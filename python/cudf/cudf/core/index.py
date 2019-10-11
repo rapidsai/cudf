@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 from cudf.core.buffer import Buffer
@@ -797,6 +797,10 @@ class DatetimeIndex(GenericIndex):
     @property
     def second(self):
         return self.get_dt_field("second")
+
+    @property
+    def weekday(self):
+        return self.get_dt_field("weekday")
 
     def to_pandas(self):
         nanos = self.as_column().astype("datetime64[ns]")

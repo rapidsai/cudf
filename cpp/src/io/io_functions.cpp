@@ -18,11 +18,10 @@
 #include <cudf/legacy/table.hpp>
 #include <utilities/error_utils.hpp>
 
-using namespace cudf::io;
-
 namespace cudf {
 
 table read_avro(avro_read_arg const &args) {
+  namespace avro = cudf::io::avro;
   auto reader = [&]() {
     avro::reader_options options{args.columns};
 
@@ -46,16 +45,10 @@ table read_avro(avro_read_arg const &args) {
 }
 
 table read_csv(csv_read_arg const &args) {
+  namespace csv = cudf::io::csv;
   auto reader = [&]() {
     csv::reader_options options{};
 
-    options.input_data_form = args.source.type;
-    if (options.input_data_form == HOST_BUFFER) {
-      options.filepath_or_buffer =
-          std::string(args.source.buffer.first, args.source.buffer.second);
-    } else {
-      options.filepath_or_buffer = args.source.filepath;
-    }
     options.compression = args.compression;
     options.lineterminator = args.lineterminator;
     options.delimiter = args.delimiter;
@@ -83,7 +76,16 @@ table read_csv(csv_read_arg const &args) {
     options.doublequote = args.doublequote;
     options.out_time_unit = args.out_time_unit;
 
-    return std::make_unique<csv::reader>(options);
+    if (args.source.type == FILE_PATH) {
+      return std::make_unique<csv::reader>(args.source.filepath, options);
+    } else if (args.source.type == HOST_BUFFER) {
+      return std::make_unique<csv::reader>(args.source.buffer.first,
+                                           args.source.buffer.second, options);
+    } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
+      return std::make_unique<csv::reader>(args.source.file, options);
+    } else {
+      CUDF_FAIL("Unsupported source type");
+    }
   }();
 
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
@@ -98,6 +100,7 @@ table read_csv(csv_read_arg const &args) {
 }
 
 table read_json(json_read_arg const &args) {
+  namespace json = cudf::io::json;
   CUDF_EXPECTS(args.lines == true, "Only JSONLines are currently supported");
 
   auto reader = [&]() {
@@ -126,6 +129,7 @@ table read_json(json_read_arg const &args) {
 }
 
 table read_orc(orc_read_arg const &args) {
+  namespace orc = cudf::io::orc;
   auto reader = [&]() {
     orc::reader_options options{args.columns, args.use_index,
                                 args.use_np_dtypes, args.timestamp_unit};
@@ -151,7 +155,23 @@ table read_orc(orc_read_arg const &args) {
   }
 }
 
+void write_orc(orc_write_arg const &args) {
+  namespace orc = cudf::io::orc;
+  auto writer = [&]() {
+    orc::writer_options options{};
+
+    if (args.sink.type == FILE_PATH) {
+      return std::make_unique<orc::writer>(args.sink.filepath, options);
+    } else {
+      CUDF_FAIL("Unsupported sink type");
+    }
+  }();
+
+  return writer->write_all(args.table);
+}
+
 table read_parquet(parquet_read_arg const &args) {
+  namespace parquet = cudf::io::parquet;
   auto reader = [&]() {
     parquet::reader_options options{args.columns, args.strings_to_categorical,
                                     args.use_pandas_metadata,

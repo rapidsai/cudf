@@ -59,10 +59,10 @@ public class TableTest {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
-  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName) {
+  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
-    if (rowOffset == 0 && length == expected.getRowCount()) {
+    if (enableNullCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
@@ -118,10 +118,10 @@ public class TableTest {
   }
 
   public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
-  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table) {
+  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table, boolean enableNullCheck) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
     assertEquals(length, table.getRowCount());
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
@@ -131,12 +131,12 @@ public class TableTest {
       if (rowOffset != 0 || length != expected.getRowCount()) {
         name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
       }
-      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name);
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
     }
   }
 
   public static void assertTablesAreEqual(Table expected, Table table) {
-    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table);
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -812,6 +812,67 @@ public class TableTest {
   }
 
   @Test
+  void testSerializationRoundTripSlicedHostSide() throws IOException {
+    try (Table t = new Table.TestBuilder()
+        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .build()) {
+      for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
+        ByteArrayOutputStream bout = new ByteArrayOutputStream();
+        for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
+          int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
+          JCudfSerialization.writeToStream(t, bout, i, len);
+        }
+        ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+        DataInputStream din = new DataInputStream(bin);
+        ArrayList<JCudfSerialization.SerializedTableHeader> headers = new ArrayList<>();
+        List<HostMemoryBuffer> buffers = new ArrayList<>();
+        long offset = 0;
+        try {
+          JCudfSerialization.SerializedTableHeader head;
+          long numRows = 0;
+          do {
+            head = new JCudfSerialization.SerializedTableHeader(din);
+            if (head.wasInitialized()) {
+              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              buffers.add(buff);
+              JCudfSerialization.readTableIntoBuffer(din, head, buff);
+              assert head.wasDataRead();
+            }
+            numRows += head.getNumRows();
+            assert numRows <= Integer.MAX_VALUE;
+            headers.add(head);
+          } while (head.wasInitialized());
+          assert numRows == t.getRowCount();
+          ByteArrayOutputStream bout2 = new ByteArrayOutputStream();
+          JCudfSerialization.writeConcatedStream(
+              headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
+              buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
+          ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
+          try (Table found = JCudfSerialization.readTableFrom(bin2)) {
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false);
+          }
+          assertNull(JCudfSerialization.readTableFrom(bin2));
+        } finally {
+          for (HostMemoryBuffer buff: buffers) {
+            buff.close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testSerializationRoundTripSliced() throws IOException {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
@@ -834,7 +895,7 @@ public class TableTest {
           JCudfSerialization.writeToStream(t, bout, i, len);
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (Table found = JCudfSerialization.readTableFrom(bin)) {
-            assertPartialTablesAreEqual(t, i, len, found);
+            assertPartialTablesAreEqual(t, i, len, found, i == 0 && len == t.getRowCount());
           }
           assertNull(JCudfSerialization.readTableFrom(bin));
         }
@@ -854,6 +915,16 @@ public class TableTest {
       assertEquals(output[0], 0xFFFFFFAF);   // 1010 1111 => 12, null, 10, null, 8, 7, 6, 5
       assertEquals(output[1], 0x0000000E);   // 0000 1110 => ..., 15, 14, null
     } catch (Exception e){}
+  }
+
+  @Test
+  void testValidityFill() {
+    byte[] buff = new byte[2];
+    buff[0] = 0;
+    int bitsToFill = (buff.length * 8) - 1;
+    assertEquals(bitsToFill, JCudfSerialization.fillValidityData(buff, 1, bitsToFill));
+    assertEquals(buff[0], 0xFFFFFFFE);
+    assertEquals(buff[1], 0xFFFFFFFF);
   }
 
   @Test

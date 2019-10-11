@@ -19,7 +19,6 @@
 #define RMM_TRY_CUDAERROR(x) \
   if ((x) != RMM_SUCCESS) CUDA_TRY(cudaPeekAtLastError());
 
-
 /**---------------------------------------------------------------------------*
  * @brief DEPRECATED error checking macro that verifies a condition evaluates to
  * true or returns an error-code.
@@ -44,7 +43,6 @@
     gdf_error _gdf_try_result = ( _expression ) ; \
     if (_gdf_try_result != GDF_SUCCESS) return _gdf_try_result ; \
 } while(0)
-
 
 namespace cudf {
 /**---------------------------------------------------------------------------*
@@ -109,20 +107,21 @@ struct cuda_error : public std::runtime_error {
 } while(0)
 
 /**---------------------------------------------------------------------------*
- * @brief Error macro that throws an exception
- * 
- * Example usage:
- * 
- * @code
- * CUDF_FAIL("Non-arithmetic operation is not supported");
- * @endcode
+ * @brief Indicates that an erroneous code path has been taken.
  *
+ * In host code, throws a `cudf::logic_error`.
+ *
+ *
+ * Example usage:
+ * ```
+ * CUDF_FAIL("Non-arithmetic operation is not supported");
+ * ```
+ * 
  * @param[in] reason String literal description of the reason
- * @throw cudf::logic_error if the condition evaluates to false.
  *---------------------------------------------------------------------------**/
-#define CUDF_FAIL(reason)      				     \
-    throw cudf::logic_error("cuDF failure at: " __FILE__     \
-                            ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_FAIL(reason)                              \
+  throw cudf::logic_error("cuDF failure at: " __FILE__ \
+                          ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
 namespace cudf {
 namespace detail {
@@ -202,5 +201,3 @@ inline void check_stream(cudaStream_t stream, const char* file,
 #else
 #define CHECK_STREAM(stream) static_cast<void>(0)
 #endif
-
-

@@ -419,12 +419,7 @@ class nvstrings:
         if isinstance(key, int):
             return self.gather([key])
         if isinstance(key, slice):
-            start = 0 if key.start is None else key.start
-            end = self.size() if key.stop is None else key.stop
-            step = 1 if key.step is None or key.step == 0 else key.step
-            # negative slicing check
-            end = self.size() + end if end < 0 else end
-            start = self.size() + start if start < 0 else start
+            start, end, step = key.indices(self.size())
             rtn = pyniNVStrings.n_sublist(self.m_cptr, start, end, step)
             if rtn is not None:
                 rtn = nvstrings(rtn)
@@ -548,14 +543,14 @@ class nvstrings:
         Examples
         --------
         >>> import nvstrings
-        >>> from librmm_cffi import librmm
+        >>> import rmm
         >>> import numpy as np
 
         Example passing device memory pointer
 
         >>> s = nvstrings.to_device(["abc","d","ef"])
         >>> arr = np.arange(s.size(),dtype=np.int32)
-        >>> d_arr = librmm.to_device(arr)
+        >>> d_arr = rmm.to_device(arr)
         >>> s.len(d_arr.device_ctypes_pointer.value)
         >>> print(d_arr.copy_to_host())
         [3,1,2]
@@ -580,13 +575,13 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> import numpy as np
-        >>> from librmm_cffi import librmm
+        >>> import rmm
 
         Example passing device memory pointer
 
         >>> s = nvstrings.to_device(["abc","d","ef"])
         >>> arr = np.arange(s.size(),dtype=np.int32)
-        >>> d_arr = librmm.to_device(arr)
+        >>> d_arr = rmm.to_device(arr)
         >>> s.byte_count(d_arr.device_ctypes_pointer.value,True)
         >>> print(d_arr.copy_to_host())
         [3,1,2]
@@ -2653,7 +2648,7 @@ class nvstrings:
         Examples
         --------
         >>> import nvstrings
-        >>> from librmm_cffi import librmm as rmm
+        >>> import rmm
         >>> import numpy as np
         >>> s = nvstrings.to_device(["a","xyz", "éee"])
         >>> s.len()

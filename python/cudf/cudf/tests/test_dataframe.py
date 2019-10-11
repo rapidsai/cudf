@@ -8,13 +8,14 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf as gd
 from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
+from cudf.utils.utils import _have_cupy
 
 
 def test_buffer_basic():
@@ -1532,14 +1533,9 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    try:
-        import cupy
-
-        _have_cupy = True
-    except ImportError:
-        _have_cupy = False
     if not _have_cupy:
         pytest.skip("CuPy is not installed")
+    import cupy
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
@@ -1849,6 +1845,13 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf["a"].tail(), gdf["a"][-5:])
     check_frame_series_equality(gdf["a"].tail(3), gdf["a"][-3:])
     check_frame_series_equality(gdf["a"].tail(-2), gdf["a"][2:])
+
+
+def test_tail_for_string():
+    gdf = DataFrame()
+    gdf["id"] = Series(["a", "b"], dtype=np.object)
+    gdf["v"] = Series([1, 2])
+    assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -2631,6 +2634,7 @@ def test_ndim():
         np.random.normal(-100, 100, 1000),
         np.random.randint(-50, 50, 1000),
         np.zeros(100),
+        np.repeat([-0.6459412758761901], 100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
     ],
@@ -2649,6 +2653,13 @@ def test_ndim():
         8,
         9,
         10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
         pytest.param(
             -1,
             marks=[
@@ -2662,9 +2673,8 @@ def test_round(arr, decimal):
     ser = Series(arr)
     result = ser.round(decimal)
     expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+
+    assert_eq(result, expected)
 
     # with nulls, maintaining existing null mask
     arr = arr.astype("float64")  # for pandas nulls
@@ -2675,9 +2685,8 @@ def test_round(arr, decimal):
     ser = Series(arr)
     result = ser.round(decimal)
     expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+
+    assert_eq(result, expected)
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
 
 
@@ -3188,11 +3197,87 @@ def test_create_dataframe_column():
         ["m", "a", "d", "v"],
     ],
 )
-def test_series_values_property(data):
+def test_series_values_host_property(data):
     pds = pd.Series(data)
     gds = Series(data)
 
-    np.testing.assert_array_equal(pds.values, gds.values)
+    np.testing.assert_array_equal(pds.values, gds.values_host)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pytest.param(
+            pd.Categorical(["a", "b", "c"]),
+            marks=pytest.mark.xfail(raises=TypeError),
+        ),
+        pytest.param(
+            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError)
+        ),
+    ],
+)
+def test_series_values_property(data):
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed")
+    import cupy
+
+    pds = pd.Series(data)
+    gds = Series(data)
+    gds_vals = gds.values
+    assert isinstance(gds_vals, cupy.ndarray)
+    np.testing.assert_array_equal(gds_vals.get(), pds.values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"A": [1, 2, 3], "B": [4, 5, 6]},
+        {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
+        {"A": [1, 2, 3], "B": [1.0, 2.0, 3.0]},
+        {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
+        pytest.param(
+            {"A": [1, None, 3], "B": [1, 2, None]},
+            marks=pytest.mark.xfail(
+                reason="Nulls not supported by as_gpu_matrix"
+            ),
+        ),
+        pytest.param(
+            {"A": [None, None, None], "B": [None, None, None]},
+            marks=pytest.mark.xfail(
+                reason="Nulls not supported by as_gpu_matrix"
+            ),
+        ),
+        pytest.param(
+            {"A": [], "B": []},
+            marks=pytest.mark.xfail(reason="Requires at least 1 row"),
+        ),
+        pytest.param(
+            {"A": [1, 2, 3], "B": ["a", "b", "c"]},
+            marks=pytest.mark.xfail(
+                reason="str or categorical not supported by as_gpu_matrix"
+            ),
+        ),
+        pytest.param(
+            {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
+            marks=pytest.mark.xfail(
+                reason="str or categorical not supported by as_gpu_matrix"
+            ),
+        ),
+    ],
+)
+def test_df_values_property(data):
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed")
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = DataFrame.from_pandas(pdf)
+
+    pmtr = pdf.values
+    gmtr = gdf.values.get()
+
+    np.testing.assert_array_equal(pmtr, gmtr)
 
 
 def test_value_counts():

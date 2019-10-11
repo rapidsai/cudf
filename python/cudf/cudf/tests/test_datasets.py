@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
@@ -29,7 +28,7 @@ def test_dataset_timeseries():
 
     assert gdf["value"].head().dtype == float
     assert gdf["id"].head().dtype == int
-    assert gdf["name"].head().dtype == pd.api.types.CategoricalDtype()
+    assert gdf["name"].head().dtype == "category"
 
     gdf = gd.datasets.randomdata()
     assert gdf["id"].head().dtype == int
