@@ -75,5 +75,28 @@ std::vector<std::unique_ptr<column>> table::release() {
   return std::move(_columns);
 }
 
+// Returns a table_view with set of specified columns
+table_view table::select(std::vector<gdf_size_type> const& column_indices) const {
+    CUDF_EXPECTS(column_indices.size() <= _columns.size(), "Requested too many columns.");
+
+    std::vector<column_view> columns;
+    for (auto index : column_indices) {
+      columns.push_back(_columns.at(index)->view());
+    }
+    return table_view(columns);
+}
+
+// Concatenate `table1` and `table2` into a single table_view
+table_view concat(cudf::experimental::table const& table1, cudf::experimental::table const&table2) {
+  CUDF_EXPECTS(table1.num_rows() == table2.num_rows(), "Number of rows mismatch");
+  table_view v1 = table1.view();
+  table_view v2 = table2.view();
+  std::vector<column_view> concat_cols;
+  concat_cols.insert(concat_cols.end(), v1.begin(), v1.end());
+  concat_cols.insert(concat_cols.end(), v2.begin(), v2.end());
+
+  return table_view(concat_cols);
+}
+
 }  // namespace experimental
 }  // namespace cudf

@@ -100,9 +100,28 @@ class table {
    *---------------------------------------------------------------------------**/
   std::vector<std::unique_ptr<column>> release();
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a table_view with set of specified columns.
+   *---------------------------------------------------------------------------**/
+  table_view select(std::vector<gdf_size_type> const& column_indices) const;
+
  private:
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief `table1` and `table2` are concatenated to return single table_view
+ *
+ * @throws cudf::logic_error
+ * If number of rows mismatch
+ *
+ * @param table1 The table to be concatenated with `table2`
+ * @param table2 The table to be concatenated with `table1`
+ * @return A single table having all the columns from `table1` and `table2`
+ * respectively in the same order.
+ *---------------------------------------------------------------------------**/
+table_view concat(cudf::experimental::table const& table1, cudf::experimental::table const&table2);
+
 }  // namespace experimental
 }  // namespace cudf
