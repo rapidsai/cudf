@@ -198,11 +198,10 @@ template<>
 __forceinline__ 
 __host__ __device__ hash_value_type MurmurHash3_32<cudf::string_view>::operator()(const cudf::string_view& key) const
 {
-    uint32_t seed = m_seed;
     const int len = (int)key.size_bytes();
     const uint8_t* data = (const uint8_t*)key.data();
     const int nblocks = len / 4;
-    result_type h1 = seed;
+    result_type h1 = m_seed;
     constexpr uint32_t c1 = 0xcc9e2d51;
     constexpr uint32_t c2 = 0x1b873593;
     auto getblock32 = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
