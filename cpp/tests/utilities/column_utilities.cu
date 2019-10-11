@@ -44,7 +44,7 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
       thrust::equal(thrust::device, thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(lhs.size()),
                     thrust::make_counting_iterator(0),
-                    cudf::exp::row_equality_comparator<true>{*d_lhs, *d_rhs}));
+                    cudf::experimental::row_equality_comparator<true>{*d_lhs, *d_rhs}));
 
   CUDA_TRY(cudaDeviceSynchronize());
 }

@@ -21,7 +21,7 @@
 #include <limits>
 #include <type_traits>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 //Terminating call
 //Extract the value of the Ith element of a tuple of vectors keys

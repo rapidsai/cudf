@@ -16,7 +16,7 @@
 #ifndef TEST_PARAMETERS_CUH
 #define TEST_PARAMETERS_CUH
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <cudf/types.h>
 

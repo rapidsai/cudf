@@ -16,13 +16,13 @@
 
 #include <cudf/stream_compaction.hpp>
 #include <cudf/legacy/table.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <utilities/error_utils.hpp>
 
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include<limits>
 

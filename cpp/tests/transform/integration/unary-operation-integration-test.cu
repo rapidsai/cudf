@@ -17,15 +17,15 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/transform.hpp>
 #include "assert-unary.h"
 #include <cudf/types.h>
 
 #include <cctype>
 
-#include <tests/utilities/nvcategory_utils.cuh>
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 namespace cudf {
 namespace test {

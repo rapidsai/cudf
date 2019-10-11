@@ -20,8 +20,8 @@
 #include <cudf/cudf.h>
 #include <dlpack/dlpack.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 template <class TestParameters>
 struct DLPackTypedTest : public GdfTest
