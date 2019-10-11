@@ -1,7 +1,7 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <cudf/cudf.h>
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/merge.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/legacy/table.hpp>

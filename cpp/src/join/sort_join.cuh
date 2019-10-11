@@ -17,7 +17,7 @@
 #ifndef SORT_JOIN_CUH
 #define SORT_JOIN_CUH
 
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/types.h>
 #include "join_compute_api.h"
 #include "full_join.cuh"

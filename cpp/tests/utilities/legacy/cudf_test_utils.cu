@@ -22,7 +22,7 @@
 #include <nvstrings/NVStrings.h>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 
 namespace {
 

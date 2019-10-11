@@ -15,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <utilities/nvtx/nvtx_utils.h>
+#include <utilities/nvtx/legacy/nvtx_utils.h>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
