@@ -564,6 +564,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfByteCount(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemoryStringSize(JNIEnv *env, jobject j_object,
+                                                                                   jlong handle) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    gdf_column *column = reinterpret_cast<gdf_column *>(handle);
+    gdf_dtype dtype = column->dtype;
+    if (dtype == GDF_STRING) {
+      NVStrings *nvstr = static_cast<NVStrings *>(column->data);
+      return static_cast<jlong>(nvstr->memsize());
+    } else {
+      throw std::logic_error("ONLY STRING TYPES ARE SUPPORTED...");
+    }
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jclass clazz,
                                                               jlong column_handle, jint hash_type) {
   JNI_NULL_CHECK(env, column_handle, "input column is null", 0);
