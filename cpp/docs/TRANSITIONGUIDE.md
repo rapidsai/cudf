@@ -525,7 +525,7 @@ gdf_column  old_function(gdf_column const& input,
     - `cudf/cpp/CMakeLists.txt` 
     - `cudf/cpp/tests/CMakeLists.txt`
     - `cudf/conda/recipes/libcudf/meta.yaml`
-    - Include paths
+    - Include paths (including code in `cudf/cpp/benchmarks`)
     - Cython include paths (see [Cython changes](#cython_changes))
 3. Update test names
     - Rename `OLD_TESTS` to `LEGACY_OLD_TESTS` in `cudf/cpp/tests/CMakeLists.txt`
