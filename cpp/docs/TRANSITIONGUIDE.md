@@ -23,7 +23,7 @@ For example, when porting the implementation of `gather` in `cudf/src/copying/ga
 Resource ownership is an essential concept in `libcudf++`. In short, an "owning" object owns some resource (such as device memory). It acquires that resource during construction and releases the resource in destruction (RAII). A "non-owning" object does not own resources. Any class in `libcudf++` with the `*_view` suffix is non-owning. For more detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing) 
 
 
-## `rmm::device_memory_resource`
+## `rmm::device_memory_resource`<a name="memory_resource"></a>
 
 Abstract interface class based on [`std::pmr::memory_resource`](https://en.cppreference.com/w/cpp/memory/memory_resource) for allocating device memory. 
 
@@ -105,7 +105,7 @@ A *mutable*, non-owning view of a table.
 
 Trivially-copyable and should be passed by value. 
 
-# libcudf++ API
+# libcudf++ API and Implementation
 
 ## Streams
 
@@ -127,6 +127,7 @@ namespace detail{
         RMM_ALLOC(...,stream);
         cudaMemcpyAsync(...,stream);
         kernel<<<..., stream>>>(...);
+        thrust::algorithm(rmm::exec_policy(stream)->on(stream), ...);
         cudaStreamSynchronize(stream);
         RMM_FREE(...,stream);
     }
@@ -139,43 +140,93 @@ void external_function(...){
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
  This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
 
-### Old libcudf API
-```c++
-/**
-* @brief This is an example of an old API.
-*
-* @param input Immutable input column
-* @param in_out Mutable column modified in place
-* @param input_table Immutable input table
-* @param in_out_table Mutable table modified in place
-* @return gdf_column Newly allocated output column
-**/
+ ### Stream Creation
 
-gdf_column  some_function(gdf_column const& input, 
-                          gdf_column* in_out,
-                          cudf::table const& input_table,
-                          cudf::table* in_out_table);
+There may be times in implementing `libcudf` features where it would be advantageous to use streams *internally*, i.e., to accomplish overlap in implementing an algorithm. 
+However, dynamically creating a stream can be expensive. 
+There are plans in the future to add a "stream pool" for this situation to avoid dynamic stream creation.
+However, for the time being, `libcudf` features should avoid creating streams (even if it is slightly less efficient). 
+It is a good idea to leave a `//TODO` note indicating where using a stream would be beneficial.
+
+## Memory Allocation
+
+Device [memory resources](#memory_resource) are used in libcudf to abstract and control how device memory is allocated. 
+
+### Output Memory
+
+Any libcudf API that allocates memory that is *returned* to a user must accept a `device_memory_resource`. Example:
+
+```c++
+// Returned `column` contains newly allocated memory, 
+// therefore the API must accept a memory resource pointer
+std::unique_ptr<column> returns_output_memory(..., 
+                                              rmm::device_memory_resource * mr = rmm::mr::get_default_resource());
+
+// This API does not allocate any new *output* memory, therefore
+// a memory resource is unnecessary
+void does_not_allocate_output_memory(...);                                              
 ```
 
-### New libcudf API
+### Temporary Memory
+
+Not all memory allocated within a libcudf feature is returned to the caller.
+Oftentimes in implementing an algorithm, it is necessary to allocate temporary, scratch memory for intermediate results.
+For these temporary memory allocations, the default resource returned from `rmm::mr::get_default_resource()` should *always* be used. Example:
 ```c++
-/**
- * @brief This is an example of a new API.
- *
- * @param input Immutable view of input column
- * @param in_out Mutable view of column modified in place
- * @param input_table Immutable view of input table
- * @param in_out_table Mutable view of table modified in place
- * @param mr Memory resource used to allocate device memory for the returned
- * output column
- * @return std::unique_ptr<column> Newly allocated output column
- **/
-std::unique_ptr<column> some_function(cudf::column_view input, 
-                                      cudf::mutable_column_view in_out, 
-                                      cudf::table_view input_table,
-                                      cudf::mutable_table_view in_out_table,
-                                      device_memory_resource* mr = rmm::get_default_resource());
+rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm::mr::get_default_resource()){
+    rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
+    ...
+    rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
+    ...
+    return returned_buffer;
+}
 ```
+
+### Memory Management
+
+Explicit memory management through calls to `RMM_ALLOC/RMM_FREE` should be avoided whenever possible in favor of a construct with automated lifetime management, i.e., a RAII object. 
+RMM provides three classes built to use `device_memory_resource`(*)s for device memory allocation with automated lifetime management:
+
+#### `rmm::device_buffer`
+Allocates a specified number of bytes of untyped, uninitialized device memory. 
+`rmm::device_buffer` is copyable and movable.
+
+```c++
+// Allocates at least 100 bytes of uninitialized device memory 
+// using the specified resource and stream
+rmm::device_buffer buff(100, stream, mr); 
+void * raw_data = buff.data(); // Raw pointer to underlying device memory
+
+rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
+rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
+```
+
+#### `rmm::device_scalar<T>`
+Allocates a single element of the specified type initialized to the specified value.
+Use this for scalar input/outputs into device kernels, e.g., reduction results, null count, etc.
+This is effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
+
+```c++
+// Allocates device memory for a single int using the specified resource and stream
+// and initializes the value to 42
+rmm::device_scalar<int> int_scalar{42, stream, mr}; 
+
+// scalar.get() returns pointer to value in device memory
+kernel<<<...>>>(int_scalar.get(),...);
+
+// scalar.value() synchronizes the scalar's stream and copies the 
+// value from device to host and returns the value
+int host_value = int_scalar.value();
+```
+
+#### `rmm::device_vector<T>`
+
+Allocates a specified number of elements of the specified type.
+If no initialization value is provided, all elements are default initialized (this incurs a kernel launch).
+
+(*) Note: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support is forthcoming.
+
+
 ## Input/Output Style<a name="inout_style"></a>
 
 All `*_view` objects are trivially copyable and are intended to be passed by value.
