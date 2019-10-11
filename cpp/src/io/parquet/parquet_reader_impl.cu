@@ -657,7 +657,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
           required_bits(col_schema.max_repetition_level), col_meta.codec,
-          col_schema.converted_type, ts_clock_rate));
+          col_schema.converted_type, col_schema.decimal_scale, ts_clock_rate));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "
