@@ -162,6 +162,7 @@
 - PR #3035 Update update-version.sh for new docs locations
 - PR #3038 Fix uninitialized stream parameter in device_table deleter
 - PR #3064 Fixes groupby performance issue
+- PR #3058 Fix UDF doc markdown formatting
 
 
 # cuDF 0.9.0 (21 Aug 2019)
