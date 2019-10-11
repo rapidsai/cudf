@@ -21,6 +21,7 @@
 ## Bug Fixes
 
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3056 Add additional cmake hint for finding local build of RMM files
 
 
 # cuDF 0.10.0 (Date TBD)
