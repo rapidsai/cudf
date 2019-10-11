@@ -7,7 +7,7 @@
 
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 namespace detail {
 
 std::unique_ptr<table> gather(table_view source_table, column_view gather_map,

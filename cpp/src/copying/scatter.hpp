@@ -8,7 +8,7 @@
 
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 namespace detail {
 
 void scatter(table_view source_table, column_view gather_map,
