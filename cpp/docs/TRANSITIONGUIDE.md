@@ -675,5 +675,31 @@ In scatter, the first phase consists of using the `scatter_map` to determine if 
 
 ### NVCategory<a name="nvcategory_changes"></a>
 
-// TODO
+Previously, libcudf's support for strings columns relied on the `NVCategory` class. 
+`NVCategory` was an object that emulated a *categorical* or *dictionary* column. A dictionary column is a compound column composed of a *dictionary* and *indices* into that dictionary. 
+The dictionary contains the unique set of values within the column.
+The indices contain the offset into the dictionary for each element in the column, e.g., element `i` is given by `dictionary[indices[i]]`.
+See the example below.
+
+Furthermore, the dictionary is sorted.
+This means the indices are order preserving, and relational comparisons between values in the indices column will provide the same ordering as if the strings were compared directly.
+For example, in the snippet below, `"green"` is ordered lexicographically before `"red"`, and `"green"`'s index is `0` where `"red"`'s is `1`.
+Since `0` is ordered before `1`, comparing `0` and `1` will provide the same ordering as comparing `"green"` and `"red"` directly.
+
+```c++
+strings:    {"red", "yellow", "red", "green", "yellow"}
+dictionary: {"green", "red", "yellow"}
+indices:    {1, 2, 1, 0, 2}
+```
+`libcudf` leveraged the order preserving nature of the indices to allow comparing string elements without ever having to compare strings directly. 
+In effect, this allowed us to treat columns of strings as fixed-width, numeric columns which greatly simplified handling of string columns. 
+
+However, there was extra work required to manage the `NVCategory` columns--all of which should be removed when porting to libcudf++.
+Any use of a function from `cudf/cpp/include/cudf/utilities/legacy/nvcategory_util.hpp` should be removed from the new implementation.
+
+
+
+
+
+
 
