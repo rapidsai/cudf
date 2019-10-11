@@ -4,6 +4,8 @@
 
 #include "nvstrings/NVStrings.h"
 
+#include "./utils.h"
+
 std::vector<const char*> hstrs{
         "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "",
         "1.75", "-34", "+9.8", "17¼", "x³", "2³", " 12⅝",
@@ -172,6 +174,9 @@ TEST(TestAttrs, CodePoints)
 
 int main( int argc, char** argv )
 {
+    rmmInitialize(nullptr);
     testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
+    int rc = RUN_ALL_TESTS();
+    rmmFinalize();
+    return rc;
 }

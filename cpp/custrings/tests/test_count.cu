@@ -5,6 +5,8 @@
 
 #include "nvstrings/NVStrings.h"
 
+#include "./utils.h"
+
 std::vector<const char*> hstrs{
         "The quick brown @fox jumps", "ovér the", "lazy @dog",
         "1234", "00:0:00", nullptr, "" };
@@ -102,6 +104,9 @@ TEST(TestCount, Count)
 
 int main( int argc, char** argv )
 {
+    rmmInitialize(nullptr);
     testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
+    int rc = RUN_ALL_TESTS();
+    rmmFinalize();
+    return rc;
 }

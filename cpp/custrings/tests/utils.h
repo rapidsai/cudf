@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <vector>
 
+#include <rmm/rmm.h>
+
 #include "nvstrings/NVStrings.h"
 
 // utility to verify strings results

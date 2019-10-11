@@ -76,6 +76,9 @@ TEST(TestPad, Wrap)
 
 int main( int argc, char** argv )
 {
+    rmmInitialize(nullptr);
     testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
+    int rc = RUN_ALL_TESTS();
+    rmmFinalize();
+    return rc;
 }
