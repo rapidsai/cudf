@@ -72,7 +72,7 @@ test:
     - test -f $PREFIX/include/cudf/reduction.hpp
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
-    - test -f $PREFIX/include/cudf/search.hpp
+    - test -f $PREFIX/include/cudf/legacy/search.hpp
     - test -f $PREFIX/include/cudf/stream_compaction.hpp
     - test -f $PREFIX/include/cudf/transform.hpp
     - test -f $PREFIX/include/cudf/types.h
