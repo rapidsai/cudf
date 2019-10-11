@@ -58,7 +58,7 @@ constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     parquet::Type physical, parquet::ConvertedType logical,
-    bool strings_to_categorical, gdf_time_unit ts_unit) {
+    bool strings_to_categorical, gdf_time_unit ts_unit, int32_t decimal_scale) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -80,6 +80,11 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
                  ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
                  : std::make_pair(GDF_TIMESTAMP,
                                   gdf_dtype_extra_info{TIME_UNIT_ms});
+    case parquet::DECIMAL:
+      if (decimal_scale != 0 || (physical != parquet::INT32 && physical != parquet::INT64)) {
+        return std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      }
+      break;
     default:
       break;
   }
@@ -580,7 +585,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     auto row_group_0 = md_->row_groups[selected_row_groups[0].first];
     auto &col_schema = md_->schema[row_group_0.columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
-                               strings_to_categorical_, timestamp_unit_);
+                               strings_to_categorical_, timestamp_unit_, col_schema.decimal_scale);
 
     columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
                          dtype_info.second, col.second);
