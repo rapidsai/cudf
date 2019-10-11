@@ -6,6 +6,8 @@
 
 #include "./utils.h"
 
+struct TestAttrs : public GdfTest{};
+
 std::vector<const char*> hstrs{
         "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "",
         "1.75", "-34", "+9.8", "17¼", "x³", "2³", " 12⅝",

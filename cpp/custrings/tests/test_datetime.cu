@@ -7,6 +7,8 @@
 
 #include "./utils.h"
 
+struct TestTimestamp : public GdfTest{};
+
 TEST(TestTimestamp, ToTimestamp)
 {
     {    

@@ -7,6 +7,8 @@
 
 #include "./utils.h"
 
+struct TestConvert : public GdfTest{};
+
 TEST(TestConvert, Hash)
 {
     std::vector<const char*> hstrs{ "thesé", nullptr, "are", "the",

@@ -5,6 +5,8 @@
 
 #include "./utils.h"
 
+struct TestCase : public GdfTest{};
+
 std::vector<const char*> hstrs{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
 TEST(TestCase, ToLower)

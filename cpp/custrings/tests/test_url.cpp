@@ -4,6 +4,8 @@
 
 #include "./utils.h"
 
+struct TestURL : public GdfTest{};
+
 TEST(TestURL, UrlEncode)
 {
     std::vector<const char*> hstrs{"www.nvidia.com/rapids?p=é", "/_file-7.txt", "a b+c~d",

@@ -7,6 +7,8 @@
 
 #include "./utils.h"
 
+struct TestText : public GdfTest{};
+
 std::vector<const char*> tstrs{ "the fox jumped over the dog",
                                 "the dog chased the cat",
                                 "the cat chased the mouse",

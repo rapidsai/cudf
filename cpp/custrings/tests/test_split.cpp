@@ -5,6 +5,8 @@
 
 #include "./utils.h"
 
+struct TestSplit : public GdfTest{};
+
 std::vector<const char*> hstrs{ "Héllo thesé", nullptr, "are some", "tést String", "" };
 
 

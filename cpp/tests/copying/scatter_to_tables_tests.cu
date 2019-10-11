@@ -262,7 +262,7 @@ auto scatter_columns(
                          output_cols_null_count);
 }
 
-TEST(ScatterToTablesTest, FunctionalTest) {
+TYPED_TEST(ScatterToTablesTest, FunctionalTest) {
   using TypeParam = gdf_index_type;
   constexpr gdf_size_type table_n_cols{2};
   constexpr gdf_size_type table_n_rows{1000};

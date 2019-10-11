@@ -8,6 +8,8 @@
 
 #include "./utils.h"
 
+struct TestModify : public GdfTest{};
+
 std::vector<const char*> hstrs{ "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
 TEST(TestModify, SliceReplace)

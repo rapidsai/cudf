@@ -5,6 +5,8 @@
 
 #include "./utils.h"
 
+struct TestPad : public GdfTest{};
+
 std::vector<const char*> hstrs{ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
 TEST(TestPad, Repeat)

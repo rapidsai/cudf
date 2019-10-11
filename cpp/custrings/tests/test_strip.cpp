@@ -5,6 +5,8 @@
 
 #include "./utils.h"
 
+struct TestStrip : public GdfTest{};
+
 std::vector<const char*> hstrs{ " hello  ", "   thesé ", nullptr, "ARE THE", " tést  strings ", "" };
 
 TEST(TestStrip, Strip)

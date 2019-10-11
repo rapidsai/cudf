@@ -5,6 +5,8 @@
 
 #include "./utils.h"
 
+struct TestExtract : public GdfTest{};
+
  std::vector<const char*> hstrs{"First Last", "Joe Schmoe", "John Smith", "Jane Smith",
                                 "Beyonce", "Sting",
                                 nullptr, "" };

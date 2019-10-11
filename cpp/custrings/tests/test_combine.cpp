@@ -5,6 +5,8 @@
 
 #include "./utils.h"
 
+struct TestCombine : public GdfTest{};
+
 std::vector<const char*> hstrs1{ "thesé", nullptr, "are", "the",
                                  "tést", "strings", "" };
 std::vector<const char*> hstrs2{ "1234", "accénted", "", nullptr, 

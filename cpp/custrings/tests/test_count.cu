@@ -7,6 +7,8 @@
 
 #include "./utils.h"
 
+struct TestCount : public GdfTest{};
+
 std::vector<const char*> hstrs{
         "The quick brown @fox jumps", "ovér the", "lazy @dog",
         "1234", "00:0:00", nullptr, "" };

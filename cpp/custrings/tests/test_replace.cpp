@@ -6,6 +6,8 @@
 
 #include "./utils.h"
 
+struct TestReplace : public GdfTest{};
+
 std::vector<const char*> hstrs{ "the quick brown fox jumps over the lazy dog",
                                 "the fat cat lays next to the other accénted cat",
                                  "a slow moving turtlé cannot catch the bird",
