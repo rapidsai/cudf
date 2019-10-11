@@ -16,8 +16,8 @@
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
-#include <cudf/search.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/search.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <benchmark/benchmark.h>
 
