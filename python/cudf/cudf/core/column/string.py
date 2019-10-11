@@ -586,7 +586,7 @@ class StringColumn(column.TypedColumnBase):
             )
 
     def to_pandas(self, index=None):
-        pd_series = self.to_arrow().to_pandas()
+        pd_series = self.to_arrow().to_pandas().array
         return pd.Series(pd_series, index=index, name=self.name)
 
     def to_array(self, fillna=None):
@@ -605,7 +605,7 @@ class StringColumn(column.TypedColumnBase):
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
 
-        return self.to_arrow().to_pandas()
+        return self.to_arrow().to_pandas().array
 
     def serialize(self):
         header = {"null_count": self._null_count}
