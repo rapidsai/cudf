@@ -15,7 +15,7 @@
  */
 
 #include "csv_gpu.h"
-#include "io/utilities/parsing_utils.cuh"
+#include <io/utilities/legacy/parsing_utils.cuh>
 
 namespace cudf {
 namespace io {

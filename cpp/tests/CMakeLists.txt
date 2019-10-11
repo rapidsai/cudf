@@ -309,24 +309,24 @@ ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
-set(AVRO_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
-set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
-set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
-set(ORC_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(LEGACY_AVRO_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/avro_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_CSV_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/json_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_ORC_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/orc_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
-ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
-ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
-ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
-ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
+ConfigureTest(LEGACY_AVRO_TEST "${LEGACY_AVRO_TEST_SRC}")
+ConfigureTest(LEGACY_CSV_TEST "${LEGACY_CSV_TEST_SRC}")
+ConfigureTest(LEGACY_JSON_TEST "${LEGACY_JSON_TEST_SRC}")
+ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------

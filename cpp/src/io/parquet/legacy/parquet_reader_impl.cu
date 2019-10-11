@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "parquet.h"
-#include "parquet_gpu.h"
+#include "../parquet.h"
+#include "../parquet_gpu.h"
 #include "parquet_reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
