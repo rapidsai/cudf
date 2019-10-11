@@ -17,7 +17,7 @@
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
-- PR #3046 Adding `empty_like` API based on `cudf::column` and `cudf::table`
+- PR #3046 Adding `empty_like` and `allocate_like` APIs based on `cudf::column` and `cudf::table`
 
 ## Bug Fixes
 

@@ -16,6 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/copying.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -28,6 +29,14 @@ namespace experimental
 {
 namespace detail
 {
+
+inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
+  if ((mask_alloc == ALWAYS) || (mask_alloc == RETAIN && mask_exists)) {
+    return UNINITIALIZED;
+  } else {
+    return UNALLOCATED;
+  }
+}
 
 /*
  * Initializes and returns an empty column of the same type as the `input`.
@@ -42,6 +51,59 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
 
   return std::make_unique<column>(input.type(), 0, rmm::device_buffer {},
 		                  rmm::device_buffer {}, 0, std::move(children));
+}
+
+/*
+ * Creates an uninitialized new column of the same size and type as the `input`.
+ * Supports only fixed-width types.
+ */
+std::unique_ptr<column> allocate_like(column_view input,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr,
+				      cudaStream_t stream)
+{
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
+  mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
+
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index; index < input.num_children(); index++) {
+      children.emplace_back(allocate_like(input.child(index), mask_alloc, mr, stream));
+  }
+
+  return std::make_unique<column>(input.type(),
+                                  input.size(),
+                                  rmm::device_buffer(input.size()*size_of(input.type()), stream, mr),
+                                  create_null_mask(input.size(), allocate_mask, stream, mr),
+                                  state_null_count(allocate_mask, input.size()),
+                                  std::move(children));
+}
+
+/*
+ * Creates an uninitialized new column of the specified size and same type as the `input`.
+ * Supports only fixed-width types.
+ */
+std::unique_ptr<column> allocate_like(column_view input,
+		                      size_type size,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr,
+				      cudaStream_t stream)
+{
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
+  mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
+
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index; index < input.num_children(); index++) {
+      children.emplace_back(allocate_like(input.child(index), size, mask_alloc, mr, stream));
+  }
+
+  return std::make_unique<column>(input.type(),
+                                  size,
+                                  rmm::device_buffer(size*size_of(input.type()), stream, mr),
+                                  create_null_mask(size, allocate_mask, stream, mr),
+                                  state_null_count(allocate_mask, input.size()),
+                                  std::move(children));
 }
 
 /*
@@ -61,6 +123,19 @@ std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream){
 
 std::unique_ptr<column> empty_like(column_view input){
   return detail::empty_like(input, 0);
+}
+
+std::unique_ptr<column> allocate_like(column_view input,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr){
+  return detail::allocate_like(input, mask_alloc, mr, 0);
+}
+
+std::unique_ptr<column> allocate_like(column_view input,
+		                      size_type size,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr){
+  return detail::allocate_like(input, size, mask_alloc, mr, 0);
 }
 
 std::unique_ptr<table> empty_like(table_view input_table){

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -23,7 +23,7 @@
 #include <cstring>
 
 template <typename T>
-struct EmptyLikeTest : GdfTest {};
+struct EmptyLikeTest : public cudf::test::BaseFixture {};
 
 using numeric_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
@@ -127,3 +127,30 @@ TEST(EmptyLikeTest, TableTest) {
 
     expect_tables_prop_equal(got->view(), expected->view()); 
 }
+
+template <typename T>
+struct AllocateLikeTest : public cudf::test::BaseFixture {};;
+
+TYPED_TEST_CASE(AllocateLikeTest, numeric_types);
+
+TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize) {
+    // For same size as input
+    cudf::size_type size = 10;
+    cudf::mask_state state = cudf::ALL_VALID;
+    auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
+    auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, cudf::UNINITIALIZED);
+    auto got = cudf::experimental::allocate_like(input->view());
+    cudf::test::expect_columns_prop_equal(*expected, *got);
+}
+
+TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
+    // For same size as input
+    cudf::size_type size = 10;
+    cudf::size_type specified_size = 5;
+    cudf::mask_state state = cudf::ALL_VALID;
+    auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
+    auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, specified_size, cudf::UNINITIALIZED);
+    auto got = cudf::experimental::allocate_like(input->view(), specified_size);
+    cudf::test::expect_columns_prop_equal(*expected, *got);
+}
+
