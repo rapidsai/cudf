@@ -15,14 +15,14 @@
  */
 #include "scatter.hpp"
 #include "gather.cuh"
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
 #include <cudf/legacy/table.hpp>
 
-#include <copying/gather.hpp>
+#include <copying/legacy/gather.hpp>
 
 #include <cudf/types.h>
 #include <utilities/bit_util.cuh>

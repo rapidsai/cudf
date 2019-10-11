@@ -27,7 +27,7 @@
 
 #include <cudf/functions.h>
 #include <cudf/types.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <utilities/column_utils.hpp>
 #include <iostream>
 #include <random>

@@ -17,7 +17,7 @@
  */
 
 #include <utilities/column_utils.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/error_utils.hpp>
@@ -26,7 +26,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <bitmask/legacy/bit_mask.cuh> 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <copying/slice.hpp>
+#include <copying/legacy/slice.hpp>
 
 namespace cudf {
 

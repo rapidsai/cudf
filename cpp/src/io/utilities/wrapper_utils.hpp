@@ -17,12 +17,11 @@
 #pragma once
 
 #include <cudf/cudf.h>
+
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 
-#include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
-#include <rmm/rmm.h>
 
 #include <algorithm>
 #include <cstring>
@@ -158,85 +157,4 @@ class hostdevice_vector {
   size_t num_elements = 0;
   T *h_data = nullptr;
   T *d_data = nullptr;
-};
-
-/**
- * @brief A helper class that owns a resizable device memory buffer.
- *
- * Memory in the allocated buffer is not initialized in the constructors.
- * Copy construction and copy assignment are disabled to prevent
- * accidental copies.
- **/
-template <typename T>
-class device_buffer {
-  T* d_data_ = nullptr;
-  size_t count_ = 0;
-  cudaStream_t stream_ = 0;
-
-public:
-  device_buffer() noexcept = default;
-  device_buffer(size_t cnt, cudaStream_t stream = 0):
-    stream_(stream){
-    resize(cnt);
-  }
-
-  T* data() const noexcept {return d_data_;}
-  size_t size() const noexcept {return count_;}
-  bool empty() const noexcept {return count_ == 0;}
-
-  void resize(size_t cnt) {
-    if (cnt == count_) {
-      return;
-    }
-    // new size is zero, free the buffer if not null
-    if(cnt == 0 && d_data_ != nullptr) {
-      RMM_FREE(d_data_, stream_);
-      d_data_ = nullptr;
-      count_ = cnt;
-      return;
-    }
-
-    T* new_ptr = nullptr;
-    const auto error = RMM_ALLOC(&new_ptr, cnt*sizeof(T), stream_);
-    if(error != RMM_SUCCESS) {
-      cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
-    }
-    // Copy to the new buffer, if some memory was already allocated
-    if (count_ != 0) {
-      const size_t copy_bytes = std::min(cnt, count_)*sizeof(T);
-      CUDA_TRY(cudaMemcpyAsync(new_ptr, d_data_, copy_bytes, cudaMemcpyDefault, stream_));
-      RMM_FREE(d_data_, stream_);
-    }
-
-    d_data_ = new_ptr;
-    count_ = cnt;
-  }
-
-  device_buffer(device_buffer& ) = delete;
-  device_buffer(device_buffer&& rh) noexcept {
-    d_data_ = rh.d_data_; 
-    count_ = rh.count_;
-    stream_ = rh.stream_;
-
-    rh.d_data_ = nullptr;
-    rh.count_ = 0;
-  }
-
-  device_buffer& operator=(device_buffer& ) = delete;
-  device_buffer& operator=(device_buffer&& rh) noexcept {
-    RMM_FREE(d_data_, stream_);
-
-    d_data_ = rh.d_data_; 
-    count_ = rh.count_;
-    stream_ = rh.stream_;
-
-    rh.d_data_ = nullptr;
-    rh.count_ = 0;
-   
-    return *this;
-  }
-
-  ~device_buffer() {
-    RMM_FREE(d_data_, stream_);
-  }
 };

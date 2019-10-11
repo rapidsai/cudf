@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>

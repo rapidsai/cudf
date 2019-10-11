@@ -29,7 +29,7 @@ namespace gpu {
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
-  explicit constexpr CompressedStreamInfo(uint8_t *compressed_data_,
+  explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_,
                                           size_t compressed_size_)
       : compressed_data(compressed_data_),
         compressed_data_size(compressed_size_),
@@ -40,7 +40,7 @@ struct CompressedStreamInfo {
         num_compressed_blocks(0),
         num_uncompressed_blocks(0),
         max_uncompressed_size(0) {}
-  uint8_t *compressed_data;         // [in] base ptr to compressed stream data
+  const uint8_t *compressed_data;   // [in] base ptr to compressed stream data
   uint8_t *uncompressed_data;       // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream
   gpu_inflate_input_s *decctl;      // [in] base ptr to decompression structure to be filled

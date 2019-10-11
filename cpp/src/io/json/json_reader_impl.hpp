@@ -16,15 +16,19 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+
 #include <memory>
+#include <string>
 #include <vector>
 
-#include <cudf/cudf.h>
-#include <cudf/legacy/table.hpp>
-
 #include "../csv/type_conversion.cuh"
+
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
+
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -57,7 +61,8 @@ private:
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
-  device_buffer<char> d_data_;
+  rmm::device_buffer data_;
+  rmm::device_vector<uint64_t> rec_starts_;
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_ = 0;
@@ -66,8 +71,6 @@ private:
   std::vector<gdf_dtype> dtypes_;
   std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
   std::vector<gdf_column_wrapper> columns_;
-
-  device_buffer<uint64_t> rec_starts_;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;

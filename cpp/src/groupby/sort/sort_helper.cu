@@ -16,14 +16,14 @@
 
 #include "sort_helper.hpp"
 
-#include <copying/scatter.hpp>
+#include <copying/legacy/scatter.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>

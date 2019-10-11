@@ -10,7 +10,7 @@ from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 
 
-cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 
     cdef cudf_table gather(
         const cudf_table * source_table,

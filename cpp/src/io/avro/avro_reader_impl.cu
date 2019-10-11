@@ -19,9 +19,8 @@
 #include "avro_reader_impl.hpp"
 
 #include "io/comp/gpuinflate.h"
-#include <cuda_runtime.h>
 
-#include <inttypes.h>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -94,16 +93,17 @@ class avro_metadata : public avro::file_metadata {
 
     const auto num_avro_columns = static_cast<int>(columns.size());
     if (!use_names.empty()) {
-      for (int i = 0, column_id = 0; i < (int)use_names.size(); i++) {
-        for (int j = 0; j < num_avro_columns; j++, column_id++) {
-          if (column_id >= num_avro_columns) {
-            column_id = 0;
+      int index = 0;
+      for (const auto &use_name : use_names) {
+        for (int i = 0; i < num_avro_columns; ++i, ++index) {
+          if (index >= num_avro_columns) {
+            index = 0;
           }
-          if (columns[column_id].name == use_names[i] &&
+          if (columns[index].name == use_name &&
               GDF_invalid !=
-                  to_dtype(&schema[columns[column_id].schema_data_idx])) {
-            selection.emplace_back(column_id, columns[column_id].name);
-            column_id++;
+                  to_dtype(&schema[columns[index].schema_data_idx])) {
+            selection.emplace_back(index, columns[index].name);
+            index++;
             break;
           }
         }
@@ -185,11 +185,9 @@ table reader::Impl::read(int skip_rows, int num_rows) {
   }
 
   if (md_->total_data_size > 0) {
-    device_buffer<uint8_t> block_data(align_size(md_->total_data_size));
     const auto buffer =
         source_->get_buffer(md_->block_list[0].offset, md_->total_data_size);
-    CUDA_TRY(cudaMemcpyAsync(block_data.data(), buffer->data(), buffer->size(),
-                             cudaMemcpyHostToDevice));
+    rmm::device_buffer block_data(buffer->data(), align_size(buffer->size()));
 
     if (md_->codec != "" && md_->codec != "null") {
       auto decomp_block_data = decompress_data(block_data);
@@ -247,7 +245,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
       }
       CUDA_TRY(cudaMemcpyAsync(
           global_dictionary.device_ptr(), global_dictionary.host_ptr(),
-          global_dictionary.memory_size(), cudaMemcpyHostToDevice, 0));
+          global_dictionary.memory_size(), cudaMemcpyHostToDevice));
     }
 
     // Write out columns
@@ -274,9 +272,8 @@ table reader::Impl::read(int skip_rows, int num_rows) {
   return cudf::table(out_cols.data(), out_cols.size());
 }
 
-device_buffer<uint8_t> reader::Impl::decompress_data(
-    const device_buffer<uint8_t> &comp_block_data) {
-
+rmm::device_buffer reader::Impl::decompress_data(
+    const rmm::device_buffer &comp_block_data) {
   size_t uncompressed_data_size = 0;
   hostdevice_vector<gpu_inflate_input_s> inflate_in(md_->block_list.size());
   hostdevice_vector<gpu_inflate_status_s> inflate_out(md_->block_list.size());
@@ -310,15 +307,17 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
     CUDF_FAIL("Unsupported compression codec\n");
   }
 
-  device_buffer<uint8_t> decomp_block_data(uncompressed_data_size);
+  rmm::device_buffer decomp_block_data(uncompressed_data_size);
 
   const auto base_offset = md_->block_list[0].offset;
   for (size_t i = 0, dst_pos = 0; i < md_->block_list.size(); i++) {
     const auto src_pos = md_->block_list[i].offset - base_offset;
 
-    inflate_in[i].srcDevice = comp_block_data.data() + src_pos;
+    inflate_in[i].srcDevice =
+        static_cast<const uint8_t *>(comp_block_data.data()) + src_pos;
     inflate_in[i].srcSize = md_->block_list[i].size;
-    inflate_in[i].dstDevice = decomp_block_data.data() + dst_pos;
+    inflate_in[i].dstDevice =
+        static_cast<uint8_t *>(decomp_block_data.data()) + dst_pos;
 
     // Update blocks offsets & sizes to refer to uncompressed data
     md_->block_list[i].offset = dst_pos;
@@ -328,22 +327,21 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
 
   for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
     CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(), inflate_in.host_ptr(),
-                             inflate_in.memory_size(), cudaMemcpyHostToDevice,
-                             0));
+                             inflate_in.memory_size(), cudaMemcpyHostToDevice));
     CUDA_TRY(cudaMemsetAsync(inflate_out.device_ptr(), 0,
-                             inflate_out.memory_size(), 0));
+                             inflate_out.memory_size()));
     if (md_->codec == "deflate") {
       CUDA_TRY(gpuinflate(inflate_in.device_ptr(), inflate_out.device_ptr(),
-                          inflate_in.size(), 0, 0));
+                          inflate_in.size(), 0));
     } else if (md_->codec == "snappy") {
       CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(),
-                          inflate_in.size(), 0));
+                          inflate_in.size()));
     } else {
       CUDF_FAIL("Unsupported compression codec\n");
     }
     CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(), inflate_out.device_ptr(),
-                             inflate_out.memory_size(), cudaMemcpyDeviceToHost,
-                             0));
+                             inflate_out.memory_size(),
+                             cudaMemcpyDeviceToHost));
     CUDA_TRY(cudaStreamSynchronize(0));
 
     // Check if larger output is required, as it's not known ahead of time
@@ -361,7 +359,8 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
       if (actual_uncompressed_size > uncompressed_data_size) {
         decomp_block_data.resize(actual_uncompressed_size);
         for (size_t i = 0, dst_pos = 0; i < md_->block_list.size(); i++) {
-          inflate_in[i].dstDevice = decomp_block_data.data() + dst_pos;
+          auto dst_base = static_cast<uint8_t *>(decomp_block_data.data());
+          inflate_in[i].dstDevice = dst_base + dst_pos;
 
           md_->block_list[i].offset = dst_pos;
           md_->block_list[i].size = static_cast<uint32_t>(inflate_in[i].dstSize);
@@ -379,7 +378,7 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
 }
 
 void reader::Impl::decode_data(
-    const device_buffer<uint8_t> &block_data,
+    const rmm::device_buffer &block_data,
     const std::vector<std::pair<uint32_t, uint32_t>> &dict,
     const hostdevice_vector<uint8_t> &global_dictionary,
     size_t total_dictionary_entries,
@@ -445,17 +444,16 @@ void reader::Impl::decode_data(
       schema_desc[schema_data_idx].count = dict[i].first;
     }
   }
-  device_buffer<block_desc_s> block_list(md_->block_list.size());
+  rmm::device_buffer block_list(md_->block_list.data(),
+                                md_->block_list.size() * sizeof(block_desc_s));
   CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(), schema_desc.host_ptr(),
-           schema_desc.memory_size(), cudaMemcpyHostToDevice, 0));
-  CUDA_TRY(cudaMemcpyAsync(block_list.data(), md_->block_list.data(),
-                           md_->block_list.size() * sizeof(block_desc_s),
-                           cudaMemcpyHostToDevice, 0));
+                           schema_desc.memory_size(), cudaMemcpyHostToDevice));
 
   CUDA_TRY(DecodeAvroColumnData(
-      block_list.data(), schema_desc.device_ptr(),
+      static_cast<block_desc_s *>(block_list.data()), schema_desc.device_ptr(),
       reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.device_ptr()),
-      block_data.data(), static_cast<uint32_t>(block_list.size()),
+      static_cast<const uint8_t *>(block_data.data()),
+      static_cast<uint32_t>(block_list.size()),
       static_cast<uint32_t>(schema_desc.size()),
       static_cast<uint32_t>(total_dictionary_entries), md_->num_rows,
       md_->skip_rows, min_row_data_size, 0));
@@ -465,12 +463,11 @@ void reader::Impl::decode_data(
     if (valid_alias[i] != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(columns[i]->valid, valid_alias[i],
                                gdf_valid_allocation_size(columns[i]->size),
-                               cudaMemcpyHostToDevice, 0));
+                               cudaMemcpyHostToDevice));
     }
   }
   CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(), schema_desc.device_ptr(),
-                           schema_desc.memory_size(), cudaMemcpyDeviceToHost,
-                           0));
+                           schema_desc.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
   for (size_t i = 0; i < columns.size(); i++) {
     const auto col_idx = selected_cols_[i].first;

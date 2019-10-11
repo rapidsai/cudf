@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/stream_compaction.hpp>
 
 #include <bitmask/legacy/bit_mask.cuh>

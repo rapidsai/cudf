@@ -16,7 +16,7 @@
 
 #include <cudf/stream_compaction.hpp>
 #include <cudf/legacy/table.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <utilities/error_utils.hpp>
 

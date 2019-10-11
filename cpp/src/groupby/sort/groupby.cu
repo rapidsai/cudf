@@ -21,7 +21,7 @@
 #include <tuple>
 
 #include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/cudf.h>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/bitmask.hpp>

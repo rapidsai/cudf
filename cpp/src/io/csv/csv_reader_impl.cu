@@ -23,37 +23,15 @@
 #include "csv_gpu.h"
 #include "csv_reader_impl.hpp"
 
-#include <cuda_runtime.h>
-
 #include <algorithm>
 #include <iostream>
 #include <numeric>
-#include <string>
-#include <vector>
 #include <tuple>
-#include <utility>
-#include <iterator>
-#include <memory>
 #include <unordered_map>
-#include <cstring>
-
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
-#include <thrust/host_vector.h>
 
 #include "type_conversion.cuh"
 #include "datetime_parser.cuh"
 
-#include <cudf/cudf.h>
 #include <cudf/unary.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/trie.cuh>
@@ -62,12 +40,8 @@
 
 #include <nvstrings/NVStrings.h>
 
-#include <rmm/rmm.h>
-#include <rmm/thrust_rmm_allocator.h>
 #include <io/comp/io_uncomp.h>
-
 #include <io/cuio_common.hpp>
-#include <io/utilities/datasource.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 using std::vector;
@@ -273,9 +247,7 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
     CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
 
     num_bits = (data_size + 63) / 64;
-    data = device_buffer<char>(data_size);
-    CUDA_TRY(cudaMemcpyAsync(data.data(), h_uncomp_data + row_range.first,
-                             data_size, cudaMemcpyHostToDevice));
+    data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
   }
 
   // Check if the user gave us a list of column names
@@ -584,8 +556,9 @@ reader::Impl::gather_column_dtypes() {
       CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0,
                                column_stats.memory_size()));
       CUDA_TRY(gpu::DetectCsvDataTypes(
-          data.data(), row_offsets.data().get(), num_records, num_actual_cols,
-          opts, d_column_flags.data().get(), column_stats.device_ptr()));
+          static_cast<const char *>(data_.data()), row_offsets.data().get(),
+          num_records, num_actual_cols, opts, d_column_flags.data().get(),
+          column_stats.device_ptr()));
       CUDA_TRY(
           cudaMemcpyAsync(column_stats.host_ptr(), column_stats.device_ptr(),
                           column_stats.memory_size(), cudaMemcpyDeviceToHost));
@@ -701,9 +674,10 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
   d_column_flags = h_column_flags;
 
   CUDA_TRY(gpu::DecodeCsvColumnData(
-      data.data(), row_offsets.data().get(), num_records, num_actual_cols, opts,
-      d_column_flags.data().get(), d_dtypes.data().get(), d_data.data().get(),
-      d_valid.data().get(), d_valid_counts.data().get()));
+      static_cast<const char *>(data_.data()), row_offsets.data().get(),
+      num_records, num_actual_cols, opts, d_column_flags.data().get(),
+      d_dtypes.data().get(), d_data.data().get(), d_valid.data().get(),
+      d_valid_counts.data().get()));
   CUDA_TRY(cudaStreamSynchronize(0));
 
   thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;

@@ -17,7 +17,7 @@
 #include <utilities/error_utils.hpp>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/types.h>
