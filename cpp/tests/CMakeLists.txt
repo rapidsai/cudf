@@ -66,6 +66,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
@@ -103,6 +104,14 @@ set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
+
+###################################################################################################
+# - timestamps tests ----------------------------------------------------------------------------------
+
+set(TIMESTAMPS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
+
+ConfigureTest(TIMESTAMPS_TEST "${TIMESTAMPS_TEST_SRC}")
 
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------

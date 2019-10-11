@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the row indices that would produce `input`  in a
@@ -41,5 +41,5 @@ std::unique_ptr<column> sorted_order(
     table_view input, std::vector<order> const& column_order,
     null_order null_precedence,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf
