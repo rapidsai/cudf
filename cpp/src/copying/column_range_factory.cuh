@@ -28,6 +28,7 @@ namespace cudf
 namespace detail
 {
 
+template <bool use_source_validity>
 struct column_range_factory {
   gdf_column column;
   gdf_index_type begin;
@@ -44,7 +45,9 @@ struct column_range_factory {
 
     __device__
     bool valid(gdf_index_type index) {
-      return bit_mask::is_valid(bitmask, begin + index);
+      return use_source_validity
+        ? bit_mask::is_valid(bitmask, begin + index)
+        : true;
     }
   };
 

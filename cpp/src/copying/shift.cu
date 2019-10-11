@@ -28,40 +28,46 @@ namespace cudf {
 namespace detail {
 
   void shift(
-    gdf_column *out_column,
-    gdf_column const &in_column,
+    gdf_column *out,
+    gdf_column const &in,
     gdf_index_type periods,
     gdf_scalar const fill_value
   )
   {
     gdf_index_type in_start = 0;
     gdf_index_type out_start = periods;
-    gdf_index_type out_end = out_column->size;
+    gdf_index_type out_end = out->size;
     gdf_index_type fill_start = 0;
     gdf_index_type fill_end = out_start;
   
     if (periods < 0) {
       in_start = -periods;
       out_start = 0;
-      out_end = out_column->size + periods;
+      out_end = out->size + periods;
       fill_start = out_end;
-      fill_end = out_column->size;
+      fill_end = out->size;
     }
 
-    if (std::abs(periods) < out_column->size) {
-      detail::copy_range(out_column,
-                         detail::column_range_factory{in_column, in_start},
-                         out_start,
-                         out_end);
+    if (std::abs(periods) < out->size) {
+      if (is_nullable(in)) {
+        detail::copy_range(out,
+                           detail::column_range_factory<true>{in, in_start},
+                           out_start,
+                           out_end);
+      } else {
+        detail::copy_range(out,
+                           detail::column_range_factory<false>{in, in_start},
+                           out_start,
+                           out_end);
+      }
     } else {
       fill_start = 0;
-      fill_end = out_column->size;
+      fill_end = out->size;
     }
 
-    detail::copy_range(out_column,
-                       detail::scalar_factory{fill_value},
-                       fill_start,
-                       fill_end);
+    auto fill_source = detail::scalar_factory{fill_value};
+
+    detail::copy_range(out, fill_source, fill_start, fill_end);
   }
 
 }; // namespace detail

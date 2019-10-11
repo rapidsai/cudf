@@ -60,7 +60,7 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
         "Failed to synchronize NVCategory");
 
       detail::copy_range(out_column,
-                         detail::column_range_factory{temp_in, in_begin},
+                         detail::column_range_factory<true>{temp_in, in_begin},
                          out_begin, out_end);
       
       gdf_column_free(&temp_out);
@@ -68,7 +68,7 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
     }
     else {
       detail::copy_range(out_column,
-                         detail::column_range_factory{in_column, in_begin},
+                         detail::column_range_factory<true>{in_column, in_begin},
                          out_begin, out_end);
     }
   }

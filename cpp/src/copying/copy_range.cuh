@@ -160,6 +160,8 @@ struct copy_range_dispatch {
     kernel<<<grid.num_blocks, block_size, 0, stream>>>
       (data, bitmask, null_count, begin, end, input);
 
+    CHECK_STREAM(stream);
+
     if (null_count != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
                                sizeof(gdf_size_type), cudaMemcpyDefault, stream));
