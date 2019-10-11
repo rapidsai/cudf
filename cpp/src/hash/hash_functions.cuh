@@ -192,84 +192,57 @@ template <typename Key>
 using default_hash = MurmurHash3_32<Key>;
 
 /**
-* @brief Specialization of MurmurHash3_32 for string_view.
+* @brief Specialization of MurmurHash3_32 operator for strings.
 */
 template<>
-struct MurmurHash3_32<cudf::string_view>
+__forceinline__ 
+__host__ __device__ hash_value_type MurmurHash3_32<cudf::string_view>::operator()(const cudf::string_view& key) const
 {
-    using result_type = hash_value_type;
-
-    // This is the same as the numeric version.
-    // Perhaps this could be standalone utility method.
-    __forceinline__
-    __host__ __device__ uint32_t rotl32(uint32_t x, int8_t r) const
-    {
-        return (x << r) | (x >> (32 - r));
-    }
-    
-    // This is the same as the numeric version.
-    // Perhaps this could be standalone utility method.
-    __forceinline__
-    __host__ __device__ uint32_t fmix32(uint32_t h) const
-    {
-        h ^= h >> 16;
-        h *= 0x85ebca6b;
-        h ^= h >> 13;
-        h *= 0xc2b2ae35;
-        h ^= h >> 16;
-        return h;
-    }
-
-    // String characters will not be aligned on uint32 boundary
-    __forceinline__
-    __host__ __device__ uint32_t getblock32(const uint32_t* p, int i) const
-    {
-        // Individual byte reads for unaligned char accesses
-        auto q = (const int8_t*)(p + i);
+    uint32_t seed = m_seed;
+    const int len = (int)key.size_bytes();
+    const uint8_t* data = (const uint8_t*)key.data();
+    const int nblocks = len / 4;
+    result_type h1 = seed;
+    constexpr uint32_t c1 = 0xcc9e2d51;
+    constexpr uint32_t c2 = 0x1b873593;
+    auto getblock32 = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
+      // Individual byte reads for unaligned accesses (very likely)
+      #ifndef __CUDA_ARCH__
+        CUDF_FAIL("Hashing a string in host code is not supported.");
+      #else
+        auto q = (const uint8_t*)(p + i);
         return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+      #endif
     };
 
-    // This is almost the same as the numeric version.
-    // Refactoring to use common pieces may degrade performance of the numeric version.
-    __forceinline__ 
-    __host__ __device__ result_type operator()(const cudf::string_view& key) const
-    {
-        uint32_t seed = 31;
-        const int len = (int)key.size_bytes();
-        const uint8_t* data = (const uint8_t*)key.data();
-        const int nblocks = len / 4;
-        result_type h1 = seed;
-        constexpr uint32_t c1 = 0xcc9e2d51;
-        constexpr uint32_t c2 = 0x1b873593;
-        //----------
-        // body
-        const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
-        for (int i = -nblocks; i; i++) {
-          uint32_t k1 = getblock32(blocks, i);
-          k1 *= c1;
-          k1 = rotl32(k1, 15);
-          k1 *= c2;
-          h1 ^= k1;
-          h1 = rotl32(h1, 13);
-          h1 = h1 * 5 + 0xe6546b64;
-        }
-        //----------
-        // tail
-        const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
-        uint32_t k1 = 0;
-        switch (len & 3) {
-          case 3: k1 ^= tail[2] << 16;
-          case 2: k1 ^= tail[1] << 8;
-          case 1: k1 ^= tail[0];
-            k1 *= c1; k1 = rotl32(k1, 15); k1 *= c2; h1 ^= k1;
-        };
-        //----------
-        // finalization
-        h1 ^= len;
-        h1 = fmix32(h1);
-        return h1;
+    //----------
+    // body
+    const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+    for (int i = -nblocks; i; i++) {
+      uint32_t k1 = getblock32(blocks, i);
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
     }
-};
+    //----------
+    // tail
+    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+    uint32_t k1 = 0;
+    switch (len & 3) {
+      case 3: k1 ^= tail[2] << 16;
+      case 2: k1 ^= tail[1] << 8;
+      case 1: k1 ^= tail[0];
+        k1 *= c1; k1 = rotl32(k1, 15); k1 *= c2; h1 ^= k1;
+    };
+    //----------
+    // finalization
+    h1 ^= len;
+    h1 = fmix32(h1);
+    return h1;
+}
 
 
 #endif //HASH_FUNCTIONS_CUH
