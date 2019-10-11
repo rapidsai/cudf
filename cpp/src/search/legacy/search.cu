@@ -22,7 +22,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <cudf/legacy/search.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 

@@ -74,7 +74,7 @@ class device_table {
    *---------------------------------------------------------------------------**/
   static auto create(gdf_size_type num_columns, gdf_column const* const* cols,
                      cudaStream_t stream = 0) {
-    auto deleter = [](device_table* d) { d->destroy(); };
+    auto deleter = [stream](device_table* d) { d->destroy(stream); };
 
     std::unique_ptr<device_table, decltype(deleter)> p{
         new device_table(num_columns, cols, stream), deleter};
@@ -104,8 +104,8 @@ class device_table {
    * unique_ptr returned from device_table::create.
    *
    *---------------------------------------------------------------------------**/
-  __host__ void destroy(void) {
-    RMM_FREE(device_columns, _stream);
+  __host__ void destroy(cudaStream_t stream) {
+    RMM_FREE(device_columns, stream);
     delete this;
   }
 
@@ -133,8 +133,6 @@ class device_table {
   bool _has_nulls;
   gdf_column* device_columns{
       nullptr};  ///< Array of `gdf_column`s in device memory
-  cudaStream_t
-      _stream;  ///< Stream used to allocate/free the table's device memory
 
  protected:
   /**---------------------------------------------------------------------------*
