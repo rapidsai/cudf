@@ -633,7 +633,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       }
 
       int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
-                               ? (col_schema.type_length << 3)
+                               ? col_schema.type_length
                                : 0;
       int32_t ts_clock_rate = 0;
       if (gdf_column->dtype == GDF_INT8)
@@ -644,6 +644,11 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
         type_width = 4;  // str -> hash32
       else if (gdf_column->dtype == GDF_TIMESTAMP)
         ts_clock_rate = to_clockrate(timestamp_unit_);
+
+      int8_t converted_type = col_schema.converted_type;
+      if (converted_type == parquet::DECIMAL && gdf_column->dtype != GDF_FLOAT64) {
+        converted_type = parquet::UNKNOWN; // Not converting to float64
+      }
 
       uint8_t *d_compdata = nullptr;
       if (col_meta.total_compressed_size != 0) {
@@ -662,7 +667,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
           required_bits(col_schema.max_repetition_level), col_meta.codec,
-          col_schema.converted_type, col_schema.decimal_scale, ts_clock_rate));
+          converted_type, col_schema.decimal_scale, ts_clock_rate));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "

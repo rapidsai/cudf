@@ -53,6 +53,10 @@ template <typename T> inline __device__ T WarpReducePos8(T pos, uint32_t t) { T 
 template <typename T> inline __device__ T WarpReducePos16(T pos, uint32_t t) { T tmp; pos = WarpReducePos8(pos, t); tmp = SHFL(pos, (t & 0x10) | 7); pos += (t & 8) ? tmp : 0; return pos; }
 template <typename T> inline __device__ T WarpReducePos32(T pos, uint32_t t) { T tmp; pos = WarpReducePos16(pos, t); tmp = SHFL(pos, 0xf); pos += (t & 16) ? tmp : 0; return pos; }
 
+inline __device__ double Int128ToDouble_rn(int64_t lo, uint64_t hi)
+{
+    return __fma_rn(__ll2double_rn(hi), 4294967296.0, __ull2double_rn(lo));
+}
 
 } // namespace io
 } // namespace cudf
