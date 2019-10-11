@@ -100,6 +100,28 @@ CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 
+
+template <typename T>
+struct type_to_scalar_type_impl {
+  using ScalarType = cudf::scalar;
+};
+
+template <>
+struct type_to_scalar_type_impl<int8_t> {
+  using ScalarType = cudf::numeric_scalar<int8_t>;
+};
+
+template <>
+struct type_to_scalar_type_impl<cudf::string> {
+  using ScalarType = cudf::string_scalar;
+};
+
+template <>
+struct type_to_scalar_type_impl<timestamp_D> {
+  using ScalarType = cudf::timestamp_scalar<timestamp_D>;
+};
+
+
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
  * the specified `cudf::data_type`'s `id()`.
