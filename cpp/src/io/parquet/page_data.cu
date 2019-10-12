@@ -948,8 +948,8 @@ inline __device__ void gpuOutputDecimal(volatile page_state_s *s, int src_pos, d
                 i128_hi = (i128_hi << 8) | v;
             }
             if (dtype_len_in < 16) {
-                i128_hi <<= 64 - (16 - dtype_len_in) * 8;
-                i128_hi >>= 64 - (16 - dtype_len_in) * 8;
+                i128_hi <<= 64 - (dtype_len_in - 8) * 8;
+                i128_hi >>= 64 - (dtype_len_in - 8) * 8;
             }
         }
         else {
