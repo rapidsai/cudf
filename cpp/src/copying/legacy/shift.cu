@@ -82,6 +82,8 @@ gdf_column shift(
     return copy(in);
   }
 
+  validate(in);
+
   gdf_column out;
 
   if (fill_value.is_valid == false || is_nullable(in)) {

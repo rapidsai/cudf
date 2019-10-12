@@ -2075,7 +2075,7 @@ def test_dataframe_reindex_10(copy):
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
-    index = pd.date_range("12/29/2009", periodss=10, freq="D")
+    index = pd.date_range("12/29/2009", periods=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}

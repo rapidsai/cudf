@@ -461,6 +461,22 @@ std::vector<gdf_column*> split(gdf_column const &         input,
                                gdf_index_type const*      splits,
                                gdf_size_type              num_splits);
 
+/**
+* @brief Shifts a column by `periods`, using a fill_value for pre/post-fix data.
+*
+* Output will be nullable if either the input is nullable or the fill value is null.
+*
+* Example:
+* input:        {14, 72, @, 8, @, 9, 13, 7}
+* periods:      3
+* fill_value:   @
+* output:       {@, @, @, 14, 72, @, 8, @}
+
+*
+* @param[in] input      The input column whose rows will be shifted.
+* @param[in] periods    The amount and direction by which to shift the input.
+* @param[in] fill_value The value used in place of undefined outputs.
+*/
 gdf_column shift(const gdf_column& input,
                  gdf_index_type periods,
                  const gdf_scalar fill_value);
@@ -503,5 +519,4 @@ gdf_column shift(const gdf_column& input,
  */
 std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
-
 }  // namespace cudf
