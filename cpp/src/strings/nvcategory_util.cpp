@@ -9,7 +9,7 @@
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/binaryop.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 namespace {
   NVCategory * combine_column_categories(const gdf_column* const input_columns[], int num_columns){

@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef COPYING_HPP
-#define COPYING_HPP
+#pragma once
 
-#include "cudf.h"
-#include "types.hpp"
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 #include <vector>
 
 // Forward declaration
@@ -506,5 +505,3 @@ std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
 
 }  // namespace cudf
-
-#endif  // COPYING_H

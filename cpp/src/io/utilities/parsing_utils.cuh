@@ -22,22 +22,16 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+
 #include <vector>
 
-#include <cuda.h>
-#include <cuda_runtime.h>
-
-#include <cudf/cudf.h>
+#include <io/utilities/wrapper_utils.hpp>
+#include <io/csv/type_conversion.cuh>
 
 #include <thrust/pair.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
-
-#include <rmm/rmm.h>
-#include <rmm/thrust_rmm_allocator.h>
-
-#include <io/utilities/wrapper_utils.hpp>
-#include <io/csv/type_conversion.cuh>
 
 gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
 
@@ -45,7 +39,7 @@ template<class T>
 gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
 
-device_buffer<int16_t> getBracketLevels(
+rmm::device_vector<int16_t> getBracketLevels(
 	thrust::pair<uint64_t,char>* brackets, int count, 
 	const std::string& open_chars, const std::string& close_chars);
 

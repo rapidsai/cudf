@@ -247,6 +247,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
@@ -412,15 +413,15 @@ add_library(cudf
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
-            src/copying/copy.cpp
-            src/copying/gather.cu
-            src/copying/scatter.cu
-            src/copying/shift.cu
-            src/copying/slice.cu
-            src/copying/split.cu
+            src/copying/legacy/copy.cpp
+            src/copying/legacy/gather.cu
+            src/copying/legacy/scatter.cu
+            src/copying/legacy/shift.cu
+            src/copying/legacy/slice.cu
+            src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
-            src/copying/copy_range.cu
+            src/copying/legacy/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
             src/search/search.cu

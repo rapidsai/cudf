@@ -28,10 +28,10 @@
 #include <memory>
 #include <iostream>
 
-#include <rmm/rmm.h>
-#include <rmm/thrust_rmm_allocator.h>
 #include <utilities/error_utils.hpp>
 #include <io/utilities/wrapper_utils.hpp>
+
+#include <rmm/device_buffer.hpp>
 
 // When processing the input in chunks, this is the maximum size of each chunk.
 // Only one chunk is loaded on the GPU at a time, so this value is chosen to
@@ -131,17 +131,16 @@ template<class T>
 gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions) {
 
-	device_buffer<char> d_chunk(std::min(max_chunk_bytes, h_size));
-	device_buffer<gdf_size_type> d_count(1);
-	CUDA_TRY(cudaMemsetAsync(d_count.data(), 0ull, sizeof(gdf_size_type)));
+	rmm::device_buffer d_chunk(std::min(max_chunk_bytes, h_size));
+	rmm::device_vector<gdf_size_type> d_count(1, 0);
 
 	int block_size = 0;		// suggested thread count to use
 	int min_grid_size = 0;	// minimum block count required
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, countAndSetPositions<T>) );
 
 	const size_t chunk_count = divCeil(h_size, max_chunk_bytes);
-	for (size_t ci = 0; ci < chunk_count; ++ci) {	
-		const auto chunk_offset = ci * max_chunk_bytes;	
+	for (size_t ci = 0; ci < chunk_count; ++ci) {
+		const auto chunk_offset = ci * max_chunk_bytes;
 		const auto h_chunk = h_data + chunk_offset;
 		const int chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = divCeil(chunk_bytes, bytes_per_find_thread);
@@ -152,14 +151,12 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
 
 		for (char key: keys) {
 			countAndSetPositions<T> <<< grid_size, block_size >>> (
-				d_chunk.data(), chunk_bytes, chunk_offset + result_offset, key,
-				d_count.data(), positions);
+				static_cast<char *>(d_chunk.data()), chunk_bytes,
+				chunk_offset + result_offset, key, d_count.data().get(), positions);
 		}
 	}
 
-	gdf_size_type h_count = 0;
-	CUDA_TRY(cudaMemcpy(&h_count, d_count.data(), sizeof(gdf_size_type), cudaMemcpyDefault));
-	return h_count;
+	return d_count[0];
 }
 
 /**---------------------------------------------------------------------------*
@@ -485,9 +482,9 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
  * @param[in] open_chars string of characters to treat as open brackets
  * @param[in] close_chars string of characters to treat as close brackets
  * 
- * @return device_ptr<int16_t> Device memory array of levels
+ * @return rmm::device_vector<int16_t> Device vector containing bracket levels
  *---------------------------------------------------------------------------**/
-device_buffer<int16_t> getBracketLevels(
+rmm::device_vector<int16_t> getBracketLevels(
 	pos_key_pair* brackets, int count,
 	const std::string& open_chars, const std::string& close_chars){
 	// TODO: consider moving sort() out of this function
@@ -500,29 +497,24 @@ device_buffer<int16_t> getBracketLevels(
 		"The number of open and close bracket characters must be equal.");
 
 	// Copy the open/close chars to device
-	device_buffer<char> d_open_chars(open_chars.size());
-	device_buffer<char> d_close_chars(close_chars.size());
-	CUDA_TRY(cudaMemcpyAsync(
-		d_open_chars.data(), open_chars.c_str(),
-		open_chars.size() * sizeof(char), cudaMemcpyDefault));
-	CUDA_TRY(cudaMemcpyAsync(
-		d_close_chars.data(), close_chars.c_str(),
-		close_chars.size() * sizeof(char), cudaMemcpyDefault));
+	rmm::device_buffer d_open_chars(open_chars.data(), open_chars.size());
+	rmm::device_buffer d_close_chars(close_chars.data(), close_chars.size());
 
 	if (aggregated_sums.getHeight() != 0) {
 		sumBrackets(
-			brackets, count,
-			d_open_chars.data(), d_close_chars.data(), open_chars.size(),
+			brackets, count, static_cast<char *>(d_open_chars.data()),
+			static_cast<char *>(d_close_chars.data()), open_chars.size(),
 			aggregated_sums[0]);
 		for (size_t level_idx = 1; level_idx < aggregated_sums.getHeight(); ++level_idx)
 			aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
 	}
 
-	device_buffer<int16_t> d_levels(count);
+	rmm::device_vector<int16_t> d_levels(count);
 	assignLevels(
 		brackets, count, aggregated_sums,
-		d_open_chars.data(), d_close_chars.data(), open_chars.size(),
-		d_levels.data());
+		static_cast<char *>(d_open_chars.data()),
+		static_cast<char *>(d_close_chars.data()),
+		open_chars.size(), d_levels.data().get());
 
 	return std::move(d_levels);
 }

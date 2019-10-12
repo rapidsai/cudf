@@ -15,10 +15,10 @@
  */
  
 #include <cudf/cudf.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/filling.hpp>
 
-#include <copying/copy_range.cuh>
+#include <copying/legacy/copy_range.cuh>
 #include <filling/scalar_factory.cuh>
 
 #include <vector>

@@ -23,7 +23,7 @@
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <copying/column_range_factory.cuh>
+#include <copying/legacy/column_range_factory.cuh>
 
 #include <cub/cub.cuh>
 
