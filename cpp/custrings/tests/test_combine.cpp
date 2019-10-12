@@ -12,7 +12,7 @@ std::vector<const char*> hstrs1{ "thesé", nullptr, "are", "the",
 std::vector<const char*> hstrs2{ "1234", "accénted", "", nullptr, 
                                  "5678", "othér", "9" };
 
-TEST(TestCombine, Concatenate)
+TEST_F(TestCombine, Concatenate)
 {
     NVStrings* strs1 = NVStrings::create_from_array(hstrs1.data(),hstrs1.size());
     NVStrings* strs2 = NVStrings::create_from_array(hstrs2.data(),hstrs2.size());
@@ -48,7 +48,7 @@ TEST(TestCombine, Concatenate)
 std::vector<const char*> hstrs3{ "abcdéf", "", nullptr, "ghijkl",
                                  "mnop", "éach", "xyz" };
 
-TEST(TestCombine, ConcatenateMultiple)
+TEST_F(TestCombine, ConcatenateMultiple)
 {
     NVStrings* strs1 = NVStrings::create_from_array(hstrs1.data(),hstrs1.size());
     NVStrings* strs2 = NVStrings::create_from_array(hstrs2.data(),hstrs2.size());
@@ -86,7 +86,7 @@ TEST(TestCombine, ConcatenateMultiple)
     NVStrings::destroy(strs3);
 }
 
-TEST(TestCombine, Join)
+TEST_F(TestCombine, Join)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs1.data(),hstrs1.size());
 
@@ -112,13 +112,4 @@ TEST(TestCombine, Join)
     }
 
     NVStrings::destroy(strs);
-}
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

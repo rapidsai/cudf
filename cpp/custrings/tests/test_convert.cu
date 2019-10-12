@@ -9,7 +9,7 @@
 
 struct TestConvert : public GdfTest{};
 
-TEST(TestConvert, Hash)
+TEST_F(TestConvert, Hash)
 {
     std::vector<const char*> hstrs{ "thesé", nullptr, "are", "the",
                                 "tést", "strings", "" };
@@ -25,7 +25,7 @@ TEST(TestConvert, Hash)
     NVStrings::destroy(strs);
 }
 
-TEST(TestConvert, ToInteger)
+TEST_F(TestConvert, ToInteger)
 {
     std::vector<const char*> hstrs{"1234", nullptr, 
             "-876", "543.2", "-0.12", ".55", "-.002",
@@ -55,7 +55,7 @@ TEST(TestConvert, ToInteger)
     NVStrings::destroy(strs);
 }
 
-TEST(TestConvert, FromInteger)
+TEST_F(TestConvert, FromInteger)
 {
     {    
         int values[] = {100, 987654321, -12761, 0, 5, -4};
@@ -77,7 +77,7 @@ TEST(TestConvert, FromInteger)
     }
 }
 
-TEST(TestConvert, Hex)
+TEST_F(TestConvert, Hex)
 {
     std::vector<const char*> hstrs{"1234", nullptr, 
             "98BEEF", "1a5", "CAFE", "2face"};
@@ -91,7 +91,7 @@ TEST(TestConvert, Hex)
     NVStrings::destroy(strs);
 }
 
-TEST(TestConvert, ToFloat)
+TEST_F(TestConvert, ToFloat)
 {
     std::vector<const char*> hstrs{"1234", nullptr, 
             "-876", "543.2", "-0.12", ".25", "-.002",
@@ -142,7 +142,7 @@ TEST(TestConvert, ToFloat)
     NVStrings::destroy(strs);
 }
 
-TEST(TestConvert, FromFloat)
+TEST_F(TestConvert, FromFloat)
 {
     {    
         float values[] = {100, 654321.25, -12761.125, 0, 5, -4, std::numeric_limits<float>::quiet_NaN()};
@@ -164,7 +164,7 @@ TEST(TestConvert, FromFloat)
     }
 }
 
-TEST(TestConvert, ToBool)
+TEST_F(TestConvert, ToBool)
 {
     std::vector<const char*> hstrs{"false", nullptr, "", "true", "True", "False"};
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
@@ -176,7 +176,7 @@ TEST(TestConvert, ToBool)
     NVStrings::destroy(strs);
 }
 
-TEST(TestConvert, FromBool)
+TEST_F(TestConvert, FromBool)
 {
     bool values[] = { true, false, false, true, true, true };
     thrust::device_vector<bool> results(6);
@@ -187,7 +187,7 @@ TEST(TestConvert, FromBool)
     NVStrings::destroy(got);
 }
 
-TEST(TestConvert, ToIPv4)
+TEST_F(TestConvert, ToIPv4)
 {
     std::vector<const char*> hstrs{ nullptr, "", "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1" };
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
@@ -199,7 +199,7 @@ TEST(TestConvert, ToIPv4)
     NVStrings::destroy(strs);
 }
 
-TEST(TestConvert, FromIPv4)
+TEST_F(TestConvert, FromIPv4)
 {
     unsigned values[] = { 3232235521, 167772161, 0, 0, 700055553, 700776449 };
     thrust::device_vector<unsigned int> results(6);
@@ -208,13 +208,4 @@ TEST(TestConvert, FromIPv4)
     const char* expected[] = { "192.168.0.1", "10.0.0.1", "0.0.0.0", "0.0.0.0", "41.186.0.1", "41.197.0.1" };
     EXPECT_TRUE( verify_strings(got,expected));
     NVStrings::destroy(got);
-}
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

@@ -11,7 +11,7 @@ struct TestExtract : public GdfTest{};
                                 "Beyonce", "Sting",
                                 nullptr, "" };
 
-TEST(TestExtract, ExtractColumn)
+TEST_F(TestExtract, ExtractColumn)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     std::vector<NVStrings*> results;
@@ -27,7 +27,7 @@ TEST(TestExtract, ExtractColumn)
     NVStrings::destroy(strs);
 }
 
-TEST(TestExtract, ExtractRecord)
+TEST_F(TestExtract, ExtractRecord)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     std::vector<NVStrings*> results;
@@ -52,14 +52,4 @@ TEST(TestExtract, ExtractRecord)
         NVStrings::destroy(row);
     }
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

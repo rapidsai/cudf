@@ -10,7 +10,7 @@ struct TestSplit : public GdfTest{};
 std::vector<const char*> hstrs{ "Héllo thesé", nullptr, "are some", "tést String", "" };
 
 
-TEST(TestSplit, Split)
+TEST_F(TestSplit, Split)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     {
@@ -61,7 +61,7 @@ TEST(TestSplit, Split)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, SplitRecord)
+TEST_F(TestSplit, SplitRecord)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     {
@@ -155,7 +155,7 @@ TEST(TestFind, SplitRecord)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, Partition)
+TEST_F(TestSplit, Partition)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     {
@@ -203,14 +203,4 @@ TEST(TestFind, Partition)
         }
     }
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

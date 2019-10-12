@@ -9,7 +9,7 @@ struct TestCase : public GdfTest{};
 
 std::vector<const char*> hstrs{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
-TEST(TestCase, ToLower)
+TEST_F(TestCase, ToLower)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     NVStrings* got = strs->lower();
@@ -19,7 +19,7 @@ TEST(TestCase, ToLower)
     NVStrings::destroy(strs);
 }
 
-TEST(TestCase, ToUpper)
+TEST_F(TestCase, ToUpper)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     NVStrings* got = strs->upper();
@@ -29,7 +29,7 @@ TEST(TestCase, ToUpper)
     NVStrings::destroy(strs);
 }
 
-TEST(TestCase, Swapcase)
+TEST_F(TestCase, Swapcase)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     NVStrings* got = strs->swapcase();
@@ -39,7 +39,7 @@ TEST(TestCase, Swapcase)
     NVStrings::destroy(strs);
 }
 
-TEST(TestCase, Capitalize)
+TEST_F(TestCase, Capitalize)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     NVStrings* got = strs->capitalize();
@@ -49,7 +49,7 @@ TEST(TestCase, Capitalize)
     NVStrings::destroy(strs);
 }
 
-TEST(TestCase, Title)
+TEST_F(TestCase, Title)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     NVStrings* got = strs->title();
@@ -57,13 +57,4 @@ TEST(TestCase, Title)
     EXPECT_TRUE( verify_strings(got,expected));
     NVStrings::destroy(got);
     NVStrings::destroy(strs);
-}
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

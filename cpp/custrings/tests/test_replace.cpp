@@ -15,7 +15,7 @@ std::vector<const char*> hstrs{ "the quick brown fox jumps over the lazy dog",
                                  "thé result does not include the value in the sum in",
                                  "", "absent stop words" };
 
-TEST(TestReplace, Replace)
+TEST_F(TestReplace, Replace)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -35,7 +35,7 @@ TEST(TestReplace, Replace)
     NVStrings::destroy(strs);
 }
 
-TEST(TestReplace, ReplaceRegex)
+TEST_F(TestReplace, ReplaceRegex)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -55,7 +55,7 @@ TEST(TestReplace, ReplaceRegex)
     NVStrings::destroy(strs);
 }
 
-TEST(TestReplace, ReplaceMulti)
+TEST_F(TestReplace, ReplaceMulti)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -81,7 +81,7 @@ TEST(TestReplace, ReplaceMulti)
     NVStrings::destroy(strs);
 }
 
-TEST(TestReplace, ReplaceMultiRegex)
+TEST_F(TestReplace, ReplaceMultiRegex)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -105,7 +105,7 @@ TEST(TestReplace, ReplaceMultiRegex)
     NVStrings::destroy(strs);
 }
 
-TEST(TestReplace, ReplaceTokens)
+TEST_F(TestReplace, ReplaceTokens)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -131,7 +131,7 @@ TEST(TestReplace, ReplaceTokens)
     NVStrings::destroy(strs);
 }
 
-TEST(TestReplace, ReplaceBackrefs)
+TEST_F(TestReplace, ReplaceBackrefs)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -148,14 +148,4 @@ TEST(TestReplace, ReplaceBackrefs)
 
     NVStrings::destroy(got);
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

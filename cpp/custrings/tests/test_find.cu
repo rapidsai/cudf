@@ -10,7 +10,7 @@ struct TestFind : public GdfTest{};
 
 std::vector<const char*> hstrs{ "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
-TEST(TestFind, Compare)
+TEST_F(TestFind, Compare)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -25,7 +25,7 @@ TEST(TestFind, Compare)
 }
 
 
-TEST(TestFind, Find)
+TEST_F(TestFind, Find)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -46,7 +46,7 @@ TEST(TestFind, Find)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, Match)
+TEST_F(TestFind, Match)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
     std::vector<const char*> hstrs2{ "héllo", "thesé", "", nullptr, "tést strings", "" };
@@ -63,7 +63,7 @@ TEST(TestFind, Match)
     NVStrings::destroy(strs2);
 }
 
-TEST(TestFind, Contains)
+TEST_F(TestFind, Contains)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -77,7 +77,7 @@ TEST(TestFind, Contains)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, FindFrom)
+TEST_F(TestFind, FindFrom)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
     thrust::device_vector<int> from(hstrs.size(),3);
@@ -92,7 +92,7 @@ TEST(TestFind, FindFrom)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, FindMultiple)
+TEST_F(TestFind, FindMultiple)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -111,7 +111,7 @@ TEST(TestFind, FindMultiple)
     NVStrings::destroy(strs2);
 }
 
-TEST(TestFind, StartsEnds)
+TEST_F(TestFind, StartsEnds)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -132,7 +132,7 @@ TEST(TestFind, StartsEnds)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, FindAll)
+TEST_F(TestFind, FindAll)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     std::vector<NVStrings*> results;
@@ -148,7 +148,7 @@ TEST(TestFind, FindAll)
     NVStrings::destroy(strs);
 }
 
-TEST(TestFind, FindAllRecord)
+TEST_F(TestFind, FindAllRecord)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     std::vector<NVStrings*> results;
@@ -171,14 +171,4 @@ TEST(TestFind, FindAllRecord)
         NVStrings::destroy(row);
     }
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }

@@ -9,7 +9,7 @@ struct TestStrip : public GdfTest{};
 
 std::vector<const char*> hstrs{ " hello  ", "   thesé ", nullptr, "ARE THE", " tést  strings ", "" };
 
-TEST(TestStrip, Strip)
+TEST_F(TestStrip, Strip)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -33,14 +33,4 @@ TEST(TestStrip, Strip)
     }
 
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    rmmInitialize(nullptr);
-    testing::InitGoogleTest(&argc,argv);
-    int rc = RUN_ALL_TESTS();
-    rmmFinalize();
-    return rc;
 }
