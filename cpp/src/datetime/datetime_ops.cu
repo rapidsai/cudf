@@ -544,7 +544,7 @@ gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input->size);
+      cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(input->size);
       thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 	if ( input->dtype == GDF_DATE64 ) {

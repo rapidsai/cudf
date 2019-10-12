@@ -229,7 +229,7 @@ cudf::jni::gdf_column_wrapper gather_mutated_category(gdf_column *dict_result, g
   std::vector<gdf_column*> out_vec {result_ptr};
   cudf::table output_table(out_vec);
 
-  gather(&tmp_table, static_cast<gdf_index_type *>(column->data), &output_table);
+  gather(&tmp_table, static_cast<cudf::size_type *>(column->data), &output_table);
   if (column->null_count > 0) {
     CUDA_TRY(cudaMemcpy(result_ptr->valid, column->valid,
                         gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToDevice));
