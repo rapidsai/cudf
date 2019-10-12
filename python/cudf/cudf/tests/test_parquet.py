@@ -296,14 +296,14 @@ def test_parquet_reader_spark_timestamps(datadir):
 
 
 def test_parquet_reader_spark_decimals(datadir):
-    fname = datadir / "spark_decimals.parquet"
+    fname = datadir / "spark_decimal.parquet"
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    # expect = expect.apply(pd.to_numeric)
+    expect = expect.apply(pd.to_numeric)
 
     # np.testing.assert_allclose(expect, got)
     assert_eq(expect, got)
