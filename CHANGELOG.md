@@ -17,6 +17,7 @@
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3071 IO Readers & Writers: Move current APIs to legacy
 
 ## Bug Fixes
 
