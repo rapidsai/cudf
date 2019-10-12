@@ -305,7 +305,7 @@ def test_parquet_reader_spark_decimals(datadir):
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
     # expect = expect.apply(pd.to_numeric)
 
-    #np.testing.assert_allclose(expect, got)
+    # np.testing.assert_allclose(expect, got)
     assert_eq(expect, got)
 
 
