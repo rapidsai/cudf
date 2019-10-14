@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <algorithm>
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/rolling.hpp>
 #include "rolling_detail.hpp"
 
@@ -33,7 +33,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <jit/launcher.h>
-#include <jit/type.h>
+#include <jit/legacy/type.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 #include "jit/util/type.h"

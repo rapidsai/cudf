@@ -15,7 +15,7 @@
  */
 
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
 
 using namespace cudf::test;  // this will make reading code way easier
 

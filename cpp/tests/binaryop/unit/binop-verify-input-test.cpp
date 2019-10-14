@@ -17,9 +17,9 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/scalar_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/scalar_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/binaryop.hpp>
 #include <gtest/gtest.h>
 #include <vector>

@@ -15,9 +15,11 @@
  */
 
 #include <io/comp/gpuinflate.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <vector>
+
+#include <rmm/device_buffer.hpp>
 
 /**
  * @brief Base test fixture for decompression
@@ -47,14 +49,13 @@ struct DecompressTest : public GdfTest {
 
   void Decompress(std::vector<uint8_t>* decompressed, const uint8_t* compressed,
                   size_t compressed_size) {
-    inf_args->srcSize = compressed_size;
-    inf_args->dstSize = decompressed->size();
-    ASSERT_RMM_SUCCEEDED(RMM_ALLOC(&inf_args->srcDevice, inf_args->srcSize, 0));
-    ASSERT_RMM_SUCCEEDED(RMM_ALLOC(&inf_args->dstDevice, inf_args->dstSize, 0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_args->srcDevice, compressed,
-                                          inf_args->srcSize,
-                                          cudaMemcpyHostToDevice, 0));
+    rmm::device_buffer src(compressed, compressed_size);
+    rmm::device_buffer dst(decompressed->size());
 
+    inf_args->srcDevice = static_cast<const uint8_t*>(src.data());
+    inf_args->dstDevice = static_cast<uint8_t*>(dst.data());
+    inf_args->srcSize = src.size();
+    inf_args->dstSize = dst.size();
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_args, inf_args,
                                           sizeof(cudf::io::gpu_inflate_input_s),
                                           cudaMemcpyHostToDevice, 0));
@@ -69,9 +70,6 @@ struct DecompressTest : public GdfTest {
                                           inf_args->dstDevice, inf_args->dstSize,
                                           cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
-
-    ASSERT_RMM_SUCCEEDED(RMM_FREE(inf_args->dstDevice, 0));
-    ASSERT_RMM_SUCCEEDED(RMM_FREE(inf_args->srcDevice, 0));
   }
 
   cudf::io::gpu_inflate_input_s* inf_args = nullptr;
