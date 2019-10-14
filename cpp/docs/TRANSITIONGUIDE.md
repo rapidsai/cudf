@@ -54,6 +54,10 @@ custom_memory_resource mr;
 rmm::device_buffer custom_buff(100, &mr); // Allocates 100 bytes from the custom memory resource
 ```
 
+## `cudf::scalar`
+
+// TODO
+
 ## `cudf::column`
 
 Contains `device_buffer`s which own the device memory for the elements of a column and it's optional null indicator bitmask. 
