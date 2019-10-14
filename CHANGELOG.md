@@ -21,7 +21,7 @@
 ## Bug Fixes
 
 - PR #3041 Fixed exp to experimental namespace name change issue
-- PR #3060 Fixing missing benchmark changes for copying.hpp 
+- PR #3060 Move copying.hpp includes to legacy
 
 
 # cuDF 0.10.0 (Date TBD)
