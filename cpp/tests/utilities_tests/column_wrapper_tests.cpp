@@ -25,3 +25,13 @@ struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthColumnWrapperTest, First) { ASSERT_TRUE(true); }
+
+TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableConstructor) {
+  auto iter = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(iter, iter + 100);
+
+  cudf::column_view view = col;
+  EXPECT_EQ(view.size(), 100);
+}

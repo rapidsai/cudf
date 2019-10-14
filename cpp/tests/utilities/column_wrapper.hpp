@@ -23,13 +23,22 @@
 #include <rmm/device_buffer.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <iterator>
 #include <memory>
 
 namespace cudf {
 namespace test {
 
+template <typename UnaryFunction>
+auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f) {
+  return thrust::make_transform_iterator(thrust::make_counting_iterator(start),
+                                         f);
+}
+
 class column_wrapper {
+ public:
   operator column_view() const { return col->view(); }
 
   operator mutable_column_view() { return col->mutable_view(); }
@@ -42,23 +51,68 @@ template <typename T>
 class fixed_width_column_wrapper : public column_wrapper {
   static_assert(cudf::is_fixed_width<T>(), "Unexpected non-fixed width type.");
 
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief
+   *
+   * @tparam InputIterator
+   * @tparam NullIterator
+   * @param begin
+   * @param end
+   * @param bit_initializer
+   *---------------------------------------------------------------------------**/
+  template <typename InputIterator, typename ValidInitializer>
+  fixed_width_column_wrapper(InputIterator begin, InputIterator end,
+                             ValidInitializer v)
+      : column_wrapper{} {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief
+   *
+   * @tparam InputIterator
+   * @param begin
+   * @param end
+   *---------------------------------------------------------------------------**/
   template <typename InputIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end)
       : column_wrapper{} {
     std::vector<T> elements(begin, end);
     rmm::device_buffer d_elements{elements.data(), elements.size() * sizeof(T)};
-    col.reset(cudf::data_type{cudf::experimental::type_to_id<T>()},
-              elements.size(), std::move(d_elements));
+    col.reset(new cudf::column{
+        cudf::data_type{cudf::experimental::type_to_id<T>()},
+        static_cast<cudf::size_type>(elements.size()), std::move(d_elements)});
   }
 
-  fixed_width_column_wrapper(std::initializer_list<T> element_list)
-      : fixed_width_column_wrapper{std::cbegin(element_list),
-                                   std::cend(element_list)} {}
+  /**---------------------------------------------------------------------------*
+   * @brief
+   *
+   * @param element_list
+   *---------------------------------------------------------------------------**/
+  fixed_width_column_wrapper(std::initializer_list<T> elements)
+      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements)} {
+  }
 
-  template <typename InputIterator, typename NullIterator>
-  fixed_width_column_wrapper(InputIterator begin, InputIterator end,
-                             NullIterator bit_initializer)
-      : column_wrapper{} {}
+  /**---------------------------------------------------------------------------*
+   * @brief
+   *
+   * @param elements
+   * @param validity
+   *---------------------------------------------------------------------------**/
+  fixed_width_column_wrapper(std::initializer_list<T> elements,
+                             std::initializer_list<bool> validity)
+      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements),
+                                   std::cbegin(validity)} {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief
+   *
+   * @param element_list
+   *---------------------------------------------------------------------------**/
+  template <typename ValidInitializer>
+  fixed_width_column_wrapper(std::initializer_list<T> element_list,
+                             ValidInitializer v)
+      : fixed_width_column_wrapper{std::cbegin(element_list),
+                                   std::cend(element_list), v} {}
 };
 
 class strings_column_wrapper : public column_wrapper {};
