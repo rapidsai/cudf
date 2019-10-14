@@ -379,7 +379,7 @@ add_library(cudf
             src/unary/cast_ops.cu
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
-            src/io/convert/csr/cudf_to_csr.cu
+            src/io/convert/csr/legacy/cudf_to_csr.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
