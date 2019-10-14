@@ -17,7 +17,9 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_buffer.hpp>
@@ -53,18 +55,38 @@ class fixed_width_column_wrapper : public column_wrapper {
 
  public:
   /**---------------------------------------------------------------------------*
-   * @brief
+   * @brief Construct a new fixed width column wrapper object
    *
    * @tparam InputIterator
-   * @tparam NullIterator
+   * @tparam ValidInitializer
    * @param begin
    * @param end
-   * @param bit_initializer
+   * @param v
    *---------------------------------------------------------------------------**/
   template <typename InputIterator, typename ValidInitializer>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end,
                              ValidInitializer v)
-      : column_wrapper{} {}
+      : column_wrapper{} {
+    std::vector<T> elements(begin, end);
+    rmm::device_buffer d_elements{elements.data(), elements.size() * sizeof(T)};
+
+    std::vector<uint8_t> null_mask(
+        cudf::bitmask_allocation_size_bytes(elements.size()), 0);
+    for (auto i = 0; i < elements.size(); ++i) {
+      if (v[i] == true) {
+        set_bit_unsafe(reinterpret_cast<cudf::bitmask_type*>(null_mask.data()),
+                       i);
+      }
+    }
+
+    rmm::device_buffer d_null_mask{null_mask.data(),
+                                   null_mask.size() * sizeof(uint8_t)};
+
+    col.reset(new cudf::column{
+        cudf::data_type{cudf::experimental::type_to_id<T>()},
+        static_cast<cudf::size_type>(elements.size()), std::move(d_elements),
+        std::move(d_null_mask), cudf::UNKNOWN_NULL_COUNT});
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief

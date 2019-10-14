@@ -35,3 +35,17 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableConstructor) {
   cudf::column_view view = col;
   EXPECT_EQ(view.size(), 100);
 }
+
+TYPED_TEST(FixedWidthColumnWrapperTest, NullableConstructor) {
+  auto iter = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+  auto valid_iter = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return true; });
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(iter, iter + 100,
+                                                        valid_iter);
+  cudf::column_view view = col;
+  EXPECT_EQ(view.size(), 100);
+  EXPECT_TRUE(view.nullable());
+  EXPECT_FALSE(view.has_nulls());
+}
