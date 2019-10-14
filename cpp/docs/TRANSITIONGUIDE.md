@@ -472,8 +472,21 @@ For example `is_numeric<T>()` can be used to specialize for any numeric type.
 
 # Testing
 
-TBD
+Instead of including `gtest/gtest.h` directly, use the custom header in `cpp/tests/utilities/cudf_gtest.hpp`.
 
+## Directory and File Naming
+
+## Base Fixture
+
+## Typed Tests
+
+### Type Lists
+
+## Utilities
+
+### Column Wrapper
+
+### Column Utilities
 
 
 # Porting Guide
