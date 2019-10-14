@@ -17,6 +17,7 @@
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3086 fixed dependency in Java to point to the new legacy directory
 
 ## Bug Fixes
 
