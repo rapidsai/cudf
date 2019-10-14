@@ -168,7 +168,7 @@ def bind_cpointer(cptr, own=True):
 
 
 def _destroy_nvcategory_instance(own, cptr):
-    if own:
+    if own and rmm.is_initialized():
         pyniNVCategory.n_destroyCategory(cptr)
 
 
