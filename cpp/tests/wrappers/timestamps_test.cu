@@ -29,7 +29,7 @@ template <typename T>
 struct TimestampColumnTest : public cudf::test::BaseFixture {
   cudaStream_t stream() { return cudaStream_t(0); }
   cudf::size_type size() { return cudf::size_type(100); }
-  cudf::data_type type() { return cudf::data_type{cudf::exp::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
 };
 
 template <typename Timestamp>
@@ -66,7 +66,7 @@ TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation) 
                                                           time_point_ms(start),
                                                           time_point_ms(stop_));
 
-  auto primitive_type = cudf::data_type{cudf::exp::type_to_id<Rep>()};
+  auto primitive_type = cudf::data_type{cudf::experimental::type_to_id<Rep>()};
 
   auto primitive_col = cudf::make_numeric_column(primitive_type, this->size(),
                                                  cudf::mask_state::ALL_VALID,

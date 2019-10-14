@@ -14,10 +14,13 @@
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 
 ## Bug Fixes
+
+- PR #3041 Fixed exp to experimental namespace name change issue
 
 
 # cuDF 0.10.0 (Date TBD)
@@ -182,7 +185,9 @@
 - PR #3007 Java: Remove unit test that frees RMM invalid pointer
 - PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
 - PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
+- PR #3035 Update update-version.sh for new docs locations
 - PR #3038 Fix uninitialized stream parameter in device_table deleter
+- PR #3058 Fix UDF doc markdown formatting
 
 # cuDF 0.9.0 (21 Aug 2019)
 
