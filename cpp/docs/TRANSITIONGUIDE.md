@@ -503,9 +503,11 @@ Porting an old API should be broken up into two PRs:
 1. Moving the old API/implementation to `legacy/`
     - This is [steps 1-3 below](#legacy_changes)
     - This PR should not introduce any functional changes, and therefore be trivial to review and merged quickly.
+    - Naming should be `Move <module> files to legacy`
 2. Creating and implementing the new API
     - This is [steps 4-6 below](#new_changes)
     - This PR should be opened as soon as steps 4 & 5 are complete (i.e., once the API is created, but before beginning on the implementation). This is to allow early feedback on the API and make sure it is solid before effort is put into implementation.
+    - PR name should be `Define and implement new <module> APIs`
 
 ## C++ Changes
 
