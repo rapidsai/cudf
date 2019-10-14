@@ -16,7 +16,12 @@
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_lists.hpp>
 
-struct ColumnWrapperTest : public cudf::test::BaseFixture {};
+template <typename T>
+struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture {};
 
-TEST_F(ColumnWrapperTest, First) { ASSERT_TRUE(true); }
+TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(FixedWidthColumnWrapperTest, First) { ASSERT_TRUE(true); }
