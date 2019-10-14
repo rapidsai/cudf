@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <bitmask/valid_if.cuh>
+#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/functions.h>

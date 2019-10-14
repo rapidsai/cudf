@@ -14,7 +14,7 @@
  * limitations under the License.
  */ 
 
-#include <bitmask/valid_if.cuh>
+#include <bitmask/legacy/valid_if.cuh>
 
 namespace cudf {
 
