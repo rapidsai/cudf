@@ -21,12 +21,12 @@
 #include <tests/utilities/legacy/valid_vectors.h>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 
-#include <join/joining.h>
-#include <join/join_compute_api.h>
+#include <join/legacy/joining.h>
+#include <join/legacy/join_compute_api.h>
 #include <utilities/bit_util.cuh>
 
 #include <cudf/cudf.h>
-#include <cudf/join.hpp>
+#include <cudf/legacy/join.hpp>
 
 #include <rmm/rmm.h>
 

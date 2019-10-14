@@ -326,7 +326,7 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/strings/nvcategory_util.cpp
-            src/join/joining.cu
+            src/join/legacy/joining.cu
             src/orderby/orderby.cu
             src/predicates/is_sorted.cu
             src/sort/digitize.cu

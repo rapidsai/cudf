@@ -17,7 +17,7 @@
 #include <benchmark/benchmark.h>
 #include <vector>
 #include <cudf/cudf.h>
-#include <cudf/join.hpp>
+#include <cudf/legacy/join.hpp>
 #include <utilities/error_utils.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
