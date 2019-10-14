@@ -20,7 +20,7 @@
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 // Copy the columns from another table
 table::table(table const& other) : _num_rows{other.num_rows()} {
@@ -75,5 +75,5 @@ std::vector<std::unique_ptr<column>> table::release() {
   return std::move(_columns);
 }
 
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

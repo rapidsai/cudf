@@ -60,20 +60,20 @@ template<>
 NVStrings* column_to_strings_fn::operator()<int8_t>()
 {
     auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
-    device_buffer<int32_t> int_buffer(rows);
-    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+    rmm::device_vector<int32_t> int_buffer(rows);
+    thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.begin(),
         [] __device__(const int8_t value) { return int32_t{value}; });
-    return NVStrings::itos(int_buffer.data(), rows, valid);
+    return NVStrings::itos(int_buffer.data().get(), rows, valid);
 }
 
 template<>
 NVStrings* column_to_strings_fn::operator()<int16_t>()
 {
     auto d_src = (static_cast<const int16_t*>(column->data)) + row_offset;
-    device_buffer<int32_t> int_buffer(rows);
-    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+    rmm::device_vector<int32_t> int_buffer(rows);
+    thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.begin(),
         [] __device__(const int16_t value) { return int32_t{value}; });
-    return NVStrings::itos(int_buffer.data(), rows, valid);
+    return NVStrings::itos(int_buffer.data().get(), rows, valid);
 }
 
 template<>
@@ -108,10 +108,10 @@ NVStrings* column_to_strings_fn::operator()<cudf::bool8>()
     else
     {
         auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
-        device_buffer<bool> bool_buffer(rows);
-        thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.data(),
+        rmm::device_vector<bool> bool_buffer(rows);
+        thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.begin(),
                 [] __device__(const cudf::bool8 value) { return bool{value}; });
-        return NVStrings::create_from_bools(bool_buffer.data(), rows, true_string, false_string, valid);
+        return NVStrings::create_from_bools(bool_buffer.data().get(), rows, true_string, false_string, valid);
     }
 }
 
@@ -122,10 +122,10 @@ NVStrings* column_to_strings_fn::operator()<cudf::date32>()
     if( column->dtype_info.time_unit != TIME_UNIT_NONE )
         units = cudf2nvs(column->dtype_info.time_unit);
     auto d_src = (static_cast<const cudf::date32*>(column->data)) + row_offset;
-    device_buffer<unsigned long> ulong_buffer(rows);
-    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.data(),
+    rmm::device_vector<unsigned long> ulong_buffer(rows);
+    thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.begin(),
         [] __device__(const cudf::date32 value) { return (unsigned long)(int32_t{value}); });
-    return NVStrings::long2timestamp(ulong_buffer.data(), rows, units, nullptr, valid);
+    return NVStrings::long2timestamp(ulong_buffer.data().get(), rows, units, nullptr, valid);
 }
 
 template<>

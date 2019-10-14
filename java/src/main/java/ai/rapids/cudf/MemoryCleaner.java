@@ -181,12 +181,12 @@ class MemoryCleaner {
     }
   }
 
-  public static synchronized void register(ColumnVector vec, Cleaner cleaner) {
+  public static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(vec, cleaner));
   }
 
-  public static synchronized void register(MemoryBuffer buf, Cleaner cleaner) {
+  public static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(buf, cleaner));
   }

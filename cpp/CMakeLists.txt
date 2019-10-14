@@ -247,6 +247,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
@@ -324,7 +325,7 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
-            src/string/nvcategory_util.cpp
+            src/strings/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
             src/predicates/is_sorted.cu
@@ -345,7 +346,7 @@ add_library(cudf
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
-            src/jit/type.cpp
+            src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
@@ -412,14 +413,14 @@ add_library(cudf
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
-            src/copying/copy.cpp
-            src/copying/gather.cu
-            src/copying/scatter.cu
-            src/copying/slice.cu
-            src/copying/split.cu
+            src/copying/legacy/copy.cpp
+            src/copying/legacy/gather.cu
+            src/copying/legacy/scatter.cu
+            src/copying/legacy/slice.cu
+            src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
-            src/copying/copy_range.cu
+            src/copying/legacy/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
             src/search/search.cu
@@ -432,12 +433,9 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cu
             src/sort/sort.cu
+            src/strings/strings_column_factories.cu
+            src/strings/strings_column_view.cu
             src/column/legacy/interop.cpp)
-
-# Override RPATH for nvstrings
-set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -446,6 +444,11 @@ set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
 
 # Override RPATH for cudf
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+# Override RPATH for nvstrings
+set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------

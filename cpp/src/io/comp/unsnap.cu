@@ -15,27 +15,13 @@
 */
 
 #include "gpuinflate.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
-
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d)  __nanosleep(d)
-#else
-#define NANOSLEEP(d)  clock()
-#endif
+namespace cudf {
+namespace io {
 
 // Not supporting streams longer than this (not what snappy is intended for)
-#define SNAPPY_MAX_STREAM_SIZE	0xefffffff
+#define SNAPPY_MAX_STREAM_SIZE	0x7fffffff
 
 #define LOG2_BATCH_SIZE     5
 #define BATCH_SIZE          (1 << LOG2_BATCH_SIZE)
@@ -44,10 +30,12 @@
 #define LOG2_PREFETCH_SIZE  9
 #define PREFETCH_SIZE       (1 << LOG2_PREFETCH_SIZE)   // 512B, in 32B chunks
 
+#define LOG_CYCLECOUNT      0
+
 struct unsnap_batch_s
 {
-    int32_t len;        // 1..64 = Number of bytes to copy at given offset, 65..97 = Number of literal bytes
-    uint32_t offset;    // copy distance or absolute literal offset in byte stream
+    int32_t len;        // 1..64 = Number of bytes
+    uint32_t offset;    // copy distance if greater than zero or negative of literal offset in byte stream
 };
 
 
@@ -69,6 +57,7 @@ struct unsnap_state_s
     uint32_t uncompressed_size;
     uint32_t bytes_left;
     int32_t error;
+    uint32_t tstart;
     volatile unsnap_queue_s q;
     gpu_inflate_input_s in;
 };
@@ -77,7 +66,7 @@ struct unsnap_state_s
 __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
 {
     const uint8_t *base = s->base;
-    uint32_t end = (uint32_t)min((size_t)(s->end - base), (size_t)0xffffffffu);
+    uint32_t end = (uint32_t)(s->end - base);
     uint32_t align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
     int32_t pos = min(align_bytes, end);
     int32_t blen;
@@ -119,131 +108,343 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
 }
 
 
+/*
+ * @brief Lookup table for get_len3_mask()
+ *
+ * Indexed by a 10-bit pattern, contains the corresponding 4-bit mask of
+ * 3-byte code lengths in the lower 4 bits, along with the total number of
+ * bytes used for coding the four lengths in the upper 4 bits.
+ * The upper 4-bit value could also be obtained by 8+__popc(mask4)
+ *
+ *   for (uint32_t k = 0; k < 1024; k++)
+ *   {
+ *       for (uint32_t i = 0, v = 0, b = k, n = 0; i < 4; i++)
+ *       {
+ *           v |= (b & 1) << i;
+ *           n += (b & 1) + 2;
+ *           b >>= (b & 1) + 2;
+ *       }
+ *       k_len3lut[k] = v | (n << 4);
+ *   }
+ *
+ */
+static const uint8_t __device__ __constant__ k_len3lut[1 << 10] =
+{
+    0x80,0x91,0x80,0x91,0x92,0x91,0x92,0x91,0x80,0xa3,0x80,0xa3,0x92,0xa3,0x92,0xa3,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xa3,0x94,0xa3,0x92,0xa3,0x92,0xa3,
+    0x80,0xa5,0x80,0xa5,0xa6,0xa5,0xa6,0xa5,0x80,0xa3,0x80,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0x94,0xa5,0x94,0xa5,0xa6,0xa5,0xa6,0xa5,0x94,0xa3,0x94,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0x98,0x91,0x98,0x91,0x92,0x91,0x92,0x91,0x98,0xb7,0x98,0xb7,0x92,0xb7,0x92,0xb7,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xb7,0x94,0xb7,0x92,0xb7,0x92,0xb7,
+    0x98,0xa5,0x98,0xa5,0xa6,0xa5,0xa6,0xa5,0x98,0xb7,0x98,0xb7,0xa6,0xb7,0xa6,0xb7,
+    0x94,0xa5,0x94,0xa5,0xa6,0xa5,0xa6,0xa5,0x94,0xb7,0x94,0xb7,0xa6,0xb7,0xa6,0xb7,
+    0x80,0xa9,0x80,0xa9,0xaa,0xa9,0xaa,0xa9,0x80,0xa3,0x80,0xa3,0xaa,0xa3,0xaa,0xa3,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xa3,0xac,0xa3,0xaa,0xa3,0xaa,0xa3,
+    0x80,0xa5,0x80,0xa5,0xa6,0xa5,0xa6,0xa5,0x80,0xa3,0x80,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0xac,0xa5,0xac,0xa5,0xa6,0xa5,0xa6,0xa5,0xac,0xa3,0xac,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0x98,0xa9,0x98,0xa9,0xaa,0xa9,0xaa,0xa9,0x98,0xb7,0x98,0xb7,0xaa,0xb7,0xaa,0xb7,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xb7,0xac,0xb7,0xaa,0xb7,0xaa,0xb7,
+    0x98,0xa5,0x98,0xa5,0xa6,0xa5,0xa6,0xa5,0x98,0xb7,0x98,0xb7,0xa6,0xb7,0xa6,0xb7,
+    0xac,0xa5,0xac,0xa5,0xa6,0xa5,0xa6,0xa5,0xac,0xb7,0xac,0xb7,0xa6,0xb7,0xa6,0xb7,
+    0x80,0x91,0x80,0x91,0x92,0x91,0x92,0x91,0x80,0xbb,0x80,0xbb,0x92,0xbb,0x92,0xbb,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xbb,0x94,0xbb,0x92,0xbb,0x92,0xbb,
+    0x80,0xbd,0x80,0xbd,0xbe,0xbd,0xbe,0xbd,0x80,0xbb,0x80,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0x94,0xbd,0x94,0xbd,0xbe,0xbd,0xbe,0xbd,0x94,0xbb,0x94,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0x98,0x91,0x98,0x91,0x92,0x91,0x92,0x91,0x98,0xb7,0x98,0xb7,0x92,0xb7,0x92,0xb7,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xb7,0x94,0xb7,0x92,0xb7,0x92,0xb7,
+    0x98,0xbd,0x98,0xbd,0xbe,0xbd,0xbe,0xbd,0x98,0xb7,0x98,0xb7,0xbe,0xb7,0xbe,0xb7,
+    0x94,0xbd,0x94,0xbd,0xbe,0xbd,0xbe,0xbd,0x94,0xb7,0x94,0xb7,0xbe,0xb7,0xbe,0xb7,
+    0x80,0xa9,0x80,0xa9,0xaa,0xa9,0xaa,0xa9,0x80,0xbb,0x80,0xbb,0xaa,0xbb,0xaa,0xbb,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xbb,0xac,0xbb,0xaa,0xbb,0xaa,0xbb,
+    0x80,0xbd,0x80,0xbd,0xbe,0xbd,0xbe,0xbd,0x80,0xbb,0x80,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0xac,0xbd,0xac,0xbd,0xbe,0xbd,0xbe,0xbd,0xac,0xbb,0xac,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0x98,0xa9,0x98,0xa9,0xaa,0xa9,0xaa,0xa9,0x98,0xb7,0x98,0xb7,0xaa,0xb7,0xaa,0xb7,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xb7,0xac,0xb7,0xaa,0xb7,0xaa,0xb7,
+    0x98,0xbd,0x98,0xbd,0xbe,0xbd,0xbe,0xbd,0x98,0xb7,0x98,0xb7,0xbe,0xb7,0xbe,0xb7,
+    0xac,0xbd,0xac,0xbd,0xbe,0xbd,0xbe,0xbd,0xac,0xb7,0xac,0xb7,0xbe,0xb7,0xbe,0xb7,
+    0x80,0x91,0x80,0x91,0x92,0x91,0x92,0x91,0x80,0xa3,0x80,0xa3,0x92,0xa3,0x92,0xa3,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xa3,0x94,0xa3,0x92,0xa3,0x92,0xa3,
+    0x80,0xa5,0x80,0xa5,0xa6,0xa5,0xa6,0xa5,0x80,0xa3,0x80,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0x94,0xa5,0x94,0xa5,0xa6,0xa5,0xa6,0xa5,0x94,0xa3,0x94,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0x98,0x91,0x98,0x91,0x92,0x91,0x92,0x91,0x98,0xcf,0x98,0xcf,0x92,0xcf,0x92,0xcf,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xcf,0x94,0xcf,0x92,0xcf,0x92,0xcf,
+    0x98,0xa5,0x98,0xa5,0xa6,0xa5,0xa6,0xa5,0x98,0xcf,0x98,0xcf,0xa6,0xcf,0xa6,0xcf,
+    0x94,0xa5,0x94,0xa5,0xa6,0xa5,0xa6,0xa5,0x94,0xcf,0x94,0xcf,0xa6,0xcf,0xa6,0xcf,
+    0x80,0xa9,0x80,0xa9,0xaa,0xa9,0xaa,0xa9,0x80,0xa3,0x80,0xa3,0xaa,0xa3,0xaa,0xa3,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xa3,0xac,0xa3,0xaa,0xa3,0xaa,0xa3,
+    0x80,0xa5,0x80,0xa5,0xa6,0xa5,0xa6,0xa5,0x80,0xa3,0x80,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0xac,0xa5,0xac,0xa5,0xa6,0xa5,0xa6,0xa5,0xac,0xa3,0xac,0xa3,0xa6,0xa3,0xa6,0xa3,
+    0x98,0xa9,0x98,0xa9,0xaa,0xa9,0xaa,0xa9,0x98,0xcf,0x98,0xcf,0xaa,0xcf,0xaa,0xcf,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xcf,0xac,0xcf,0xaa,0xcf,0xaa,0xcf,
+    0x98,0xa5,0x98,0xa5,0xa6,0xa5,0xa6,0xa5,0x98,0xcf,0x98,0xcf,0xa6,0xcf,0xa6,0xcf,
+    0xac,0xa5,0xac,0xa5,0xa6,0xa5,0xa6,0xa5,0xac,0xcf,0xac,0xcf,0xa6,0xcf,0xa6,0xcf,
+    0x80,0x91,0x80,0x91,0x92,0x91,0x92,0x91,0x80,0xbb,0x80,0xbb,0x92,0xbb,0x92,0xbb,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xbb,0x94,0xbb,0x92,0xbb,0x92,0xbb,
+    0x80,0xbd,0x80,0xbd,0xbe,0xbd,0xbe,0xbd,0x80,0xbb,0x80,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0x94,0xbd,0x94,0xbd,0xbe,0xbd,0xbe,0xbd,0x94,0xbb,0x94,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0x98,0x91,0x98,0x91,0x92,0x91,0x92,0x91,0x98,0xcf,0x98,0xcf,0x92,0xcf,0x92,0xcf,
+    0x94,0x91,0x94,0x91,0x92,0x91,0x92,0x91,0x94,0xcf,0x94,0xcf,0x92,0xcf,0x92,0xcf,
+    0x98,0xbd,0x98,0xbd,0xbe,0xbd,0xbe,0xbd,0x98,0xcf,0x98,0xcf,0xbe,0xcf,0xbe,0xcf,
+    0x94,0xbd,0x94,0xbd,0xbe,0xbd,0xbe,0xbd,0x94,0xcf,0x94,0xcf,0xbe,0xcf,0xbe,0xcf,
+    0x80,0xa9,0x80,0xa9,0xaa,0xa9,0xaa,0xa9,0x80,0xbb,0x80,0xbb,0xaa,0xbb,0xaa,0xbb,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xbb,0xac,0xbb,0xaa,0xbb,0xaa,0xbb,
+    0x80,0xbd,0x80,0xbd,0xbe,0xbd,0xbe,0xbd,0x80,0xbb,0x80,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0xac,0xbd,0xac,0xbd,0xbe,0xbd,0xbe,0xbd,0xac,0xbb,0xac,0xbb,0xbe,0xbb,0xbe,0xbb,
+    0x98,0xa9,0x98,0xa9,0xaa,0xa9,0xaa,0xa9,0x98,0xcf,0x98,0xcf,0xaa,0xcf,0xaa,0xcf,
+    0xac,0xa9,0xac,0xa9,0xaa,0xa9,0xaa,0xa9,0xac,0xcf,0xac,0xcf,0xaa,0xcf,0xaa,0xcf,
+    0x98,0xbd,0x98,0xbd,0xbe,0xbd,0xbe,0xbd,0x98,0xcf,0x98,0xcf,0xbe,0xcf,0xbe,0xcf,
+    0xac,0xbd,0xac,0xbd,0xbe,0xbd,0xbe,0xbd,0xac,0xcf,0xac,0xcf,0xbe,0xcf,0xbe,0xcf
+};
+
+/*
+ * @brief Returns a 32-bit mask where 1 means 3-byte code length and 0 means 2-byte
+ * code length, given an input mask of up to 96 bits.
+ *
+ * Implemented by doing 8 consecutive lookups, building the result 4-bit at a time
+ */
+inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2)
+{
+    uint32_t m, v, m4, n;
+    v = v0;
+    m4 = k_len3lut[v & 0x3ff];
+    m = m4 & 0xf;
+    n = m4 >> 4; // 8..12
+    v = v0 >> n;
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 4;
+    n += m4 >> 4; // 16..24
+    v = __funnelshift_r(v0, v1, n);
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 8;
+    n += m4 >> 4; // 24..36
+    v >>= (m4 >> 4);
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 12;
+    n = (n + (m4 >> 4)) & 0x1f; // (32..48) % 32 = 0..16
+    v1 = __funnelshift_r(v1, v2, n);
+    v2 >>= n;
+    v = v1;
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 16;
+    n = m4 >> 4; // 8..12
+    v = v1 >> n;
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 20;
+    n += m4 >> 4; // 16..24
+    v = __funnelshift_r(v1, v2, n);
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 24;
+    n += m4 >> 4; // 24..36
+    v >>= (m4 >> 4);
+    m4 = k_len3lut[v & 0x3ff];
+    m |= (m4 & 0xf) << 28;
+    return m;
+}
+
+
 #define READ_BYTE(pos)  s->q.buf[(pos) & (PREFETCH_SIZE-1)]
 
-__device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
+__device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
 {
     uint32_t cur = 0;
-    uint32_t end = (uint32_t)min((size_t)(s->end - s->base), (size_t)0xffffffffu);
+    uint32_t end = static_cast<uint32_t>(s->end - s->base);
     uint32_t bytes_left = s->uncompressed_size;
     uint32_t dst_pos = 0;
     int32_t batch = 0;
 
     for (;;)
     {
-        volatile unsnap_batch_s *b = &s->q.batch[batch * BATCH_SIZE];
-        int32_t batch_len = 0;
-        uint32_t min_wrpos;
+        int32_t batch_len;
+        volatile unsnap_batch_s *b;
 
         // Wait for prefetcher
-        s->q.prefetch_rdpos = cur;
-        min_wrpos = min(cur + 5 * BATCH_SIZE, end);
-        #pragma unroll(1) // We don't want unrolling here
-        while (s->q.prefetch_wrpos < min_wrpos)
+        if (t == 0)
         {
-            NANOSLEEP(50);
-        }
-
-        while (bytes_left > 0)
-        {
-            uint32_t blen, offset;
-            uint8_t b0 = READ_BYTE(cur);
-            if (b0 & 3)
+            s->q.prefetch_rdpos = cur;
+            #pragma unroll(1) // We don't want unrolling here
+            while (s->q.prefetch_wrpos < min(cur + 5 * BATCH_SIZE, end))
             {
-                uint8_t b1 = READ_BYTE(cur+1);
-                if (!(b0 & 2))
+                NANOSLEEP(50);
+            }
+            b = &s->q.batch[batch * BATCH_SIZE];
+        }
+        // Process small symbols in parallel: for data that does not get good compression,
+        // the stream will consist of a large number of short literals (1-byte or 2-byte)
+        // followed by short repeat runs. This results in many 2-byte or 3-byte symbols
+        // that can all be decoded in parallel once we know the symbol length.
+        {
+            uint32_t v0, v1, v2, len3_mask, cur_t, is_long_sym, short_sym_mask;
+            uint32_t b0;
+            cur =  SHFL0(cur);
+            cur_t = cur + t;
+            b0 = READ_BYTE(cur_t);
+            v0 = BALLOT((b0 == 4) || (b0 & 2));
+            b0 = READ_BYTE(cur_t + 32);
+            v1 = BALLOT((b0 == 4) || (b0 & 2));
+            b0 = READ_BYTE(cur_t + 64);
+            v2 = BALLOT((b0 == 4) || (b0 & 2));
+            len3_mask = SHFL0((t == 0) ? get_len3_mask(v0, v1, v2) : 0);
+            cur_t = cur + 2 * t + __popc(len3_mask & ((1 << t) - 1));
+            b0 = READ_BYTE(cur_t);
+            is_long_sym = ((b0 & ~4) != 0) && (((b0 + 1) & 2) == 0);
+            short_sym_mask = BALLOT(is_long_sym);
+            batch_len = 0;
+            if (!(short_sym_mask & 1))
+            {
+                b = reinterpret_cast<volatile unsnap_batch_s *>(SHFL0(reinterpret_cast<uintptr_t>(b)));
+                batch_len = SHFL0((t == 0) ? (short_sym_mask) ? __ffs(short_sym_mask) - 1 : 32 : 0);
+                if (batch_len != 0)
                 {
-                    // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
-                    offset = ((b0 & 0xe0) << 3) | b1;
-                    blen = ((b0 >> 2) & 7) + 4;
-                    cur += 2;
-                }
-                else
-                {
-                    // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-                    offset = b1 | (READ_BYTE(cur+2) << 8);
-                    if (b0 & 1) // 4-byte offset
+                    uint32_t blen = 0;
+                    int32_t ofs = 0;
+                    if (t < batch_len)
                     {
-                        offset |= (READ_BYTE(cur+3) << 16) | (READ_BYTE(cur + 4) << 24);
-                        cur += 5;
+                        blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
+                        ofs = (b0 & 1) ? ((b0 & 0xe0) << 3) | READ_BYTE(cur_t + 1)
+                            : (b0 & 2) ? READ_BYTE(cur_t + 1) | (READ_BYTE(cur_t + 2) << 8) : -(int32_t)(cur_t + 1);
+                        b[t].len = blen;
+                        b[t].offset = ofs;
+                        ofs += blen; // for correct out-of-range detection below
+                    }
+                    blen = WarpReducePos32(blen, t);
+                    bytes_left = SHFL0(bytes_left);
+                    dst_pos = SHFL0(dst_pos);
+                    short_sym_mask = __ffs(BALLOT(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
+                    if (short_sym_mask != 0)
+                    {
+                        batch_len = min(batch_len, short_sym_mask - 1);
+                    }
+                    if (batch_len != 0)
+                    {
+                        blen = SHFL(blen, batch_len - 1);
+                        cur = SHFL(cur_t, batch_len - 1) + 2 + ((len3_mask >> (batch_len - 1)) & 1);
+                        if (t == 0)
+                        {
+                            dst_pos += blen;
+                            bytes_left -= blen;
+                        }
+                    }
+                }
+            }
+        }
+        if (t == 0)
+        {
+            while (bytes_left > 0 && batch_len < BATCH_SIZE)
+            {
+                uint32_t blen, offset;
+                uint8_t b0 = READ_BYTE(cur);
+                if (b0 & 3)
+                {
+                    uint8_t b1 = READ_BYTE(cur+1);
+                    if (!(b0 & 2))
+                    {
+                        // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
+                        offset = ((b0 & 0xe0) << 3) | b1;
+                        blen = ((b0 >> 2) & 7) + 4;
+                        cur += 2;
                     }
                     else
                     {
-                        cur += 3;
-                    }
-                    blen = (b0 >> 2) + 1;
-                }
-                dst_pos += blen;
-                if (offset - 1u >= dst_pos ||  bytes_left < blen)
-                    break;
-                bytes_left -= blen;
-            }
-            else
-            {
-                // xxxxxx00: literal
-                blen = b0 >> 2;
-                if (blen >= 60)
-                {
-                    uint32_t num_bytes = blen - 59;
-                    blen = READ_BYTE(cur + 1);
-                    if (num_bytes > 1)
-                    {
-                        blen |= READ_BYTE(cur + 2) << 8;
-                        if (num_bytes > 2)
+                        // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
+                        offset = b1 | (READ_BYTE(cur+2) << 8);
+                        if (b0 & 1) // 4-byte offset
                         {
-                            blen |= READ_BYTE(cur + 3) << 16;
-                            if (num_bytes > 3)
+                            offset |= (READ_BYTE(cur+3) << 16) | (READ_BYTE(cur + 4) << 24);
+                            cur += 5;
+                        }
+                        else
+                        {
+                            cur += 3;
+                        }
+                        blen = (b0 >> 2) + 1;
+                    }
+                    dst_pos += blen;
+                    if (offset - 1u >= dst_pos || bytes_left < blen)
+                        break;
+                    bytes_left -= blen;
+                }
+                else if (b0 < 4*4)
+                {
+                    // 0000xx00: short literal
+                    blen = (b0 >> 2) + 1;
+                    offset = -(int32_t)(cur + 1);
+                    cur += 1 + blen;
+                    dst_pos += blen;
+                    if (bytes_left < blen)
+                        break;
+                    bytes_left -= blen;
+                }
+                else
+                {
+                    // xxxxxx00: literal
+                    blen = b0 >> 2;
+                    if (blen >= 60)
+                    {
+                        uint32_t num_bytes = blen - 59;
+                        blen = READ_BYTE(cur + 1);
+                        if (num_bytes > 1)
+                        {
+                            blen |= READ_BYTE(cur + 2) << 8;
+                            if (num_bytes > 2)
                             {
-                                blen |= READ_BYTE(cur + 4) << 24;
-                                if (blen >= end)
-                                    break;
+                                blen |= READ_BYTE(cur + 3) << 16;
+                                if (num_bytes > 3)
+                                {
+                                    blen |= READ_BYTE(cur + 4) << 24;
+                                }
                             }
                         }
+                        cur += num_bytes;
                     }
-                    cur += num_bytes;
+                    cur += 1;
+                    blen += 1;
+                    offset = -(int32_t)cur;
+                    cur += blen;
+                    // Wait for prefetcher
+                    s->q.prefetch_rdpos = cur;
+                    #pragma unroll(1) // We don't want unrolling here
+                    while (s->q.prefetch_wrpos < min(cur + 5 * BATCH_SIZE, end))
+                    {
+                        NANOSLEEP(50);
+                    }
+                    dst_pos += blen;
+                    if (bytes_left < blen)
+                        break;
+                    bytes_left -= blen;
                 }
-                cur += 1;
-                blen += 1;
-                offset = cur;
-                cur += blen;
-                // Wait for prefetcher
-                s->q.prefetch_rdpos = cur;
-                min_wrpos = min(cur + 5 * BATCH_SIZE, end);
-                #pragma unroll(1) // We don't want unrolling here
-                while (s->q.prefetch_wrpos < min_wrpos)
-                {
-                    NANOSLEEP(50);
-                }
-                dst_pos += blen;
-                if (bytes_left < blen)
-                {
-                    break;
-                }
-                bytes_left -= blen;
-                blen += 64;
+                b[batch_len].len = blen;
+                b[batch_len].offset = offset;
+                batch_len++;
             }
-            b->len = blen;
-            b->offset = offset;
-            b++;
-            if (++batch_len == BATCH_SIZE)
-                break;
+            if (batch_len != 0)
+            {
+                s->q.batch_len[batch] = batch_len;
+                batch = (batch + 1) & (BATCH_COUNT - 1);
+            }
         }
-        if (batch_len != 0)
+        batch_len = SHFL0(batch_len);
+        if (t == 0)
         {
-            s->q.batch_len[batch] = batch_len;
-            batch = (batch + 1) & (BATCH_COUNT - 1);
+            while (s->q.batch_len[batch] != 0)
+            {
+                NANOSLEEP(100);
+            }
         }
-        while (s->q.batch_len[batch] != 0)
-        {
-            NANOSLEEP(100);
-        }
-        if (batch_len != BATCH_SIZE || bytes_left == 0)
+        if (batch_len != BATCH_SIZE)
         {
             break;
         }
     }
-    s->q.batch_len[batch] = -1;
-    return bytes_left;
+    if (!t)
+    {
+        s->q.prefetch_end = 1;
+        s->q.batch_len[batch] = -1;
+        s->bytes_left = bytes_left;
+        if (bytes_left != 0)
+        {
+            s->error = -2;
+        }
+    }
 }
 
 
@@ -278,12 +479,34 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
         }
         for (int i = 0; i < batch_len; i++, b++)
         {
-            int blen = b->len;
-            uint32_t dist = b->offset;
-            if (blen <= 64)
+            int32_t blen = b->len;
+            int32_t dist = b->offset;
+            int32_t blen2 = (i + 1 < batch_len) ? b[1].len : 32;
+            // Try to combine consecutive small entries if they are independent
+            if ((uint32_t)dist >= (uint32_t)blen && blen + blen2 <= 32)
             {
-                uint8_t b0, b1;
+                int32_t dist2 = b[1].offset;
+                if ((uint32_t)dist2 >= (uint32_t)(blen + blen2))
+                {
+                    SYNCWARP();
+                    int32_t d = (t >= blen) ? (dist2 < 0) ? dist2 + blen : dist2 : dist;
+                    blen += blen2;
+                    if (t < blen)
+                    {
+                        const uint8_t *src = (d > 0) ? (out - d) : (literal_base - d);
+                        out[t] = src[t];
+                    }
+                    out += blen;
+                    i++;
+                    b++;
+                    continue;
+                }
+            }
+            if (dist > 0)
+            {
                 // Copy
+                uint8_t b0, b1;
+                SYNCWARP();
                 if (t < blen)
                 {
                     uint32_t pos = t;
@@ -304,13 +527,12 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
                 {
                     out[32 + t] = b1;
                 }
-                SYNCWARP();
             }
             else
             {
                 // Literal
                 uint8_t b0, b1;
-                blen -= 64;
+                dist = -dist;
                 while (blen >= 64)
                 {
                     b0 = literal_base[dist + t];
@@ -352,7 +574,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
 
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
-unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
+unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
 {
     __shared__ __align__(16) unsnap_state_s state_g;
 
@@ -360,7 +582,7 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
     unsnap_state_s *s = &state_g;
     int strm_id = blockIdx.x;
 
-    if (strm_id < count && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t))
+    if (t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t))
     {
         reinterpret_cast<uint32_t *>(&s->in)[t] = reinterpret_cast<const uint32_t *>(&inputs[strm_id])[t];
         __threadfence_block();
@@ -370,11 +592,14 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
         s->q.batch_len[t] = 0;
     }
     __syncthreads();
-    if (!t && strm_id < count)
+    if (!t)
     {
         const uint8_t *cur = reinterpret_cast<const uint8_t *>(s->in.srcDevice);
         const uint8_t *end = cur + s->in.srcSize;
         s->error = 0;
+    #if LOG_CYCLECOUNT
+        s->tstart = clock();
+    #endif
         if (cur < end)
         {
             // Read uncompressed size (varint), limited to 32-bit
@@ -394,7 +619,7 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
                         if (uncompressed_size >= (0x80 << 21))
                         {
                             c = (cur < end) ? *cur++ : 0;
-                            if (c < 0xf)
+                            if (c < 0x8)
                                 uncompressed_size = (uncompressed_size & ((0x7f << 21) | (0x7f << 14) | (0x7f << 7) | 0x7f)) | (c << 28);
                             else
                                 s->error = -1;
@@ -420,20 +645,12 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
         s->q.prefetch_rdpos = 0;
     }
     __syncthreads();
-    if (strm_id < count && !s->error)
+    if (!s->error)
     {
         if (t < 32)
         {
             // WARP0: decode lengths and offsets
-            if (!t)
-            {
-                s->bytes_left = snappy_decode_symbols(s);
-                if (s->bytes_left != 0)
-                {
-                    s->error = -2;
-                }
-                s->q.prefetch_end = 1;
-            }
+            snappy_decode_symbols(s, t);
         }
         else if (t < 64)
         {
@@ -445,13 +662,17 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
             // WARP2: LZ77
             snappy_process_symbols(s, t & 0x1f);
         }
+        __syncthreads();
     }
-    __syncthreads();
-    if (!t && strm_id < count)
+    if (!t)
     {
         outputs[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
         outputs[strm_id].status = s->error;
+    #if LOG_CYCLECOUNT
+        outputs[strm_id].reserved = clock() - s->tstart;
+    #else
         outputs[strm_id].reserved = 0;
+    #endif
     }
 }
 
@@ -462,8 +683,12 @@ cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs, gpu_inflate_status_
     dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
     dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
-    unsnap_kernel << < dim_grid, dim_block, 0, stream >> >(inputs, outputs, count32);
+    unsnap_kernel <<< dim_grid, dim_block, 0, stream >>>(inputs, outputs);
 
     return cudaSuccess;
 }
+
+
+} // namespace io
+} // namespace cudf
 

@@ -298,12 +298,20 @@ class Series(object):
         idx = self._index if index is None else index
         return self.to_frame(name).reindex(idx, copy=copy)[name]
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False, inplace=False):
         """ Reset index to RangeIndex """
         if not drop:
+            if inplace is True:
+                raise TypeError(
+                    "Cannot reset_index inplace on a Series "
+                    "to create a DataFrame"
+                )
             return self.to_frame().reset_index(drop=drop)
         else:
-            return self._copy_construct(index=RangeIndex(len(self)))
+            if inplace is True:
+                self._index = RangeIndex(len(self))
+            else:
+                return self._copy_construct(index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -2593,6 +2601,10 @@ class DatetimeProperties(object):
     @property
     def second(self):
         return self.get_dt_field("second")
+
+    @property
+    def weekday(self):
+        return self.get_dt_field("weekday")
 
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
