@@ -262,7 +262,7 @@ auto scatter_columns(
                          output_cols_null_count);
 }
 
-TEST(ScatterToTablesTest, FunctionalTest) {
+TYPED_TEST(ScatterToTablesTest, FunctionalTest) {
   using TypeParam = cudf::size_type;
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
