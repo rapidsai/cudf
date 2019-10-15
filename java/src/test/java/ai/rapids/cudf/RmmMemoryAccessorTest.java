@@ -23,7 +23,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class RmmMemoryAccessorTest extends CudfTestBase {
   @Test
@@ -63,5 +65,29 @@ class RmmMemoryAccessorTest extends CudfTestBase {
     } finally {
       Rmm.free(address, 0);
     }
+  }
+
+  @Test
+  public void implicitInit() {
+    if (Rmm.isInitialized()) {
+      Rmm.shutdown();
+    }
+    long address = Rmm.alloc(10, 0);
+    try {
+      assertNotEquals(0, address);
+    } finally {
+      Rmm.free(address, 0);
+    }
+    Rmm.shutdown();
+  }
+
+  @Test
+  public void doubleInitFails() {
+    if (!Rmm.isInitialized()) {
+      Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0);
+    }
+    assertThrows(IllegalStateException.class, () -> {
+      Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024);
+    });
   }
 }
