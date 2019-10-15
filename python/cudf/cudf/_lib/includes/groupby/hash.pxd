@@ -23,7 +23,8 @@ cdef extern from "cudf/legacy/groupby.hpp" namespace "cudf::groupby" nogil:
         MEDIAN,
         QUANTILE
 
-cdef extern from "cudf/legacy/groupby.hpp" namespace "cudf::groupby::hash" nogil:
+cdef extern from "cudf/legacy/groupby.hpp"
+namespace "cudf::groupby::hash" nogil:
     cdef cppclass Options(groupby_common.Options):
         Options(bool _ignore_null_keys) except +
 
