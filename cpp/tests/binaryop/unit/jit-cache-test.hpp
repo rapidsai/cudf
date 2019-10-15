@@ -17,12 +17,15 @@
 #pragma once
 
 #include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+
 #include <jit/cache.h>
 #include <cudf/cudf.h>
-#include <gtest/gtest.h>
 #include <ftw.h>
 
-struct JitCacheTest : public ::testing::Test
+
+struct JitCacheTest : public cudf::test::BaseFixture
                     , public cudf::jit::cudfJitCache {
     JitCacheTest() : grid(1), block(1) {
     }
