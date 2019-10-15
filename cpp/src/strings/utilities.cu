@@ -83,7 +83,7 @@ std::unique_ptr<cudf::column> offsets_from_string_vector(
 {
     auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
     auto begin = thrust::make_transform_iterator(strings.begin(), transformer);
-    return make_offsets(begin, begin + strings.size(), mr, stream);
+    return make_offsets_child_column(begin, begin + strings.size(), mr, stream);
 }
 
 // build a strings chars column from an vector of string_views
@@ -115,6 +115,22 @@ std::unique_ptr<cudf::column> chars_from_string_vector(
         });
 
     return chars_column;
+}
+
+//
+std::unique_ptr<column> create_chars_child_column( cudf::size_type strings_count,
+    cudf::size_type null_count, cudf::size_type total_bytes,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+{
+    CUDF_EXPECTS(null_count <= strings_count, "Invalid null count");
+    // If we have all nulls, a null chars column is allowed.
+    // If all non-null strings are empty strings, we need a non-null chars column.
+    // In this case we set the bytes to 1 to create a minimal one-byte chars column.
+    if( (total_bytes==0) && (null_count < strings_count) )
+        total_bytes = 1; // all entries are empty strings (not nulls)
+    // return chars column
+    return make_numeric_column( data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr );
 }
 
 } // namespace detail
