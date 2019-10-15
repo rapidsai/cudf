@@ -20,6 +20,7 @@
 
 ## Bug Fixes
 
+- PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
 
 
