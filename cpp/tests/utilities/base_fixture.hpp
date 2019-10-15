@@ -17,7 +17,7 @@
 #pragma once
 
 #include "cudf_gtest.hpp"
-#include "cudf_test_utils.cuh"
+#include "legacy/cudf_test_utils.cuh"
 
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
