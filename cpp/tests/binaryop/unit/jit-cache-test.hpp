@@ -17,7 +17,6 @@
 #pragma once
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
