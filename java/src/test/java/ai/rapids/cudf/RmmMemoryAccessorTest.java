@@ -24,12 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-class RmmMemoryAccessorTest {
+class RmmMemoryAccessorTest extends CudfTestBase {
   @Test
   public void log() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
@@ -47,7 +45,6 @@ class RmmMemoryAccessorTest {
 
   @Test
   public void init() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
@@ -60,7 +57,6 @@ class RmmMemoryAccessorTest {
 
   @Test
   public void allocate() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     long address = Rmm.alloc(10, 0);
     try {
       assertNotEquals(0, address);
