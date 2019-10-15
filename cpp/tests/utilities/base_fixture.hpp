@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cudf_gtest.hpp"
+#include "cudf_test_utils.cuh"
 
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
@@ -41,6 +42,14 @@ class BaseFixture : public ::testing::Test {
    * all tests inheritng from this fixture
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
+
+  static void SetUpTestCase() {
+    ASSERT_RMM_SUCCEEDED( rmmInitialize(nullptr) );
+  }
+
+  static void TearDownTestCase() {
+    ASSERT_RMM_SUCCEEDED( rmmFinalize() );
+  }
 };
 
 }  // namespace test
