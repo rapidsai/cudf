@@ -17,6 +17,7 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
+#include <cudf/wrappers/bools.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
 using hash_value_type = uint32_t;
@@ -78,9 +79,31 @@ struct MurmurHash3_32
 
       return combined;
     }
-  
-    __forceinline__ 
-    __host__ __device__ result_type operator()(const Key& key) const
+    
+    template <typename TKey = Key>
+    typename std::enable_if_t<
+      std::is_same<TKey, cudf::bool8>::value,
+    result_type>
+    __forceinline__ __host__ __device__ operator()(const TKey& key) const
+    {
+      return this->operator()(static_cast<bool>(static_cast<int8_t>(key)));
+    }
+
+    template <typename TKey = Key>
+    typename std::enable_if_t<
+      std::is_same<TKey, cudf::experimental::bool8>::value,
+    result_type>
+    __forceinline__ __host__ __device__ operator()(const TKey& key) const
+    {
+      return this->operator()(static_cast<bool>(static_cast<uint8_t>(key)));
+    }
+
+    template <typename TKey = Key>
+    typename std::enable_if_t<
+      !std::is_same<TKey, cudf::bool8>::value &&
+      !std::is_same<TKey, cudf::experimental::bool8>::value,
+    result_type>
+    __forceinline__  __host__ __device__ operator()(const TKey& key) const
     {
         constexpr int len = sizeof(argument_type);
         const uint8_t * const data = (const uint8_t*)&key;
@@ -179,8 +202,16 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
       return combined;
     }
 
-    __forceinline__ 
-    __host__ __device__ result_type operator()(cudf::detail::wrapper<T,type_id> const& key) const
+    template <gdf_dtype dtype = type_id>
+    typename std::enable_if_t<(dtype == GDF_BOOL8), result_type>
+    __forceinline__  __host__ __device__ operator()(cudf::detail::wrapper<T, dtype> const& key) const
+    {
+      return static_cast<result_type>(key);
+    }
+
+    template <gdf_dtype dtype = type_id>
+    typename std::enable_if_t<(dtype != GDF_BOOL8), result_type>
+    __forceinline__  __host__ __device__ operator()(cudf::detail::wrapper<T, dtype> const& key) const
     {
       return static_cast<result_type>(key.value);
     }
