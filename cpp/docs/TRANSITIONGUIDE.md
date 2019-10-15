@@ -81,13 +81,13 @@ column_view v = moved_to; // Implicit conversion to non-owning column_view
 
 An immutable, non-owning view of device memory as a column. 
 
-Trivially-copyable and should be passed by value. 
+Inexpensive to copy and should be passed by value. 
 
 ### `cudf::mutable_column_view`
 
 A *mutable*, non-owning view of device memory as a column. 
 
-Trivially-copyable and should be passed by value. 
+Inexpensive to copy and should be passed by value. 
 
 ## `cudf::table`
 
@@ -101,13 +101,13 @@ Movable and copyable. A copy performs a deep copy of all columns, whereas a move
 
 An *immutable*, non-owning view of a table. 
 
-Trivially-copyable and should be passed by value. 
+Inexpensive to copy and should be passed by value. 
 
 ### `cudf::mutable_table_view`
 
 A *mutable*, non-owning view of a table. 
 
-Trivially-copyable and should be passed by value. 
+Inexpensive to copy and should be passed by value. 
 
 # libcudf++ API and Implementation
 
