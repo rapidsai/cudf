@@ -2598,7 +2598,7 @@ class DatetimeProperties(object):
     def weekday(self):
         return self.get_dt_field("weekday")
 
-    @property 
+    @property
     def dayofweek(self):
         return self.get_dt_field("weekday")
 
