@@ -62,7 +62,7 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 # Auto-detect available GPU compute architectures
-set(GPU_ARCHS "" CACHE STRING
+set(GPU_ARCHS "ALL" CACHE STRING
   "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
 
 if("${GPU_ARCHS}" STREQUAL "")
