@@ -73,7 +73,7 @@ TEST_F(Bool8Test, TestBool8Constructor) {
   for (int i = 0; i < NUM_TRIALS; ++i) {
     uint8_t t{this->rand()};
     cudf::experimental::bool8 const w{t};
-    EXPECT_EQ(w.value, static_cast<uint8_t>(static_cast<bool>(t)));
+    EXPECT_EQ(w.operator uint8_t(), static_cast<uint8_t>(static_cast<bool>(t)));
   }
 }
 
@@ -83,7 +83,7 @@ TYPED_TEST(Bool8CtorTest, TestBool8ConstructorCast) {
   for (int i = 0; i < NUM_TRIALS; ++i) {
     SourceType t{this->rand()};
     cudf::experimental::bool8 const w{t};
-    EXPECT_EQ(w.value, static_cast<uint8_t>(static_cast<bool>(t)));
+    EXPECT_EQ(w.operator uint8_t(), static_cast<uint8_t>(static_cast<bool>(t)));
   }
 }
 
@@ -96,7 +96,7 @@ TEST_F(Bool8Test, TestBool8Assignment) {
 
       w0 = w1;
 
-      EXPECT_EQ(w0.value, static_cast<bool>(t1));
+      EXPECT_EQ(w0.operator bool(), static_cast<bool>(t1));
     }
 }
 
@@ -111,14 +111,14 @@ TEST_F(Bool8Test, TestBool8ArithmeticOperators) {
         // Types smaller than int are implicitly promoted to `int` for
         // arithmetic operations. Therefore, need to convert it back to the
         // original type
-        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 + w1}.value),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 + w1}.operator uint8_t()),
                   static_cast<bool>(t0 + t1));
-        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 - w1}.value),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 - w1}.operator uint8_t()),
                   static_cast<bool>(t0 - t1));
-        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 * w1}.value),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 * w1}.operator uint8_t()),
                   static_cast<bool>(t0 * t1));
         if (0 != t1) {
-            EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 / w1}.value),
+            EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 / w1}.operator uint8_t()),
                       static_cast<bool>(t0 / t1));
         }
     }

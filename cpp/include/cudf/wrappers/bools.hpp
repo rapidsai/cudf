@@ -33,7 +33,6 @@ namespace experimental {
 
 struct bool8 {
 
-  uint8_t value;
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit bool8(from_type v)
@@ -133,6 +132,9 @@ struct bool8 {
   CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator!() const {
     return static_cast<cudf::experimental::bool8>(!static_cast<bool>(*this));
   }
+
+private:
+  uint8_t value{0};
 };
 
 // This is necessary for global, constant, non-fundamental types
