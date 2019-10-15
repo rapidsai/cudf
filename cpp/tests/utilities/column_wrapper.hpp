@@ -240,7 +240,6 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
       : fixed_width_column_wrapper{std::cbegin(element_list),
                                    std::cend(element_list), v} {}
 
- private:
 };
 
 // std::unique_ptr<cudf::column> create_strings_column(

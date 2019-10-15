@@ -37,8 +37,10 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableConstructor) {
 }
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NullableConstructor) {
+
   auto iter = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
+
   auto valid_iter = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
 
