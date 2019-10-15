@@ -2442,12 +2442,64 @@ class DataFrame(object):
         while idx_col_name in self.columns or idx_col_name in other.columns:
             idx_col_name = str(random.randint(2 ** 29, 2 ** 31))
 
-        lhs[idx_col_name] = Series(self.index.as_column()).set_index(
-            self.index
-        )
-        rhs[idx_col_name] = Series(other.index.as_column()).set_index(
-            other.index
-        )
+        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
+            if not isinstance(other.index, cudf.core.multiindex.MultiIndex):
+                raise TypeError(
+                    "Left index is MultiIndex, but right index is "
+                    + type(other.index)
+                )
+
+            warnings.warn(
+                "Joining on a MultiIndex is not fully supported."
+                " Performance may be poor."
+            )
+
+            from cudf.core import column
+            from cudf.core.column import CategoricalColumn, StringColumn
+
+            index_frame = self.index.copy().to_frame(index=False)
+            index_frame_r = other.index.copy().to_frame(index=False)
+
+            for col in index_frame.columns:
+                if isinstance(index_frame[col]._column, StringColumn):
+                    index_frame[col] = index_frame[col].astype("category")
+                    index_frame_r[col] = index_frame_r[col].astype("category")
+                if isinstance(index_frame[col]._column, CategoricalColumn):
+                    cats = column.as_column(
+                        index_frame[col].cat.categories
+                    ).append(index_frame_r[col].cat.categories)
+                    cats = Series(cats).drop_duplicates()._column
+
+                    index_frame[col] = (
+                        index_frame[col]
+                        .cat.set_categories(cats, is_unique=True)
+                        .fillna(-1)
+                    )
+                    index_frame[col] = index_frame[col]._column.as_numerical
+
+                    index_frame_r[col] = (
+                        index_frame_r[col]
+                        .cat.set_categories(cats, is_unique=True)
+                        .fillna(-1)
+                    )
+                    index_frame_r[col] = index_frame_r[
+                        col
+                    ]._column.as_numerical
+
+            lhs[idx_col_name] = index_frame.hash_columns().set_index(
+                self.index
+            )
+            rhs[idx_col_name] = index_frame_r.hash_columns().set_index(
+                other.index
+            )
+        else:
+            index_frame = False
+            lhs[idx_col_name] = Series(self.index.as_column()).set_index(
+                self.index
+            )
+            rhs[idx_col_name] = Series(other.index.as_column()).set_index(
+                other.index
+            )
 
         for name in self.columns:
             lhs[name] = self[name]
@@ -2455,8 +2507,8 @@ class DataFrame(object):
         for name in other.columns:
             rhs[name] = other[name]
 
-        lhs = lhs.reset_index(drop=True)
-        rhs = rhs.reset_index(drop=True)
+        lhs = lhs.reset_index(drop=not bool(index_frame))
+        rhs = rhs.reset_index(drop=not bool(index_frame))
 
         cat_join = False
 
@@ -2506,7 +2558,29 @@ class DataFrame(object):
         # change random number index to None to better reflect pandas behavior
         df.index.name = None
 
-        if sort and len(df):
+        if index_frame:
+            names = index_frame.columns
+            dfj = df.copy()
+            for name in names:
+
+                val_list = []
+                for i in range(len(dfj)):
+                    val = dfj[name + lsuffix].iloc[i]
+                    if val is None:
+                        val = dfj[name + rsuffix].iloc[i]
+                    val_list.append(val)
+                dfj[name] = val_list
+
+                dfj = dfj.drop(columns=[name + lsuffix, name + rsuffix])
+            if sort and len(dfj):
+                for col in reversed(index_frame.columns):
+                    dfj = dfj.sort_values(col)
+
+            df = dfj.set_index(
+                cudf.MultiIndex.from_frame(dfj[names], names=names)
+            ).drop(columns=names)
+
+        elif sort and len(df):
             return df.sort_index()
 
         return df

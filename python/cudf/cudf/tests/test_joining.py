@@ -735,3 +735,56 @@ def test_join_empty_table_dtype():
     pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
     assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)
+
+
+@pytest.mark.parametrize("how", ["outer", "inner", "left", "right"])
+@pytest.mark.parametrize("cat", [True, False])
+def test_join_multi(how, cat):
+
+    size = 10
+    index = ["b", "c"]
+    df1 = pd.DataFrame(
+        {
+            "a1": np.arange(size),
+            "b": np.random.randint(0, 2, size=size),
+            "c": np.random.choice(["dog", "cat"], size=size),
+        }
+    )
+    if cat:
+        df1["c"] = df1["c"].astype("category")
+    df1 = df1.set_index(index)
+    gdf1 = cudf.from_pandas(df1)
+
+    df2 = pd.DataFrame(
+        {
+            "a2": np.arange(size),
+            "b": np.random.randint(0, 4, size=size),
+            "c": np.random.choice(["bird"], size=size),
+        }
+    )
+    if cat:
+        df2["c"] = df2["c"].astype("category")
+    df2 = df2.set_index(index)
+    gdf2 = cudf.from_pandas(df2)
+
+    gdf_result = gdf1.join(gdf2, how=how, sort=True).sort_values(["a1", "a2"])
+    pdf_result = df1.join(df2, how=how, sort=True).sort_values(["a1", "a2"])
+
+    for col in ["a1", "a2"]:
+        if gdf_result[col].dtype != pdf_result[col].dtype:
+            gdf_result[col] = gdf_result[col].astype(pdf_result[col].dtype)
+
+    # Make sure columns are in the same order
+    columns = pdf_result.columns.values
+    gdf_result = gdf_result[columns]
+    pdf_result = pdf_result[columns]
+    if how != "outer":
+        pdf_result.index.name = "bob"
+        gdf_result.index.name = "mary"
+        pd.util.testing.assert_frame_equal(
+            gdf_result.to_pandas().reset_index(drop=True),
+            pdf_result.reset_index(drop=True),
+        )
+    else:
+        _check_series(pdf_result["a1"].fillna(-1), gdf_result["a1"].fillna(-1))
+        _check_series(pdf_result["a2"].fillna(-1), gdf_result["a2"].fillna(-1))
