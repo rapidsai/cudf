@@ -3675,3 +3675,36 @@ def test_tolist_mixed_nulls():
     np.testing.assert_equal(num_data_got, num_data_expect)
     for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
         assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
+
+
+@pytest.mark.parametrize("df", [pd.DataFrame({'a': [1, 2, 3]})])
+@pytest.mark.parametrize("name", [[True, False, True]])
+@pytest.mark.parametrize("value", [1, 2])
+def test_dataframe_set_item_bool_mask(df, name, value):
+    gdf = DataFrame.from_pandas(df)
+
+    cudf_replace_value = value
+
+    if isinstance(cudf_replace_value, pd.DataFrame):
+        cudf_replace_value = DataFrame.from_pandas(value)
+    elif isinstance(cudf_replace_value, pd.Series):
+        cudf_replace_value = Series.from_pandas(value)
+
+    gdf[name] = cudf_replace_value
+
+    df[name] = value
+    assert_eq(df, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("df", [pd.DataFrame({'a': [1, 2, 3]})])
+@pytest.mark.parametrize("name", [['b', 'c']])
+@pytest.mark.parametrize("value", [pd.DataFrame({'0': [1, 2, 3], '1': [1, 2, 3]})])
+def test_dataframe_set_item_columns(df, name, value):
+    gdf = DataFrame.from_pandas(df)
+    if isinstance(value, pd.DataFrame):
+        gdf[name] = DataFrame.from_pandas(value)
+    else:
+        gdf[name] = value
+
+    df[name] = value
+    assert_eq(df, gdf, check_dtype=False)

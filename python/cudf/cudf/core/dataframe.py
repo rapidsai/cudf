@@ -87,6 +87,7 @@ class DataFrame(object):
     A GPU Dataframe object.
 
     Examples
+    Examples
     --------
 
     Build dataframe with `__setitem__`:
@@ -378,6 +379,40 @@ class DataFrame(object):
             for col_name in self._cols:
                 mask = name[col_name]
                 self._cols[col_name][mask] = col
+
+        elif isinstance(name, (Series, np.ndarray, list, Index)):
+            mask = name
+            if isinstance(mask, list):
+                mask = np.array(mask)
+            if mask.dtype == "bool":
+                if isinstance(col, DataFrame):
+                    if len(col.columns) == 1:
+                        for df_col in self.columns:
+                            self._cols[df_col][mask] = col[col.columns[0]]
+                    else:
+                        if sum(mask) != len(self.columns):
+                            raise ValueError("Replacement columns must be of same length as Data Frame")
+                        else:
+                            for df_col, rep_col in zip(self.columns, col.columns):
+                                self._cols[df_col][mask] = col[rep_col]
+
+                else:
+                    # should we check for more types here
+                    # pandas behaviour is weird for series, scalers etc
+                    for df_col in self.columns:
+                        self._cols[df_col][mask] = col
+
+            else:
+                # replacing for non bool name iterable `name` object
+                if isinstance(col, DataFrame):
+                    if len(name) != len(col.columns):
+                        raise ValueError("Replacement columns must be of same length as Data Frame")
+                    else:
+                        for name_col, rep_col in zip(name, col.columns):
+                            self.add_column(name_col, col[rep_col])
+                else:
+                    for name_col in name:
+                        self._cols[name_col] = self._prepare_series_for_add(col)
 
         elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
