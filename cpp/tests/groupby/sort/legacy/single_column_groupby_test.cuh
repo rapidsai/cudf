@@ -18,12 +18,12 @@
 #define _SORT_SINGLE_COLUMN_GROUPBY_TEST_CUH
 
 #include <cudf/legacy/copying.hpp>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "../common/groupby_test.hpp"
+#include "../../common/legacy/groupby_test.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

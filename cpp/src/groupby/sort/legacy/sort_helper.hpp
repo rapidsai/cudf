@@ -20,7 +20,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 

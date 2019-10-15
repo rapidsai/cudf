@@ -18,7 +18,7 @@
 #define _COMMON_GROUPBY_TEST_HPP
 
 #include <cudf/legacy/copying.hpp>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/compare_column_wrappers.cuh>

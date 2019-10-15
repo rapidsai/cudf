@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../single_column_groupby_test.cuh"
-#include <cudf/groupby.hpp>
+#include "../../legacy/single_column_groupby_test.cuh"
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>

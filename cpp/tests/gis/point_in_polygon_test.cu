@@ -18,7 +18,7 @@
 #include <cudf/gis.hpp>
 #include <gtest/gtest.h>
 
-#include <tests/groupby/without_agg/groupby_test_helpers.cuh>
+#include <tests/groupby/without_agg/legacy/groupby_test_helpers.cuh>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>

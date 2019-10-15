@@ -17,8 +17,8 @@
 #ifndef GROUPBY_HPP
 #define GROUPBY_HPP
 
-#include "cudf.h"
-#include "types.hpp"
+#include "../cudf.h"
+#include <cudf/types.hpp>
 #include <cudf/quantiles.hpp>
 
 #include <tuple>

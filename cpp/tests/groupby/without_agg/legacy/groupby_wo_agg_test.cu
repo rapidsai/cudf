@@ -26,7 +26,7 @@
 #include <gmock/gmock.h>
 
 #include <cudf/cudf.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 
 #include <utilities/cudf_utils.h>

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

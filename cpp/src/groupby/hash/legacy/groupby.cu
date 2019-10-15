@@ -18,7 +18,7 @@
 #include <cudf/cudf.h>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/legacy/copying.hpp>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
@@ -30,9 +30,9 @@
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "groupby_kernels.cuh"
-#include "groupby/common/aggregation_requests.hpp"
-#include "groupby/common/type_info.hpp"
-#include "groupby/common/utils.hpp"
+#include "groupby/common/legacy/aggregation_requests.hpp"
+#include "groupby/common/legacy/type_info.hpp"
+#include "groupby/common/legacy/utils.hpp"
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
 #include <type_traits>

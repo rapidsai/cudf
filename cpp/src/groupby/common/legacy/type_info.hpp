@@ -17,7 +17,7 @@
 #ifndef _TYPE_INFO_HPP
 #define _TYPE_INFO_HPP
 
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 
 /**---------------------------------------------------------------------------*
  * @file type_info.hpp

@@ -23,7 +23,7 @@
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/cudf.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
@@ -33,9 +33,9 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
-#include "groupby/common/aggregation_requests.hpp"
-#include "groupby/common/type_info.hpp"
-#include "groupby/common/utils.hpp"
+#include "groupby/common/legacy/aggregation_requests.hpp"
+#include "groupby/common/legacy/type_info.hpp"
+#include "groupby/common/legacy/utils.hpp"
 #include "groupby_kernels.cuh"
 #include "sort_helper.hpp"
 

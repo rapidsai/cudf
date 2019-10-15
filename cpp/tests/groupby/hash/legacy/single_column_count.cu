@@ -15,13 +15,13 @@
  */
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
-#include "../common/type_info.hpp"
+#include "../../common/legacy/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

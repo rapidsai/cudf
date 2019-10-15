@@ -16,9 +16,9 @@
 #ifndef GROUPBY_KERNELS_CUH
 #define GROUPBY_KERNELS_CUH
 
-#include <cudf/groupby.hpp>
-#include "../common/type_info.hpp"
-#include "../common/kernel_utils.hpp"
+#include <cudf/legacy/groupby.hpp>
+#include "groupby/common/legacy/type_info.hpp"
+#include "groupby/common/legacy/kernel_utils.hpp"
 #include "utilities/device_atomics.cuh"
 
 namespace cudf {

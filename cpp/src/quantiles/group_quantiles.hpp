@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>

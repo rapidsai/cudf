@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 
 namespace cudf {
 // forward decls

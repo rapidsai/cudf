@@ -18,7 +18,7 @@
 #define _AGGREGATION_REQUESTS_HPP_
 
 #include <cudf/cudf.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 
 #include <utility>
 #include <vector>

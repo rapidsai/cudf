@@ -18,12 +18,12 @@
 #include <cudf/cudf.h>
 #include <cudf/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "../common/type_info.hpp"
+#include "type_info.hpp"
 
 #include <rmm/rmm.h>
 #include <algorithm>
