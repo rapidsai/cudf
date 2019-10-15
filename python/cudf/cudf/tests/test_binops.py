@@ -541,6 +541,7 @@ def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
 
 _permu_values = [0, 1, None, np.nan]
 
+
 @pytest.mark.parametrize("fill_value", _permu_values)
 @pytest.mark.parametrize("scalar_a", _permu_values)
 @pytest.mark.parametrize("scalar_b", _permu_values)
@@ -563,9 +564,8 @@ def test_operator_func_between_series_logical(
 
     if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
         # best attempt to account for disparity between cudf/pandas binops results.
-        gdf_series_result = gdf_series_result \
-            .fillna(func is "ne") \
-            .astype(np.bool)
+        gdf_series_result.fillna(func is "ne", inplace=True)
+        gdf_series_result = gdf_series_result.astype(np.bool)
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
