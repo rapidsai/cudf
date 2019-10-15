@@ -10,7 +10,7 @@ from libcpp.vector cimport vector
 from cudf._lib.cudf cimport *
 
 
-cdef extern from "cudf/join.hpp" nogil:
+cdef extern from "cudf/legacy/join.hpp" nogil:
 
     cdef cudf_table inner_join(
         const cudf_table left_cols,

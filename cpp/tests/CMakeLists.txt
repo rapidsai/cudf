@@ -162,7 +162,7 @@ ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 set(JOIN_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
 
-ConfigureTest(OLD_JOIN_TEST "${JOIN_TEST_SRC}")
+ConfigureTest(LEGACY_JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
 # - orderby tests ---------------------------------------------------------------------------------
