@@ -381,7 +381,7 @@ def bind_cpointer(cptr, own=True):
 
 
 def _destroy_nvstrings_instance(own, cptr):
-    if own and rmm.is_initialized():
+    if own:
         pyniNVStrings.n_destroyStrings(cptr)
 
 
