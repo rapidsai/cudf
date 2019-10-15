@@ -46,19 +46,19 @@ struct bool8 {
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit bool8(from_type v)
-    : value{static_cast<bool>(v)} {}
+    : value{static_cast<uint8_t>(static_cast<bool>(v))} {}
 
   // move/copy assignment operators for non-bool8 types
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator=(from_type&& rhs) {
-    this->value = static_cast<bool>(rhs);
+    this->value = static_cast<uint8_t>(static_cast<bool>(rhs));
     return *this;
   }
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator=(const from_type& rhs) {
-    this->value = static_cast<bool>(rhs);
+    this->value = static_cast<uint8_t>(static_cast<bool>(rhs));
     return *this;
   }
 
