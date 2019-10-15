@@ -33,104 +33,125 @@ namespace experimental {
 
 struct bool8 {
 
+  // defaulted bool8 move/copy constructors
+
+  bool8() = default;
+  ~bool8() = default;
+  bool8(bool8 &&) = default;
+  bool8(bool8 const& w) = default;
+  bool8& operator=(bool8&&) = default;
+  bool8& operator=(const bool8&) = default;
+
+  // bool8 constructor that takes non-bool8 types
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit bool8(from_type v)
     : value{static_cast<bool>(v)} {}
 
-  bool8(bool8 const& w) = default;
-  bool8() = default;
+  // move/copy assignment operators for non-bool8 types
 
-  // cudf::experimental::bool8 bool conversion operators
-
-  CUDA_HOST_DEVICE_CALLABLE explicit operator uint8_t() const {
-    return this->value;
+  template <typename from_type>
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator=(from_type&& rhs) {
+    this->value = static_cast<bool>(rhs);
+    return *this;
   }
+
+  template <typename from_type>
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator=(const from_type& rhs) {
+    this->value = static_cast<bool>(rhs);
+    return *this;
+  }
+
+  // conversion operators
 
   CUDA_HOST_DEVICE_CALLABLE explicit operator bool() const {
     return static_cast<bool>(this->value);
   }
 
-  // cudf::experimental::bool8 ostream << operator overload
+  CUDA_HOST_DEVICE_CALLABLE explicit operator uint8_t() const {
+    return static_cast<uint8_t>(static_cast<bool>(this->value));
+  }
+
+  // ostream << operator overload
 
   inline std::ostream& operator<<(std::ostream& os) {
     return os << static_cast<bool>(this->value);
   }
 
-  // cudf::experimental::bool8 binary operator overloads
+  // binary operator overloads
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator==(cudf::experimental::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator==(bool8 const &rhs) const {
     return static_cast<bool>(*this) == static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator!=(cudf::experimental::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator!=(bool8 const &rhs) const {
     return static_cast<bool>(*this) != static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator<=(cudf::experimental::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator<=(bool8 const &rhs) const {
     return static_cast<bool>(*this) <= static_cast<bool>(rhs); 
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator>=(cudf::experimental::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator>=(bool8 const &rhs) const {
     return static_cast<bool>(*this) >= static_cast<bool>(rhs); 
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator<(cudf::experimental::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator<(bool8 const &rhs) const {
     return static_cast<bool>(*this) < static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator>(cudf::experimental::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator>(bool8 const &rhs) const {
     return static_cast<bool>(*this) > static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator+(cudf::experimental::bool8 const &rhs) const {
-    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) +
-                                         static_cast<bool>(rhs));
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator+(bool8 const &rhs) const {
+    return static_cast<bool8>(static_cast<bool>(*this) +
+                              static_cast<bool>(rhs));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator-(cudf::experimental::bool8 const &rhs) const {
-    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) -
-                                         static_cast<bool>(rhs));
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator-(bool8 const &rhs) const {
+    return static_cast<bool8>(static_cast<bool>(*this) -
+                              static_cast<bool>(rhs));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator*(cudf::experimental::bool8 const &rhs) const {
-    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) *
-                                         static_cast<bool>(rhs));
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator*(bool8 const &rhs) const {
+    return static_cast<bool8>(static_cast<bool>(*this) *
+                              static_cast<bool>(rhs));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator/(cudf::experimental::bool8 const &rhs) const {
-    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) /
-                                         static_cast<bool>(rhs));
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator/(bool8 const &rhs) const {
+    return static_cast<bool8>(static_cast<bool>(*this) /
+                              static_cast<bool>(rhs));
   }
 
-  // cudf::experimental::bool8 unary operator overloads
+  // unary operator overloads
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator+=(cudf::experimental::bool8 const &rhs) {
-    cudf::experimental::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator+=(bool8 const &rhs) {
+    bool8 &lhs = *this;
     lhs = lhs + rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator-=(cudf::experimental::bool8 const &rhs) {
-    cudf::experimental::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator-=(bool8 const &rhs) {
+    bool8 &lhs = *this;
     lhs = lhs - rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator*=(cudf::experimental::bool8 const &rhs) {
-    cudf::experimental::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator*=(bool8 const &rhs) {
+    bool8 &lhs = *this;
     lhs = lhs * rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator/=(cudf::experimental::bool8 const &rhs) {
-    cudf::experimental::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator/=(bool8 const &rhs) {
+    bool8 &lhs = *this;
     lhs = lhs / rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator!() const {
-    return static_cast<cudf::experimental::bool8>(!static_cast<bool>(*this));
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator!() const {
+    return static_cast<bool8>(!static_cast<bool>(*this));
   }
 
 private:
