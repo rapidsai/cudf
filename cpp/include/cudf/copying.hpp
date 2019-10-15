@@ -49,9 +49,9 @@ std::unique_ptr<column> empty_like(column_view input);
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input,
-		                      mask_allocation_policy mask_alloc = RETAIN,
+                                      mask_allocation_policy mask_alloc = RETAIN,
                                       rmm::mr::device_memory_resource *mr =
-				          rmm::mr::get_default_resource());
+                                          rmm::mr::get_default_resource());
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -66,7 +66,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 std::unique_ptr<column> allocate_like(column_view input, size_type size,
                                       mask_allocation_policy mask_alloc = RETAIN,
                                       rmm::mr::device_memory_resource *mr =
-				          rmm::mr::get_default_resource());
+                                          rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`

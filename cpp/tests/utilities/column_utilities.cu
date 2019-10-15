@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "column_utilities.cuh"
+#include "column_utilities.hpp"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -29,7 +29,7 @@ namespace cudf {
 namespace test {
 
 // Property equality
-void expect_columns_prop_equal(cudf::column_view lhs, cudf::column_view rhs) {
+void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());

@@ -18,7 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/column_utilities.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cstring>
 
@@ -36,7 +36,7 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 0);
     auto got = cudf::experimental::empty_like(input->view());
-    cudf::test::expect_columns_prop_equal(*expected, *got);
+    cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
 rmm::device_vector<thrust::pair<const char*,cudf::size_type>> create_test_string () {
@@ -115,7 +115,7 @@ void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs)
 {
     EXPECT_EQ (lhs.num_columns(), rhs.num_columns());
     for (cudf::size_type index = 0; index < lhs.num_columns(); index++)
-        cudf::test::expect_columns_prop_equal(lhs.column(index), rhs.column(index));    
+        cudf::test::expect_column_properties_equal(lhs.column(index), rhs.column(index));    
 }
 
 TEST(EmptyLikeTest, TableTest) {
@@ -140,7 +140,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, cudf::UNINITIALIZED);
     auto got = cudf::experimental::allocate_like(input->view());
-    cudf::test::expect_columns_prop_equal(*expected, *got);
+    cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
@@ -151,6 +151,6 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, specified_size, cudf::UNINITIALIZED);
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
-    cudf::test::expect_columns_prop_equal(*expected, *got);
+    cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
