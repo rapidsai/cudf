@@ -388,13 +388,17 @@ def test_parquet_writer(tmpdir, pdf, gdf):
     expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
     expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
     expect = expect.set_column(
-        expect_idx, expect_field, expect.column(expect_idx).cast(expect_field.type)
+        expect_idx,
+        expect_field,
+        expect.column(expect_idx).cast(expect_field.type),
     )
     expect = expect.replace_schema_metadata()
 
     got_idx = got.schema.get_field_index("col_datetime64[ms]")
     got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
-    got = got.set_column(got_idx, got_field, got.column(got_idx).cast(got_field.type))
+    got = got.set_column(
+        got_idx, got_field, got.column(got_idx).cast(got_field.type)
+    )
     got = got.replace_schema_metadata()
 
     # assert_eq(expect, got)
