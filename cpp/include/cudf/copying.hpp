@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <cudf/column/column_view.hpp>
@@ -8,17 +9,15 @@
 
 namespace cudf {
 namespace experimental {
-namespace detail {
 
 std::unique_ptr<table> gather(table_view source_table, column_view gather_map,
 			      bool check_bounds = false,
-			      rmm::rm::device_memory_resource* mr = rmm::mr::get_default_resource());
+			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 std::unique_ptr<table> scatter(table_view source, column_view scatter_map,
 			       table_view target, bool check_bounds = false,
 			       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace detail
 }  // namespace exp
 }  // namespace cudf
 

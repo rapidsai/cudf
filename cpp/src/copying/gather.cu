@@ -1,7 +1,13 @@
+#include "gather.cuh"
 #include <cudf/column/column_view.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/copying.hpp>
+#include <utilities/error_utils.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/count.h>
 
 #include <memory>
 
@@ -19,7 +25,7 @@ struct dispatch_map_type {
       bool allow_negative_indices = false)
   {
 
-    map_type const * typed_gather_map = static_cast<map_type const*>(gather_map.data());
+    map_type const * typed_gather_map = gather_map.data<map_type>();
 
     if (check_bounds) {
       gdf_index_type begin = (allow_negative_indices) ? -source_table.num_rows() : 0;
@@ -78,21 +84,17 @@ void gather(table_view source_table, column_view gather_map,
     return;
   }
 
-  CUDF_EXPECTS(nullptr != gather_map.data, "gather_map data is null");
-  CUDF_EXPECTS(cudf::has_nulls(gather_map) == false, "gather_map contains nulls");
-  CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
+  CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
+  CUDF_EXPECTS(source_table.num_columns() == destination_table.num_columns(),
                "Mismatched number of columns");
 
-  cudf::type_dispatcher(gather_map.dtype, dispatch_map_type{},
-			source_table, gather_map, destination_table, check_bounds,
-			ignore_out_of_bounds,
-			sync_nvstring_category, allow_negative_indices);
+  cudf::experimental::type_dispatcher(gather_map.type(), dispatch_map_type{},
+				      source_table, gather_map, destination_table, check_bounds,
+				      ignore_out_of_bounds,
+				      sync_nvstring_category, allow_negative_indices);
 }
 
 
 }  // namespace detail
 }  // namespace exp
 }  // namespace cudf
-
-
-      

@@ -2,15 +2,15 @@
 #include <cudf/types.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/cudf_utils.h>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
+#include <cudf/null_mask.hpp>
 #include <cudf/table/table.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <algorithm>
 
-#include <cudf/table/device_table.cuh>
 #include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/gather.h>
@@ -25,6 +25,7 @@
 #include <bitmask/valid_if.cuh>
 
 namespace cudf {
+namespace experimental {
 namespace detail {
 
 /**---------------------------------------------------------------------------*
@@ -60,6 +61,8 @@ __global__ void gather_bitmask_kernel(const bitmask_type *const *source_valid,
 
     const bool src_has_nulls = source_valid_col != nullptr;
     const bool dest_has_nulls = destination_valid_col != nullptr;
+
+    const int warp_size = 32;
 
     if (dest_has_nulls) {
       size_type destination_row_base = blockIdx.x * blockDim.x;
@@ -136,16 +139,17 @@ struct column_gatherer {
    * out of bounds
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
-  template <typename column_type, typename iterator_type>
-  void operator()(column_view source_column,
+  template <typename column_type, typename iterator_type,
+    std::enable_if_t<std::is_integral<column_type>::value or
+                     std::is_floating_point<column_type>::value>* = nullptr>
+    void operator()(column_view source_column,
 		  iterator_type gather_map,
 		  mutable_column_view destination_column,
 		  bool ignore_out_of_bounds,
-		  bool sync_nvstring_category, cudaStream_t stream) {
-    column_type const *source_data{
-      static_cast<column_type const *>(source_column.data())};
-    column_type *destination_data{
-      static_cast<column_type *>(destination_column.data())};
+		  bool sync_nvstring_category,
+		  util::cuda::scoped_stream stream) {
+    column_type const *source_data{source_column.data<column_type>()};
+    column_type *destination_data{destination_column.data<column_type>()};
 
     size_type const num_destination_rows{destination_column.size()};
 
@@ -176,11 +180,24 @@ struct column_gatherer {
     if (in_place) {
       thrust::copy(rmm::exec_policy(stream)->on(stream), destination_data,
 		   destination_data + num_destination_rows,
-		   static_cast<column_type *>(destination_column.data()));
+		   destination_column.data<column_type>());
     }
 
     CHECK_STREAM(stream);
   }
+
+  template <typename column_type, typename iterator_type,
+    std::enable_if_t<not std::is_integral<column_type>::value and
+                     not std::is_floating_point<column_type>::value>* = nullptr>
+  void operator()(column_view source_column,
+		  iterator_type gather_map,
+		  mutable_column_view destination_column,
+		  bool ignore_out_of_bounds,
+		  bool sync_nvstring_category,
+		  util::cuda::scoped_stream stream) {
+    CUDF_FAIL("Column type must be numeric");
+  }
+
 };
 
 /**
@@ -239,9 +256,9 @@ struct index_converter<map_type, index_conversion::NONE>
 template <typename iterator_type>
 void gather(table_view source_table, iterator_type gather_map,
 	    mutable_table_view destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds false, bool sync_nvstring_category = false,
+	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
 	    bool allow_negative_indices = false,
-	    rmm::mr:device_memory_resource* mr = rmm::mr::get_default_resource()
+	    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
 	    )
 {
   auto source_n_cols = source_table.num_columns();
@@ -257,9 +274,9 @@ void gather(table_view source_table, iterator_type gather_map,
     CUDF_EXPECTS(src_col.type() == dest_col.type(), "Column type mismatch");
 
     // The data gather for n columns will be put on the first n streams
-    cudf::type_dispatcher(src_col.type(), column_gatherer{}, src_col,
-			  gather_map, dest_col, ignore_out_of_bounds,
-			  sync_nvstring_category, v_stream[i]);
+    cudf::experimental::type_dispatcher(src_col.type(), column_gatherer{}, src_col,
+					gather_map, dest_col, ignore_out_of_bounds,
+					sync_nvstring_category, v_stream[i]);
 
     if (src_col.has_nulls()) {
       CUDF_EXPECTS(dest_col.nullable(),
@@ -269,7 +286,7 @@ void gather(table_view source_table, iterator_type gather_map,
 
   rmm::device_vector<size_type> null_counts(source_n_cols, 0);
 
-  std::vector<bitmask_type*> source_bitmasks_host(source_n_cols);
+  std::vector<bitmask_type const*> source_bitmasks_host(source_n_cols);
   std::vector<bitmask_type*> destination_bitmasks_host(source_n_cols);
 
   std::vector<rmm::device_vector<bitmask_type>> inplace_buffers(source_n_cols);
@@ -290,7 +307,7 @@ void gather(table_view source_table, iterator_type gather_map,
 
   // In the following we allocate the device array thats hold the valid
   // bits.
-  rmm::device_vector<bitmask_type*> source_bitmasks(source_bitmasks_host);
+  rmm::device_vector<bitmask_type const*> source_bitmasks(source_bitmasks_host);
   rmm::device_vector<bitmask_type*> destination_bitmasks(destination_bitmasks_host);
 
   auto bitmask_kernel =
@@ -314,7 +331,7 @@ void gather(table_view source_table, iterator_type gather_map,
   // buffer back to destination if true.
   for (size_type i = 0; i < destination_table.num_columns(); i++) {
     mutable_column_view dest_col = destination_table.column(i);
-    if (dest_col.is_nullable()) {
+    if (dest_col.nullable()) {
       // Copy temp buffer content back to column
       if (dest_col.null_mask() == source_table.column(i).null_mask()) {
 	size_type num_bitmask_elements =
@@ -322,13 +339,14 @@ void gather(table_view source_table, iterator_type gather_map,
 	CUDA_TRY(cudaMemcpy(dest_col.null_mask(), destination_bitmasks_host[i],
 			    num_bitmask_elements, cudaMemcpyDeviceToDevice));
       }
-      dest_col.null_count() = dest_col.size() - h_count[i];
+      dest_col.set_null_count(dest_col.size() - h_count[i]);
     } else {
-      dest_col.null_count() = 0;
+      dest_col.set_null_count(0);
     }
   }
 }
 
 
 } // namespace detail
+} // namespace experimental
 } // namespace cudf
