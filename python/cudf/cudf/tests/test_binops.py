@@ -563,8 +563,8 @@ def test_operator_func_between_series_logical(
     )
 
     if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
-        # best attempt to account for disparity between cudf/pandas binops results.
-        gdf_series_result.fillna(func is "ne", inplace=True)
+        # best attempt to account for disparity between pandas binops results.
+        gdf_series_result.fillna(func == "ne", inplace=True)
         gdf_series_result = gdf_series_result.astype(np.bool)
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
