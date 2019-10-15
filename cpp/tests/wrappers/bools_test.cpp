@@ -72,7 +72,7 @@ TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 TEST_F(Bool8Test, TestBool8Constructor) {
   for (int i = 0; i < NUM_TRIALS; ++i) {
     uint8_t t{this->rand()};
-    cudf::exp::bool8 const w{t};
+    cudf::experimental::bool8 const w{t};
     EXPECT_EQ(w.value, static_cast<uint8_t>(static_cast<bool>(t)));
   }
 }
@@ -82,7 +82,7 @@ TYPED_TEST(Bool8CtorTest, TestBool8ConstructorCast) {
   using SourceType = TypeParam;
   for (int i = 0; i < NUM_TRIALS; ++i) {
     SourceType t{this->rand()};
-    cudf::exp::bool8 const w{t};
+    cudf::experimental::bool8 const w{t};
     EXPECT_EQ(w.value, static_cast<uint8_t>(static_cast<bool>(t)));
   }
 }
@@ -91,8 +91,8 @@ TEST_F(Bool8Test, TestBool8Assignment) {
     for (int i = 0; i < NUM_TRIALS; ++i) {
       uint8_t const t0{this->rand()};
       uint8_t const t1{this->rand()};
-      cudf::exp::bool8 w0{t0};
-      cudf::exp::bool8 w1{t1};
+      cudf::experimental::bool8 w0{t0};
+      cudf::experimental::bool8 w1{t1};
 
       w0 = w1;
 
@@ -105,20 +105,20 @@ TEST_F(Bool8Test, TestBool8ArithmeticOperators) {
         uint8_t const t0{static_cast<bool>(this->rand())};
         uint8_t const t1{static_cast<bool>(this->rand())};
 
-        cudf::exp::bool8 const w0{t0};
-        cudf::exp::bool8 const w1{t1};
+        cudf::experimental::bool8 const w0{t0};
+        cudf::experimental::bool8 const w1{t1};
 
         // Types smaller than int are implicitly promoted to `int` for
         // arithmetic operations. Therefore, need to convert it back to the
         // original type
-        EXPECT_EQ(static_cast<bool>(cudf::exp::bool8{w0 + w1}.value),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 + w1}.value),
                   static_cast<bool>(t0 + t1));
-        EXPECT_EQ(static_cast<bool>(cudf::exp::bool8{w0 - w1}.value),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 - w1}.value),
                   static_cast<bool>(t0 - t1));
-        EXPECT_EQ(static_cast<bool>(cudf::exp::bool8{w0 * w1}.value),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 * w1}.value),
                   static_cast<bool>(t0 * t1));
         if (0 != t1) {
-            EXPECT_EQ(static_cast<bool>(cudf::exp::bool8{w0 / w1}.value),
+            EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 / w1}.value),
                       static_cast<bool>(t0 / t1));
         }
     }
@@ -126,11 +126,11 @@ TEST_F(Bool8Test, TestBool8ArithmeticOperators) {
 
 TEST_F(Bool8Test, TestBool8BinaryOperators) {
     for(int i = 0; i < NUM_TRIALS; ++i) {
-        bool const t0{this->rand()};
-        bool const t1{this->rand()};
+        bool const t0{this->rand() != 0};
+        bool const t1{this->rand() != 0};
 
-        cudf::exp::bool8 const w0{t0};
-        cudf::exp::bool8 const w1{t1};
+        cudf::experimental::bool8 const w0{t0};
+        cudf::experimental::bool8 const w1{t1};
 
         EXPECT_EQ(w0 > w1, t0 > t1);
         EXPECT_EQ(w0 < w1, t0 < t1);
@@ -140,8 +140,8 @@ TEST_F(Bool8Test, TestBool8BinaryOperators) {
         EXPECT_EQ(w0 != w1, t0 != t1);
     }
 
-    cudf::exp::bool8 w2{42};
-    cudf::exp::bool8 w3{43};
+    cudf::experimental::bool8 w2{42};
+    cudf::experimental::bool8 w3{43};
 
     EXPECT_TRUE(w2 == w2);
     EXPECT_TRUE(w2 == w3);
@@ -153,8 +153,8 @@ TEST_F(Bool8Test, TestBool8BinaryOperators) {
     EXPECT_TRUE(w2 >= w3);
     EXPECT_TRUE(w2 <= w3);
 
-    cudf::exp::bool8 w4{static_cast<char>(-42)};
-    cudf::exp::bool8 w5{43};
+    cudf::experimental::bool8 w4{static_cast<char>(-42)};
+    cudf::experimental::bool8 w5{43};
 
     EXPECT_TRUE(w4 == w4);
     EXPECT_TRUE(w5 == w5);
@@ -166,8 +166,8 @@ TEST_F(Bool8Test, TestBool8BinaryOperators) {
     EXPECT_TRUE(w4 >= w5);
     EXPECT_TRUE(w4 <= w5);
 
-    cudf::exp::bool8 w6{0};
-    cudf::exp::bool8 w7{43};
+    cudf::experimental::bool8 w6{0};
+    cudf::experimental::bool8 w7{43};
 
     EXPECT_FALSE(w6 == w7);
     EXPECT_TRUE(w6 < w7);
@@ -180,15 +180,15 @@ TEST_F(Bool8Test, TestBool8BinaryOperators) {
     EXPECT_TRUE(w6 <= w7);
 }
 
-// This ensures that casting cudf::exp::bool8 to int, doing arithmetic, and casting
+// This ensures that casting cudf::experimental::bool8 to int, doing arithmetic, and casting
 // the result to bool results in the right answer. If the arithmetic is done
 // on random underlying values you can get the wrong answer.
 TEST_F(Bool8Test, TestBool8ArithmeticCast) {
-    cudf::exp::bool8 w1{42};
-    cudf::exp::bool8 w2{static_cast<char>(-42)};
+    cudf::experimental::bool8 w1{42};
+    cudf::experimental::bool8 w2{static_cast<char>(-42)};
 
-    bool t1{42};
-    bool t2{-42};
+    bool t1{42 != 0};
+    bool t2{-42 != 0};
 
     EXPECT_EQ(static_cast<bool>(static_cast<uint8_t>(w1) + static_cast<uint8_t>(w2)),
               static_cast<bool>(static_cast<uint8_t>(t1) + static_cast<uint8_t>(t2)));
@@ -199,8 +199,8 @@ TEST_F(Bool8Test, TestBool8CompoundAssignmentOperators) {
         bool t0{static_cast<bool>(this->rand())};
         bool const t1{static_cast<bool>(this->rand())};
 
-        cudf::exp::bool8 w0{t0};
-        cudf::exp::bool8 const w1{t1};
+        cudf::experimental::bool8 w0{t0};
+        cudf::experimental::bool8 const w1{t1};
 
         t0 += t1;
         w0 += w1;
@@ -224,10 +224,10 @@ TEST_F(Bool8Test, TestBool8CompoundAssignmentOperators) {
 }
 
 TEST_F(Bool8Test, TestBool8NumericLimitsTest) {
-    EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::exp::bool8>::max()),
+    EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::experimental::bool8>::max()),
               static_cast<uint8_t>(static_cast<bool>(std::numeric_limits<uint8_t>::max())));
-    EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::exp::bool8>::min()),
+    EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::experimental::bool8>::min()),
               static_cast<uint8_t>(static_cast<bool>(std::numeric_limits<uint8_t>::min())));
-    EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::exp::bool8>::lowest()),
+    EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::experimental::bool8>::lowest()),
               static_cast<uint8_t>(static_cast<bool>(std::numeric_limits<uint8_t>::lowest())));
 }

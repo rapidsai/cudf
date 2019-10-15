@@ -29,7 +29,7 @@
  * boolean true and false respectively.
  *---------------------------------------------------------------------------**/
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 struct bool8 {
 
@@ -42,7 +42,7 @@ struct bool8 {
   bool8(bool8 const& w) = default;
   bool8() = default;
 
-  // cudf::exp::bool8 bool conversion operators
+  // cudf::experimental::bool8 bool conversion operators
 
   CUDA_HOST_DEVICE_CALLABLE explicit operator uint8_t() const {
     return this->value;
@@ -52,86 +52,86 @@ struct bool8 {
     return static_cast<bool>(this->value);
   }
 
-  // cudf::exp::bool8 ostream << operator overload
+  // cudf::experimental::bool8 ostream << operator overload
 
   inline std::ostream& operator<<(std::ostream& os) {
     return os << static_cast<bool>(this->value);
   }
 
-  // cudf::exp::bool8 binary operator overloads
+  // cudf::experimental::bool8 binary operator overloads
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator==(cudf::exp::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator==(cudf::experimental::bool8 const &rhs) const {
     return static_cast<bool>(*this) == static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator!=(cudf::exp::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator!=(cudf::experimental::bool8 const &rhs) const {
     return static_cast<bool>(*this) != static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator<=(cudf::exp::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator<=(cudf::experimental::bool8 const &rhs) const {
     return static_cast<bool>(*this) <= static_cast<bool>(rhs); 
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator>=(cudf::exp::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator>=(cudf::experimental::bool8 const &rhs) const {
     return static_cast<bool>(*this) >= static_cast<bool>(rhs); 
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator<(cudf::exp::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator<(cudf::experimental::bool8 const &rhs) const {
     return static_cast<bool>(*this) < static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator>(cudf::exp::bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator>(cudf::experimental::bool8 const &rhs) const {
     return static_cast<bool>(*this) > static_cast<bool>(rhs);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8 operator+(cudf::exp::bool8 const &rhs) const {
-    return static_cast<cudf::exp::bool8>(static_cast<bool>(*this) +
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator+(cudf::experimental::bool8 const &rhs) const {
+    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) +
                                          static_cast<bool>(rhs));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8 operator-(cudf::exp::bool8 const &rhs) const {
-    return static_cast<cudf::exp::bool8>(static_cast<bool>(*this) -
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator-(cudf::experimental::bool8 const &rhs) const {
+    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) -
                                          static_cast<bool>(rhs));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8 operator*(cudf::exp::bool8 const &rhs) const {
-    return static_cast<cudf::exp::bool8>(static_cast<bool>(*this) *
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator*(cudf::experimental::bool8 const &rhs) const {
+    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) *
                                          static_cast<bool>(rhs));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8 operator/(cudf::exp::bool8 const &rhs) const {
-    return static_cast<cudf::exp::bool8>(static_cast<bool>(*this) /
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator/(cudf::experimental::bool8 const &rhs) const {
+    return static_cast<cudf::experimental::bool8>(static_cast<bool>(*this) /
                                          static_cast<bool>(rhs));
   }
 
-  // cudf::exp::bool8 unary operator overloads
+  // cudf::experimental::bool8 unary operator overloads
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8& operator+=(cudf::exp::bool8 const &rhs) {
-    cudf::exp::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator+=(cudf::experimental::bool8 const &rhs) {
+    cudf::experimental::bool8 &lhs = *this;
     lhs = lhs + rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8& operator-=(cudf::exp::bool8 const &rhs) {
-    cudf::exp::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator-=(cudf::experimental::bool8 const &rhs) {
+    cudf::experimental::bool8 &lhs = *this;
     lhs = lhs - rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8& operator*=(cudf::exp::bool8 const &rhs) {
-    cudf::exp::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator*=(cudf::experimental::bool8 const &rhs) {
+    cudf::experimental::bool8 &lhs = *this;
     lhs = lhs * rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8& operator/=(cudf::exp::bool8 const &rhs) {
-    cudf::exp::bool8 &lhs = *this;
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8& operator/=(cudf::experimental::bool8 const &rhs) {
+    cudf::experimental::bool8 &lhs = *this;
     lhs = lhs / rhs;
     return lhs;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE cudf::exp::bool8 operator!() const {
-    return static_cast<cudf::exp::bool8>(!static_cast<bool>(*this));
+  CUDA_HOST_DEVICE_CALLABLE cudf::experimental::bool8 operator!() const {
+    return static_cast<cudf::experimental::bool8>(!static_cast<bool>(*this));
   }
 };
 
@@ -147,29 +147,29 @@ static constexpr bool8 true_v{uint8_t{1}};
 static constexpr bool8 false_v{uint8_t{0}};
 #endif
 
-} // exp
+} // experimental
 }  // cudf
 
 namespace std {
 /** --------------------------------------------------------------------------*
-  * @brief Specialization of std::numeric_limits for cudf::exp::bool8
+  * @brief Specialization of std::numeric_limits for cudf::experimental::bool8
   *
   * Required since the underlying type, uint8_t, has different limits than bool
   * --------------------------------------------------------------------------**/
 template <>
-struct numeric_limits<cudf::exp::bool8> {
+struct numeric_limits<cudf::experimental::bool8> {
   
-  static constexpr cudf::exp::bool8 max() noexcept {
+  static constexpr cudf::experimental::bool8 max() noexcept {
     // tried using `return cudf::true_v` but it causes a compiler segfault!
-    return cudf::exp::bool8{true};
+    return cudf::experimental::bool8{true};
   }
   
-  static constexpr cudf::exp::bool8 lowest() noexcept {
-    return cudf::exp::bool8{false};
+  static constexpr cudf::experimental::bool8 lowest() noexcept {
+    return cudf::experimental::bool8{false};
   }
 
-  static constexpr cudf::exp::bool8 min() noexcept {
-    return cudf::exp::bool8{false};
+  static constexpr cudf::experimental::bool8 min() noexcept {
+    return cudf::experimental::bool8{false};
   }
 };
 
@@ -177,7 +177,7 @@ struct numeric_limits<cudf::exp::bool8> {
 
 namespace cub {
 
-template <> struct NumericTraits<cudf::exp::bool8> :
+template <> struct NumericTraits<cudf::experimental::bool8> :
   BaseTraits<SIGNED_INTEGER, true, false, uint8_t, int8_t> {};
 
 } // cub
