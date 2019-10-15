@@ -67,6 +67,7 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories
@@ -188,6 +189,8 @@
 - PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
 - PR #3035 Update update-version.sh for new docs locations
 - PR #3038 Fix uninitialized stream parameter in device_table deleter
+- PR #3058 Fix UDF doc markdown formatting
+- PR #3059 Add nvstrings python build instructions to contributing.md
 
 # cuDF 0.9.0 (21 Aug 2019)
 

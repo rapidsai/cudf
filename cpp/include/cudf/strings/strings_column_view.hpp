@@ -80,12 +80,12 @@ void print( strings_column_view strings,
 
 /**---------------------------------------------------------------------------*
  * @brief Create output per Arrow strings format.
- * The return pair is the array of chars and the array of offsets.
+ * The return pair is the vector of chars and the vector of offsets.
  *
  * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
- * @return Pair containing a contiguous array of chars and an array of offsets.
+ * @return Pair containing a vector of chars and a vector of offsets.
  *---------------------------------------------------------------------------**/
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
     create_offsets( strings_column_view strings,
