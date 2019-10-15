@@ -21,6 +21,7 @@
 ## Bug Fixes
 
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3092 Initialize RMM in Java unit tests
 
 
 # cuDF 0.10.0 (Date TBD)
