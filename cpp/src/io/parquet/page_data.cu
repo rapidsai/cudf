@@ -889,6 +889,7 @@ static const __device__ __constant__ double kPow10[40] =
  * @param[in,out] s Page state input/output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
+ * @param[in] dtype Stored data type
  **/
 inline __device__ void gpuOutputDecimal(volatile page_state_s *s, int src_pos, double *dst, int dtype)
 {
