@@ -3649,9 +3649,9 @@ def test_tolist_mixed_nulls():
 )
 def test_df_astype_numeric_to_all(dtype, as_dtype):
     if "int" in dtype:
-        data = [1, 2, None, 4]
+        data = [1, 2, None, 4, -7]
     elif "float" in dtype:
-        data = [1.0, 2.0, None, 4.0]
+        data = [1.0, 2.0, None, 4.0, np.nan, -7.0]
 
     gdf = DataFrame()
     gdf["foo"] = Series(data, dtype=dtype)
