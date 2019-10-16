@@ -60,7 +60,10 @@ namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Base class for a wrapper around a `cudf::column`.
  *
- * This should not be instantiated directly.
+ * Classes that derive from `column_wrapper` may be passed directly into any
+ * API expecting a `column_view` or `mutable_column_view`.
+ *
+ * `column_wrapper` should not be instantiated directly.
  *---------------------------------------------------------------------------**/
 class column_wrapper {
  public:
