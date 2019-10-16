@@ -55,9 +55,9 @@ namespace groupby {
  * @param ops The aggregation operators
  *---------------------------------------------------------------------------**/
 static void verify_operators(table const& values, std::vector<operators> const& ops) {
-  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
+  CUDF_EXPECTS(static_cast<cudf::size_type>(ops.size()) == values.num_columns(),
                "Size mismatch between ops and value columns");
-  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
+  for (cudf::size_type i = 0; i < values.num_columns(); ++i) {
     // TODO Add more checks here, i.e., can't compute sum of non-arithemtic
     // types
     if ((ops[i] == SUM) and
@@ -131,7 +131,7 @@ struct identity_initializer {
     if ((nullptr != col.valid) and (COUNT == op)) {
       CUDA_TRY(cudaMemsetAsync(
           col.valid, 0xff,
-          sizeof(gdf_valid_type) * gdf_valid_allocation_size(col.size),
+          sizeof(cudf::valid_type) * gdf_valid_allocation_size(col.size),
           stream));
     }
   }
@@ -156,7 +156,7 @@ static void initialize_with_identity(cudf::table const& table,
                               cudaStream_t stream = 0) {
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
-  for (gdf_size_type i = 0; i < table.num_columns(); ++i) {
+  for (cudf::size_type i = 0; i < table.num_columns(); ++i) {
     gdf_column const* col = table.get_column(i);
     cudf::type_dispatcher(col->dtype, identity_initializer{}, *col, ops[i]);
   }
@@ -186,7 +186,7 @@ static void update_nvcategories(table const& input_keys, table& output_keys,
   std::vector<gdf_column *> string_input_value_cols;
   std::vector<gdf_column *> string_output_value_cols;
 
-  for (gdf_size_type i = 0; i < input_values.num_columns(); i++) {
+  for (cudf::size_type i = 0; i < input_values.num_columns(); i++) {
     if (output_values.get_column(i)->dtype == GDF_STRING_CATEGORY) {
       string_input_value_cols.push_back(
         const_cast<gdf_column*>(input_values.get_column(i)));

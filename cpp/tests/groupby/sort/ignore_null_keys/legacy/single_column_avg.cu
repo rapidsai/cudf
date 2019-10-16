@@ -109,7 +109,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupEvenNullKeys) {
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size / 2) * (size / 2);
-  gdf_size_type count = size / 2 + size % 2;
+  cudf::size_type count = size / 2 + size % 2;
   ResultValue avg{sum / count};
   cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
@@ -131,7 +131,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullKeys) {
   int num_even_numbers = (size - 1) / 2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
-  gdf_size_type count = size / 2 + size % 2;
+  cudf::size_type count = size / 2 + size % 2;
   ResultValue avg{sum / count};
   cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
@@ -151,7 +151,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupEvenNullValues) {
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size / 2) * (size / 2);
-  gdf_size_type count = size / 2 + size % 2;
+  cudf::size_type count = size / 2 + size % 2;
   ResultValue avg{sum / count};
   cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
@@ -173,7 +173,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullValues) {
   int num_even_numbers = (size - 1) / 2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
-  gdf_size_type count = size / 2 + size % 2;
+  cudf::size_type count = size / 2 + size % 2;
   ResultValue avg{sum / count};
   cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(

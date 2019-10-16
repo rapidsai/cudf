@@ -31,7 +31,7 @@ struct row_hasher {
   device_table table;
   row_hasher(device_table const& t) : table{t} {}
 
-  __device__ auto operator()(gdf_size_type row_index) const {
+  __device__ auto operator()(cudf::size_type row_index) const {
     return hash_row<nullable>(table, row_index);
   }
 };
@@ -91,7 +91,7 @@ __global__ void build_aggregation_map(
     Map map, device_table input_keys, device_table input_values,
     device_table output_values, operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
-  gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
     if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, i)) {
@@ -138,16 +138,16 @@ __global__ void extract_groupby_result(Map map, device_table const input_keys,
                                        device_table output_keys,
                                        device_table const sparse_output_values,
                                        device_table dense_output_values,
-                                       gdf_size_type* output_write_index) {
-  gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+                                       cudf::size_type* output_write_index) {
+  cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   using pair_type = typename Map::value_type;
 
   pair_type const* const __restrict__ table_pairs{map.data()};
 
   while (i < map.capacity()) {
-    gdf_size_type source_key_row_index;
-    gdf_size_type source_value_row_index;
+    cudf::size_type source_key_row_index;
+    cudf::size_type source_value_row_index;
 
     // The way the aggregation map is built, these two indices will always be
     // equal, but lets be generic just in case that ever changes.

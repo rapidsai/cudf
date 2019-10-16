@@ -51,15 +51,15 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
                            device_table const& d_input_values,
                            std::vector<operators> const& ops, Options options,
                            cudaStream_t stream) {
-  gdf_size_type constexpr unused_key{std::numeric_limits<gdf_size_type>::max()};
-  gdf_size_type constexpr unused_value{
-      std::numeric_limits<gdf_size_type>::max()};
+  cudf::size_type constexpr unused_key{std::numeric_limits<cudf::size_type>::max()};
+  cudf::size_type constexpr unused_value{
+      std::numeric_limits<cudf::size_type>::max()};
   CUDF_EXPECTS(input_keys.num_rows() < unused_key,
                "Groupby input size too large.");
 
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound.
-  gdf_size_type const output_size_estimate{input_keys.num_rows()};
+  cudf::size_type const output_size_estimate{input_keys.num_rows()};
 
   cudf::table sparse_output_values{
       output_size_estimate,
@@ -85,7 +85,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
       d_input_keys, d_input_keys, null_keys_are_equal};
 
   using map_type =
-      concurrent_unordered_map<gdf_size_type, gdf_size_type, decltype(hasher),
+      concurrent_unordered_map<cudf::size_type, cudf::size_type, decltype(hasher),
                                decltype(rows_equal)>;
 
   auto map = map_type::create(compute_hash_table_size(input_keys.num_rows()),
@@ -135,9 +135,9 @@ auto extract_results(table const& input_keys, table const& input_values,
   auto d_output_keys = device_table::create(output_keys, stream);
   auto d_output_values = device_table::create(output_values, stream);
 
-  gdf_size_type* d_result_size{nullptr};
-  RMM_TRY(RMM_ALLOC(&d_result_size, sizeof(gdf_size_type), stream));
-  CUDA_TRY(cudaMemsetAsync(d_result_size, 0, sizeof(gdf_size_type), stream));
+  cudf::size_type* d_result_size{nullptr};
+  RMM_TRY(RMM_ALLOC(&d_result_size, sizeof(cudf::size_type), stream));
+  CUDA_TRY(cudaMemsetAsync(d_result_size, 0, sizeof(cudf::size_type), stream));
 
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
 
@@ -148,8 +148,8 @@ auto extract_results(table const& input_keys, table const& input_values,
 
   CHECK_STREAM(stream);
 
-  gdf_size_type result_size{-1};
-  CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(gdf_size_type),
+  cudf::size_type result_size{-1};
+  CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(cudf::size_type),
                            cudaMemcpyDeviceToHost, stream));
 
   // Update size and null count of output columns
@@ -210,7 +210,7 @@ template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                           std::vector<operators> const& ops, Options options,
                           cudaStream_t stream) {
-  CUDF_EXPECTS(values.num_columns() == static_cast<gdf_size_type>(ops.size()),
+  CUDF_EXPECTS(values.num_columns() == static_cast<cudf::size_type>(ops.size()),
                "Size mismatch between number of value columns and number of "
                "aggregations.");
 
