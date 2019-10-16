@@ -245,9 +245,9 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
                 JoinConditionalAdd<index_type>(static_cast<index_type>(JoinNoneValue)));
     }
     CUDA_CHECK_LAST()
-    gdf_size_type final_join_size = static_cast<gdf_size_type>(join_size);
+    cudf::size_type final_join_size = static_cast<cudf::size_type>(join_size);
     if (join_type == JoinType::FULL_JOIN) {
-        gdf_size_type join_column_capacity = final_join_size;
+        cudf::size_type join_column_capacity = final_join_size;
         gdf_error err = append_full_join_indices(
                 &l_ptr, &r_ptr,
                 join_column_capacity,

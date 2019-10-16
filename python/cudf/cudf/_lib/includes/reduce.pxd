@@ -34,7 +34,7 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         gdf_column *inp,
         operators op,
         gdf_dtype output_dtype,
-        gdf_size_type ddof
+        size_type ddof
     ) except +
 
     cdef void scan(

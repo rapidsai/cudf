@@ -51,7 +51,7 @@ using AggRequestType = std::pair<gdf_column*, operators>;
  * @brief An "aggregation counter" is the pairing of a `AggRequestType` and a
  * counter of how many times said operation is needed.
  *---------------------------------------------------------------------------**/
-using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
+using SimpleAggRequestCounter = std::pair<AggRequestType, cudf::size_type>;
 
 static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
 

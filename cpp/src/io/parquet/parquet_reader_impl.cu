@@ -582,7 +582,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
                                strings_to_categorical_, timestamp_unit_);
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
+    columns.emplace_back(static_cast<cudf::size_type>(num_rows), dtype_info.first,
                          dtype_info.second, col.second);
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",

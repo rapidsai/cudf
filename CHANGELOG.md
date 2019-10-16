@@ -17,11 +17,14 @@
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3070 Move functions.h and related source to legacy
 
 ## Bug Fixes
 
+- PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3060 Move copying.hpp includes to legacy
 
 
 # cuDF 0.10.0 (Date TBD)

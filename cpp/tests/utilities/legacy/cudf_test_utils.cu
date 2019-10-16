@@ -51,7 +51,7 @@ struct column_printer {
   void operator()(gdf_column const* the_column, unsigned min_printing_width,
                   std::ostream& stream)
   {
-    gdf_size_type num_rows { the_column->size };
+    cudf::size_type num_rows { the_column->size };
 
     Element const* column_data { static_cast<Element const*>(the_column->data) };
 
@@ -59,14 +59,14 @@ struct column_printer {
     cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element),
                cudaMemcpyDeviceToHost);
 
-    gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
-    std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
+    cudf::size_type const num_masks { gdf_valid_allocation_size(num_rows) };
+    std::vector<cudf::valid_type> h_mask(num_masks, ~cudf::valid_type { 0 });
     if (nullptr != the_column->valid) {
-      cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type),
+      cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(cudf::valid_type),
                  cudaMemcpyDeviceToHost);
     }
 
-    for (gdf_size_type i = 0; i < num_rows; ++i) {
+    for (cudf::size_type i = 0; i < num_rows; ++i) {
       stream << std::setw(min_printing_width);
       if (gdf_is_valid(h_mask.data(), i)) {
         stream << detail::promote_for_streaming(host_side_data[i]);
@@ -151,7 +151,7 @@ struct elements_equal {
                                      bool nulls_are_equal = true)
       : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
 
-  __device__ bool operator()(gdf_index_type row) {
+  __device__ bool operator()(cudf::size_type row) {
     bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
     bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 
@@ -207,7 +207,7 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
   if (left.dtype == GDF_STRING_CATEGORY) {
     // Transfer input column to host
     std::vector<std::string> left_data, right_data;
-    std::vector<gdf_valid_type> left_bitmask, right_bitmask;
+    std::vector<cudf::valid_type> left_bitmask, right_bitmask;
     std::tie(left_data, left_bitmask) =
       cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&left));
     std::tie(right_data, right_bitmask) =
@@ -269,7 +269,7 @@ void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width
                         the_column, min_printing_width, stream);
 }
 
-void print_valid_data(const gdf_valid_type *validity_mask,
+void print_valid_data(const cudf::valid_type *validity_mask,
                       const size_t num_rows, std::ostream& stream)
 {
   cudaError_t error;
@@ -277,7 +277,7 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   cudaPointerGetAttributes(&attrib, validity_mask);
   error = cudaGetLastError();
 
-  std::vector<gdf_valid_type> h_mask(gdf_valid_allocation_size(num_rows));
+  std::vector<cudf::valid_type> h_mask(gdf_valid_allocation_size(num_rows));
   if (error != cudaErrorInvalidValue && isDeviceType(attrib))
     cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows),
                cudaMemcpyDeviceToHost);
@@ -286,25 +286,25 @@ void print_valid_data(const gdf_valid_type *validity_mask,
 
   std::transform(
       h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
-      std::ostream_iterator<std::string>(stream, " "), [](gdf_valid_type x) {
+      std::ostream_iterator<std::string>(stream, " "), [](cudf::valid_type x) {
         auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string(null_signifier);
         return std::string(bits.rbegin(), bits.rend());
       });
   stream << std::endl;
 }
 
-gdf_size_type count_valid_bits_host(
-    std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows)
+cudf::size_type count_valid_bits_host(
+    std::vector<cudf::valid_type> const& masks, cudf::size_type const num_rows)
 {
   if ((0 == num_rows) || (0 == masks.size())) {
     return 0;
   }
 
-  gdf_size_type count{0};
+  cudf::size_type count{0};
 
   // Count the valid bits for all masks except the last one
-  for (gdf_size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
-    gdf_valid_type current_mask = masks[i];
+  for (cudf::size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
+    cudf::valid_type current_mask = masks[i];
 
     while (current_mask > 0) {
       current_mask &= (current_mask - 1);
@@ -319,8 +319,8 @@ gdf_size_type count_valid_bits_host(
   }
 
   // Mask off only the bits that correspond to rows
-  gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
-  gdf_valid_type last_mask = masks[gdf_num_bitmask_elements(num_rows) - 1] & rows_mask;
+  cudf::valid_type const rows_mask = ( cudf::valid_type{1} << num_rows_last_mask ) - 1;
+  cudf::valid_type last_mask = masks[gdf_num_bitmask_elements(num_rows) - 1] & rows_mask;
 
   while (last_mask > 0) {
     last_mask &= (last_mask - 1);

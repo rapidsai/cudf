@@ -62,7 +62,7 @@ gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_al
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
+gdf_column allocate_like(gdf_column const& input, cudf::size_type size, mask_allocation_policy mask_alloc = RETAIN,
                          cudaStream_t stream = 0);
 
 
@@ -125,7 +125,7 @@ table allocate_like(table const& t, mask_allocation_policy mask_alloc = RETAIN,
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type as @p t and specified @p size
  */
-table allocate_like(table const& t, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
+table allocate_like(table const& t, cudf::size_type size, mask_allocation_policy mask_alloc = RETAIN,
                     cudaStream_t stream = 0);
 
 
@@ -164,8 +164,8 @@ table copy(table const& t, cudaStream_t stream = 0);
  * @return void
  */
 void copy_range(gdf_column *out_column, gdf_column const &in_column,
-                gdf_index_type out_begin, gdf_index_type out_end, 
-                gdf_index_type in_begin);
+                cudf::size_type out_begin, cudf::size_type out_end, 
+                cudf::size_type in_begin);
 
 /**
  * @brief Creates a new `table` as if an in-place scatter from a `source` table
@@ -246,7 +246,7 @@ table scatter(table const& source, gdf_column const& scatter_map,
  * of `scatter_map` and throw an error if any of its values are out of bounds.
  * @return[out] The result of the scatter
  */
-table scatter(table const& source, gdf_index_type const scatter_map[],
+table scatter(table const& source, cudf::size_type const scatter_map[],
 	      table const& target, bool check_bounds = false);
 
 /**
@@ -275,8 +275,8 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
  * @return[out] The result of the scatter
  */
 table scatter(std::vector<gdf_scalar> const& source,
-	      gdf_index_type const scatter_map[],
-	      gdf_size_type num_scatter_rows, table const& target);
+	      cudf::size_type const scatter_map[],
+	      cudf::size_type num_scatter_rows, table const& target);
 
 /**
  * @brief Gathers the specified rows (including null values) of a set of source
@@ -347,7 +347,7 @@ void gather(table const* source_table, gdf_column const& gather_map,
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
  */
-void gather(table const* source_table, gdf_index_type const gather_map[],
+void gather(table const* source_table, cudf::size_type const gather_map[],
 	    table* destination_table, bool check_bounds=false);
 
 /**
@@ -410,8 +410,8 @@ table gather(table const* source_table, gdf_column const& gather_map, bool check
  * of two consecutive indices in the indices array.
  */
 std::vector<gdf_column*> slice(gdf_column const &         input,
-                               gdf_index_type const*      indices,
-                               gdf_size_type              num_indices);
+                               cudf::size_type const*      indices,
+                               cudf::size_type              num_indices);
 
 /**
  * @brief Splits a column (including null values) into a set of columns
@@ -458,8 +458,8 @@ std::vector<gdf_column*> slice(gdf_column const &         input,
  * a different number of rows.
  */
 std::vector<gdf_column*> split(gdf_column const &         input,
-                               gdf_index_type const*      splits,
-                               gdf_size_type              num_splits);
+                               cudf::size_type const*      splits,
+                               cudf::size_type              num_splits);
 
 /**
  * @brief Scatters the rows of a table to `n` tables according to a scatter map
