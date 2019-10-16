@@ -262,8 +262,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * Example:
    * ```c++
    * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
-   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {true, false, true,
-   *false}}
+   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
    * ```
    *
    * @param elements The list of elements
@@ -310,6 +309,14 @@ class strings_column_wrapper : public detail::column_wrapper {
    * Values in the sequence `[begin,end)` will each be converted to
    *`std::string` and a column will be created containing all of the strings.
    *
+   * Example:
+   * ```c++
+   * // Creates a non-nullable STRING column with 7 string elements: 
+   * // {"", "this", "is", "a", "column", "of", "strings"}
+   * std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
+   * strings_column_wrapper s(strings.begin(), strings.end());
+   * ```
+   *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
    * @param begin The beginning of the sequence
@@ -337,6 +344,15 @@ class strings_column_wrapper : public detail::column_wrapper {
    *
    * If `v[i] == true`, string `i` is valid, else it is null. If a string
    * `*(begin+i)` is null, it's value is ignored and treated as an empty string.
+   * 
+   * Example:
+   * ```c++
+   * // Creates a nullable STRING column with 7 string elements: 
+   * // {NULL, "this", NULL, "a", NULL, "of", NULL}
+   * std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+   * strings_column_wrapper s(strings.begin(), strings.end(), validity);
+   * ```
    *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
@@ -360,6 +376,13 @@ class strings_column_wrapper : public detail::column_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a non-nullable column of strings from a list of strings.
+   * 
+   * Example:
+   * ```c++
+   * // Creates a non-nullable STRING column with 7 string elements: 
+   * // {"", "this", "is", "a", "column", "of", "strings"}
+   * strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"});
+   * ```
    *
    * @param strings The list of strings
    *---------------------------------------------------------------------------**/
@@ -370,6 +393,14 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @brief Construct a nullable column of strings from a list of strings and
    * the range `[v, v + strings.size())` interpreted as booleans to indicate the
    * validity of each string.
+   * 
+   * Example:
+   * ```c++
+   * // Creates a nullable STRING column with 7 string elements: 
+   * // {NULL, "this", NULL, "a", NULL, "of", NULL}
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+   * strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
+   * ```
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be
    * convertible to `bool`
@@ -384,6 +415,14 @@ class strings_column_wrapper : public detail::column_wrapper {
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column of strings from a list of strings and
    * the a list of booleans to indicate the validity of each string.
+   * 
+   * Example:
+   * ```c++
+   * // Creates a nullable STRING column with 7 string elements: 
+   * // {NULL, "this", NULL, "a", NULL, "of", NULL}
+   * strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, 
+   *                          {0,1,0,1,0,1,0});
+   * ```
    *
    * @param strings The list of strings
    * @param validity The list of validity indicator booleans
