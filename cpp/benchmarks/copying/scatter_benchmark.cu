@@ -38,16 +38,16 @@ class Scatter: public cudf::benchmark {
 
 template<class TypeParam, bool coalesce>
 void BM_scatter(benchmark::State& state){
-  const gdf_size_type source_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
+  const cudf::size_type source_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type destination_size{(cudf::size_type)state.range(0)};
 
-  const gdf_size_type n_cols = (gdf_size_type)state.range(1);
+  const cudf::size_type n_cols = (cudf::size_type)state.range(1);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,
     { source_size, 
-      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }
+      [](cudf::size_type row){ return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return true; }
     }
   );
   std::vector<gdf_column*> vp_src(n_cols);
@@ -56,20 +56,20 @@ void BM_scatter(benchmark::State& state){
   }
   
   // Create scatter_map that reverses order of source_column
-  std::vector<gdf_index_type> host_scatter_map(source_size);
+  std::vector<cudf::size_type> host_scatter_map(source_size);
   std::iota(host_scatter_map.begin(), host_scatter_map.end(), 0);
   if(coalesce){
     std::reverse(host_scatter_map.begin(), host_scatter_map.end());
   }else{
     std::random_shuffle(host_scatter_map.begin(), host_scatter_map.end());
   }
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::size_type> scatter_map(host_scatter_map);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
     n_cols,
     { source_size, 
-      [](gdf_index_type row){return static_cast<TypeParam>(row);},
-      [](gdf_index_type row) { return true; }
+      [](cudf::size_type row){return static_cast<TypeParam>(row);},
+      [](cudf::size_type row) { return true; }
     }
   );
   std::vector<gdf_column*> vp_dest (n_cols);
