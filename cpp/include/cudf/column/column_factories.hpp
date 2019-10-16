@@ -99,9 +99,12 @@ std::unique_ptr<column> make_strings_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
- * @brief Construct STRING type column given an contiguous array of chars
- * encoded as UTF-8, an array of byte offsets identifying individual strings
- * within the char array, and a null bitmask.
+ * @brief Construct STRING type column given a device vector of chars
+ * encoded as UTF-8, a device vector of byte offsets identifying individual
+ * strings within the char vector, and an optional null bitmask.
+ *
+ * `offsets.front()` must always be zero.
+ * 
  * The total number of char bytes must not exceed the maximum size of size_type.
  * Use the strings_column_view class to perform strings operations on this type
  * of column.
@@ -114,12 +117,15 @@ std::unique_ptr<column> make_strings_column(
  *                This char array is expected to be UTF-8 encoded characters.
  * @param offsets The array of byte offsets in device memory.
  *                The number of elements is one more than the total number
- *                of strings so the offset[last] - offset[0] is the total
+ *                of strings so the `offsets.last()` is the total
  *                number of bytes in the strings array.
- * @param null_mask The array of bits specifying the null strings.
- *                  This array must be in device memory.
+ *                `offsets.first()` must always be 0 to point to the beginning
+ *                of `strings`.
+ * @param null_mask Device vector containing the null element indicator bitmask. 
  *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param null_count The number of null string entries.
+ * @param null_count The number of null string entries. If equal to
+ * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the first
+ * invocation of `column::null_count()`
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
  * @param mr Optional resource to use for device memory
