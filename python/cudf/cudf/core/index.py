@@ -804,7 +804,7 @@ class DatetimeIndex(GenericIndex):
 
     @property
     def dayofweek(self):
-        return self.get_dt_field("weekday")
+        return self.weekday
 
     def to_pandas(self):
         nanos = self.as_column().astype("datetime64[ns]")

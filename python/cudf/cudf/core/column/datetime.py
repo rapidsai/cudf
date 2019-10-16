@@ -133,7 +133,7 @@ class DatetimeColumn(column.TypedColumnBase):
 
     @property
     def dayofweek(self):
-        return self.get_dt_field("weekday")
+        return self.weekday
 
     def get_dt_field(self, field):
         out = column.column_empty_like_same_mask(self, dtype=np.int16)

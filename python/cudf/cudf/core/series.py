@@ -2600,7 +2600,7 @@ class DatetimeProperties(object):
 
     @property
     def dayofweek(self):
-        return self.get_dt_field("weekday")
+        return self.weekday
 
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
