@@ -25,7 +25,7 @@
 #include <utilities/cudf_utils.h>
 #include <cudf/join.hpp>
 
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/types.h>
 #include <cudf/legacy/copying.hpp>
 #include <utilities/column_utils.hpp>
