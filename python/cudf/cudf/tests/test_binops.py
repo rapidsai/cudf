@@ -563,7 +563,11 @@ def test_operator_func_between_series_logical(
     )
 
     if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
-        # best attempt to account for disparity between pandas binops results.
+        # cudf will return `None` for a row  when both left- and right- side
+        # inputs are `None`. Because the result can contain only `None` values,
+        # it's possible cudf will default to `dtype=float64` whereas pandas
+        # will return `dtype=object`. `fillna` + `astype` account for this
+        # disparity in this test.
         gdf_series_result.fillna(func == "ne", inplace=True)
         gdf_series_result = gdf_series_result.astype(np.bool)
 
