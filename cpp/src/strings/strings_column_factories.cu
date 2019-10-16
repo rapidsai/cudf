@@ -161,4 +161,17 @@ std::unique_ptr<column> make_strings_column(
         std::move(children));
 }
 
+// Create strings column from host vectors
+std::unique_ptr<column> make_strings_column(
+    const std::vector<char>& strings, const std::vector<size_type>& offsets,
+    const std::vector<bitmask_type>& null_mask, size_type null_count,
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+  rmm::device_vector<char> d_strings{strings};
+  rmm::device_vector<size_type> d_offsets{offsets};
+  rmm::device_vector<bitmask_type> d_null_mask{null_mask};
+
+  return make_strings_column(d_strings, d_offsets, d_null_mask, null_count,
+                             stream, mr);
+}
+
 }  // namespace cudf
