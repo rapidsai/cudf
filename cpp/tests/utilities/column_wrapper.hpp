@@ -155,6 +155,20 @@ rmm::device_buffer make_null_mask(ValidityIterator begin,
       null_mask.data(), null_mask.size() * sizeof(decltype(null_mask.front()))};
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Given the range `[begin,end)`, converts each value to a string and
+ * then creates a packed vector of characters for each string and a vector of
+ * offsets indicating the starting position of each string.
+ *
+ * @tparam StringsIterator A `std::string` must be constructible from
+ * dereferencing a `StringsIterator`.
+ * @tparam ValidityIterator Dereferencing a ValidityIterator must be
+ * convertible to `bool`
+ * @param begin The beginning of the sequence of values to convert to strings
+ * @param end The end of the sequence of values to convert to strings
+ * @param v The beginning of the validity indicator sequence
+ * @return std::pair containing the vector of chars and offsets
+ *---------------------------------------------------------------------------**/
 template <typename StringsIterator, typename ValidityIterator>
 auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
                             ValidityIterator v) {
