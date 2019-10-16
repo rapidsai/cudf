@@ -89,6 +89,7 @@ class column_wrapper {
 /**---------------------------------------------------------------------------*
  * @brief Creates a `device_buffer` containing the elements in the range
  * `[begin,end)`.
+ * 
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Begining of the sequence of elements
@@ -184,6 +185,13 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @brief Construct a non-nullable column of the fixed-width elements in the
    * range `[begin,end)`.
    *
+   * Example:
+   * ```c++
+   * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 1, 2, 3, 4}
+   * auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
+   * fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
+   * ```
+   *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    *---------------------------------------------------------------------------**/
@@ -202,6 +210,14 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * as booleans to indicate the validity of each element.
    *
    * If `v[i] == true`, element `i` is valid, else it is null.
+   * 
+   * Example:
+   * ```c++
+   * // Creates a nullable column of INT32 elements with 5 elements: {null, 1, null, 3, null}
+   * auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * fixed_width_column_wrapper<int32_t> w(elements, elements + 5, validity);
+   * ```
    *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
@@ -262,6 +278,13 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @brief Construct a nullable column from a list of fixed-width elements and
    * the the range `[v, v + element_list.size())` interpretted as booleans to
    * indicate the validity of each element.
+   * 
+   * Example:
+   * ```c++
+   * // Creates a nullable INT32 column with 4 elements: {NULL, 1, NULL, 3}
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, validity}
+   * ```
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be
    * convertible to `bool`
