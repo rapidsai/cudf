@@ -2535,7 +2535,7 @@ class DataFrame(object):
             if sort and len(df):
                 df = df.sort_values(idx_col_names)
 
-            # TODO: USe set_index once it can handle a list
+            # TODO: Use set_index once it can handle a list
             return df.set_index(
                 cudf.MultiIndex.from_frame(
                     df[idx_col_names], names=index_frame_l.columns
