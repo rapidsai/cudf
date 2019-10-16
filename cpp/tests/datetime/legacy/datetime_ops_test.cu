@@ -19,7 +19,7 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <cudf/cudf.h>
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 
