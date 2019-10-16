@@ -28,9 +28,9 @@
 template<typename key_type, typename payload_type>
 static void join_benchmark(benchmark::State& state)
 {
-    const gdf_size_type build_table_size {(gdf_size_type) state.range(0)};
-    const gdf_size_type probe_table_size {(gdf_size_type) state.range(1)};
-    const gdf_size_type rand_max_val {build_table_size * 2};
+    const cudf::size_type build_table_size {(cudf::size_type) state.range(0)};
+    const cudf::size_type probe_table_size {(cudf::size_type) state.range(1)};
+    const cudf::size_type rand_max_val {build_table_size * 2};
     const double selectivity = 0.3;
     const bool is_build_table_key_unique = true;
 
@@ -39,7 +39,7 @@ static void join_benchmark(benchmark::State& state)
     cudf::test::column_wrapper<key_type> build_key_column(build_table_size);
     cudf::test::column_wrapper<key_type> probe_key_column(probe_table_size);
 
-    generate_input_tables<key_type, gdf_size_type>(
+    generate_input_tables<key_type, cudf::size_type>(
         (key_type *)build_key_column.get()->data, build_table_size,
         (key_type *)probe_key_column.get()->data, probe_table_size,
         selectivity, rand_max_val, is_build_table_key_unique
@@ -47,14 +47,14 @@ static void join_benchmark(benchmark::State& state)
 
     cudf::test::column_wrapper<payload_type> build_payload_column(
         build_table_size,
-        [] (gdf_index_type row_index) {
+        [] (cudf::size_type row_index) {
             return row_index;
         }
     );
 
     cudf::test::column_wrapper<payload_type> probe_payload_column(
         probe_table_size,
-        [] (gdf_index_type row_index) {
+        [] (cudf::size_type row_index) {
             return row_index;
         }
     );
@@ -71,7 +71,7 @@ static void join_benchmark(benchmark::State& state)
         gdf_method::GDF_HASH   // hash based join
     };
 
-    std::vector<gdf_size_type> columns_to_join = {0};
+    std::vector<cudf::size_type> columns_to_join = {0};
 
     // Benchmark the inner join operation
 

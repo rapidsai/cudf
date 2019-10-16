@@ -44,12 +44,12 @@ template <template <typename> class hash_function>
 struct row_partition_mapper
 {
   __device__
-  row_partition_mapper(device_table table_to_hash, const gdf_size_type _num_partitions)
+  row_partition_mapper(device_table table_to_hash, const cudf::size_type _num_partitions)
     : the_table{table_to_hash}, num_partitions{_num_partitions}
   {}
 
   __device__
-  hash_value_type operator()(gdf_size_type row_index) const
+  hash_value_type operator()(cudf::size_type row_index) const
   {
     return hash_row<true, hash_function>(the_table, row_index) % num_partitions;
   }
@@ -58,7 +58,7 @@ struct row_partition_mapper
 
   // Using int_fastdiv can return results different from using the normal modulus
   // operation, therefore we need to use it in result verfication as well
-  gdf_size_type num_partitions;
+  cudf::size_type num_partitions;
 };
 
 // Put all repeated setup and validation stuff here

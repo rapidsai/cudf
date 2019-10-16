@@ -27,34 +27,34 @@
 namespace {
 
 using bit_mask::bit_mask_t;
-static constexpr gdf_size_type warp_size{32};
+static constexpr cudf::size_type warp_size{32};
 
 template <typename T, typename InputFunctor, bool has_validity>
 __global__
 void copy_range_kernel(T * __restrict__ const data,
                        bit_mask_t * __restrict__ const bitmask,
-                       gdf_size_type * __restrict__ const null_count,
-                       gdf_index_type begin,
-                       gdf_index_type end,
+                       cudf::size_type * __restrict__ const null_count,
+                       cudf::size_type begin,
+                       cudf::size_type end,
                        InputFunctor input)
 {
-  const gdf_index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   constexpr size_t mask_size = warp_size;
 
-  const gdf_size_type masks_per_grid = gridDim.x * blockDim.x / mask_size;
+  const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / mask_size;
   const int warp_id = tid / warp_size;
   const int warp_null_change_id = threadIdx.x / warp_size;
   const int lane_id = threadIdx.x % warp_size;
 
-  const gdf_index_type begin_mask_idx =
+  const cudf::size_type begin_mask_idx =
       cudf::util::detail::bit_container_index<bit_mask_t>(begin);
-  const gdf_index_type end_mask_idx =
+  const cudf::size_type end_mask_idx =
       cudf::util::detail::bit_container_index<bit_mask_t>(end);
 
-  gdf_index_type mask_idx = begin_mask_idx + warp_id;
+  cudf::size_type mask_idx = begin_mask_idx + warp_id;
 
-  gdf_index_type output_offset = begin_mask_idx * mask_size - begin;
-  gdf_index_type input_idx = tid + output_offset; 
+  cudf::size_type output_offset = begin_mask_idx * mask_size - begin;
+  cudf::size_type input_idx = tid + output_offset; 
 
   // each warp shares its total change in null count to shared memory to ease
   // computing the total change to null_count.
@@ -67,7 +67,7 @@ void copy_range_kernel(T * __restrict__ const data,
 
   while (mask_idx <= end_mask_idx)
   {
-    gdf_index_type index = mask_idx * mask_size + lane_id;
+    cudf::size_type index = mask_idx * mask_size + lane_id;
     bool in_range = (index >= begin && index < end);
 
     // write data
@@ -120,7 +120,7 @@ struct copy_range_dispatch {
 
   template <typename T>
   void operator()(gdf_column *column,
-                  gdf_index_type begin, gdf_index_type end,
+                  cudf::size_type begin, cudf::size_type end,
                   cudaStream_t stream = 0)
   {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
@@ -129,21 +129,21 @@ struct copy_range_dispatch {
     auto input = factory.template make<T>();
     auto kernel = copy_range_kernel<T, decltype(input), false>;
 
-    gdf_size_type *null_count = nullptr;
+    cudf::size_type *null_count = nullptr;
 
     if (cudf::is_nullable(*column)) {
-      RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
+      RMM_ALLOC(&null_count, sizeof(cudf::size_type), stream);
       CUDA_TRY(cudaMemcpyAsync(null_count, &column->null_count, 
-                               sizeof(gdf_size_type), 
+                               sizeof(cudf::size_type), 
                                cudaMemcpyHostToDevice,
                                stream));
       kernel = copy_range_kernel<T, decltype(input), true>;
     }
 
     // This one results in a compiler internal error! TODO: file NVIDIA bug
-    // gdf_size_type num_items = cudf::util::round_up_safe(end - begin, warp_size);
+    // cudf::size_type num_items = cudf::util::round_up_safe(end - begin, warp_size);
     // number threads to cover range, rounded to nearest warp
-    gdf_size_type num_items =
+    cudf::size_type num_items =
       warp_size * cudf::util::div_rounding_up_safe(end - begin, warp_size);
 
     constexpr int block_size = 256;
@@ -159,7 +159,7 @@ struct copy_range_dispatch {
 
     if (null_count != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
-                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+                               sizeof(cudf::size_type), cudaMemcpyDefault, stream));
       RMM_FREE(null_count, stream);
     }
 
@@ -180,8 +180,8 @@ namespace detail {
  * of @p out_column. @p out_column is modified in place.
  * 
  * InputFunctor must have these accessors:
- * __device__ T data(gdf_index_type index);
- * __device__ bool valid(gdf_index_type index);
+ * __device__ T data(cudf::size_type index);
+ * __device__ bool valid(cudf::size_type index);
  * 
  * @tparam InputFunctor the type of the input function object
  * @p out_column the column to copy into
@@ -191,7 +191,7 @@ namespace detail {
  */
 template <typename InputFunctor>
 void copy_range(gdf_column *out_column, InputFunctor input,
-                gdf_index_type begin, gdf_index_type end)
+                cudf::size_type begin, cudf::size_type end)
 {
   validate(out_column);
   CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed");
