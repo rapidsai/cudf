@@ -563,13 +563,12 @@ def test_operator_func_between_series_logical(
     )
 
     if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
-        # cudf will return `None` for a row  when both left- and right- side
-        # inputs are `None`. Because the result can contain only `None` values,
-        # it's possible cudf will default to `dtype=float64` whereas pandas
-        # will return `dtype=object`. `fillna` + `astype` account for this
-        # disparity in this test.
+        # cudf binary operations will return `None` when both left- and right-
+        # side values are `None`. It will return `np.nan` when either side is
+        # `np.nan`. As a consequence, when we convert our gdf => pdf during
+        # assert_eq, we get a pdf with dtype='object' (all inputs are none).
+        # to account for this, we use fillna.
         gdf_series_result.fillna(func == "ne", inplace=True)
-        gdf_series_result = gdf_series_result.astype(np.bool)
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
