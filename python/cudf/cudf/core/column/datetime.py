@@ -143,10 +143,11 @@ class DatetimeColumn(column.TypedColumnBase):
             3: "Thursday",
             4: "Friday",
             5: "Saturday",
-            6: "Sunday"
+            6: "Sunday",
         }
-        return Series([day_names[day_idx] for day_idx in self.weekday])
-
+        return cudf.core.column.string.StringColumn(
+            [day_names[day_idx] for day_idx in self.weekday]
+        )
 
     def month_name(self):
         month_names = {
@@ -161,9 +162,11 @@ class DatetimeColumn(column.TypedColumnBase):
             9: "September",
             10: "October",
             11: "November",
-            12: "December"
+            12: "December",
         }
-        return Series([month_names[month_idx] for month_idx in self.month])
+        return cudf.core.column.string.StringColumn(
+            [month_names[month_idx] for month_idx in self.month]
+        )
 
     def get_dt_field(self, field):
         out = column.column_empty_like_same_mask(self, dtype=np.int16)

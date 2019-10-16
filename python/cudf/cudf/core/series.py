@@ -2610,7 +2610,7 @@ class DatetimeProperties(object):
             3: "Thursday",
             4: "Friday",
             5: "Saturday",
-            6: "Sunday"
+            6: "Sunday",
         }
 
         return Series([day_names[day_idx] for day_idx in self.weekday])
@@ -2628,7 +2628,7 @@ class DatetimeProperties(object):
             9: "September",
             10: "October",
             11: "November",
-            12: "December"
+            12: "December",
         }
         return Series([month_names[month_idx] for month_idx in self.month])
 
