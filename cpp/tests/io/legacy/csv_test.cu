@@ -348,7 +348,9 @@ TEST_F(CsvTest, Timestamps)
     }
 }
 
-TEST(gdf_csv_test, TimestampSeconds)
+struct gdf_csv_test : public GdfTest{};
+
+TEST_F(gdf_csv_test, TimestampSeconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvTimestampSeconds.csv";
 
@@ -376,7 +378,7 @@ TEST(gdf_csv_test, TimestampSeconds)
     }
 }
 
-TEST(gdf_csv_test, TimestampMilliseconds)
+TEST_F(gdf_csv_test, TimestampMilliseconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvTimestampMilliseconds.csv";
 
@@ -404,7 +406,7 @@ TEST(gdf_csv_test, TimestampMilliseconds)
     }
 }
 
-TEST(gdf_csv_test, TimestampMicroseconds)
+TEST_F(gdf_csv_test, TimestampMicroseconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvTimestampMicroseconds.csv";
 
@@ -432,7 +434,7 @@ TEST(gdf_csv_test, TimestampMicroseconds)
     }
 }
 
-TEST(gdf_csv_test, TimestampNanoseconds)
+TEST_F(gdf_csv_test, TimestampNanoseconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvTimestampNanoseconds.csv";
 
@@ -460,7 +462,7 @@ TEST(gdf_csv_test, TimestampNanoseconds)
     }
 }
 
-TEST(gdf_csv_test, DatesCastToTimestampSeconds)
+TEST_F(gdf_csv_test, DatesCastToTimestampSeconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CastToTimestampSeconds.csv";
 
@@ -492,7 +494,7 @@ TEST(gdf_csv_test, DatesCastToTimestampSeconds)
     }
 }
 
-TEST(gdf_csv_test, DatesCastToTimestampMilliseconds)
+TEST_F(gdf_csv_test, DatesCastToTimestampMilliseconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CastToTimestampMilliseconds.csv";
 
@@ -524,7 +526,7 @@ TEST(gdf_csv_test, DatesCastToTimestampMilliseconds)
     }
 }
 
-TEST(gdf_csv_test, DatesCastToTimestampMicroseconds)
+TEST_F(gdf_csv_test, DatesCastToTimestampMicroseconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CastToTimestampMicroseconds.csv";
 
@@ -556,7 +558,7 @@ TEST(gdf_csv_test, DatesCastToTimestampMicroseconds)
     }
 }
 
-TEST(gdf_csv_test, DatesCastToTimestampNanoseconds)
+TEST_F(gdf_csv_test, DatesCastToTimestampNanoseconds)
 {
     const std::string fname = temp_env->get_temp_dir()+"CastToTimestampNanoseconds.csv";
 
@@ -749,7 +751,7 @@ TEST_F(CsvTest, ArrowFileSource) {
   args.dtype = {"int8"};
   const auto df = cudf::read_csv(args);
 
-  EXPECT_EQ(df.num_columns(), static_cast<gdf_size_type>(args.dtype.size()));
+  EXPECT_EQ(df.num_columns(), static_cast<cudf::size_type>(args.dtype.size()));
   ASSERT_EQ(df.get_column(0)->dtype, GDF_INT8);
 
   const auto col = gdf_host_column<int8_t>(df.get_column(0));

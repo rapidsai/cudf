@@ -39,15 +39,15 @@ using flags = uint8_t;
  * @brief Per-column histogram struct holding detected ocurrences of each dtype
  **/
 struct stats {
-  gdf_size_type countFloat;
-  gdf_size_type countDateAndTime;
-  gdf_size_type countString;
-  gdf_size_type countBool;
-  gdf_size_type countInt8;
-  gdf_size_type countInt16;
-  gdf_size_type countInt32;
-  gdf_size_type countInt64;
-  gdf_size_type countNULL;
+  cudf::size_type countFloat;
+  cudf::size_type countDateAndTime;
+  cudf::size_type countString;
+  cudf::size_type countBool;
+  cudf::size_type countInt8;
+  cudf::size_type countInt16;
+  cudf::size_type countInt32;
+  cudf::size_type countInt64;
+  cudf::size_type countNULL;
 };
 }  // namespace column_parse
 

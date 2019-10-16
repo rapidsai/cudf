@@ -668,7 +668,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
 
-    columns.emplace_back(static_cast<gdf_size_type>(selected_stripes.size() > 0 ? num_rows : 0), dtype_info.first,
+    columns.emplace_back(static_cast<cudf::size_type>(selected_stripes.size() > 0 ? num_rows : 0), dtype_info.first,
                          dtype_info.second, md_->ff.GetColumnName(col));
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",

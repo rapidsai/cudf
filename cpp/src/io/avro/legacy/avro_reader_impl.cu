@@ -174,7 +174,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
   for (const auto &col : selected_cols_) {
     auto &col_schema = md_->schema[md_->columns[col.first].schema_data_idx];
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows),
+    columns.emplace_back(static_cast<cudf::size_type>(num_rows),
                          to_dtype(&col_schema),
                          gdf_dtype_extra_info{TIME_UNIT_NONE}, col.second);
 

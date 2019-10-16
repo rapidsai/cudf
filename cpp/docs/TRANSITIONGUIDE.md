@@ -183,7 +183,7 @@ You can also construct a `gdf_column` that uses a `std::vector` to initialize th
 ```
  std::vector<T> values(size);
 
- std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
+ std::vector<cudf::valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
 
  cudf::test::column_wrapper<T> const col(values, bitmask);
 ```

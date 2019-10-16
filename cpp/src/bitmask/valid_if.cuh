@@ -42,9 +42,9 @@ constexpr int block_size = 256;
  * @return[out] result of each block is returned in thread 0.
  */
 template <class bit_container, int lane = 0>
-__device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container bit_mask) {
+__device__ __inline__ cudf::size_type single_lane_popc_block_reduce(bit_container bit_mask) {
   
-  static __shared__ gdf_size_type warp_count[warp_size];
+  static __shared__ cudf::size_type warp_count[warp_size];
   
   int lane_id = (threadIdx.x % warp_size);
   int warp_id = (threadIdx.x / warp_size);
@@ -56,7 +56,7 @@ __device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container 
   }
   __syncthreads();
 
-  gdf_size_type block_count = 0;
+  cudf::size_type block_count = 0;
 
   if (warp_id == 0) {
     
@@ -65,12 +65,12 @@ __device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container 
 
     // Maximum block size is 1024 and 1024 / 32 = 32
     // so one single warp is enough to do the reduction over different warps
-    gdf_size_type count = 
+    cudf::size_type count = 
       (lane_id < (blockDim.x / warp_size)) ? warp_count[lane_id] : 0;
     
     __shared__
-        typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
-    block_count = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(count);
+        typename cub::WarpReduce<cudf::size_type>::TempStorage temp_storage;
+    block_count = cub::WarpReduce<cudf::size_type>(temp_storage).Sum(count);
 
   }
 

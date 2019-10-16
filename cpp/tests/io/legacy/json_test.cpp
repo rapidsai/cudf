@@ -54,7 +54,7 @@ TEST_F(gdf_json_test, SquareBrackets) {
       "\"index\":[\"row 1\",\"row 2\"] , "
       "\"data\":[[\"a\",1,1.0],[\"b\",2,2.0]]}");
 
-  const gdf_size_type count = countAllFromSet(
+  const cudf::size_type count = countAllFromSet(
       json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'});
   ASSERT_TRUE(count == 10);
 
@@ -90,7 +90,7 @@ TEST_F(gdf_json_test, BracketsLevels) {
   expected.push_back(2);
   expected.push_back(1);
 
-  const gdf_size_type count = countAllFromSet(
+  const cudf::size_type count = countAllFromSet(
       json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'});
   rmm::device_buffer d_pos(count * sizeof(pos_key_pair));
   findAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char),
@@ -289,7 +289,7 @@ TEST_F(gdf_json_test, ArrowFileSource) {
   args.dtype = {"int8"};
   const auto df = cudf::read_json(args);
 
-  EXPECT_EQ(df.num_columns(), static_cast<gdf_size_type>(args.dtype.size()));
+  EXPECT_EQ(df.num_columns(), static_cast<cudf::size_type>(args.dtype.size()));
   ASSERT_EQ(df.get_column(0)->dtype, GDF_INT8);
 
   const auto col = gdf_host_column<int8_t>(df.get_column(0));

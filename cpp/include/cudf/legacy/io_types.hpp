@@ -130,10 +130,10 @@ struct csv_read_arg {
   bool skipinitialspace = false;            ///< Skip white space after the delimiter
   bool skip_blank_lines = true;             ///< Ignore empty lines or parse line values as invalid
 
-  gdf_size_type nrows = -1;                 ///< Rows to read
-  gdf_size_type skiprows = -1;              ///< Rows to skip from the start
-  gdf_size_type skipfooter = -1;            ///< Rows to skip from the end
-  gdf_size_type header = 0;                 ///< Header row index, zero-based counting; default is no header reading
+  cudf::size_type nrows = -1;                 ///< Rows to read
+  cudf::size_type skiprows = -1;              ///< Rows to skip from the start
+  cudf::size_type skipfooter = -1;            ///< Rows to skip from the end
+  cudf::size_type header = 0;                 ///< Header row index, zero-based counting; default is no header reading
 
   std::vector<std::string> names;           ///< Names of the columns
   std::vector<std::string> dtype;           ///< Data types of the column; empty to infer dtypes

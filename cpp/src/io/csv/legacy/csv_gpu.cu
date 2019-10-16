@@ -37,7 +37,7 @@ namespace gpu {
  * @param[out] d_columnData The count for each column data type
  **/
 __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
-                                  gdf_size_type num_records, int num_columns,
+                                  cudf::size_type num_records, int num_columns,
                                   column_parse::flags *flags,
                                   const uint64_t *recStart,
                                   column_parse::stats *d_columnData) {
@@ -243,11 +243,11 @@ struct ConvertFunctor {
  * @param[out] num_valid The numbers of valid fields in columns
  *---------------------------------------------------------------------------**/
 __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
-                                gdf_size_type num_records, int num_columns,
+                                cudf::size_type num_records, int num_columns,
                                 const column_parse::flags *flags,
                                 const uint64_t *recStart, gdf_dtype *dtype,
-                                void **data, gdf_valid_type **valid,
-                                gdf_size_type *num_valid) {
+                                void **data, cudf::valid_type **valid,
+                                cudf::size_type *num_valid) {
   // thread IDs range per block, so also need the block id
   long rec_id =
       threadIdx.x +
@@ -323,7 +323,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
 
 cudaError_t __host__
 DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
-                   gdf_size_type num_rows, gdf_size_type num_columns,
+                   cudf::size_type num_rows, cudf::size_type num_columns,
                    const ParseOptions &options, column_parse::flags *flags,
                    column_parse::stats *stats, cudaStream_t stream) {
   int blockSize;    // suggested thread count to use
@@ -341,10 +341,10 @@ DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
 }
 
 cudaError_t __host__ DecodeCsvColumnData(
-    const char *data, const uint64_t *row_starts, gdf_size_type num_rows,
-    gdf_size_type num_columns, const ParseOptions &options,
+    const char *data, const uint64_t *row_starts, cudf::size_type num_rows,
+    cudf::size_type num_columns, const ParseOptions &options,
     const column_parse::flags *flags, gdf_dtype *dtypes, void **columns,
-    gdf_valid_type **valids, gdf_size_type *num_valid, cudaStream_t stream) {
+    cudf::valid_type **valids, cudf::size_type *num_valid, cudaStream_t stream) {
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
