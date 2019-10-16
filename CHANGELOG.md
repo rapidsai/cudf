@@ -20,7 +20,6 @@
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3067 Java method to return size of device memory buffer
 
-
 ## Bug Fixes
 
 - PR #3030 Fix snappy decoding regression in PR #3014
