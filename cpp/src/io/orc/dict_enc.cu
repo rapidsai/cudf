@@ -189,7 +189,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  *
  **/
 // blockDim {512,1,1}
-extern "C" __global__ void __launch_bounds__(512, 3)
+extern "C" __global__ void __launch_bounds__(512, 2)
 gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 {
     __shared__ __align__(16) dictinit_state_s state_g;
