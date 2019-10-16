@@ -554,8 +554,15 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
         {
             break;
         }
-        blen_t = b[t].len;
-        dist_t = b[t].offset;
+        if (t < batch_len)
+        {
+            blen_t = b[t].len;
+            dist_t = b[t].offset;
+        }
+        else
+        {
+            blen_t = dist_t = 0;
+        }
         // Try to combine as many small entries as possible, but try to avoid doing that
         // if we see a small repeat distance 8 bytes or less
         if (SHFL0(min((uint32_t)dist_t, (uint32_t)SHFL_XOR(dist_t, 1))) > 8)
@@ -565,7 +572,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
             {
                 uint32_t bofs = WarpReducePos32(blen_t, t);
                 uint32_t stop_mask = BALLOT((uint32_t)dist_t < bofs);
-                uint32_t start_mask = WarpReduceSum32((bofs < 32) ? 1 << bofs : 0);
+                uint32_t start_mask = WarpReduceSum32((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
                 n = min(min((uint32_t)__popc(start_mask), (uint32_t)(__ffs(stop_mask) - 1u)), (uint32_t)batch_len);
                 if (n != 0)
                 {
