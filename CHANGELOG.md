@@ -18,6 +18,7 @@
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #3126 Round 2 of snappy decompression optimizations
 
 ## Bug Fixes
 
