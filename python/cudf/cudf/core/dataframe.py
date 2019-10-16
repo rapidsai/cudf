@@ -1160,13 +1160,25 @@ class DataFrame(object):
 
         Parameters
         ----------
-        index : Index, Series-convertible, or str
+        index : Index, Series-convertible, str, or list of str
             Index : the new index.
             Series-convertible : values for the new index.
             str : name of column to be used as series
+            list of str : name of columns to be converted to a MultiIndex
         drop : boolean
             whether to drop corresponding column for str index argument
         """
+        # When index is a list of column names
+        if isinstance(index, list):
+            if len(index) > 1:
+                df = self.copy(deep=False)
+                if drop:
+                    df = df.drop(columns=index)
+                return df.set_index(
+                    cudf.MultiIndex.from_frame(self[index], names=index)
+                )
+            index = index[0]  # List contains single item
+
         # When index is a column name
         if isinstance(index, str):
             df = self.copy(deep=False)
