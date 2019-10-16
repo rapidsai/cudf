@@ -23,7 +23,7 @@ from cudf.core.column import (
 )
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
-
+from cudf.utils.dateutils import wkday_idx_to_name, month_idx_to_name
 
 class Index(object):
     """The root interface for all Series indexes.
@@ -807,35 +807,10 @@ class DatetimeIndex(GenericIndex):
         return self.weekday
 
     def day_name(self):
-        day_names = {
-            0: "Monday",
-            1: "Tuesday",
-            2: "Wednesday",
-            3: "Thursday",
-            4: "Friday",
-            5: "Saturday",
-            6: "Sunday",
-        }
-        return GenericIndex([day_names[day_idx] for day_idx in self.weekday])
+        return GenericIndex(wkday_idx_to_name(self.weekday))
 
     def month_name(self):
-        month_names = {
-            1: "January",
-            2: "February",
-            3: "March",
-            4: "April",
-            5: "May",
-            6: "June",
-            7: "July",
-            8: "August",
-            9: "September",
-            10: "October",
-            11: "November",
-            12: "December",
-        }
-        return GenericIndex(
-            [month_names[month_idx] for month_idx in self.month]
-        )
+        return GenericIndex(month_idx_to_name(self.month))
 
     def to_pandas(self):
         nanos = self.as_column().astype("datetime64[ns]")

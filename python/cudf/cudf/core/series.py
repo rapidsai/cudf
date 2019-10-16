@@ -18,6 +18,7 @@ from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dateutils import wkday_idx_to_name, month_idx_to_name
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
@@ -2603,34 +2604,10 @@ class DatetimeProperties(object):
         return self.weekday
 
     def day_name(self):
-        day_names = {
-            0: "Monday",
-            1: "Tuesday",
-            2: "Wednesday",
-            3: "Thursday",
-            4: "Friday",
-            5: "Saturday",
-            6: "Sunday",
-        }
-
-        return Series([day_names[day_idx] for day_idx in self.weekday])
+        return Series(wkday_idx_to_name(self.weekday))
 
     def month_name(self):
-        month_names = {
-            1: "January",
-            2: "February",
-            3: "March",
-            4: "April",
-            5: "May",
-            6: "June",
-            7: "July",
-            8: "August",
-            9: "September",
-            10: "October",
-            11: "November",
-            12: "December",
-        }
-        return Series([month_names[month_idx] for month_idx in self.month])
+        return Series(month_idx_to_name(self.month))
 
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)

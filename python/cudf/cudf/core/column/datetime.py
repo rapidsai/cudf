@@ -12,6 +12,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.dateutils import wkday_idx_to_name, month_idx_to_name
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -136,36 +137,13 @@ class DatetimeColumn(column.TypedColumnBase):
         return self.weekday
 
     def day_name(self):
-        day_names = {
-            0: "Monday",
-            1: "Tuesday",
-            2: "Wednesday",
-            3: "Thursday",
-            4: "Friday",
-            5: "Saturday",
-            6: "Sunday",
-        }
         return cudf.core.column.string.StringColumn(
-            [day_names[day_idx] for day_idx in self.weekday]
+            wkday_idx_to_name(self.weekday)
         )
 
     def month_name(self):
-        month_names = {
-            1: "January",
-            2: "February",
-            3: "March",
-            4: "April",
-            5: "May",
-            6: "June",
-            7: "July",
-            8: "August",
-            9: "September",
-            10: "October",
-            11: "November",
-            12: "December",
-        }
         return cudf.core.column.string.StringColumn(
-            [month_names[month_idx] for month_idx in self.month]
+            month_idx_to_name(self.month)
         )
 
     def get_dt_field(self, field):
