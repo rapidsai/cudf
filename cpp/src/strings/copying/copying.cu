@@ -97,9 +97,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
 
     // build null mask
     auto valid_mask = strings::detail::make_null_mask(strings_count,
-        [d_column, d_indices, sliced_offset] __device__ (size_type idx) {
-            return !d_column.is_null(d_indices[idx+sliced_offset]);
-        },
+        [d_column, d_indices] __device__ (size_type idx) { return !d_column.is_null(d_indices[idx]);},
         mr, stream);
     auto null_count = valid_mask.second;
     rmm::device_buffer null_mask = valid_mask.first;
