@@ -139,11 +139,9 @@ std::unique_ptr<column> make_strings_column(
                               cudaMemcpyDeviceToDevice, stream ));
 
     // build null bitmask
-    rmm::device_buffer null_mask;
-    if( null_count )
-        null_mask = rmm::device_buffer(valid_mask.data().get(),
-                                       gdf_valid_allocation_size(num_strings),
-                                       stream, mr);
+    rmm::device_buffer null_mask{
+        valid_mask.data().get(),
+        valid_mask.size() * sizeof(decltype(valid_mask.front()))};
 
     // build chars column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );

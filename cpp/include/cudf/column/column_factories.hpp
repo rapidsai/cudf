@@ -128,8 +128,8 @@ std::unique_ptr<column> make_strings_column(
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<char>& strings,
     const rmm::device_vector<size_type>& offsets,
-    const rmm::device_vector<bitmask_type>& null_mask,
-    size_type null_count,
+    const rmm::device_vector<bitmask_type>& null_mask = {},
+    size_type null_count = cudf::UNKNOWN_NULL_COUNT,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
