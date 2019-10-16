@@ -414,7 +414,7 @@ class strings_column_wrapper : public detail::column_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column of strings from a list of strings and
-   * the a list of booleans to indicate the validity of each string.
+   * a list of booleans to indicate the validity of each string.
    * 
    * Example:
    * ```c++
