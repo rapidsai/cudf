@@ -111,17 +111,18 @@ class table {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief `table1` and `table2` are concatenated to return single table_view
+ * @brief Elements of `tables_to_concat` are concatenated to return single
+ * table_view
  *
  * @throws cudf::logic_error
  * If number of rows mismatch
  *
- * @param table1 The table to be concatenated with `table2`
- * @param table2 The table to be concatenated with `table1`
- * @return A single table having all the columns from `table1` and `table2`
- * respectively in the same order.
+ * @param tables_to_concat The tables to be concatenated into a single
+ * table_view
+ * @return A single table having all the columns from the elements of
+ * `tables_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
-table_view concat(cudf::experimental::table const& table1, cudf::experimental::table const&table2);
+table_view concat(std::vector<table_view> const& tables_to_concat);
 
 }  // namespace experimental
 }  // namespace cudf

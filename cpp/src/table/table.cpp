@@ -91,14 +91,12 @@ table_view table::select(std::vector<gdf_size_type> const& column_indices) const
 }
 
 // Concatenate `table1` and `table2` into a single table_view
-table_view concat(cudf::experimental::table const& table1, cudf::experimental::table const&table2) {
-  CUDF_EXPECTS(table1.num_rows() == table2.num_rows(), "Number of rows mismatch");
-  table_view v1 = table1.view();
-  table_view v2 = table2.view();
+//table_view concat(cudf::experimental::table const& table1, cudf::experimental::table const&table2) {
+table_view concat(std::vector<table_view> const& tables_to_concat) {
   std::vector<column_view> concat_cols;
-  concat_cols.insert(concat_cols.end(), v1.begin(), v1.end());
-  concat_cols.insert(concat_cols.end(), v2.begin(), v2.end());
-
+  for (auto& view : tables_to_concat) {
+    concat_cols.insert(concat_cols.end(), view.begin(), view.end());
+  }
   return table_view(concat_cols);
 }
 
