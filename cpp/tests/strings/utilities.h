@@ -40,5 +40,12 @@ std::unique_ptr<cudf::column> create_strings_column( const std::vector<const cha
  *---------------------------------------------------------------------------**/
 void expect_strings_equal(cudf::column_view strings_column, const std::vector<const char*>& h_expected );
 
+/**---------------------------------------------------------------------------*
+ * @brief Utility will verify the given strings column is empty.
+ *
+ * @param strings_column Column of strings to check
+ *---------------------------------------------------------------------------**/
+void expect_strings_empty(cudf::column_view strings_column);
+
 }  // namespace test
 }  // namespace cudf

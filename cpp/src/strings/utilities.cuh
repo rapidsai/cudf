@@ -53,7 +53,7 @@ __device__ inline char* copy_string( char* buffer, const string_view& d_string )
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
  * @param mr Memory resource to use.
- * @stream Stream to use for any kernel calls.
+ * @param stream Stream to use for any kernel calls.
  * @return offsets child column for strings column
  */
 template <typename InputIterator>
@@ -85,7 +85,7 @@ std::unique_ptr<column> make_offsets_child_column( InputIterator begin, InputIte
  * @param strings_count Number of strings for the column.
  * @param bfn The custom function used for identifying null string entries.
  * @param mr Memory resource to use.
- * @stream Stream to use for any kernel calls.
+ * @param stream Stream to use for any kernel calls.
  * @return Pair including null mask and null count
  */
 template <typename BoolFn>

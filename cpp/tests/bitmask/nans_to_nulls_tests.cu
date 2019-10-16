@@ -40,25 +40,25 @@ using test_types =
 TYPED_TEST_CASE(bitmask_test, test_types);
 
 TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_valid) {
-  constexpr gdf_size_type source_size{2000};
+  constexpr cudf::size_type source_size{2000};
   
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); },
-      [](gdf_index_type row) { return row % 3 != 1; }};
+      source_size, [](cudf::size_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); },
+      [](cudf::size_type row) { return row % 3 != 1; }};
 
   gdf_column* raw_source = source_column.get();
 
   const auto num_bytes = cudf::util::packed_bit_sequence_size_in_bytes<bit_mask_t>(source_size)*sizeof(bit_mask_t);
   std::vector<bit_mask_t> result_mask_host(num_bytes);
 
-  std::pair<bit_mask_t*, gdf_size_type> result;
+  std::pair<bit_mask_t*, cudf::size_type> result;
   EXPECT_NO_THROW(result = cudf::nans_to_nulls(*raw_source));
   
   EXPECT_EQ(result.second, 2*(source_size/3 + 1));
 
   CUDA_TRY(cudaMemcpy(result_mask_host.data(), result.first, num_bytes, cudaMemcpyDeviceToHost));
   
-  for (gdf_index_type i = 0; i < source_size; i++) {
+  for (cudf::size_type i = 0; i < source_size; i++) {
     // The first half of the destination column should be all valid
     // and values should be 1, 3, 5, 7, etc.
     if (i % 3 == 2) {
@@ -74,10 +74,10 @@ TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_valid) {
 }
 
 TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_null) {
-  constexpr gdf_size_type source_size{2000};
+  constexpr cudf::size_type source_size{2000};
   
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); }
+      source_size, [](cudf::size_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); }
   };
 
   gdf_column* raw_source = source_column.get();
@@ -85,14 +85,14 @@ TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_null) {
   const auto num_bytes = cudf::util::packed_bit_sequence_size_in_bytes<bit_mask_t>(source_size)*sizeof(bit_mask_t);
   std::vector<bit_mask_t> result_mask_host(num_bytes);
 
-  std::pair<bit_mask_t*, gdf_size_type> result;
+  std::pair<bit_mask_t*, cudf::size_type> result;
   EXPECT_NO_THROW(result = cudf::nans_to_nulls(*raw_source));
 
   EXPECT_EQ(result.second, source_size/3 + 1);
 
   CUDA_TRY(cudaMemcpy(result_mask_host.data(), result.first, num_bytes, cudaMemcpyDeviceToHost));
   
-  for (gdf_index_type i = 0; i < source_size; i++) {
+  for (cudf::size_type i = 0; i < source_size; i++) {
     // The first half of the destination column should be all valid
     // and values should be 1, 3, 5, 7, etc.
     if (i % 3) {
@@ -111,7 +111,7 @@ TYPED_TEST(bitmask_test, nans_to_nulls_source_empty) {
  
   gdf_column source{};
 
-  std::pair<bit_mask_t*, gdf_size_type> result;
+  std::pair<bit_mask_t*, cudf::size_type> result;
 
   EXPECT_NO_THROW(result = cudf::nans_to_nulls(source));
 
@@ -124,15 +124,15 @@ TEST_F(GdfTest, nans_to_nulls_wrong_type) {
   
   using TypeParam = int;
 
-  constexpr gdf_size_type source_size{2000};
+  constexpr cudf::size_type source_size{2000};
   
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); },
-      [](gdf_index_type row) { return row % 3 != 1; }};
+      source_size, [](cudf::size_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); },
+      [](cudf::size_type row) { return row % 3 != 1; }};
 
   gdf_column* raw_source = source_column.get();
 
-  std::pair<bit_mask_t*, gdf_size_type> result;
+  std::pair<bit_mask_t*, cudf::size_type> result;
   EXPECT_THROW(result = cudf::nans_to_nulls(*raw_source), cudf::logic_error);
   
 }

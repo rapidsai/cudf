@@ -133,6 +133,15 @@ std::unique_ptr<column> create_chars_child_column( cudf::size_type strings_count
     return make_numeric_column( data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr );
 }
 
+//
+std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resource* mr, cudaStream_t stream )
+{
+    return std::make_unique<column>( data_type{STRING}, 0,
+                                     rmm::device_buffer{0,stream,mr}, // data
+                                     rmm::device_buffer{0,stream,mr}, 0 ); // nulls
+}
+
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf
