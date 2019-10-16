@@ -166,6 +166,24 @@ public class ColumnVectorTest {
   }
 
   @Test
+  void testGetDeviceMemorySizeNonStrings() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
+      assertEquals(24, v0.getDeviceMemorySize()); // (6*4B)
+      assertEquals(40, v1.getDeviceMemorySize()); // (8*4B) + 8B(for validity vector)
+    }
+  }
+
+  @Test
+  void testGetDeviceMemorySizeStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings("onetwothree", "four", "five");
+         ColumnVector v1 = ColumnVector.fromStrings("onetwothree", "four", null, "five")) {
+      assertEquals(80, v0.getDeviceMemorySize()); //32B + 24B + 24B
+      assertEquals(112, v1.getDeviceMemorySize()); //32B + 24B + 24B + 24B + 8B(for validity vector)
+    }
+  }
+
+  @Test
   void testFromScalarProducesEmptyColumn() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromInt(1), 0);
