@@ -22,7 +22,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <cudf/search.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -36,8 +36,8 @@ namespace {
 template <typename DataIterator, typename ValuesIterator, typename Comparator>
 void launch_search(DataIterator it_data,
                     ValuesIterator it_vals,
-                    gdf_size_type data_size,
-                    gdf_size_type values_size,
+                    cudf::size_type data_size,
+                    cudf::size_type values_size,
                     void* output,
                     Comparator comp,
                     bool find_first,
@@ -47,14 +47,14 @@ void launch_search(DataIterator it_data,
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         it_data, it_data + data_size,
                         it_vals, it_vals + values_size,
-                        static_cast<gdf_index_type*>(output),
+                        static_cast<cudf::size_type*>(output),
                         comp);
   }
   else {
     thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                         it_data, it_data + data_size,
                         it_vals, it_vals + values_size,
-                        static_cast<gdf_index_type*>(output),
+                        static_cast<cudf::size_type*>(output),
                         comp);
   }
 }
@@ -118,7 +118,7 @@ struct compare_with_value{
             compare_with_value(device_table t, device_table val, bool nulls_are_equal = true)
                 : compare(t, val, nulls_are_equal) {}
 
-            __device__ bool operator()(gdf_index_type i){
+            __device__ bool operator()(cudf::size_type i){
                return compare(i, 0);
             }
             row_equality_comparator<nullable> compare;
