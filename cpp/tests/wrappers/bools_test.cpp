@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/wrappers/bools.hpp>
+#include <cudf/wrappers/bool.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>
 

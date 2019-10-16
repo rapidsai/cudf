@@ -17,7 +17,7 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
-#include <cudf/wrappers/bools.hpp>
+#include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
 using hash_value_type = uint32_t;
