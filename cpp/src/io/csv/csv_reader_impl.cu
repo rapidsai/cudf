@@ -192,8 +192,8 @@ void reader::Impl::setColumnNamesFromCsv() {
 }
 
 table reader::Impl::read(size_t range_offset, size_t range_size,
-                         gdf_size_type skip_rows, gdf_size_type skip_end_rows,
-                         gdf_size_type num_rows) {
+                         cudf::size_type skip_rows, cudf::size_type skip_end_rows,
+                         cudf::size_type num_rows) {
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");
@@ -435,8 +435,8 @@ void reader::Impl::gather_row_offsets(const char *h_data, size_t h_size,
 
 std::pair<uint64_t, uint64_t> reader::Impl::select_rows(
     const char *h_data, size_t h_size, size_t range_size,
-    gdf_size_type skip_rows, gdf_size_type skip_end_rows,
-    gdf_size_type num_rows) {
+    cudf::size_type skip_rows, cudf::size_type skip_end_rows,
+    cudf::size_type num_rows) {
   thrust::host_vector<uint64_t> h_row_offsets = row_offsets;
   auto it_begin = h_row_offsets.begin();
   auto it_end = h_row_offsets.end();
@@ -659,7 +659,7 @@ reader::Impl::gather_column_dtypes() {
 void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
   thrust::host_vector<gdf_dtype> h_dtypes(num_active_cols);
   thrust::host_vector<void*> h_data(num_active_cols);
-  thrust::host_vector<gdf_valid_type*> h_valid(num_active_cols);
+  thrust::host_vector<cudf::valid_type*> h_valid(num_active_cols);
 
   for (int i = 0; i < num_active_cols; ++i) {
     h_dtypes[i] = columns[i]->dtype;
@@ -669,8 +669,8 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
 
   rmm::device_vector<gdf_dtype> d_dtypes = h_dtypes;
   rmm::device_vector<void*> d_data = h_data;
-  rmm::device_vector<gdf_valid_type*> d_valid = h_valid;
-  rmm::device_vector<gdf_size_type> d_valid_counts(num_active_cols, 0);
+  rmm::device_vector<cudf::valid_type*> d_valid = h_valid;
+  rmm::device_vector<cudf::size_type> d_valid_counts(num_active_cols, 0);
   d_column_flags = h_column_flags;
 
   CUDA_TRY(gpu::DecodeCsvColumnData(
@@ -680,7 +680,7 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
       d_valid_counts.data().get()));
   CUDA_TRY(cudaStreamSynchronize(0));
 
-  thrust::host_vector<gdf_size_type> h_valid_counts = d_valid_counts;
+  thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;
   for (int i = 0; i < num_active_cols; ++i) {
     columns[i]->null_count = columns[i]->size - h_valid_counts[i];
   }
@@ -773,8 +773,8 @@ table reader::read_byte_range(size_t offset, size_t size) {
   return impl_->read(offset, size, 0, 0, -1);
 }
 
-table reader::read_rows(gdf_size_type num_skip_header,
-                        gdf_size_type num_skip_footer, gdf_size_type num_rows) {
+table reader::read_rows(cudf::size_type num_skip_header,
+                        cudf::size_type num_skip_footer, cudf::size_type num_rows) {
   CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
                "Cannot use both `num_rows` and `num_skip_footer`");
 

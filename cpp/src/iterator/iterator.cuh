@@ -64,7 +64,7 @@
  *     auto it_meanvar = thrust::make_transform_iterator(it_pair, transformer);
  *
  * 5. template parameter for custom indexed iterator
- *     gdf_index_type *indices;
+ *     cudf::size_type *indices;
  *     auto it = make_iterator<has_nulls, T, T, T_index*>(column, T{0}, indices);
  * -------------------------------------------------------------------------**/
 
@@ -91,7 +91,7 @@ namespace cudf
 /** -------------------------------------------------------------------------*
  * @brief value accessor with/without null bitmask
  * A unary function returns scalar value at `id`.
- * `operator() (gdf_index_type id)` computes
+ * `operator() (cudf::size_type id)` computes
  * `data` value and valid flag at `id`
  *
  * If has_nulls = false, the data is always `static_cast<ResultType>(data[id])`
@@ -135,7 +135,7 @@ struct value_accessor<ElementType, ResultType, true>
   }
 
   CUDA_DEVICE_CALLABLE
-  ResultType operator()(gdf_index_type i) const {
+  ResultType operator()(cudf::size_type i) const {
     return bit_mask::is_valid(bitmask, i) ? static_cast<ResultType>(elements[i]) : identity;
   }
 };
@@ -158,7 +158,7 @@ struct value_accessor<ElementType, ResultType, false>
   value_accessor(ElementType const* e, bit_mask::bit_mask_t const*, ResultType) : elements{e} {}
 
   CUDA_DEVICE_CALLABLE
-  ResultType operator()(gdf_index_type i) const { return static_cast<ResultType>(elements[i]); }
+  ResultType operator()(cudf::size_type i) const { return static_cast<ResultType>(elements[i]); }
 };
 
 /** -------------------------------------------------------------------------*
@@ -199,7 +199,7 @@ struct pair_accessor<ElementType, ResultType, true> : public value_accessor<Elem
     : value_accessor<ElementType, ResultType, true>(e, b, i) {};
 
   CUDA_DEVICE_CALLABLE
-  thrust::pair<ResultType, bool> operator()(gdf_index_type i) const {
+  thrust::pair<ResultType, bool> operator()(cudf::size_type i) const {
     return bit_mask::is_valid(this->bitmask, i) ?
         thrust::make_pair(static_cast<ResultType>(this->elements[i]), true) :
         thrust::make_pair(this->identity, false) ;
@@ -223,7 +223,7 @@ struct pair_accessor<ElementType, ResultType, false> : public value_accessor<Ele
     : value_accessor<ElementType, ResultType, false>(e, b, i) {};
 
   CUDA_DEVICE_CALLABLE
-  thrust::pair<ResultType, bool> operator()(gdf_index_type i) const {
+  thrust::pair<ResultType, bool> operator()(cudf::size_type i) const {
     return thrust::make_pair(static_cast<ResultType>(this->elements[i]), true);
   }
 };
@@ -260,7 +260,7 @@ struct pair_accessor<ElementType, ResultType, false> : public value_accessor<Ele
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
 auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = nullptr,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
@@ -274,14 +274,14 @@ auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = 
 
 /** -------------------------------------------------------------------------*
  * @overload auto make_iterator(const ElementType *data,
- *                     const gdf_valid_type *valid, ResultType identity,
+ *                     const cudf::valid_type *valid, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
- * make iterator from the pointer of null bitmask of column as gdf_valid_type
+ * make iterator from the pointer of null bitmask of column as cudf::valid_type
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator(const ElementType *data, const gdf_valid_type *valid = nullptr,
+    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
+auto make_iterator(const ElementType *data, const cudf::valid_type *valid = nullptr,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
@@ -295,7 +295,7 @@ auto make_iterator(const ElementType *data, const gdf_valid_type *valid = nullpt
  * make iterator from a column
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
 auto make_iterator(const gdf_column& column,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
@@ -329,7 +329,7 @@ auto make_iterator(const gdf_column& column,
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
 auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = nullptr,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
@@ -343,14 +343,14 @@ auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *val
 
 /** -------------------------------------------------------------------------*
  * @overload auto make_pair_iterator(const ElementType *data,
- *                     const gdf_valid_type *valid, ResultType identity,
+ *                     const cudf::valid_type *valid, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
- * make iterator from the pointer of null bitmask of column as gdf_valid_type
+ * make iterator from the pointer of null bitmask of column as cudf::valid_type
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_pair_iterator(const ElementType *data, const gdf_valid_type *valid = nullptr,
+    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
+auto make_pair_iterator(const ElementType *data, const cudf::valid_type *valid = nullptr,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
@@ -364,7 +364,7 @@ auto make_pair_iterator(const ElementType *data, const gdf_valid_type *valid = n
  * make iterator from a column
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
 auto make_pair_iterator(const gdf_column& column,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {

@@ -25,12 +25,12 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_from_dlpack(
         gdf_column** columns,
-        gdf_size_type* num_columns,
+        size_type* num_columns,
         const DLManagedTensor* tensor
     ) except +
 
     cdef gdf_error gdf_to_dlpack(
         DLManagedTensor* tensor,
         const gdf_column** columns,
-        gdf_size_type num_columns
+        size_type num_columns
     ) except +
