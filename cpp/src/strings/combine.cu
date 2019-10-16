@@ -53,6 +53,8 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
     {
         CUDF_FAIL( "concatenate requires all columns have an equal number of rows");
     }
+    if( strings_count == 0 )
+        return make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
     if( !separator )
@@ -115,7 +117,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
     auto valid_mask = detail::make_null_mask(strings_count,
         [d_columns, num_columns, d_narep] __device__ (size_type idx) {
             bool null_element = thrust::any_of( thrust::seq, d_columns, d_columns+num_columns,
-                [idx] (column_device_view col) { return col.nullable() && col.is_null(idx);});
+                [idx] (column_device_view col) { return col.is_null(idx);});
             return( !null_element || !d_narep.is_null() );
         },
         mr, stream );
@@ -128,7 +130,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
             for( size_type col_idx=0; col_idx < num_columns; ++col_idx )
             {
                 auto d_column = d_columns[col_idx];
-                if( d_column.nullable() && d_column.is_null(idx) )
+                if( d_column.is_null(idx) )
                 {
                     if( d_narep.is_null() )
                         return 0; // null entry in result
@@ -158,7 +160,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         [d_columns, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
             bool null_element = thrust::any_of( thrust::seq, d_columns, d_columns+num_columns,
-                    [idx] (column_device_view col) { return col.nullable() && col.is_null(idx);});
+                    [idx] (column_device_view col) { return col.is_null(idx);});
             if( null_element && d_narep.is_null() )
                 return; // do not write to buffer at all if any element is null
             size_type offset = d_results_offsets[idx];
@@ -190,6 +192,10 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                                             rmm::mr::device_memory_resource* mr,
                                             cudaStream_t stream=0 )
 {
+    auto strings_count = strings.size();
+    if( strings_count == 0 )
+        return make_empty_strings_column(mr,stream);
+
     auto execpol = rmm::exec_policy(stream);
     if( !separator )
         separator = "";
@@ -200,7 +206,6 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
     if( narep_ptr )
         d_narep = *narep_ptr;
 
-    auto strings_count = strings.size();
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
     auto d_offsets = strings.offsets().data<int32_t>();
@@ -215,7 +220,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         d_output_offsets + 1,
         [d_column, d_separator, d_narep] __device__ (size_type idx) {
             size_type bytes = 0;
-            if( d_column.nullable() && d_column.is_null(idx) )
+            if( d_column.is_null(idx) )
             {
                 if( d_narep.is_null() )
                     return 0; // skip nulls
@@ -228,10 +233,11 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
             return bytes;
         },
         thrust::plus<int32_t>());
+    CUDA_TRY(cudaMemsetAsync(d_output_offsets, 0, sizeof(int32_t), stream));
     // total size is the last entry
     size_type bytes = output_offsets.back();
 
-     // build offsets column (only 1 string so 2 offset entries)
+    // build offsets column (only 1 string so 2 offset entries)
     auto offsets_column = make_numeric_column( data_type{INT32}, 2, mask_state::UNALLOCATED,
                                                stream, mr );
     auto offsets_view = offsets_column->mutable_view();
@@ -241,7 +247,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                              sizeof(new_offsets), cudaMemcpyHostToDevice,stream));
 
     // build null mask
-    // one entry so it is either all valid or all null
+    // only one entry so it is either all valid or all null
     size_type null_count = 0;
     rmm::device_buffer null_mask; // init to null null-mask
     if( strings.null_count()==strings_count )
@@ -261,7 +267,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         [d_column, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx){
             size_type offset = d_output_offsets[idx];
             char* d_buffer = d_chars + offset;
-            if( d_column.nullable() && d_column.is_null(idx) )
+            if( d_column.is_null(idx) )
             {
                 if( d_narep.is_null() )
                     return; // do not write to buffer if element is null (including separator)

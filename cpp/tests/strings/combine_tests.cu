@@ -26,9 +26,9 @@
 #include <gmock/gmock.h>
 
 
-struct CombineTest : public cudf::test::BaseFixture {};
+struct StringsCombineTest : public cudf::test::BaseFixture {};
 
-TEST_F(CombineTest, Concatenate)
+TEST_F(StringsCombineTest, Concatenate)
 {
     std::vector<const char*> h_strings1{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
     std::vector<const char*> h_strings2{ "xyz", "abc", "d", "éa", "", nullptr, "f" };
@@ -68,7 +68,31 @@ TEST_F(CombineTest, Concatenate)
     }
 }
 
-TEST_F(CombineTest, Join)
+TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
+{
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
+
+    std::vector<cudf::strings_column_view> strings_columns;
+    strings_columns.push_back(strings_view);
+    strings_columns.push_back(strings_view);
+
+    auto results = cudf::strings::concatenate(strings_columns);
+    cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsCombineTest, ConcatInvalidStringsColumns)
+{
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
+
+    std::vector<cudf::strings_column_view> strings_columns;
+    strings_columns.push_back(strings_view);
+
+    EXPECT_THROW( cudf::strings::concatenate(strings_columns), cudf::logic_error );
+}
+
+TEST_F(StringsCombineTest, Join)
 {
     std::vector<const char*> h_strings1{ "eee", "bb", nullptr, "zzzz", "", "aaa", "ééé" };
 
@@ -99,4 +123,12 @@ TEST_F(CombineTest, Join)
         auto results = cudf::strings::join_strings(view1,"+","___");
         cudf::test::expect_strings_equal(*results, h_expected);
     }
+}
+
+TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn)
+{
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
+    auto results = cudf::strings::join_strings(strings_view);
+    cudf::test::expect_strings_empty(results->view());
 }

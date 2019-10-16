@@ -110,7 +110,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         [d_column, d_indices, d_new_offsets, d_chars] __device__(size_type idx){
             size_type index = d_indices[idx];
-            if( d_column.nullable() && d_column.is_null(index) )
+            if( d_column.is_null(index) )
                 return;
             string_view d_str = d_column.element<string_view>(index);
             memcpy(d_chars + d_new_offsets[idx], d_str.data(), d_str.size_bytes() );
