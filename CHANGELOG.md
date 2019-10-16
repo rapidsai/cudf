@@ -16,6 +16,7 @@
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
+- PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 
