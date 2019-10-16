@@ -89,7 +89,7 @@ namespace {
 // Convert a DLPack DLTensor into gdf_column(s)
 // Currently 1D and 2D column-major (Fortran order) tensors are supported
 gdf_error gdf_from_dlpack(gdf_column** columns,
-                          gdf_size_type *num_columns,
+                          cudf::size_type *num_columns,
                           DLManagedTensor const * tensor)
 {
   // We can copy from host or device pointers
@@ -113,7 +113,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
     GDF_REQUIRE(tensor->dl_tensor.shape[1] > 0, GDF_DATASET_EMPTY);
 
   GDF_REQUIRE(tensor->dl_tensor.shape[0] < 
-              std::numeric_limits<gdf_size_type>::max(), 
+              std::numeric_limits<cudf::size_type>::max(), 
               GDF_COLUMN_SIZE_TOO_BIG);
   
   // compute the GDF datatype
@@ -134,8 +134,8 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   *columns = new gdf_column[*num_columns]{};
   GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
 
-  gdf_size_type byte_width = cudf::size_of(dtype);
-  gdf_size_type num_rows = tensor->dl_tensor.shape[0];
+  cudf::size_type byte_width = cudf::size_of(dtype);
+  cudf::size_type num_rows = tensor->dl_tensor.shape[0];
   size_t bytes = num_rows * byte_width;
 
   // Determine the stride between the start of each column
@@ -151,7 +151,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   }
   
   // copy the dl_tensor data
-  for (gdf_size_type c = 0; c < *num_columns; ++c) {
+  for (cudf::size_type c = 0; c < *num_columns; ++c) {
     void *tensor_data = reinterpret_cast<void*>(
       reinterpret_cast<uintptr_t>(tensor->dl_tensor.data) +
       tensor->dl_tensor.byte_offset +
@@ -181,20 +181,20 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 // Supports 1D and 2D tensors (single or multiple columns)
 gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const * const * columns, 
-                        gdf_size_type num_columns)
+                        cudf::size_type num_columns)
 {
   GDF_REQUIRE(tensor != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 
   // first column determines datatype and number of rows
   gdf_dtype type = columns[0]->dtype;
-  gdf_size_type num_rows = columns[0]->size;
+  cudf::size_type num_rows = columns[0]->size;
 
   GDF_REQUIRE(type != GDF_invalid, GDF_UNSUPPORTED_DTYPE);
   GDF_REQUIRE(num_rows > 0, GDF_DATASET_EMPTY);
 
   // ensure all columns are the same type and size
-  for (gdf_size_type i = 1; i < num_columns; ++i) {
+  for (cudf::size_type i = 1; i < num_columns; ++i) {
     GDF_REQUIRE(columns[i]->dtype == type, GDF_DTYPE_MISMATCH);
     GDF_REQUIRE(columns[i]->size == num_rows, GDF_COLUMN_SIZE_MISMATCH);
   }
@@ -237,7 +237,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
   RMM_TRY( RMM_ALLOC(&data, bytesize, 0) );
 
   char *d = data;
-  for (gdf_size_type i = 0; i < num_columns; ++i) {
+  for (cudf::size_type i = 0; i < num_columns; ++i) {
     CUDA_TRY(cudaMemcpy(d, columns[i]->data,
                         column_bytesize, cudaMemcpyDefault));
     d += column_bytesize;

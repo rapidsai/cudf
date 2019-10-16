@@ -33,10 +33,10 @@
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 
-gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
+cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
 
 template<class T>
-gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
 
 rmm::device_vector<int16_t> getBracketLevels(
@@ -48,11 +48,11 @@ rmm::device_vector<int16_t> getBracketLevels(
  * @brief Sets the specified bit in a device memory bitmap.
  * Uses atomics for synchronization.
  */
-__device__ __inline__ void setBitmapBit(gdf_valid_type *bitmap, long bit_idx) {
+__device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx) {
   constexpr int32_t bit_mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
   const auto address = bitmap + bit_idx / 8;
 
-  int32_t *const base_address = (int32_t *)((gdf_valid_type *)address - ((size_t)address & 3));
+  int32_t *const base_address = (int32_t *)((cudf::valid_type *)address - ((size_t)address & 3));
   const int32_t mask = bit_mask[bit_idx % 8] << (((size_t)address & 3) * 8);
 
   atomicOr(base_address, mask);

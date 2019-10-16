@@ -20,7 +20,7 @@
 #include <unordered_set>
 
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
-#include "cudf/copying.hpp"
+#include "cudf/legacy/copying.hpp"
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
@@ -341,7 +341,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     context.flag_sort_inplace = 0;
 
     int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<gdf_size_type, gdf_size_type>> dedupe(dedupe_size);
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
     for (int i = 0; i < dedupe_size; i++) {
       dedupe[i].first = left_join_cols[i];
       dedupe[i].second = right_join_cols[i];
@@ -385,7 +385,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfInnerJoin(
     context.flag_sort_inplace = 0;
 
     int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<gdf_size_type, gdf_size_type>> dedupe(dedupe_size);
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
     for (int i = 0; i < dedupe_size; i++) {
       dedupe[i].first = left_join_cols[i];
       dedupe[i].second = right_join_cols[i];
@@ -430,7 +430,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     }
 
     // check for overflow
-    if (total_size != static_cast<gdf_size_type>(total_size)) {
+    if (total_size != static_cast<cudf::size_type>(total_size)) {
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
                                       "resulting column is too large");
     }

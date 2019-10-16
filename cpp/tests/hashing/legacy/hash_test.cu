@@ -120,7 +120,7 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
   inputData6[3] = 786.34;
   inputData6[4] = 343.01;
 
-  rmm::device_vector<gdf_valid_type> inputValidDev(1,0xFF);
+  rmm::device_vector<cudf::valid_type> inputValidDev(1,0xFF);
 
   rmm::device_vector<int8_t> intputDataDev0(inputData0);
   rmm::device_vector<int8_t> intputDataDev1(inputData1);
@@ -131,7 +131,7 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
   rmm::device_vector<double> intputDataDev6(inputData6);
 
   rmm::device_vector<int32_t> outDataDev(nrows);
-  rmm::device_vector<gdf_valid_type> outputValidDev(1,0);
+  rmm::device_vector<cudf::valid_type> outputValidDev(1,0);
 
   inputCol[0]->data = thrust::raw_pointer_cast(intputDataDev0.data());
   inputCol[0]->valid = thrust::raw_pointer_cast(inputValidDev.data());

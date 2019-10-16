@@ -1916,6 +1916,38 @@ def test_set_index(pdf, gdf, drop):
         assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
 
 
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("nelem", [10, 200, 1333])
+def test_set_index_multi(drop, nelem):
+    np.random.seed(0)
+    a = np.arange(nelem)
+    np.random.shuffle(a)
+    df = pd.DataFrame(
+        {
+            "a": a,
+            "b": np.random.randint(0, 4, size=nelem),
+            "c": np.random.uniform(low=0, high=4, size=nelem),
+            "d": np.random.choice(["green", "black", "white"], nelem),
+        }
+    )
+    df["e"] = df["d"].astype("category")
+    gdf = DataFrame.from_pandas(df)
+
+    assert_eq(gdf.set_index("a", drop=drop), gdf.set_index(["a"], drop=drop))
+    assert_eq(
+        df.set_index(["b", "c"], drop=drop),
+        gdf.set_index(["b", "c"], drop=drop),
+    )
+    assert_eq(
+        df.set_index(["d", "b"], drop=drop),
+        gdf.set_index(["d", "b"], drop=drop),
+    )
+    assert_eq(
+        df.set_index(["b", "d", "e"], drop=drop),
+        gdf.set_index(["b", "d", "e"], drop=drop),
+    )
+
+
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_0(copy):
     # TODO (ptaylor): pandas changes `int` dtype to `float64`
