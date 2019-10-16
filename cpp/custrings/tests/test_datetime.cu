@@ -7,7 +7,9 @@
 
 #include "./utils.h"
 
-TEST(TestTimestamp, ToTimestamp)
+struct TestTimestamp : public GdfTest{};
+
+TEST_F(TestTimestamp, ToTimestamp)
 {
     {    
         std::vector<const char*> hstrs{"1974-02-28T01:23:45Z", "2019-07-17T21:34:37Z",
@@ -33,7 +35,7 @@ TEST(TestTimestamp, ToTimestamp)
     }
 }
 
-TEST(TestTimestamp, FromTimestamp)
+TEST_F(TestTimestamp, FromTimestamp)
 {
     {    
         unsigned long values[] = {1563399273};
@@ -53,11 +55,4 @@ TEST(TestTimestamp, FromTimestamp)
         EXPECT_TRUE( verify_strings(got,expected));
         NVStrings::destroy(got);
     }
-}
-
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

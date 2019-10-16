@@ -25,12 +25,13 @@ namespace code {
 
 const char* kernel =
 R"***(
-    #include "operation.h"
     #include <cudf/types.h>
+    #include <cudf/types.hpp>
+    #include "operation.h"
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
-    void kernel_v_s(gdf_size_type size,
+    void kernel_v_s(cudf::size_type size,
                     TypeOut* out_data, TypeLhs* lhs_data, gdf_data rhs_data) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
@@ -40,14 +41,14 @@ R"***(
         int start = tid + blkid * blksz;
         int step = blksz * gridsz;
 
-        for (gdf_size_type i=start; i<size; i+=step) {
+        for (cudf::size_type i=start; i<size; i+=step) {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], *reinterpret_cast<TypeRhs*>(&rhs_data));
         }
     }
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
-    void kernel_v_v(gdf_size_type size,
+    void kernel_v_v(cudf::size_type size,
                     TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
@@ -57,7 +58,7 @@ R"***(
         int start = tid + blkid * blksz;
         int step = blksz * gridsz;
 
-        for (gdf_size_type i=start; i<size; i+=step) {
+        for (cudf::size_type i=start; i<size; i+=step) {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[i]);
         }
     }

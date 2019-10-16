@@ -1,7 +1,24 @@
 #include <cstdio>
 #include <vector>
 
+#include <rmm/rmm.h>
+
 #include "nvstrings/NVStrings.h"
+
+#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
+
+// Base class fixture for GDF google tests that initializes / finalizes the
+// RAPIDS memory manager
+struct GdfTest : public ::testing::Test
+{
+    static void SetUpTestCase() {
+        ASSERT_RMM_SUCCEEDED( rmmInitialize(nullptr) );
+    }
+
+    static void TearDownTestCase() {
+        ASSERT_RMM_SUCCEEDED( rmmFinalize() );
+    }
+};
 
 // utility to verify strings results
 
