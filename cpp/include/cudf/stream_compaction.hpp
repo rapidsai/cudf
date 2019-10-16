@@ -86,7 +86,7 @@ table apply_boolean_mask(table const &input,
  */
 table drop_nulls(table const &input,
                  table const &keys,
-                 gdf_size_type keep_threshold);
+                 cudf::size_type keep_threshold);
 
 /**
  * @brief Filters a table to remove null elements.
@@ -155,7 +155,7 @@ cudf::table drop_duplicates(const cudf::table& input,
  *
  * @return number of unique elements
  */
-gdf_size_type unique_count(gdf_column const& input,
+cudf::size_type unique_count(gdf_column const& input,
                            bool const ignore_nulls,
                            bool const nan_as_null);
 }  // namespace cudf
