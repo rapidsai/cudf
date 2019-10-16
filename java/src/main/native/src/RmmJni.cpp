@@ -15,10 +15,13 @@
  */
 
 #include <stddef.h>
+#include <mutex>
 
 #include <rmm/rmm.hpp>
 
 #include "jni_utils.hpp"
+
+static std::mutex Rmm_alloc_init_mutex;
 
 extern "C" {
 
@@ -50,11 +53,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_alloc(JNIEnv *env, jclass clazz,
     // RMM used to allow allocations without explicit initialization.
     // This emulates the old behavior with the caveat that a subsequent
     // RMM initialization will fail with an already initialized error.
-    rmmOptions_t opts;
-    opts.allocation_mode = CudaDefaultAllocation;
-    opts.enable_logging = false;
-    opts.initial_pool_size = 0;
-    JNI_RMM_TRY(env, 0, rmmInitialize(&opts));
+    std::lock_guard<std::mutex> lock(Rmm_alloc_init_mutex);
+
+    if (!rmmIsInitialized(nullptr)) {
+      rmmOptions_t opts;
+      opts.allocation_mode = CudaDefaultAllocation;
+      opts.enable_logging = false;
+      opts.initial_pool_size = 0;
+      JNI_RMM_TRY(env, 0, rmmInitialize(&opts));
+    }
   }
 
   void *ret = 0;
