@@ -2502,25 +2502,25 @@ class DataFrame(object):
                 lcats = lhs[name].cat.categories
                 rcats = rhs[name].cat.categories
 
-                def set_categories(col, cats):
-                    return col.cat.set_categories(cats, is_unique=True).fillna(
-                        -1
-                    )
+                def _set_categories(col, cats):
+                    return col.cat._set_categories(
+                        cats, is_unique=True
+                    ).fillna(-1)
 
                 if how == "left":
                     cats = lcats
-                    rhs[name] = set_categories(rhs[name], cats)
+                    rhs[name] = _set_categories(rhs[name], cats)
                 elif how == "right":
                     cats = rcats
-                    lhs[name] = set_categories(lhs[name], cats)
+                    lhs[name] = _set_categories(lhs[name], cats)
                 elif how in ["inner", "outer"]:
                     cats = column.as_column(lcats).append(rcats)
                     cats = Series(cats).drop_duplicates()._column
 
-                    lhs[name] = set_categories(lhs[name], cats)
+                    lhs[name] = _set_categories(lhs[name], cats)
                     lhs[name] = lhs[name]._column.as_numerical
 
-                    rhs[name] = set_categories(rhs[name], cats)
+                    rhs[name] = _set_categories(rhs[name], cats)
                     rhs[name] = rhs[name]._column.as_numerical
 
                 cat_join.append((name, cats))
@@ -2543,24 +2543,15 @@ class DataFrame(object):
                 data=df[name].data, categories=cats, ordered=False
             )
 
+        if sort and len(df):
+            df = df.sort_values(idx_col_names)
+
+        df = df.set_index(idx_col_names)
+        # change index to None to better reflect pandas behavior
+        df.index.name = None
+
         if len(idx_col_names) > 1:
-            if sort and len(df):
-                df = df.sort_values(idx_col_names)
-
-            # TODO: Use set_index once it can handle a list
-            return df.set_index(
-                cudf.MultiIndex.from_frame(
-                    df[idx_col_names], names=index_frame_l.columns
-                )
-            ).drop(columns=idx_col_names)
-
-        else:
-            df = df.set_index(idx_col_names[0])
-            # change index to None to better reflect pandas behavior
-            df.index.name = None
-
-            if sort and len(df):
-                return df.sort_index()
+            df.index.names = index_frame_l.columns
 
         return df
 
