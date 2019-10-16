@@ -128,7 +128,7 @@ std::unique_ptr<column> make_strings_column(
     }
 
     auto execpol = rmm::exec_policy(stream);
-    size_type bytes = offsets.back() - offsets[0];
+    size_type bytes = offsets.back();
     CUDF_EXPECTS( bytes >=0, "invalid offsets vector");
 
     // build offsets column -- this is the number of strings + 1
