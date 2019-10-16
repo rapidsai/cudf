@@ -86,7 +86,7 @@ struct MurmurHash3_32
     result_type>
     __forceinline__ __host__ __device__ operator()(const TKey& key) const
     {
-      return this->operator()(static_cast<int8_t>(key));
+      return this->operator()(static_cast<bool>(static_cast<int8_t>(key)));
     }
 
     template <typename TKey = Key>
@@ -95,7 +95,7 @@ struct MurmurHash3_32
     result_type>
     __forceinline__ __host__ __device__ operator()(const TKey& key) const
     {
-      return this->operator()(static_cast<uint8_t>(key));
+      return this->operator()(static_cast<bool>(static_cast<uint8_t>(key)));
     }
 
     template <typename TKey = Key>
