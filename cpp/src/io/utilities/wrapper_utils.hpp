@@ -41,7 +41,7 @@ class gdf_column_wrapper {
   using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
 
  public:
-  gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype,
+  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype,
                      gdf_dtype_extra_info dtype_info, const std::string name) {
     col = static_cast<gdf_column *>(malloc(gdf_column_sizeof()));
     gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info,
