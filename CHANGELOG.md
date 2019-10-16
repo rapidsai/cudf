@@ -4,8 +4,10 @@
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3094 Adding `any` and `all` support from libcudf
+
 
 ## Improvements
 
