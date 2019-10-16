@@ -40,12 +40,7 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
 
 // Verify elementwise equality
 void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
-  EXPECT_EQ(lhs.type(), rhs.type());
-  EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
-  EXPECT_EQ(lhs.nullable(), rhs.nullable());
-  EXPECT_EQ(lhs.has_nulls(), rhs.has_nulls());
-  EXPECT_EQ(lhs.num_children(), rhs.num_children());
+  expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});

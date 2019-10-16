@@ -19,14 +19,14 @@
 #include <cudf/table/table.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cstring>
 
 template <typename T>
 struct EmptyLikeTest : public cudf::test::BaseFixture {};
 
-using numeric_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using numeric_types = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(EmptyLikeTest, numeric_types);
 
