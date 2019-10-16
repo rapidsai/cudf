@@ -22,9 +22,8 @@ import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class TimestampColumnVectorTest {
+public class TimestampColumnVectorTest extends CudfTestBase {
   static final long[] TIMES_S = {-131968728L,   //'1965-10-26 14:01:12'
                                  1530705600L,   //'2018-07-04 12:00:00'
                                  1674631932L,   //'2023-01-25 07:32:12'
@@ -77,8 +76,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void getYear() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
       ColumnVector result = timestampColumnVector.year();
@@ -100,7 +97,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void getMonth() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS);
          ColumnVector result = timestampColumnVector.month()) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
@@ -122,7 +118,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void getDay() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
       try (ColumnVector result = timestampColumnVector.day()) {
@@ -145,7 +140,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void getHour() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
       try (ColumnVector result = timestampColumnVector.hour()) {
@@ -168,7 +162,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void getMinute() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
       try (ColumnVector result = timestampColumnVector.minute()) {
@@ -191,7 +184,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void getSecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
       try (ColumnVector result = timestampColumnVector.second()) {
@@ -214,7 +206,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testCastToTimestamp() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date64ColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS);
          ColumnVector timestampColumnVector = date64ColumnVector.asTimestamp(TimeUnit.SECONDS)) {
       timestampColumnVector.ensureOnHost();
@@ -226,8 +217,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testTimestampToLongSecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
          ColumnVector ms_string_times = ColumnVector.fromStrings(TIMES_MS_STRING);
          ColumnVector us_string_times = ColumnVector.fromStrings(TIMES_US_STRING);
@@ -246,8 +235,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testTimestampToLongMillisecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
          ColumnVector ms_string_times = ColumnVector.fromStrings(TIMES_MS_STRING);
          ColumnVector us_string_times = ColumnVector.fromStrings(TIMES_US_STRING);
@@ -268,8 +255,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testTimestampToLongMicrosecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
          ColumnVector ms_string_times = ColumnVector.fromStrings(TIMES_MS_STRING);
          ColumnVector us_string_times = ColumnVector.fromStrings(TIMES_US_STRING);
@@ -291,8 +276,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testTimestampToLongNanosecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
          ColumnVector ms_string_times = ColumnVector.fromStrings(TIMES_MS_STRING);
          ColumnVector us_string_times = ColumnVector.fromStrings(TIMES_US_STRING);
@@ -315,8 +298,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testCategoryTimestampToLongSecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector s_string_times = ColumnVector.categoryFromStrings(TIMES_S_STRING);
          ColumnVector ms_string_times = ColumnVector.categoryFromStrings(TIMES_MS_STRING);
          ColumnVector us_string_times = ColumnVector.categoryFromStrings(TIMES_US_STRING);
@@ -335,8 +316,6 @@ public class TimestampColumnVectorTest {
 
   @Test
   public void testCategoryTimestampToSubsecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector ms_string_times = ColumnVector.categoryFromStrings(TIMES_MS_STRING);
          ColumnVector us_string_times = ColumnVector.categoryFromStrings(TIMES_US_STRING);
          ColumnVector ns_string_times = ColumnVector.categoryFromStrings(TIMES_NS_STRING);
