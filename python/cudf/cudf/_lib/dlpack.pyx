@@ -36,7 +36,7 @@ cpdef from_dlpack(dlpack_capsule):
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>pycapsule.\
         PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
     pycapsule.PyCapsule_SetName(dlpack_capsule, 'used_dltensor')
-    cdef gdf_size_type c_result_num_cols
+    cdef size_type c_result_num_cols
     cdef gdf_column* result_cols
 
     with nogil:
@@ -107,7 +107,7 @@ cpdef to_dlpack(in_cols):
     cdef gdf_column** input_cols = <gdf_column**>malloc(
         input_num_cols * sizeof(gdf_column*)
     )
-    cdef gdf_size_type c_input_num_cols = input_num_cols
+    cdef size_type c_input_num_cols = input_num_cols
 
     for idx, col in enumerate(in_cols):
         check_gdf_compatibility(col)

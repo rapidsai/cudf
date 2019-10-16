@@ -36,8 +36,8 @@ TYPED_TEST_CASE(ScatterTest, test_types);
 
 
 TYPED_TEST(ScatterTest, DtypeMistach){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<int32_t> source(source_size);
   cudf::test::column_wrapper<float> destination(target_size);
@@ -48,7 +48,7 @@ TYPED_TEST(ScatterTest, DtypeMistach){
   cudf::table source_table{&raw_source, 1};
   cudf::table target_table{&raw_destination, 1};
 
-  rmm::device_vector<gdf_index_type> scatter_map(source_size);
+  rmm::device_vector<cudf::size_type> scatter_map(source_size);
   
   cudf::table destination_table;
 
@@ -60,8 +60,8 @@ TYPED_TEST(ScatterTest, DtypeMistach){
 }
 
 TYPED_TEST(ScatterTest, NumColumnsMismatch){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source0(source_size, true);
   cudf::test::column_wrapper<TypeParam> source1(source_size, true);
@@ -74,7 +74,7 @@ TYPED_TEST(ScatterTest, NumColumnsMismatch){
   cudf::table source_table{source_cols.data(), 2};
   cudf::table target_table{&raw_destination, 1};
 
-  rmm::device_vector<gdf_index_type> scatter_map(source_size);
+  rmm::device_vector<cudf::size_type> scatter_map(source_size);
   
   cudf::table destination_table;
 
@@ -87,15 +87,15 @@ TYPED_TEST(ScatterTest, NumColumnsMismatch){
 // This also test the case where the source column has a valid bitmask while
 // the target column does not.
 TYPED_TEST(ScatterTest, IdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column(
       source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return row != source_size/2; });
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return row != source_size/2; });
 
-  thrust::device_vector<gdf_index_type> scatter_map(source_size);
+  thrust::device_vector<cudf::size_type> scatter_map(source_size);
   thrust::sequence(scatter_map.begin(), scatter_map.end());
 
   cudf::test::column_wrapper<TypeParam> target_column(target_size, false);
@@ -119,19 +119,19 @@ TYPED_TEST(ScatterTest, IdentityTest) {
 }
 
 TYPED_TEST(ScatterTest, ReverseIdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column(
       source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; });
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return true; });
 
   // Create scatter_map that reverses order of source_column
-  std::vector<gdf_index_type> host_scatter_map(source_size);
+  std::vector<cudf::size_type> host_scatter_map(source_size);
   std::iota(host_scatter_map.begin(), host_scatter_map.end(), 0);
   std::reverse(host_scatter_map.begin(), host_scatter_map.end());
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::size_type> scatter_map(host_scatter_map);
 
   cudf::test::column_wrapper<TypeParam> target_column(target_size,
                                                            true);
@@ -149,17 +149,17 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
   
   // Expected result is the reversal of the source column
   std::vector<TypeParam> expected_data;
-  std::vector<gdf_valid_type> expected_bitmask;
+  std::vector<cudf::valid_type> expected_bitmask;
   std::tie(expected_data, expected_bitmask) = source_column.to_host();
   std::reverse(expected_data.begin(), expected_data.end());
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
-  for (gdf_index_type i = 0; i < target_size; i++) {
+  for (cudf::size_type i = 0; i < target_size; i++) {
     EXPECT_EQ(expected_data[i], result_data[i])
         << "Data at index " << i << " doesn't match!\n";
     EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
@@ -170,21 +170,21 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
 }
 
 TYPED_TEST(ScatterTest, AllNull) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   // source column has all null values
   cudf::test::column_wrapper<TypeParam> source_column(
       source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return false; });
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return false; });
 
   // Create scatter_map that scatters to random locations
-  std::vector<gdf_index_type> host_scatter_map(source_size);
+  std::vector<cudf::size_type> host_scatter_map(source_size);
   std::iota(host_scatter_map.begin(), host_scatter_map.end(), 0);
   std::mt19937 g(0);
   std::shuffle(host_scatter_map.begin(), host_scatter_map.end(), g);
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::size_type> scatter_map(host_scatter_map);
 
   cudf::test::column_wrapper<TypeParam> target_column(target_size,
                                                            true);
@@ -203,12 +203,12 @@ TYPED_TEST(ScatterTest, AllNull) {
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
   // All values of result should be null
-  for (gdf_index_type i = 0; i < target_size; i++) {
+  for (cudf::size_type i = 0; i < target_size; i++) {
     EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
         << "Value at index " << i << " should be null!\n";
   }
@@ -217,8 +217,8 @@ TYPED_TEST(ScatterTest, AllNull) {
 }
 
 TYPED_TEST(ScatterTest, EveryOtherNull) {
-  constexpr gdf_size_type source_size{1234};
-  constexpr gdf_size_type target_size{source_size};
+  constexpr cudf::size_type source_size{1234};
+  constexpr cudf::size_type target_size{source_size};
 
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");
@@ -228,16 +228,16 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
   // elements with even indices are null
   cudf::test::column_wrapper<TypeParam> source_column(
       source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return row % 2; });
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return row % 2; });
 
   // Scatter null values to the last half of the destination column
-  std::vector<gdf_index_type> host_scatter_map(source_size);
-  for (gdf_size_type i = 0; i < source_size / 2; ++i) {
+  std::vector<cudf::size_type> host_scatter_map(source_size);
+  for (cudf::size_type i = 0; i < source_size / 2; ++i) {
     host_scatter_map[i * 2] = target_size / 2 + i;
     host_scatter_map[i * 2 + 1] = i;
   }
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::size_type> scatter_map(host_scatter_map);
 
   cudf::test::column_wrapper<TypeParam> target_column(target_size,
                                                            true);
@@ -256,11 +256,11 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
-  for (gdf_index_type i = 0; i < target_size; i++) {
+  for (cudf::size_type i = 0; i < target_size; i++) {
     // The first half of the destination column should be all valid
     // and values should be 1, 3, 5, 7, etc.
     if (i < target_size / 2) {
@@ -288,8 +288,8 @@ TYPED_TEST(ScatterTest, PreserveDestBitmask) {
       {10, -1, 6, 7}, [](auto index){ return index != 2; });
   // So destination is {10, -1, @, 7} 
 
-  std::vector<gdf_index_type> scatter_map({1, 3});
-  rmm::device_vector<gdf_index_type> d_scatter_map = scatter_map;
+  std::vector<cudf::size_type> scatter_map({1, 3});
+  rmm::device_vector<cudf::size_type> d_scatter_map = scatter_map;
 
   cudf::table source_table({source_column.get()});
   cudf::table target_table({target_column.get()});

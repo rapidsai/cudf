@@ -42,7 +42,7 @@ namespace detail {
  *   value column
  */
 struct helper {
-  using index_vector = rmm::device_vector<gdf_size_type>;
+  using index_vector = rmm::device_vector<cudf::size_type>;
   using bitmask_vector = rmm::device_vector<bit_mask::bit_mask_t>;
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
   using index_vec_pointer = std::unique_ptr<index_vector>;
@@ -93,7 +93,7 @@ struct helper {
    * @param values The value column to group and sort
    * @return the sorted and grouped column and per-group valid count
    */
-  std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
+  std::pair<gdf_column, rmm::device_vector<cudf::size_type> >
   sort_values(gdf_column const& values);
 
   /**
@@ -107,7 +107,7 @@ struct helper {
    * @brief Get the number of groups in `keys`
    * 
    */
-  gdf_size_type num_groups() { return group_offsets().size(); }
+  cudf::size_type num_groups() { return group_offsets().size(); }
 
   /**
    * @brief Return the effective number of keys
@@ -116,7 +116,7 @@ struct helper {
    * When include_nulls = false, returned value is the number of rows in `keys`
    *  in which no element is null
    */
-  gdf_size_type num_keys();
+  cudf::size_type num_keys();
 
   /**
    * @brief Get the sorted order of `keys`.
@@ -190,7 +190,7 @@ struct helper {
   index_vec_pointer   _group_offsets;
   index_vec_pointer   _group_labels;
 
-  gdf_size_type       _num_keys;
+  cudf::size_type       _num_keys;
   bool                _keys_pre_sorted;
   bool                _include_nulls;
   null_order          _null_sort_behavior;
