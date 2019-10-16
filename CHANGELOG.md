@@ -7,7 +7,6 @@
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3022 adds DataFrame.astype for cuDF dataframes
 
-
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
