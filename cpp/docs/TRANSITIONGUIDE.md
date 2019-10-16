@@ -81,13 +81,9 @@ column_view v = moved_to; // Implicit conversion to non-owning column_view
 
 An immutable, non-owning view of device memory as a column. 
 
-Inexpensive to copy and should be passed by value. 
-
 ### `cudf::mutable_column_view`
 
 A *mutable*, non-owning view of device memory as a column. 
-
-Inexpensive to copy and should be passed by value. 
 
 ## `cudf::table`
 
@@ -101,13 +97,9 @@ Movable and copyable. A copy performs a deep copy of all columns, whereas a move
 
 An *immutable*, non-owning view of a table. 
 
-Inexpensive to copy and should be passed by value. 
-
 ### `cudf::mutable_table_view`
 
 A *mutable*, non-owning view of a table. 
-
-Inexpensive to copy and should be passed by value. 
 
 # libcudf++ API and Implementation
 
@@ -233,14 +225,12 @@ If no initialization value is provided, all elements are default initialized (th
 
 ## Input/Output Style<a name="inout_style"></a>
 
-All `*_view` objects are trivially copyable and are intended to be passed by value.
-
 The preferred style for how inputs are passed in and outputs are returned is the following:
 -   Inputs
 	- Columns:
-		- `column_view`
+		- `column_view const&`
 	- Tables:
-		- `table_view`
+		- `table_view const&`
     - Everything else:
        - Trivial or inexpensively copied types
           - Pass by value
@@ -248,9 +238,9 @@ The preferred style for how inputs are passed in and outputs are returned is the
           - Pass by `const&`
 -   In/Outs  
 	- Columns:
-		- `mutable_column_view`
+		- `mutable_column_view&`
 	- Tables:
-		- `mutable_table_view`
+		- `mutable_table_view&`
     - Everything else:
         - Pass by via raw pointer
 -   Outputs 
