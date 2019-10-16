@@ -16,7 +16,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include "column_view.hpp"
+#include <cudf/utilities/type_dispatcher.hpp>
+// #include "scalar_device_view.cuh"
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -28,8 +29,13 @@
 #include <utility>
 #include <vector>
 
+// Forward declarations
+template <typename T>
 class numeric_scalar_device_view;
+
 class string_scalar_device_view;
+
+template <typename T>
 class timestamp_scalar_device_view;
 
 namespace cudf {
@@ -52,20 +58,6 @@ class scalar {
   scalar(scalar const& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new scalar object by deep copying the contents of
-   *`other`.
-   *
-   * Uses the specified `stream` and device_memory_resource for all allocations
-   * and copies.
-   *
-   * @param other The `scalar` to copy
-   * @param stream The stream on which to execute all allocations and copies
-   * @param mr The resource to use for all allocations
-   *---------------------------------------------------------------------------**/
-  scalar(scalar const& other, cudaStream_t stream,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-  /**---------------------------------------------------------------------------*
    * @brief Move the contents from `other` to create a new scalar.
    *
    * After the move, `other.type() = {EMPTY}`
@@ -75,25 +67,6 @@ class scalar {
   scalar(scalar&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new scalar from existing device memory.
-   *
-   * @note This constructor is primarily intended for use in scalar factory
-   * functions. 
-   *
-   * @param[in] dtype The element type
-   * @param[in] size The number of elements in the scalar
-   * @param[in] data The scalar's data
-   * @param[in] is_valid Optional, scalar's null value indicator bitmask. May
-   * be empty if `null_count` is 0 or `UNKNOWN_NULL_COUNT`.
-   *---------------------------------------------------------------------------**/
-  template <typename B1, typename B2 = rmm::device_scalar<bool>>
-  scalar(data_type dtype, size_type size, B1&& data, B2&& is_valid = {})
-      : _type{dtype},
-        _size{size},
-        _data{std::forward<B1>(data)},
-        _is_valid{std::forward<B2>(is_valid)} {}
-
-  /**---------------------------------------------------------------------------*
    * @brief Returns the scalar's logical element type
    *---------------------------------------------------------------------------**/
   data_type type() const noexcept { return _type; }
@@ -101,7 +74,12 @@ class scalar {
   /**---------------------------------------------------------------------------*
    * @brief Sets this scalar to null
    *---------------------------------------------------------------------------**/
-  void set_null();
+  void set_null() { _is_valid.set_value(false); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Sets this scalar to valid
+   *---------------------------------------------------------------------------**/
+  void set_valid() { _is_valid.set_value(true); }
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates whether the scalar contains a valid value
@@ -109,50 +87,78 @@ class scalar {
    * @note Using the value when `is_valid() == false` is undefined behaviour
    * 
    * @return true Value is valid
-   * @return false Value is invalid
+   * @return false Value is invalid/null
    *---------------------------------------------------------------------------**/
-  bool is_valid() const;
+  bool is_valid() const { return _is_valid.value(); }
 
  protected:
   data_type _type{EMPTY};      ///< Logical type of elements in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
+
+  scalar(data_type type, bool is_valid) : _type(type), _is_valid(is_valid) {}
 };
 
 template <typename T>
-class numeric_scalar {
+class numeric_scalar : public scalar {
   // TODO: prevent construction using anything other than arithmetic types
+ public:
+  using ValueType = T;
 
-  // TODO: store value_type
+  numeric_scalar(T value, bool is_valid = true)
+   : scalar(data_type(experimental::type_to_id<T>()), is_valid), _data(value)
+  {}
+
+  void set_value(T value) { _data.set_value(value); }
   T value() { return _data.value(); }
 
   // TODO: implement
-  numeric_scalar_device_view<T> device_view();
+  // numeric_scalar_device_view<T> device_view() {
+  //   return numeric_scalar_device_view<T>(this->_type, this->_data.get(),
+  //                                        this->_is_valid.get());
+  // }
 
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing numeric value
 };
 
-class string_scalar {
+class string_scalar : public scalar {
+ public:
+  using ValueType = cudf::string_view;
 
-  // TODO: store value_type
+  // TODO: implement with copying string
+  string_scalar(std::string& string) : scalar(data_type(STRING), true) {}
+
   std::string value() {} // TODO: implement
 
   // TODO: implement
-  string_scalar_device_view device_view();
+  // string_scalar_device_view device_view() {
+  //   return string_scalar_device_view(this->_type, this->_data.data().get(),
+  //                                    this->_is_valid.get(), this->_data.size());
+  // }
 
  protected:
   rmm::device_vector<char> _data{};  ///< device memory containing the string
 };
 
 template <typename T>
-class timestamp_scalar {
+class timestamp_scalar : public scalar {
   // TODO: prevent construction using anything other than timestamp types
+ public:
 
-  // TODO: store value_type
+  using ValueType = T;
+
+  timestamp_scalar(T value, bool is_valid = true)
+   : scalar(experimental::type_to_id<T>(), is_valid), _data(value)
+  {}
+
+  void set_value() { _data.set_value(value); }
   T value() { return _data.value(); }
 
   // TODO: implement
-  timestamp_scalar_device_view<T> device_view();
+  // timestamp_scalar_device_view<T> device_view() {
+  //   return timestamp_scalar_device_view<T>(this->_type, this->_data.get(),
+  //                                          this->_is_valid.get());
+  // }
 
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing timestamp value

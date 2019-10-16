@@ -29,6 +29,7 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 class alignas(16) scalar_device_view_base {
  public:
+  scalar_device_view_base() = default;
   ~scalar_device_view_base() = default;
 
   /**---------------------------------------------------------------------------*
@@ -72,11 +73,12 @@ class alignas(16) scalar_device_view_base {
 
  protected:
   data_type _type{EMPTY};   ///< Element type
-  void * _data{};      ///< Pointer to device memory containing the value
-  bool * _is_valid{};  ///< Pointer to device memory containing
-                       ///< boolean representing validity of the value.
+  bool * _is_valid{};       ///< Pointer to device memory containing
+                            ///< boolean representing validity of the value.
 
-  scalar_device_view_base() = default;
+  scalar_device_view_base(data_type type, bool* is_valid)
+    : _type(type), _is_valid(is_valid) 
+  {}
 };
 
 template <typename T>
@@ -103,16 +105,10 @@ class alignas(16) primitive_scalar_device_view
     return static_cast<T const*>(_data);
   }
 
- private:
-  /**---------------------------------------------------------------------------*
-   * @brief Construct's a `primitive_scalar_device_view` from a
-   *`mutable_column_view` populating all but the children.
-   *
-   * @note This constructor is for internal use only. To create a
-   *`primitive_scalar_device_view` from a `column_view`, the
-   *`primitive_scalar_device_view::create()` function should be used.
-   *---------------------------------------------------------------------------**/
-  primitive_scalar_device_view(mutable_column_view source);
+ protected:
+  T * _data{};      ///< Pointer to device memory containing the value
+
+  // primitive_scalar_device_view() : _data()
 };
 
 }  // namespace detail
@@ -122,12 +118,22 @@ template <typename T>
 class alignas(16) numeric_scalar_device_view
     : public detail::primitive_scalar_device_view<T> {
   using ValueType = T;
+
+  numeric_scalar_device_view(data_type type, T* data, bool* is_valid) 
+    : detail::scalar_device_view_base(type, is_valid)
+    , detail::primitive_scalar_device_view<T>{data}
+  {}
 };
 
 class alignas(16) string_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
   using ValueType = cudf::string_view;
+
+  string_scalar_device_view(data_type type, const char* data, bool* is_valid,
+                            size_type size) 
+    : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
+  {}
 
   /**---------------------------------------------------------------------------*
    * @brief Returns string_view of the value of this scalar.
@@ -141,22 +147,19 @@ class alignas(16) string_scalar_device_view
   }
 
  private:
-  size_type _size;  ///< Length of the string
-  /**---------------------------------------------------------------------------*
-   * @brief Construct's a `string_scalar_device_view` from a
-   *`mutable_column_view` populating all but the children.
-   *
-   * @note This constructor is for internal use only. To create a
-   *`string_scalar_device_view` from a `column_view`, the
-   *`string_scalar_device_view::create()` function should be used.
-   *---------------------------------------------------------------------------**/
-  string_scalar_device_view(mutable_column_view source);
+  const char* _data{};  ///< Pointer to device memory containing the value
+  size_type _size;      ///< Length of the string
 };
 
 template <typename T>
 class alignas(16) timestamp_scalar_device_view
-    : public detail::primitive_scalar_device_view {
+    : public detail::primitive_scalar_device_view<T> {
   using ValueType = T;
+
+  timestamp_scalar_device_view(data_type type, T* data, bool* is_valid) 
+    : detail::scalar_device_view_base(type, is_valid)
+    , detail::primitive_scalar_device_view<T>{data}
+  {}
 };
 
 

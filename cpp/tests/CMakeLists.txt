@@ -106,6 +106,14 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
+# - scalar tests ----------------------------------------------------------------------------------
+
+set(SCALAR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/scalar/scalar_test.cpp")
+
+ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
+
+###################################################################################################
 # - timestamps tests ----------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC

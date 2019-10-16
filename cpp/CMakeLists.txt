@@ -437,7 +437,8 @@ add_library(cudf
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
-            src/column/legacy/interop.cpp)
+            src/column/legacy/interop.cpp
+            src/scalar/scalar.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
