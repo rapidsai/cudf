@@ -16,7 +16,7 @@ from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -27,6 +27,8 @@ pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 _REDUCTION_OP = {
     'max': cpp_reduce.MAX,
     'min': cpp_reduce.MIN,
+    'any': cpp_reduce.ANY,
+    'all': cpp_reduce.ALL,
     'sum': cpp_reduce.SUM,
     'product': cpp_reduce.PRODUCT,
     'sum_of_squares': cpp_reduce.SUMOFSQUARES,
@@ -79,7 +81,7 @@ def reduce(reduction_op, col, dtype=None, ddof=1):
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(col, col_dtype)
     cdef gdf_scalar c_result
-    cdef gdf_size_type c_ddof = ddof
+    cdef size_type c_ddof = ddof
     cdef cpp_reduce.operators c_op = _REDUCTION_OP[reduction_op]
 
     with nogil:

@@ -16,17 +16,16 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
-
-#include "orc.h"
-#include "orc_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -97,11 +96,11 @@ class reader::Impl {
    * @param[in] row_groups List of row index descriptors
    * @param[in] row_index_stride Distance between each row index
    *
-   * @return device_buffer<uint8_t> Device buffer to decompressed page data
+   * @return rmm::device_buffer Device buffer to decompressed page data
    **/
-  device_buffer<uint8_t> decompress_stripe_data(
+  rmm::device_buffer decompress_stripe_data(
       const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-      const std::vector<device_buffer<uint8_t>> &stripe_data,
+      const std::vector<rmm::device_buffer> &stripe_data,
       const orc::OrcDecompressor *decompressor,
       std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
       rmm::device_vector<orc::gpu::RowGroup> &row_groups,
@@ -125,6 +124,16 @@ class reader::Impl {
                           size_t row_index_stride,
                           const std::vector<gdf_column_wrapper> &columns);
 
+  /**
+   * @brief Align a size such that aligned 64-bit loads within a memory block
+   * won't trip cuda-memcheck if the size is not a multiple of 8
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by orc kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint64_t)); }
+
  private:
   std::unique_ptr<datasource> source_;
   std::unique_ptr<OrcMetadata> md_;
@@ -136,6 +145,6 @@ class reader::Impl {
   gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
-} // namespace orc
-} // namespace io
-} // namespace cudf
+}  // namespace orc
+}  // namespace io
+}  // namespace cudf

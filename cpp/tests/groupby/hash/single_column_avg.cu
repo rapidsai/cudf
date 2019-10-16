@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/compare_column_wrappers.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
-#include "type_info.hpp"
+#include "../common/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-static constexpr cudf::groupby::hash::operators op{
-    cudf::groupby::hash::operators::MEAN};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::MEAN};
 
 template <typename KV>
 struct SingleColumnAvg : public GdfTest {
@@ -107,7 +107,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupEvenNullKeys) {
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size/2) * (size/2);
-  gdf_size_type count = size/2 + size%2;
+  cudf::size_type count = size/2 + size%2;
   ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
@@ -127,7 +127,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullKeys) {
   int num_even_numbers = (size-1)/2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
-  gdf_size_type count = size/2 + size%2;
+  cudf::size_type count = size/2 + size%2;
   ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
@@ -145,7 +145,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupEvenNullValues) {
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size/2) * (size/2);
-  gdf_size_type count = size/2 + size%2;
+  cudf::size_type count = size/2 + size%2;
   ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
@@ -166,7 +166,7 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullValues) {
   int num_even_numbers = (size-1)/2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
-  gdf_size_type count = size/2 + size%2;
+  cudf::size_type count = size/2 + size%2;
   ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),

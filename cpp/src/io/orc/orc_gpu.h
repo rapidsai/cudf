@@ -29,23 +29,25 @@ namespace gpu {
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
-  explicit constexpr CompressedStreamInfo(uint8_t *compressed_data_,
+  explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_,
                                           size_t compressed_size_)
       : compressed_data(compressed_data_),
         compressed_data_size(compressed_size_),
         uncompressed_data(nullptr),
         decctl(nullptr),
         decstatus(nullptr),
-        max_compressed_blocks(0),
+        copyctl(nullptr),
         num_compressed_blocks(0),
+        num_uncompressed_blocks(0),
         max_uncompressed_size(0) {}
-  uint8_t *compressed_data;         // [in] base ptr to compressed stream data
+  const uint8_t *compressed_data;   // [in] base ptr to compressed stream data
   uint8_t *uncompressed_data;       // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream
   gpu_inflate_input_s *decctl;      // [in] base ptr to decompression structure to be filled
   gpu_inflate_status_s *decstatus;  // [in] results of decompression
-  uint32_t max_compressed_blocks;   // [in] number of entries in decctl
-  uint32_t num_compressed_blocks;   // [out] total number of compressed blocks in this stream
+  gpu_inflate_input_s *copyctl;     // [in] base ptr to copy structure to be filled for uncompressed blocks
+  uint32_t num_compressed_blocks;   // [in,out] number of entries in decctl(in), number of compressed blocks(out)
+  uint32_t num_uncompressed_blocks; // [in,out] number of entries in copyctl(in), number of uncompressed blocks(out)
   uint64_t max_uncompressed_size;   // [out] maximum uncompressed data size
 };
 
@@ -112,6 +114,77 @@ struct RowGroup
     uint32_t strm_offset[2];                    // Index offset for CI_DATA and CI_DATA2 streams
     uint16_t run_pos[2];                        // Run position for CI_DATA and CI_DATA2
 };
+
+
+/**
+ * @brief Struct to describe an encoder data chunk
+ **/
+struct EncChunk
+{
+    uint8_t *streams[CI_NUM_STREAMS];           // encoded output
+    int32_t strm_id[CI_NUM_STREAMS];            // stream id or -1 if not present
+    uint32_t strm_len[CI_NUM_STREAMS];          // in: max length, out: actual length
+    const uint32_t *valid_map_base;             // base ptr of input valid bit map
+    const void *column_data_base;               // base ptr of input column data
+    uint32_t start_row;                         // start row of this chunk
+    uint32_t num_rows;                          // number of rows in this chunk
+    uint32_t valid_rows;                        // max number of valid rows
+    uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
+    uint8_t type_kind;                          // column data type (orc::TypeKind)
+    uint8_t dtype_len;                          // data type length
+    uint8_t scale;                              // scale for decimals or timestamps
+};
+
+
+/**
+ * @brief Struct to describe a column stream within a stripe
+ **/
+struct StripeStream
+{
+    size_t bfr_offset;                          // Offset of this stream in compressed buffer
+    uint32_t stream_size;                       // Size of stream in bytes
+    uint32_t first_chunk_id;                    // First chunk of the stripe
+    uint32_t num_chunks;                        // Number of chunks in the stripe
+    uint32_t column_id;                         // column index
+    uint32_t first_block;                       // First compressed block
+    uint8_t strm_type;                          // Stream index type
+    uint8_t pad[3];
+};
+
+
+/**
+ * @brief Struct to describe a dictionary chunk
+ **/
+struct DictionaryChunk
+{
+    const uint32_t *valid_map_base;             // base ptr of input valid bit map
+    const void *column_data_base;               // base ptr of column data (ptr,len pair)
+    uint32_t *dict_data;                        // dictionary data (index of non-null rows)
+    uint32_t *dict_index;                       // row indices of corresponding string (row from dictionary index)
+    uint32_t start_row;                         // start row of this chunk
+    uint32_t num_rows;                          // num rows in this chunk
+    uint32_t num_strings;                       // number of strings in this chunk
+    uint32_t string_char_count;                 // total size of string data (NOTE: assumes less than 4G bytes per chunk)
+    uint32_t num_dict_strings;                  // number of strings in dictionary
+    uint32_t dict_char_count;                   // size of dictionary string data for this chunk
+};
+
+
+/**
+ * @brief Struct to describe a dictionary
+ **/
+struct StripeDictionary
+{
+    const void *column_data_base;               // base ptr of column data (ptr,len pair)
+    uint32_t *dict_data;                        // row indices of corresponding string (row from dictionary index)
+    uint32_t *dict_index;                       // dictionary index from row index
+    uint32_t column_id;                         // real column id
+    uint32_t start_chunk;                       // first chunk in stripe
+    uint32_t num_chunks;                        // number of chunks in the stripe
+    uint32_t num_strings;                       // number of unique strings in the dictionary
+    uint32_t dict_char_count;                   // total size of dictionary string data
+};
+
 
 
 /**
@@ -189,6 +262,98 @@ cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry
 cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0,
                                 size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0,
                                 RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for encoding column data
+ *
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_columns Number of columns
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for encoding column dictionaries
+ *
+ * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_string_columns Number of string columns
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_string_columns, uint32_t num_columns, uint32_t num_stripes, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for compacting chunked column data prior to compression
+ *
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] num_columns Number of columns
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t CompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_stripe_streams, uint32_t num_columns, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel(s) for compressing data streams
+ *
+ * @param[in] compressed_data Output compressed blocks
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[out] comp_in Per-block compression input parameters
+ * @param[out] comp_out Per-block compression status
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] compression Type of compression
+ * @param[in] num_compressed_blocks Total number of compressed blocks
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t CompressOrcDataStreams(uint8_t *compressed_data, StripeStream *strm_desc, EncChunk *chunks, gpu_inflate_input_s *comp_in,
+        gpu_inflate_status_s *comp_out, uint32_t num_stripe_streams, uint32_t num_compressed_blocks, CompressionKind compression,
+        uint32_t comp_blk_size, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for initializing dictionary chunks
+ *
+ * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] num_columns Number of columns
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for building stripe dictionaries
+ *
+ * @param[in] stripes_dev StripeDictionary device array [stripe][column]
+ * @param[in] stripes_host StripeDictionary host array [stripe][column]
+ * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] num_stripes Number of stripes
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] num_columns Number of columns
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks,
+                                    uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu
 } // namespace orc

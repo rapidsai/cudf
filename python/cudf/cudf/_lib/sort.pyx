@@ -14,7 +14,7 @@ import pyarrow as pa
 
 from libc.stdint cimport uintptr_t, int8_t
 from libc.stdlib cimport malloc, free
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -87,7 +87,7 @@ cpdef digitize(column, bins, right=False):
             <gdf_column*> in_col,
             <gdf_column*> bins_col,
             <bool> cright,
-            <gdf_index_type*> out_ptr
+            <size_type*> out_ptr
         )
 
     check_gdf_error(result)

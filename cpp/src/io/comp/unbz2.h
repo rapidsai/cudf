@@ -79,6 +79,9 @@ For more information on these sources, see the manual.
 
 #pragma once
 
+namespace cudf {
+namespace io {
+
 // If BZ_OUTBUFF_FULL is returned and block_start is non-NULL, dstlen will be updated to point to the end of the last valid block,
 // and block_start will contain the offset in bits of the beginning of the block, so it can be passed in to resume decoding later on.
 #define BZ_OK                0
@@ -98,5 +101,6 @@ For more information on these sources, see the manual.
 
 int32_t cpu_bz2_uncompress(const uint8_t *input, size_t inlen, uint8_t *dst, size_t *dstlen, uint64_t *block_start=nullptr);
 
-
+} // namespace io
+} // namespace cudf
 

@@ -18,7 +18,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -163,6 +163,8 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+        for col in self._cols:
+            self._cols[col]._index = self._index
 
         # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
         self._allow_setattr_to_setitem = True
@@ -354,7 +356,6 @@ class DataFrame(object):
         if is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
-            s.index = self.index
             return s
         elif isinstance(arg, slice):
             df = DataFrame()
@@ -370,10 +371,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                selvals, selinds = column.column_select_by_boolmask(
-                    column.as_column(self.index), Series(mask)
-                )
-                index = self.index.take(selinds.to_gpu_array())
+                index = as_index(self.index.as_column()[mask])
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
@@ -475,6 +473,14 @@ class DataFrame(object):
     @property
     def empty(self):
         return not len(self)
+
+    @property
+    def values(self):
+        if not utils._have_cupy:
+            raise ModuleNotFoundError("CuPy was not found.")
+        import cupy
+
+        return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
@@ -900,12 +906,14 @@ class DataFrame(object):
         Name: b, dtype: int64
 
         Selection by boolean mask.
+
         >>> print(df.loc[df.a > 2])
            a  b
         d  3  8
         e  4  9
 
         Setting values using loc.
+
         >>> df.loc[['a', 'c', 'e'], 'a'] = 0
         >>> print(df)
            a  b
@@ -1182,13 +1190,25 @@ class DataFrame(object):
 
         Parameters
         ----------
-        index : Index, Series-convertible, or str
+        index : Index, Series-convertible, str, or list of str
             Index : the new index.
             Series-convertible : values for the new index.
             str : name of column to be used as series
+            list of str : name of columns to be converted to a MultiIndex
         drop : boolean
             whether to drop corresponding column for str index argument
         """
+        # When index is a list of column names
+        if isinstance(index, list):
+            if len(index) > 1:
+                df = self.copy(deep=False)
+                if drop:
+                    df = df.drop(columns=index)
+                return df.set_index(
+                    cudf.MultiIndex.from_frame(self[index], names=index)
+                )
+            index = index[0]  # List contains single item
+
         # When index is a column name
         if isinstance(index, str):
             df = self.copy(deep=False)
@@ -1204,7 +1224,7 @@ class DataFrame(object):
                 df[k] = c.set_index(index)
             return df
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False, inplace=False):
         out = DataFrame()
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
@@ -1220,7 +1240,13 @@ class DataFrame(object):
                 out[c] = self[c]
         else:
             out = self
-        return out.set_index(RangeIndex(len(self)))
+        if inplace is True:
+            for column_name in set(out.columns) - set(self.columns):
+                self[column_name] = out[column_name]
+                self._cols.move_to_end(column_name, last=False)
+            self._index = RangeIndex(len(self))
+        else:
+            return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
@@ -1692,6 +1718,7 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='columns' only.
           * Not supporting: index, level
+
         Rename will not overwite column names. If a list with duplicates it
         passed, column names will be postfixed.
         """
@@ -1802,9 +1829,12 @@ class DataFrame(object):
             raise ValueError("require at least 1 column")
         if nrow < 1:
             raise ValueError("require at least 1 row")
-        dtype = cols[0].dtype
-        if any(dtype != c.dtype for c in cols):
-            raise ValueError("all columns must have the same dtype")
+        if any(
+            (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
+            for c in cols
+        ):
+            raise TypeError("non-numeric data not yet supported")
+        dtype = np.find_common_type(cols, [])
         for k, c in self._cols.items():
             if c.null_count > 0:
                 errmsg = (
@@ -1818,7 +1848,7 @@ class DataFrame(object):
                 shape=(nrow, ncol), dtype=dtype, order=order
             )
             for colidx, inpcol in enumerate(cols):
-                dense = inpcol.to_gpu_array(fillna="pandas")
+                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
                 matrix[:, colidx].copy_to_device(dense)
         elif order == "C":
             matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
@@ -2120,13 +2150,14 @@ class DataFrame(object):
             in both DataFrames.
         how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
             Type of merge to be performed.
-                left: use only keys from left frame, similar to a SQL left
-                      outer join; preserve key order.
-                right: not supported.
-                outer: use union of keys from both frames, similar to a SQL
-                       full outer join; sort keys lexicographically.
-                inner: use intersection of keys from both frames, similar to
-                       a SQL inner join; preserve the order of the left keys.
+
+            - left : use only keys from left frame, similar to a SQL left
+              outer join; preserve key order.
+            - right : not supported.
+            - outer : use union of keys from both frames, similar to a SQL
+              full outer join; sort keys lexicographically.
+            - inner: use intersection of keys from both frames, similar to
+              a SQL inner join; preserve the order of the left keys.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -3017,6 +3048,7 @@ class DataFrame(object):
         Examples
         --------
         Describing a ``Series`` containing numeric values.
+
         >>> import cudf
         >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         >>> print(s.describe())
@@ -3032,6 +3064,7 @@ class DataFrame(object):
 
         Describing a ``DataFrame``. By default all numeric fields
         are returned.
+
         >>> gdf = cudf.DataFrame()
         >>> gdf['a'] = [1,2,3]
         >>> gdf['b'] = [1.0, 2.0, 3.0]
@@ -3050,6 +3083,7 @@ class DataFrame(object):
         7    max  3.0  3.0  3.0
 
         Using the ``include`` keyword to describe only specific dtypes.
+
         >>> gdf = cudf.DataFrame()
         >>> gdf['a'] = [1,2,3]
         >>> gdf['b'] = [1.0, 2.0, 3.0]
@@ -3555,6 +3589,7 @@ class DataFrame(object):
     #
     # Stats
     #
+
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
@@ -3830,6 +3865,13 @@ class DataFrame(object):
             chunksize,
         )
 
+    @ioutils.doc_to_orc()
+    def to_orc(self, fname, compression=None, *args, **kwargs):
+        """{docstring}"""
+        import cudf.io.orc as orc
+
+        orc.to_orc(self, fname, compression, *args, **kwargs)
+
     def scatter_by_map(self, map_index, map_size=None):
         """Scatter to a list of dataframes.
 
@@ -3899,7 +3941,8 @@ class DataFrame(object):
         cols = libcudf.filling.repeat(self._columns, repeats)
         # to preserve col names, need to get it from old _cols dict
         column_names = self._cols.keys()
-        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
+        result = DataFrame(data=dict(zip(column_names, cols)))
+        return result.set_index(new_index)
 
 
 def from_pandas(obj):

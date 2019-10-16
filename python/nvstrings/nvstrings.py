@@ -1,3 +1,7 @@
+import weakref
+
+import rmm  # noqa: F401
+
 import pyniNVStrings
 
 
@@ -363,7 +367,7 @@ def create_from_ipc(ipc_data):
 def free(dstrs):
     """Force free resources for the specified instance."""
     if dstrs is not None:
-        pyniNVStrings.n_destroyStrings(dstrs.m_cptr)
+        dstrs._finalizer()
         dstrs.m_cptr = 0
 
 
@@ -374,6 +378,11 @@ def bind_cpointer(cptr, own=True):
         rtn = nvstrings(cptr)
         rtn._own = own
     return rtn
+
+
+def _destroy_nvstrings_instance(own, cptr):
+    if own:
+        pyniNVStrings.n_destroyStrings(cptr)
 
 
 # this will be documented with all the public methods
@@ -395,11 +404,9 @@ class nvstrings:
         """
         self.m_cptr = cptr
         self._own = True
-
-    def __del__(self):
-        if self._own:
-            pyniNVStrings.n_destroyStrings(self.m_cptr)
-        self.m_cptr = 0
+        self._finalizer = weakref.finalize(
+            self, _destroy_nvstrings_instance, self._own, self.m_cptr
+        )
 
     def __str__(self):
         return str(pyniNVStrings.n_createHostStrings(self.m_cptr))
@@ -419,12 +426,7 @@ class nvstrings:
         if isinstance(key, int):
             return self.gather([key])
         if isinstance(key, slice):
-            start = 0 if key.start is None else key.start
-            end = self.size() if key.stop is None else key.stop
-            step = 1 if key.step is None or key.step == 0 else key.step
-            # negative slicing check
-            end = self.size() + end if end < 0 else end
-            start = self.size() + start if start < 0 else start
+            start, end, step = key.indices(self.size())
             rtn = pyniNVStrings.n_sublist(self.m_cptr, start, end, step)
             if rtn is not None:
                 rtn = nvstrings(rtn)
@@ -548,14 +550,14 @@ class nvstrings:
         Examples
         --------
         >>> import nvstrings
-        >>> from librmm_cffi import librmm
+        >>> import rmm
         >>> import numpy as np
 
         Example passing device memory pointer
 
         >>> s = nvstrings.to_device(["abc","d","ef"])
         >>> arr = np.arange(s.size(),dtype=np.int32)
-        >>> d_arr = librmm.to_device(arr)
+        >>> d_arr = rmm.to_device(arr)
         >>> s.len(d_arr.device_ctypes_pointer.value)
         >>> print(d_arr.copy_to_host())
         [3,1,2]
@@ -580,13 +582,13 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> import numpy as np
-        >>> from librmm_cffi import librmm
+        >>> import rmm
 
         Example passing device memory pointer
 
         >>> s = nvstrings.to_device(["abc","d","ef"])
         >>> arr = np.arange(s.size(),dtype=np.int32)
-        >>> d_arr = librmm.to_device(arr)
+        >>> d_arr = rmm.to_device(arr)
         >>> s.byte_count(d_arr.device_ctypes_pointer.value,True)
         >>> print(d_arr.copy_to_host())
         [3,1,2]
@@ -2653,7 +2655,7 @@ class nvstrings:
         Examples
         --------
         >>> import nvstrings
-        >>> from librmm_cffi import librmm as rmm
+        >>> import rmm
         >>> import numpy as np
         >>> s = nvstrings.to_device(["a","xyz", "éee"])
         >>> s.len()

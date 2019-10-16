@@ -59,6 +59,8 @@ struct SchemaElement {
   FieldRepetitionType repetition_type = REQUIRED;
   std::string name = "";
   int32_t num_children = 0;
+  int32_t decimal_scale = 0;
+  int32_t decimal_precision = 0;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;

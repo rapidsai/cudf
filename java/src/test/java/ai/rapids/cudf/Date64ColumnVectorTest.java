@@ -21,17 +21,14 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class Date64ColumnVectorTest {
+public class Date64ColumnVectorTest extends CudfTestBase {
   private static final long[] DATES = {-131968727238L,   //'1965-10-26 14:01:12.762'
       1530705600000L,   //'2018-07-04 12:00:00.000'
       1674631932929L};  //'2023-01-25 07:32:12.929'
 
   @Test
   public void getYear() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-
     try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
          ColumnVector result = date64ColumnVector.year()) {
       result.ensureOnHost();
@@ -43,7 +40,6 @@ public class Date64ColumnVectorTest {
 
   @Test
   public void getMonth() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
          ColumnVector result = date64ColumnVector.month()) {
       result.ensureOnHost();
@@ -55,7 +51,6 @@ public class Date64ColumnVectorTest {
 
   @Test
   public void getDay() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
          ColumnVector result = date64ColumnVector.day()) {
       result.ensureOnHost();
@@ -67,7 +62,6 @@ public class Date64ColumnVectorTest {
 
   @Test
   public void getHour() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
          ColumnVector result = date64ColumnVector.hour()) {
       result.ensureOnHost();
@@ -79,7 +73,6 @@ public class Date64ColumnVectorTest {
 
   @Test
   public void getMinute() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
          ColumnVector result = date64ColumnVector.minute()) {
       result.ensureOnHost();
@@ -91,7 +84,6 @@ public class Date64ColumnVectorTest {
 
   @Test
   public void getSecond() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
          ColumnVector result = date64ColumnVector.second()) {
       result.ensureOnHost();

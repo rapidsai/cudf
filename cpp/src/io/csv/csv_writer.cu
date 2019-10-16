@@ -31,8 +31,8 @@
 struct column_to_strings_fn
 {
     const gdf_column* column;
-    gdf_valid_type* valid;
-    gdf_size_type row_offset, rows;
+    cudf::valid_type* valid;
+    cudf::size_type row_offset, rows;
     const char* true_string;
     const char* false_string;
 
@@ -60,20 +60,20 @@ template<>
 NVStrings* column_to_strings_fn::operator()<int8_t>()
 {
     auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
-    device_buffer<int32_t> int_buffer(rows);
-    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+    rmm::device_vector<int32_t> int_buffer(rows);
+    thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.begin(),
         [] __device__(const int8_t value) { return int32_t{value}; });
-    return NVStrings::itos(int_buffer.data(), rows, valid);
+    return NVStrings::itos(int_buffer.data().get(), rows, valid);
 }
 
 template<>
 NVStrings* column_to_strings_fn::operator()<int16_t>()
 {
     auto d_src = (static_cast<const int16_t*>(column->data)) + row_offset;
-    device_buffer<int32_t> int_buffer(rows);
-    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+    rmm::device_vector<int32_t> int_buffer(rows);
+    thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.begin(),
         [] __device__(const int16_t value) { return int32_t{value}; });
-    return NVStrings::itos(int_buffer.data(), rows, valid);
+    return NVStrings::itos(int_buffer.data().get(), rows, valid);
 }
 
 template<>
@@ -108,10 +108,10 @@ NVStrings* column_to_strings_fn::operator()<cudf::bool8>()
     else
     {
         auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
-        device_buffer<bool> bool_buffer(rows);
-        thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.data(),
+        rmm::device_vector<bool> bool_buffer(rows);
+        thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.begin(),
                 [] __device__(const cudf::bool8 value) { return bool{value}; });
-        return NVStrings::create_from_bools(bool_buffer.data(), rows, true_string, false_string, valid);
+        return NVStrings::create_from_bools(bool_buffer.data().get(), rows, true_string, false_string, valid);
     }
 }
 
@@ -122,10 +122,10 @@ NVStrings* column_to_strings_fn::operator()<cudf::date32>()
     if( column->dtype_info.time_unit != TIME_UNIT_NONE )
         units = cudf2nvs(column->dtype_info.time_unit);
     auto d_src = (static_cast<const cudf::date32*>(column->data)) + row_offset;
-    device_buffer<unsigned long> ulong_buffer(rows);
-    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.data(),
+    rmm::device_vector<unsigned long> ulong_buffer(rows);
+    thrust::transform(rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.begin(),
         [] __device__(const cudf::date32 value) { return (unsigned long)(int32_t{value}); });
-    return NVStrings::long2timestamp(ulong_buffer.data(), rows, units, nullptr, valid);
+    return NVStrings::long2timestamp(ulong_buffer.data().get(), rows, units, nullptr, valid);
 }
 
 template<>
@@ -165,13 +165,13 @@ NVStrings* column_to_strings_fn::operator()<cudf::nvstring_category>()
 // - false_string: String to use for 'false' values in boolean columns
 // Return: NVStrings instance formated for CSV column output.
 //
-NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_offset, gdf_size_type rows,
+NVStrings* column_to_strings_csv(const gdf_column* column, cudf::size_type row_offset, cudf::size_type rows,
                                  const char* delimiter, const char* null_representation,
                                  const char* true_string, const char* false_string )
 {
     NVStrings* rtn = nullptr;
     // point the null bitmask to the next set of bits associated with this chunk of rows
-    gdf_valid_type* valid = column->valid;
+    cudf::valid_type* valid = column->valid;
     if( valid )                                    // normalize row_offset (number of bits here)
         valid += (row_offset / GDF_VALID_BITSIZE); // to appropriate pointer for the bitmask
 
@@ -240,7 +240,7 @@ gdf_error write_csv(csv_write_arg* args)
     // when args becomes a struct/class these can be modified
     auto columns = args->columns;
     int count = args->num_cols;
-    gdf_size_type total_rows = columns[0]->size;
+    cudf::size_type total_rows = columns[0]->size;
     const char* filepath = args->filepath;
     char delimiter[2] = {',','\0'};
     if( args->delimiter )
@@ -267,7 +267,7 @@ gdf_error write_csv(csv_write_arg* args)
             {
                 NVStrings* strs = (NVStrings*)col->data;
                 unsigned int elems = strs != nullptr ? strs->size() : 0;
-                return (total_rows==(gdf_size_type)elems);
+                return (total_rows==(cudf::size_type)elems);
             }
             return (total_rows==col->size);
         });
@@ -283,14 +283,14 @@ gdf_error write_csv(csv_write_arg* args)
     // instead of an arbitrary chunk count.
     // The entire CSV chunk must fit in CPU memory before writing it out.
     //
-    gdf_size_type rows_chunk = args->rows_per_chunk;
+    cudf::size_type rows_chunk = args->rows_per_chunk;
     if( rows_chunk % 8 ) // must be divisible by 8
         rows_chunk += 8 - (rows_chunk % 8);
     CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
     auto execpol = rmm::exec_policy(0);
-    gdf_size_type row_offset = 0;
-    gdf_size_type rows = total_rows;
+    cudf::size_type row_offset = 0;
+    cudf::size_type rows = total_rows;
     while( rows > 0 )
     {
         if( rows > rows_chunk )
@@ -338,8 +338,8 @@ gdf_error write_csv(csv_write_arg* args)
             rmm::device_vector<size_t> sums(rows);
             size_t* d_sums = sums.data().get();
             // do vertical scan -- add up lengths in each column
-            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<gdf_size_type>(0), rows,
-                [d_sums, d_string_lengths, rows, count, d_string_locations] __device__ (gdf_size_type idx) {
+            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<cudf::size_type>(0), rows,
+                [d_sums, d_string_lengths, rows, count, d_string_locations] __device__ (cudf::size_type idx) {
                     size_t sum = 0;
                     for( int column=0; column < count; ++column )
                     {
@@ -373,8 +373,8 @@ gdf_error write_csv(csv_write_arg* args)
                     size_t* row_offsets = d_string_locations + (idx*rows);
                     strs->create_index(d_indices); // get the internal pointers
                     // copy each string over to its correct position in csv_data memory
-                    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<gdf_size_type>(0), rows,
-                        [row_offsets, d_csv_data, d_indices] __device__ (gdf_size_type jdx) {
+                    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<cudf::size_type>(0), rows,
+                        [row_offsets, d_csv_data, d_indices] __device__ (cudf::size_type jdx) {
                             memcpy(d_csv_data+row_offsets[jdx],d_indices[jdx].first,d_indices[jdx].second);
                     });
                     NVStrings::destroy(strs);

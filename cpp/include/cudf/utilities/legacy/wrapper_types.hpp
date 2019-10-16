@@ -80,11 +80,11 @@ struct wrapper
   template <gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE
-  constexpr explicit wrapper(T v) : value{v} {}
+  constexpr explicit wrapper(value_type v) : value{v} {}
 
-  template <gdf_dtype dtype = type_id,
+  template <typename from_type, gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(T v)
+  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(from_type v)
       : value{static_cast<bool>(v)} {}
 
   CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
@@ -92,7 +92,7 @@ struct wrapper
   }
 
   // enable conversion to arithmetic types *only* for the cudf::bool8 wrapper
-  // (defined later in this file as wrapper<gdf_bool8, GDF_BOOL8>)
+  // (defined later in this file as wrapper<int8_t, GDF_BOOL8>)
   template <gdf_dtype the_type = type_id,
             typename T_out,
             typename std::enable_if<(the_type == GDF_BOOL8) &&
@@ -340,28 +340,28 @@ using unwrapped_type_t = typename unwrapped_type<T>::type;
 
 } // namespace detail
 
-using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
+using category = detail::wrapper<int32_t, GDF_CATEGORY>;
 
-using nvstring_category = detail::wrapper<gdf_nvstring_category, GDF_STRING_CATEGORY>;
+using nvstring_category = detail::wrapper<int32_t, GDF_STRING_CATEGORY>;
 
-using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
+using timestamp = detail::wrapper<int64_t, GDF_TIMESTAMP>;
 
-using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
+using date32 = detail::wrapper<int32_t, GDF_DATE32>;
 
-using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
+using date64 = detail::wrapper<int64_t, GDF_DATE64>;
 
-using bool8 = detail::wrapper<gdf_bool8, GDF_BOOL8>;
+using bool8 = detail::wrapper<int8_t, GDF_BOOL8>;
 
 // This is necessary for global, constant, non-fundamental types
 // We can't rely on --expt-relaxed-constexpr here because `bool8` is not a
 // scalar type. See CUDA Programming guide
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
 #ifdef __CUDA_ARCH__
-__device__ __constant__ static bool8 true_v{gdf_bool8{1}};
-__device__ __constant__ static bool8 false_v{gdf_bool8{0}};
+__device__ __constant__ static bool8 true_v{bool8::value_type{1}};
+__device__ __constant__ static bool8 false_v{bool8::value_type{0}};
 #else
-static constexpr bool8 true_v{gdf_bool8{1}};
-static constexpr bool8 false_v{gdf_bool8{0}};
+static constexpr bool8 true_v{bool8::value_type{1}};
+static constexpr bool8 false_v{bool8::value_type{0}};
 #endif
 
 // Wrapper operator overloads for cudf::bool8 

@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+#pragma once
+
+#include <cudf/cudf.h>
+
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
-
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -60,10 +63,9 @@ class reader::Impl {
    *
    * @param[in] comp_block_data Compressed block data
    *
-   * @return device_buffer<uint8_t> Device buffer to decompressed block data
+   * @return rmm::device_buffer Device buffer to decompressed block data
    **/
-  device_buffer<uint8_t> decompress_data(
-      const device_buffer<uint8_t> &comp_block_data);
+  rmm::device_buffer decompress_data(const rmm::device_buffer &comp_block_data);
 
   /**
    * @brief Convert the avro row-based block data and outputs to gdf_columns
@@ -74,11 +76,21 @@ class reader::Impl {
    * @param[in] total_dictionary_entries Number of dictionary entries
    * @param[in, out] columns List of gdf_columns
    **/
-  void decode_data(const device_buffer<uint8_t> &block_data,
+  void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
                    const hostdevice_vector<uint8_t> &global_dictionary,
                    size_t total_dictionary_entries,
                    const std::vector<gdf_column_wrapper> &columns);
+
+  /**
+   * @brief Align a size such that aligned 32-bit loads within a memory block
+   * won't trip cuda-memcheck if the size is not a multiple of 4
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by avro kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint32_t)); }
 
  private:
   std::unique_ptr<datasource> source_;

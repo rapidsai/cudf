@@ -1,11 +1,50 @@
+# cuDF 0.11.0 (Date TBD)
+
+## New Features
+
+- PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3054 Add parquet reader support for decimal data types
+- PR #3094 Adding `any` and `all` support from libcudf
+
+## Improvements
+
+- PR #2904 Move gpu decompressors to cudf::io namespace
+- PR #2977 Moved old C++ test utilities to legacy directory.
+- PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2995 Move JIT type utilities to legacy directory
+- PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
+- PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
+- PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3027 Move copying.hpp and related source to legacy folder
+- PR #3014 Snappy decompression optimizations
+- PR #3032 Use `asarray` to coerce indices to a NumPy array
+- PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3092 Implicitly init RMM if Java allocates before init
+- PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #3070 Move functions.h and related source to legacy
+- PR #2951 Allow set_index to handle a list of column names
+- PR #3067 Java method to return size of device memory buffer
+
+## Bug Fixes
+
+- PR #3048 Support for zero columned tables
+- PR #3030 Fix snappy decoding regression in PR #3014
+- PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3060 Move copying.hpp includes to legacy
+
+
 # cuDF 0.10.0 (Date TBD)
 
 ## New Features
+
 - PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2605 Added Sort based groupby in libcudf
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2507 Add GPU-accelerated ORC Writer
 - PR #2559 Add Series.tolist()
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2480 Merge `custreamz` codebase into `cudf` repo
@@ -16,6 +55,7 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2777 Add python bindings for porter stemmer measure functionality
 - PR #2781 Add issorted to is_monotonic
 - PR #2685 Add cudf::scatter_to_tables and cython binding
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
@@ -28,6 +68,19 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2870 Add support for grouping by Series of arbitrary length
+- PR #2719 Series covariance and Pearson correlation
+- PR #2207 Beginning of libcudf overhaul: introduce new column and table types
+- PR #2869 Add `cudf.CategoricalDtype`
+- PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
+- PR #2655 CuPy-based Series and Dataframe .values property
+- PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
+- PR #2811 Start of cudf strings column work based on 2207
+- PR #2872 Add Java pinned memory pool allocator
+- PR #2969 Add findAndReplaceAll to ColumnVector
+- PR #2814 Add Datetimeindex.weekday
+- PR #2999 Add timestamp conversion support for string categories
+- PR #2918 Add cudf::column timestamp wrapper types
 
 ## Improvements
 
@@ -54,11 +107,24 @@
 - PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2640 Add dask wait/persist exmaple to 10 minute guide
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
-- PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
+- PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
+- PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
+- PR #2832 Using the new Python bindings for UCX
 - PR #2856 Update group_split_cudf to use scatter_by_map
+- PR #2890 Optionally keep serialized table data on the host.
+- PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
+- PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
+- PR #2887 Minor snappy decompression optimization
+- PR #2899 Use new RMM API based on Cython
+- PR #2788 Guide to Python UDFs
+- PR #2919 Change java API to use operators in groupby namespace
+- PR #2909 CSV Reader: Avoid row offsets host vector default init
+- PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
 
 ## Bug Fixes
 
@@ -70,6 +136,7 @@
 - PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
+- PR #2628 groupby_without_aggregation non-nullable input table produces non-nullable output
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
 - PR #2649 Fix groupby issue resulting from column_empty bug
@@ -103,6 +170,7 @@
 - PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2824 Fix issue with incorrect result when Numeric Series replace is called several times
 - PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
@@ -111,6 +179,30 @@
 - PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2854 Fix column creation from ephemeral objects exposing __cuda_array_interface__
+- PR #2860 Fix boolean indexing when the result is a single row
+- PR #2859 Fix tail method issue for string columns
+- PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
+- PR #2865 DaskIO: Fix `read_csv` and `read_orc` when input is list of files
+- PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
+- PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
+- PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
+- PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2926 Update rounding algorithm to avoid using fmod
+- PR #2968 Fix Java dependency loading when using NVTX
+- PR #2963 Fix ORC writer uncompressed block indexing
+- PR #2928 CSV Reader: Fix using `byte_range` for large datasets
+- PR #2983 Fix sm_70+ race condition in gpu_unsnap
+- PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3007 Java: Remove unit test that frees RMM invalid pointer
+- PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
+- PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
+- PR #3035 Update update-version.sh for new docs locations
+- PR #3038 Fix uninitialized stream parameter in device_table deleter
+- PR #3064 Fixes groupby performance issue
+- PR #3061 Add rmmInitialize to nvstrings gtests
+- PR #3058 Fix UDF doc markdown formatting
+- PR #3059 Add nvstrings python build instructions to contributing.md
 
 
 # cuDF 0.9.0 (21 Aug 2019)
@@ -388,6 +480,7 @@
 - PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 - PR #2104 Add a functional ``sort=`` keyword argument to groupby
 - PR #2108 Add `find_and_replace` for StringColumn for replacing single values
+- PR #1803 cuDF/CuPy interoperability documentation
 
 ## Bug Fixes
 

@@ -234,3 +234,76 @@ def test_orc_reader_uncompressed_block(datadir):
     got = cudf.read_orc(path, engine="cudf")
 
     assert_eq(expect, got, check_categorical=False)
+
+
+def test_orc_reader_nodata_block(datadir):
+    path = datadir / "nodata.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    got = cudf.read_orc(path, engine="cudf", num_rows=1)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.parametrize("compression", [None, "snappy"])
+@pytest.mark.parametrize(
+    "reference_file, columns",
+    [
+        (
+            "TestOrcFile.test1.orc",
+            [
+                "boolean1",
+                "byte1",
+                "short1",
+                "int1",
+                "long1",
+                "float1",
+                "double1",
+            ],
+        ),
+        ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
+    ],
+)
+def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read(columns=columns).to_pandas()
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, compression=compression)
+    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtypes",
+    [
+        {"c": str, "a": int},
+        {"c": int, "a": str},
+        {"c": int, "a": str, "b": float},
+        {"c": str, "a": object},
+    ],
+)
+def test_orc_writer_strings(tmpdir, dtypes):
+    gdf_fname = tmpdir.join("gdf_strings.orc")
+
+    expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    expect.to_orc(gdf_fname)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)

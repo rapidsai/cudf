@@ -31,12 +31,12 @@
 
 #include <utilities/cudf_utils.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters_wo.cuh"
-#include "../groupby_test_helpers.cuh"
+#include "groupby_test_helpers.cuh"
 
 // See this header for all valid handling
 #include <bitmask/legacy/legacy_bitmask.hpp>
@@ -64,7 +64,7 @@ struct GroupByWoAggTest : public GdfTest {
   using multi_column_t = typename test_parameters::multi_column_t;
 
   //output_t is the output type of the aggregation column
-  using output_t = gdf_size_type;
+  using output_t = cudf::size_type;
 
   //map_t is used for reference solution
   using map_t = typename test_parameters::ref_map_type;
@@ -82,7 +82,7 @@ struct GroupByWoAggTest : public GdfTest {
   multi_column_t cpu_data_cols_out;
 
   //contains the aggregated output column
-  std::vector<gdf_size_type> cpu_out_indices;
+  std::vector<cudf::size_type> cpu_out_indices;
 
   // Containers for unique_ptrs to gdf_columns that will be used in the gdf_group_by functions
   // unique_ptrs are used to automate freeing device memory
@@ -191,7 +191,7 @@ struct GroupByWoAggTest : public GdfTest {
                                                                             groupby_col_indices.data(),
                                                                             &context));
 
-    copy_output_with_array(output_table.begin(), cpu_data_cols_out, static_cast<gdf_size_type *>(indices_col.data), indices_col.size, this->cpu_out_indices);
+    copy_output_with_array(output_table.begin(), cpu_data_cols_out, static_cast<cudf::size_type *>(indices_col.data), indices_col.size, this->cpu_out_indices);
 
     // Free results
     gdf_column_free(&indices_col);
@@ -407,7 +407,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
                                                                             groupby_col_indices.data(),
                                                                             &this->context));
     copy_output_with_array_with_nulls(
-            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, static_cast<gdf_size_type *>(indices_col.data), indices_col.size, this->cpu_out_indices);
+            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, static_cast<cudf::size_type *>(indices_col.data), indices_col.size, this->cpu_out_indices);
 
     // Free results
     gdf_column_free(&indices_col);

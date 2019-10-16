@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
+#include "parquet.h"
+#include "parquet_gpu.h"
 #include "parquet_reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
-#include <cuda_runtime.h>
-
-#include <rmm/rmm.h>
-#include <rmm/thrust_rmm_allocator.h>
 
 #include <algorithm>
 #include <array>
-#include <utility>
+
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -59,7 +58,7 @@ constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     parquet::Type physical, parquet::ConvertedType logical,
-    bool strings_to_categorical, gdf_time_unit ts_unit) {
+    bool strings_to_categorical, gdf_time_unit ts_unit, int32_t decimal_scale) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -81,6 +80,11 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
                  ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
                  : std::make_pair(GDF_TIMESTAMP,
                                   gdf_dtype_extra_info{TIME_UNIT_ms});
+    case parquet::DECIMAL:
+      if (decimal_scale != 0 || (physical != parquet::INT32 && physical != parquet::INT64)) {
+        return std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      }
+      break;
     default:
       break;
   }
@@ -360,7 +364,7 @@ void reader::Impl::decode_page_headers(
   }
 }
 
-device_buffer<uint8_t> reader::Impl::decompress_page_data(
+rmm::device_buffer reader::Impl::decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
   auto for_each_codec_page = [&](parquet::Compression codec,
@@ -404,7 +408,7 @@ device_buffer<uint8_t> reader::Impl::decompress_page_data(
       codecs[1].second);
 
   // Dispatch batches of pages to decompress for each codec
-  device_buffer<uint8_t> decomp_pages(total_decompressed_size);
+  rmm::device_buffer decomp_pages(align_size(total_decompressed_size));
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
 
@@ -415,9 +419,10 @@ device_buffer<uint8_t> reader::Impl::decompress_page_data(
       int32_t start_pos = argc;
 
       for_each_codec_page(codec.first, [&](size_t page) {
+        auto dst_base = static_cast<uint8_t *>(decomp_pages.data());
         inflate_in[argc].srcDevice = pages[page].page_data;
         inflate_in[argc].srcSize = pages[page].compressed_page_size;
-        inflate_in[argc].dstDevice = decomp_pages.data() + decomp_offset;
+        inflate_in[argc].dstDevice = dst_base + decomp_offset;
         inflate_in[argc].dstSize = pages[page].uncompressed_page_size;
 
         inflate_out[argc].bytes_written = 0;
@@ -580,9 +585,9 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     auto row_group_0 = md_->row_groups[selected_row_groups[0].first];
     auto &col_schema = md_->schema[row_group_0.columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
-                               strings_to_categorical_, timestamp_unit_);
+                               strings_to_categorical_, timestamp_unit_, col_schema.decimal_scale);
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
+    columns.emplace_back(static_cast<cudf::size_type>(num_rows), dtype_info.first,
                          dtype_info.second, col.second);
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
@@ -599,7 +604,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
   std::vector<gdf_column *> chunk_map(num_column_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<device_buffer<uint8_t>> page_data;
+  std::vector<rmm::device_buffer> page_data;
 
   // Initialize column chunk info
   LOG_PRINTF("[+] Column Chunk Description\n");
@@ -628,7 +633,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       }
 
       int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
-                               ? (col_schema.type_length << 3)
+                               ? col_schema.type_length
                                : 0;
       int32_t ts_clock_rate = 0;
       if (gdf_column->dtype == GDF_INT8)
@@ -640,19 +645,21 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       else if (gdf_column->dtype == GDF_TIMESTAMP)
         ts_clock_rate = to_clockrate(timestamp_unit_);
 
+      int8_t converted_type = col_schema.converted_type;
+      if (converted_type == parquet::DECIMAL && gdf_column->dtype != GDF_FLOAT64) {
+        converted_type = parquet::UNKNOWN; // Not converting to float64
+      }
+
       uint8_t *d_compdata = nullptr;
       if (col_meta.total_compressed_size != 0) {
         const auto offset = (col_meta.dictionary_page_offset != 0)
                                 ? std::min(col_meta.data_page_offset,
                                            col_meta.dictionary_page_offset)
                                 : col_meta.data_page_offset;
-        page_data.emplace_back(col_meta.total_compressed_size);
-        d_compdata = page_data.back().data();
-        const auto buffer = source_->get_buffer(offset, col_meta.total_compressed_size);
-        CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
-                                 col_meta.total_compressed_size,
-                                 cudaMemcpyHostToDevice));
-        CUDA_TRY(cudaStreamSynchronize(0));
+        const auto buffer =
+            source_->get_buffer(offset, col_meta.total_compressed_size);
+        page_data.emplace_back(buffer->data(), align_size(buffer->size()));
+        d_compdata = static_cast<uint8_t *>(page_data.back().data());
       }
       chunks.insert(parquet::gpu::ColumnChunkDesc(
           col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -660,7 +667,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
           required_bits(col_schema.max_repetition_level), col_meta.codec,
-          col_schema.converted_type, ts_clock_rate));
+          converted_type, col_schema.decimal_scale, ts_clock_rate));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "

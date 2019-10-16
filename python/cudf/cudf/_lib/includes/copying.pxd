@@ -10,12 +10,12 @@ from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 
 
-cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 
-    cdef void gather(
+    cdef cudf_table gather(
         const cudf_table * source_table,
-        const gdf_index_type* gather_map,
-        cudf_table* destination_table
+        const gdf_column gather_map,
+        bool bounds_check
     ) except +
 
     cdef gdf_column copy(
@@ -24,16 +24,17 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
     cdef cudf_table scatter(
         const cudf_table source,
-        const gdf_index_type* scatter_map,
-        const cudf_table target
+        const gdf_column scatter_map,
+        const cudf_table target,
+        bool bounds_check
     ) except +
 
     cdef void copy_range(
         gdf_column *out_column,
         const gdf_column in_column,
-        gdf_index_type out_begin,
-        gdf_index_type out_end,
-        gdf_index_type in_begin
+        size_type out_begin,
+        size_type out_end,
+        size_type in_begin
     ) except +
 
     cdef vector[cudf_table] scatter_to_tables(
