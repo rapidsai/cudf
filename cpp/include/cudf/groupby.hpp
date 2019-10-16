@@ -221,8 +221,8 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
 std::pair<cudf::table,
           gdf_column>
 gdf_group_by_without_aggregations(cudf::table const& input_table,
-                                  gdf_size_type num_key_cols,
-                                  gdf_index_type const* key_col_indices,
+                                  cudf::size_type num_key_cols,
+                                  cudf::size_type const* key_col_indices,
                                   gdf_context* context);
 
 #endif
