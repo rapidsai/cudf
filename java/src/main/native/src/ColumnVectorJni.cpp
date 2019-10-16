@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "cudf/copying.hpp"
+#include "cudf/legacy/copying.hpp"
 #include "cudf/quantiles.hpp"
 #include "cudf/replace.hpp"
 #include "cudf/rolling.hpp"

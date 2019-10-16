@@ -20,7 +20,7 @@
 #include <unordered_set>
 
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
-#include "cudf/copying.hpp"
+#include "cudf/legacy/copying.hpp"
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
