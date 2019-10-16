@@ -158,9 +158,9 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param end The end of the sequence of elements
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
-  template <typename InputIterator, typename ValidInitializer>
+  template <typename InputIterator, typename ValidityIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end,
-                             ValidInitializer v)
+                             ValidityIterator v)
       : column_wrapper{} {
     cudf::size_type size = std::distance(begin, end);
 
@@ -230,13 +230,13 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * the the range `[v, v + element_list.size())` interpretted as booleans to
    * indicate the validity of each element.
    *
-   * @tparam ValidInitializer
+   * @tparam ValidityIterator
    * @param element_list The list of elements
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
-  template <typename ValidInitializer>
+  template <typename ValidityIterator>
   fixed_width_column_wrapper(std::initializer_list<Element> element_list,
-                             ValidInitializer v)
+                             ValidityIterator v)
       : fixed_width_column_wrapper{std::cbegin(element_list),
                                    std::cend(element_list), v} {}
 
