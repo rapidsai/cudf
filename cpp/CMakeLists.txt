@@ -468,7 +468,16 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
 
-add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   COMMENT "Run stringify on header types.hpp to convert it to c-str for use in JIT compiled code"
+                   DEPENDS stringify
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
+
+add_custom_target(stringify_run DEPENDS
+                  ${CMAKE_BINARY_DIR}/include/types.h.jit
+                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
 
 add_dependencies(cudf stringify_run)
 

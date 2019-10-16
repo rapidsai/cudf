@@ -50,12 +50,12 @@ std::string random_string(size_t len, std::string const &allowed_chars) {
   return ret;
 }
 
-gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strings){
+gdf_column * create_nv_category_column(cudf::size_type num_rows, bool repeat_strings){
 
   const char ** string_host_data = new const char *[num_rows];
 
 
-  for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+  for(cudf::size_type row_index = 0; row_index < num_rows; row_index++){
     string_host_data[row_index] = new char[(num_rows + 25) / 26]; //allows string to grow depending on numbe of rows
     std::string temp_string = "";
     int num_chars = repeat_strings ? 1 : (row_index / 26) + 1;
@@ -81,14 +81,14 @@ gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strin
 
   gdf_error err = gdf_column_view(column,
       (void *) data,
-      (gdf_valid_type *)valid,
+      (cudf::valid_type *)valid,
       num_rows,
       GDF_STRING_CATEGORY);
   column->dtype_info.category = category;
   return column;
 }
 
-gdf_column * create_nv_category_column_strings(const char ** string_host_data, gdf_size_type num_rows){
+gdf_column * create_nv_category_column_strings(const char ** string_host_data, cudf::size_type num_rows){
   NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
 
   gdf_column * column = new gdf_column{};
@@ -101,17 +101,17 @@ gdf_column * create_nv_category_column_strings(const char ** string_host_data, g
 
   gdf_error err = gdf_column_view(column,
       (void *) data,
-      (gdf_valid_type *)valid,
+      (cudf::valid_type *)valid,
       num_rows,
       GDF_STRING_CATEGORY);
   column->dtype_info.category = category;
   return column;
 }
 
-const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool print){
+const char ** generate_string_data(cudf::size_type num_rows, size_t length, bool print){
   const char ** string_host_data = new const char *[num_rows];
 
-  for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+  for(cudf::size_type row_index = 0; row_index < num_rows; row_index++){
     string_host_data[row_index] = new char[length+1];
 
     std::string rand_string = cudf::test::random_string(length);
@@ -126,7 +126,7 @@ const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool p
   return string_host_data;
 }
 
-std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_column_to_host(gdf_column * column){
+std::tuple<std::vector<std::string>, std::vector<cudf::valid_type>> nvcategory_column_to_host(gdf_column * column){
 
   if (column->dtype == GDF_STRING_CATEGORY && column->dtype_info.category != nullptr && column->size > 0) {
     NVStrings* tptr = static_cast<NVCategory*>(column->dtype_info.category)->gather_strings(static_cast<nv_category_index_type*>(column->data),
@@ -135,7 +135,7 @@ std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_col
 
     unsigned int count = tptr->size();
     if( count==0 )
-        return std::make_tuple(std::vector<std::string>(), std::vector<gdf_valid_type>());
+        return std::make_tuple(std::vector<std::string>(), std::vector<cudf::valid_type>());
 
     std::vector<char*> list(count);
     char** plist = list.data();
@@ -164,16 +164,16 @@ std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_col
     NVStrings::destroy(tptr);
     std::vector<std::string> host_strings_vector(plist, plist + column->size);
    
-    std::vector<gdf_valid_type> host_bitmask(gdf_valid_allocation_size(column->size));
+    std::vector<cudf::valid_type> host_bitmask(gdf_valid_allocation_size(column->size));
     if (cudf::is_nullable(*column)) {
       CUDA_TRY(cudaMemcpy(host_bitmask.data(),
                           column->valid,
-                          host_bitmask.size()*sizeof(gdf_valid_type),
+                          host_bitmask.size()*sizeof(cudf::valid_type),
                           cudaMemcpyDeviceToHost));
     }
     return std::make_tuple(host_strings_vector, host_bitmask);
   } else {
-    return std::make_tuple(std::vector<std::string>(), std::vector<gdf_valid_type>());
+    return std::make_tuple(std::vector<std::string>(), std::vector<cudf::valid_type>());
   }
 }
 
