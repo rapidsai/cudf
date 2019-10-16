@@ -128,7 +128,7 @@ def groupby_without_aggregations(cols, key_cols):
     from cudf.core.column import Column, CategoricalColumn
 
     cdef cudf_table* c_in_table = table_from_columns(cols)
-    cdef vector[gdf_index_type] c_key_col_indices
+    cdef vector[size_type] c_key_col_indices
     cdef pair[cudf_table, gdf_column] c_result
 
     for i in range(len(key_cols)):

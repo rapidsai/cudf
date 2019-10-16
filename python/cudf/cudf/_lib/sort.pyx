@@ -87,7 +87,7 @@ cpdef digitize(column, bins, right=False):
             <gdf_column*> in_col,
             <gdf_column*> bins_col,
             <bool> cright,
-            <gdf_index_type*> out_ptr
+            <size_type*> out_ptr
         )
 
     check_gdf_error(result)
