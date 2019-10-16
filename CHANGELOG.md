@@ -22,6 +22,7 @@
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
+- PR #3124 Add support for grand-children in cudf column classes
 
 ## Bug Fixes
 
