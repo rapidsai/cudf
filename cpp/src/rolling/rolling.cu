@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <utilities/nvtx/nvtx_utils.h>
+#include <utilities/nvtx/legacy/nvtx_utils.h>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/bit_util.cuh>
 #include <bitmask/legacy/bit_mask.cuh>

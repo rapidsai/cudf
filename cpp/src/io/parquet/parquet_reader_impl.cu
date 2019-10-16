@@ -58,7 +58,7 @@ constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     parquet::Type physical, parquet::ConvertedType logical,
-    bool strings_to_categorical, gdf_time_unit ts_unit) {
+    bool strings_to_categorical, gdf_time_unit ts_unit, int32_t decimal_scale) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -80,6 +80,11 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
                  ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
                  : std::make_pair(GDF_TIMESTAMP,
                                   gdf_dtype_extra_info{TIME_UNIT_ms});
+    case parquet::DECIMAL:
+      if (decimal_scale != 0 || (physical != parquet::INT32 && physical != parquet::INT64)) {
+        return std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      }
+      break;
     default:
       break;
   }
@@ -580,7 +585,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     auto row_group_0 = md_->row_groups[selected_row_groups[0].first];
     auto &col_schema = md_->schema[row_group_0.columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
-                               strings_to_categorical_, timestamp_unit_);
+                               strings_to_categorical_, timestamp_unit_, col_schema.decimal_scale);
 
     columns.emplace_back(static_cast<cudf::size_type>(num_rows), dtype_info.first,
                          dtype_info.second, col.second);
@@ -628,7 +633,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       }
 
       int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
-                               ? (col_schema.type_length << 3)
+                               ? col_schema.type_length
                                : 0;
       int32_t ts_clock_rate = 0;
       if (gdf_column->dtype == GDF_INT8)
@@ -639,6 +644,11 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
         type_width = 4;  // str -> hash32
       else if (gdf_column->dtype == GDF_TIMESTAMP)
         ts_clock_rate = to_clockrate(timestamp_unit_);
+
+      int8_t converted_type = col_schema.converted_type;
+      if (converted_type == parquet::DECIMAL && gdf_column->dtype != GDF_FLOAT64) {
+        converted_type = parquet::UNKNOWN; // Not converting to float64
+      }
 
       uint8_t *d_compdata = nullptr;
       if (col_meta.total_compressed_size != 0) {
@@ -657,7 +667,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
           required_bits(col_schema.max_repetition_level), col_meta.codec,
-          col_schema.converted_type, ts_clock_rate));
+          converted_type, col_schema.decimal_scale, ts_clock_rate));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "
