@@ -4,12 +4,16 @@
 
 #include "nvstrings/NVStrings.h"
 
+#include "./utils.h"
+
+struct TestAttrs : public GdfTest{};
+
 std::vector<const char*> hstrs{
         "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "",
         "1.75", "-34", "+9.8", "17¼", "x³", "2³", " 12⅝",
         "1234567890", "de", "\t\r\n\f "};
 
-TEST(TestAttrs, CharCounts)
+TEST_F(TestAttrs, CharCounts)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -23,7 +27,7 @@ TEST(TestAttrs, CharCounts)
     NVStrings::destroy(strs);
 }
 
-TEST(TestAttrs, ByteCounts)
+TEST_F(TestAttrs, ByteCounts)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -37,7 +41,7 @@ TEST(TestAttrs, ByteCounts)
     NVStrings::destroy(strs);
 }
 
-TEST(TestAttrs, IsAlpha)
+TEST_F(TestAttrs, IsAlpha)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -72,7 +76,7 @@ TEST(TestAttrs, IsAlpha)
     NVStrings::destroy(strs);
 }
 
-TEST(TestAttrs, IsNumeric)
+TEST_F(TestAttrs, IsNumeric)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -107,7 +111,7 @@ TEST(TestAttrs, IsNumeric)
     NVStrings::destroy(strs);
 }
 
-TEST(TestAttrs, IsSpace)
+TEST_F(TestAttrs, IsSpace)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -134,7 +138,7 @@ TEST(TestAttrs, IsSpace)
     NVStrings::destroy(strs);
 }
 
-TEST(TestAttrs, IsUpperLower)
+TEST_F(TestAttrs, IsUpperLower)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -160,7 +164,7 @@ TEST(TestAttrs, IsUpperLower)
     NVStrings::destroy(strs);
 }
 
-TEST(TestAttrs, CodePoints)
+TEST_F(TestAttrs, CodePoints)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), 2);
     thrust::device_vector<unsigned int> results(10,0);
@@ -168,10 +172,4 @@ TEST(TestAttrs, CodePoints)
     unsigned int expected[] = {72, 50089, 108, 108, 111, 116, 104, 101, 115, 50089};
     for( int idx = 0; idx < 10; ++idx )
         EXPECT_EQ(results[idx],expected[idx]);
-}
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

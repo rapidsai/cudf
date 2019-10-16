@@ -33,7 +33,7 @@ namespace{ // anonymous
   // compute quantile value as `result` from `quant` value by `interpolation` method
   template<typename T, typename RetT>
   gdf_error select_quantile(T* devarr,
-                          gdf_size_type n,
+                          cudf::size_type n,
                           double quant, 
                           cudf::interpolation interpolation,
                           RetT& result,

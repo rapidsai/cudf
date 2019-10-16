@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <copying/copy_range.cuh>
+#include <copying/legacy/copy_range.cuh>
 
 namespace cudf {
 
@@ -29,10 +29,10 @@ struct scalar_factory {
     bool is_valid;
 
     __device__
-    T data(gdf_index_type index) { return value; }
+    T data(cudf::size_type index) { return value; }
 
     __device__
-    bool valid(gdf_index_type index) { return is_valid; }
+    bool valid(cudf::size_type index) { return is_valid; }
   };
 
   template <typename T>
@@ -46,7 +46,7 @@ struct scalar_factory {
 }; // namespace detail
 
 void fill(gdf_column *column, gdf_scalar const& value, 
-          gdf_index_type begin, gdf_index_type end)
+          cudf::size_type begin, cudf::size_type end)
 { 
   if (end != begin) { // otherwise no-op   
     validate(column);

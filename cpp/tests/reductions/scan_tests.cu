@@ -45,7 +45,7 @@ struct ScanTest : public GdfTest
         this->val_check(int_values, do_print, "input = ");
         this->val_check(exact_values, do_print, "exact = ");
 
-        gdf_size_type col_size = int_values.size();
+        cudf::size_type col_size = int_values.size();
         std::vector<T> input_values(col_size);
 
         std::transform(int_values.begin(), int_values.end(),
