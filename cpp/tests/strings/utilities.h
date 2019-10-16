@@ -32,6 +32,18 @@ namespace test {
 std::unique_ptr<cudf::column> create_strings_column( const std::vector<const char*>& h_strings );
 
 /**---------------------------------------------------------------------------*
+ * @brief Utility for creating a int32 numeric column from a vector of host values
+ *
+ * @param h_numerics Vector of integers
+ * @param h_nulls Vector of bitmask values indicating null entries in h_numerics vector.
+ * @param null_count Number of null entries
+ * @return column instance of type INT32
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> create_numeric_column( const std::vector<int32_t>& h_values,
+                                                     const std::vector<bitmask_type>& h_nulls,
+                                                     cudf::size_type null_count );
+
+/**---------------------------------------------------------------------------*
  * @brief Utility will verify the given column string elements match the
  * expected vector of host strings.
  *
