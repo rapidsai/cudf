@@ -5,7 +5,7 @@
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3054 Add parquet reader support for decimal data types
-- PR #3025 Move current search code to legacy directories
+- PR #3025 Move search files to legacy
 
 ## Improvements
 
