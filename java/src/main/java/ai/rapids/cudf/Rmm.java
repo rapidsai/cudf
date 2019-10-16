@@ -19,8 +19,11 @@ package ai.rapids.cudf;
  * This is the binding class for rmm lib.
  */
 public class Rmm {
+  private static volatile boolean defaultInitialized;
   static {
     NativeDepsLoader.loadNativeDeps();
+    initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0);
+    defaultInitialized = true;
   }
 
   /**
@@ -32,15 +35,32 @@ public class Rmm {
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
+   * @throws IllegalStateException if RMM has already been initialized
    */
-  public static native void initialize(int allocationMode, boolean enableLogging, long poolSize)
-      throws RmmException;
+  public static void initialize(int allocationMode, boolean enableLogging, long poolSize)
+      throws RmmException {
+    if (defaultInitialized) {
+      synchronized(Rmm.class) {
+        if (defaultInitialized) {
+          shutdown();
+          defaultInitialized = false;
+        }
+      }
+    }
+    initializeInternal(allocationMode, enableLogging, poolSize);
+  }
 
+  private static native void initializeInternal(int allocationMode, boolean enableLogging, long poolSize)
+      throws RmmException;
 
   /**
    * Check if RMM has been initialized already or not.
    */
-  public static native boolean isInitialized() throws RmmException;
+  public static boolean isInitialized() throws RmmException {
+    return !defaultInitialized && isInitializedInternal();
+  }
+
+  private static native boolean isInitializedInternal() throws RmmException;
 
   /**
    * Shut down any initialized rmm.
@@ -50,6 +70,8 @@ public class Rmm {
   /**
    * ---------------------------------------------------------------------------*
    * Allocate memory and return a pointer to device memory.
+   * If initialization has not occurred then RMM will be implicitly initialized
+   * in CUDA default mode.
    * <p>
    * Mapping: RMM_ALLOC in rmm.h.
    * @param size   The size in bytes of the allocated memory region

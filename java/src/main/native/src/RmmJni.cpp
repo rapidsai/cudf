@@ -22,10 +22,13 @@
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initialize(JNIEnv *env, jclass clazz,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
                                                           jint allocation_mode,
                                                           jboolean enable_logging,
                                                           jlong pool_size) {
+  if (rmmIsInitialized(nullptr)) {
+    JNI_THROW_NEW(env, "java/lang/IllegalStateException", "RMM already initialized", );
+  }
   rmmOptions_t opts;
   opts.allocation_mode = static_cast<rmmAllocationMode_t>(allocation_mode);
   opts.enable_logging = enable_logging == JNI_TRUE;
@@ -33,7 +36,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initialize(JNIEnv *env, jclass cl
   JNI_RMM_TRY(env, , rmmInitialize(&opts));
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_isInitialized(JNIEnv *env, jclass clazz) {
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_isInitializedInternal(JNIEnv *env, jclass clazz) {
   return rmmIsInitialized(nullptr);
 }
 
