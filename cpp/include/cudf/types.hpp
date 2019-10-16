@@ -16,10 +16,18 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "utilities/cuda.cuh"
+#ifndef CUDA_HOST_DEVICE_CALLABLE
+#ifdef __CUDACC__
+#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
+#define CUDA_DEVICE_CALLABLE __device__ inline
+#else
+#define CUDA_HOST_DEVICE_CALLABLE inline
+#define CUDA_DEVICE_CALLABLE inline
+#endif
+#endif
 
 #include <cstddef>
+#include <cstdint>
 
 /**---------------------------------------------------------------------------*
  * @file types.hpp
@@ -63,6 +71,7 @@ class mutable_table_view;
 
 using size_type = int32_t;
 using bitmask_type = uint32_t;
+using valid_type = uint8_t;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates an unknown null count.

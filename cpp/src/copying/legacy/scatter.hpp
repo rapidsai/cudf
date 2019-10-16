@@ -18,6 +18,7 @@
 #define SCATTER_HPP
 
 #include <cudf/types.h>
+#include <cudf/types.hpp>
 
 namespace cudf {
 
@@ -72,7 +73,7 @@ void scatter(table const* source_table, gdf_column const& scatter_map,
  * @overload This function accepts `scatter_map` as an array instead of
  * a `gdf_column`.
  */
-void scatter(table const* source_table, gdf_index_type const scatter_map[],
+void scatter(table const* source_table, cudf::size_type const scatter_map[],
 	     table* destination_table, bool check_bounds = false,
 	     bool allow_negative_indices = false);
 

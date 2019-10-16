@@ -91,7 +91,7 @@ namespace test {
  * ```
  *  std::vector<T> values(size);
  *
- *  std::vector<gdf_valid_type>
+ *  std::vector<cudf::valid_type>
  *expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
  *
  *  cudf::test::column_wrapper<T> const col(values, bitmask);
@@ -198,9 +198,9 @@ struct column_wrapper {
    * @param column_size The desired size of the column
    * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
    *---------------------------------------------------------------------------**/
-  column_wrapper(gdf_size_type column_size, bool allocate_bitmask = false) {
+  column_wrapper(cudf::size_type column_size, bool allocate_bitmask = false) {
     std::vector<ColumnType> host_data(column_size);
-    std::vector<gdf_valid_type> host_bitmask;
+    std::vector<cudf::valid_type> host_bitmask;
 
     if (allocate_bitmask) {
       host_bitmask.resize(gdf_valid_allocation_size(column_size));
@@ -222,13 +222,13 @@ struct column_wrapper {
    * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
    *---------------------------------------------------------------------------**/
   template <typename ValueInitializerType>
-  column_wrapper(gdf_size_type column_size,
+  column_wrapper(cudf::size_type column_size,
                  ValueInitializerType value_initalizer,
                  bool allocate_bitmask = false) {
     std::vector<ColumnType> host_data(column_size);
-    std::vector<gdf_valid_type> host_bitmask;
+    std::vector<cudf::valid_type> host_bitmask;
 
-    for (gdf_index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = value_initalizer(row);
     }
 
@@ -250,7 +250,7 @@ struct column_wrapper {
    * @param host_bitmask The validity bitmask to use for the column
    *---------------------------------------------------------------------------**/
   column_wrapper(std::vector<ColumnType> const& host_data,
-                 std::vector<gdf_valid_type> const& host_bitmask) {
+                 std::vector<cudf::valid_type> const& host_bitmask) {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
@@ -334,11 +334,11 @@ struct column_wrapper {
   column_wrapper(std::vector<ColumnType> const& host_data,
                  BitInitializerType bit_initializer) {
     const size_t num_masks = gdf_valid_allocation_size(host_data.size());
-    const gdf_size_type num_rows{static_cast<gdf_size_type>(host_data.size())};
+    const cudf::size_type num_rows{static_cast<cudf::size_type>(host_data.size())};
 
     // Initialize the valid mask for this column using the initializer
-    std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
-    for (gdf_index_type row = 0; row < num_rows; ++row) {
+    std::vector<cudf::valid_type> host_bitmask(num_masks, 0);
+    for (cudf::size_type row = 0; row < num_rows; ++row) {
       if (true == bit_initializer(row)) {
         cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
@@ -382,16 +382,16 @@ struct column_wrapper {
    * column's bitmask
    *---------------------------------------------------------------------------**/
   template <typename ValueInitializerType, typename BitInitializerType>
-  column_wrapper(gdf_size_type column_size,
+  column_wrapper(cudf::size_type column_size,
                  ValueInitializerType value_initalizer,
                  BitInitializerType bit_initializer) {
     const size_t num_masks = gdf_valid_allocation_size(column_size);
 
     // Initialize the values and bitmask using the initializers
     std::vector<ColumnType> host_data(column_size);
-    std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
+    std::vector<cudf::valid_type> host_bitmask(num_masks, 0);
 
-    for (gdf_index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = value_initalizer(row);
 
       if (true == bit_initializer(row)) {
@@ -414,7 +414,7 @@ struct column_wrapper {
    * @param string_values The array of strings to initialize column category
    * values
    *---------------------------------------------------------------------------**/
-  column_wrapper(gdf_size_type column_size,
+  column_wrapper(cudf::size_type column_size,
                  char const ** string_values) {
     // Initialize the values and bitmask using the initializers
     std::vector<ColumnType> host_data(column_size);
@@ -424,7 +424,7 @@ struct column_wrapper {
     gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
     category->get_values(category_data, false);
 
-    for (gdf_index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = ColumnType{category_data[row]};
     }
     initialize_with_host_data(host_data);
@@ -450,21 +450,21 @@ struct column_wrapper {
    * column's bitmask
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
-  column_wrapper(gdf_size_type column_size,
+  column_wrapper(cudf::size_type column_size,
                  char const ** string_values,
                  BitInitializerType bit_initializer) {
     const size_t num_masks = gdf_valid_allocation_size(column_size);
 
     // Initialize the values and bitmask using the initializers
     std::vector<ColumnType> host_data(column_size);
-    std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
+    std::vector<cudf::valid_type> host_bitmask(num_masks, 0);
 
     NVCategory* category = NVCategory::create_from_array(string_values,
                                                          column_size);
     gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
     category->get_values(category_data, false);
 
-    for (gdf_index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = ColumnType{category_data[row]};
 
       if (true == bit_initializer(row)) {
@@ -487,7 +487,7 @@ struct column_wrapper {
    * @brief Returns the null count of the underlying column.
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type null_count() const { return the_column.null_count; }
+  cudf::size_type null_count() const { return the_column.null_count; }
 
   /**---------------------------------------------------------------------------*
    * @brief Copies the underying gdf_column's data and bitmask to the host.
@@ -497,9 +497,9 @@ struct column_wrapper {
    *
    *---------------------------------------------------------------------------**/
   auto to_host() const {
-    gdf_size_type const num_masks{gdf_valid_allocation_size(the_column.size)};
+    cudf::size_type const num_masks{gdf_valid_allocation_size(the_column.size)};
     std::vector<ColumnType> host_data;
-    std::vector<gdf_valid_type> host_bitmask;
+    std::vector<cudf::valid_type> host_bitmask;
 
     if (nullptr != the_column.data) {
       // TODO Is there a nicer way to get a `std::vector` from a
@@ -513,7 +513,7 @@ struct column_wrapper {
     if (nullptr != the_column.valid) {
       host_bitmask.resize(num_masks);
       CUDA_RT_CALL(cudaMemcpy(host_bitmask.data(), the_column.valid,
-                              num_masks * sizeof(gdf_valid_type),
+                              num_masks * sizeof(cudf::valid_type),
                               cudaMemcpyDeviceToHost));
     }
 
@@ -530,7 +530,7 @@ struct column_wrapper {
     print_gdf_column(&the_column);
   }
 
-  gdf_size_type size() const { return the_column.size; }
+  cudf::size_type size() const { return the_column.size; }
 
   /**---------------------------------------------------------------------------*
    * @brief Prints the values of the underlying gdf_column to a string
@@ -572,9 +572,9 @@ struct column_wrapper {
 
   rmm::device_vector<ColumnType> const& get_data() const { return data; }
 
-  rmm::device_vector<gdf_valid_type>& get_bitmask() { return bitmask; }
+  rmm::device_vector<cudf::valid_type>& get_bitmask() { return bitmask; }
 
-  rmm::device_vector<gdf_valid_type> const& get_bitmask() const {
+  rmm::device_vector<cudf::valid_type> const& get_bitmask() const {
     return bitmask;
   }
 
@@ -593,8 +593,8 @@ struct column_wrapper {
    *---------------------------------------------------------------------------**/
   void initialize_with_host_data(
       std::vector<ColumnType> const& host_data,
-      std::vector<gdf_valid_type> const& host_bitmask =
-          std::vector<gdf_valid_type>{}) {
+      std::vector<cudf::valid_type> const& host_bitmask =
+          std::vector<cudf::valid_type>{}) {
     // thrust::device_vector takes care of host to device copy assignment
     data = host_data;
 
@@ -608,7 +608,7 @@ struct column_wrapper {
     // If a validity bitmask vector was passed in, allocate device storage
     // and copy its contents from the host vector
     if (host_bitmask.size() > 0) {
-      gdf_size_type const required_bitmask_size{
+      cudf::size_type const required_bitmask_size{
           gdf_valid_allocation_size(host_data.size())};
 
       if (host_bitmask.size() < static_cast<size_t>(required_bitmask_size)) {
@@ -627,7 +627,7 @@ struct column_wrapper {
 
   // If the column's bitmask does not exist (doesn't contain null values), then
   // the size of this vector will be zero
-  rmm::device_vector<gdf_valid_type>
+  rmm::device_vector<cudf::valid_type>
       bitmask{};  ///< Container for the column's bitmask
 
   gdf_column the_column{};

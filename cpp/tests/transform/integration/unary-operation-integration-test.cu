@@ -39,10 +39,10 @@ void test_cuda_and_ptx_udf(
     const char ptx[], 
     Op op, 
     Data data_init, 
-    gdf_size_type size
+    cudf::size_type size
 ){
     auto in = cudf::test::column_wrapper<dtype>(
-        size, data_init, [](gdf_size_type row) {return true;});
+        size, data_init, [](cudf::size_type row) {return true;});
   { 
     gdf_column cpp_output_col;
     // false means the string is a piece of CUDA code
@@ -120,7 +120,7 @@ R"***(
 
   using dtype = float;
   auto op = [](dtype a) {return a*a*a*a;};
-  auto data_init = [](gdf_size_type row) {return row % 3;};
+  auto data_init = [](cudf::size_type row) {return row % 3;};
   
   test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
 
@@ -162,7 +162,7 @@ R"***(
   
   using dtype = int;
   auto op = [](dtype a) {return a*a-a;};
-  auto data_init = [](gdf_size_type row) {return row % 78;};
+  auto data_init = [](cudf::size_type row) {return row % 78;};
   
   test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
 
@@ -217,7 +217,7 @@ R"***(
 
   using dtype = int8_t;
   auto op = [](dtype a){return std::toupper(a);};  
-  auto data_init = [](gdf_size_type row){return 'a' + (row % 26);};
+  auto data_init = [](cudf::size_type row){return 'a' + (row % 26);};
 
   test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
 
