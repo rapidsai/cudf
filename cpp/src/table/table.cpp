@@ -90,8 +90,7 @@ table_view table::select(std::vector<gdf_size_type> const& column_indices) const
     return table_view(columns);
 }
 
-// Concatenate `table1` and `table2` into a single table_view
-//table_view concat(cudf::experimental::table const& table1, cudf::experimental::table const&table2) {
+// Concatenate elements of `tables_to_concat` into a single table_view
 table_view concat(std::vector<table_view> const& tables_to_concat) {
   std::vector<column_view> concat_cols;
   for (auto& view : tables_to_concat) {
