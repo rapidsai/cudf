@@ -806,6 +806,35 @@ class DatetimeIndex(GenericIndex):
     def dayofweek(self):
         return self.weekday
 
+    def day_name(self):
+        day_names = {
+            0: "Monday",
+            1: "Tuesday",
+            2: "Wednesday",
+            3: "Thursday",
+            4: "Friday",
+            5: "Saturday",
+            6: "Sunday"
+        }
+        return GenericIndex([day_names[day_idx] for day_idx in self.weekday])
+
+    def month_name(self):
+        month_names = {
+            1: "January",
+            2: "February",
+            3: "March",
+            4: "April",
+            5: "May",
+            6: "June",
+            7: "July",
+            8: "August",
+            9: "September",
+            10: "October",
+            11: "November",
+            12: "December"
+        }
+        return GenericIndex([month_names[month_idx] for month_idx in self.month])
+
     def to_pandas(self):
         nanos = self.as_column().astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
