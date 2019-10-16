@@ -24,6 +24,7 @@
 
 ## Bug Fixes
 
+- PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
 - PR #3060 Move copying.hpp includes to legacy
