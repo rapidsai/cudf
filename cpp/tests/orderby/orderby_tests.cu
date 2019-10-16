@@ -101,8 +101,8 @@ struct OrderByTest : public GdfTest
   * @returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
-          const gdf_size_type n_count)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, cudf::valid_type* host_valid,
+          const cudf::size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type = GDF_INT8;
@@ -153,14 +153,14 @@ struct OrderByTest : public GdfTest
   // a gdf_column and append it to a vector of gdf_columns
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const cudf::size_type n_count)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const cudf::size_type n_count)
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
@@ -177,7 +177,7 @@ struct OrderByTest : public GdfTest
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer>
   initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids,
-          const gdf_size_type n_count)
+          const cudf::size_type n_count)
   {
     std::vector<gdf_col_pointer> gdf_columns;
     convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids, n_count);
@@ -197,7 +197,7 @@ struct OrderByTest : public GdfTest
    * @param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t orderby_column_length, size_t orderby_column_range,
-                     const gdf_size_type n_count = 0, bool random_order_type_values = true, bool print = false)
+                     const cudf::size_type n_count = 0, bool random_order_type_values = true, bool print = false)
   {
     initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range);
 

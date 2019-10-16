@@ -17,11 +17,15 @@
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3067 Java method to return size of device memory buffer
+
 
 ## Bug Fixes
 
+- PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3060 Move copying.hpp includes to legacy
 
 
 # cuDF 0.10.0 (Date TBD)
@@ -188,6 +192,11 @@
 - PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
 - PR #3035 Update update-version.sh for new docs locations
 - PR #3038 Fix uninitialized stream parameter in device_table deleter
+- PR #3064 Fixes groupby performance issue
+- PR #3061 Add rmmInitialize to nvstrings gtests
+- PR #3058 Fix UDF doc markdown formatting
+- PR #3059 Add nvstrings python build instructions to contributing.md
+
 
 # cuDF 0.9.0 (21 Aug 2019)
 

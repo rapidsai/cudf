@@ -45,7 +45,7 @@ void initialize_order_by_types(std::vector<int8_t>& order_by_types, size_t lengt
 
 // Prints a vector, its valids and the its sort order
 template <typename T>
-void print_vector_valids_and_sort_order(std::vector<T>& v, gdf_valid_type* valid, order_by_type sort_order)
+void print_vector_valids_and_sort_order(std::vector<T>& v, cudf::valid_type* valid, order_by_type sort_order)
 {
   std::cout << (sort_order == GDF_ORDER_ASC ? "ASC ORDER: " : "DESC ORDER: " );
 
