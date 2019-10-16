@@ -20,6 +20,7 @@
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #3070 Move functions.h and related source to legacy
 
 ## Bug Fixes
 

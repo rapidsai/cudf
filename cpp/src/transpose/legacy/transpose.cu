@@ -1,6 +1,6 @@
 /* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
 
-#include <utilities/nvtx/nvtx_utils.h>
+#include <utilities/nvtx/legacy/nvtx_utils.h>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>

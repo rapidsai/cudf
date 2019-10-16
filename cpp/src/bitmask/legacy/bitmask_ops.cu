@@ -2,7 +2,7 @@
 #include <cudf/legacy/table.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
