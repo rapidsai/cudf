@@ -32,7 +32,6 @@ column_device_view::column_device_view(column_view source)
 
 // Free device memory allocated for children
 void column_device_view::destroy() {
-  // TODO Needs to handle grand-children
   RMM_FREE(d_children,0);
   delete this;
 }
@@ -46,9 +45,6 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
       _num_children{source.num_children()}
 {
   size_type num_children = source.num_children();
-  //if( count_descendants(source) > _num_children ) {
-  //  CUDF_FAIL("Columns with grand-children are not currently supported.");
-  //}
   if( num_children > 0 )
   {
     column_device_view* h_column = reinterpret_cast<column_device_view*>(h_ptr);
@@ -72,9 +68,6 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
   size_type num_children = source.num_children();
-  //if( count_descendants(source) > num_children ) {
-  //  CUDF_FAIL("Columns with grand-children are not currently supported.");
-  //}
   auto deleter = [](column_device_view* v) { v->destroy(); };
   std::unique_ptr<column_device_view, decltype(deleter)> p{
       new column_device_view(source), deleter};
