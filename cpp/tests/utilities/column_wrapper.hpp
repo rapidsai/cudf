@@ -239,40 +239,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
                              ValidityIterator v)
       : fixed_width_column_wrapper{std::cbegin(element_list),
                                    std::cend(element_list), v} {}
-
 };
-
-// std::unique_ptr<cudf::column> create_strings_column(
-//    const std::vector<const char*>& h_strings) {
-//  cudf::size_type memsize = 0;
-//  for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr)
-//    memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
-//  if (memsize == 0 && h_strings.size())
-//    memsize = 1;  // prevent vectors from being null in all empty-string
-//    case
-//  cudf::size_type count = (cudf::size_type)h_strings.size();
-//  thrust::host_vector<char> h_buffer(memsize);
-//  thrust::device_vector<char> d_buffer(memsize);
-//  thrust::host_vector<thrust::pair<const char*, size_type>> strings(count);
-//  cudf::size_type offset = 0;
-//  for (cudf::size_type idx = 0; idx < count; ++idx) {
-//    const char* str = h_strings[idx];
-//    if (!str)
-//      strings[idx] = thrust::pair<const char*, size_type>{nullptr, 0};
-//    else {
-//      cudf::size_type length = (cudf::size_type)strlen(str);
-//      memcpy(h_buffer.data() + offset, str, length);
-//      strings[idx] = thrust::pair<const char*, size_type>{
-//          d_buffer.data().get() + offset, length};
-//      offset += length;
-//    }
-//  }
-//  rmm::device_vector<thrust::pair<const char*, size_type>>
-//  d_strings(strings); cudaMemcpy(d_buffer.data().get(), h_buffer.data(),
-//  memsize,
-//             cudaMemcpyHostToDevice);
-//  return cudf::make_strings_column(d_strings);
-//}
 
 class strings_column_wrapper : public detail::column_wrapper {
  public:
@@ -308,9 +275,9 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param strings
    * @param v
    *---------------------------------------------------------------------------**/
-  template <typename ValidIterator>
+  template <typename ValidityIterator>
   strings_column_wrapper(std::initializer_list<std::string> strings,
-                         ValidIterator v)
+                         ValidityIterator v)
       : strings_column_wrapper(std::cbegin(strings), std::cend(strings), v) {}
 
   /**---------------------------------------------------------------------------*
@@ -324,6 +291,71 @@ class strings_column_wrapper : public detail::column_wrapper {
       : strings_column_wrapper(std::cbegin(strings), std::cend(strings),
                                std::cbegin(validity)) {}
 };
+
+// std::unique_ptr<cudf::column> create_strings_column(
+//    const std::vector<const char*>& h_strings) {
+//  cudf::size_type memsize = 0;
+//  for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr)
+//    memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
+//  if (memsize == 0 && h_strings.size())
+//    memsize = 1;  // prevent vectors from being null in all empty-string
+//  cudf::size_type count = (cudf::size_type)h_strings.size();
+//  thrust::host_vector<char> h_buffer(memsize);
+//  thrust::device_vector<char> d_buffer(memsize);
+//  thrust::host_vector<thrust::pair<const char*, size_type>> strings(count);
+//  cudf::size_type offset = 0;
+//  for (cudf::size_type idx = 0; idx < count; ++idx) {
+//    const char* str = h_strings[idx];
+//    if (!str)
+//      strings[idx] = thrust::pair<const char*, size_type>{nullptr, 0};
+//    else {
+//      cudf::size_type length = (cudf::size_type)strlen(str);
+//      memcpy(h_buffer.data() + offset, str, length);
+//      strings[idx] = thrust::pair<const char*, size_type>{
+//          d_buffer.data().get() + offset, length};
+//      offset += length;
+//    }
+//  }
+//  rmm::device_vector<thrust::pair<const char*, size_type>> d_strings(strings);
+//  cudaMemcpy(d_buffer.data().get(), h_buffer.data(), memsize,
+//             cudaMemcpyHostToDevice);
+//  return cudf::make_strings_column(d_strings);
+//}
+
+// template <typename StringsIterator, typename ValidityIterator>
+// auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
+//                            ValidityIterator v) {
+//  cudf::size_type num_strings{std::distance(begin, end)};
+//  std::vector<char> chars{};
+//  std::vector<int32_t> offsets(num_strings + 1, 0);
+//
+////  std::transform(begin, end, v, ++offsets.begin(),
+////                 [&chars, &offsets](auto const& s, auto is_valid) {
+////                   std::string tmp{};
+////                   if (is_valid) {
+////                     tmp = std::string(s);
+////                     chars.insert(chars.end(), std::cbegin(tmp),
+////                                  std::cend(tmp));
+////                   }
+////                   return offsets.back() + tmp.length();
+////                 });
+//}
+
+template <typename StringsIterator, typename ValidityIterator>
+auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
+                            ValidityIterator v) {
+  std::vector<char> chars{};
+  std::vector<int32_t> offsets(1, 0);
+  for (; begin < end; ++begin) {
+    std::string tmp{};
+    if (*v++) {
+      tmp = std::string{*begin};
+      chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
+    }
+    offsets.push_back(offsets.back() + tmp.length());
+  }
+  return std::make_pair(chars, offsets);
+}
 
 }  // namespace test
 }  // namespace cudf
