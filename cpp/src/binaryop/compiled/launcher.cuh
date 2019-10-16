@@ -17,7 +17,7 @@
 #ifndef COMPILED_BINARY_OPS_LAUNCHER_H
 #define COMPILED_BINARY_OPS_LAUNCHER_H
 
-#include <utilities/nvtx/nvtx_utils.h>
+#include <utilities/nvtx/legacy/nvtx_utils.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/cudf.h>
 
