@@ -22,8 +22,9 @@ from cudf.core.column import (
     column,
 )
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dateutils import month_idx_to_name, wkday_idx_to_name
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
-from cudf.utils.dateutils import wkday_idx_to_name, month_idx_to_name
+
 
 class Index(object):
     """The root interface for all Series indexes.

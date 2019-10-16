@@ -11,8 +11,8 @@ from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import utils
+from cudf.utils.dateutils import month_idx_to_name, wkday_idx_to_name
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
-from cudf.utils.dateutils import wkday_idx_to_name, month_idx_to_name
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {

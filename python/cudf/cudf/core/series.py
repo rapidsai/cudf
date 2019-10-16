@@ -17,8 +17,8 @@ from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dateutils import month_idx_to_name, wkday_idx_to_name
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dateutils import wkday_idx_to_name, month_idx_to_name
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
