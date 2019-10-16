@@ -5,6 +5,7 @@
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3054 Add parquet reader support for decimal data types
+- PR #3094 Adding `any` and `all` support from libcudf
 
 ## Improvements
 
@@ -22,6 +23,7 @@
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
+- PR #3067 Java method to return size of device memory buffer
 - PR #3083 Improved some binary operation tests to include null testing.
 
 ## Bug Fixes
