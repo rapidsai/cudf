@@ -40,8 +40,10 @@ namespace test {
  * Example:
  * ```
  * // Returns square of the value of the counting iterator
- * auto iter = make_counting_transform_iterator(0, [](auto i) { return (i * i);
- *}); iter[0] == 0 iter[1] == 1 iter[2] == 4
+ * auto iter = make_counting_transform_iterator(0, [](auto i){ return (i * i);}); 
+ * iter[0] == 0 
+ * iter[1] == 1 
+ * iter[2] == 4
  * ...
  * iter[n] == n * n
  * ```
