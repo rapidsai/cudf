@@ -22,6 +22,8 @@
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <random>
+
 namespace cudf {
 namespace test {
 
@@ -43,13 +45,58 @@ class BaseFixture : public ::testing::Test {
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
 
-  static void SetUpTestCase() {
-    ASSERT_RMM_SUCCEEDED( rmmInitialize(nullptr) );
-  }
+  static void SetUpTestCase() { ASSERT_RMM_SUCCEEDED(rmmInitialize(nullptr)); }
 
-  static void TearDownTestCase() {
-    ASSERT_RMM_SUCCEEDED( rmmFinalize() );
-  }
+  static void TearDownTestCase() { ASSERT_RMM_SUCCEEDED(rmmFinalize()); }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Provides uniform random number generation.
+ *
+ * It is often useful in testing to have a convenient source of random numbers.
+ * This class is intended to serve as a base class for test fixtures to provide
+ * random number generation. `UniformRandomGenerator::generate()` will generate
+ * the next random number in the sequence.
+ *
+ * Example:
+ * ```c++
+ * UniformRandomGenerator g(0,100);
+ * g.generate(); // Returns a random number in the range [0,100]
+ * ```
+ *
+ * @tparam T The type of values that will be generated.
+ *---------------------------------------------------------------------------**/
+template <typename T, typename Engine = std::default_random_engine>
+class UniformRandomGenerator {
+ public:
+  using uniform_distribution =
+      std::conditional_t<std::is_floating_point<T>::value,
+                         std::uniform_real_distribution<T>,
+                         std::uniform_int_distribution<T>>;
+
+  UniformRandomGenerator() = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new Uniform Random Generator to generate uniformly
+   * random numbers in the range `[upper,lower]`
+   *
+   * @tparam Seed Type of seed
+   * @param lower Lower bound of the range
+   * @param upper Upper bound of the desired range
+   * @param s Optional seed
+   *---------------------------------------------------------------------------**/
+  template <typename Seed>
+  UniformRandomGenerator(T lower, T upper, Seed s = std::random_device{}())
+      : dist{lower, upper}, rng{s} {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the next random number.
+   *---------------------------------------------------------------------------**/
+  T generate() { return dist(rng); }
+
+ private:
+  uniform_distribution dist{};         ///< Distribution
+  Engine rng{std::random_device{}()};  ///< Random generator
 };
 
 }  // namespace test
