@@ -1,17 +1,18 @@
 #pragma once
 
+#include <stdint.h>
+
 // TODO: Update to use fixed width types when CFFI goes away
-typedef int           gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
-typedef gdf_size_type gdf_index_type;
-typedef unsigned char gdf_valid_type;
-typedef char          gdf_bool8;     /*< Storage type for Boolean values. 
+typedef int32_t       gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
+typedef uint8_t       gdf_valid_type;
+typedef int8_t        gdf_bool8;     /*< Storage type for Boolean values. 
                                         char is used to guarantee 8-bit storage. 
                                         zero == false, nonzero == true. */
-typedef	long          gdf_date64;
-typedef	int           gdf_date32;
-typedef	int           gdf_category;
-typedef	long          gdf_timestamp;
-typedef int           gdf_nvstring_category;
+typedef int64_t       gdf_date64;
+typedef int32_t       gdf_date32;
+typedef int32_t       gdf_category;
+typedef int64_t       gdf_timestamp;
+typedef int32_t       gdf_nvstring_category;
 
 
  /**
@@ -107,13 +108,13 @@ typedef struct {
  */
 // TODO: #1119 Use traits to set `gdf_data` elements
 typedef union {
-  signed char   si08;  /**< GDF_INT8      */
-  short         si16;  /**< GDF_INT16     */
-  int           si32;  /**< GDF_INT32     */
-  long          si64;  /**< GDF_INT64     */
+  int8_t        si08;  /**< GDF_INT8      */
+  int16_t       si16;  /**< GDF_INT16     */
+  int32_t       si32;  /**< GDF_INT32     */
+  int64_t       si64;  /**< GDF_INT64     */
   float         fp32;  /**< GDF_FLOAT32   */
   double        fp64;  /**< GDF_FLOAT64   */
-  char           b08;  /**< GDF_BOOL8     */
+  gdf_bool8      b08;  /**< GDF_BOOL8     */
   gdf_date32    dt32;  /**< GDF_DATE32    */
   gdf_date64    dt64;  /**< GDF_DATE64    */
   gdf_timestamp tmst;  /**< GDF_TIMESTAMP */

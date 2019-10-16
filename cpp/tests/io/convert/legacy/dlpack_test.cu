@@ -87,8 +87,8 @@ namespace{
   }
 
   template <typename T>
-  DLManagedTensor* create_DLTensor(gdf_size_type ncols, 
-                                   gdf_size_type nrows,
+  DLManagedTensor* create_DLTensor(cudf::size_type ncols, 
+                                   cudf::size_type nrows,
                                    DLDeviceType device_type = kDLGPU) 
   {
     DLManagedTensor *mng_tensor = new DLManagedTensor;
@@ -111,8 +111,8 @@ namespace{
     size_t bytesize = tensor_size(mng_tensor->dl_tensor);
 
     T *init = new T[N];
-    for (gdf_size_type c = 0; c < ncols; ++c)
-      for (gdf_size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i * (c + 1);
+    for (cudf::size_type c = 0; c < ncols; ++c)
+      for (cudf::size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i * (c + 1);
 
     if (kDLGPU == device_type) {
       EXPECT_EQ(RMM_ALLOC(&data, bytesize, 0), RMM_SUCCESS);
@@ -210,7 +210,7 @@ TEST_F(DLPackTest, UnsupportedDimensions) {
                             GDF_DATASET_EMPTY);
 
   mng_tensor->dl_tensor.ndim = 1;  
-  mng_tensor->dl_tensor.shape[0] = std::numeric_limits<gdf_size_type>::max();
+  mng_tensor->dl_tensor.shape[0] = std::numeric_limits<cudf::size_type>::max();
   ASSERT_EQ(gdf_from_dlpack(&columns, &num_columns, mng_tensor), 
                             GDF_COLUMN_SIZE_TOO_BIG);
 
@@ -377,8 +377,8 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn)
 
   constexpr int64_t length = 100;
   cudf::test::column_wrapper<T> col0(length,
-                                     [](gdf_index_type i) { return i; },
-                                     [](gdf_index_type i) { return true; });
+                                     [](cudf::size_type i) { return i; },
+                                     [](cudf::size_type i) { return true; });
 
   gdf_column **columns = new gdf_column*[1];
   columns[0] = col0.get();
@@ -411,8 +411,8 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn)
 
   for (int64_t c = 0; c < width; c++) {
     cols[c] = new cudf::test::column_wrapper<T>(length,
-                                                [c](gdf_index_type i) { return i*(c+1); },
-                                                [](gdf_index_type i) { return true; });
+                                                [c](cudf::size_type i) { return i*(c+1); },
+                                                [](cudf::size_type i) { return true; });
     columns[c] = cols[c]->get();
   }
 
