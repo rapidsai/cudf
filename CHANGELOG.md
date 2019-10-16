@@ -4,6 +4,7 @@
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3129 Add strings column factory from `std::vector`s
 
 ## Improvements
 
@@ -187,7 +188,11 @@
 - PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
 - PR #3035 Update update-version.sh for new docs locations
 - PR #3038 Fix uninitialized stream parameter in device_table deleter
+- PR #3064 Fixes groupby performance issue
+- PR #3061 Add rmmInitialize to nvstrings gtests
 - PR #3058 Fix UDF doc markdown formatting
+- PR #3059 Add nvstrings python build instructions to contributing.md
+
 
 # cuDF 0.9.0 (21 Aug 2019)
 
