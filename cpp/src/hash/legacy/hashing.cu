@@ -23,7 +23,7 @@
 #include <table/legacy/device_table.cuh>
 #include "hash/hash_functions.cuh"
 #include <utilities/int_fastdiv.h>
-#include <utilities/nvtx/legacy/nvtx_utils.h>
+#include <utilities/nvtx/nvtx_utils.hpp>
 #include <copying/legacy/scatter.hpp>
 #include <cudf/types.hpp>
 
@@ -603,7 +603,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
       return GDF_COLUMN_SIZE_MISMATCH;
   }
 
-  PUSH_RANGE("LIBGDF_HASH_PARTITION", PARTITION_COLOR);
+  cudf::nvtx::range_push("CUDF_HASH_PARTITION", cudf::nvtx::PARTITION_COLOR);
 
   cudf::table input_table(input, num_input_cols);
   cudf::table output_table(partitioned_output, num_input_cols);
@@ -638,7 +638,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
       gdf_status = GDF_INVALID_HASH_FUNCTION;
   }
 
-  POP_RANGE();
+  cudf::nvtx::range_pop();
 
   return gdf_status;
 }

@@ -17,7 +17,7 @@
 #ifndef COMPILED_BINARY_OPS_LAUNCHER_H
 #define COMPILED_BINARY_OPS_LAUNCHER_H
 
-#include <utilities/nvtx/legacy/nvtx_utils.h>
+#include <utilities/nvtx/nvtx_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/cudf.h>
 
@@ -57,7 +57,7 @@ struct BinaryOp {
         GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
 
-        PUSH_RANGE("LIBGDF_BINARY_OP", BINARY_OP_COLOR);
+        nvtx::range_push("CUDF_BINARY_OP", nvtx::BINARY_OP_COLOR);
         // find optimal blocksize
         int mingridsize, blocksize;
         CUDA_TRY(
@@ -82,7 +82,7 @@ struct BinaryOp {
 
         cudaDeviceSynchronize();
 
-        POP_RANGE();
+        nvtx::range_pop();
 
         CUDA_CHECK_LAST();
         return GDF_SUCCESS;
