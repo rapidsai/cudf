@@ -2470,7 +2470,14 @@ class DataFrame(object):
             index_frame_l = self.index.copy().to_frame(index=False)
             index_frame_r = other.index.copy().to_frame(index=False)
 
-            for name in index_frame_l.columns:
+            if (index_frame_l.columns != index_frame_r.columns).any():
+                raise ValueError(
+                    "Left and Right indice-column names must match."
+                )
+
+            for name, name_r in zip(
+                index_frame_l.columns, index_frame_r.columns
+            ):
                 idx_col_name = _unique_tmp_name(self, other, idx_col_names)
                 idx_col_names.append(idx_col_name)
 
