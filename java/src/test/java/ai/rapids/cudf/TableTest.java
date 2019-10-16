@@ -31,9 +31,8 @@ import java.util.stream.LongStream;
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Table.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class TableTest {
+public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
@@ -176,7 +175,6 @@ public class TableTest {
 
   @Test
   void testOrderByAD() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
         .column(5, 3, 3, 1, 1)
         .column(5, 3, 4, 1, 2)
@@ -194,7 +192,6 @@ public class TableTest {
 
   @Test
   void testOrderByDD() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
         .column(5, 3, 3, 1, 1)
         .column(5, 3, 4, 1, 2)
@@ -212,7 +209,6 @@ public class TableTest {
 
   @Test
   void testOrderByWithNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
@@ -232,7 +228,6 @@ public class TableTest {
 
   @Test
   void testOrderByWithNullsAndStrings() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
 	.categoryColumn("4", "3", "2", "1", "0")
         .column(5, null, 3, 1, 1)
@@ -252,7 +247,6 @@ public class TableTest {
 
   @Test
   void testTableCreationIncreasesRefCount() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     //tests the Table increases the refcount on column vectors
     assertThrows(IllegalStateException.class, () -> {
       try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
@@ -269,7 +263,6 @@ public class TableTest {
 
   @Test
   void testGetRows() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
@@ -285,7 +278,6 @@ public class TableTest {
 
   @Test
   void testAllRowsSize() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v1 = ColumnVector.build(DType.INT32, 4, Range.appendInts(4));
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5))) {
       assertThrows(AssertionError.class, () -> {
@@ -297,7 +289,6 @@ public class TableTest {
 
   @Test
   void testGetNumberOfColumns() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
@@ -307,7 +298,6 @@ public class TableTest {
 
   @Test
   void testReadCSVPrune() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
         .column(DType.FLOAT64, "B")
@@ -328,7 +318,6 @@ public class TableTest {
 
   @Test
   void testReadCSVBufferInferred() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A")
         .includeColumn("B")
@@ -358,7 +347,6 @@ public class TableTest {
 
   @Test
   void testReadCSVBuffer() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A")
         .includeColumn("B")
@@ -379,7 +367,6 @@ public class TableTest {
 
   @Test
   void testReadCSVWithOffset() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A")
         .includeColumn("B")
@@ -419,7 +406,6 @@ public class TableTest {
         .column(DType.STRING, "D")
         .build();
 
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A", "B", "D")
         .hasHeader(true)
@@ -440,7 +426,6 @@ public class TableTest {
 
   @Test
   void testReadCSV() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
         .column(DType.FLOAT64, "B")
@@ -460,7 +445,6 @@ public class TableTest {
 
   @Test
   void testReadParquet() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("loan_id")
         .includeColumn("zip")
@@ -475,7 +459,6 @@ public class TableTest {
 
   @Test
   void testReadParquetBuffer() throws IOException {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("loan_id")
         .includeColumn("coborrow_credit_score")
@@ -496,7 +479,6 @@ public class TableTest {
 
   @Test
   void testReadParquetFull() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = Table.readParquet(TEST_PARQUET_FILE)) {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
@@ -536,7 +518,6 @@ public class TableTest {
 
   @Test
   void testReadORC() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ORCOptions opts = ORCOptions.builder()
         .includeColumn("string1")
         .includeColumn("float1")
@@ -554,7 +535,6 @@ public class TableTest {
 
   @Test
   void testReadORCBuffer() throws IOException {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ORCOptions opts = ORCOptions.builder()
         .includeColumn("string1")
         .includeColumn("float1")
@@ -576,7 +556,6 @@ public class TableTest {
 
   @Test
   void testReadORCFull() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table expected = new Table.TestBuilder()
         .column(false, true)
         .column((byte)1, (byte)100)
@@ -594,7 +573,6 @@ public class TableTest {
 
   @Test
   void testReadORCNumPyTypes() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     // by default ORC will promote DATE32 to DATE64
     // and TIMESTAMP is kept as it is
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
@@ -614,7 +592,6 @@ public class TableTest {
 
   @Test
   void testReadORCTimeUnit() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     // specifying no NumPy types should load them as DATE32 and TIMESTAMP
     // specifying TimeUnit will return the result in that unit
     ORCOptions opts = ORCOptions.builder()
@@ -1289,7 +1266,6 @@ public class TableTest {
 
   @Test
   void testMaskWithValidity() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     final int numRows = 5;
     try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
       for (int i = 0; i < numRows; ++i) {
@@ -1314,7 +1290,6 @@ public class TableTest {
 
   @Test
   void testMaskDataOnly() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
          Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
@@ -1331,7 +1306,6 @@ public class TableTest {
 
   @Test
   void testAllFilteredFromData() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, false);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
@@ -1345,7 +1319,6 @@ public class TableTest {
 
   @Test
   void testAllFilteredFromValidity() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     final int numRows = 5;
     try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
       for (int i = 0; i < numRows; ++i) {
@@ -1364,7 +1337,6 @@ public class TableTest {
 
   @Test
   void testMismatchedSizes() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Boolean[] maskVals = new Boolean[3];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
@@ -1375,7 +1347,6 @@ public class TableTest {
 
   @Test
   void testTableBasedFilter() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
          Table input = new Table(
@@ -1391,7 +1362,6 @@ public class TableTest {
 
   @Test
   void testStringsAreNotSupported() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);

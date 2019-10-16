@@ -20,6 +20,7 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
