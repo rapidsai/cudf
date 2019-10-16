@@ -2475,9 +2475,7 @@ class DataFrame(object):
                     "Left and Right indice-column names must match."
                 )
 
-            for name, name_r in zip(
-                index_frame_l.columns, index_frame_r.columns
-            ):
+            for name in index_frame_l.columns:
                 idx_col_name = _unique_tmp_name(self, other, idx_col_names)
                 idx_col_names.append(idx_col_name)
 
