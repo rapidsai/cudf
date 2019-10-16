@@ -28,11 +28,8 @@
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
-<<<<<<< HEAD
-- PR #2994 Fix split_out-support but with hash_object_dispatch
-=======
 - PR #3060 Move copying.hpp includes to legacy
->>>>>>> upstream/branch-0.11
+- PR #2994 Fix split_out-support but with hash_object_dispatch
 
 
 # cuDF 0.10.0 (Date TBD)
