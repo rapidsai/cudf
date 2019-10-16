@@ -46,7 +46,8 @@ TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    EXPECT_THROW( cudf::strings::detail::sort(strings_view, cudf::strings::detail::name), cudf::logic_error );
+    auto results = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
+    cudf::test::expect_strings_empty(results->view());
 }
 
 class SliceParmsTest : public StringsColumnTest,
@@ -110,7 +111,8 @@ TEST_F(StringsColumnTest, SliceZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    EXPECT_THROW( cudf::strings::detail::slice(strings_view,1,2), cudf::logic_error );
+    auto results = cudf::strings::detail::slice(strings_view,1,2);
+    cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsColumnTest, Gather)
@@ -136,7 +138,8 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
     cudf::column_view map_view( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-    EXPECT_THROW( cudf::strings::detail::gather(strings_view,map_view), cudf::logic_error );
+    auto results = cudf::strings::detail::gather(strings_view,map_view);
+    cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsColumnTest, Scatter)
@@ -167,7 +170,8 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
     cudf::column_view map_view( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
     cudf::column_view values( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto values_view = cudf::strings_column_view(values);
-    EXPECT_THROW( cudf::strings::detail::scatter(strings_view,values_view,map_view), cudf::logic_error );
+    auto results = cudf::strings::detail::scatter(strings_view,values_view,map_view);
+    cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsColumnTest, ScatterScalar)
@@ -193,5 +197,6 @@ TEST_F(StringsColumnTest, ScatterScalarZeroSizeStringsColumn)
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
     cudf::column_view map_view( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-    EXPECT_THROW( cudf::strings::detail::scatter(strings_view,nullptr,map_view), cudf::logic_error );
+    auto results = cudf::strings::detail::scatter(strings_view,nullptr,map_view);
+    cudf::test::expect_strings_empty(results->view());
 }

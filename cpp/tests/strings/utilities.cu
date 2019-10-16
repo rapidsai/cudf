@@ -67,5 +67,13 @@ void expect_strings_equal(cudf::column_view strings_column, const std::vector<co
     cudf::test::expect_columns_equal(results_view.parent(), d_expected->view());
 }
 
+void expect_strings_empty(cudf::column_view strings_column)
+{
+    EXPECT_EQ(STRING, strings_column.type().id());
+    EXPECT_EQ(0,strings_column.size());
+    EXPECT_EQ(0,strings_column.null_count());
+    EXPECT_EQ(0,strings_column.num_children());
+}
+
 }  // namespace test
 }  // namespace cudf

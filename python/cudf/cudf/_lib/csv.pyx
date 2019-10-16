@@ -217,9 +217,9 @@ cpdef read_csv(
     cdef cudf_table c_out_table
     cdef size_t c_range_offset = byte_range[0] if byte_range is not None else 0
     cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
-    cdef gdf_size_type c_skiprows = skiprows if skiprows is not None else 0
-    cdef gdf_size_type c_skipend = skipfooter if skipfooter is not None else 0
-    cdef gdf_size_type c_nrows = nrows if nrows is not None else -1
+    cdef size_type c_skiprows = skiprows if skiprows is not None else 0
+    cdef size_type c_skipend = skipfooter if skipfooter is not None else 0
+    cdef size_type c_nrows = nrows if nrows is not None else -1
     with nogil:
         if c_range_offset !=0 or c_range_size != 0:
             c_out_table = reader.get().read_byte_range(
