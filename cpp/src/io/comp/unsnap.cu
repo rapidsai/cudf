@@ -255,7 +255,7 @@ inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
     v1 >>= (m + 1);
     for (uint32_t i = 1; i < 16; i++)
     {
-        uint32_t m2 = (v1 & 2) + (v0 & 1);
+        uint32_t m2 = (v1 & 2) | (v0 & 1);
         uint32_t n = m2 + 2;
         m |= m2 << (i * 2);
         v0 >>= n;
@@ -566,7 +566,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
                 uint32_t bofs = WarpReducePos32(blen_t, t);
                 uint32_t stop_mask = BALLOT((uint32_t)dist_t < bofs);
                 uint32_t start_mask = WarpReduceSum32((bofs < 32) ? 1 << bofs : 0);
-                n = min(min((uint32_t)__popc(start_mask), (uint32_t)__ffs(stop_mask | 0x80000000u) - 1u), (uint32_t)batch_len);
+                n = min(min((uint32_t)__popc(start_mask), (uint32_t)(__ffs(stop_mask) - 1u)), (uint32_t)batch_len);
                 if (n != 0)
                 {
                     uint32_t it = __popc(start_mask & ((2 << t) - 1));
