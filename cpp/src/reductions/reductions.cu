@@ -20,7 +20,7 @@ namespace cudf{
 
 gdf_scalar reduce(const gdf_column *col,
                   cudf::reduction::operators op, gdf_dtype output_dtype,
-                  gdf_size_type ddof)
+                  cudf::size_type ddof)
 {
     gdf_scalar scalar;
     scalar.dtype = output_dtype;

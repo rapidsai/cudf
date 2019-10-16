@@ -59,7 +59,7 @@ __device__ T sum_warps(T* warp_smem)
 
 // return the new_value for output column at index `idx`
 template<class T, bool replacement_has_nulls>
-__device__ auto get_new_value(gdf_size_type         idx,
+__device__ auto get_new_value(cudf::size_type         idx,
                            const T* __restrict__ input_data,
                            const T* __restrict__ values_to_replace_begin,
                            const T* __restrict__ values_to_replace_end,
@@ -117,14 +117,14 @@ __device__ auto get_new_value(gdf_size_type         idx,
                       bit_mask_t const * __restrict__ input_valid,
                       T * __restrict__          output_data,
                       bit_mask_t * __restrict__ output_valid,
-                      gdf_size_type * __restrict__    output_valid_count,
-                      gdf_size_type                   nrows,
+                      cudf::size_type * __restrict__    output_valid_count,
+                      cudf::size_type                   nrows,
                       const T* __restrict__ values_to_replace_begin,
                       const T* __restrict__ values_to_replace_end,
                       const T* __restrict__           d_replacement_values,
                       bit_mask_t const * __restrict__ replacement_valid)
   {
-  gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask = __ballot_sync(active_mask, i < nrows);
@@ -214,10 +214,10 @@ __device__ auto get_new_value(gdf_size_type         idx,
                                         reinterpret_cast<bit_mask_t*>(replacement_values.valid);
       bit_mask_t* __restrict__ typed_out_valid =
                                         reinterpret_cast<bit_mask_t*>(output.valid);
-      gdf_size_type *valid_count = nullptr;
+      cudf::size_type *valid_count = nullptr;
       if (typed_out_valid != nullptr) {
-        RMM_ALLOC(&valid_count, sizeof(gdf_size_type), stream);
-        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(gdf_size_type), stream));
+        RMM_ALLOC(&valid_count, sizeof(cudf::size_type), stream);
+        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(cudf::size_type), stream));
       }
 
       col_type const * values_to_replace_ptr{ cudf::get_data<col_type const>(values_to_replace) };
@@ -252,9 +252,9 @@ __device__ auto get_new_value(gdf_size_type         idx,
                                              typed_replacement_valid);
 
       if(typed_out_valid != nullptr){
-        gdf_size_type valids {0};
+        cudf::size_type valids {0};
         CUDA_TRY(cudaMemcpyAsync(&valids, valid_count,
-                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+                               sizeof(cudf::size_type), cudaMemcpyDefault, stream));
         output.null_count = output.size - valids;
         RMM_FREE(valid_count, stream);
       }
@@ -294,8 +294,8 @@ namespace detail {
     gdf_column output = cudf::allocate_like(input_col, RETAIN, stream);
 
     if (nullptr == input_col.valid && replacement_values.valid != nullptr) {
-      gdf_valid_type *valid = nullptr;
-      gdf_size_type bytes = gdf_valid_allocation_size(input_col.size);
+      cudf::valid_type *valid = nullptr;
+      cudf::size_type bytes = gdf_valid_allocation_size(input_col.size);
       RMM_ALLOC(&valid, bytes, stream);
       CUDA_TRY(cudaMemsetAsync(valid, 0, bytes, stream));
       CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, output.data, valid,
@@ -343,7 +343,7 @@ using bit_mask::bit_mask_t;
 
 template <typename Type>
 __global__
-  void replace_nulls_with_scalar(gdf_size_type size,
+  void replace_nulls_with_scalar(cudf::size_type size,
                                  const Type* __restrict__ in_data,
                                  const bit_mask_t* __restrict__ in_valid,
                                  const Type* __restrict__ replacement,
@@ -365,7 +365,7 @@ __global__
 
 template <typename Type>
 __global__
-void replace_nulls_with_column(gdf_size_type size,
+void replace_nulls_with_column(cudf::size_type size,
                                const Type* __restrict__ in_data,
                                const bit_mask_t* __restrict__ in_valid,
                                const Type* __restrict__ replacement,
@@ -393,9 +393,9 @@ void replace_nulls_with_column(gdf_size_type size,
 /* ----------------------------------------------------------------------------*/
 struct replace_nulls_column_kernel_forwarder {
   template <typename col_type>
-  void operator()(gdf_size_type    nrows,
+  void operator()(cudf::size_type    nrows,
                   void*            d_in_data,
-                  gdf_valid_type*  d_in_valid,
+                  cudf::valid_type*  d_in_valid,
                   const void*      d_replacement,
                   void*            d_out_data,
                   cudaStream_t     stream = 0)
@@ -421,9 +421,9 @@ struct replace_nulls_column_kernel_forwarder {
 /* ----------------------------------------------------------------------------*/
 struct replace_nulls_scalar_kernel_forwarder {
   template <typename col_type>
-  void operator()(gdf_size_type    nrows,
+  void operator()(cudf::size_type    nrows,
                   void*            d_in_data,
-                  gdf_valid_type*  d_in_valid,
+                  cudf::valid_type*  d_in_valid,
                   const void*      replacement,
                   void*            d_out_data,
                   cudaStream_t     stream = 0)

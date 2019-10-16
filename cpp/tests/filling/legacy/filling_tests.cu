@@ -33,27 +33,27 @@ using test_types =
                    cudf::bool8>;
 TYPED_TEST_CASE(FillingTest, test_types);
 
-constexpr gdf_size_type column_size{1000};
+constexpr cudf::size_type column_size{1000};
 
-auto all_valid = [](gdf_index_type row) { return true; };
+auto all_valid = [](cudf::size_type row) { return true; };
 
 template <typename T, typename BitInitializerType = decltype(all_valid)>
-void FillTest(gdf_index_type begin, gdf_index_type end,
+void FillTest(cudf::size_type begin, cudf::size_type end,
               T value, bool value_is_valid = true, 
               BitInitializerType source_validity = all_valid)
 {
   column_wrapper<T> source(column_size, 
-    [](gdf_index_type row) { return static_cast<T>(row); },
-    [&](gdf_index_type row) { return source_validity(row); });
+    [](cudf::size_type row) { return static_cast<T>(row); },
+    [&](cudf::size_type row) { return source_validity(row); });
 
   scalar_wrapper<T> val(value, value_is_valid);
 
   column_wrapper<T> expected(column_size,
-    [&](gdf_index_type row) { 
+    [&](cudf::size_type row) { 
       return (row >= begin && row < end) ? 
         value : static_cast<T>(row);
     },
-    [&](gdf_index_type row) { 
+    [&](cudf::size_type row) { 
       return (row >= begin && row < end) ? 
         value_is_valid : source_validity(row); 
     });
@@ -74,7 +74,7 @@ void FillTest(gdf_index_type begin, gdf_index_type end,
 
 TYPED_TEST(FillingTest, SetSingle)
 {
-  gdf_index_type index = 9;
+  cudf::size_type index = 9;
   TypeParam val = TypeParam{1};
   
   // First set it as valid
@@ -95,8 +95,8 @@ TYPED_TEST(FillingTest, SetAll)
 
 TYPED_TEST(FillingTest, SetRange)
 {
-  gdf_index_type begin = 99;
-  gdf_index_type end   = 299;
+  cudf::size_type begin = 99;
+  cudf::size_type end   = 299;
   TypeParam val = TypeParam{1};
 
   // First set it as valid
@@ -107,15 +107,15 @@ TYPED_TEST(FillingTest, SetRange)
 
 TYPED_TEST(FillingTest, SetRangeNullCount)
 {
-  gdf_index_type begin = 10;
-  gdf_index_type end = 50;
+  cudf::size_type begin = 10;
+  cudf::size_type end = 50;
   TypeParam val = TypeParam{1};
 
-  auto some_valid = [](gdf_index_type row) { 
+  auto some_valid = [](cudf::size_type row) { 
     return row % 2 != 0;
   };
 
-  auto all_invalid = [](gdf_index_type row) { 
+  auto all_invalid = [](cudf::size_type row) { 
     return false;
   };
 
@@ -162,8 +162,8 @@ TEST_F(FillingErrorTest, InvalidRange)
 {
   scalar_wrapper<int32_t> val(5, true);
   column_wrapper<int32_t> dest(100, 
-    [](gdf_index_type row) { return static_cast<int32_t>(row); },
-    [](gdf_index_type row) { return true; });
+    [](cudf::size_type row) { return static_cast<int32_t>(row); },
+    [](cudf::size_type row) { return true; });
   
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 110),
                             "Range is out of bounds");
@@ -177,8 +177,8 @@ TEST_F(FillingErrorTest, DTypeMismatch)
 {
   scalar_wrapper<int32_t> val(5, true);
   column_wrapper<float> dest(100, 
-    [](gdf_index_type row) { return static_cast<float>(row); },
-    [](gdf_index_type row) { return true; });
+    [](cudf::size_type row) { return static_cast<float>(row); },
+    [](cudf::size_type row) { return true; });
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 10),
                             "Data type mismatch");
 }
