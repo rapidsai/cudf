@@ -46,6 +46,8 @@ enum operators {
   MEAN,           ///< Computes the arithmetic mean of the values in the column
   VAR,            ///< Computes the variance of the values in the column
   STD,            ///< Computes the standard deviation of the values in the column
+  ANY,            ///< Computes to true if any of the values are non-zero/true
+  ALL,            ///< Computes to true if all of the values are non-zero/true
 };
 }  // namespace reduction
 
@@ -77,7 +79,7 @@ enum operators {
  * ----------------------------------------------------------------------------**/
 gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
                         gdf_dtype output_dtype,
-                        gdf_size_type ddof = 1);
+                        cudf::size_type ddof = 1);
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.

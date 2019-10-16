@@ -224,12 +224,12 @@ class NumericalColumn(column.TypedColumnBase):
         return out_col
 
     def all(self):
-        return bool(self.min(dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(self.max(dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
         return libcudf.reduce.reduce("min", self, dtype=dtype)
