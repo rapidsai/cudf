@@ -20,9 +20,8 @@ namespace detail {
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
   void operator()(table_view source_table, column_view gather_map,
-      mutable_table_view destination_table, bool check_bounds,
-      bool ignore_out_of_bounds, bool sync_nvstring_category = false,
-      bool allow_negative_indices = false)
+		  mutable_table_view destination_table, bool check_bounds,
+		  bool ignore_out_of_bounds, bool allow_negative_indices = false)
   {
 
     map_type const * typed_gather_map = gather_map.data<map_type>();
@@ -46,7 +45,6 @@ struct dispatch_map_type {
 	     destination_table,
 	     check_bounds,
 	     ignore_out_of_bounds,
-	     sync_nvstring_category,
 	     allow_negative_indices
 	     );
     }
@@ -58,7 +56,6 @@ struct dispatch_map_type {
 	     destination_table,
 	     check_bounds,
 	     ignore_out_of_bounds,
-	     sync_nvstring_category,
 	     allow_negative_indices
 	     );
     }
@@ -67,16 +64,14 @@ struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
   void operator()(table_view source_table, column_view gather_map,
                   mutable_table_view destination_table, bool check_bounds,
-		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
-		  bool allow_negative_indices = false) {
+		  bool ignore_out_of_bounds, bool allow_negative_indices = false) {
    CUDF_FAIL("Gather map must be an integral type.");
   }
 };
 
 void gather(table_view source_table, column_view gather_map,
 	    mutable_table_view destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool allow_negative_indices = false,
+	    bool ignore_out_of_bounds = false, bool allow_negative_indices = false,
 	    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
   // If the destination is empty, return immediately as there is nothing to
   // gather
@@ -89,9 +84,9 @@ void gather(table_view source_table, column_view gather_map,
                "Mismatched number of columns");
 
   cudf::experimental::type_dispatcher(gather_map.type(), dispatch_map_type{},
-				      source_table, gather_map, destination_table, check_bounds,
-				      ignore_out_of_bounds,
-				      sync_nvstring_category, allow_negative_indices);
+				      source_table, gather_map, destination_table,
+				      check_bounds, ignore_out_of_bounds,
+				      allow_negative_indices);
 }
 
 

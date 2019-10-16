@@ -17,8 +17,6 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <cub/cub.cuh>
-#include <nvstrings/NVCategory.h>
-#include <nvstrings/NVStrings.h>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
@@ -146,18 +144,14 @@ struct column_gatherer {
 		  iterator_type gather_map,
 		  mutable_column_view destination_column,
 		  bool ignore_out_of_bounds,
-		  bool sync_nvstring_category,
 		  util::cuda::scoped_stream stream) {
     column_type const *source_data{source_column.data<column_type>()};
     column_type *destination_data{destination_column.data<column_type>()};
 
     size_type const num_destination_rows{destination_column.size()};
 
-    // If gathering in-place or scattering nvstring
-    // (in which case the sync_nvstring_category should be set to true)
-    // allocate temporary buffers to hold intermediate results
-    bool const sync_category = false;
-    bool const in_place = !sync_category && (source_data == destination_data);
+    // If gathering in-place allocate temporary buffers to hold intermediate results
+    bool const in_place = (source_data == destination_data);
 
     rmm::device_vector<column_type> in_place_buffer;
     if (in_place) {
@@ -193,7 +187,6 @@ struct column_gatherer {
 		  iterator_type gather_map,
 		  mutable_column_view destination_column,
 		  bool ignore_out_of_bounds,
-		  bool sync_nvstring_category,
 		  util::cuda::scoped_stream stream) {
     CUDF_FAIL("Column type must be numeric");
   }
@@ -256,8 +249,7 @@ struct index_converter<map_type, index_conversion::NONE>
 template <typename iterator_type>
 void gather(table_view source_table, iterator_type gather_map,
 	    mutable_table_view destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool allow_negative_indices = false,
+	    bool ignore_out_of_bounds = false, bool allow_negative_indices = false,
 	    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
 	    )
 {
@@ -276,7 +268,7 @@ void gather(table_view source_table, iterator_type gather_map,
     // The data gather for n columns will be put on the first n streams
     cudf::experimental::type_dispatcher(src_col.type(), column_gatherer{}, src_col,
 					gather_map, dest_col, ignore_out_of_bounds,
-					sync_nvstring_category, v_stream[i]);
+					v_stream[i]);
 
     if (src_col.has_nulls()) {
       CUDF_EXPECTS(dest_col.nullable(),
