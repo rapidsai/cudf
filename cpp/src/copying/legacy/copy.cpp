@@ -72,7 +72,7 @@ gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_al
  * Allocates a new column of specified size of the same type as the input.
  * Does not copy data.
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size,
+gdf_column allocate_like(gdf_column const& input, cudf::size_type size,
                          mask_allocation_policy mask_alloc, cudaStream_t stream)
 {
   bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
@@ -134,7 +134,7 @@ table empty_like(table const& t) {
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{columns.data(), static_cast<cudf::size_type>(columns.size())};
 }
 
 table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStream_t stream) {
@@ -146,10 +146,10 @@ table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStrea
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{columns.data(), static_cast<cudf::size_type>(columns.size())};
 }
 
-table allocate_like(table const& t, gdf_size_type size, 
+table allocate_like(table const& t, cudf::size_type size, 
                     mask_allocation_policy mask_alloc, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
@@ -159,7 +159,7 @@ table allocate_like(table const& t, gdf_size_type size,
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{columns.data(), static_cast<cudf::size_type>(columns.size())};
 }
 
 table copy(table const& t, cudaStream_t stream) {
@@ -171,7 +171,7 @@ table copy(table const& t, cudaStream_t stream) {
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{columns.data(), static_cast<cudf::size_type>(columns.size())};
 }
 
 } // namespace cudf

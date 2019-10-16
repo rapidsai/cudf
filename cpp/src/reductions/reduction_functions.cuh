@@ -31,8 +31,8 @@ gdf_scalar product(gdf_column const& col, gdf_dtype const output_dtype, cudaStre
 gdf_scalar sum_of_squares(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
 
 gdf_scalar mean(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
-gdf_scalar variance(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream=0);
-gdf_scalar standard_deviation(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream=0);
+gdf_scalar variance(gdf_column const& col, gdf_dtype const output_dtype, cudf::size_type ddof, cudaStream_t stream=0);
+gdf_scalar standard_deviation(gdf_column const& col, gdf_dtype const output_dtype, cudf::size_type ddof, cudaStream_t stream=0);
 
 } // namespace reduction
 } // namespace cudf

@@ -4,6 +4,7 @@
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3054 Add parquet reader support for decimal data types
 - PR #3094 Adding `any` and `all` support from libcudf
 
 ## Improvements
@@ -17,11 +18,18 @@
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
+- PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #3070 Move functions.h and related source to legacy
+- PR #2951 Allow set_index to handle a list of column names
 
 ## Bug Fixes
 
+- PR #3048 Support for zero columned tables
+- PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3060 Move copying.hpp includes to legacy
 
 
 # cuDF 0.10.0 (Date TBD)

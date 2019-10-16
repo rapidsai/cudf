@@ -79,7 +79,7 @@ enum operators {
  * ----------------------------------------------------------------------------**/
 gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
                         gdf_dtype output_dtype,
-                        gdf_size_type ddof = 1);
+                        cudf::size_type ddof = 1);
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.
