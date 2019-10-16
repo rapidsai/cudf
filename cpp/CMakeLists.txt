@@ -327,9 +327,9 @@ add_library(cudf
             src/table/legacy/table.cpp
             src/strings/nvcategory_util.cpp
             src/join/joining.cu
-            src/orderby/orderby.cu
+            src/orderby/legacy/orderby.cu
             src/predicates/is_sorted.cu
-            src/sort/digitize.cu
+            src/sort/legacy/digitize.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/sort_helper.cu
             src/groupby/sort/groupby.cu
@@ -357,9 +357,9 @@ add_library(cudf
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_duplicates.cu
-            src/datetime/datetime_ops.cu
+            src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
-            src/hash/hashing.cu
+            src/hash/legacy/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
             src/reductions/reductions.cu
@@ -373,7 +373,7 @@ add_library(cudf
             src/reductions/std.cu
             src/replace/replace.cu
             src/reductions/scan.cu
-            src/transpose/transpose.cu
+            src/transpose/legacy/transpose.cu
             src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
@@ -381,7 +381,7 @@ add_library(cudf
             src/io/cuio_common.cpp
             src/io/io_functions.cpp
             src/io/convert/csr/cudf_to_csr.cu
-            src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/convert/dlpack/legacy/cudf_dlpack.cpp
             src/io/avro/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
@@ -410,10 +410,10 @@ add_library(cudf
             src/io/comp/gpuinflate.cu
             src/io/utilities/datasource.cpp
             src/io/utilities/parsing_utils.cu
-            src/utilities/cuda_utils.cu
+            src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
-            src/utilities/error_utils.cpp
-            src/utilities/nvtx/nvtx_utils.cpp
+            src/utilities/legacy/error_utils.cpp
+            src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -466,7 +466,16 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
 
-add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   COMMENT "Run stringify on header types.hpp to convert it to c-str for use in JIT compiled code"
+                   DEPENDS stringify
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
+
+add_custom_target(stringify_run DEPENDS
+                  ${CMAKE_BINARY_DIR}/include/types.h.jit
+                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
 
 add_dependencies(cudf stringify_run)
 

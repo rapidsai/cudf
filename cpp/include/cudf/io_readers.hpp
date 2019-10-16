@@ -201,7 +201,7 @@ struct reader_options {
   bool          delim_whitespace = false;   ///< Use white space as the delimiter; default is false. This overrides the delimiter argument.
   bool          skipinitialspace = false;   ///< Skip white spaces after the delimiter; default is false.
   bool          skip_blank_lines = true;    ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
-  gdf_size_type header = 0;                 ///< Row of the header data, zero based counting; Default is zero.
+  cudf::size_type header = 0;                 ///< Row of the header data, zero based counting; Default is zero.
 
   std::vector<std::string> names;           ///< Ordered List of column names; Empty by default.
   std::vector<std::string> dtype;           ///< Ordered List of data types; Empty by default.
@@ -291,8 +291,8 @@ class reader {
    *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer,
-                  gdf_size_type num_rows = -1);
+  table read_rows(cudf::size_type num_skip_header, cudf::size_type num_skip_footer,
+                  cudf::size_type num_rows = -1);
 
   ~reader();
 };

@@ -465,7 +465,7 @@ class RangeIndex(Index):
             index += self._start
             return index
         elif isinstance(index, (list, np.ndarray)):
-            index = np.array(index)
+            index = np.asarray(index)
             index = rmm.to_device(index)
 
         else:

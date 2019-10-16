@@ -313,13 +313,13 @@ void fill_with_random_values(std::vector<TFROM>& input, size_t size)
 }
 
 // Generates random bitmaps
-void fill_random_bitmap(std::vector<gdf_valid_type>& valid_input, size_t size)
+void fill_random_bitmap(std::vector<cudf::valid_type>& valid_input, size_t size)
 {
 	std::random_device rd;
 	std::default_random_engine eng(rd());
 
-	std::uniform_int_distribution<gdf_valid_type> int_dis;
-	int_dis = std::uniform_int_distribution<gdf_valid_type>(std::numeric_limits<gdf_valid_type>::min(), std::numeric_limits<gdf_valid_type>::max());
+	std::uniform_int_distribution<cudf::valid_type> int_dis;
+	int_dis = std::uniform_int_distribution<cudf::valid_type>(std::numeric_limits<cudf::valid_type>::min(), std::numeric_limits<cudf::valid_type>::max());
 
 	std::generate(valid_input.begin(), valid_input.end(), [int_dis, eng]() mutable {
 		return int_dis(eng);
@@ -474,10 +474,10 @@ DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date64, GDF_DATE64, int64_t)
 struct generateValidRandom
 {
     __host__ __device__
-    gdf_valid_type operator () (int idx)
+    cudf::valid_type operator () (int idx)
     {
         thrust::default_random_engine eng;
-        thrust::uniform_int_distribution<gdf_valid_type> int_dis;
+        thrust::uniform_int_distribution<cudf::valid_type> int_dis;
         eng.discard(idx);
         return int_dis(eng);
     }
@@ -558,7 +558,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 			cudf::date64{-4870713600000}  // '1815-08-28 00:00:00.000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>(inputData,  allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, allValidFunctor);
 
@@ -638,7 +638,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 			cudf::date32{22294}	// '2031-01-15'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>(inputData,  allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>(outputData, allValidFunctor);
 
@@ -676,7 +676,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 			cudf::date64{0} // no operation
 		};
 
-		auto altValidFunctor = [](gdf_size_type row){return (row % 2 == 0);}; //01010101
+		auto altValidFunctor = [](cudf::size_type row){return (row % 2 == 0);}; //01010101
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>(inputData,  altValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, altValidFunctor);
 
@@ -714,7 +714,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::timestamp{-4870713600}  // '1815-08-28 00:00:00'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -753,7 +753,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::date32{-56374}  // '1815-08-28
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
@@ -790,7 +790,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::timestamp{-4870713600000}  // '1815-08-28 00:00:00.000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -829,7 +829,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::date32{-56374}  // '1815-08-28
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
@@ -866,7 +866,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::timestamp{-4870713600000000000}	// '1815-08-28 00:00:00.000000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -905,7 +905,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::date32{-56374}  // '1815-08-28
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
@@ -942,7 +942,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::timestamp{-4870713600000000}  // '1815-08-28 00:00:00.000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -981,7 +981,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			cudf::date32{-56374}  // '1815-08-28
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
@@ -1035,13 +1035,13 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			1926203568000 //	'2031-01-15 00:32:48'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>(colSize,
-			[data] (gdf_size_type row) { return cudf::date64{ data[row] }; },
+			[data] (cudf::size_type row) { return cudf::date64{ data[row] }; },
 			allValidFunctor
 		); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(colSize,
-			[data] (gdf_size_type row) { return cudf::timestamp{ data[row] }; },
+			[data] (cudf::size_type row) { return cudf::timestamp{ data[row] }; },
 			allValidFunctor
 		);
 
@@ -1094,13 +1094,13 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			1926203568000 //	'2031-01-15 00:32:48'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(colSize,
-			[data] (gdf_size_type row) { return cudf::timestamp{ data[row] }; },
+			[data] (cudf::size_type row) { return cudf::timestamp{ data[row] }; },
 			allValidFunctor
 		); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(colSize,
-			[data] (gdf_size_type row) { return cudf::date64{ data[row] }; },
+			[data] (cudf::size_type row) { return cudf::date64{ data[row] }; },
 			allValidFunctor
 		);
 
@@ -1137,7 +1137,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			cudf::timestamp{-4870653059},  // '1815-08-28 16:49:01'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1176,7 +1176,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			cudf::date64{-4870653059000},  // '1815-08-28 16:49:01.000
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
@@ -1213,7 +1213,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			cudf::timestamp{-4870653058987000},  // '1815-08-28 16:49:01.013000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1252,7 +1252,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			cudf::date64{-4870653058988},  // '1815-08-28 16:49:01.012'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
@@ -1289,7 +1289,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			cudf::timestamp{-4870653058987000000},  // '1815-08-28 16:49:01.013000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1328,7 +1328,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			cudf::date64{-4870653058988},  // '1815-08-28 16:49:01.012'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
@@ -1416,7 +1416,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000} //	2031-01-15 00:32:48.000
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1502,7 +1502,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568} //	'2031-01-15 00:32:48'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1588,7 +1588,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000000} //	'2031-01-15 00:32:48.000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1674,7 +1674,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568} //	'2031-01-15 00:32:48'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1760,7 +1760,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000000000} //	'2031-01-15 00:32:48.000000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1846,7 +1846,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568} //	'2031-01-15 00:32:48'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -1932,7 +1932,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000000000} //	'2031-01-15 00:32:48.000000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -2018,7 +2018,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000000} //	'2031-01-15 00:32:48.000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -2104,7 +2104,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000000000} //	'2031-01-15 00:32:48.000000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -2190,7 +2190,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000} //	'2031-01-15 00:32:48.000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -2276,7 +2276,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000} //	'2031-01-15 00:32:48.000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -2362,7 +2362,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			cudf::timestamp{1926203568000000} //	'2031-01-15 00:32:48.000000'
 		};
 
-		auto allValidFunctor = [](gdf_size_type row){return true;};
+		auto allValidFunctor = [](cudf::size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
@@ -2399,7 +2399,7 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 	std::vector<cudf::bool8> h_expect_v{colSize};
 
 	// compute NOT
-	for (gdf_size_type i = 0; i < colSize; ++i)
+	for (cudf::size_type i = 0; i < colSize; ++i)
 		h_expect_v[i] = static_cast<cudf::bool8>( !h_input_v[i] );
 
 	// Use vector to build expected output
