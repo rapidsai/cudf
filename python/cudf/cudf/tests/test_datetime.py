@@ -152,6 +152,12 @@ def test_dt_index(data, field):
         getattr(gdf_data, field).to_pandas(), getattr(pd_data, field)
     )
 
+def test_dt_index_methods():
+    pd_data = data1()
+    gd_data = DatetimeIndex(pd_data)
+    assert_index_equal(pd_data.day_name(), gd_data.day_name().to_pandas(), check_names=False)
+    assert_index_equal(pd_data.month_name(), gd_data.month_name().to_pandas(), check_names=False)
+
 def test_dt_accessor_methods():
     data = data1()
     pd_data = pd.Series(data)
