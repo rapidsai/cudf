@@ -30,7 +30,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
     cdef cudf_table drop_nulls(
         const cudf_table &input,
         const cudf_table &keys,
-        const gdf_size_type keep_threshold
+        const size_type keep_threshold
     ) except +
 
     cdef cudf_table drop_duplicates(
@@ -39,7 +39,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         const duplicate_keep_option keep
     ) except +
 
-    cdef gdf_size_type unique_count(
+    cdef size_type unique_count(
         const gdf_column& input_column,
         const bool dropna,
         const bool nan_as_null

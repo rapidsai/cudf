@@ -90,7 +90,7 @@ try{ statement; } catch (std::exception& e)             \
 
 /**
  * @brief  Counts the number of valid bits for the specified number of rows
- * in the host vector of gdf_valid_type masks
+ * in the host vector of cudf::valid_type masks
  *
  * @param masks The host vector of masks whose bits will be counted
  * @param num_rows The number of bits to count
@@ -98,8 +98,8 @@ try{ statement; } catch (std::exception& e)             \
  * @returns The number of valid bits in [0, num_rows) in the host vector of
  * masks
  **/
-gdf_size_type count_valid_bits_host(
-  std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows);
+cudf::size_type count_valid_bits_host(
+  std::vector<cudf::valid_type> const& masks, cudf::size_type const num_rows);
 
 
 /**
@@ -112,7 +112,7 @@ gdf_size_type count_valid_bits_host(
 template <typename Element>
 void print_typed_column(
     const Element *    __restrict__  col_data,
-    gdf_valid_type *   __restrict__  validity_mask,
+    cudf::valid_type *   __restrict__  validity_mask,
     const size_t                     size_in_elements,
     unsigned                         min_element_print_width = 1)
 {
@@ -130,7 +130,7 @@ void print_typed_column(
   cudaMemcpy(h_data.data(), col_data, size_in_elements * sizeof(Element), cudaMemcpyDefault);
 
   const size_t num_valid_type_elements = gdf_valid_allocation_size(size_in_elements);
-  std::vector<gdf_valid_type> h_mask(num_valid_type_elements );
+  std::vector<cudf::valid_type> h_mask(num_valid_type_elements );
   if(nullptr != validity_mask)
   {
     cudaMemcpy(h_mask.data(), validity_mask, num_valid_type_elements, cudaMemcpyDefault);
@@ -198,7 +198,7 @@ void print_gdf_column(gdf_column const *column, unsigned min_element_print_width
  * in the last byte, if length % 8 != 0. Such slack bits are ignored and
  * not printed. Usually, length is the number of elements of a gdf_column.
  * ---------------------------------------------------------------------------**/
-void print_valid_data(const gdf_valid_type* validity_mask, const size_t length,
+void print_valid_data(const cudf::valid_type* validity_mask, const size_t length,
                       std::ostream& stream = std::cout);
 
 /* --------------------------------------------------------------------------*/
@@ -212,7 +212,7 @@ void print_valid_data(const gdf_valid_type* validity_mask, const size_t length,
 /* ----------------------------------------------------------------------------*/
 template <typename ColumnType>
 gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
-                                  std::vector<gdf_valid_type> const & valid_vector = std::vector<gdf_valid_type>())
+                                  std::vector<cudf::valid_type> const & valid_vector = std::vector<cudf::valid_type>())
 {
   // Get the corresponding gdf_dtype for the ColumnType
   gdf_dtype gdf_col_type{cudf::gdf_dtype_of<ColumnType>()};
@@ -243,8 +243,8 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   // and copy its contents from the host vector
   if(valid_vector.size() > 0)
   {
-    RMM_ALLOC((void**)&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type), 0);
-    cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
+    RMM_ALLOC((void**)&(the_column->valid), valid_vector.size() * sizeof(cudf::valid_type), 0);
+    cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(cudf::valid_type), cudaMemcpyHostToDevice);
     the_column->null_count = (host_vector.size() - count_valid_bits_host(valid_vector, host_vector.size()));
   }
   else
@@ -265,7 +265,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
   const size_t num_masks = gdf_valid_allocation_size(num_rows);
 
   // Initialize the valid mask for this column using the initializer
-  std::vector<gdf_valid_type> valid_masks(num_masks,0);
+  std::vector<cudf::valid_type> valid_masks(num_masks,0);
   for(size_t row = 0; row < num_rows; ++row){
     if(true == bit_initializer(row, col_index))
     {
