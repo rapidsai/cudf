@@ -40,12 +40,12 @@ namespace compound {
  * ----------------------------------------------------------------------------**/
  template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
 gdf_scalar compound_reduction(gdf_column const& col, gdf_dtype const output_dtype,
-    gdf_size_type ddof, cudaStream_t stream)
+    cudf::size_type ddof, cudaStream_t stream)
 {
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
     scalar.is_valid = false; // the scalar is not valid for error case
-    gdf_size_type valid_count = col.size - col.null_count;
+    cudf::size_type valid_count = col.size - col.null_count;
 
     using intermediateOp = typename Op::template intermediate<ResultType>;
     // IntermediateType: intermediate structure, output type of `reduction_op` and
@@ -100,7 +100,7 @@ private:
 
 public:
     template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
+    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
             return compound_reduction<ElementType, ResultType, Op, true >(col, output_dtype, ddof, stream);
@@ -110,7 +110,7 @@ public:
     }
 
     template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr >
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
+    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         CUDF_FAIL("Unsupported output data type");
     }
@@ -130,14 +130,14 @@ private:
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
+    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         return cudf::type_dispatcher(output_dtype,
             result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
+    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");

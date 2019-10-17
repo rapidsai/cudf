@@ -23,7 +23,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/nvtx/nvtx_utils.h>
+#include <utilities/nvtx/legacy/nvtx_utils.h>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/legacy/gather.hpp>
@@ -37,7 +37,7 @@
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-using output_index_type = gdf_index_type;
+using output_index_type = cudf::size_type;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
 namespace cudf {
@@ -55,7 +55,7 @@ namespace cudf {
 /* ----------------------------------------------------------------------------*/
 template <typename data_type>
 gdf_error allocValueBuffer(data_type ** buffer,
-                           const gdf_size_type buffer_length,
+                           const cudf::size_type buffer_length,
                            const data_type value) 
 {
     RMM_TRY( RMM_ALLOC((void**)buffer, buffer_length*sizeof(data_type), 0) );
@@ -76,7 +76,7 @@ gdf_error allocValueBuffer(data_type ** buffer,
 /* ----------------------------------------------------------------------------*/
 template <typename data_type>
 gdf_error allocSequenceBuffer(data_type ** buffer,
-                              const gdf_size_type buffer_length) 
+                              const cudf::size_type buffer_length) 
 {
     RMM_TRY( RMM_ALLOC((void**)buffer, buffer_length*sizeof(data_type), 0) );
     thrust::sequence(thrust::device, *buffer, *buffer + buffer_length);
@@ -99,8 +99,8 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
  */
 /* ----------------------------------------------------------------------------*/
 void trivial_full_join(
-        const gdf_size_type left_size,
-        const gdf_size_type right_size,
+        const cudf::size_type left_size,
+        const cudf::size_type right_size,
         gdf_column *left_result,
         gdf_column *right_result) {
     // Deduce the type of the output gdf_columns
@@ -115,7 +115,7 @@ void trivial_full_join(
 
     output_index_type *l_ptr{nullptr};
     output_index_type *r_ptr{nullptr};
-    gdf_size_type result_size{0};
+    cudf::size_type result_size{0};
     CUDF_EXPECTS((left_size != 0) || (right_size != 0), "Dataset is empty");
     if (left_size == 0) {
         allocValueBuffer(&l_ptr, right_size,
@@ -261,17 +261,17 @@ void join_call(cudf::table const& left, cudf::table const& right,
  *---------------------------------------------------------------------------**/
 
 auto non_common_column_indices(
-    gdf_size_type num_columns,
-    std::vector<gdf_size_type> const& common_column_indices) {
+    cudf::size_type num_columns,
+    std::vector<cudf::size_type> const& common_column_indices) {
   CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
                "Too many columns in common");
-  std::vector<gdf_size_type> all_column_indices(num_columns);
+  std::vector<cudf::size_type> all_column_indices(num_columns);
   std::iota(std::begin(all_column_indices), std::end(all_column_indices), 0);
-  std::vector<gdf_size_type> sorted_common_column_indices{
+  std::vector<cudf::size_type> sorted_common_column_indices{
       common_column_indices};
   std::sort(std::begin(sorted_common_column_indices),
             std::end(sorted_common_column_indices));
-  std::vector<gdf_size_type> non_common_column_indices(num_columns -
+  std::vector<cudf::size_type> non_common_column_indices(num_columns -
                                                 common_column_indices.size());
   std::set_difference(std::cbegin(all_column_indices),
                       std::cend(all_column_indices),
@@ -318,14 +318,14 @@ template <JoinType join_type, typename index_type>
 cudf::table construct_join_output_df(
         cudf::table const& left, 
         cudf::table const& right,
-        std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+        std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
         gdf_column * left_indices,
         gdf_column * right_indices) {
 
     PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
     //create left and right input table with columns not joined on
-    std::vector<gdf_size_type> left_columns_in_common (columns_in_common.size());
-    std::vector<gdf_size_type> right_columns_in_common (columns_in_common.size());
+    std::vector<cudf::size_type> left_columns_in_common (columns_in_common.size());
+    std::vector<cudf::size_type> right_columns_in_common (columns_in_common.size());
 
     for (unsigned int i = 0; i < columns_in_common.size(); ++i)
     {
@@ -334,12 +334,12 @@ cudf::table construct_join_output_df(
     }
   
     // Gathering the indices that are not in common
-    std::vector<gdf_size_type> left_non_common_indices =
+    std::vector<cudf::size_type> left_non_common_indices =
                                     non_common_column_indices(left.num_columns(), left_columns_in_common);
-    std::vector<gdf_size_type> right_non_common_indices =
+    std::vector<cudf::size_type> right_non_common_indices =
                                      non_common_column_indices(right.num_columns(), right_columns_in_common);
 
-    gdf_size_type join_size = left_indices->size;
+    cudf::size_type join_size = left_indices->size;
     // Update first set of type and type infos from left
     std::vector<gdf_dtype> result_dtypes = cudf::column_dtypes(left);
     std::vector<gdf_dtype_extra_info> result_dtype_infos = cudf::column_dtype_infos(left);
@@ -367,7 +367,7 @@ cudf::table construct_join_output_df(
 
     // Construct the right columns
     if (not right_non_common_indices.empty()) {
-      std::vector<gdf_size_type> result_right_non_common_indices (right_non_common_indices.size());
+      std::vector<cudf::size_type> result_right_non_common_indices (right_non_common_indices.size());
       std::iota(std::begin(result_right_non_common_indices),
                 std::end(result_right_non_common_indices), left.num_columns());
       cudf::table right_source_table = right.select(right_non_common_indices);
@@ -451,9 +451,9 @@ template <JoinType join_type, typename index_type>
 cudf::table join_call_compute_df(
                          cudf::table const& left, 
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context) {
  
@@ -463,7 +463,7 @@ cudf::table join_call_compute_df(
   CUDF_EXPECTS(std::none_of(std::cbegin(left), std::cend(left), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported left column dtype");
   CUDF_EXPECTS(std::none_of(std::cbegin(right), std::cend(right), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported right column dtype");
 
-  std::vector<gdf_size_type> right_columns_in_common (columns_in_common.size());
+  std::vector<cudf::size_type> right_columns_in_common (columns_in_common.size());
 
   for (unsigned int i = 0; i < columns_in_common.size(); ++i)
   {
@@ -472,7 +472,7 @@ cudf::table join_call_compute_df(
 
   cudf::table empty_left = cudf::empty_like(left);
   cudf::table empty_right = cudf::empty_like(right);
-  std::vector <gdf_size_type> right_non_common_indices = non_common_column_indices(right.num_columns(),
+  std::vector <cudf::size_type> right_non_common_indices = non_common_column_indices(right.num_columns(),
                                                                          right_columns_in_common);;
   cudf::table tmp_right_table = empty_right.select(right_non_common_indices);
   cudf::table tmp_table = cudf::concat(empty_left, tmp_right_table);
@@ -537,8 +537,8 @@ cudf::table join_call_compute_df(
         int col_width = cudf::byte_width(*new_left_column_ptr);
         RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
         if(left_original_column->valid != nullptr){
-          RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(left_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_left_column_ptr->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(left_original_column->size),cudaMemcpyDeviceToDevice) );
+          RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->valid), sizeof(cudf::valid_type)*gdf_valid_allocation_size(left_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_left_column_ptr->valid, left_original_column->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(left_original_column->size),cudaMemcpyDeviceToDevice) );
         }else{
           new_left_column_ptr->valid = nullptr;
         }
@@ -547,8 +547,8 @@ cudf::table join_call_compute_df(
 
         RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
         if(right_original_column->valid != nullptr){
-          RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(right_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_right_column_ptr->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(right_original_column->size),cudaMemcpyDeviceToDevice) );
+          RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->valid), sizeof(cudf::valid_type)*gdf_valid_allocation_size(right_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_right_column_ptr->valid, right_original_column->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(right_original_column->size),cudaMemcpyDeviceToDevice) );
         }else{
           new_right_column_ptr->valid = nullptr;
         }
@@ -625,9 +625,9 @@ cudf::table join_call_compute_df(
 cudf::table left_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::LEFT_JOIN, output_index_type>(
@@ -643,9 +643,9 @@ cudf::table left_join(
 cudf::table inner_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::INNER_JOIN, output_index_type>(
@@ -661,9 +661,9 @@ cudf::table inner_join(
 cudf::table full_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::FULL_JOIN, output_index_type>(

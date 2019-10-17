@@ -30,7 +30,7 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         bool                delim_whitespace
         bool                skipinitialspace
         bool                skip_blank_lines
-        gdf_size_type       header
+        size_type       header
         vector[string]      names
         vector[string]      dtype
         vector[int]         use_cols_indexes
@@ -67,13 +67,13 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         cudf_table read_byte_range(size_t offset, size_t size) except +
 
         cudf_table read_rows(
-            gdf_size_type num_skip_header,
-            gdf_size_type num_skip_footer,
-            gdf_size_type num_rows
+            size_type num_skip_header,
+            size_type num_skip_footer,
+            size_type num_rows
         ) except +
 
 cdef extern from "cudf/cudf.h" nogil:
-    # See cpp/include/cudf/io_types.h:146
+
     ctypedef struct csv_write_arg:
         # Arguments to csv writer function
         gdf_column** columns

@@ -68,10 +68,10 @@ struct expected_result_type<SourceType, MAX> {
 };
 
 // Always use int64_t accumulator for COUNT
-// TODO Use `gdf_size_type`
+// TODO Use `cudf::size_type`
 template <typename SourceType>
 struct expected_result_type<SourceType, COUNT> {
-  using type = gdf_size_type;
+  using type = cudf::size_type;
 };
 
 // Always use `double` as output of MEAN

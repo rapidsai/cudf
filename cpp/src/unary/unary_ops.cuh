@@ -28,7 +28,7 @@ namespace unary {
 
 template<typename T, typename Tout, typename F>
 __global__
-void gpu_op_kernel(const T *data, gdf_size_type size,
+void gpu_op_kernel(const T *data, cudf::size_type size,
                    Tout *results, F functor) {
     int tid = threadIdx.x;
     int blkid = blockIdx.x;

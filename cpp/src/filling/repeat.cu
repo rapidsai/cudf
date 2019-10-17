@@ -35,7 +35,7 @@ namespace cudf {
 namespace detail {
 
 cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t stream = 0) {
-  CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
+  CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),
     "Count column should be of index type");
   CUDF_EXPECTS(in.num_rows() == count.size, "in and count must have equal size");
   CUDF_EXPECTS(not has_nulls(count), "count cannot contain nulls");
@@ -45,14 +45,14 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t 
   }
   
   auto exec_policy = rmm::exec_policy(stream)->on(stream);
-  rmm::device_vector<gdf_size_type> offset(count.size);
-  auto count_data = static_cast <gdf_size_type*> (count.data);
+  rmm::device_vector<cudf::size_type> offset(count.size);
+  auto count_data = static_cast <cudf::size_type*> (count.data);
   
   thrust::inclusive_scan(exec_policy, count_data, count_data + count.size, offset.begin());
 
-  gdf_size_type output_size = offset.back();
+  cudf::size_type output_size = offset.back();
 
-  rmm::device_vector<gdf_size_type> indices(output_size);
+  rmm::device_vector<cudf::size_type> indices(output_size);
   thrust::upper_bound(exec_policy,
                       offset.begin(), offset.end(),
                       thrust::make_counting_iterator(0),
@@ -67,7 +67,7 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t 
 }
 
 cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t stream = 0) {
-  CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
+  CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),
     "Count value should be of index type");
   CUDF_EXPECTS(count.is_valid, "count cannot be null");
 
@@ -75,15 +75,15 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t 
     return cudf::empty_like(in);
   }
   
-  gdf_size_type stride = count.data.si32;
+  cudf::size_type stride = count.data.si32;
 
-  gdf_size_type output_size = stride * in.num_rows();
+  cudf::size_type output_size = stride * in.num_rows();
   auto offset = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     [stride] __device__ (auto i) { return (i+1) * stride; }
   );
 
-  rmm::device_vector<gdf_size_type> indices(output_size);
+  rmm::device_vector<cudf::size_type> indices(output_size);
   thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                       offset, offset + in.num_rows(),
                       thrust::make_counting_iterator(0),

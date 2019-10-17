@@ -20,7 +20,7 @@
 #include <memory>
 #include <utility>
 
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/types.h>
 #include <table/legacy/device_table.cuh>
 
