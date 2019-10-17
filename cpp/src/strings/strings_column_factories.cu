@@ -115,11 +115,12 @@ std::unique_ptr<column> make_strings_column(
     CUDA_TRY(cudaMemcpyAsync( offsets_view.data<int32_t>(), offsets.data().get(),
                               (num_strings+1)*sizeof(int32_t),
                               cudaMemcpyDeviceToDevice, stream ));
-
     // build null bitmask
     rmm::device_buffer null_mask{
         valid_mask.data().get(),
-        valid_mask.size() * sizeof(decltype(valid_mask.front()))};
+        valid_mask.size() * sizeof(bitmask_type)}; // Or this works too: sizeof(typename std::remove_reference_t<decltype(valid_mask)>::value_type)
+                                                   // Following give the incorrect value of 8 instead of 4 because of smart references:
+                                                   // sizeof(valid_mask[0]), sizeof(decltype(valid_mask.front()))
 
     // build chars column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
