@@ -3887,7 +3887,9 @@ def test_df_astype_to_categorical_ordered(ordered):
         ),
         pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
         "ignore",
-        "warn",
+        pytest.param(
+            "warn", marks=pytest.mark.filterwarnings("ignore:Traceback")
+        ),
     ],
 )
 def test_series_astype_error_handling(errors):
