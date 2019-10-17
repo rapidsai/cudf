@@ -79,6 +79,20 @@ column_view::column_view(data_type type, size_type size, void const* data,
   }
 }
 
+// Slicer for immutable view
+std::unique_ptr<column_view> column_view::slice(size_type slice_offset, 
+                                                size_type slice_size) const {
+   size_type expecetd_size = offset() + slice_offset + slice_size;
+   CUDF_EXPECTS(slice_size >= 0, "size should be non negative value");
+   CUDF_EXPECTS(expecetd_size <= size(), "Expected slice exceeeds the size of the column_view");
+
+   return std::make_unique<column_view>(type(), slice_size, 
+                                        head(), null_mask(),
+                                        cudf::UNKNOWN_NULL_COUNT, 
+                                        offset() + slice_offset, _children);
+}
+
+
 // Mutable view constructor
 mutable_column_view::mutable_column_view(
     data_type type, size_type size, void* data, bitmask_type* null_mask,
