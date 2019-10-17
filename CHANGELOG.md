@@ -27,6 +27,7 @@
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
 - PR #3067 Java method to return size of device memory buffer
+- PR #3083 Improved some binary operation tests to include null testing.
 
 ## Bug Fixes
 
