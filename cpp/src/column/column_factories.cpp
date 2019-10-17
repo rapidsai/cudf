@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <utilities/integer_utils.hpp>
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
@@ -40,6 +41,16 @@ std::size_t size_of(data_type element_type) {
   return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
 }
 
+
+// Return size in byte of data elements, including alignment padding
+std::size_t data_allocation_size(data_type type, size_type size)
+{
+  // Align size of column data allocations to 64-bit to enable data loading
+  // optimizations without triggering bounds checking tools
+  return cudf::util::align_up(size * cudf::size_of(type), sizeof(uint64_t));
+}
+
+
 // Allocate storage for a specified number of numeric elements
 std::unique_ptr<column> make_numeric_column(
     data_type type, size_type size, mask_state state, cudaStream_t stream,
@@ -47,7 +58,7 @@ std::unique_ptr<column> make_numeric_column(
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
 
   return std::make_unique<column>(
-      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      type, size, rmm::device_buffer{data_allocation_size(type, size), stream, mr},
       create_null_mask(size, state, stream, mr), state_null_count(state, size),
       std::vector<std::unique_ptr<column>>{});
 }
@@ -59,7 +70,7 @@ std::unique_ptr<column> make_timestamp_column(
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
 
   return std::make_unique<column>(
-      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      type, size, rmm::device_buffer{data_allocation_size(type, size), stream, mr},
       create_null_mask(size, state, stream, mr), state_null_count(state, size),
       std::vector<std::unique_ptr<column>>{});
 }

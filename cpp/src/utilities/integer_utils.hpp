@@ -110,6 +110,15 @@ is_a_power_of_two(I val) noexcept
 }
 
 
+/**
+ * Align up to a power of 2, align_bytes is expected to be a nonzero power of 2
+ */
+inline std::size_t align_up(std::size_t v, std::size_t align_bytes) noexcept
+{
+    return (v + (align_bytes - 1)) & ~(align_bytes - 1);
+}
+
+
 } // namespace util
 
 } // namespace cudf
