@@ -274,7 +274,6 @@ class DataFrame(object):
         )
         return list(o)
 
-
     def __setattr__(self, key, col):
         if getattr(self, "_allow_setattr_to_setitem", False):
             # if an attribute already exists, set it.
@@ -287,16 +286,17 @@ class DataFrame(object):
 
             # if a column already exists, set it.
             try:
-                self[key] # __getitem__ to verify key exists
+                self[key]  # __getitem__ to verify key exists
                 self[key] = col
                 return
             except KeyError:
                 pass
 
             warnings.warn(
-                "Columns may not be added to a DataFrame using a new " +
-                "attribute name. A new attribute will be created: '%s'" % key,
-                UserWarning
+                "Columns may not be added to a DataFrame using a new "
+                + "attribute name. A new attribute will be created: '%s'"
+                % key,
+                UserWarning,
             )
 
         object.__setattr__(self, key, col)
