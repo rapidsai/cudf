@@ -1,4 +1,5 @@
 #include "gather.cuh"
+#include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/table/table_view.hpp>
@@ -27,7 +28,7 @@ struct dispatch_map_type {
     map_type const * typed_gather_map = gather_map.data<map_type>();
 
     if (check_bounds) {
-      gdf_index_type begin = (allow_negative_indices) ? -source_table.num_rows() : 0;
+      cudf::size_type begin = (allow_negative_indices) ? -source_table.num_rows() : 0;
       CUDF_EXPECTS(
 	  destination_table.num_rows() == thrust::count_if(
 	      rmm::exec_policy()->on(0),
