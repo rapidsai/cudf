@@ -516,7 +516,7 @@ class Column(object):
                 else:
                     data_size = self.data.size
                 bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask.to_gpu_array()
+                    data_size, self.mask.mem
                 )
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
@@ -612,8 +612,8 @@ class Column(object):
         if not self.has_null_mask:
             return self
         out = cudautils.fillna(
-            data=self.data.to_gpu_array(),
-            mask=self.mask.to_gpu_array(),
+            data=self.data.mem,
+            mask=self.mask.mem,
             value=value,
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
@@ -664,8 +664,8 @@ class Column(object):
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
     def _copy_to_dense_buffer(self):
-        data = self.data.to_gpu_array()
-        mask = self.mask.to_gpu_array()
+        data = self.data.mem
+        mask = self.mask.mem
         nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
         return Buffer(mem, size=nnz, capacity=mem.size)
 
@@ -1414,7 +1414,7 @@ def column_applymap(udf, column, out_dtype):
     """
     core = njit(udf)
     results = rmm.device_array(shape=len(column), dtype=out_dtype)
-    values = column.data.to_gpu_array()
+    values = column.data.mem
     if column.mask:
         # For masked columns
         @cuda.jit
@@ -1427,7 +1427,7 @@ def column_applymap(udf, column, out_dtype):
                     # call udf
                     results[i] = core(values[i])
 
-        masks = column.mask.to_gpu_array()
+        masks = column.mask.mem
         kernel_masked.forall(len(column))(values, masks, results)
     else:
         # For non-masked columns
