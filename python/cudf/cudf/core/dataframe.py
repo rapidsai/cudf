@@ -2545,6 +2545,7 @@ class DataFrame(object):
         df.index.name = None
 
         if len(idx_col_names) > 1:
+            df.index._source_data.columns = index_frame_l.columns
             df.index.names = index_frame_l.columns
 
         return df
