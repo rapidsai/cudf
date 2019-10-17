@@ -7,6 +7,7 @@
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3094 Adding `any` and `all` support from libcudf
+- PR #3130 Define and implement new `column_wrapper`
 
 
 ## Improvements
