@@ -20,6 +20,7 @@
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/column_wrapper.hpp>
 #include "./utilities.h"
 
 #include <vector>
@@ -31,39 +32,39 @@ struct StringAttributesTest : public cudf::test::BaseFixture {};
 TEST_F(StringAttributesTest, StringDataCounts)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
-    auto strings_column = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(strings_column->view());
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
 
     std::vector<cudf::bitmask_type> h_nulls{ 123 };
     {
-        std::vector<int32_t> h_expected{ 3, 2, 0, 0, 2, 3, 3 };
-        auto d_expected = cudf::test::create_numeric_column(h_expected, h_nulls, 1);
-
         auto results = cudf::strings::characters_counts(strings_view);
-        cudf::test::expect_columns_equal(*results, *d_expected);
+
+        cudf::test::fixed_width_column_wrapper<int32_t> expected{{ 3, 2, 0, 0, 2, 3, 3 },
+                                                                 { 1, 1, 0, 1, 1, 1, 1 }};
+        cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        std::vector<int32_t> h_expected{ 3, 2, 0, 0, 2, 3, 6 };
-        auto d_expected = cudf::test::create_numeric_column(h_expected, h_nulls, 1);
-
         auto results = cudf::strings::bytes_counts(strings_view);
-        cudf::test::expect_columns_equal(*results, *d_expected);
+
+        cudf::test::fixed_width_column_wrapper<int32_t> expected{{ 3, 2, 0, 0, 2, 3, 6 },
+                                                                 { 1, 1, 0, 1, 1, 1, 1 }};
+        cudf::test::expect_columns_equal(*results, expected);
     }
 }
 
 TEST_F(StringAttributesTest, CodePoints)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
-    auto strings_column = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(strings_column->view());
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
 
     {
-        std::vector<int32_t> h_expected{ 101, 101, 101, 98, 98, 97, 97, 98, 98, 98, 50089, 50089, 50089 };
-        std::vector<cudf::bitmask_type> h_nulls{ 0xFF };
-        auto d_expected = cudf::test::create_numeric_column(h_expected, h_nulls, 0);
-
         auto results = cudf::strings::code_points(strings_view);
-        cudf::test::expect_columns_equal(*results, *d_expected);
+
+        cudf::test::fixed_width_column_wrapper<int32_t> expected{ 101, 101, 101, 98, 98, 97, 97, 98, 98, 98, 50089, 50089, 50089 };
+        cudf::test::expect_columns_equal(*results, expected);
     }
 }
 
