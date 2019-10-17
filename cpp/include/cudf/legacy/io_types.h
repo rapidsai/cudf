@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+
 /*
  * @brief Enumeration of supported input types for cudf reader interfaces
  */
