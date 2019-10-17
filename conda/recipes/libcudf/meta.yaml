@@ -61,11 +61,12 @@ test:
     - test -f $PREFIX/include/cudf/legacy/functions.h
     - test -f $PREFIX/include/cudf/gis.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
-    - test -f $PREFIX/include/cudf/io_functions.h
-    - test -f $PREFIX/include/cudf/io_functions.hpp
-    - test -f $PREFIX/include/cudf/io_readers.hpp
-    - test -f $PREFIX/include/cudf/io_types.h
-    - test -f $PREFIX/include/cudf/io_types.hpp
+    - test -f $PREFIX/include/cudf/legacy/io_functions.h
+    - test -f $PREFIX/include/cudf/legacy/io_functions.hpp
+    - test -f $PREFIX/include/cudf/legacy/io_readers.hpp
+    - test -f $PREFIX/include/cudf/legacy/io_types.h
+    - test -f $PREFIX/include/cudf/legacy/io_types.hpp
+    - test -f $PREFIX/include/cudf/legacy/io_writers.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/predicates.hpp

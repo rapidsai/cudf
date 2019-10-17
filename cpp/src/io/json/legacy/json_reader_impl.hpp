@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "../csv/type_conversion.cuh"
+#include "../../csv/legacy/type_conversion.cuh"
 
 #include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
