@@ -20,8 +20,9 @@
 #include <string>
 #include <vector>
 
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
-#include "cudf.h"
 
 namespace cudf {
 namespace io {
