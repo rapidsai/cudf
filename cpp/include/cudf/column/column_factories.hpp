@@ -117,9 +117,9 @@ std::unique_ptr<column> make_strings_column(
  *                This char array is expected to be UTF-8 encoded characters.
  * @param offsets The array of byte offsets in device memory.
  *                The number of elements is one more than the total number
- *                of strings so the `offsets.last()` is the total
+ *                of strings so the `offsets.back()` is the total
  *                number of bytes in the strings array.
- *                `offsets.first()` must always be 0 to point to the beginning
+ *                `offsets.front()` must always be 0 to point to the beginning
  *                of `strings`.
  * @param null_mask Device vector containing the null element indicator bitmask. 
  *                  Arrow format for nulls is used for interpeting this bitmask.
@@ -158,9 +158,9 @@ std::unique_ptr<column> make_strings_column(
  *                This char array is expected to be UTF-8 encoded characters.
  * @param offsets The array of byte offsets in host memory.
  *                The number of elements is one more than the total number
- *                of strings so the `offsets.last()` is the total
+ *                of strings so the `offsets.back()` is the total
  *                number of bytes in the strings array.
- *                `offsets.first()` must always be 0 to point to the beginning
+ *                `offsets.front()` must always be 0 to point to the beginning
  *                of `strings`.
  * @param null_mask Host vector containing the null element indicator bitmask. 
  *                  Arrow format for nulls is used for interpeting this bitmask.
