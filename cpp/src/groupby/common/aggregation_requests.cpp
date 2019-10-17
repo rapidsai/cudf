@@ -17,7 +17,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/binaryop.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
@@ -64,7 +64,7 @@ std::vector<SimpleAggRequestCounter> compound_to_simple(
     while (not ops.empty()) {
       auto op = *ops.begin();
       simple_requests.emplace_back(std::make_pair(col, op),
-                                   static_cast<gdf_size_type>(ops.count(op)));
+                                   static_cast<cudf::size_type>(ops.count(op)));
       ops.erase(op);
     }
   }
@@ -99,7 +99,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t strea
   if (cudf::is_nullable(sum) or cudf::is_nullable(count)) {
     RMM_TRY(RMM_ALLOC(
         &avg->valid,
-        sizeof(gdf_size_type) * gdf_valid_allocation_size(sum.size), stream));
+        sizeof(cudf::size_type) * gdf_valid_allocation_size(sum.size), stream));
   }
   cudf::binary_operation(avg, &sum, &count, avg_binop);
   return avg;
@@ -111,7 +111,7 @@ table compute_original_requests(
     table simple_outputs, cudaStream_t stream) {
   // Maps the requested simple aggregation to a resulting output column paired
   // with a counter of how many times said column is needed
-  std::map<AggRequestType, std::pair<gdf_column*, gdf_size_type>>
+  std::map<AggRequestType, std::pair<gdf_column*, cudf::size_type>>
       simple_requests_to_outputs;
 
   for (std::size_t i = 0; i < simple_requests.size(); ++i) {

@@ -19,9 +19,9 @@
 #include <gtest/gtest.h>
 
 #include <tests/groupby/without_agg/groupby_test_helpers.cuh>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <vector>
 
 template <typename T>

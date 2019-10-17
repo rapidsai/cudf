@@ -50,10 +50,10 @@ enum class JoinType {
 template<typename multimap_type>
 __global__ void build_hash_table( multimap_type multi_map,
                                   device_table build_table,
-                                  const gdf_size_type build_table_num_rows,
+                                  const cudf::size_type build_table_num_rows,
                                   gdf_error * gdf_error_code)
 {
-    gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+    cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
     while (i < build_table_num_rows) {
       // Compute the hash value of this row
@@ -125,8 +125,8 @@ template< JoinType join_type,
 __global__ void compute_join_output_size( multimap_type multi_map,
                                           device_table build_table,
                                           device_table probe_table,
-                                          const gdf_size_type probe_table_num_rows,
-                                          gdf_size_type* output_size)
+                                          const cudf::size_type probe_table_num_rows,
+                                          cudf::size_type* output_size)
 {
   // This kernel probes multiple elements in the probe_table and store the number of matches found inside a register.
   // A block reduction is used at the end to calculate the matches per thread block, and atomically add to the global
@@ -134,13 +134,13 @@ __global__ void compute_join_output_size( multimap_type multi_map,
   // Compared to probing one element per thread, this implementation improves performance by reducing atomic adds to
   // the shared memory counter.
 
-  gdf_size_type thread_counter {0};
-  const gdf_size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  const gdf_size_type stride = blockDim.x * gridDim.x;
+  cudf::size_type thread_counter {0};
+  const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  const cudf::size_type stride = blockDim.x * gridDim.x;
   const auto unused_key = multi_map.get_unused_key();
   const auto end = multi_map.end();
 
-  for (gdf_size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows; probe_row_index += stride) {
+  for (cudf::size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows; probe_row_index += stride) {
 
     auto found = end;
 
@@ -204,9 +204,9 @@ __global__ void compute_join_output_size( multimap_type multi_map,
     }
   }
 
-  typedef cub::BlockReduce<gdf_size_type, block_size> BlockReduce;
+  typedef cub::BlockReduce<cudf::size_type, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  gdf_size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
+  cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   __syncthreads();
 
@@ -242,21 +242,21 @@ template< JoinType join_type,
           typename multimap_type,
           typename key_type,
           typename output_index_type,
-          gdf_size_type block_size,
-          gdf_size_type output_cache_size>
+          cudf::size_type block_size,
+          cudf::size_type output_cache_size>
 __global__ void probe_hash_table( multimap_type multi_map,
                                   device_table build_table,
                                   device_table probe_table,
-                                  const gdf_size_type probe_table_num_rows,
+                                  const cudf::size_type probe_table_num_rows,
                                   output_index_type * join_output_l,
                                   output_index_type * join_output_r,
-                                  gdf_size_type* current_idx,
-                                  const gdf_size_type max_size,
+                                  cudf::size_type* current_idx,
+                                  const cudf::size_type max_size,
                                   bool flip_results,
                                   const output_index_type offset = 0)
 {
   constexpr int num_warps = block_size/warp_size;
-  __shared__ gdf_size_type current_idx_shared[num_warps];
+  __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
   __shared__ output_index_type join_shared_r[num_warps][output_cache_size];
   output_index_type *output_l = join_output_l, *output_r = join_output_r;
@@ -370,7 +370,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
         const unsigned int activemask = __ballot(1);
 #endif
         int num_threads = __popc(activemask);
-        gdf_size_type output_offset = 0;
+        cudf::size_type output_offset = 0;
 
         if ( 0 == lane_id )
         {
@@ -381,7 +381,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
 
         for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
         {
-          gdf_size_type thread_offset = output_offset + shared_out_idx;
+          cudf::size_type thread_offset = output_offset + shared_out_idx;
           if (thread_offset < max_size) {
             output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
             output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
@@ -408,7 +408,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
       const unsigned int activemask = __ballot(1);
 #endif
       int num_threads = __popc(activemask);
-      gdf_size_type output_offset = 0;
+      cudf::size_type output_offset = 0;
       if ( 0 == lane_id )
       {
         output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
@@ -418,7 +418,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
 
       for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
       {
-        gdf_size_type thread_offset = output_offset + shared_out_idx;
+        cudf::size_type thread_offset = output_offset + shared_out_idx;
         if (thread_offset < max_size) 
         {
           output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];

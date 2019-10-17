@@ -445,12 +445,7 @@ def test_groupby_external_series(series):
     assert_eq(pxx, gxx)
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="cuDF does not support arbitrary series "
-    "index lengths for groupby",
-)
-@pytest.mark.parametrize("series", [[0, 1], [1, 1, 1, 1]])
+@pytest.mark.parametrize("series", [[0.0, 1.0], [1.0, 1.0, 1.0, 1.0]])
 def test_groupby_external_series_incorrect_length(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
@@ -903,3 +898,46 @@ def test_groupby_categorical_from_string():
         cudf.DataFrame({"val": gdf["val"]}, index=gdf["id"]),
         gdf.groupby("id").sum(),
     )
+
+
+def test_groupby_arbitrary_length_series():
+    gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
+    gsr = cudf.Series([1.0, 2.0, 2.0], index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
+
+    expect = pdf.groupby(psr).sum()
+    got = gdf.groupby(gsr).sum()
+
+    assert_eq(expect, got)
+
+
+def test_groupby_series_same_name_as_dataframe_column():
+    gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
+    gsr = cudf.Series([1.0, 2.0, 2.0], name="a", index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
+
+    expect = pdf.groupby(psr).sum()
+    got = gdf.groupby(gsr).sum()
+
+    assert_eq(expect, got)
+
+
+def test_group_by_series_and_column_name_in_by():
+    gdf = cudf.DataFrame(
+        {"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]}, index=[1, 2, 3]
+    )
+    gsr0 = cudf.Series([0.0, 1.0, 2.0], name="a", index=[1, 2, 3])
+    gsr1 = cudf.Series([0.0, 1.0, 3.0], name="b", index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr0 = gsr0.to_pandas()
+    psr1 = gsr1.to_pandas()
+
+    expect = pdf.groupby(["x", psr0, psr1]).sum()
+    got = gdf.groupby(["x", gsr0, gsr1]).sum()
+
+    assert_eq(expect, got)

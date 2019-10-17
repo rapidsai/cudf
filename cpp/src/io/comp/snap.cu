@@ -255,7 +255,7 @@ snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int coun
 
     if (!t)
     {
-        const uint8_t *src = reinterpret_cast<uint8_t *>(inputs[blockIdx.x].srcDevice);
+        const uint8_t *src = reinterpret_cast<const uint8_t *>(inputs[blockIdx.x].srcDevice);
         uint32_t src_len = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
         uint8_t *dst = reinterpret_cast<uint8_t *>(inputs[blockIdx.x].dstDevice);
         uint32_t dst_len = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);

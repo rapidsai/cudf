@@ -284,6 +284,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the Device memory buffer size.
+   */
+  public long getDeviceMemorySize() {
+    return offHeap != null ? offHeap.getDeviceMemoryLength(type) : 0;
+  }
+
+  /**
    * Retrieve the number of characters in each string. Null strings will have value of null.
    *
    * @return ColumnVector holding length of string at index 'i' in the original vector
@@ -609,6 +616,32 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector isNotNull() {
     return validityAsBooleanVector();
+  }
+
+  /**
+   * Returns a vector with all values "oldValues[i]" replaced with "newValues[i]".
+   * Warning:
+   *    Currently this function doesn't work for Strings or StringCategories.
+   *    NaNs can't be replaced in the original vector but regular values can be replaced with NaNs
+   *    Nulls can't be replaced in the original vector but regular values can be replaced with Nulls
+   *    Mixing of types isn't allowed, the resulting vector will be the same type as the original.
+   *      e.g. You can't replace an integer vector with values from a long vector
+   *
+   * Usage:
+   *    this = {1, 4, 5, 1, 5}
+   *    oldValues = {1, 5, 7}
+   *    newValues = {2, 6, 9}
+   *
+   *    result = this.findAndReplaceAll(oldValues, newValues);
+   *    result = {2, 4, 6, 2, 6}  (1 and 5 replaced with 2 and 6 but 7 wasn't found so no change)
+   *
+   * @param oldValues - A vector containing values that should be replaced
+   * @param newValues - A vector containing new values
+   * @return - A new vector containing the old values replaced with new values
+   */
+  public ColumnVector findAndReplaceAll(ColumnVector oldValues, ColumnVector newValues) {
+    assert this.type != DType.STRING_CATEGORY : "STRING_CATEGORY isn't supported at this time";
+    return new ColumnVector(findAndReplaceAll(oldValues.getNativeCudfColumnAddress(), newValues.getNativeCudfColumnAddress(), this.getNativeCudfColumnAddress()));
   }
 
   /**
@@ -1447,7 +1480,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestamp(TimeUnit unit) {
-    if (type == DType.STRING) {
+    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
       return asTimestamp(unit, "%Y-%m-%dT%H:%M:%SZ%f");
     }
     return castTo(DType.TIMESTAMP, unit);
@@ -1484,8 +1517,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         original column vector.
    */
   public ColumnVector asTimestamp(TimeUnit unit, String format) {
-    assert type == DType.STRING : "A column of type string is required " +
-                                  "for .timestampToLong() operation";
+    assert type == DType.STRING  || type == DType.STRING_CATEGORY : "A column of type string " +
+                                  "is required for .timestampToLong() operation";
     assert format != null : "Format string may not be NULL";
     if (unit == TimeUnit.NONE) {
       unit = TimeUnit.MILLISECONDS;
@@ -1599,6 +1632,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private native long[] cudfSlice(long nativeHandle, long indices) throws CudfException;
 
+  private native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
+
   /**
    * Translate the host side string representation of strings into the device side representation
    * and populate the cudfColumn with it.
@@ -1705,6 +1740,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native int getTimeUnitInternal(long cudfColumnHandle) throws CudfException;
 
   private static native int getNullCount(long cudfColumnHandle) throws CudfException;
+
+  private static native int getDeviceMemoryStringSize(long cudfColumnHandle) throws CudfException;
 
   private static native long concatenate(long[] columnHandles) throws CudfException;
 
@@ -1818,6 +1855,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     public BufferEncapsulator<DeviceMemoryBuffer> getDeviceData() {
       return deviceData;
+    }
+
+    public long getDeviceMemoryLength(DType type) {
+      assert type != DType.STRING_CATEGORY;
+      long length;
+
+      length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
+      if (type == DType.STRING) {
+        length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
+      } else {
+        length += deviceData.data != null ? deviceData.data.getLength() : 0;
+      }
+      return length;
     }
 
     public void setDeviceData(BufferEncapsulator<DeviceMemoryBuffer> deviceData) {

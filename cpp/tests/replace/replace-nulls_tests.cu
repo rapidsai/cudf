@@ -19,10 +19,10 @@
 
 #include <utilities/error_utils.hpp>
 
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/scalar_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/scalar_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/cudf.h>
 
 
@@ -56,31 +56,31 @@ void ReplaceNullsScalar(cudf::test::column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 {
-  constexpr gdf_size_type column_size{10};
+  constexpr cudf::size_type column_size{10};
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return row; },
-      [](gdf_index_type row) { return (row < column_size/2) ? false : true; }},
+      [](cudf::size_type row) { return row; },
+      [](cudf::size_type row) { return (row < column_size/2) ? false : true; }},
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return 1; },
+      [](cudf::size_type row) { return 1; },
       false},
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return (row < column_size/2) ? 1 : row; },
+      [](cudf::size_type row) { return (row < column_size/2) ? 1 : row; },
       false});
 }
 
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
-  constexpr gdf_size_type column_size{10};
+  constexpr cudf::size_type column_size{10};
 
   ReplaceNullsScalar<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return row; },
-      [](gdf_index_type row) { return (row < column_size/2) ? false : true; }},
+      [](cudf::size_type row) { return row; },
+      [](cudf::size_type row) { return (row < column_size/2) ? false : true; }},
     cudf::test::scalar_wrapper<TypeParam> {1, true},
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return (row < column_size/2) ? 1 : row; },
+      [](cudf::size_type row) { return (row < column_size/2) ? 1 : row; },
       false});
 }

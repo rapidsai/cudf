@@ -7,7 +7,7 @@ import itertools
 import logging
 import numbers
 import pickle
-import random
+import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -163,6 +163,8 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+        for col in self._cols:
+            self._cols[col]._index = self._index
 
     @property
     def _constructor(self):
@@ -324,7 +326,6 @@ class DataFrame(object):
         if is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
-            s.index = self.index
             return s
         elif isinstance(arg, slice):
             df = DataFrame()
@@ -1159,13 +1160,25 @@ class DataFrame(object):
 
         Parameters
         ----------
-        index : Index, Series-convertible, or str
+        index : Index, Series-convertible, str, or list of str
             Index : the new index.
             Series-convertible : values for the new index.
             str : name of column to be used as series
+            list of str : name of columns to be converted to a MultiIndex
         drop : boolean
             whether to drop corresponding column for str index argument
         """
+        # When index is a list of column names
+        if isinstance(index, list):
+            if len(index) > 1:
+                df = self.copy(deep=False)
+                if drop:
+                    df = df.drop(columns=index)
+                return df.set_index(
+                    cudf.MultiIndex.from_frame(self[index], names=index)
+                )
+            index = index[0]  # List contains single item
+
         # When index is a column name
         if isinstance(index, str):
             df = self.copy(deep=False)
@@ -1181,7 +1194,7 @@ class DataFrame(object):
                 df[k] = c.set_index(index)
             return df
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False, inplace=False):
         out = DataFrame()
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
@@ -1197,7 +1210,13 @@ class DataFrame(object):
                 out[c] = self[c]
         else:
             out = self
-        return out.set_index(RangeIndex(len(self)))
+        if inplace is True:
+            for column_name in set(out.columns) - set(self.columns):
+                self[column_name] = out[column_name]
+                self._cols.move_to_end(column_name, last=False)
+            self._index = RangeIndex(len(self))
+        else:
+            return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
@@ -2429,18 +2448,37 @@ class DataFrame(object):
         lhs = DataFrame()
         rhs = DataFrame()
 
-        # Creating unique column name to use libgdf join
-        idx_col_name = str(random.randint(2 ** 29, 2 ** 31))
+        idx_col_names = []
+        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
+            if not isinstance(other.index, cudf.core.multiindex.MultiIndex):
+                raise TypeError(
+                    "Left index is MultiIndex, but right index is "
+                    + type(other.index)
+                )
 
-        while idx_col_name in self.columns or idx_col_name in other.columns:
-            idx_col_name = str(random.randint(2 ** 29, 2 ** 31))
+            index_frame_l = self.index.copy().to_frame(index=False)
+            index_frame_r = other.index.copy().to_frame(index=False)
 
-        lhs[idx_col_name] = Series(self.index.as_column()).set_index(
-            self.index
-        )
-        rhs[idx_col_name] = Series(other.index.as_column()).set_index(
-            other.index
-        )
+            if (index_frame_l.columns != index_frame_r.columns).any():
+                raise ValueError(
+                    "Left and Right indice-column names must match."
+                )
+
+            for name in index_frame_l.columns:
+                idx_col_name = str(uuid.uuid4())
+                idx_col_names.append(idx_col_name)
+
+                lhs[idx_col_name] = index_frame_l[name].set_index(self.index)
+                rhs[idx_col_name] = index_frame_r[name].set_index(other.index)
+
+        else:
+            idx_col_names.append(str(uuid.uuid4()))
+            lhs[idx_col_names[0]] = Series(self.index.as_column()).set_index(
+                self.index
+            )
+            rhs[idx_col_names[0]] = Series(other.index.as_column()).set_index(
+                other.index
+            )
 
         for name in self.columns:
             lhs[name] = self[name]
@@ -2451,31 +2489,35 @@ class DataFrame(object):
         lhs = lhs.reset_index(drop=True)
         rhs = rhs.reset_index(drop=True)
 
-        cat_join = False
+        cat_join = []
+        for name in idx_col_names:
+            if is_categorical_dtype(lhs[name]):
 
-        if is_categorical_dtype(lhs[idx_col_name]):
-            cat_join = True
-            lcats = lhs[idx_col_name].cat.categories
-            rcats = rhs[idx_col_name].cat.categories
+                lcats = lhs[name].cat.categories
+                rcats = rhs[name].cat.categories
 
-            def set_categories(col, cats):
-                return col.cat.set_categories(cats, is_unique=True).fillna(-1)
+                def _set_categories(col, cats):
+                    return col.cat._set_categories(
+                        cats, is_unique=True
+                    ).fillna(-1)
 
-            if how == "left":
-                cats = lcats
-                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
-            elif how == "right":
-                cats = rcats
-                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
-            elif how in ["inner", "outer"]:
-                cats = column.as_column(lcats).append(rcats)
-                cats = Series(cats).drop_duplicates()._column
+                if how == "left":
+                    cats = lcats
+                    rhs[name] = _set_categories(rhs[name], cats)
+                elif how == "right":
+                    cats = rcats
+                    lhs[name] = _set_categories(lhs[name], cats)
+                elif how in ["inner", "outer"]:
+                    cats = column.as_column(lcats).append(rcats)
+                    cats = Series(cats).drop_duplicates()._column
 
-                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
-                lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
+                    lhs[name] = _set_categories(lhs[name], cats)
+                    lhs[name] = lhs[name]._column.as_numerical
 
-                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
-                rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
+                    rhs[name] = _set_categories(rhs[name], cats)
+                    rhs[name] = rhs[name]._column.as_numerical
+
+                cat_join.append((name, cats))
 
         if lsuffix == "":
             lsuffix = "l"
@@ -2484,23 +2526,27 @@ class DataFrame(object):
 
         df = lhs.merge(
             rhs,
-            on=[idx_col_name],
+            on=idx_col_names,
             how=how,
             suffixes=(lsuffix, rsuffix),
             method=method,
         )
 
-        if cat_join:
-            df[idx_col_name] = CategoricalColumn(
-                data=df[idx_col_name].data, categories=cats, ordered=False
+        for name, cats in cat_join:
+            df[name] = CategoricalColumn(
+                data=df[name].data, categories=cats, ordered=False
             )
 
-        df = df.set_index(idx_col_name)
-        # change random number index to None to better reflect pandas behavior
+        if sort and len(df):
+            df = df.sort_values(idx_col_names)
+
+        df = df.set_index(idx_col_names)
+        # change index to None to better reflect pandas behavior
         df.index.name = None
 
-        if sort and len(df):
-            return df.sort_index()
+        if len(idx_col_names) > 1:
+            df.index._source_data.columns = index_frame_l.columns
+            df.index.names = index_frame_l.columns
 
         return df
 
@@ -3892,7 +3938,8 @@ class DataFrame(object):
         cols = libcudf.filling.repeat(self._columns, repeats)
         # to preserve col names, need to get it from old _cols dict
         column_names = self._cols.keys()
-        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
+        result = DataFrame(data=dict(zip(column_names, cols)))
+        return result.set_index(new_index)
 
 
 def from_pandas(obj):

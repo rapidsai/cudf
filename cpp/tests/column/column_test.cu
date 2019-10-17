@@ -22,8 +22,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list.hpp>
-#include <tests/utilities/typed_tests.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <thrust/sequence.h>
 #include <random>
@@ -34,7 +34,7 @@ template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   static std::size_t data_size() { return 1000; }
   static std::size_t mask_size() { return 100; }
-  cudf::data_type type() { return cudf::data_type{cudf::exp::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
 
   TypedColumnTest()
       : data{_num_elements * cudf::size_of(type())},

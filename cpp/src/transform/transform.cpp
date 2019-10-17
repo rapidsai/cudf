@@ -15,12 +15,11 @@
  */
 
 #include <cudf/cudf.h>
-#include <jit/type.h>
 #include <nvstrings/NVCategory.h>
 #include <utilities/cudf_utils.h>
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>
 
@@ -29,11 +28,12 @@
 #include <cudf/legacy/column.hpp>
 
 #include <jit/launcher.h>
-#include <jit/type.h>
+#include <jit/legacy/type.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 
 #include <types.h.jit>
+#include <types.hpp.jit>
 
 namespace cudf {
 namespace transformation {
@@ -71,7 +71,7 @@ void unary_operation(gdf_column& output, const gdf_column& input,
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
-    { cudf_types_h },
+    { cudf_types_h, cudf_types_hpp },
     { "-std=c++14" }, nullptr
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
@@ -111,7 +111,7 @@ gdf_column transform(const gdf_column& input,
       "Invalid/Unsupported input datatype" );
   
   if (input.valid != nullptr) {
-    gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
+    cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
     CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));
   }
 
