@@ -112,7 +112,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
 
 /**---------------------------------------------------------------------------*
  * @brief Create a `std::vector` containing a validity indicator bitmask using
- * the range `[begin,end)` interpretted as booleans to indicate the state of
+ * the range `[begin,end)` interpreted as booleans to indicate the state of
  * each bit.
  *
  * If `*(begin + i) == true`, then bit `i` is set to 1, else it is zero.
@@ -140,7 +140,7 @@ std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin,
 
 /**---------------------------------------------------------------------------*
  * @brief Create a `device_buffer` containing a validity indicator bitmask using
- * the range `[begin,end)` interpretted as booleans to indicate the state of
+ * the range `[begin,end)` interpreted as booleans to indicate the state of
  *each bit.
  *
  * If `*(begin + i) == true`, then bit `i` is set to 1, else it is zero.
@@ -224,7 +224,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column of the fixed-width elements in the range
-   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpretted
+   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
    * as booleans to indicate the validity of each element.
    *
    * If `v[i] == true`, element `i` is valid, else it is null.
@@ -293,7 +293,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements and
-   * the the range `[v, v + element_list.size())` interpretted as booleans to
+   * the the range `[v, v + element_list.size())` interpreted as booleans to
    * indicate the validity of each element.
    * 
    * Example:
@@ -354,7 +354,7 @@ class strings_column_wrapper : public detail::column_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column of strings from the range
-   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpretted
+   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
    * as booleans to indicate the validity of each string.
    *
    * Values in the sequence `[begin,end)` will each be converted to
