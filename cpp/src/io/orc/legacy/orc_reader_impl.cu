@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "../orc.h"
+#include "../orc_gpu.h"
 #include "orc_reader_impl.hpp"
 
-#include "timezone.h"
+#include "../timezone.h"
 #include <io/comp/gpuinflate.h>
 
 #include <algorithm>
