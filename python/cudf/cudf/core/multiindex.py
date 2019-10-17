@@ -101,8 +101,8 @@ class MultiIndex(Index):
             if -1 in self._codes[name].values:
                 # Must account for null(s) in _source_data column
                 level = DataFrame(
-                    {name: [None] + [v for v in self._levels[i]]},
-                    index=[i for i in range(-1, len(self._levels[i]))],
+                    {name: [None] + list(self._levels[i])},
+                    index=range(-1, len(self._levels[i])),
                 )
             else:
                 level = DataFrame({name: self._levels[i]})
