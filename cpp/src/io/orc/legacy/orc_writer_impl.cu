@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "../orc.h"
+#include "../orc_gpu.h"
 #include "orc_writer_impl.hpp"
 
 #include <nvstrings/NVCategory.h>
