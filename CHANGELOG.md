@@ -6,6 +6,7 @@
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
+- PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 
 
@@ -29,6 +30,9 @@
 - PR #3067 Java method to return size of device memory buffer
 - PR #3083 Improved some binary operation tests to include null testing.
 - PR #3084 Update to arrow-cpp and pyarrow 0.15.0
+- PR #3071 Move cuIO to legacy
+- PR #3126 Round 2 of snappy decompression optimizations
+- PR #3128 Support MultiIndex in DataFrame.join
 
 ## Bug Fixes
 
