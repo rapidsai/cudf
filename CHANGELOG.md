@@ -31,6 +31,7 @@
 - PR #3071 Move cuIO to legacy
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3146 Align column data allocation size to 8 bytes
 
 ## Bug Fixes
 
