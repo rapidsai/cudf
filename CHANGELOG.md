@@ -51,16 +51,7 @@
 
 ## Bug Fixes
 
-- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
-- PR #3048 Support for zero columned tables
-- PR #3030 Fix snappy decoding regression in PR #3014
-- PR #3041 Fixed exp to experimental namespace name change issue
-- PR #3060 Move copying.hpp includes to legacy
-- PR #3139 Fixed java RMM auto initalization
-- PR #3141 Java fix for relocated IO headers
-- PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
-- PR #3168 Fix mutable_column_device_view head const_cast
-
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 
 # cuDF 0.10.0 (16 Oct 2019)
 
