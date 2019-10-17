@@ -14,13 +14,3 @@
  * limitations under the License.
  */
 #include <cudf/transpose.hpp>
-
-namespace cudf {
-
-std::unique_ptr<table> transpose(cudf::table_view const& input,
-                                 device_memory_resource* mr)
-{
-  
-}
-
-}  // namespace cudf
