@@ -388,10 +388,18 @@ set(LEGACY_NVSTRING_SCATTER_TEST_SRC
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - legacy utilities tests -------------------------------------------------------------------------------
+
+set(LEGACY_UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/legacy/column_wrapper_tests.cu")
+
+ConfigureTest(LEGACY_UTILITIES_TEST "${LEGACY_UTILITIES_TEST_SRC}")
 
 ###################################################################################################
 # - iterator tests -------------------------------------------------------------------------------
