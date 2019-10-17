@@ -12,7 +12,7 @@ import pytest
 from pandas.util.testing import assert_frame_equal
 
 import cudf
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame
 from cudf.tests.utils import assert_eq
 from cudf.utils import queryutils
 

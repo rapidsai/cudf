@@ -21,7 +21,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
-
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -79,6 +79,16 @@ class reader::Impl {
                    const hostdevice_vector<uint8_t> &global_dictionary,
                    size_t total_dictionary_entries,
                    const std::vector<gdf_column_wrapper> &columns);
+
+  /**
+   * @brief Align a size such that aligned 32-bit loads within a memory block
+   * won't trip cuda-memcheck if the size is not a multiple of 4
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by avro kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint32_t)); }
 
  private:
   std::unique_ptr<datasource> source_;

@@ -169,21 +169,6 @@ struct ParseOptions {
 };
 
 /**
- * @brief Per-column parsing flags used for dtype detection and data conversion
- **/
-namespace column_parse {
-enum : uint8_t {
-  disabled = 0,       ///< data is not read
-  enabled = 1,        ///< data is read and parsed as usual
-  inferred = 2,       ///< infer the dtype
-  as_default = 4,     ///< no special decoding
-  as_hexadecimal = 8, ///< decode with base-16
-  as_datetime = 16,   ///< decode as date and/or time
-};
-using flags = uint8_t;
-} // namespace column_parse
-
-/**
  * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
  * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
  * If the character is not a valid numeric digit then `0` is returned.

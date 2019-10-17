@@ -173,3 +173,30 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
     got = cudf.Series(obj)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.skipif(not _have_cupy, reason="CuPy is not installed")
+def test_column_from_ephemeral_cupy():
+    # Test that we keep a reference to the ephemeral
+    # CuPy array. If we didn't, then `a` would end
+    # up referring to the same memory as `b` due to
+    # CuPy's caching allocator
+    a = cudf.Series(cupy.asarray([1, 2, 3]))
+    b = cudf.Series(cupy.asarray([1, 1, 1]))
+    assert_eq(pd.Series([1, 2, 3]), a)
+    assert_eq(pd.Series([1, 1, 1]), b)
+
+
+@pytest.mark.skipif(not _have_cupy, reason="CuPy is not installed")
+def test_column_from_ephemeral_cupy_try_lose_reference():
+    # Try to lose the reference we keep to the ephermal
+    # CuPy array
+    a = cudf.Series(cupy.asarray([1, 2, 3]))._column
+    a = cudf.core.column.as_column(a)
+    b = cupy.asarray([1, 1, 1])  # noqa: F841
+    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+
+    a = cudf.Series(cupy.asarray([1, 2, 3]))._column
+    a = a.replace(name="b")
+    b = cupy.asarray([1, 1, 1])  # noqa: F841
+    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())

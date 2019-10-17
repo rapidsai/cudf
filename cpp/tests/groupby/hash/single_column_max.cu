@@ -21,7 +21,7 @@
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
-#include "type_info.hpp"
+#include "../common/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -43,8 +43,8 @@ auto constexpr last_even_index(gdf_size_type size) {
 }
 }  // namespace
 
-static constexpr cudf::groupby::hash::operators op{
-    cudf::groupby::hash::operators::MAX};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::MAX};
 
 template <typename K, typename V>
 struct KV {

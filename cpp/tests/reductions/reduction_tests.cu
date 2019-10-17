@@ -514,8 +514,10 @@ TEST_F(ReductionDtypeTest, different_precision)
 
 }
 
+struct ReductionErrorTest : public GdfTest{};
+
 // test case for empty input cases
-TEST(ReductionErrorTest, empty_column)
+TEST_F(ReductionErrorTest, empty_column)
 {
     using T = int32_t;
     auto statement = [](const gdf_column* col) {

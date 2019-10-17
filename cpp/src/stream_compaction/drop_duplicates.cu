@@ -27,11 +27,12 @@
 #include <cudf/legacy/table.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
+#include <cudf/transform.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
- 
+
 namespace cudf {
 namespace detail {
 
@@ -88,13 +89,13 @@ template<typename DerivedPolicy,
 }
 
 auto 
-get_unique_ordered_indices(const cudf::table& key_columns,
+get_unique_ordered_indices(const cudf::table& keys,
                            const duplicate_keep_option keep,
                            const bool nulls_are_equal = true,
                            cudaStream_t stream=0)
 {
-  gdf_size_type ncols = key_columns.num_columns();
-  gdf_size_type nrows = key_columns.num_rows();
+  gdf_size_type ncols = keys.num_columns();
+  gdf_size_type nrows = keys.num_rows();
 
   // sort only indices
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
@@ -102,20 +103,19 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   gdf_column sorted_indices_col;
   CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
         nullptr, nrows, GDF_INT32));
-  CUDF_TRY(gdf_order_by(key_columns.begin(),
+  CUDF_TRY(gdf_order_by(keys.begin(),
         nullptr,
-        key_columns.num_columns(),
+        keys.num_columns(),
         &sorted_indices_col,
         &context));
 
   // extract unique indices 
   rmm::device_vector<gdf_index_type> unique_indices(nrows);
   auto exec = rmm::exec_policy(stream)->on(stream);
-  auto device_input_table = device_table::create(key_columns, stream);
+  auto device_input_table = device_table::create(keys, stream);
   rmm::device_vector<gdf_size_type>::iterator result_end;
 
-  bool nullable = device_input_table->has_nulls();
-  if(nullable) {
+  if(cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
     result_end = unique_copy(exec,
@@ -139,37 +139,85 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   return std::make_pair(unique_indices, 
                         thrust::distance(unique_indices.begin(), result_end));
 }
+
+gdf_size_type unique_count(const cudf::table& keys,
+             const bool nulls_are_equal = true,
+             cudaStream_t stream=0)
+{
+  gdf_size_type ncols = keys.num_columns();
+  gdf_size_type nrows = keys.num_rows();
+
+  // sort only indices
+  rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  gdf_context context;
+  gdf_column sorted_indices_col;
+  CUDF_TRY(gdf_column_view(&sorted_indices_col, static_cast<void*>(sorted_indices.data().get()),
+        nullptr, nrows, GDF_INT32));
+  CUDF_TRY(gdf_order_by(keys.begin(),
+        nullptr,
+        keys.num_columns(),
+        &sorted_indices_col,
+        &context));
+
+  // count unique elements
+  auto sorted_row_index = sorted_indices.begin();
+  auto exec = rmm::exec_policy(stream)->on(stream);
+  auto device_input_table = device_table::create(keys, stream);
+
+  if(cudf::has_nulls(keys)) {
+    auto comp = row_equality_comparator<true>(*device_input_table,
+        nulls_are_equal);
+    return thrust::count_if(exec,
+              thrust::counting_iterator<gdf_size_type>(0),
+              thrust::counting_iterator<gdf_size_type>(nrows),
+              [sorted_row_index, comp] 
+              __device__ (const gdf_size_type i) {
+              return (i == 0 || !comp(sorted_row_index[i], sorted_row_index[i-1]));
+              });
+  } else {
+    auto comp = row_equality_comparator<false>(*device_input_table,
+        nulls_are_equal);
+    return thrust::count_if(exec,
+              thrust::counting_iterator<gdf_size_type>(0),
+              thrust::counting_iterator<gdf_size_type>(nrows),
+              [sorted_row_index, comp]
+              __device__ (const gdf_size_type i) {
+              return (i == 0 || !comp(sorted_row_index[i], sorted_row_index[i-1]));
+              });
+  }
+}
+
 } //namespace detail
 
-cudf::table drop_duplicates(const cudf::table& input_table,
-                            const cudf::table& key_columns,
+cudf::table drop_duplicates(const cudf::table& input,
+                            const cudf::table& keys,
                             const duplicate_keep_option keep,
                             const bool nulls_are_equal)
 {
-  CUDF_EXPECTS( input_table.num_rows() == key_columns.num_rows(), "number of \
+  CUDF_EXPECTS( input.num_rows() == keys.num_rows(), "number of \
 rows in input table should be equal to number of rows in key colums table");
 
-  if (0 == input_table.num_rows() || 
-      0 == input_table.num_columns() ||
-      0 == key_columns.num_columns() 
+  if (0 == input.num_rows() || 
+      0 == input.num_columns() ||
+      0 == keys.num_columns() 
       ) {
-    return cudf::empty_like(input_table);
+    return cudf::empty_like(input);
   }
   rmm::device_vector<gdf_index_type> unique_indices;
   gdf_size_type unique_count; 
   std::tie(unique_indices, unique_count) =
-    detail::get_unique_ordered_indices(key_columns, keep, nulls_are_equal);
+    detail::get_unique_ordered_indices(keys, keep, nulls_are_equal);
 
   // Allocate output columns
   cudf::table destination_table(unique_count,
-                                cudf::column_dtypes(input_table),
-                                cudf::column_dtype_infos(input_table), true);
+                                cudf::column_dtypes(input),
+                                cudf::column_dtype_infos(input), true);
   // Ensure column names are preserved. Ideally we could call cudf::allocate_like
   // here, but the above constructor allocates and fills null bitmaps differently
   // than allocate_like. Doing this for now because the impending table + column
   // re-design will handle this better than another cudf::allocate_like overload
   std::transform(
-    input_table.begin(), input_table.end(),
+    input.begin(), input.end(),
     destination_table.begin(), destination_table.begin(),
     [](const gdf_column* inp_col, gdf_column* out_col) {
       // a rather roundabout way to do a strcpy...
@@ -183,8 +231,41 @@ rows in input table should be equal to number of rows in key colums table");
   });
 
   // run gather operation to establish new order
-  cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
-  nvcategory_gather_table(input_table, destination_table);
+  cudf::gather(&input, unique_indices.data().get(), &destination_table);
+  nvcategory_gather_table(input, destination_table);
   return destination_table;
 }
+
+gdf_size_type unique_count(gdf_column const& input,
+                           bool const ignore_nulls,
+                           bool const nan_as_null)
+{
+  if (0 == input.size || input.null_count == input.size) {
+    return 0;
+  }
+  gdf_column col{input};
+  //TODO: remove after NaN support to equality operator is added
+  //if (nan_as_null)
+  if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64)) {
+    auto temp = nans_to_nulls(col);
+    col.valid = reinterpret_cast<gdf_valid_type*>(temp.first);
+    col.null_count = temp.second;
+  }
+  bool const has_nans{col.null_count > input.null_count};
+  
+  auto count = detail::unique_count({const_cast<gdf_column*>(&col)}, true);
+  if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64))
+    bit_mask::destroy_bit_mask(reinterpret_cast<bit_mask::bit_mask_t*>(col.valid));
+
+  //TODO: remove after NaN support to equality operator is added
+  // if nan is counted as null when null is already present.
+  if (not nan_as_null and has_nans and cudf::has_nulls(input))
+    ++count;
+
+  if (ignore_nulls and cudf::has_nulls(input))
+    return --count;
+  else
+    return count;
+}
+
 }  // namespace cudf

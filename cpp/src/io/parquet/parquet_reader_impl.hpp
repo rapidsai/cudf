@@ -22,6 +22,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -47,11 +48,11 @@ class reader::Impl {
                 reader_options const &options);
 
   /**
-   * @brief Returns the index column derived from the dataset metadata.
+   * @brief Returns the PANDAS-specific index column derived from the metadata.
    *
    * @return std::string Name of the column
    **/
-  std::string get_index_column() const { return index_col_; }
+  std::string get_index_column() const { return pandas_index_col_; }
 
   /**
    * @brief Read an entire set or a subset of data from the source and returns
@@ -66,6 +67,16 @@ class reader::Impl {
   table read(int skip_rows, int num_rows, int row_group);
 
  private:
+  /**
+   * @brief Align a size such that aligned 32-bit loads within a memory block
+   * won't read bytes beyond the unaligned cuda-memcheck limit
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by parquet kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint32_t)); }
+
   /**
    * @brief Returns the number of total pages from the given column chunks
    *
@@ -117,9 +128,10 @@ class reader::Impl {
   std::unique_ptr<datasource> source_;
   std::unique_ptr<ParquetMetadata> md_;
 
-  std::string index_col_;
+  std::string pandas_index_col_;
   std::vector<std::pair<int, std::string>> selected_cols_;
   bool strings_to_categorical_ = false;
+  gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
 } // namespace parquet

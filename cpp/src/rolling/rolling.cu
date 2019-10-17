@@ -34,10 +34,11 @@
 
 #include <jit/launcher.h>
 #include <jit/type.h>
-#include <jit/types_h_jit.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 #include "jit/util/type.h"
+
+#include <types.h.jit>
 
 namespace
 {
@@ -271,7 +272,7 @@ gdf_column* rolling_window(const gdf_column &input_col,
     return output_col.release();
 
   // Allocate memory for the output column
-  CUDF_EXPECTS(output_col.allocate() == GDF_SUCCESS, "Cannot allocate the output column");
+  output_col.allocate();
 
   // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);

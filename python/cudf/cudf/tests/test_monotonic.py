@@ -8,14 +8,15 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import MultiIndex, Series
-from cudf.dataframe.index import (
+from cudf.core import MultiIndex, Series
+from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
     RangeIndex,
     StringIndex,
 )
+from cudf.tests.utils import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
@@ -236,6 +237,23 @@ def test_get_slice_bound(testlist, side, kind):
         ) == index_pd.get_slice_bound(label, side, kind)
 
 
+@pytest.mark.parametrize("bounds", [(0, 10), (0, 1), (3, 4), (0, 0), (3, 3)])
+@pytest.mark.parametrize(
+    "indices",
+    [[-1, 0, 5, 10, 11], [-1, 0, 1, 2], [2, 3, 4, 5], [-1, 0, 1], [2, 3, 4]],
+)
+@pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.parametrize("kind", ["getitem", "loc", "ix"])
+def test_rangeindex_get_slice_bound(bounds, indices, side, kind):
+    start, stop = bounds
+    pd_index = pd.RangeIndex(start, stop)
+    cudf_index = RangeIndex(start, stop)
+    for idx in indices:
+        expect = pd_index.get_slice_bound(idx, side, kind)
+        got = cudf_index.get_slice_bound(idx, side, kind)
+        assert expect == got
+
+
 @pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])
 @pytest.mark.parametrize("side", ["left", "right"])
 @pytest.mark.parametrize("kind", ["ix", "loc", "getitem", None])
@@ -260,3 +278,21 @@ def test_get_slice_bound_missing_str(label, side):
     assert index.get_slice_bound(
         label, side, "getitem"
     ) == index_pd.get_slice_bound(label, side, "getitem")
+
+
+testdata = [
+    (
+        Series(["2018-01-01", "2019-01-31", None], dtype="datetime64[ms]"),
+        False,
+    ),
+    (Series([1, 2, 3, None]), False),
+    (Series([None, 1, 2, 3]), False),
+    (Series(["a", "b", "c", None]), False),
+    (Series([None, "a", "b", "c"]), False),
+]
+
+
+@pytest.mark.parametrize("data, expected", testdata)
+def test_is_monotonic_always_falls_for_null(data, expected):
+    assert_eq(expected, data.is_monotonic_increasing)
+    assert_eq(expected, data.is_monotonic_decreasing)

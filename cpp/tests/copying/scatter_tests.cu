@@ -279,7 +279,7 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
 }
 
 // The test to test against BUG #2007
-TEST(ScatterTest, PreserveDestBitmask) {
+TYPED_TEST(ScatterTest, PreserveDestBitmask) {
   
   cudf::test::column_wrapper<int64_t> source_column(
       {10, -1}, [](auto index){ return false; });

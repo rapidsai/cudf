@@ -19,7 +19,9 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <utility>
 
+#include <cudf/legacy/table.hpp>
 #include "cudf.h"
 
 // Forward declarations
@@ -41,6 +43,24 @@ struct source_info {
   explicit source_info(const char* host_buffer, size_t size)
       : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
   explicit source_info(
+      const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
+      : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Output sink info for `xxx_write_arg` arguments
+ *---------------------------------------------------------------------------**/
+struct sink_info {
+  gdf_input_type type = FILE_PATH;
+  std::string filepath;
+  std::pair<const char*, size_t> buffer;
+  std::shared_ptr<arrow::io::RandomAccessFile> file;
+
+  explicit sink_info(const std::string& file_path)
+      : type(FILE_PATH), filepath(file_path) {}
+  explicit sink_info(const char* host_buffer, size_t size)
+      : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
+  explicit sink_info(
       const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
       : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
 };
@@ -142,6 +162,7 @@ struct csv_read_arg {
 
   size_t byte_range_offset = 0;             ///< Bytes to skip from the start
   size_t byte_range_size = 0;               ///< Bytes to read; always reads complete rows
+  gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< The output resolution for date32, date64, and timestamp columns
 
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };
@@ -194,8 +215,20 @@ struct orc_read_arg {
 
   bool use_index = false;                   ///< Whether to use row index to speed-up reading
   bool use_np_dtypes = true;                ///< Whether to use numpy-compatible dtypes
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit orc_read_arg(const source_info& src) : source(src) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `write_orc` interface
+ *---------------------------------------------------------------------------**/
+struct orc_write_arg {
+  sink_info sink;                           ///< Info on sink of data
+
+  cudf::table table;                        ///< Table of columns to write
+
+  explicit orc_write_arg(const sink_info& snk) : sink(snk) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -211,8 +244,10 @@ struct parquet_read_arg {
   int num_rows = -1;                        ///< Rows to read; -1 is all
 
   bool strings_to_categorical = false;      ///< Whether to store string data as GDF_CATEGORY
+  bool use_pandas_metadata = true;          ///< Whether to always load PANDAS index columns
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit parquet_read_arg(const source_info& src) : source(src) {}
 };
 
-} // namespace cudf
+}  // namespace cudf

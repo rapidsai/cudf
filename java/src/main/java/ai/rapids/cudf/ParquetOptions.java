@@ -25,8 +25,16 @@ public class ParquetOptions extends ColumnFilterOptions {
 
   public static ParquetOptions DEFAULT = new ParquetOptions(new Builder());
 
+  private final TimeUnit unit;
+
+
   private ParquetOptions(Builder builder) {
     super(builder);
+    unit = builder.unit;
+  }
+
+  TimeUnit timeUnit() {
+    return unit;
   }
 
   public static Builder builder() {
@@ -34,6 +42,18 @@ public class ParquetOptions extends ColumnFilterOptions {
   }
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
+    private TimeUnit unit = TimeUnit.NONE;
+
+    /**
+     * Specify the time unit to use when returning timestamps.
+     * @param unit TimeUnit specified by the user
+     * @return builder for chaining
+     */
+    public Builder withTimeUnit(TimeUnit unit) {
+      this.unit = unit;
+      return this;
+    }
+
     public ParquetOptions build() {
       return new ParquetOptions(this);
     }

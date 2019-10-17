@@ -26,10 +26,9 @@
 #include <tests/utilities/nvcategory_utils.cuh>
 #include <tests/utilities/valid_vectors.h>
 
-template <typename T>
 struct ScatterTest : GdfTest {};
 
-TEST(ScatterTest, ScatterNVString)
+TEST_F(ScatterTest, ScatterNVString)
 {
   bool print = false;
   const int rows_size = 12;

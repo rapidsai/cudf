@@ -67,13 +67,20 @@ struct TempDirTestEnvironment : public ::testing::Environment
     }
 
     /**
-    * @brief get temporary path of filename for this test program
-    *
-    * @return temporary directory path
-    */
-    std::string get_temp_dir()
+     * @brief Get directory path to use for temporary files
+     *
+     * @return std::string The temporary directory path
+     */
+    std::string get_temp_dir() { return tmpdir; }
+
+    /**
+     * @brief Get a temporary filepath to use for the specified filename
+     *
+     * @return std::string The temporary filepath
+     */
+    std::string get_temp_filepath(std::string filename)
     {
-        return tmpdir;
+        return tmpdir + filename;
     }
 };
 #endif // CUDF_TEST_FIXTURES_H

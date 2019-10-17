@@ -63,6 +63,7 @@ private:
 
   std::vector<std::string> column_names_;
   std::vector<gdf_dtype> dtypes_;
+  std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
   std::vector<gdf_column_wrapper> columns_;
 
   device_buffer<uint64_t> rec_starts_;

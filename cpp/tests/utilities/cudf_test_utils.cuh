@@ -191,14 +191,15 @@ void print_gdf_column(gdf_column const *column, unsigned min_element_print_width
  *
  * @param validity_mask The validity bitmask to print
  * @param length Length of the mask in bits
+ * @param ostream Output stream, defaults to the standard output stream
  *
  * @note the mask may have more space allocated for it than is necessary 
  * for the specified length; in particular, it will have "slack" bits
  * in the last byte, if length % 8 != 0. Such slack bits are ignored and
  * not printed. Usually, length is the number of elements of a gdf_column.
  * ---------------------------------------------------------------------------**/
-void print_valid_data(const gdf_valid_type *validity_mask, 
-                      const size_t length);
+void print_valid_data(const gdf_valid_type* validity_mask, const size_t length,
+                      std::ostream& stream = std::cout);
 
 /* --------------------------------------------------------------------------*/
 /**

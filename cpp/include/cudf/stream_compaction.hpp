@@ -126,18 +126,38 @@ enum duplicate_keep_option {
  * Note that the memory for the output table columns is allocated by this function, so 
  * it must be freed by the caller when finished. 
  *
- * @param[in] input_table input table to copy only unique rows
- * @param[in] key_columns columns to consider to identify duplicate rows
- * @param[in] keep keep first entry, last entry, or no entries if duplicates found
+ * @param[in] input           input table to copy only unique rows
+ * @param[in] keys            columns to consider to identify duplicate rows
+ * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_are_equal flag to denote nulls are equal if true,
  * nulls are not equal if false
  *
- * @return out_table with only unique rows
+ * @return new table with only unique rows
  */
-cudf::table drop_duplicates(const cudf::table& input_table,
-                            const cudf::table& key_columns,
+cudf::table drop_duplicates(const cudf::table& input,
+                            const cudf::table& keys,
                             const duplicate_keep_option keep,
                             const bool nulls_are_equal = true);
+
+/**
+ * @brief Count the unique elements in the column
+ *
+ * Given an input column, number of unique elements in this column is returned
+ *
+ * If both `ignore_nulls` and `nan_as_null` are true, both `NaN` and `null`
+ * values are ignored.
+ * If `ignored_nulls` is true and `nan_as_null` is false, only `null` is
+ * ignored, `NaN` is considered in unique count.
+ *
+ * @param[in] input         The column whose unique elements will be counted.
+ * @param[in] ignore_nulls  flag to ignore `null` in unique count if true, 
+ * @param[in] nan_as_null   flag to consider `NaN==null` if true.
+ *
+ * @return number of unique elements
+ */
+gdf_size_type unique_count(gdf_column const& input,
+                           bool const ignore_nulls,
+                           bool const nan_as_null);
 }  // namespace cudf
 
 #endif

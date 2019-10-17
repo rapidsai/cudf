@@ -82,10 +82,7 @@ struct orc_rlev2_state_s
         uint64_t u64[NWARPS];
     } baseval;
     uint16_t m2_pw_byte3[NWARPS];
-    union {
-        int32_t i32[NWARPS];
-        int64_t i64[NWARPS];
-    } delta;
+    int64_t delta[NWARPS];
     uint16_t runs_loc[NTHREADS];
 };
 
@@ -809,22 +806,19 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     else
                     {
                         T baseval;
+                        int64_t delta;
                         // Delta
                         pos = decode_varint(bs, pos, baseval);
                         if (sizeof(T) <= 4)
                         {
-                            int32_t delta;
-                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u32[r] = baseval;
-                            rle->delta.i32[r] = delta;
                         }
                         else
                         {
-                            int64_t delta;
-                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u64[r] = baseval;
-                            rle->delta.i64[r] = delta;
                         }
+                        pos = decode_varint(bs, pos, delta);
+                        rle->delta[r] = delta;
                     }
                 }
             }
@@ -855,9 +849,16 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else
                 {
-                    int32_t delta = rle->delta.i32[r];
-                    uint32_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) : abs(delta);
-                    vals[base + i] = (delta < 0) ? -ofs : ofs;
+                    int64_t delta = rle->delta[r];
+                    if (w > 1 && i > 1)
+                    {
+                        int32_t delta_s = (delta < 0) ? -1 : 0;
+                        vals[base + i] = (bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) ^ delta_s) - delta_s;
+                    }
+                    else
+                    {
+                        vals[base + i] = (i == 0) ? 0 : static_cast<uint32_t>(delta);
+                    }
                 }
             }
             else
@@ -879,9 +880,17 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else
                 {
-                    int64_t delta = rle->delta.i64[r];
-                    uint64_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) : llabs(delta);
-                    vals[base + i] = (delta < 0) ? -ofs : ofs;
+                    int64_t delta = rle->delta[r], ofs;
+                    if (w > 1 && i > 1)
+                    {
+                        int64_t delta_s = (delta < 0) ? -1 : 0;                        
+                        ofs = (bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) ^ delta_s) - delta_s;
+                    }
+                    else
+                    {
+                        ofs = (i == 0) ? 0 : delta;
+                    }
+                    vals[base + i] = ofs;
                 }
             }
         }
@@ -1901,7 +1910,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             {
                 if (s->chunk.type_kind == TIMESTAMP)
                 {
-                    s->top.data.buffered_count = s->top.data.max_vals - (numvals + vals_skipped);
+                    s->top.data.buffered_count = s->top.data.max_vals - numvals;
                 }
                 s->top.data.max_vals = numvals;
             }
@@ -2003,7 +2012,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         {
                             seconds -= 1;
                         }
-                        reinterpret_cast<int64_t *>(data_out)[row] = seconds * ORC_TS_CLKRATE + (nanos + (499999999 / ORC_TS_CLKRATE)) / (1000000000 / ORC_TS_CLKRATE); // Output to desired clock rate
+                        if (s->chunk.ts_clock_rate)
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * s->chunk.ts_clock_rate + (nanos + (499999999 / s->chunk.ts_clock_rate)) / (1000000000 / s->chunk.ts_clock_rate); // Output to desired clock rate
+                        else
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
                         break;
                     }
                     }
@@ -2013,7 +2025,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             // Buffer secondary stream values
             if (s->chunk.type_kind == TIMESTAMP)
             {
-                int buffer_pos = s->top.data.max_vals + vals_skipped;
+                int buffer_pos = s->top.data.max_vals;
                 if (t >= buffer_pos && t < buffer_pos + s->top.data.buffered_count)
                 {
                     s->vals.u32[t - buffer_pos] = secondary_val;

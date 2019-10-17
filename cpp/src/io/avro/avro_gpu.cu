@@ -29,7 +29,7 @@ namespace gpu {
 #endif
 
 #define NWARPS                  16
-#define MAX_SHARED_SCHEMA_LEN   512
+#define MAX_SHARED_SCHEMA_LEN   1000
 
 /**
  * @brief Decode column data
@@ -47,14 +47,15 @@ namespace gpu {
  *
  **/
 // blockDim {32,NWARPS,1}
-extern "C" __global__ void __launch_bounds__(NWARPS * 32)
+extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
 gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
     uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, uint32_t min_row_size, size_t max_rows, size_t first_row)
 {
     __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
-    __shared__ __align__(8) block_desc_s blk_g;
+    __shared__ __align__(8) block_desc_s blk_g[NWARPS];
 
     schemadesc_s *schema;
+    block_desc_s * const blk = &blk_g[threadIdx.y];
     uint32_t block_id = blockIdx.x * NWARPS + threadIdx.y;
     size_t cur_row;
     uint32_t rows_remaining;
@@ -76,7 +77,7 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
     }
     if (block_id < num_blocks && threadIdx.x < sizeof(block_desc_s) / sizeof(uint32_t))
     {
-        reinterpret_cast<volatile uint32_t *>(&blk_g)[threadIdx.x] = reinterpret_cast<const uint32_t *>(&blocks[block_id])[threadIdx.x];
+        reinterpret_cast<volatile uint32_t *>(blk)[threadIdx.x] = reinterpret_cast<const uint32_t *>(&blocks[block_id])[threadIdx.x];
         __threadfence_block();
     }
     __syncthreads();
@@ -84,10 +85,10 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
     {
         return;
     }
-    cur_row = blk_g.first_row;
-    rows_remaining = blk_g.num_rows;
-    cur = avro_data + blk_g.offset;
-    end = cur + blk_g.size;
+    cur_row = blk->first_row;
+    rows_remaining = blk->num_rows;
+    cur = avro_data + blk->offset;
+    end = cur + blk->size;
     while (rows_remaining > 0 && cur < end)
     {
         uint32_t nrows;

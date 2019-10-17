@@ -22,6 +22,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -125,6 +126,16 @@ class reader::Impl {
                           size_t row_index_stride,
                           const std::vector<gdf_column_wrapper> &columns);
 
+  /**
+   * @brief Align a size such that aligned 64-bit loads within a memory block
+   * won't trip cuda-memcheck if the size is not a multiple of 8
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by orc kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint64_t)); }
+
  private:
   std::unique_ptr<datasource> source_;
   std::unique_ptr<OrcMetadata> md_;
@@ -133,6 +144,7 @@ class reader::Impl {
   bool has_timestamp_column_ = false;
   bool use_index_ = true;
   bool use_np_dtypes_ = true;
+  gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
 } // namespace orc

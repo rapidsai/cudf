@@ -34,14 +34,15 @@
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
-                          gdf_size_type output_column_length,            
-                          gdf_valid_type *masks_to_concat[], 
-                          gdf_size_type *column_lengths, 
+                          gdf_size_type output_column_length,
+                          gdf_column *columns_to_concat[],
                           gdf_size_type num_columns);
 
 // Concatenates multiple gdf_columns into a single, contiguous column,
 // including the validity bitmasks.
-gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)
+gdf_error gdf_column_concat(gdf_column *output_column,
+                            gdf_column *columns_to_concat[],
+                            int num_columns)
 {
   GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
   GDF_REQUIRE(output_column != nullptr, GDF_DATASET_EMPTY);
@@ -105,27 +106,9 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   }
 
-  if (at_least_one_mask_present) {
-    gdf_valid_type** masks;
-    gdf_size_type* column_lengths;
-    CUDA_TRY( cudaMallocManaged((void**)&masks, sizeof(gdf_valid_type*)*num_columns) );
-    CUDA_TRY( cudaMallocManaged((void**)&column_lengths, sizeof(gdf_size_type)*num_columns) );
-
-    for (int i = 0; i < num_columns; ++i) {   
-      masks[i] = columns_to_concat[i]->valid;
-      column_lengths[i] = columns_to_concat[i]->size;
-    }
-
-    gdf_error result = gdf_mask_concat(output_column->valid,
-                             output_column->size, 
-                             masks, 
-                             column_lengths, 
-                             num_columns);
-
-    CUDA_TRY( cudaFree(masks) );
-    CUDA_TRY( cudaFree(column_lengths) );
-
-    return result;
+  if (at_least_one_mask_present) {   
+    return gdf_mask_concat(output_column->valid, output_column->size, 
+                           columns_to_concat, num_columns);
   }
   else if (nullptr != output_column->valid) {
     // no masks, so just fill output valid mask with all 1 bits

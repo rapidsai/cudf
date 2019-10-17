@@ -11,7 +11,7 @@ from setuptools.extension import Extension
 
 install_requires = ["numba", "cython"]
 
-cython_files = ["cudf/bindings/**/*.pyx"]
+cython_files = ["cudf/_lib/**/*.pyx"]
 
 extensions = [
     Extension(
@@ -52,9 +52,10 @@ setup(
     ext_modules=cythonize(extensions),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
-        "cudf.bindings": ["*.pxd"],
-        "cudf.bindings.groupby": ["*.pxd"],
-        "cudf.bindings.arrow": ["*.pxd"],
+        "cudf._lib": ["*.pxd"],
+        "cudf._lib.includes": ["*.pxd"],
+        "cudf._lib.includes.groupby": ["*.pxd"],
+        "cudf._lib.arrow": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

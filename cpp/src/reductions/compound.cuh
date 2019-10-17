@@ -80,7 +80,8 @@ gdf_scalar compound_reduction(gdf_column const& col, gdf_dtype const output_dtyp
     RMM_TRY(RMM_FREE(dev_result, stream));
 
     // set scalar is valid
-    scalar.is_valid = true;
+    if (col.null_count < col.size)
+      scalar.is_valid = true;
     return scalar;
 };
 

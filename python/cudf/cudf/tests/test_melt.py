@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from cudf import melt as cudf_melt
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame
 
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2, 10])

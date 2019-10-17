@@ -156,16 +156,6 @@ typedef enum {
   N_GDF_METHODS,  ///< Window Variance additional methods should go BEFORE N_GDF_METHODS
 } gdf_method;
 
-typedef enum {
-  GDF_QUANT_LINEAR =0,
-  GDF_QUANT_LOWER,
-  GDF_QUANT_HIGHER,
-  GDF_QUANT_MIDPOINT,
-  GDF_QUANT_NEAREST,
-  N_GDF_QUANT_METHODS,
-} gdf_quantile_method;
-
-
 
 /** 
  * @brief These enums indicate the supported aggregation operations that can be

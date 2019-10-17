@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 #include <vector>
 #include <cudf/cudf.h>
+#include <cudf/join.hpp>
 #include <utilities/error_utils.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 
@@ -60,8 +61,8 @@ static void join_benchmark(benchmark::State& state)
 
     CHECK_STREAM(0);
 
-    std::vector<gdf_column*> build_table {build_key_column.get(), build_payload_column.get()};
-    std::vector<gdf_column*> probe_table {probe_key_column.get(), probe_payload_column.get()};
+    cudf::table build_table {build_key_column.get(), build_payload_column.get()};
+    cudf::table probe_table {probe_key_column.get(), probe_payload_column.get()};
 
     // Setup join parameters and result table
 
@@ -70,34 +71,21 @@ static void join_benchmark(benchmark::State& state)
         gdf_method::GDF_HASH   // hash based join
     };
 
-    int columns_to_join[] = {0};
-
-    const int nresult_cols = build_table.size() + probe_table.size() - 1;
-
-    std::vector<gdf_column> result_table(nresult_cols);
-    std::vector<gdf_column *> col_ptrs(nresult_cols);
-
-    for (size_t icol = 0; icol < result_table.size(); icol++) {
-        col_ptrs[icol] = &result_table[icol];
-    }
+    std::vector<gdf_size_type> columns_to_join = {0};
 
     // Benchmark the inner join operation
 
     for (auto _ : state) {
         cuda_event_timer raii(state, true, 0);
 
-        CUDF_TRY(gdf_inner_join(
-            probe_table.data(), 2, columns_to_join,
-            build_table.data(), 2, columns_to_join,
-            1, nresult_cols, col_ptrs.data(),
-            nullptr, nullptr, &ctxt
-        ));
-    }
+        cudf::table result = cudf::inner_join(
+            probe_table, build_table, 
+            columns_to_join, columns_to_join,
+            {{0,0}},
+            nullptr, &ctxt
+        );
 
-    // Cleanup
-
-    for (auto & col_ptr : col_ptrs) {
-        CUDF_TRY(gdf_column_free(col_ptr));
+        result.destroy();
     }
 }
 

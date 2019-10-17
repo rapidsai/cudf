@@ -1,13 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from functools import lru_cache
-from math import fmod
 
 import numpy as np
 from numba import cuda, int32, numpy_support
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils.utils import (
     check_equals_float,
@@ -16,6 +15,7 @@ from cudf.utils.utils import (
     mask_bitsize,
     mask_get,
     mask_set,
+    rint,
 )
 
 
@@ -278,10 +278,10 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
+    import cudf._lib as libcudf
 
-    import cudf.bindings.reduce as cpp_reduce
-    from cudf.dataframe.numerical import NumericalColumn
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.column import NumericalColumn
+    from cudf.core.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
@@ -295,7 +295,7 @@ def prefixsum(vals):
     out_col = NumericalColumn(
         data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
     )
-    cpp_reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
+    libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 
@@ -548,30 +548,13 @@ def gpu_diff(in_col, out_col, N):
 @cuda.jit
 def gpu_round(in_col, out_col, decimal):
     i = cuda.grid(1)
-    round_val = 10 ** (-1.0 * decimal)
+    f = 10 ** decimal
 
     if i < in_col.size:
-        if not in_col[i]:
-            out_col[i] = np.nan
-            return
-
-        newval = in_col[i] // round_val * round_val
-        remainder = fmod(in_col[i], round_val)
-
-        if remainder != 0 and remainder > (0.5 * round_val) and in_col[i] > 0:
-            newval = newval + round_val
-            out_col[i] = newval
-
-        elif (
-            remainder != 0
-            and abs(remainder) < (0.5 * round_val)
-            and in_col[i] < 0
-        ):
-            newval = newval + round_val
-            out_col[i] = newval
-
-        else:
-            out_col[i] = newval
+        ret = in_col[i] * f
+        ret = rint(ret)
+        tmp = ret / f
+        out_col[i] = tmp
 
 
 def apply_round(data, decimal):
@@ -779,7 +762,7 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     min_index = found_col.min()
@@ -812,7 +795,7 @@ def find_last(arr, val, compare="eq"):
                 gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
             else:
                 gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     max_index = found_col.max()

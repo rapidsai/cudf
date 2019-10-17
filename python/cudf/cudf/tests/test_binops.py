@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import Series
-from cudf.dataframe.index import as_index
+from cudf.core import Series
+from cudf.core.index import as_index
 from cudf.tests import utils
 
 _binops = [
@@ -88,7 +88,7 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64"]
+_int_types = ["int8", "int16", "int32", "int64", "longlong"]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -195,6 +195,7 @@ def test_series_compare(cmpop, obj_class, dtype):
         "float32",
         "float64",
         "datetime64[ms]",
+        "longlong",
     ],
 )
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
@@ -630,10 +631,6 @@ def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
     if func == "rmod" or func == "rfloordiv":
         return
-    # TODO: remove this once issue #2173 is resolved
-    if func == "mod" or func == "floordiv":
-        if rhs == 0:
-            return
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(

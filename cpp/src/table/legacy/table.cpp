@@ -21,20 +21,17 @@
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-
+#include <utilities/integer_utils.hpp>
 #include <algorithm>
 
 namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
-  CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-  gdf_size_type num_rows = cols[0]->size;
-
-  std::for_each(_columns.begin(), _columns.end(),
-                [this, num_rows](gdf_column* col) {
-                  CUDF_EXPECTS(nullptr != col, "Null input column");
-                  CUDF_EXPECTS(num_rows == col->size, "Column size mismatch");
-                });
+    std::for_each(_columns.begin(), _columns.end(),
+                  [this](gdf_column* col) {
+                    CUDF_EXPECTS(nullptr != col, "Null input column");
+                    CUDF_EXPECTS(_columns.front()->size == col->size, "Column size mismatch");
+                  });
 }
 
 table::table(std::initializer_list<gdf_column*> list)
@@ -61,8 +58,15 @@ table::table(gdf_size_type num_rows,
                       gdf_column_view_augmented(col, nullptr, nullptr, num_rows,
                                                 dtype, 0, extra_info),
                      "Invalid column parameters");
+        
+        // Allocation size should be  aligned to 4 bytes. The use of 
+        // `round_up_safe`guarantee correct execution with cuda-memcheck  
+        // for cases when the sizeof(type) is 1 or 2 bytes. 
+        size_t buffer_size = cudf::size_of(dtype) * num_rows;
+        size_t buffer_size_aligned = 
+            cudf::util::round_up_safe((size_t)buffer_size, (size_t)sizeof(int32_t));
 
-        RMM_ALLOC(&col->data, cudf::size_of(dtype) * num_rows, stream);
+        RMM_ALLOC(&col->data, buffer_size_aligned, stream);
         if (allocate_bitmasks) {
           int fill_value = (all_valid) ? 0xff : 0;
 
@@ -94,6 +98,16 @@ void table::destroy(void) {
   }
 }
 
+table table::select(std::vector<gdf_size_type> const& column_indices) const {
+    CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
+
+    std::vector<gdf_column*> desired_columns;
+    for(auto index : column_indices){
+        desired_columns.push_back(_columns.at(index));
+    }
+    return table{desired_columns};
+}
+
 std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
   std::vector<gdf_dtype> dtypes(table.num_columns());
 
@@ -114,6 +128,18 @@ bool has_nulls(cudf::table const& table) {
   return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
     return (nullptr != col->valid) and (col->null_count > 0);
   });
+}
+
+table concat(cudf::table const& table1, cudf::table const&table2) {
+    CUDF_EXPECTS(table1.num_rows() == table2.num_rows(), "Number of rows mismatch");
+
+    std::vector<gdf_column*> columns(table1.num_columns()+table2.num_columns());
+    std::transform (std::cbegin(table1), std::cend(table1),
+                  std::begin(columns), [](auto col) { return const_cast<gdf_column*>(col); });
+    std::transform (std::cbegin(table2), std::cend(table2),
+                  std::begin(columns)+table1.num_columns(), [](auto col) { return const_cast<gdf_column*>(col); });
+
+    return table{columns};
 }
 
 }  // namespace cudf

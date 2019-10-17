@@ -155,6 +155,60 @@ struct gdf_extract_day_from_unixtime_op : public thrust::unary_function<int64_t,
 	}
 };
 
+struct gdf_extract_weekday_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
+{
+
+	int64_t units_per_day;
+	__host__ __device__
+	gdf_extract_weekday_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s)   // second
+			units_per_day = 86400;
+		else if (unit == TIME_UNIT_ms)   // millisecond
+			units_per_day = 86400000;
+		else if (unit == TIME_UNIT_us)   // microsecond
+			units_per_day = 86400000000;
+		else if (unit == TIME_UNIT_ns)   // nanosecond
+			units_per_day = 86400000000000;
+		else
+			units_per_day = 86400000;   // default to millisecond
+	}
+
+	__host__ __device__
+	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
+	{
+		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
+		const int era = (z >= 0 ? z : z - 146096) / 146097;
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		const unsigned d =  doy - (153*mp+2)/5 + 1;
+		int m = mp + (mp < 10 ? 3 : -9);
+		int y = static_cast<int>(yoe) + era * 400;
+
+		// apply Zeller's algorithm		
+		if (m <= 2) {
+			y += 1;
+		}
+
+		if (m == 1) {
+			m = 13;
+			y -= 1;
+		}
+
+		if (m == 2) {
+			m = 14;
+			y-= 1;
+		}
+
+		const unsigned k = y % 100;
+		const unsigned j = y / 100;
+		const unsigned h = (d + 13*(m+1)/5 + k + k/4 + j/4 + 5*j) % 7; 
+
+		return (h - 2 + 7) % 7; // pandas convention Monday = 0
+
+	}
+};
 
 struct gdf_extract_hour_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
@@ -305,7 +359,45 @@ struct gdf_extract_day_from_date32_op : public thrust::unary_function<int32_t, i
 };
 
 
+struct gdf_extract_weekday_from_date32_op : public thrust::unary_function<int32_t, int16_t>
+{
 
+	__host__ __device__
+	int16_t operator()(int32_t unixDate) // unixDate is days since the UNIX epoch
+	{
+		const int z = unixDate + 719468;
+		const int era = (z >= 0 ? z : z - 146096) / 146097;
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		const unsigned d = doy - (153*mp+2)/5 + 1;
+		int m = mp + (mp < 10 ? 3 : -9);
+		int y = static_cast<int>(yoe) + era * 400;
+
+		// apply Zeller's algorithm
+		if (m <= 2) {
+			y += 1;
+		}
+
+		if (m == 1) {
+			m = 13;
+			y -= 1;
+		}
+
+		if (m == 2) {
+			m = 14;
+			y-= 1;
+		}
+
+		const unsigned k = y % 100;
+		const unsigned j = y / 100;
+		const unsigned h = (d + 13*(m+1)/5 + k + k/4 + j/4 + 5*j) % 7; 
+
+		return (h - 2 + 7) % 7; // pandas convention Monday = 0
+
+	}
+};
 
 
 gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
@@ -429,6 +521,50 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_day_from_unixtime_op op(input->dtype_info.time_unit);
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
+	}
+
+	cudaStreamSynchronize(stream);
+	cudaStreamDestroy(stream);
+
+	return GDF_SUCCESS;
+}
+
+gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
+
+	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
+
+	cudaStream_t stream;
+	cudaStreamCreate(&stream);
+
+
+    if (input->valid){
+      gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input->size);
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
+    }
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_weekday_from_unixtime_op op(TIME_UNIT_ms);
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_DATE32) {
+		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_weekday_from_date32_op op;
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_weekday_from_unixtime_op op(input->dtype_info.time_unit);
 		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 

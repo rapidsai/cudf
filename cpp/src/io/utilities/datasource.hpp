@@ -59,6 +59,11 @@ class datasource {
       std::shared_ptr<arrow::io::RandomAccessFile> file);
 
   /**
+   * @brief Base class destructor
+   **/
+  virtual ~datasource(){};
+
+  /**
    * @brief Returns a buffer with a subset of data from the source
    *
    * @param[in] offset Bytes from the start

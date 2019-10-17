@@ -262,6 +262,7 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
 
   // Initialize output_columns
   output_columns.resize(num_indices/2);
+  //TODO: optimize to launch all slices in parallel
   for (gdf_size_type i = 0; i < num_indices/2; i++){
     output_columns[i] = new gdf_column{};
     gdf_column_view_augmented(output_columns[i],
