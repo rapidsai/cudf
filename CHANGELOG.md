@@ -9,6 +9,7 @@
 
 ## Bug Fixes
 
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 
 # cuDF 0.10.0 (Date TBD)
 
