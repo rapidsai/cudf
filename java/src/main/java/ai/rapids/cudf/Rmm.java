@@ -32,6 +32,7 @@ public class Rmm {
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
+   * @throws IllegalStateException if RMM has already been initialized
    */
   public static native void initialize(int allocationMode, boolean enableLogging, long poolSize)
       throws RmmException;
@@ -50,6 +51,8 @@ public class Rmm {
   /**
    * ---------------------------------------------------------------------------*
    * Allocate memory and return a pointer to device memory.
+   * If initialization has not occurred then RMM will be implicitly initialized
+   * in CUDA default mode.
    * <p>
    * Mapping: RMM_ALLOC in rmm.h.
    * @param size   The size in bytes of the allocated memory region
