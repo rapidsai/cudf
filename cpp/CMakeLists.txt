@@ -376,7 +376,7 @@ add_library(cudf
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/legacy/transpose.cu
-            src/merge/merge.cu
+            src/merge/legacy/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/legacy/cuio_common.cpp
