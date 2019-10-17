@@ -1446,7 +1446,7 @@ class Series(object):
             Copy of ``self`` cast to the given dtype. Returns
             ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
-        if errors not in ("ignore", "raise"):
+        if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
 
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
@@ -1458,10 +1458,13 @@ class Series(object):
         except Exception as e:
             if errors == "raise":
                 raise e
+            elif errors == "warn":
+                import traceback
+
+                tb = traceback.format_exc()
+                warnings.warn(tb)
             elif errors == "ignore":
-                warnings.warn(
-                    " cant cast '{}' to '{}' ".format(self.dtype, dtype)
-                )
+                pass
             return self
 
     def argsort(self, ascending=True, na_position="last"):
