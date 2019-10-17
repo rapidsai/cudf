@@ -39,6 +39,7 @@
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
 - PR #3060 Move copying.hpp includes to legacy
+- PR #3141 Java fix for relocated IO headers
 
 
 # cuDF 0.10.0 (Date TBD)
