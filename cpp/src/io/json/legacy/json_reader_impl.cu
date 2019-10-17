@@ -30,8 +30,8 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <io/comp/io_uncomp.h>
-#include <io/cuio_common.hpp>
-#include <io/utilities/parsing_utils.cuh>
+#include <io/legacy/cuio_common.hpp>
+#include <io/utilities/legacy/parsing_utils.cuh>
 
 namespace cudf {
 namespace io {
