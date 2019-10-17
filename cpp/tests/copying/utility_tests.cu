@@ -21,7 +21,7 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cstring>
+#include <string>
 
 template <typename T>
 struct EmptyLikeTest : public cudf::test::BaseFixture {};
@@ -38,6 +38,8 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
     auto got = cudf::experimental::empty_like(input->view());
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
+
+struct EmptyLikeStringTest : public EmptyLikeTest <std::string> {};
 
 rmm::device_vector<thrust::pair<const char*,cudf::size_type>> create_test_string () {
     std::vector<const char*> h_test_strings{ "the quick brown fox jumps over the lazy dog",
@@ -71,6 +73,7 @@ rmm::device_vector<thrust::pair<const char*,cudf::size_type>> create_test_string
         }
         h_offsets[idx+1] = offset;
     }
+
     rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings(strings);
     cudaMemcpy( d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice );
 
@@ -87,7 +90,7 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
     EXPECT_EQ(lhs.num_children(), rhs.num_children());
 }
 
-TEST(EmptyLikeTest, ColumnStringTest) {
+TEST_F(EmptyLikeStringTest, ColumnStringTest) {
     rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings = create_test_string();
 
     auto column = cudf::make_strings_column(d_strings);
@@ -118,7 +121,9 @@ void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs)
         cudf::test::expect_column_properties_equal(lhs.column(index), rhs.column(index));    
 }
 
-TEST(EmptyLikeTest, TableTest) {
+struct EmptyLikeTableTest : public cudf::test::BaseFixture {};
+
+TEST_F(EmptyLikeTableTest, TableTest) {
     cudf::mask_state state = cudf::ALL_VALID;
     cudf::size_type size = 10;
     auto input = create_table(size, state);
