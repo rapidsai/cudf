@@ -7,6 +7,7 @@
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3094 Adding `any` and `all` support from libcudf
+- PR 
 
 
 ## Improvements
@@ -30,6 +31,7 @@
 - PR #3083 Improved some binary operation tests to include null testing.
 - PR #3071 Move cuIO to legacy
 - PR #3126 Round 2 of snappy decompression optimizations
+- PR #3143 Define and implement new copying APIs `slice` and `split`
 
 ## Bug Fixes
 
