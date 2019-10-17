@@ -46,6 +46,8 @@ enum operators {
   MEAN,           ///< Computes the arithmetic mean of the values in the column
   VAR,            ///< Computes the variance of the values in the column
   STD,            ///< Computes the standard deviation of the values in the column
+  ANY,            ///< Computes to true if any of the values are non-zero/true
+  ALL,            ///< Computes to true if all of the values are non-zero/true
 };
 }  // namespace reduction
 

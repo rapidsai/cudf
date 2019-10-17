@@ -365,6 +365,8 @@ add_library(cudf
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
+            src/reductions/any.cu
+            src/reductions/all.cu
             src/reductions/sum.cu
             src/reductions/product.cu
             src/reductions/sum_of_squares.cu
