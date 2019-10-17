@@ -7,7 +7,7 @@ import itertools
 import logging
 import numbers
 import pickle
-import random
+import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -2448,17 +2448,6 @@ class DataFrame(object):
         lhs = DataFrame()
         rhs = DataFrame()
 
-        # Creating unique column name to use libgdf join
-        def _unique_tmp_name(l, r, names):
-            name = str(random.randint(2 ** 29, 2 ** 31))
-            while (
-                (name in self.columns)
-                or (name in other.columns)
-                or (name in names)
-            ):
-                name = str(random.randint(2 ** 29, 2 ** 31))
-            return name
-
         idx_col_names = []
         if isinstance(self.index, cudf.core.multiindex.MultiIndex):
             if not isinstance(other.index, cudf.core.multiindex.MultiIndex):
@@ -2476,14 +2465,14 @@ class DataFrame(object):
                 )
 
             for name in index_frame_l.columns:
-                idx_col_name = _unique_tmp_name(self, other, idx_col_names)
+                idx_col_name = str(uuid.uuid4())
                 idx_col_names.append(idx_col_name)
 
                 lhs[idx_col_name] = index_frame_l[name].set_index(self.index)
                 rhs[idx_col_name] = index_frame_r[name].set_index(other.index)
 
         else:
-            idx_col_names.append(_unique_tmp_name(self, other, idx_col_names))
+            idx_col_names.append(str(uuid.uuid4()))
             lhs[idx_col_names[0]] = Series(self.index.as_column()).set_index(
                 self.index
             )

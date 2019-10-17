@@ -738,53 +738,68 @@ def test_join_empty_table_dtype():
 
 
 @pytest.mark.parametrize("how", ["outer", "inner", "left", "right"])
-@pytest.mark.parametrize("cat", [True, False])
-def test_join_multi(how, cat):
-
-    size = 10
+@pytest.mark.parametrize(
+    "column_a",
+    [
+        (
+            pd.Series([None, 1, 2, 3, 4, 5, 6, 7]).astype(np.float),
+            pd.Series([8, 9, 10, 11, 12, None, 14, 15]).astype(np.float),
+        ),
+        (
+            pd.Series([np.nan] * 8).astype(np.float),
+            pd.Series([np.nan] * 8).astype(np.float),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "column_b",
+    [
+        (
+            pd.Series([0, 1, 0, 1, 1, 0, 0, 0]).astype(np.float),
+            pd.Series([0, 1, 2, 1, 2, 2, 0, 0]).astype(np.float),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "column_c",
+    [
+        (
+            pd.Series(["dog", "cat", "fish", "bug"] * 2),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2),
+        ),
+        (
+            pd.Series(["dog", "cat", "fish", "bug"] * 2).astype("category"),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2).astype(
+                "category"
+            ),
+        ),
+    ],
+)
+def test_join_multi(how, column_a, column_b, column_c):
     index = ["b", "c"]
-    df1 = pd.DataFrame(
-        {
-            "a1": np.arange(size),
-            "b": np.random.randint(0, 2, size=size),
-            "c": np.random.choice(["dog", "cat"], size=size),
-        }
-    )
-    if cat:
-        df1["c"] = df1["c"].astype("category")
+    df1 = pd.DataFrame()
+    df1["a1"] = column_a[0]
+    df1["b"] = column_b[0]
+    df1["c"] = column_c[0]
     df1 = df1.set_index(index)
     gdf1 = cudf.from_pandas(df1)
 
-    df2 = pd.DataFrame(
-        {
-            "a2": np.arange(size),
-            "b": np.random.randint(0, 4, size=size),
-            "c": np.random.choice(["bird"], size=size),
-        }
-    )
-    if cat:
-        df2["c"] = df2["c"].astype("category")
+    df2 = pd.DataFrame()
+    df2["a2"] = column_a[1]
+    df2["b"] = column_b[1]
+    df2["c"] = column_c[1]
     df2 = df2.set_index(index)
     gdf2 = cudf.from_pandas(df2)
 
-    gdf_result = gdf1.join(gdf2, how=how, sort=True).sort_values(["a1", "a2"])
-    pdf_result = df1.join(df2, how=how, sort=True).sort_values(["a1", "a2"])
-
-    for col in ["a1", "a2"]:
-        if gdf_result[col].dtype != pdf_result[col].dtype:
-            gdf_result[col] = gdf_result[col].astype(pdf_result[col].dtype)
+    gdf_result = gdf1.join(gdf2, how=how, sort=True)
+    pdf_result = df1.join(df2, how=how, sort=True)
 
     # Make sure columns are in the same order
     columns = pdf_result.columns.values
     gdf_result = gdf_result[columns]
     pdf_result = pdf_result[columns]
-    if how != "outer":
-        pdf_result.index.name = "bob"
-        gdf_result.index.name = "mary"
-        pd.util.testing.assert_frame_equal(
-            gdf_result.to_pandas().reset_index(drop=True),
-            pdf_result.reset_index(drop=True),
-        )
-    else:
-        _check_series(pdf_result["a1"].fillna(-1), gdf_result["a1"].fillna(-1))
-        _check_series(pdf_result["a2"].fillna(-1), gdf_result["a2"].fillna(-1))
+
+    assert_eq(
+        gdf_result.reset_index(drop=True).fillna(-1),
+        pdf_result.sort_index().reset_index(drop=True).fillna(-1),
+    )
