@@ -102,9 +102,8 @@ class column_wrapper {
  * @return rmm::device_buffer Buffer containing all elements in the range
  *`[begin,end)`
  *---------------------------------------------------------------------------**/
-template <typename InputIterator>
+template <typename Element, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
-  using Element = decltype(*begin);
   static_assert(cudf::is_fixed_width<Element>(),
                 "Unexpected non-fixed width type.");
   std::vector<Element> elements(begin, end);
@@ -220,7 +219,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     cudf::size_type size = std::distance(begin, end);
     wrapped.reset(new cudf::column{
         cudf::data_type{cudf::experimental::type_to_id<Element>()}, size,
-        detail::make_elements(begin, end)});
+        detail::make_elements<Element>(begin, end)});
   }
 
   /**---------------------------------------------------------------------------*
@@ -250,8 +249,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
     wrapped.reset(new cudf::column{
         cudf::data_type{cudf::experimental::type_to_id<Element>()}, size,
-        detail::make_elements(begin, end), detail::make_null_mask(v, v + size),
-        cudf::UNKNOWN_NULL_COUNT});
+        detail::make_elements<Element>(begin, end),
+        detail::make_null_mask(v, v + size), cudf::UNKNOWN_NULL_COUNT});
   }
 
   /**---------------------------------------------------------------------------*
