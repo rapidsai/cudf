@@ -165,6 +165,8 @@ def nans_to_nulls(py_col):
             finalizer=rmm._make_finalizer(mask_ptr, 0)
         )
 
+    free_column(c_col)
+
     return mask
 
 
@@ -176,6 +178,7 @@ def is_null(col):
     cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_column result = cpp_unaryops.is_null(c_col[0])
+    free_column(c_col)
 
     return gdf_column_to_column(&result)
 
@@ -188,5 +191,6 @@ def is_not_null(col):
     cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_column result = cpp_unaryops.is_not_null(c_col[0])
+    free_column(c_col)
 
     return gdf_column_to_column(&result)

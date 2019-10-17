@@ -2427,7 +2427,7 @@ TYPED_TEST(IsNull, sample)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 5000;
+    cudf::size_type NUM_ELEM = 5000;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2445,7 +2445,7 @@ TYPED_TEST(IsNull, all_valid)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 50;
+    cudf::size_type NUM_ELEM = 50;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2463,7 +2463,7 @@ TYPED_TEST(IsNull, all_invalid)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 50;
+    cudf::size_type NUM_ELEM = 50;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2481,7 +2481,7 @@ TYPED_TEST(IsNull, empty_column)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 0;
+    cudf::size_type NUM_ELEM = 0;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2508,7 +2508,7 @@ TYPED_TEST(IsNotNull, sample)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 5000;
+    cudf::size_type NUM_ELEM = 5000;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2526,7 +2526,7 @@ TYPED_TEST(IsNotNull, all_valid)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 50;
+    cudf::size_type NUM_ELEM = 50;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2544,7 +2544,7 @@ TYPED_TEST(IsNotNull, all_invalid)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 50;
+    cudf::size_type NUM_ELEM = 50;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
@@ -2562,7 +2562,7 @@ TYPED_TEST(IsNotNull, empty_column)
 {
     using T = TypeParam;
 
-    gdf_index_type NUM_ELEM = 0;
+    cudf::size_type NUM_ELEM = 0;
 
     column_wrapper <T> col(NUM_ELEM,
                     [](auto row) { return row; },
