@@ -27,7 +27,7 @@ import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class ColumnVectorTest {
+public class ColumnVectorTest extends CudfTestBase {
 
   public static final double DELTA = 0.0001;
 
@@ -117,7 +117,6 @@ public class ColumnVectorTest {
 
   @Test
   void isNotNullTestEmptyColumn() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans(); 
          ColumnVector result = v.isNotNull()) {
@@ -127,7 +126,6 @@ public class ColumnVectorTest {
 
   @Test
   void isNotNullTest() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts(1, 2, null, 4, null, 6);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true);
          ColumnVector result = v.isNotNull()) {
@@ -137,7 +135,6 @@ public class ColumnVectorTest {
 
   @Test
   void isNotNullTestAllNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts(null, null, null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
          ColumnVector result = v.isNotNull()) {
@@ -147,7 +144,6 @@ public class ColumnVectorTest {
 
   @Test
   void isNotNullTestAllNotNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts(1,2,3,4,5,6);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
          ColumnVector result = v.isNotNull()) {
@@ -157,7 +153,6 @@ public class ColumnVectorTest {
 
   @Test
   void isNullTest() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts(1, 2, null, 4, null, 6);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
          ColumnVector result = v.isNull()) {
@@ -166,8 +161,25 @@ public class ColumnVectorTest {
   }
 
   @Test
+  void testGetDeviceMemorySizeNonStrings() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
+      assertEquals(24, v0.getDeviceMemorySize()); // (6*4B)
+      assertEquals(40, v1.getDeviceMemorySize()); // (8*4B) + 8B(for validity vector)
+    }
+  }
+
+  @Test
+  void testGetDeviceMemorySizeStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings("onetwothree", "four", "five");
+         ColumnVector v1 = ColumnVector.fromStrings("onetwothree", "four", null, "five")) {
+      assertEquals(80, v0.getDeviceMemorySize()); //32B + 24B + 24B
+      assertEquals(112, v1.getDeviceMemorySize()); //32B + 24B + 24B + 24B + 8B(for validity vector)
+    }
+  }
+
+  @Test
   void testFromScalarProducesEmptyColumn() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromInt(1), 0);
          ColumnVector expected = ColumnVector.fromBoxedInts()) {
       assertColumnsAreEqual(input, expected);
@@ -176,7 +188,6 @@ public class ColumnVectorTest {
 
   @Test
   void testFromScalarFloat() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromFloat(1.123f), 4);
          ColumnVector expected = ColumnVector.fromBoxedFloats(1.123f, 1.123f, 1.123f, 1.123f)) {
       assertColumnsAreEqual(input, expected);
@@ -185,7 +196,6 @@ public class ColumnVectorTest {
 
   @Test
   void testFromNullScalarInteger() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT32), 6);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
       assertEquals(input.getNullCount(), expected.getNullCount());
@@ -195,7 +205,6 @@ public class ColumnVectorTest {
 
   @Test
   void testSetToNullScalarInteger() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromInt(123), 6);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
       input.fill(Scalar.fromNull(DType.INT32));
@@ -206,7 +215,6 @@ public class ColumnVectorTest {
 
   @Test
   void testSetToNullScalarByte() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     int numNulls = 3000;
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT8), numNulls)) {
       assertEquals(input.getNullCount(), numNulls);
@@ -219,7 +227,6 @@ public class ColumnVectorTest {
 
   @Test
   void testSetToNullThenBackScalarByte() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     int numNulls = 3000;
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT8), numNulls)) {
       assertEquals(input.getNullCount(), numNulls);
@@ -234,14 +241,12 @@ public class ColumnVectorTest {
 
   @Test
   void testFromScalarStringThrows() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     assertThrows(IllegalArgumentException.class, () ->
       ColumnVector.fromScalar(Scalar.fromString("test"), 1));
   }
 
   @Test
   void testReplaceEmptyColumn() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedBooleans();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
          ColumnVector result = input.replaceNulls(Scalar.fromBool(false))) {
@@ -251,7 +256,6 @@ public class ColumnVectorTest {
 
   @Test
   void testReplaceNullBoolsWithAllNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedBooleans(null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false);
          ColumnVector result = input.replaceNulls(Scalar.fromBool(false))) {
@@ -261,7 +265,6 @@ public class ColumnVectorTest {
 
   @Test
   void testReplaceSomeNullBools() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedBooleans(false, null, null, false);
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false);
          ColumnVector result = input.replaceNulls(Scalar.fromBool(true))) {
@@ -271,7 +274,6 @@ public class ColumnVectorTest {
 
   @Test
   void testReplaceNullIntegersWithAllNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedInts(null, null, null, null);
          ColumnVector expected = ColumnVector.fromBoxedInts(0, 0, 0, 0);
          ColumnVector result = input.replaceNulls(Scalar.fromInt(0))) {
@@ -281,7 +283,6 @@ public class ColumnVectorTest {
 
   @Test
   void testReplaceSomeNullIntegers() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
          ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 999, 4, 999);
          ColumnVector result = input.replaceNulls(Scalar.fromInt(999))) {
@@ -291,7 +292,6 @@ public class ColumnVectorTest {
 
   @Test
   void testReplaceNullsFailsOnTypeMismatch() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null)) {
       assertThrows(CudfException.class, () -> {
         long nativePtr = Cudf.replaceNulls(input, Scalar.fromBool(true));
@@ -304,7 +304,6 @@ public class ColumnVectorTest {
 
   @Test
   void testReplaceNullsFailsOnNullScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null)) {
       assertThrows(CudfException.class, () -> {
         long nativePtr = Cudf.replaceNulls(input, Scalar.fromNull(input.getType()));
@@ -320,7 +319,6 @@ public class ColumnVectorTest {
 
   @Test
   void testQuantilesOnIntegerInput() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     int[] approxExpected = {-1, 1, 1, 2, 9};
     double[][] exactExpected = {
         {-1.0,   1.0,   1.0,   2.5,   9.0},  // LINEAR
@@ -345,7 +343,6 @@ public class ColumnVectorTest {
 
   @Test
   void testQuantilesOnDoubleInput() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     double[] approxExpected = {-1.01, 0.8, 0.8, 2.13, 6.8};
     double[][] exactExpected = {
         {-1.01, 0.8, 0.9984, 2.13, 6.8},  // LINEAR
@@ -370,7 +367,6 @@ public class ColumnVectorTest {
 
   @Test
   void testSliceWithArray() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
       Integer[][] expectedSlice = {
           {12, null},
@@ -408,7 +404,6 @@ public class ColumnVectorTest {
 
   @Test
   void testWithOddSlices() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
       assertThrows(CudfException.class, () -> cv.slice(1, 3, 5, 9, 2, 4, 8));
     }
@@ -416,7 +411,6 @@ public class ColumnVectorTest {
 
   @Test
   void testSliceWithColumnVector() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28);
         ColumnVector indices = ColumnVector.fromInts(1, 3, 5, 9, 2, 4, 8, 8)) {
       Integer[][] expectedSlice = {
@@ -613,7 +607,6 @@ public class ColumnVectorTest {
 
   @Test
   void testNVStringManipulationWithNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     // Special characters in order of usage, capital and small cyrillic koppa
     // Latin A with macron, and cyrillic komi de
     // \ud720 and \ud721 are UTF-8 characters without corresponding upper and lower characters
@@ -638,7 +631,6 @@ public class ColumnVectorTest {
 
   @Test
   void testNVStringManipulation() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
                                                    "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
                                                    "kl m", "Nop1", "\\qRs2", "3tuV\'",
