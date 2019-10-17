@@ -21,6 +21,9 @@
 #include <zlib.h> // uncompress
 #include "unbz2.h" // bz2 uncompress
 
+namespace cudf {
+namespace io {
+
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
 #define GZ_FLG_FEXTRA   0x04    // Extra fields present
@@ -284,7 +287,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst)
+gdf_error io_uncompress_single_h2d(const void *src, cudf::size_type src_size, int strm_type, std::vector<char>& dst)
 {
     const uint8_t *raw = (const uint8_t *)src;
     const uint8_t *comp_data = nullptr;
@@ -652,3 +655,8 @@ HostDecompressor *HostDecompressor::Create(int stream_type)
     }
     return decompressor;
 }
+
+
+} // namespace io
+} // namespace cudf
+

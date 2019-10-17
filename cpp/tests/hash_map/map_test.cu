@@ -15,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <gtest/gtest.h>
@@ -52,7 +52,7 @@ struct InsertTest : public GdfTest {
     map = std::move(map_type::create(compute_hash_table_size(size)));
   }
 
-  const gdf_size_type size{10000};
+  const cudf::size_type size{10000};
   rmm::device_vector<pair_type> pairs;
   std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
@@ -98,7 +98,7 @@ template <typename pair_type,
           typename key_type = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
 struct unique_pair_generator {
-  __device__ pair_type operator()(gdf_size_type i) {
+  __device__ pair_type operator()(cudf::size_type i) {
     return thrust::make_pair(key_type(i), value_type(i));
   }
 };
@@ -109,7 +109,7 @@ template <typename pair_type,
 struct identical_pair_generator {
   identical_pair_generator(key_type k = 42, value_type v = 42)
       : key{k}, value{v} {}
-  __device__ pair_type operator()(gdf_size_type i) {
+  __device__ pair_type operator()(cudf::size_type i) {
     return thrust::make_pair(key, value);
   }
   key_type key;
@@ -121,7 +121,7 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 struct identical_key_generator {
   identical_key_generator(key_type k = 42) : key{k} {}
-  __device__ pair_type operator()(gdf_size_type i) {
+  __device__ pair_type operator()(cudf::size_type i) {
     return thrust::make_pair(key, value_type(i));
   }
   key_type key;

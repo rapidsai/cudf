@@ -28,9 +28,9 @@
 
 #include <thrust/device_vector.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 // This is the main test feature
 template <typename T>
@@ -45,7 +45,7 @@ struct ScanTest : public GdfTest
         this->val_check(int_values, do_print, "input = ");
         this->val_check(exact_values, do_print, "exact = ");
 
-        gdf_size_type col_size = int_values.size();
+        cudf::size_type col_size = int_values.size();
         std::vector<T> input_values(col_size);
 
         std::transform(int_values.begin(), int_values.end(),

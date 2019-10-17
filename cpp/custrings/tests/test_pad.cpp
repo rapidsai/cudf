@@ -5,9 +5,11 @@
 
 #include "./utils.h"
 
+struct TestPad : public GdfTest{};
+
 std::vector<const char*> hstrs{ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
-TEST(TestPad, Repeat)
+TEST_F(TestPad, Repeat)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -27,7 +29,7 @@ TEST(TestPad, Repeat)
     NVStrings::destroy(strs);
 }
 
-TEST(TestPad, Pad)
+TEST_F(TestPad, Pad)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -53,7 +55,7 @@ TEST(TestPad, Pad)
     NVStrings::destroy(strs);
 }
 
-TEST(TestPad, ZFill)
+TEST_F(TestPad, ZFill)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
     NVStrings* got = strs->zfill(8);
@@ -63,7 +65,7 @@ TEST(TestPad, ZFill)
     NVStrings::destroy(strs);
 }
 
-TEST(TestPad, Wrap)
+TEST_F(TestPad, Wrap)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
     NVStrings* got = strs->wrap(3);
@@ -71,11 +73,4 @@ TEST(TestPad, Wrap)
     EXPECT_TRUE( verify_strings(got,expected) );
     NVStrings::destroy(got);
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

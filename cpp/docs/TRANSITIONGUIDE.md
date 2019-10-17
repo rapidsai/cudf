@@ -168,7 +168,7 @@ CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
 
 ### ```column_wrapper```
 
-The `column_wrapper<T>` class template is defined in `cudf/cpp/tests/utilities/column_wrapper.cuh` to simplify the creation and management of `gdf_column`s for the purposes of unit testing. 
+The `column_wrapper<T>` class template is defined in `cudf/cpp/tests/utilities/legacy/column_wrapper.cuh` to simplify the creation and management of `gdf_column`s for the purposes of unit testing. 
 
 `column_wrapper<T>` provides a number of constructors that allow easily constructing a `gdf_column` with the appropriate `gdf_dtype` enum set based on mapping `T` to an enum, e.g., `column_wrapper<int>` will correspond to a `gdf_column` whose `gdf_dtype` is set to `GDF_INT32`.
 
@@ -183,7 +183,7 @@ You can also construct a `gdf_column` that uses a `std::vector` to initialize th
 ```
  std::vector<T> values(size);
 
- std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
+ std::vector<cudf::valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
 
  cudf::test::column_wrapper<T> const col(values, bitmask);
 ```

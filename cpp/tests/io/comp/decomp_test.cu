@@ -15,9 +15,11 @@
  */
 
 #include <io/comp/gpuinflate.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <vector>
+
+#include <rmm/device_buffer.hpp>
 
 /**
  * @brief Base test fixture for decompression
@@ -29,13 +31,13 @@ template <typename Decompressor>
 struct DecompressTest : public GdfTest {
   void SetUp() override {
     ASSERT_CUDA_SUCCEEDED(
-        cudaMallocHost((void**)&inf_args, sizeof(gpu_inflate_input_s)));
+        cudaMallocHost((void**)&inf_args, sizeof(cudf::io::gpu_inflate_input_s)));
     ASSERT_CUDA_SUCCEEDED(
-        cudaMallocHost((void**)&inf_stat, sizeof(gpu_inflate_status_s)));
+        cudaMallocHost((void**)&inf_stat, sizeof(cudf::io::gpu_inflate_status_s)));
     ASSERT_RMM_SUCCEEDED(
-        RMM_ALLOC(&d_inf_args, sizeof(gpu_inflate_input_s), 0));
+        RMM_ALLOC(&d_inf_args, sizeof(cudf::io::gpu_inflate_input_s), 0));
     ASSERT_RMM_SUCCEEDED(
-        RMM_ALLOC(&d_inf_stat, sizeof(gpu_inflate_status_s), 0));
+        RMM_ALLOC(&d_inf_stat, sizeof(cudf::io::gpu_inflate_status_s), 0));
   }
 
   void TearDown() override {
@@ -47,51 +49,47 @@ struct DecompressTest : public GdfTest {
 
   void Decompress(std::vector<uint8_t>* decompressed, const uint8_t* compressed,
                   size_t compressed_size) {
-    inf_args->srcSize = compressed_size;
-    inf_args->dstSize = decompressed->size();
-    ASSERT_RMM_SUCCEEDED(RMM_ALLOC(&inf_args->srcDevice, inf_args->srcSize, 0));
-    ASSERT_RMM_SUCCEEDED(RMM_ALLOC(&inf_args->dstDevice, inf_args->dstSize, 0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_args->srcDevice, compressed,
-                                          inf_args->srcSize,
-                                          cudaMemcpyHostToDevice, 0));
+    rmm::device_buffer src(compressed, compressed_size);
+    rmm::device_buffer dst(decompressed->size());
 
+    inf_args->srcDevice = static_cast<const uint8_t*>(src.data());
+    inf_args->dstDevice = static_cast<uint8_t*>(dst.data());
+    inf_args->srcSize = src.size();
+    inf_args->dstSize = dst.size();
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_args, inf_args,
-                                          sizeof(gpu_inflate_input_s),
+                                          sizeof(cudf::io::gpu_inflate_input_s),
                                           cudaMemcpyHostToDevice, 0));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_stat, inf_stat,
-                                          sizeof(gpu_inflate_status_s),
+                                          sizeof(cudf::io::gpu_inflate_status_s),
                                           cudaMemcpyHostToDevice, 0));
     ASSERT_CUDA_SUCCEEDED(static_cast<Decompressor*>(this)->dispatch());
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_stat, d_inf_stat,
-                                          sizeof(gpu_inflate_status_s),
+                                          sizeof(cudf::io::gpu_inflate_status_s),
                                           cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(decompressed->data(),
                                           inf_args->dstDevice, inf_args->dstSize,
                                           cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
-
-    ASSERT_RMM_SUCCEEDED(RMM_FREE(inf_args->dstDevice, 0));
-    ASSERT_RMM_SUCCEEDED(RMM_FREE(inf_args->srcDevice, 0));
   }
 
-  gpu_inflate_input_s* inf_args = nullptr;
-  gpu_inflate_status_s* inf_stat = nullptr;
-  gpu_inflate_input_s* d_inf_args = nullptr;
-  gpu_inflate_status_s* d_inf_stat = nullptr;
+  cudf::io::gpu_inflate_input_s* inf_args = nullptr;
+  cudf::io::gpu_inflate_status_s* inf_stat = nullptr;
+  cudf::io::gpu_inflate_input_s* d_inf_args = nullptr;
+  cudf::io::gpu_inflate_status_s* d_inf_stat = nullptr;
 };
 
 /**
  * @brief Derived fixture for GZIP decompression
  **/
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
-  cudaError_t dispatch() { return gpuinflate(d_inf_args, d_inf_stat, 1, 1); }
+  cudaError_t dispatch() { return cudf::io::gpuinflate(d_inf_args, d_inf_stat, 1, 1); }
 };
 
 /**
  * @brief Derived fixture for Snappy decompression
  **/
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
-  cudaError_t dispatch() { return gpu_unsnap(d_inf_args, d_inf_stat, 1); }
+  cudaError_t dispatch() { return cudf::io::gpu_unsnap(d_inf_args, d_inf_stat, 1); }
 };
 
 /**
@@ -100,10 +98,10 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   cudaError_t dispatch() {
     uint8_t* d_scratch = nullptr;
-    size_t scratch_size = get_gpu_debrotli_scratch_size(1);
+    size_t scratch_size = cudf::io::get_gpu_debrotli_scratch_size(1);
 
     RMM_ALLOC(&d_scratch, scratch_size, 0);
-    auto ret = gpu_debrotli(d_inf_args, d_inf_stat, d_scratch, scratch_size, 1);
+    auto ret = cudf::io::gpu_debrotli(d_inf_args, d_inf_stat, d_scratch, scratch_size, 1);
     RMM_FREE(d_scratch, 0);
     return ret;
   }
@@ -125,6 +123,15 @@ TEST_F(SnappyDecompressTest, HelloWorld) {
   constexpr char uncompressed[] = "hello world";
   constexpr uint8_t compressed[] = {0xb,  0x28, 0x68, 0x65, 0x6c, 0x6c, 0x6f,
                                     0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64};
+
+  std::vector<uint8_t> output(sizeof(uncompressed));
+  Decompress(&output, compressed, sizeof(compressed));
+  EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
+}
+
+TEST_F(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup) {
+  constexpr char uncompressed[] = "Aaaaaaaaaaaah!";
+  constexpr uint8_t compressed[] = {14, 0x0, 'A', 0x0, 'a', (10-4)*4+1, 1, 0x4, 'h', '!'};
 
   std::vector<uint8_t> output(sizeof(uncompressed));
   Decompress(&output, compressed, sizeof(compressed));

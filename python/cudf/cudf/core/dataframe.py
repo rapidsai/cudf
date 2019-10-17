@@ -163,6 +163,8 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+        for col in self._cols:
+            self._cols[col]._index = self._index
 
     @property
     def _constructor(self):
@@ -324,7 +326,6 @@ class DataFrame(object):
         if is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
-            s.index = self.index
             return s
         elif isinstance(arg, slice):
             df = DataFrame()
@@ -1176,7 +1177,7 @@ class DataFrame(object):
                 return df.set_index(
                     cudf.MultiIndex.from_frame(self[index], names=index)
                 )
-            index = index[0]
+            index = index[0]  # List contains single item
 
         # When index is a column name
         if isinstance(index, str):
@@ -1193,7 +1194,7 @@ class DataFrame(object):
                 df[k] = c.set_index(index)
             return df
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False, inplace=False):
         out = DataFrame()
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
@@ -1209,7 +1210,13 @@ class DataFrame(object):
                 out[c] = self[c]
         else:
             out = self
-        return out.set_index(RangeIndex(len(self)))
+        if inplace is True:
+            for column_name in set(out.columns) - set(self.columns):
+                self[column_name] = out[column_name]
+                self._cols.move_to_end(column_name, last=False)
+            self._index = RangeIndex(len(self))
+        else:
+            return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
@@ -3914,7 +3921,8 @@ class DataFrame(object):
         cols = libcudf.filling.repeat(self._columns, repeats)
         # to preserve col names, need to get it from old _cols dict
         column_names = self._cols.keys()
-        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
+        result = DataFrame(data=dict(zip(column_names, cols)))
+        return result.set_index(new_index)
 
 
 def from_pandas(obj):

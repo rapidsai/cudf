@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/compare_column_wrappers.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
 #include "../common/type_info.hpp"
@@ -32,13 +32,13 @@ namespace {
 /**---------------------------------------------------------------------------*
  * @brief Return last odd index in a container containing `size` items
  *---------------------------------------------------------------------------**/
-auto constexpr last_odd_index(gdf_size_type size) {
+auto constexpr last_odd_index(cudf::size_type size) {
   return size - (size + 1) % 2;
 }
 /**---------------------------------------------------------------------------*
  * @brief Return last even index in a container containing `size` items
 *---------------------------------------------------------------------------**/
-auto constexpr last_even_index(gdf_size_type size) {
+auto constexpr last_even_index(cudf::size_type size) {
   return (size - 1) - ((size - 1) % 2);
 }
 }  // namespace

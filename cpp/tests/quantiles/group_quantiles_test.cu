@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <cudf/quantiles.hpp>
 
 #include <gtest/gtest.h>
@@ -110,14 +110,14 @@ TEST_F(group_quantile, SingleColumnNullable)
     auto expect_vals = cudf::test::column_wrapper<double>  {  4.5,    4,      5 };
     
     auto keys = cudf::test::column_wrapper<int32_t> ( keys_data,
-        [&]( gdf_index_type row ) { return keys_valid[row]; }
+        [&]( cudf::size_type row ) { return keys_valid[row]; }
     );
     auto vals = cudf::test::column_wrapper<double> ( vals_data,
-        [&]( gdf_index_type row ) { return vals_valid[row]; }
+        [&]( cudf::size_type row ) { return vals_valid[row]; }
     );
 
     auto expect_keys = cudf::test::column_wrapper<int32_t> ( expect_keys_data,
-        []( gdf_size_type i ) { return true; } 
+        []( cudf::size_type i ) { return true; } 
     );
 
     cudf::table key_table;
