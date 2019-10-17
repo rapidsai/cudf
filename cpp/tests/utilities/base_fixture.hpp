@@ -66,7 +66,8 @@ class BaseFixture : public ::testing::Test {
  *
  * @tparam T The type of values that will be generated.
  *---------------------------------------------------------------------------**/
-template <typename T, typename Engine = std::default_random_engine>
+template <typename T = cudf::size_type,
+          typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
   using uniform_distribution =
@@ -80,14 +81,10 @@ class UniformRandomGenerator {
    * @brief Construct a new Uniform Random Generator to generate uniformly
    * random numbers in the range `[upper,lower]`
    *
-   * @tparam Seed Type of seed
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
-   * @param s Optional seed
    *---------------------------------------------------------------------------**/
-  template <typename Seed>
-  UniformRandomGenerator(T lower, T upper, Seed s = std::random_device{}())
-      : dist{lower, upper}, rng{s} {}
+  UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the next random number.
