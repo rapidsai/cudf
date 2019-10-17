@@ -22,7 +22,7 @@
 #include <gtest/gtest.h>
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/io/io_test_utils.hpp>
+#include <tests/io/legacy/io_test_utils.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(

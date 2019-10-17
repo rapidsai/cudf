@@ -27,7 +27,7 @@
 #include <vector>
 
 #include <io/utilities/wrapper_utils.hpp>
-#include <io/csv/type_conversion.cuh>
+#include <io/csv/legacy/type_conversion.cuh>
 
 #include <thrust/pair.h>
 #include <thrust/device_ptr.h>
