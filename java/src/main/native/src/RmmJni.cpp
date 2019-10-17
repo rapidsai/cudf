@@ -15,10 +15,13 @@
  */
 
 #include <stddef.h>
+#include <mutex>
 
 #include <rmm/rmm.hpp>
 
 #include "jni_utils.hpp"
+
+static std::mutex Rmm_alloc_init_mutex;
 
 extern "C" {
 
@@ -26,6 +29,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initialize(JNIEnv *env, jclass cl
                                                           jint allocation_mode,
                                                           jboolean enable_logging,
                                                           jlong pool_size) {
+  if (rmmIsInitialized(nullptr)) {
+    JNI_THROW_NEW(env, "java/lang/IllegalStateException", "RMM already initialized", );
+  }
   rmmOptions_t opts;
   opts.allocation_mode = static_cast<rmmAllocationMode_t>(allocation_mode);
   opts.enable_logging = enable_logging == JNI_TRUE;
@@ -43,6 +49,21 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdown(JNIEnv *env, jclass claz
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_alloc(JNIEnv *env, jclass clazz, jlong size,
                                                       jlong stream) {
+  if (!rmmIsInitialized(nullptr)) {
+    // RMM used to allow allocations without explicit initialization.
+    // This emulates the old behavior with the caveat that a subsequent
+    // RMM initialization will fail with an already initialized error.
+    std::lock_guard<std::mutex> lock(Rmm_alloc_init_mutex);
+
+    if (!rmmIsInitialized(nullptr)) {
+      rmmOptions_t opts;
+      opts.allocation_mode = CudaDefaultAllocation;
+      opts.enable_logging = false;
+      opts.initial_pool_size = 0;
+      JNI_RMM_TRY(env, 0, rmmInitialize(&opts));
+    }
+  }
+
   void *ret = 0;
   cudaStream_t c_stream = reinterpret_cast<cudaStream_t>(stream);
   JNI_RMM_TRY(env, 0, RMM_ALLOC(&ret, size, c_stream));

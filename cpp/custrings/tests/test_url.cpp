@@ -4,7 +4,9 @@
 
 #include "./utils.h"
 
-TEST(TestURL, UrlEncode)
+struct TestURL : public GdfTest{};
+
+TEST_F(TestURL, UrlEncode)
 {
     std::vector<const char*> hstrs{"www.nvidia.com/rapids?p=é", "/_file-7.txt", "a b+c~d",
                                    "e\tfgh\\jklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -23,7 +25,7 @@ TEST(TestURL, UrlEncode)
     NVStrings::destroy(strs);
 }
 
-TEST(TestURL, UrlDecode)
+TEST_F(TestURL, UrlDecode)
 {
     std::vector<const char*> hstrs{ "www.nvidia.com/rapids/%3Fp%3D%C3%A9", "/_file-1234567890.txt", "a%20b%2Bc~defghijklmnopqrstuvwxyz",
                                     "%25-accent%c3%a9d", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "01234567890",
@@ -39,11 +41,4 @@ TEST(TestURL, UrlDecode)
 
     NVStrings::destroy(got);
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

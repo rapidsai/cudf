@@ -67,9 +67,9 @@ namespace cudf {
 cudf::table inner_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context);
 /** 
@@ -121,9 +121,9 @@ cudf::table inner_join(
 cudf::table left_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context);
 
@@ -177,9 +177,9 @@ cudf::table left_join(
 cudf::table full_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         std::vector<gdf_size_type> const& left_on,
-                         std::vector<gdf_size_type> const& right_on,
-                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         std::vector<cudf::size_type> const& left_on,
+                         std::vector<cudf::size_type> const& right_on,
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          cudf::table *joined_indices,
                          gdf_context *join_context);
 } //namespace cudf

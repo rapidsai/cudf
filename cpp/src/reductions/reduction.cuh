@@ -48,7 +48,7 @@ namespace detail {
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
  template <typename Op, typename InputIterator, typename OutputType>
-void reduce(OutputType* dev_result, InputIterator d_in, gdf_size_type num_items,
+void reduce(OutputType* dev_result, InputIterator d_in, cudf::size_type num_items,
     OutputType init, Op op, cudaStream_t stream)
 {
     void     *d_temp_storage = NULL;
