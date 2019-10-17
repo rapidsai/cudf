@@ -40,6 +40,12 @@ gdf_scalar reduce(const gdf_column *col,
     case cudf::reduction::MAX:
         scalar = cudf::reduction::max(*col, output_dtype);
         break;
+    case cudf::reduction::ANY:
+        scalar = cudf::reduction::any(*col, output_dtype);
+        break;
+    case cudf::reduction::ALL:
+        scalar = cudf::reduction::all(*col, output_dtype);
+        break;
     case cudf::reduction::PRODUCT:
         scalar = cudf::reduction::product(*col, output_dtype);
         break;

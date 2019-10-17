@@ -19,21 +19,14 @@
 package ai.rapids.cudf;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-class PinnedMemoryPoolTest {
+class PinnedMemoryPoolTest extends CudfTestBase {
   private static final Logger log = LoggerFactory.getLogger(PinnedMemoryPoolTest.class);
-
-  @BeforeEach
-  void setup() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-  }
 
   @AfterEach
   void teardown() {

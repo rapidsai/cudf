@@ -232,6 +232,61 @@ TYPED_TEST(ReductionTest, SumOfSquare)
         cudf::reduction::SUMOFSQUARES);
 }
 
+struct ReductionAnyAllTest : public ReductionTest<cudf::bool8> {
+    ReductionAnyAllTest(){}
+    ~ReductionAnyAllTest(){}
+};
+
+TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
+{
+   using T = cudf::bool8;
+   std::vector<int> int_values({true, true, true, true});
+   std::vector<bool> host_bools({1, 1, 0, 1});
+   std::vector<T> v = convert_values<T>(int_values);
+
+   // Min/Max succeeds for any gdf types including
+   // non-arithmetic types (date32, date64, timestamp, category)
+   bool result_error(true);
+   bool expected = true;
+
+   // test without nulls
+   cudf::test::column_wrapper<T> col(v);
+
+   this->reduction_test(col, expected, result_error, cudf::reduction::ANY);
+   this->reduction_test(col, expected, result_error, cudf::reduction::ALL);
+
+   // test with nulls
+   cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+
+   this->reduction_test(col_nulls, expected, result_error, cudf::reduction::ANY);
+   this->reduction_test(col_nulls, expected, result_error, cudf::reduction::ALL);
+}
+
+TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
+{
+   using T = cudf::bool8;
+   std::vector<int> int_values({false, false, false, false});
+   std::vector<bool> host_bools({1, 1, 0, 1});
+   std::vector<T> v = convert_values<T>(int_values);
+
+   // Min/Max succeeds for any gdf types including
+   // non-arithmetic types (date32, date64, timestamp, category)
+   bool result_error(true);
+   bool expected = false;
+
+   // test without nulls
+   cudf::test::column_wrapper<T> col(v);
+
+   this->reduction_test(col, expected, result_error, cudf::reduction::ANY);
+   this->reduction_test(col, expected, result_error, cudf::reduction::ALL);
+
+   // test with nulls
+   cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+
+   this->reduction_test(col_nulls, expected, result_error, cudf::reduction::ANY);
+   this->reduction_test(col_nulls, expected, result_error, cudf::reduction::ALL);
+}
+
 // ----------------------------------------------------------------------------
 
 template <typename T>
