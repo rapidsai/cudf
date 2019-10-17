@@ -1167,9 +1167,11 @@ class Series(object):
         if self.name is None:
             result = result[0]
             result.name = None
-            return result
         else:
-            return result[self.name]
+            result = result[self.name]
+        result._column.name = self._column.name
+        return result
+
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.

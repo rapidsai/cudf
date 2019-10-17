@@ -946,9 +946,7 @@ class TypedColumnBase(Column):
         if (
             pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
         ) and self.null_count > 0:
-            name = cats._column.name
             cats = cats.dropna()
-            cats._column.name = name
             labels = labels - 1
 
         return cudf.core.column.CategoricalColumn(
