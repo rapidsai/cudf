@@ -21,7 +21,7 @@
  */
 
 #include "unary_ops.cuh"
-#include <cudf/unary.hpp>
+#include <cudf/legacy/unary.hpp>
 #include <cudf/legacy/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
