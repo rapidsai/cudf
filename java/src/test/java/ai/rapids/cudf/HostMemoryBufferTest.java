@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class HostMemoryBufferTest {
+public class HostMemoryBufferTest extends CudfTestBase {
   @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
@@ -84,7 +84,6 @@ public class HostMemoryBufferTest {
 
   @Test
   public void testCopyFromDeviceBuffer() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (HostMemoryBuffer init = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer tmp = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer to = HostMemoryBuffer.allocate(16)) {
