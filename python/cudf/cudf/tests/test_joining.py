@@ -744,11 +744,7 @@ def test_join_empty_table_dtype():
         (
             pd.Series([None, 1, 2, 3, 4, 5, 6, 7]).astype(np.float),
             pd.Series([8, 9, 10, 11, 12, None, 14, 15]).astype(np.float),
-        ),
-        (
-            pd.Series([np.nan] * 8).astype(np.float),
-            pd.Series([np.nan] * 8).astype(np.float),
-        ),
+        )
     ],
 )
 @pytest.mark.parametrize(
