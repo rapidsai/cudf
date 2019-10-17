@@ -515,9 +515,7 @@ class Column(object):
                     data_size = self.data.size()
                 else:
                     data_size = self.data.size
-                bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask.mem
-                )
+                bytemask = cudautils.expand_mask_bits(data_size, self.mask.mem)
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
                 return col
@@ -612,9 +610,7 @@ class Column(object):
         if not self.has_null_mask:
             return self
         out = cudautils.fillna(
-            data=self.data.mem,
-            mask=self.mask.mem,
-            value=value,
+            data=self.data.mem, mask=self.mask.mem, value=value
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
