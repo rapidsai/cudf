@@ -21,9 +21,8 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class Date32ColumnVectorTest {
+public class Date32ColumnVectorTest extends CudfTestBase {
 
   private static final int[] DATES = {17897, //Jan 01, 2019
       17532, //Jan 01, 2018
@@ -39,7 +38,6 @@ public class Date32ColumnVectorTest {
 
   @Test
   public void getYear() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date32ColumnVector = ColumnVector.datesFromInts(DATES);
          ColumnVector result = date32ColumnVector.year()) {
       result.ensureOnHost();
@@ -52,7 +50,6 @@ public class Date32ColumnVectorTest {
 
   @Test
   public void getMonth() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date32ColumnVector = ColumnVector.datesFromInts(DATES);
          ColumnVector result = date32ColumnVector.month()) {
       result.ensureOnHost();
@@ -64,7 +61,6 @@ public class Date32ColumnVectorTest {
 
   @Test
   public void getDay() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector date32ColumnVector = ColumnVector.datesFromInts(DATES_2);
          ColumnVector result = date32ColumnVector.day()) {
       result.ensureOnHost();
@@ -76,7 +72,6 @@ public class Date32ColumnVectorTest {
 
   @Test
   public void castToDate32() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector intColumnVector = ColumnVector.fromInts(DATES);
          ColumnVector date32ColumnVector = intColumnVector.asDate32()) {
       date32ColumnVector.ensureOnHost();
