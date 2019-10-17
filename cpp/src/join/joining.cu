@@ -23,7 +23,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/nvtx/legacy/nvtx_utils.h>
+#include <utilities/nvtx/nvtx_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/legacy/gather.hpp>
@@ -214,7 +214,7 @@ void join_call(cudf::table const& left, cudf::table const& right,
   gdf_method join_method = join_context->flag_method; 
   gdf_error gdf_error_code{GDF_SUCCESS};
 
-  PUSH_RANGE("LIBGDF_JOIN", JOIN_COLOR);
+  nvtx::range_push("CUDF_JOIN", nvtx::JOIN_COLOR);
 
   switch(join_method)
   {
@@ -245,7 +245,7 @@ void join_call(cudf::table const& left, cudf::table const& right,
       CUDF_FAIL("Unsupported join Method");
   }
 
-  POP_RANGE();
+  nvtx::range_pop();
 }
 
 /**---------------------------------------------------------------------------*
@@ -322,7 +322,7 @@ cudf::table construct_join_output_df(
         gdf_column * left_indices,
         gdf_column * right_indices) {
 
-    PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
+    nvtx::range_push("CUDF_JOIN_OUTPUT", nvtx::JOIN_COLOR);
     //create left and right input table with columns not joined on
     std::vector<cudf::size_type> left_columns_in_common (columns_in_common.size());
     std::vector<cudf::size_type> right_columns_in_common (columns_in_common.size());
@@ -406,7 +406,7 @@ cudf::table construct_join_output_df(
     }
 
     CHECK_STREAM(0);
-    POP_RANGE();
+    nvtx::range_pop();
     return result;
 }
 

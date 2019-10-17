@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <utilities/nvtx/legacy/nvtx_utils.h>
+#include <utilities/nvtx/nvtx_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/bit_util.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
@@ -154,7 +154,7 @@ struct rolling_window_launcher
      typename std::enable_if_t<cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(cudf::size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
-    PUSH_RANGE("CUDF_ROLLING", GDF_ORANGE);
+    cudf::nvtx::range_push("CUDF_ROLLING", cudf::nvtx::color::ORANGE);
 
     cudf::size_type block = 256;
     cudf::size_type grid = (nrows + block-1) / block;
@@ -164,7 +164,7 @@ struct rolling_window_launcher
     // check the stream for debugging
     CHECK_STREAM(stream);
 
-    POP_RANGE();
+    cudf::nvtx::range_pop();
   }
 
   /**
