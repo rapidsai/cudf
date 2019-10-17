@@ -2404,7 +2404,7 @@ class Series(object):
         if periods == 0:
             return self
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_shift.forall(output_dary.size)(
             input_dary, output_dary, periods
@@ -2430,7 +2430,7 @@ class Series(object):
                 "Diff currently only supports " "numeric dtypes"
             )
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_diff.forall(output_dary.size)(
             input_dary, output_dary, periods
