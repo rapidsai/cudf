@@ -323,30 +323,30 @@ def test_dataframe_to_string():
     pd.options.display.max_rows = 5
     pd.options.display.max_columns = 8
     # Test basic
-    df = DataFrame(
-        [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
-    )
+    df = DataFrame({
+        "a": [1, 2, 3, 4, 5, 6],
+        "b": [11, 12, 13, 14, 15, 16],
+    })
     string = str(df)
     print(string)
     assert string.splitlines()[-1] == "[6 rows x 2 columns]"
 
     # Test skipped columns
-    df = DataFrame(
-        [
-            ("a", [1, 2, 3, 4, 5, 6]),
-            ("b", [11, 12, 13, 14, 15, 16]),
-            ("c", [11, 12, 13, 14, 15, 16]),
-            ("d", [11, 12, 13, 14, 15, 16]),
-        ]
-    )
+    df = DataFrame({
+        "a": [1, 2, 3, 4, 5, 6],
+        "b": [11, 12, 13, 14, 15, 16],
+        "c": [11, 12, 13, 14, 15, 16],
+        "d": [11, 12, 13, 14, 15, 16],
+    })
     string = df.to_string()
     print(string)
     assert string.splitlines()[-1] == "[6 rows x 4 columns]"
 
     # Test masked
-    df = DataFrame(
-        [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
-    )
+    df = DataFrame({
+        "a": [1, 2, 3, 4, 5, 6],
+        "b": [11, 12, 13, 14, 15, 16],
+    })
 
     data = np.arange(6)
     mask = np.zeros(1, dtype=np.uint8)
@@ -468,7 +468,9 @@ def test_dataframe_dtypes():
     dtypes = pd.Series(
         [np.int32, np.float32, np.float64], index=["c", "a", "b"]
     )
-    df = DataFrame([(k, np.ones(10, dtype=v)) for k, v in dtypes.iteritems()])
+    df = DataFrame({
+        k: np.ones(10, dtype=v) for k, v in dtypes.iteritems()
+    })
     assert df.dtypes.equals(dtypes)
 
 
@@ -492,14 +494,12 @@ def test_dataframe_add_col_to_object_dataframe():
 
 
 def test_dataframe_dir_and_getattr():
-    df = DataFrame(
-        [
-            ("a", np.ones(10)),
-            ("b", np.ones(10)),
-            ("not an id", np.ones(10)),
-            ("oop$", np.ones(10)),
-        ]
-    )
+    df = DataFrame({
+        "a": np.ones(10),
+        "b": np.ones(10),
+        "not an id": np.ones(10),
+        "oop$": np.ones(10),
+    })
     o = dir(df)
     assert {"a", "b"}.issubset(o)
     assert "not an id" not in o
@@ -2888,7 +2888,10 @@ def test_dataframe_sizeof(indexed):
     rows = int(1e6)
     index = list(i for i in range(rows)) if indexed else None
 
-    gdf = gd.DataFrame([("A", [8] * rows), ("B", [32] * rows)], index=index)
+    gdf = gd.DataFrame({
+        "A": [8] * rows,
+        "B": [32] * rows,
+    }, index=index)
 
     for c in gdf._cols.values():
         assert gdf._index.__sizeof__() == gdf._index.__sizeof__()

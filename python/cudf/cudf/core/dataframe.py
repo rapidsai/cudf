@@ -1784,21 +1784,18 @@ class DataFrame(object):
 
         # Concatenate cudf.series for all columns
 
-        data = [
-            (
-                c,
-                Series._concat(
-                    [
-                        o[c]
-                        if c in o.columns
-                        else utils.get_null_series(size=len(o), dtype=np.bool)
-                        for o in objs
-                    ],
-                    index=index,
-                ),
-            )
-            for c in unique_columns_ordered_ls
-        ]
+        data = {
+            c: Series._concat(
+                [
+                    o[c]
+                    if c in o.columns
+                    else utils.get_null_series(size=len(o), dtype=np.bool)
+                    for o in objs
+                ],
+                index=index,
+            ) for c in unique_columns_ordered_ls
+        }
+
         out = cls(data)
         out._index = index
         libcudf.nvtx.nvtx_range_pop()
