@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+
 /*
  * @brief Interface to output GDF columns to CSV format
  *
