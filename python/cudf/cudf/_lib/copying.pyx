@@ -251,7 +251,8 @@ def scatter_to_frames(source, maps, index=None):
     -------
     list of scattered dataframes
     """
-    from cudf.core.column import column
+    from cudf.core.column import column, CategoricalColumn
+    from cudf.core.series import Series
 
     in_cols = source
     if index:
@@ -263,8 +264,15 @@ def scatter_to_frames(source, maps, index=None):
     col_count=len(in_cols)
     if col_count == 0:
         return []
+
+    cats = {}
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
+        if isinstance(in_cols[i], CategoricalColumn):
+            cats[in_cols[i].name] = (
+                Series(in_cols[i]._categories),
+                in_cols[i]._ordered
+            )
 
     if is_string_dtype(in_cols[0]):
         in_size = in_cols[0].data.size()
@@ -286,6 +294,15 @@ def scatter_to_frames(source, maps, index=None):
     out_tables = []
     for tab in c_out_tables:
         df = table_to_dataframe(&tab, int_col_names=False)
+        for name, cat_info in cats.items():
+            df[name] = Series(
+                CategoricalColumn(
+                    data=df[name].data,
+                    categories=cat_info[0],
+                    ordered=cat_info[1],
+                )
+            )
+
         if index:
             df = df.set_index(ind_names_tmp)
             if len(index) == 1:

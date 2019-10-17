@@ -204,8 +204,10 @@ def test_rearrange_by_divisions(nelem, index):
             {
                 "x": np.random.randint(0, 20, size=nelem),
                 "y": np.random.normal(size=nelem),
+                "z": np.random.choice(["dog", "cat", "bird"], nelem),
             }
         )
+        df["z"] = df["z"].astype("category")
 
         ddf1 = dd.from_pandas(df, npartitions=4)
         gdf1 = dgd.from_cudf(cudf.DataFrame.from_pandas(df), npartitions=4)

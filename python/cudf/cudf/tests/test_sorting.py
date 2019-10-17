@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame, Series
+from cudf.core.column import NumericalColumn
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]
@@ -277,26 +278,31 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
         nrows = 0
+        # print(col._column)
+        name = col.name
         for i, df in enumerate(dfs):
             nrows += len(df)
-            sr = df[col].astype(np.int32)
+            if len(df) > 0:
+                # Make sure the column types were preserved
+                assert isinstance(df[name]._column, type(col._column))
+            sr = df[name].astype(np.int32)
             assert sr.nunique() <= 1
             if sr.nunique() == 1:
-                if df[col].dtype != "O":
+                if isinstance(df[name]._column, NumericalColumn):
                     assert sr[0] == i
         assert nrows == nelem
 
     _check_scatter_by_map(
-        df.scatter_by_map("a", map_size, keep_index=keep), "a"
+        df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
     )
     _check_scatter_by_map(
-        df.scatter_by_map("b", map_size, keep_index=keep), "b"
+        df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
     )
     _check_scatter_by_map(
-        df.scatter_by_map("c", map_size, keep_index=keep), "c"
+        df.scatter_by_map("c", map_size, keep_index=keep), df["c"]
     )
     _check_scatter_by_map(
-        df.scatter_by_map("d", map_size, keep_index=keep), "d"
+        df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
     )
 
     if map_size == 2 and nelem == 100:
@@ -307,5 +313,5 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     # Test MultiIndex
     df = df.set_index(["a", "c"])
     _check_scatter_by_map(
-        df.scatter_by_map("b", map_size, keep_index=keep), "b"
+        df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
     )
