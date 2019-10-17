@@ -32,8 +32,8 @@
 
 #include <nvstrings/NVStrings.h>
 
-#include <tests/io/io_test_utils.hpp>
-#include <io/utilities/parsing_utils.cuh>
+#include <tests/io/legacy/io_test_utils.hpp>
+#include <io/utilities/legacy/parsing_utils.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <arrow/io/api.h>

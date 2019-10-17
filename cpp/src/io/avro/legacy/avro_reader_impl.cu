@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "avro.h"
-#include "avro_gpu.h"
+#include "../avro.h"
+#include "../avro_gpu.h"
 #include "avro_reader_impl.hpp"
 
-#include "io/comp/gpuinflate.h"
+#include <io/comp/gpuinflate.h>
 
 #include <rmm/device_buffer.hpp>
 
