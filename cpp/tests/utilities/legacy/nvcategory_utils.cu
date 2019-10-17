@@ -18,7 +18,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/types.h>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/cudf_utils.h>
