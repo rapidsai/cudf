@@ -30,6 +30,7 @@
 - PR #3083 Improved some binary operation tests to include null testing.
 - PR #3071 Move cuIO to legacy
 - PR #3126 Round 2 of snappy decompression optimizations
+- PR #3128 Support MultiIndex in DataFrame.join
 
 ## Bug Fixes
 
