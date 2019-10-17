@@ -123,7 +123,7 @@ std::unique_ptr<column> make_strings_column(
                                                    // sizeof(valid_mask[0]), sizeof(decltype(valid_mask.front()))
 
     // build chars column
-    auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
+    auto chars_column = strings::detail::create_chars_child_column( num_strings, null_count, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     CUDA_TRY(cudaMemcpyAsync( chars_view.data<char>(), strings.data().get(), bytes,
                               cudaMemcpyDeviceToDevice, stream ));
