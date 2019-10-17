@@ -362,7 +362,7 @@ set(LEGACY_DLPACK_TEST_SRC
 ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 
 ###################################################################################################
-# - legacy copying tests ---------------------------------------------------------------------------------
+# - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu")
