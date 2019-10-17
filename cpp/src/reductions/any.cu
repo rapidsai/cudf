@@ -13,29 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+ // The translation unit for reduction `max`
 
-#include "./utilities.h"
+#include "reduction_functions.cuh"
+#include "simple.cuh"
 
-#include <cudf/column/column_factories.hpp>
-#include <tests/utilities/column_utilities.cuh>
-
-#include <cstring>
-#include <thrust/execution_policy.h>
-#include <thrust/equal.h>
-
-#include <gmock/gmock.h>
-
-namespace cudf {
-namespace test {
-
-
-void expect_strings_empty(cudf::column_view strings_column)
+gdf_scalar cudf::reduction::any(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
 {
-    EXPECT_EQ(STRING, strings_column.type().id());
-    EXPECT_EQ(0,strings_column.size());
-    EXPECT_EQ(0,strings_column.null_count());
-    EXPECT_EQ(0,strings_column.num_children());
+    using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::max>;
+    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
 }
-
-}  // namespace test
-}  // namespace cudf

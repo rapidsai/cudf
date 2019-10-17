@@ -22,6 +22,8 @@
 #include <utilities/error_utils.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/column_utilities.cuh>
 #include "./utilities.h"
 
 #include <vector>
@@ -32,14 +34,15 @@ struct StringsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsColumnTest, Sort)
 {
-    std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
-    std::vector<const char*> h_expected{ nullptr, "", "aa", "bb", "bbb", "eee", "ééé" };
+    // cannot initialize std::string with a nullptr so use "<null>" as a place-holder
+    cudf::test::strings_column_wrapper h_strings({ "eee", "bb", "<null>", "", "aa", "bbb", "ééé" },
+                                                 {    1,    1,         0,  1,   1,     1,     1});
+    cudf::test::strings_column_wrapper h_expected({ "<null>", "", "aa", "bb", "bbb", "eee", "ééé" },
+                                                  {        0,  1,   1,    1,     1,     1,     1});
 
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(d_strings->view());
-
+    auto strings_view = cudf::strings_column_view(h_strings);
     auto results = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
-    cudf::test::expect_strings_equal(*results, h_expected);
+    cudf::test::expect_columns_equal(*results, h_expected);
 }
 
 TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
@@ -56,6 +59,8 @@ class SliceParmsTest : public StringsColumnTest,
 TEST_P(SliceParmsTest, Slice)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::size_type start = 3;
     cudf::size_type end = GetParam();
     std::vector<const char*> h_expected;
@@ -64,15 +69,19 @@ TEST_P(SliceParmsTest, Slice)
         for( cudf::size_type idx=start; (idx < end) && (idx < (cudf::size_type)h_strings.size()); ++idx )
             h_expected.push_back( h_strings[idx] );
     }
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(d_strings->view());
+    auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
-    cudf::test::expect_strings_equal(*results, h_expected);
+
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
+         //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_P(SliceParmsTest, SliceAllNulls)
 {
     std::vector<const char*> h_strings{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::size_type start = 3;
     cudf::size_type end = GetParam();
     std::vector<const char*> h_expected;
@@ -81,15 +90,18 @@ TEST_P(SliceParmsTest, SliceAllNulls)
         for( cudf::size_type idx=start; (idx < end) && (idx < (cudf::size_type)h_strings.size()); ++idx )
             h_expected.push_back( h_strings[idx] );
     }
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(d_strings->view());
+    auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
-    cudf::test::expect_strings_equal(*results, h_expected);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_P(SliceParmsTest, SliceAllEmpty)
 {
-    std::vector<const char*> h_strings{ nullptr, "", "", "", "", "", "" };
+    std::vector<const char*> h_strings{ "", "", "", "", "", "", "" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::size_type start = 3;
     cudf::size_type end = GetParam();
     std::vector<const char*> h_expected;
@@ -98,10 +110,11 @@ TEST_P(SliceParmsTest, SliceAllEmpty)
         for( cudf::size_type idx=start; (idx < end) && (idx < (cudf::size_type)h_strings.size()); ++idx )
             h_expected.push_back( h_strings[idx] );
     }
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(d_strings->view());
+    auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
-    cudf::test::expect_strings_equal(*results, h_expected);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
+         //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 INSTANTIATE_TEST_CASE_P(SliceParms, SliceParmsTest,
@@ -118,19 +131,17 @@ TEST_F(StringsColumnTest, SliceZeroSizeStringsColumn)
 TEST_F(StringsColumnTest, Gather)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
+
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{{4,1}};
+    auto results = cudf::strings::detail::gather(strings_view,gather_map);
+
     std::vector<const char*> h_expected{ "aa", "bb" };
-
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(d_strings->view());
-
-    rmm::device_vector<int32_t> gather_map(2,0);
-    gather_map[0] = 4;
-    gather_map[1] = 1;
-    cudf::column_view gather_map_view( cudf::data_type{cudf::INT32}, gather_map.size(),
-                                       gather_map.data().get(), nullptr, 0);
-
-    auto results = cudf::strings::detail::gather(strings_view,gather_map_view);
-    cudf::test::expect_strings_equal(*results, h_expected);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
+         //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
@@ -145,22 +156,22 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 TEST_F(StringsColumnTest, Scatter)
 {
     std::vector<const char*> h_strings1{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings1( h_strings1.begin(), h_strings1.end(),
+        thrust::make_transform_iterator( h_strings1.begin(), [] (auto str) { return str!=nullptr; }));
     std::vector<const char*> h_strings2{ "1", "22" };
+    cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end(),
+        thrust::make_transform_iterator( h_strings2.begin(), [] (auto str) { return str!=nullptr; }));
+
+    auto view1 = cudf::strings_column_view(strings1);
+    auto view2 = cudf::strings_column_view(strings2);
+
+    cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{{4,1}};
+    auto results = cudf::strings::detail::scatter(view1,view2,scatter_map);
+
     std::vector<const char*> h_expected{ "eee", "22", nullptr, "", "1", "bbb", "ééé" };
-
-    auto d_strings1 = cudf::test::create_strings_column(h_strings1);
-    auto view1 = cudf::strings_column_view(d_strings1->view());
-    auto d_strings2 = cudf::test::create_strings_column(h_strings2);
-    auto view2 = cudf::strings_column_view(d_strings2->view());
-
-    rmm::device_vector<int32_t> scatter_map(2,0);
-    scatter_map[0] = 4;
-    scatter_map[1] = 1;
-    cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
-                                        scatter_map.data().get(), nullptr, 0);
-
-    auto results = cudf::strings::detail::scatter(view1,view2,scatter_map_view);
-    cudf::test::expect_strings_equal(*results, h_expected);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
@@ -177,19 +188,17 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
 TEST_F(StringsColumnTest, ScatterScalar)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto view = cudf::strings_column_view(strings);
+
+    cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{{4,1}};
+    auto results = cudf::strings::detail::scatter(view,"---",scatter_map);
+
     std::vector<const char*> h_expected{ "eee", "---", nullptr, "", "---", "bbb", "ééé" };
-
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto view = cudf::strings_column_view(d_strings->view());
-
-    rmm::device_vector<int32_t> scatter_map(2,0);
-    scatter_map[0] = 4;
-    scatter_map[1] = 1;
-    cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
-                                        scatter_map.data().get(), nullptr, 0);
-
-    auto results = cudf::strings::detail::scatter(view,"---",scatter_map_view);
-    cudf::test::expect_strings_equal(*results, h_expected);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_F(StringsColumnTest, ScatterScalarZeroSizeStringsColumn)

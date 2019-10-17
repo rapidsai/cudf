@@ -89,7 +89,7 @@ std::unique_ptr<column> make_strings_column(
                                null_count, std::move(null_mask), stream, mr);
 }
 
-// Create a strings-type column from vector of chars and vector of offsets.
+// Create a strings-type column from device vector of chars and vector of offsets.
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<char>& strings,
     const rmm::device_vector<size_type>& offsets,
@@ -106,7 +106,7 @@ std::unique_ptr<column> make_strings_column(
     }
 
     auto execpol = rmm::exec_policy(stream);
-    size_type bytes = offsets.back() - offsets[0];
+    size_type bytes = offsets.back();
     CUDF_EXPECTS( bytes >=0, "invalid offsets vector");
 
     // build offsets column -- this is the number of strings + 1
@@ -115,22 +115,34 @@ std::unique_ptr<column> make_strings_column(
     CUDA_TRY(cudaMemcpyAsync( offsets_view.data<int32_t>(), offsets.data().get(),
                               (num_strings+1)*sizeof(int32_t),
                               cudaMemcpyDeviceToDevice, stream ));
-
     // build null bitmask
-    rmm::device_buffer null_mask;
-    if( null_count )
-        null_mask = rmm::device_buffer(valid_mask.data().get(),
-                                       gdf_valid_allocation_size(num_strings),
-                                       stream, mr);
+    rmm::device_buffer null_mask{
+        valid_mask.data().get(),
+        valid_mask.size() * sizeof(bitmask_type)}; // Or this works too: sizeof(typename std::remove_reference_t<decltype(valid_mask)>::value_type)
+                                                   // Following give the incorrect value of 8 instead of 4 because of smart references:
+                                                   // sizeof(valid_mask[0]), sizeof(decltype(valid_mask.front()))
 
     // build chars column
-    auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
+    auto chars_column = strings::detail::create_chars_child_column( num_strings, null_count, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     CUDA_TRY(cudaMemcpyAsync( chars_view.data<char>(), strings.data().get(), bytes,
                               cudaMemcpyDeviceToDevice, stream ));
 
     return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
+}
+
+// Create strings column from host vectors
+std::unique_ptr<column> make_strings_column(
+    const std::vector<char>& strings, const std::vector<size_type>& offsets,
+    const std::vector<bitmask_type>& null_mask, size_type null_count,
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+  rmm::device_vector<char> d_strings{strings};
+  rmm::device_vector<size_type> d_offsets{offsets};
+  rmm::device_vector<bitmask_type> d_null_mask{null_mask};
+
+  return make_strings_column(d_strings, d_offsets, d_null_mask, null_count,
+                             stream, mr);
 }
 
 //
