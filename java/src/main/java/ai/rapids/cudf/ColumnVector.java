@@ -284,6 +284,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the Device memory buffer size.
+   */
+  public long getDeviceMemorySize() {
+    return offHeap != null ? offHeap.getDeviceMemoryLength(type) : 0;
+  }
+
+  /**
    * Retrieve the number of characters in each string. Null strings will have value of null.
    *
    * @return ColumnVector holding length of string at index 'i' in the original vector
@@ -1734,6 +1741,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native int getNullCount(long cudfColumnHandle) throws CudfException;
 
+  private static native int getDeviceMemoryStringSize(long cudfColumnHandle) throws CudfException;
+
   private static native long concatenate(long[] columnHandles) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1846,6 +1855,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     public BufferEncapsulator<DeviceMemoryBuffer> getDeviceData() {
       return deviceData;
+    }
+
+    public long getDeviceMemoryLength(DType type) {
+      assert type != DType.STRING_CATEGORY;
+      long length;
+
+      length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
+      if (type == DType.STRING) {
+        length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
+      } else {
+        length += deviceData.data != null ? deviceData.data.getLength() : 0;
+      }
+      return length;
     }
 
     public void setDeviceData(BufferEncapsulator<DeviceMemoryBuffer> deviceData) {

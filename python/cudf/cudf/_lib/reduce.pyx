@@ -27,6 +27,8 @@ pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 _REDUCTION_OP = {
     'max': cpp_reduce.MAX,
     'min': cpp_reduce.MIN,
+    'any': cpp_reduce.ANY,
+    'all': cpp_reduce.ALL,
     'sum': cpp_reduce.SUM,
     'product': cpp_reduce.PRODUCT,
     'sum_of_squares': cpp_reduce.SUMOFSQUARES,
