@@ -10,12 +10,9 @@ from cudf.tests.utils import assert_eq
 def test_init_with_tuples():
 
     data = [
-        ("a", "cat", 5, np.nan),
-        ("b", None, 3, -8.4),
-        ("c", "mouse", 2, 1.53),
-        (None, "dog", 9, 3.2),
-        ("e", "plane", 32, -5.6, "extra_parameter"),
-        ("f", "bird", 2, None),
+        (5, "cats", "jump", np.nan),  # 3 columns
+        (2, "dogs", "dig", 7.5),  # 3 columns
+        (3, "cows", "moo", -2.1, "occasionally"),  # 4 columns
     ]
 
     pdf = pd.DataFrame(data)

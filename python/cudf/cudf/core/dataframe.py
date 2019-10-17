@@ -103,22 +103,18 @@ class DataFrame(object):
     3    3  13.0
     4    4  14.0
 
-    Build dataframe with initializer:
+    Build DataFrame via dict of columns:
 
     >>> import cudf
     >>> import numpy as np
     >>> from datetime import datetime, timedelta
-    >>> ids = np.arange(5)
-
-    Create some datetime data
 
     >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-    >>> datetimes = [(t0+ timedelta(seconds=x)) for x in range(5)]
-    >>> dts = np.array(datetimes, dtype='datetime64')
-
-    Create the GPU DataFrame
-
-    >>> df = cudf.DataFrame([('id', ids), ('datetimes', dts)])
+    >>> n = 5
+    >>> df = cudf.DataFrame({
+    >>>   'id': np.arange(n),
+    >>>   'datetimes', np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
+    >>> })
     >>> df
         id                datetimes
     0    0  2018-10-07T12:00:00.000
@@ -126,6 +122,20 @@ class DataFrame(object):
     2    2  2018-10-07T12:00:02.000
     3    3  2018-10-07T12:00:03.000
     4    4  2018-10-07T12:00:04.000
+
+    Build DataFrame via list of rows as tuples:
+
+    >>> import cudf
+    >>> df = cudf.DataFrame([
+    >>>   (5, 'cats', 'jump', 7.5),                # 3 columns
+    >>>   (2, 'dogs', 'dig', np.nan),              # 3 columns
+    >>>   (3, 'cows', 'moo', -2.1, 'occasionally') # 4 columns
+    >>> ])
+    >>> df
+       0     1     2     3             4
+    0  5  cats  jump  null          None
+    1  2  dogs   dig   7.5          None
+    2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
 
