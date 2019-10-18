@@ -1484,24 +1484,73 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private Table getExpectedFileTable() {
+    return new TestBuilder()
+        .column(true, false, false, true, false)
+        .column(5, 1, 0, 2, 7)
+        .column(new Byte[]{2, 3, 4, 5, 9})
+        .column(3l, 9l, 4l, 2l, 20l)
+        .column("this", "is", "a", "test", "string")
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d)
+        .build();
+  }
+
   @Test
   void testORCWriteToFile() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
-    try (Table table0 = new Table.TestBuilder()
-        .column(  true, false, false,  true,   false)
-        .column(     5,     1,    0,      2,       7)
-        .column(new Byte[]{2, 3, 4, 5, 9})
-        .column(    3l,    9l,    4l,     2l,     20l)
-        .column("this",  "is",   "a", "test", "string")
-        .column(  1.0f,  3.5f,  5.9f,   7.1f,    9.8f)
-        .column(  5.0d,  9.5d,  0.9d,   7.23d,   2.8d)
-        .build()) {
+    try (Table table0 = getExpectedFileTable()) {
       table0.writeORC(tempFile.getAbsoluteFile());
       try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table1);
       }
     } finally {
       tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteToFileUncompressed() throws IOException {
+    File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
+    try (Table table0 = getExpectedFileTable()) {
+      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.NONE).build(), tempFileUncompressed);
+      try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFileUncompressed.delete();
+    }
+  }
+
+  @Test
+  void testORCSnappyCompression() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
+    try (Table table0 = Table.readParquet(TEST_PARQUET_FILE)) {
+      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.SNAPPY).build(), tempFile.getAbsoluteFile());
+      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.NONE).build(), tempFileUncompressed);
+
+      /**
+       * WARNING!!!
+       * We are replacing the Date columns because the ORC writer currently doesn't support Date32
+       * It's also setting the timeunit to MILLISECONDS. This discrepancy is being tracked by gitlab
+       * issue (https://gitlab-master.nvidia.com/nvspark/cudf/issues/110) to investigate further.
+       *
+       */
+      ColumnVector old = table0.getColumn(5); // no need to close as we are not increasing the reference
+      table0.replaceColumn(5, old.castTo(DType.DATE64, TimeUnit.MILLISECONDS));
+      old = table0.getColumn(6); // no need to close as we are not increasing the reference
+      table0.replaceColumn(6, old.castTo(DType.DATE64, TimeUnit.MILLISECONDS));
+
+      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile());
+           Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+        assertTablesAreEqual(table0, table2);
+        assertTablesAreEqual(table2, table1);
+      }
+    } finally {
+      tempFile.delete();
+      tempFileUncompressed.delete();
     }
   }
 }

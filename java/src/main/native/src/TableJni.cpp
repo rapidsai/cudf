@@ -22,12 +22,7 @@
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/legacy/copying.hpp"
 #include "cudf/groupby.hpp"
-<<<<<<< 60aa78cabe3913b61fe247cc5d84808702a52b50
 #include "cudf/legacy/io_readers.hpp"
-=======
-#include "cudf/io_readers.hpp"
-#include "cudf/io_types.hpp"
->>>>>>> orc writer
 #include "cudf/legacy/table.hpp"
 #include "cudf/stream_compaction.hpp"
 #include "cudf/types.hpp"
@@ -323,6 +318,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfWriteORC(JNIEnv *env, jclass,
+                                                              jint compression_type,
                                                               jstring outputfilepath, jlong buffer,
                                                               jlong buffer_length, jlong table) {
   bool write_buffer = true;
@@ -338,15 +334,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfWriteORC(JNIEnv *env, jclas
 
   try {
     cudf::jni::native_jstring filename(env, outputfilepath);
-    std::unique_ptr<cudf::sink_info> info;
+    namespace orc = cudf::io::orc;
+    orc::compression_type n_compressionType = static_cast<orc::compression_type>(compression_type);
     if (write_buffer) {
-      info.reset(new cudf::sink_info(reinterpret_cast<char *>(buffer), buffer_length));
+      JNI_THROW_NEW(env, "java/lang/UnsupportedOperationException",
+                        "buffers are not supported", 0);
     } else {
-      info.reset(new cudf::sink_info(filename.get()));
+      cudf::sink_info info(filename.get());
+      cudf::orc_write_arg args(info);
+      auto writer = [&]() {
+
+        orc::writer_options options(n_compressionType);
+        return std::make_unique<orc::writer>(args.sink.filepath, options);
+      }();
+
+      args.table = *reinterpret_cast<cudf::table *>(table);
+      writer->write_all(args.table);
     }
-    cudf::orc_write_arg args(*info.get());
-    args.table = *reinterpret_cast<cudf::table *>(table);
-    cudf::write_orc(args);
   }
   CATCH_STD(env, 0);
 }

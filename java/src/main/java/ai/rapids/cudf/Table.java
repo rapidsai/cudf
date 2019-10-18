@@ -150,7 +150,7 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
 
-  private static native void gdfWriteORC(String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
+  private static native void gdfWriteORC(int compressionType, String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
 
   /**
    * Ugly long function to read CSV.  This is a long function to avoid the overhead of reaching
@@ -727,7 +727,16 @@ public final class Table implements AutoCloseable {
    * @param outputFile - File to write the table to
    */
   public void writeORC(File outputFile) {
-    gdfWriteORC(outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
+    gdfWriteORC(ORCWriterOptions.DEFAULT.getCompressionType().nativeId, outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
+  }
+
+  /**
+   * Writes this table to a file on the host
+   *
+   * @param outputFile - File to write the table to
+   */
+  public void writeORC(ORCWriterOptions options, File outputFile) {
+    gdfWriteORC(options.getCompressionType().nativeId, outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
   }
 
   /**
@@ -859,6 +868,17 @@ public final class Table implements AutoCloseable {
       assert col.getType() != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
     }
     return new Table(gdfFilter(nativeHandle, mask.getNativeCudfColumnAddress()));
+  }
+
+  /**
+   * Used strictly for testing
+   * @param index - The index at which we want to replace the vector
+   * @param columnVector - The new vector to be used
+   */
+  void replaceColumn(int index, ColumnVector columnVector) {
+    ColumnVector oldVector = columns[index];
+    columns[index] = columnVector;
+    oldVector.close();
   }
 
   /////////////////////////////////////////////////////////////////////////////
