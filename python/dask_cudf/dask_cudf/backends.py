@@ -38,19 +38,25 @@ def concat_cudf(
 try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+    from cudf.core.column import column, CategoricalColumn, StringColumn
+
+    def _string_safe_hash(frame):
+        for col in frame.columns:
+            if isinstance(frame[col]._column, StringColumn):
+                frame[col] = frame[col]._column.as_numerical_column("int32")
+        return frame.hash_columns()
 
     @hash_object_dispatch.register(cudf.DataFrame)
-    def hash_object_cudf(dfs, index=True):
+    def hash_object_cudf(frame, index=True):
         if index:
-            return dfs.reset_index.hash_columns()
-        return dfs.hash_columns()
+            return _string_safe_hash(frame.reset_index)
+        return _string_safe_hash(frame)
 
     @hash_object_dispatch.register(cudf.Index)
     def hash_object_cudf_index(ind, index=None):
-        from cudf.core.column import column, CategoricalColumn, StringColumn
 
         if isinstance(ind, cudf.MultiIndex):
-            return ind.to_frame().hash_columns()
+            return _string_safe_hash(ind.copy().to_frame(index=False))
 
         col = column.as_column(ind)
         if isinstance(col, StringColumn):

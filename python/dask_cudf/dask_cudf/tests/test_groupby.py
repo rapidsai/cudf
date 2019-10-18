@@ -162,17 +162,34 @@ def test_reset_index_multiindex():
 
 
 @pytest.mark.parametrize("split_out", [1, 2, 3])
-@pytest.mark.parametrize("size", [10, 100])
 @pytest.mark.parametrize(
     "column", ["c", "d", "e", ["b", "c"], ["b", "d"], ["b", "e"]]
 )
-def test_groupby_split_out(split_out, size, column):
+def test_groupby_split_out(split_out, column):
     df = pd.DataFrame(
         {
-            "a": np.arange(size),
-            "b": np.random.randint(0, 3, size=size),
-            "c": np.random.randint(0, 2, size=size),
-            "d": np.random.choice(["dog", "cat", "bird"], size=size),
+            "a": np.arange(8),
+            "b": [
+                1,
+                0,
+                0,
+                2,
+                1,
+                1,
+                2,
+                0,
+            ],  # np.random.randint(0, 3, size=size),
+            "c": [0, 1] * 4,  # np.random.randint(0, 2, size=size),
+            "d": [
+                "dog",
+                "cat",
+                "cat",
+                "dog",
+                "dog",
+                "dog",
+                "cat",
+                "bird",
+            ],  # np.random.choice(["dog", "cat", "bird"], size=size),
         }
     )
     df["e"] = df["d"].astype("category")
@@ -180,6 +197,10 @@ def test_groupby_split_out(split_out, size, column):
 
     ddf = dd.from_pandas(df, npartitions=3)
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
+
+    # import pdb; pdb.set_trace()
+    # gba = gddf.groupby(column).a
+    # gba.mean(split_out=split_out)
 
     ddf_result = (
         ddf.groupby(column)
