@@ -230,12 +230,12 @@ public class JCudfSerialization {
       // Noop by default
     }
 
-    public abstract HostMemoryBuffer getBufferFor(ColumnVector.BufferType buffType);
+    public abstract HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType);
 
     public abstract long getBufferStartOffset(ColumnVector.BufferType buffType);
 
     public void copyBytesToArray(byte[] dest, int destOffset, ColumnVector.BufferType srcType, long srcOffset, int length) {
-      HostMemoryBuffer buff = getBufferFor(srcType);
+      HostMemoryBuffer buff = getHostBufferFor(srcType);
       srcOffset = srcOffset + getBufferStartOffset(srcType);
       buff.getBytes(dest, destOffset, srcOffset, length);
     }
@@ -287,8 +287,8 @@ public class JCudfSerialization {
     }
 
     @Override
-    public HostMemoryBuffer getBufferFor(ColumnVector.BufferType buffType) {
-      return column.getBufferFor(buffType);
+    public HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType) {
+      return column.getHostBufferFor(buffType);
     }
 
     @Override
@@ -335,7 +335,7 @@ public class JCudfSerialization {
     }
 
     @Override
-    public HostMemoryBuffer getBufferFor(ColumnVector.BufferType buffType) {
+    public HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType) {
       return buffer;
     }
 
@@ -393,7 +393,7 @@ public class JCudfSerialization {
 
     public void copyDataFrom(ColumnBufferProvider column, ColumnVector.BufferType buffType,
                              long offset, long length) throws IOException {
-      HostMemoryBuffer buff = column.getBufferFor(buffType);
+      HostMemoryBuffer buff = column.getHostBufferFor(buffType);
       long startOffset = column.getBufferStartOffset(buffType);
       copyDataFrom(buff, startOffset + offset, length);
     }
@@ -826,7 +826,7 @@ public class JCudfSerialization {
                                          ColumnBufferProvider provider,
                                          int srcBitOffset,
                                          int lengthBits) {
-    HostMemoryBuffer src = provider.getBufferFor(ColumnVector.BufferType.VALIDITY);
+    HostMemoryBuffer src = provider.getHostBufferFor(ColumnVector.BufferType.VALIDITY);
     long baseSrcByteOffset = provider.getBufferStartOffset(ColumnVector.BufferType.VALIDITY);
 
     int destStartBytes = destBitOffset / 8;
@@ -1026,7 +1026,7 @@ public class JCudfSerialization {
 
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
       ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getBufferFor(ColumnVector.BufferType.DATA);
+      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(ColumnVector.BufferType.DATA);
       long currentOffset = provider.getBufferStartOffset(ColumnVector.BufferType.DATA);
       int dataLeft = dataLengths[batchIndex];
       out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
@@ -1057,7 +1057,7 @@ public class JCudfSerialization {
 
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
       ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getBufferFor(ColumnVector.BufferType.OFFSET);
+      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(ColumnVector.BufferType.OFFSET);
       long currentOffset = provider.getBufferStartOffset(ColumnVector.BufferType.OFFSET);
       int numRowsForHeader = (int) provider.getRowCount();
 
@@ -1109,7 +1109,7 @@ public class JCudfSerialization {
     long totalCopied = 0;
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
       ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getBufferFor(ColumnVector.BufferType.DATA);
+      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(ColumnVector.BufferType.DATA);
       long currentOffset = provider.getBufferStartOffset(ColumnVector.BufferType.DATA);
       int numRowsForBatch = (int) provider.getRowCount();
 

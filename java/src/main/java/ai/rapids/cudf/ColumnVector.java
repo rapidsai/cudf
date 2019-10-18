@@ -581,7 +581,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     DATA
   }
 
-  HostMemoryBuffer getBufferFor(BufferType src) {
+  HostMemoryBuffer getHostBufferFor(BufferType src) {
     HostMemoryBuffer srcBuffer;
     switch(src) {
       case VALIDITY:
@@ -606,7 +606,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert length >= 0;
     assert dstOffset + length <= dst.length;
 
-    HostMemoryBuffer srcBuffer = getBufferFor(src);
+    HostMemoryBuffer srcBuffer = getHostBufferFor(src);
 
     assert srcOffset + length <= srcBuffer.length : "would copy off end of buffer "
         + srcOffset + " + " + length + " > " + srcBuffer.length;
