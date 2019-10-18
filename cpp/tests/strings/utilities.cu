@@ -14,18 +14,28 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include "./utilities.h"
 
-#include <thrust/sequence.h>
-#include <random>
+#include <cudf/column/column_factories.hpp>
+#include <tests/utilities/column_utilities.cuh>
+
+#include <cstring>
+#include <thrust/execution_policy.h>
+#include <thrust/equal.h>
 
 #include <gmock/gmock.h>
+
+namespace cudf {
+namespace test {
+
+
+void expect_strings_empty(cudf::column_view strings_column)
+{
+    EXPECT_EQ(STRING, strings_column.type().id());
+    EXPECT_EQ(0,strings_column.size());
+    EXPECT_EQ(0,strings_column.null_count());
+    EXPECT_EQ(0,strings_column.num_children());
+}
+
+}  // namespace test
+}  // namespace cudf
