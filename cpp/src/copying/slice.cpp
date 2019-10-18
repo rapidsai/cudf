@@ -33,7 +33,7 @@ std::vector<std::unique_ptr<cudf::column_view>> slice(cudf::column_view const& i
     
     std::vector<std::unique_ptr<cudf::column_view>> result{};
 
-    if(indices.size() == 0) {
+    if(indices.size() == 0 or input.size() == 0) {
         return result;
     }
 
