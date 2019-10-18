@@ -16,29 +16,21 @@
 
 #pragma once 
 
-#include "cudf.h"
-#include "types.hpp"
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/copying.hpp>
 
 namespace cudf {
 namespace experimental {
-
-/** ---------------------------------------------------------------------------*
-* @brief Indicates when to allocate a mask, based on an existing mask.
-* ---------------------------------------------------------------------------**/
-enum class  mask_allocation_policy {
-    NEVER, ///< Do not allocate a null mask, regardless of input
-    RETAIN, ///< Allocate a null mask if the input contains one
-    ALWAYS ///< Allocate a null mask, regardless of input
-};
-
-
+namespace detail {
 /*
  * Initializes and returns an empty column of the same type as the `input`.
  *
  * @param input Immutable view of input column to emulate
+ * @param stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> An empty column of same type as `input`
  */
-std::unique_ptr<column> empty_like(column_view input);
+std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream = 0);
 
 /**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
@@ -47,12 +39,15 @@ std::unique_ptr<column> empty_like(column_view input);
  * @param input Immutable view of input column to emulate
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input,
-                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                                      mask_allocation_policy mask_alloc = 
+                                          mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
-                                          rmm::mr::get_default_resource());
+                                          rmm::mr::get_default_resource(),
+                                      cudaStream_t stream = 0);
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -62,12 +57,15 @@ std::unique_ptr<column> allocate_like(column_view input,
  * @param size The desired number of elements that the new column should have capacity for
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input, size_type size,
-                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                                      mask_allocation_policy mask_alloc = 
+                                          mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
-                                          rmm::mr::get_default_resource());
+                                          rmm::mr::get_default_resource(),
+                                      cudaStream_t stream = 0);
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`
@@ -76,9 +74,11 @@ std::unique_ptr<column> allocate_like(column_view input, size_type size,
  * memory for the column's data or bitmask.
  *
  * @param input_table Immutable view of input table to emulate
+ * @param stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in `input_table`
  */
-std::unique_ptr<table> empty_like(table_view input_table);
+std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream = 0);
 
+}  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
