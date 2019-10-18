@@ -144,20 +144,11 @@ struct column_gatherer {
 		  iterator_type gather_map,
 		  mutable_column_view& destination_column,
 		  bool ignore_out_of_bounds,
-		  util::cuda::scoped_stream stream) {
+		  cudaStream_t stream) {
     column_type const *source_data{source_column.data<column_type>()};
     column_type *destination_data{destination_column.data<column_type>()};
 
     size_type const num_destination_rows{destination_column.size()};
-
-    // If gathering in-place allocate temporary buffers to hold intermediate results
-    bool const in_place = (source_data == destination_data);
-
-    rmm::device_vector<column_type> in_place_buffer;
-    if (in_place) {
-      in_place_buffer.resize(num_destination_rows);
-      destination_data = in_place_buffer.data().get();
-    }
 
     if (ignore_out_of_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
@@ -168,13 +159,6 @@ struct column_gatherer {
       thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
 		     gather_map+num_destination_rows, source_data,
 		     destination_data);
-    }
-
-    // Copy temporary buffers used for in-place gather to destination column
-    if (in_place) {
-      thrust::copy(rmm::exec_policy(stream)->on(stream), destination_data,
-		   destination_data + num_destination_rows,
-		   destination_column.data<column_type>());
     }
 
     CHECK_STREAM(stream);
@@ -264,6 +248,8 @@ void gather(table_view const& source_table, iterator_type gather_map,
     column_view src_col = source_table.column(i);
 
     CUDF_EXPECTS(src_col.type() == dest_col.type(), "Column type mismatch");
+    CUDF_EXPECTS(src_col.data<void*>() != nullptr, "Missing source data buffer");
+
 
     // The data gather for n columns will be put on the first n streams
     cudf::experimental::type_dispatcher(src_col.type(), column_gatherer{}, src_col,
@@ -275,6 +261,7 @@ void gather(table_view const& source_table, iterator_type gather_map,
 		   "Missing destination null mask.");
     }
   }
+
 
   rmm::device_vector<size_type> null_counts(source_n_cols, 0);
 

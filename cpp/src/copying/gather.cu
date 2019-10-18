@@ -78,7 +78,7 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
   std::vector<std::unique_ptr<column>> columns(source_table.num_columns());
   std::transform(source_table.begin(), source_table.end(), columns.begin(),
 		 [&](column_view in_col) {
-		   return allocate_like(in_col);
+		   return allocate_like(in_col, gather_map.size());
 		 });
 
   std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(columns));
@@ -88,6 +88,7 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
                "Mismatched number of columns");
 
   mutable_table_view v {destination_table->mutable_view()};
+
   cudf::experimental::type_dispatcher(gather_map.type(), dispatch_map_type{},
 				      source_table, gather_map, v,
 				      check_bounds, ignore_out_of_bounds,
@@ -100,11 +101,8 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
 }  // namespace detail
 
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
-			      bool check_bounds = false, bool allow_negative_indices = false,
-			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
-
+			      bool check_bounds, rmm::mr::device_memory_resource* mr) {
   return detail::gather(source_table, gather_map, check_bounds, false, true, mr);
-
 }
     
 }  // namespace exp
