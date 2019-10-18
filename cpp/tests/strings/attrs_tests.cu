@@ -19,7 +19,7 @@
 #include <cudf/strings/attributes.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include "./utilities.h"
 
