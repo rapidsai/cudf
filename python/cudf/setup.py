@@ -11,15 +11,7 @@ from setuptools.extension import Extension
 
 install_requires = ["numba", "cython"]
 
-cython_files = ["cudf/**/*.pyx"]
-
-CUDA_HOME = os.environ.get("CUDA_HOME", False)
-if not CUDA_HOME:
-    CUDA_HOME = (
-        os.popen('echo "$(dirname $(dirname $(which nvcc)))"').read().strip()
-    )
-cuda_include_dir = os.path.join(CUDA_HOME, "include")
-
+cython_files = ["cudf/_lib/**/*.pyx"]
 
 extensions = [
     Extension(
@@ -31,7 +23,6 @@ extensions = [
             "../../cpp/build/include",
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
-            cuda_include_dir,
         ],
         library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
         libraries=["cudf"],
