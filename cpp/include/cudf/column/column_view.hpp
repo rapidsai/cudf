@@ -239,10 +239,8 @@ class column_view : public detail::column_view_base {
  public:
   column_view() = default;
 
-  #pragma nv_exec_check_disable
   ~column_view() = default;
 
-  #pragma nv_exec_check_disable
   column_view(column_view const&) = default;
 
   column_view(column_view&&) = default;
@@ -327,10 +325,8 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  #pragma nv_exec_check_disable
   ~mutable_column_view() = default;
 
-  #pragma nv_exec_check_disable
   mutable_column_view(mutable_column_view const&) = default;
 
   mutable_column_view(mutable_column_view&&) = default;

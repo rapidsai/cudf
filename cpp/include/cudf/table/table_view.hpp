@@ -123,10 +123,8 @@ class table_view_base {
 
   table_view_base() = delete;
 
-  #pragma nv_exec_check_disable
   ~table_view_base() = default;
 
-  #pragma nv_exec_check_disable
   table_view_base(table_view_base const&) = default;
 
   table_view_base(table_view_base&&) = default;
