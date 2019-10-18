@@ -42,6 +42,7 @@
 - PR #3041 Fixed exp to experimental namespace name change issue
 - PR #3060 Move copying.hpp includes to legacy
 - PR #3141 Java fix for relocated IO headers
+- PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 
 
 # cuDF 0.10.0 (Date TBD)
