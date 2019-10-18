@@ -21,7 +21,7 @@
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/column_utilities.hpp>
 #include "./utilities.h"
 
 #include <vector>
