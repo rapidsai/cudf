@@ -20,6 +20,8 @@
 #include <utilities/error_utils.hpp>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
+#include "char_types/char_flags.h"
+#include "char_types/char_cases.h"
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -138,6 +140,32 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
     return std::make_unique<column>( data_type{STRING}, 0,
                                      rmm::device_buffer{0,stream,mr}, // data
                                      rmm::device_buffer{0,stream,mr}, 0 ); // nulls
+}
+
+static uint8_t* d_character_flags_table = nullptr;
+
+uint8_t* get_character_flags_table()
+{
+    if( !d_character_flags_table ) // TODO make this thread-safe
+    {
+        // leave this out of RMM since it is never freed
+        RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
+        CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
+    }
+    return d_character_flags_table;
+}
+
+static uint8_t* d_character_case_table = nullptr;
+
+uint16_t* get_character_case_table()
+{
+    if( !d_character_case_table )  // TODO make this thread-safe
+    {
+        // leave this out of RMM since it is never freed
+        RMM_TRY(RMM_ALLOC(&d_character_case_table,sizeof(g_character_case_table),0));
+        CUDA_TRY(cudaMemcpy(d_character_case_table,g_character_case_table,sizeof(g_character_case_table),cudaMemcpyHostToDevice));
+    }
+    return g_character_case_table;
 }
 
 

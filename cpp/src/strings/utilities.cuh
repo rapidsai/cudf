@@ -106,6 +106,40 @@ std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type st
     return std::make_pair(null_mask,null_count);
 }
 
+/**
+ * @brief Converts a single UTF-8 character into a code-point value that
+ * can be used for lookup in the character flags or the character case tables.
+ *
+ * @param utf8_char Single UTF-8 character to convert.
+ * @return Device memory pointer to character flags table.
+ */
+__device__ inline uint16_t utf8_to_codepoint(uint32_t utf8_char)
+{
+    uint32_t unchr = 0;
+    if( utf8_char < 0x00000080 )
+        unchr = utf8_char;
+    else if( utf8_char < 0x0000E000 )
+    {
+        unchr =  (utf8_char & 0x1F00) >> 2;
+        unchr |= (utf8_char & 0x003F);
+    }
+    else if( utf8_char < 0x00F00000 )
+    {
+        unchr =  (utf8_char & 0x0F0000) >> 4;
+        unchr |= (utf8_char & 0x003F00) >> 2;
+        unchr |= (utf8_char & 0x00003F);
+    }
+    else if( utf8_char <= (unsigned)0xF8000000 )
+    {
+        unchr =  (utf8_char & 0x03000000) >> 6;
+        unchr |= (utf8_char & 0x003F0000) >> 4;
+        unchr |= (utf8_char & 0x00003F00) >> 2;
+        unchr |= (utf8_char & 0x0000003F);
+    }
+    return static_cast<uint16_t>(unchr);
+}
+
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf
