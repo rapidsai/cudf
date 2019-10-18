@@ -49,7 +49,8 @@ namespace test {
  * ```
  *
  * @param start The starting value of the counting iterator
- * @param f The unary function to apply to the counting iterator
+ * @param f The unary function to apply to the counting iterator.
+ * This should be a host function and not a device function.
  * @return auto A transform iterator that applies `f` to a counting iterator
  *---------------------------------------------------------------------------**/
 template <typename UnaryFunction>
@@ -178,8 +179,8 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
                             ValidityIterator v) {
   std::vector<char> chars{};
   std::vector<int32_t> offsets(1, 0);
-  for (; begin < end; ++begin) {
-    std::string tmp = (*v++) ? std::string(*begin) : std::string{};
+  for( auto str = begin; str < end; ++str) {
+    std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     offsets.push_back(offsets.back() + tmp.length());
   }
@@ -205,8 +206,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * ```c++
-   * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 1, 2, 3, 4}
-   * auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
+   * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 2, 4, 6, 8}
+   * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
    * fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
    * ```
    *
