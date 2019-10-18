@@ -40,7 +40,8 @@ try:
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
     from cudf.core.column import column, CategoricalColumn, StringColumn
 
-    def _string_safe_hash(frame):
+    def _string_safe_hash(df):
+        frame = df.copy()
         for col in frame.columns:
             if isinstance(frame[col]._column, StringColumn):
                 frame[col] = frame[col]._column.as_numerical_column("int32")
@@ -56,7 +57,7 @@ try:
     def hash_object_cudf_index(ind, index=None):
 
         if isinstance(ind, cudf.MultiIndex):
-            return _string_safe_hash(ind.copy().to_frame(index=False))
+            return _string_safe_hash(ind.to_frame(index=False))
 
         col = column.as_column(ind)
         if isinstance(col, StringColumn):
