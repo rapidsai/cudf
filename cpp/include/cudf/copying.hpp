@@ -19,17 +19,17 @@
 #include "cudf.h"
 #include "types.hpp"
 
-namespace cudf {
-namespace experimental {
-
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
-enum mask_allocation_policy {
+enum class  mask_allocation_policy {
     NEVER, ///< Do not allocate a null mask, regardless of input
     RETAIN, ///< Allocate a null mask if the input contains one
     ALWAYS ///< Allocate a null mask, regardless of input
 };
+
+namespace cudf {
+namespace experimental {
 
 /*
  * Initializes and returns an empty column of the same type as the `input`.
@@ -49,7 +49,7 @@ std::unique_ptr<column> empty_like(column_view input);
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input,
-                                      mask_allocation_policy mask_alloc = RETAIN,
+                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
                                           rmm::mr::get_default_resource());
 
@@ -64,7 +64,7 @@ std::unique_ptr<column> allocate_like(column_view input,
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input, size_type size,
-                                      mask_allocation_policy mask_alloc = RETAIN,
+                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
                                           rmm::mr::get_default_resource());
 
