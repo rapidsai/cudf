@@ -28,17 +28,77 @@
 #include <gmock/gmock.h>
 
 template <typename T>
-struct TypedScalarTest : public cudf::test::BaseFixture {
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
-};
+struct TypedScalarTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(TypedScalarTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(TypedScalarTest, cudf::test::AllTypes);
 
 
-TYPED_TEST(TypedScalarTest, DefaultNullCountNoMask) {
+TYPED_TEST(TypedScalarTest, DefaultValidity) {
   TypeParam value = 7;
-  cudf::numeric_scalar<TypeParam> s(value);
+  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  
 
   EXPECT_TRUE(s.is_valid());
   EXPECT_EQ(value, s.value());
 }
+
+TYPED_TEST(TypedScalarTest, ConstructNull) {
+  TypeParam value = 5;
+  cudf::experimental::type_to_scalar_type<TypeParam> s(value, false);
+
+  EXPECT_FALSE(s.is_valid());
+}
+
+TYPED_TEST(TypedScalarTest, SetValue) {
+  TypeParam value = 9;
+  cudf::experimental::type_to_scalar_type<TypeParam> s;
+  s.set_value(value);
+
+  EXPECT_TRUE(s.is_valid());
+  EXPECT_EQ(value, s.value());
+}
+
+TYPED_TEST(TypedScalarTest, SetNull) {
+  TypeParam value = 6;
+  cudf::experimental::type_to_scalar_type<TypeParam> s;
+  s.set_value(value);
+  s.set_null();
+
+  EXPECT_FALSE(s.is_valid());
+}
+
+TYPED_TEST(TypedScalarTest, CopyConstructor) {
+  TypeParam value = 8;
+  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  auto s2 = s;
+
+  EXPECT_TRUE(s2.is_valid());
+  EXPECT_EQ(value, s2.value());
+}
+
+// TYPED_TEST(TypedScalarTest, MoveConstructor) {
+//   TypeParam value = 8;
+//   cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+//   auto s2(std::move(s));
+
+//   EXPECT_TRUE(s2.is_valid());
+//   EXPECT_EQ(value, s2.value());
+//   EXPECT_FALSE(s.is_valid());
+// }
+
+// struct StringScalarTest : public cudf::test::BaseFixture {}
+
+// TEST_F(StringScalarTest, DefaultValidity) {
+//   std::string value = "test string";
+//   cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+
+//   EXPECT_TRUE(s.is_valid());
+//   EXPECT_EQ(value, s.value());
+// }
+
+// TYPED_TEST(TypedScalarTest, ConstructNull) {
+//   std::string value = "another test string";
+//   cudf::experimental::type_to_scalar_type<TypeParam> s(value, false);
+
+//   EXPECT_FALSE(s.is_valid());
+// }

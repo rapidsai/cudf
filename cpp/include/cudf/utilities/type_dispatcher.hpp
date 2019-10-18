@@ -106,21 +106,42 @@ struct type_to_scalar_type_impl {
   using ScalarType = cudf::scalar;
 };
 
-template <>
-struct type_to_scalar_type_impl<int8_t> {
-  using ScalarType = cudf::numeric_scalar<int8_t>;
+#ifndef MAP_NUMERIC_SCALAR
+#define MAP_NUMERIC_SCALAR(Type)                    \
+template <>                                         \
+struct type_to_scalar_type_impl<Type> {             \
+  using ScalarType = cudf::numeric_scalar<Type>;    \
 };
+#endif
+
+MAP_NUMERIC_SCALAR(int8_t)
+MAP_NUMERIC_SCALAR(int16_t)
+MAP_NUMERIC_SCALAR(int32_t)
+MAP_NUMERIC_SCALAR(int64_t)
+MAP_NUMERIC_SCALAR(float)
+MAP_NUMERIC_SCALAR(double)
 
 template <>
-struct type_to_scalar_type_impl<cudf::string> {
+struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType = cudf::string_scalar;
 };
 
-template <>
-struct type_to_scalar_type_impl<timestamp_D> {
-  using ScalarType = cudf::timestamp_scalar<timestamp_D>;
+#ifndef MAP_TIMESTAMP_SCALAR
+#define MAP_TIMESTAMP_SCALAR(Type)                  \
+template <>                                         \
+struct type_to_scalar_type_impl<Type> {             \
+  using ScalarType = cudf::timestamp_scalar<Type>;  \
 };
+#endif
 
+MAP_TIMESTAMP_SCALAR(timestamp_D)
+MAP_TIMESTAMP_SCALAR(timestamp_s)
+MAP_TIMESTAMP_SCALAR(timestamp_ms)
+MAP_TIMESTAMP_SCALAR(timestamp_us)
+MAP_TIMESTAMP_SCALAR(timestamp_ns)
+
+template <typename T>
+using type_to_scalar_type = typename type_to_scalar_type_impl<T>::ScalarType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on

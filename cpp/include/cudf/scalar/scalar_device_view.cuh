@@ -17,7 +17,6 @@
 
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
 
 namespace cudf {
 
@@ -97,6 +96,10 @@ class alignas(16) primitive_scalar_device_view
     return *get();
   }
 
+  __device__ void set_value(T value) {
+    *_data = value;
+  }
+
   __device__ T* get() noexcept {
     return static_cast<T*>(_data);
   }
@@ -108,7 +111,10 @@ class alignas(16) primitive_scalar_device_view
  protected:
   T * _data{};      ///< Pointer to device memory containing the value
 
-  // primitive_scalar_device_view() : _data()
+  primitive_scalar_device_view(data_type type, T* data, bool* is_valid)
+   : detail::scalar_device_view_base(type, is_valid)
+   , _data(data)
+  {}
 };
 
 }  // namespace detail
@@ -116,12 +122,13 @@ class alignas(16) primitive_scalar_device_view
 
 template <typename T>
 class alignas(16) numeric_scalar_device_view
-    : public detail::primitive_scalar_device_view<T> {
+    : public detail::primitive_scalar_device_view<T>
+{
+ public:
   using ValueType = T;
 
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid) 
-    : detail::scalar_device_view_base(type, is_valid)
-    , detail::primitive_scalar_device_view<T>{data}
+    : detail::primitive_scalar_device_view<T>(type, data, is_valid)
   {}
 };
 
@@ -153,14 +160,24 @@ class alignas(16) string_scalar_device_view
 
 template <typename T>
 class alignas(16) timestamp_scalar_device_view
-    : public detail::primitive_scalar_device_view<T> {
+    : public detail::primitive_scalar_device_view<T>
+{
+ public:
   using ValueType = T;
 
   timestamp_scalar_device_view(data_type type, T* data, bool* is_valid) 
-    : detail::scalar_device_view_base(type, is_valid)
-    , detail::primitive_scalar_device_view<T>{data}
+    : detail::primitive_scalar_device_view<T>(type, data, is_valid)
   {}
 };
 
+template <typename T>
+auto get_scalar_device_view(numeric_scalar<T>& s) {
+  return numeric_scalar_device_view<T>(s.type(), s.data(), s.valid_mask());
+}
+
+template <typename T>
+auto get_scalar_device_view(timestamp_scalar<T>& s) {
+  return timestamp_scalar_device_view<T>(s.type(), s.data(), s.valid_mask());
+}
 
 }  // namespace cudf
