@@ -13,33 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cudf/types.hpp>
-#include <cudf/column/column_view.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
+#include <vector>
 
 namespace cudf {
 namespace test {
-/**---------------------------------------------------------------------------*
- * @brief Verifies the element-wise equality of two columns.
- *
- * Treats null elements as equivalent.
- *
- * @param lhs The first column
- * @param rhs The second column
- *---------------------------------------------------------------------------**/
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
 
 /**---------------------------------------------------------------------------*
- * @brief Verifies the bitwise equality of two device memory buffers.
+ * @brief Utility will verify the given strings column is empty.
  *
- * @param lhs The first buffer
- * @param rhs The second buffer
- * @param size_bytes The number of bytes to check for equality
+ * @param strings_column Column of strings to check
  *---------------------------------------------------------------------------**/
-void expect_equal_buffers(void const* lhs, void const* rhs,
-                          std::size_t size_bytes);
+void expect_strings_empty(cudf::column_view strings_column);
 
 }  // namespace test
 }  // namespace cudf
