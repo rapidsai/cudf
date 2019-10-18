@@ -8,6 +8,7 @@
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
+- PR #3130 Define and implement new `column_wrapper`
 
 
 ## Improvements
@@ -32,6 +33,7 @@
 - PR #3083 Improved some binary operation tests to include null testing.
 - PR #3071 Move cuIO to legacy
 - PR #3126 Round 2 of snappy decompression optimizations
+- PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
 
 ## Bug Fixes
@@ -40,6 +42,8 @@
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
 - PR #3060 Move copying.hpp includes to legacy
+- PR #3141 Java fix for relocated IO headers
+- PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 
 
 # cuDF 0.10.0 (Date TBD)
@@ -85,6 +89,7 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories

@@ -61,8 +61,7 @@ void print( strings_column_view strings,
         end = count;
     if( start < 0 )
         start = 0;
-    if( start >= end )
-        throw std::invalid_argument("invalid parameter value");
+    CUDF_EXPECTS( ((start >= 0) && (start < end)), "invalid start parameter");
     count = end - start;
 
     // stick with the default stream for this odd/rare stdout function
@@ -80,7 +79,7 @@ void print( strings_column_view strings,
         thrust::make_counting_iterator<size_type>(end),
         d_output_offsets+1,
         [d_column, max_width] __device__ (size_type idx) {
-            if( d_column.nullable() && d_column.is_null(idx) )
+            if( d_column.is_null(idx) )
                 return 0;
             string_view d_str = d_column.element<string_view>(idx);
             size_type bytes = d_str.size_bytes();
