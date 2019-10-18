@@ -140,9 +140,9 @@ struct column_gatherer {
   template <typename column_type, typename iterator_type,
     std::enable_if_t<std::is_integral<column_type>::value or
                      std::is_floating_point<column_type>::value>* = nullptr>
-    void operator()(column_view source_column,
+    void operator()(column_view const& source_column,
 		  iterator_type gather_map,
-		  mutable_column_view destination_column,
+		  mutable_column_view& destination_column,
 		  bool ignore_out_of_bounds,
 		  util::cuda::scoped_stream stream) {
     column_type const *source_data{source_column.data<column_type>()};
@@ -183,9 +183,9 @@ struct column_gatherer {
   template <typename column_type, typename iterator_type,
     std::enable_if_t<not std::is_integral<column_type>::value and
                      not std::is_floating_point<column_type>::value>* = nullptr>
-  void operator()(column_view source_column,
+  void operator()(column_view const& source_column,
 		  iterator_type gather_map,
-		  mutable_column_view destination_column,
+		  mutable_column_view& destination_column,
 		  bool ignore_out_of_bounds,
 		  util::cuda::scoped_stream stream) {
     CUDF_FAIL("Column type must be numeric");
@@ -247,8 +247,8 @@ struct index_converter<map_type, index_conversion::NONE>
 
 
 template <typename iterator_type>
-void gather(table_view source_table, iterator_type gather_map,
-	    mutable_table_view destination_table, bool check_bounds = false,
+void gather(table_view const& source_table, iterator_type gather_map,
+	    mutable_table_view& destination_table, bool check_bounds = false,
 	    bool ignore_out_of_bounds = false, bool allow_negative_indices = false,
 	    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
 	    )

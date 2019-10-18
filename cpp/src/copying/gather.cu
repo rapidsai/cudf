@@ -20,8 +20,8 @@ namespace detail {
 
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
-  void operator()(table_view source_table, column_view gather_map,
-		  mutable_table_view destination_table, bool check_bounds,
+  void operator()(table_view const& source_table, column_view const& gather_map,
+		  mutable_table_view& destination_table, bool check_bounds,
 		  bool ignore_out_of_bounds, bool allow_negative_indices = false)
   {
 
@@ -63,34 +63,49 @@ struct dispatch_map_type {
   }
 
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
-  void operator()(table_view source_table, column_view gather_map,
-                  mutable_table_view destination_table, bool check_bounds,
+  void operator()(table_view const& source_table, column_view const& gather_map,
+                  mutable_table_view& destination_table, bool check_bounds,
 		  bool ignore_out_of_bounds, bool allow_negative_indices = false) {
    CUDF_FAIL("Gather map must be an integral type.");
   }
 };
 
-void gather(table_view source_table, column_view gather_map,
-	    mutable_table_view destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds = false, bool allow_negative_indices = false,
-	    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
-  // If the destination is empty, return immediately as there is nothing to
-  // gather
-  if (0 == destination_table.num_rows()) {
-    return;
-  }
+std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
+			      bool check_bounds = false, bool ignore_out_of_bounds = false,
+			      bool allow_negative_indices = false,
+			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
 
+  std::vector<std::unique_ptr<column>> columns(source_table.num_columns());
+  std::transform(source_table.begin(), source_table.end(), columns.begin(),
+		 [&](column_view in_col) {
+		   return allocate_like(in_col);
+		 });
+
+  std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(columns));
+  
   CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
-  CUDF_EXPECTS(source_table.num_columns() == destination_table.num_columns(),
+  CUDF_EXPECTS(source_table.num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 
+  mutable_table_view v {destination_table->mutable_view()};
   cudf::experimental::type_dispatcher(gather_map.type(), dispatch_map_type{},
-				      source_table, gather_map, destination_table,
+				      source_table, gather_map, v,
 				      check_bounds, ignore_out_of_bounds,
 				      allow_negative_indices);
+
+  return destination_table;
 }
 
 
 }  // namespace detail
+
+std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
+			      bool check_bounds = false, bool allow_negative_indices = false,
+			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+
+  return detail::gather(source_table, gather_map, check_bounds, false, true, mr);
+
+}
+    
 }  // namespace exp
 }  // namespace cudf

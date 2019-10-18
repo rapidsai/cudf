@@ -109,7 +109,7 @@ class table_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
-  ColumnView& column(size_type column_index) noexcept;
+  ColumnView const& column(size_type column_index) const noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of columns
@@ -131,9 +131,9 @@ class table_view_base {
 
   table_view_base(table_view_base&&) = default;
   table_view_base& operator=(table_view_base const&) = default;
-  table_view_base& operator=(table_view_base&&) = default;
-};
-}  // namespace detail
+  table_view_base& operator=(table_view_base&&) = default;}
+  ;
+}  // NAMESPACE detail
 
 /**---------------------------------------------------------------------------*
  * @brief A set of `column_view`s of the same size.
