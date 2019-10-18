@@ -106,12 +106,14 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * indices: {1, 3, 5, 9, 2, 4, 8, 8}
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
+ * @throws `cudf::logic_error` if `indices` size is not even.
+ *
  * @param input Immutable view of input column for slicing
  * @param indices A vector indices that are used to take 'slices' of the `input`.
  * @return vector<std::unique_ptr<column_view>> A vector of `column_view` unique_ptr each of which may have a different number of rows. 
  */
 
-std::vector<std::unique_ptr<column_view>> slice(column_view const& input_table,
+std::vector<std::unique_ptr<column_view>> slice(column_view const& input,
                                                 std::vector<size_type> const& indices);
 
 /**
@@ -142,11 +144,13 @@ std::vector<std::unique_ptr<column_view>> slice(column_view const& input_table,
  * splits: {2, 5, 9}
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
+ * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ *
  * @param input Immutable view of input column for spliting
  * @param indices A vector indices that are used to split the `input`
  * @return vector<std::unique_ptr<column_view>> A vector of `column_view` unique_ptr each of which may have a different number of rows. 
  */
-std::vector<std::unique_ptr<column_view>> split(column_view const& input_table,
+std::vector<std::unique_ptr<column_view>> split(column_view const& input,
                                                 std::vector<size_type> const& splits);
 
 }  // namespace experimental

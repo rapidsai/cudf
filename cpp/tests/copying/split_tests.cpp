@@ -27,8 +27,26 @@
 #include <string>
 #include <vector>
 
+std::vector<cudf::size_type> splits_to_indices(std::vector<cudf::size_type> splits, cudf::size_type size){
+    std::vector<cudf::size_type> indices{0};
+
+    std::for_each(splits.begin(), splits.end(),
+            [&indices](auto split) {
+                indices.push_back(split); // This for end
+                indices.push_back(split); // This for the start
+            });
+
+    if (splits.back() != size) {
+        indices.push_back(size); // This to include rest of the elements
+    } else {
+        indices.pop_back(); // Not required as it is extra 
+    }
+
+    return indices;
+}
+
 template <typename T, typename InputIterator>
-cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start, cudf::size_type size, InputIterator valids) {
+cudf::test::fixed_width_column_wrapper<T> create_fixed_columns_for_splits(cudf::size_type start, cudf::size_type size, InputIterator valids) {
     auto iter = cudf::test::make_counting_transform_iterator(start, [](auto i) { return T(i);});
 
         return cudf::test::fixed_width_column_wrapper<T> (iter, iter + size, valids);
@@ -36,9 +54,11 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
 }
 
 template <typename T>
-std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(std::vector<cudf::size_type> indices, bool nullable) {
+std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(std::vector<cudf::size_type> splits, cudf::size_type size, bool nullable) {
 
     std::vector<cudf::test::fixed_width_column_wrapper<T>> result = {};
+    std::vector<cudf::size_type> indices = splits_to_indices(splits, size);
+
     for(unsigned long index = 0; index < indices.size(); index+=2) {
         auto iter = cudf::test::make_counting_transform_iterator(indices[index], [](auto i) { return T(i);});
 
@@ -53,9 +73,11 @@ std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(s
     return result;
 }
 
-std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns(std::vector<std::string> strings, std::vector<cudf::size_type> indices, bool nullable) {
+std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns_for_splits(std::vector<std::string> strings, std::vector<cudf::size_type> splits, bool nullable) {
 
     std::vector<cudf::test::strings_column_wrapper> result = {};
+    std::vector<cudf::size_type> indices = splits_to_indices(splits, strings.size());
+
     for(unsigned long index = 0; index < indices.size(); index+=2) {
         if(not nullable) {
             result.push_back(cudf::test::strings_column_wrapper (strings.begin()+indices[index],  strings.begin()+indices[index+1]));
@@ -69,22 +91,22 @@ std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns(s
 }
 
 template <typename T>
-struct SliceTest : public cudf::test::BaseFixture {};
+struct SplitTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(SplitTest, cudf::test::NumericTypes);
 
-TYPED_TEST(SliceTest, NumericColumnsWithInValids) {
+TYPED_TEST(SplitTest, SplitEndLessThanSize) {
     using T = TypeParam;
 
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
 
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
+    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns_for_splits<T>(start, size, valids);
 
-    std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
-    std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(indices, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(col, indices);
+    std::vector<cudf::size_type> splits{2, 5, 7};
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(splits, size, true);
+    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col, splits);
 
     EXPECT_EQ(expected.size(), result.size());
 
@@ -93,17 +115,37 @@ TYPED_TEST(SliceTest, NumericColumnsWithInValids) {
     }
 }
 
-struct SliceStringTest : public SliceTest <std::string>{};
+TYPED_TEST(SplitTest, SplitEndToSize) {
+    using T = TypeParam;
 
-TEST_F(SliceStringTest, StringWithInvalids) {
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns_for_splits<T>(start, size, valids);
+
+    std::vector<cudf::size_type> splits{2, 5, 10};
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(splits, size, true);
+    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col, splits);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+        cudf::test::expect_columns_equal(expected[index], *(result[index]));
+    }
+}
+
+struct SplitStringTest : public SplitTest <std::string>{};
+
+TEST_F(SplitStringTest, StringWithInvalids) {
     std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
     auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
     cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
 
-    std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
+    std::vector<cudf::size_type> splits{2, 5, 9};
 
-    std::vector<cudf::test::strings_column_wrapper> expected = create_expected_string_columns(strings, indices, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(s, indices);
+    std::vector<cudf::test::strings_column_wrapper> expected = create_expected_string_columns_for_splits(strings, splits, true);
+    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(s, splits);
 
     EXPECT_EQ(expected.size(), result.size());
 
@@ -112,62 +154,62 @@ TEST_F(SliceStringTest, StringWithInvalids) {
     }
 }
 
-struct SliceCornerCases : public SliceTest <int8_t>{};
+struct SplitCornerCases : public SplitTest <int8_t>{};
 
-TEST_F(SliceCornerCases, EmptyColumn) {
+TEST_F(SplitCornerCases, EmptyColumn) {
     cudf::column col {};
-    std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
+    std::vector<cudf::size_type> splits{2, 5, 9};
 
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(col.view(), indices);
+    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col.view(), splits);
 
     unsigned long expected = 0;
 
     EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceCornerCases, EmptyIndices) {
+TEST_F(SplitCornerCases, EmptyIndices) {
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
 
-    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
-    std::vector<cudf::size_type> indices{};
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns_for_splits<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> splits{};
 
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(col, indices);
-    
+    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col, splits);
+
     unsigned long expected = 0;
 
     EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceCornerCases, InvalidSetOfIndices) {
+TEST_F(SplitCornerCases, InvalidSetOfIndices) {
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
-    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
-    std::vector<cudf::size_type> indices{11, 12};
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns_for_splits<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> splits{11, 12};
 
-    EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::split(col, splits), cudf::logic_error);
 }
 
-TEST_F(SliceCornerCases, ImproperRange) {
+TEST_F(SplitCornerCases, ImproperRange) {
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
 
-    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
-    std::vector<cudf::size_type> indices{5, 4};
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns_for_splits<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> splits{5, 4};
 
-    EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::split(col, splits), cudf::logic_error);
 }
 
-TEST_F(SliceCornerCases, NegativeOffset) {
+TEST_F(SplitCornerCases, NegativeValue) {
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
 
-    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
-    std::vector<cudf::size_type> indices{-1, 4};
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns_for_splits<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> splits{-1, 4};
 
-    EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::split(col, splits), cudf::logic_error);
 }

@@ -30,7 +30,8 @@ namespace detail {
 
 std::vector<std::unique_ptr<cudf::column_view>> slice(cudf::column_view const& input,
                                                 std::vector<size_type> const& indices){
-    
+
+    CUDF_EXPECTS(indices.size()%2 == 0, "indices size must be even");
     std::vector<std::unique_ptr<cudf::column_view>> result{};
 
     if(indices.size() == 0 or input.size() == 0) {

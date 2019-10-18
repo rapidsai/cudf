@@ -27,13 +27,14 @@ namespace experimental {
 
 std::vector<std::unique_ptr<cudf::column_view>> split(cudf::column_view const& input,
                                                 std::vector<size_type> const& splits) {
+
     std::vector<std::unique_ptr<cudf::column_view>> result{};
 
-    CUDF_EXPECTS(splits.back() <= input.size(), "splits can't exceed size of the column");
-
-    if(splits.size() == 0) {
+    if(splits.size() == 0 or input.size() == 0) {
         return std::vector<std::unique_ptr<cudf::column_view>> {};
     }
+
+    CUDF_EXPECTS(splits.back() <= input.size(), "splits can't exceed size of the column");
 
     //If the size is not zero, the split will always start at `0`
     std::vector<size_type> indices{0};
