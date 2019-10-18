@@ -415,6 +415,7 @@ add_library(cudf
             src/utilities/column_utils.cpp
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/legacy/copy.cpp
@@ -427,7 +428,7 @@ add_library(cudf
             src/copying/legacy/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
-            src/search/search.cu
+            src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
@@ -439,6 +440,9 @@ add_library(cudf
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
+            src/strings/utilities.cu
+            src/strings/copying/copying.cu
+            src/strings/sorting/sorting.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding
