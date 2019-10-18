@@ -164,6 +164,24 @@ def pdfIndex():
     return pdfIndex
 
 
+@pytest.fixture
+def pdfIndexNulls():
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+        ],
+        [
+            [0, 0, 0, -1, 1, 1, 2],
+            [1, -1, 1, 1, 0, 0, -1],
+            [-1, 0, 2, 2, 2, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather"]
+    return pdfIndex
+
+
 def test_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     gdf = cudf.from_pandas(pdf)
@@ -655,9 +673,15 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         assert_eq(presult, gresult, check_index_type=False)
 
 
-def test_multiindex_to_frame(pdfIndex):
+def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
+
+    gdfIndex = cudf.from_pandas(pdfIndexNulls)
+    assert_eq(
+        pdfIndexNulls.to_frame().fillna("nan"),
+        gdfIndex.to_frame().fillna("nan"),
+    )
 
 
 def test_multiindex_groupby_to_frame():
