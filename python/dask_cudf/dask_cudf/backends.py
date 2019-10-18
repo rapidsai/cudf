@@ -41,7 +41,7 @@ try:
     from cudf.core.column import column, CategoricalColumn, StringColumn
 
     def _string_safe_hash(df):
-        frame = df.copy()
+        frame = df.copy(deep=False)
         for col in frame.columns:
             if isinstance(frame[col]._column, StringColumn):
                 frame[col] = frame[col]._column.as_numerical_column("int32")
