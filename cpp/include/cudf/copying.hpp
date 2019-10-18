@@ -132,12 +132,11 @@ std::vector<std::unique_ptr<column_view>> slice(column_view const& input,
  * the `input`.
  *
  * Exceptional cases for the indices array are:
- * When the values in the pair are equal, the function return an empty `column_view`.
- * When the values in the pair are 'strictly decreasing', the outcome is
+ * When the value in `splits` is not in the range [0, size], the outcome is
+ * undefined..
+ * When the values in the `splits` are 'strictly decreasing', the outcome is
  * undefined.
- * When any of the values in the pair don't belong to the range[0, input column
- * size), the outcome is undefined.
- * When the indices array is empty, an empty vector of `column_view` unique_ptr is returned.
+ * When the `splits` is empty, an empty vector of `column_view` unique_ptr is returned.
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
