@@ -1793,7 +1793,8 @@ class DataFrame(object):
                     for o in objs
                 ],
                 index=index,
-            ) for c in unique_columns_ordered_ls
+            )
+            for c in unique_columns_ordered_ls
         }
 
         out = cls(data)
