@@ -310,24 +310,24 @@ ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
-set(AVRO_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
-set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
-set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
-set(ORC_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(LEGACY_AVRO_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/avro_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_CSV_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/json_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_ORC_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/orc_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
-ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
-ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
-ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
-ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
+ConfigureTest(LEGACY_AVRO_TEST "${LEGACY_AVRO_TEST_SRC}")
+ConfigureTest(LEGACY_CSV_TEST "${LEGACY_CSV_TEST_SRC}")
+ConfigureTest(LEGACY_JSON_TEST "${LEGACY_JSON_TEST_SRC}")
+ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -365,6 +365,14 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 
+set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu")
+
+ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
+# - legacy copying tests ---------------------------------------------------------------------------------
+
 set(LEGACY_COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/copy_range_tests.cu"
@@ -389,10 +397,18 @@ set(LEGACY_NVSTRING_SCATTER_TEST_SRC
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - legacy utilities tests -------------------------------------------------------------------------------
+
+set(LEGACY_UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/legacy/column_wrapper_tests.cu")
+
+ConfigureTest(LEGACY_UTILITIES_TEST "${LEGACY_UTILITIES_TEST_SRC}")
 
 ###################################################################################################
 # - iterator tests -------------------------------------------------------------------------------
@@ -477,12 +493,12 @@ set(FILLING_TEST_SRC
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
 ###################################################################################################
-# - search test -----------------------------------------------------------------------------------
+# - legacy search test -----------------------------------------------------------------------------------
 
-set(SEARCH_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+set(LEGACY_SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/legacy/search_test.cu")
 
-ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 
 ###################################################################################################
 # - traits test -----------------------------------------------------------------------------------
@@ -512,7 +528,9 @@ ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 # - strings test --------------------------------------------------------------------------------------
 
 set(STRINGS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
