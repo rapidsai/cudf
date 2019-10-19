@@ -375,6 +375,7 @@ add_library(cudf
             src/reductions/std.cu
             src/replace/replace.cu
             src/reductions/scan.cu
+            src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/merge.cu
             src/unary/math_ops.cu
