@@ -39,19 +39,19 @@ T random_int(T min, T max)
 void BM_table(benchmark::State& state){
   using wrapper = cudf::test::column_wrapper<int64_t>;
 
-  const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
-  const gdf_size_type column_size{(gdf_size_type)state.range(1)};
+  const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
+  const cudf::size_type column_size{(cudf::size_type)state.range(1)};
 
   std::vector<wrapper> key_columns;
   std::vector<wrapper> val_columns;
 
   auto make_table = [&] (std::vector<wrapper>& cols,
-                         gdf_size_type col_size) -> cudf::table
+                         cudf::size_type col_size) -> cudf::table
   {
-    for (gdf_size_type i = 0; i < num_columns; i++) {
+    for (cudf::size_type i = 0; i < num_columns; i++) {
       cols.emplace_back(col_size,
-        [=](gdf_index_type row) { return random_int(0, 10); }
-        ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+        [=](cudf::size_type row) { return random_int(0, 10); }
+        ,[=](cudf::size_type row) { return random_int(0, 10) < 90; }
       );
     }
 

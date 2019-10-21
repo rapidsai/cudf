@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ShortColumnVectorTest {
+public class ShortColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testCreateColumnVectorBuilder() {

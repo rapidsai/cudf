@@ -293,6 +293,26 @@ class Index(object):
 
         return Series(self._values)
 
+    def isnull(self):
+        """Identify missing values in an Index.
+        """
+        return as_index(self.as_column().isnull(), name=self.name)
+
+    def isna(self):
+        """Identify missing values in an Index. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in an Index.
+        """
+        return as_index(self.as_column().notna(), name=self.name)
+
+    def notnull(self):
+        """Identify non-missing values in an Index. Alias for notna.
+        """
+        return self.notna()
+
     @property
     @property
     def is_unique(self):
@@ -441,7 +461,7 @@ class RangeIndex(Index):
             index += self._start
             return index
         elif isinstance(index, (list, np.ndarray)):
-            index = np.array(index)
+            index = np.asarray(index)
             index = rmm.to_device(index)
 
         else:

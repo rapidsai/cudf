@@ -26,10 +26,9 @@
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <tests/utilities/legacy/valid_vectors.h>
 
-template <typename T>
 struct ScatterTest : GdfTest {};
 
-TEST(ScatterTest, ScatterNVString)
+TEST_F(ScatterTest, ScatterNVString)
 {
   bool print = false;
   const int rows_size = 12;
@@ -49,12 +48,12 @@ TEST(ScatterTest, ScatterNVString)
     print_gdf_column(right_column);
   }  
   
-  std::vector<gdf_index_type> scatter_map(rows_size);
+  std::vector<cudf::size_type> scatter_map(rows_size);
   for(int i = 0; i < rows_size; i++){
     scatter_map[i] = i * 2;
   }
   
-  rmm::device_vector<gdf_index_type> d_scatter_map = scatter_map;
+  rmm::device_vector<cudf::size_type> d_scatter_map = scatter_map;
 
   cudf::table source_table({left_column});
   cudf::table target_table({right_column});
@@ -69,7 +68,7 @@ TEST(ScatterTest, ScatterNVString)
   }
 
   std::vector<std::string> strs;
-  std::vector<gdf_valid_type> valids;
+  std::vector<cudf::valid_type> valids;
   std::tie(strs, valids) = cudf::test::nvcategory_column_to_host(destination_table.get_column(0));
   
   EXPECT_EQ((int)strs.size(), rows_size*2); 

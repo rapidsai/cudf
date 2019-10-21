@@ -46,7 +46,7 @@ namespace cudf {
 namespace groupby {
 namespace sort {
 
-using index_vector = rmm::device_vector<gdf_size_type>;
+using index_vector = rmm::device_vector<cudf::size_type>;
 
 namespace {
 
@@ -83,7 +83,7 @@ std::vector<gdf_column*>  compute_ordered_aggregations(
     if (is_ordered(element.second)) {
       gdf_column * value_col = element.first;
       gdf_column sorted_values;
-      rmm::device_vector<gdf_size_type> group_sizes;
+      rmm::device_vector<cudf::size_type> group_sizes;
 
       std::tie(sorted_values, group_sizes) = groupby.sort_values(*value_col);
       auto result_col = new gdf_column;
@@ -144,12 +144,12 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
 
   //group_labels 
   const index_vector& group_labels = groupby.group_labels();
-  const gdf_size_type num_groups = groupby.num_groups();
+  const cudf::size_type num_groups = groupby.num_groups();
   
   // Output allocation size aligned to 4 bytes. The use of `round_up_safe` 
   // guarantee correct execution with cuda-memcheck  for cases when 
   // num_groups == 1  and with dtype == int_8. 
-  gdf_size_type const output_size_estimate = cudf::util::round_up_safe((int64_t)groupby.num_groups(), (int64_t)sizeof(int32_t));
+  cudf::size_type const output_size_estimate = cudf::util::round_up_safe((int64_t)groupby.num_groups(), (int64_t)sizeof(int32_t));
 
   cudf::table simple_values_table{simple_values_columns};
 
@@ -171,7 +171,7 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
   cudf::groupby::sort::aggregate_all_rows<keys_have_nulls, values_have_nulls><<<
     grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
       *d_input_values, *d_output_values,
-      static_cast<gdf_index_type const*>(key_sorted_order.data),
+      static_cast<cudf::size_type const*>(key_sorted_order.data),
       group_labels.data().get(), options.ignore_null_keys,
       d_ops.data().get(), row_bitmask.data().get());
   
@@ -200,7 +200,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(cudf::tabl
         std::vector<gdf_column*>{output_values.begin(), output_values.end()}
         );
   }
-  gdf_size_type num_groups = groupby.num_groups();
+  cudf::size_type num_groups = groupby.num_groups();
   // An "aggregation request" is the combination of a `gdf_column*` to a column
   // of values, and an aggregation operation enum indicating the aggregation
   // requested to be performed on the column

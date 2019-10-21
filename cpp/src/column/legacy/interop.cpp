@@ -75,7 +75,7 @@ mutable_column_view gdf_column_to_mutable_view(gdf_column* col) {
 gdf_column view_to_gdf_column(mutable_column_view view) {
   CUDF_EXPECTS(view.offset() == 0, "Unsupported view offset.");
   return gdf_column{
-      view.head(), reinterpret_cast<gdf_valid_type*>(view.null_mask()),
+      view.head(), reinterpret_cast<cudf::valid_type*>(view.null_mask()),
       view.size(), data_type_to_gdf_dtype(view.type()), view.null_count()};
 }
 }  // namespace legacy

@@ -163,6 +163,8 @@ PARQUET_BEGIN_STRUCT(SchemaElement)
     PARQUET_FLD_STRING(4, name)
     PARQUET_FLD_INT32(5, num_children)
     PARQUET_FLD_ENUM(6, converted_type, ConvertedType)
+    PARQUET_FLD_INT32(7, decimal_scale)
+    PARQUET_FLD_INT32(8, decimal_precision)
 PARQUET_END_STRUCT()
 
 PARQUET_BEGIN_STRUCT(RowGroup)

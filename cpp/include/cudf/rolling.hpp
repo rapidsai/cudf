@@ -68,13 +68,13 @@ namespace cudf {
  *
  * --------------------------------------------------------------------------*/
 gdf_column* rolling_window(const gdf_column &input_col,
-                           gdf_size_type window,
-                           gdf_size_type min_periods,
-                           gdf_size_type forward_window,
+                           cudf::size_type window,
+                           cudf::size_type min_periods,
+                           cudf::size_type forward_window,
                            gdf_agg_op agg_type,
-                           const gdf_size_type *window_col,
-                           const gdf_size_type *min_periods_col,
-                           const gdf_size_type *forward_window_col);
+                           const cudf::size_type *window_col,
+                           const cudf::size_type *min_periods_col,
+                           const cudf::size_type *forward_window_col);
 
  /* --------------------------------------------------------------------------*
  * @brief  Applies a user defined rolling window function to the values in a column.
@@ -136,15 +136,15 @@ gdf_column* rolling_window(const gdf_column &input_col,
  *
  * --------------------------------------------------------------------------*/
 gdf_column rolling_window(gdf_column const& input,
-                          gdf_size_type window,
-                          gdf_size_type min_periods,
-                          gdf_size_type forward_window,
+                          cudf::size_type window,
+                          cudf::size_type min_periods,
+                          cudf::size_type forward_window,
                           std::string const& user_defined_aggregator,
                           gdf_agg_op agg_op,
                           gdf_dtype output_type,
-                          gdf_size_type const* window_col,
-                          gdf_size_type const* min_periods_col,
-                          gdf_size_type const* forward_window_col);
+                          cudf::size_type const* window_col,
+                          cudf::size_type const* min_periods_col,
+                          cudf::size_type const* forward_window_col);
 
 }  // namespace cudf
 

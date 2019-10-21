@@ -1,3 +1,7 @@
+import weakref
+
+import rmm  # noqa: F401
+
 import nvstrings as nvs
 import pyniNVCategory
 
@@ -163,6 +167,11 @@ def bind_cpointer(cptr, own=True):
     return rtn
 
 
+def _destroy_nvcategory_instance(own, cptr):
+    if own:
+        pyniNVCategory.n_destroyCategory(cptr)
+
+
 class nvcategory:
     """
     Instance manages a dictionary of strings (keys) in device memory
@@ -177,11 +186,9 @@ class nvcategory:
         """For internal use only."""
         self.m_cptr = cptr
         self._own = True
-
-    def __del__(self):
-        if self._own:
-            pyniNVCategory.n_destroyCategory(self.m_cptr)
-        self.m_cptr = 0
+        self._finalizer = weakref.finalize(
+            self, _destroy_nvcategory_instance, self._own, self.m_cptr
+        )
 
     def __str__(self):
         return str(self.keys())
