@@ -586,8 +586,10 @@ class StringColumn(column.TypedColumnBase):
             )
 
     def to_pandas(self, index=None):
-        pd_series = self.to_arrow().to_pandas().array
-        return pd.Series(pd_series, index=index, name=self.name)
+        pd_series = self.to_arrow().to_pandas()
+        pd_series.index = index
+        pd_series.name = self.name
+        return pd_series
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
