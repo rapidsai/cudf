@@ -32,6 +32,7 @@
 - PR #2988 Removing GIS functionality (now part of cuSpatial library)
 - PR #3067 Java method to return size of device memory buffer
 - PR #3083 Improved some binary operation tests to include null testing.
+- PR #3084 Update to arrow-cpp and pyarrow 0.15.0
 - PR #3071 Move cuIO to legacy
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
