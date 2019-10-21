@@ -159,7 +159,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param dst       the data to be copied.
    */
   public final void getBytes(byte[] dst, long dstOffset, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0;
     assert len <= dst.length - dstOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + srcOffset;
@@ -173,7 +173,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data   the data to be copied.
    */
   public final void setBytes(long offset, byte[] data, long srcOffset, long len) {
-    assert len > 0 : "length is not allowed " + len;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + offset;

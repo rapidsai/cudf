@@ -17,7 +17,7 @@
 #ifndef _SINGLE_COLUMN_GROUPBY_TEST_CUH
 #define _SINGLE_COLUMN_GROUPBY_TEST_CUH
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
