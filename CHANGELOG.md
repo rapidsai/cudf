@@ -39,6 +39,7 @@
 - PR #3143 Define and implement new copying APIs `slice` and `split`
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
+- PR #3157 Use enum class rather than enum for mask_allocation_policy
 
 ## Bug Fixes
 
