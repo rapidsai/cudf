@@ -423,7 +423,6 @@ add_library(cudf
             src/copying/legacy/slice.cu
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu
             src/copying/legacy/copy_range.cu
             src/filling/legacy/fill.cu
             src/filling/legacy/repeat.cu
