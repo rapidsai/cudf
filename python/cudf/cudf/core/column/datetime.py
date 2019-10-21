@@ -127,6 +127,10 @@ class DatetimeColumn(column.TypedColumnBase):
     def second(self):
         return self.get_dt_field("second")
 
+    @property
+    def weekday(self):
+        return self.get_dt_field("weekday")
+
     def get_dt_field(self, field):
         out = column.column_empty_like_same_mask(self, dtype=np.int16)
         libcudf.unaryops.apply_dt_extract_op(self, out, field)

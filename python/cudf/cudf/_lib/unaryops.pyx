@@ -116,6 +116,11 @@ def apply_dt_extract_op(incol, outcol, op):
                 <gdf_column*>c_incol,
                 <gdf_column*>c_outcol
             )
+        elif op == 'weekday':
+            result = cpp_unaryops.gdf_extract_datetime_weekday(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
         elif op == 'hour':
             result = cpp_unaryops.gdf_extract_datetime_hour(
                 <gdf_column*>c_incol,
@@ -145,7 +150,7 @@ def nans_to_nulls(py_col):
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
 
-    cdef pair[cpp_unaryops.bit_mask_t_ptr, gdf_size_type] result
+    cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
 
     with nogil:
         result = cpp_unaryops.nans_to_nulls(c_col[0])

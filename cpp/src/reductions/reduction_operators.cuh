@@ -167,7 +167,7 @@ struct mean {
         using IntermediateType = ResultType;
 
         // compute `mean` from intermediate type `IntermediateType`
-        static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
+        static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
             return (input / count);
         };
@@ -193,11 +193,11 @@ struct variance {
         using IntermediateType = var_std<ResultType>;
 
         // compute `variance` from intermediate type `IntermediateType`
-        static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
+        static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
             ResultType mean = input.value / count;
             ResultType asum = input.value_squared;
-            gdf_size_type div = count -ddof;
+            cudf::size_type div = count -ddof;
             ResultType var = asum / div - ((mean * mean) * count) /div;
 
             return var;
@@ -222,7 +222,7 @@ struct standard_deviation {
         using IntermediateType = var_std<ResultType>;
 
         // compute `standard deviation` from intermediate type `IntermediateType`
-        static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
+        static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
             using intermediateOp = typename cudf::reduction::op::variance::template intermediate<ResultType>;
             ResultType var = intermediateOp::compute_result(input, count, ddof);

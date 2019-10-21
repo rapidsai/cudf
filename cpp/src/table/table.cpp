@@ -20,7 +20,7 @@
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 // Copy the columns from another table
 table::table(table const& other) : _num_rows{other.num_rows()} {
@@ -33,10 +33,14 @@ table::table(table const& other) : _num_rows{other.num_rows()} {
 // Move the contents of a vector `unique_ptr<column>`
 table::table(std::vector<std::unique_ptr<column>>&& columns)
     : _columns{std::move(columns)} {
-  CUDF_EXPECTS(columns.size() > 0, "Invalid number of columns");
-  _num_rows = columns[0]->size();
-  for (auto const& c : _columns) {
-    CUDF_EXPECTS(c->size() == num_rows(), "Column size mismatch.");
+  if(num_columns() > 0) {
+    for (auto const& c : _columns) {
+      CUDF_EXPECTS(c, "Unexpected null column");
+      CUDF_EXPECTS(c->size() == _columns.front()->size(), "Column size mismatch.");
+    }
+    _num_rows = _columns.front()->size();
+  } else {
+    _num_rows = 0;
   }
 }
 
@@ -75,5 +79,5 @@ std::vector<std::unique_ptr<column>> table::release() {
   return std::move(_columns);
 }
 
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

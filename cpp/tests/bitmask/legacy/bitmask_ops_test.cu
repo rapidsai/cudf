@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/cudf.h>
 
@@ -35,7 +35,7 @@ TEST_F(ValidsTest, NoValids) {
   const int num_rows = 100;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x00);
+  std::vector<cudf::valid_type> valid(num_masks, 0x00);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -51,7 +51,7 @@ TEST_F(ValidsTest, NoValids) {
 
 TEST_F(ValidsTest, NullValids) {
   int count{-1};
-  const gdf_size_type size{100};
+  const cudf::size_type size{100};
   gdf_error error_code = gdf_count_nonzero_mask(nullptr, size, &count);
 
   ASSERT_EQ(GDF_SUCCESS, error_code)
@@ -61,7 +61,7 @@ TEST_F(ValidsTest, NullValids) {
 
 TEST_F(ValidsTest, NullCount) {
   std::vector<int> data(0);
-  std::vector<gdf_valid_type> valid{0x0};
+  std::vector<cudf::valid_type> valid{0x0};
   auto input_gdf_col = create_gdf_column(data, valid);
   gdf_error error_code =
       gdf_count_nonzero_mask(input_gdf_col->valid, 1, nullptr);
@@ -72,7 +72,7 @@ TEST_F(ValidsTest, NullCount) {
 
 TEST_F(ValidsTest, FirstRowValid) {
   std::vector<int> data(4);
-  std::vector<gdf_valid_type> valid{0x1};
+  std::vector<cudf::valid_type> valid{0x1};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -88,7 +88,7 @@ TEST_F(ValidsTest, FirstRowValid) {
 
 TEST_F(ValidsTest, EightRowsValid) {
   std::vector<int> data(8);
-  std::vector<gdf_valid_type> valid{0xFF};
+  std::vector<cudf::valid_type> valid{0xFF};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -104,7 +104,7 @@ TEST_F(ValidsTest, EightRowsValid) {
 
 TEST_F(ValidsTest, EveryOtherBit) {
   std::vector<int> data(8);
-  std::vector<gdf_valid_type> valid{0xAA};
+  std::vector<cudf::valid_type> valid{0xAA};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -120,7 +120,7 @@ TEST_F(ValidsTest, EveryOtherBit) {
 
 TEST_F(ValidsTest, OtherEveryOtherBit) {
   std::vector<int> data(8);
-  std::vector<gdf_valid_type> valid{0x55};
+  std::vector<cudf::valid_type> valid{0x55};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -138,7 +138,7 @@ TEST_F(ValidsTest, 15rows) {
   const int num_rows = 15;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x01);
+  std::vector<cudf::valid_type> valid(num_masks, 0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -156,7 +156,7 @@ TEST_F(ValidsTest, 5rows) {
   const int num_rows = 5;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x01);
+  std::vector<cudf::valid_type> valid(num_masks, 0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -174,7 +174,7 @@ TEST_F(ValidsTest, 10ValidRows) {
   const int num_rows = 10;
   std::vector<float> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0xFF);
+  std::vector<cudf::valid_type> valid(num_masks, 0xFF);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -193,7 +193,7 @@ TEST_F(ValidsTest, MultipleOfEight) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x01);
+  std::vector<cudf::valid_type> valid(num_masks, 0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -212,7 +212,7 @@ TEST_F(ValidsTest, NotMultipleOfEight) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x80);
+  std::vector<cudf::valid_type> valid(num_masks, 0x80);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -231,7 +231,7 @@ TEST_F(ValidsTest, TenThousandRows) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0xFF);
+  std::vector<cudf::valid_type> valid(num_masks, 0xFF);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -250,7 +250,7 @@ TEST_F(ValidsTest, DISABLED_PerformanceTest) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / 8);
-  std::vector<gdf_valid_type> valid(num_masks, 0x55);
+  std::vector<cudf::valid_type> valid(num_masks, 0x55);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -275,7 +275,7 @@ struct validity_checker {
   validity_checker(Predicate _p, bit_mask::bit_mask_t* _bitmask)
       : p{_p}, bitmask{_bitmask} {}
 
-  __device__ inline bool operator()(gdf_size_type index) {
+  __device__ inline bool operator()(cudf::size_type index) {
     return p(index) == bit_mask::is_valid(bitmask, index);
   }
 
@@ -284,25 +284,25 @@ struct validity_checker {
 };
 
 struct all_valid {
-  __host__ __device__ inline bool operator()(gdf_size_type index) {
+  __host__ __device__ inline bool operator()(cudf::size_type index) {
     return true;
   }
 };
 
 struct all_null {
-  __host__ __device__ inline bool operator()(gdf_size_type index) {
+  __host__ __device__ inline bool operator()(cudf::size_type index) {
     return false;
   }
 };
 
 TEST_F(RowBitmaskTest, NoBitmasks) {
-  gdf_size_type const size{1000};
+  cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
   cudf::test::column_wrapper<float> col1(size);
   cudf::test::column_wrapper<double> col2(size);
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
-                    static_cast<gdf_size_type>(gdf_cols.size())};
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
@@ -315,13 +315,13 @@ TEST_F(RowBitmaskTest, NoBitmasks) {
 }
 
 TEST_F(RowBitmaskTest, BitmasksAllNull) {
-  gdf_size_type const size{1000};
+  cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size, true);
   cudf::test::column_wrapper<float> col1(size, true);
   cudf::test::column_wrapper<double> col2(size, true);
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
-                    static_cast<gdf_size_type>(gdf_cols.size())};
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
@@ -334,16 +334,16 @@ TEST_F(RowBitmaskTest, BitmasksAllNull) {
 }
 
 TEST_F(RowBitmaskTest, BitmasksAllValid) {
-  gdf_size_type const size{1000};
-  cudf::test::column_wrapper<int> col0(size, [](gdf_size_type i) { return i; },
+  cudf::size_type const size{1000};
+  cudf::test::column_wrapper<int> col0(size, [](cudf::size_type i) { return i; },
                                        all_valid{});
-  cudf::test::column_wrapper<int> col1(size, [](gdf_size_type i) { return i; },
+  cudf::test::column_wrapper<int> col1(size, [](cudf::size_type i) { return i; },
                                        all_valid{});
-  cudf::test::column_wrapper<int> col2(size, [](gdf_size_type i) { return i; },
+  cudf::test::column_wrapper<int> col2(size, [](cudf::size_type i) { return i; },
                                        all_valid{});
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
-                    static_cast<gdf_size_type>(gdf_cols.size())};
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
@@ -356,15 +356,15 @@ TEST_F(RowBitmaskTest, BitmasksAllValid) {
 }
 
 TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskAllValid) {
-  gdf_size_type const size{1000};
+  cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
-  cudf::test::column_wrapper<int> col1(size, [](gdf_size_type i) { return i; },
+  cudf::test::column_wrapper<int> col1(size, [](cudf::size_type i) { return i; },
                                        all_valid{});
   cudf::test::column_wrapper<int> col2(size);
 
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
-                    static_cast<gdf_size_type>(gdf_cols.size())};
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
@@ -377,20 +377,20 @@ TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskAllValid) {
 }
 
 struct odds_are_null {
-  __device__ inline bool operator()(gdf_size_type i) { return i % 2; }
+  __device__ inline bool operator()(cudf::size_type i) { return i % 2; }
 };
 
 TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskOddsNull) {
-  gdf_size_type const size{1000};
+  cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
-  cudf::test::column_wrapper<int> col1(size, [](gdf_size_type i) { return i; },
+  cudf::test::column_wrapper<int> col1(size, [](cudf::size_type i) { return i; },
                                        all_valid{});
-  cudf::test::column_wrapper<int> col2(size, [](gdf_size_type i) { return i; },
-                                       [](gdf_size_type i) { return i % 2; });
+  cudf::test::column_wrapper<int> col2(size, [](cudf::size_type i) { return i; },
+                                       [](cudf::size_type i) { return i % 2; });
 
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
-                    static_cast<gdf_size_type>(gdf_cols.size())};
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 

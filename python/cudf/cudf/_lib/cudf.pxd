@@ -67,17 +67,19 @@ cpdef check_gdf_error(errcode)
 # First version of _lib has no changes to the cudf.h header, so this file
 # mirrors the structure in cpp/include
 
+cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
+
+    ctypedef int32_t       size_type
+    ctypedef uint8_t       valid_type
+
 cdef extern from "cudf/cudf.h" nogil:
 
-    ctypedef int           gdf_size_type
-    ctypedef gdf_size_type gdf_index_type
-    ctypedef unsigned char gdf_valid_type
-    ctypedef char          gdf_bool8
-    ctypedef long          gdf_date64
-    ctypedef int           gdf_date32
-    ctypedef long          gdf_timestamp
-    ctypedef int           gdf_category
-    ctypedef int           gdf_nvstring_category
+    ctypedef int8_t        gdf_bool8
+    ctypedef int64_t       gdf_date64
+    ctypedef int32_t       gdf_date32
+    ctypedef int64_t       gdf_timestamp
+    ctypedef int32_t       gdf_category
+    ctypedef int32_t       gdf_nvstring_category
 
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
@@ -136,10 +138,10 @@ cdef extern from "cudf/cudf.h" nogil:
 
     ctypedef struct gdf_column:
         void *data
-        gdf_valid_type *valid
-        gdf_size_type size
+        valid_type *valid
+        size_type size
         gdf_dtype dtype
-        gdf_size_type null_count
+        size_type null_count
         gdf_dtype_extra_info dtype_info
         char *col_name
 
@@ -198,13 +200,13 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_WINDOW_VA
 
     ctypedef union gdf_data:
-        signed char   si08
-        short         si16
-        int           si32
-        long          si64
+        int8_t        si08
+        int16_t       si16
+        int32_t       si32
+        int64_t       si64
         float         fp32
         double        fp64
-        char          b08
+        gdf_bool8      b08
         gdf_date32    dt32
         gdf_date64    dt64
         gdf_timestamp tmst
@@ -214,13 +216,13 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_dtype dtype
         bool      is_valid
 
-    cdef gdf_size_type gdf_column_sizeof() except +
+    cdef size_type gdf_column_sizeof() except +
 
     cdef gdf_error gdf_column_view(
         gdf_column *column,
         void *data,
-        gdf_valid_type *valid,
-        gdf_size_type size,
+        valid_type *valid,
+        size_type size,
         gdf_dtype dtype
     ) except +
 
@@ -228,10 +230,10 @@ cdef extern from "cudf/cudf.h" nogil:
     cdef gdf_error gdf_column_view_augmented(
         gdf_column *column,
         void *data,
-        gdf_valid_type *valid,
-        gdf_size_type size,
+        valid_type *valid,
+        size_type size,
         gdf_dtype dtype,
-        gdf_size_type null_count,
+        size_type null_count,
         gdf_dtype_extra_info extra_info,
         const char* name) except +
 
@@ -239,10 +241,10 @@ cdef extern from "cudf/cudf.h" nogil:
     cdef gdf_error gdf_column_view_augmented(
         gdf_column *column,
         void *data,
-        gdf_valid_type *valid,
-        gdf_size_type size,
+        valid_type *valid,
+        size_type size,
         gdf_dtype dtype,
-        gdf_size_type null_count,
+        size_type null_count,
         gdf_dtype_extra_info extra_info
     ) except +
 
@@ -325,7 +327,7 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_column* col,
         gdf_column* bins,
         bool right,
-        gdf_index_type* out_indices
+        size_type* out_indices
     ) except +
 
     cdef gdf_error gdf_nvtx_range_push(
@@ -344,7 +346,7 @@ cdef extern from "cudf/cudf.h" nogil:
 cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(
-        gdf_valid_type* masks,
+        valid_type* masks,
         int num_rows,
         int* count
     ) except +
@@ -356,26 +358,28 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
         cudf_table(
             gdf_column* cols[],
-            gdf_size_type num_cols
+            size_type num_cols
         ) except +
 
         cudf_table(const vector[gdf_column*] cols) except +
 
         cudf_table() except +
 
+        cudf_table(const cudf_table) except +
+
         gdf_column** begin() except +
 
         gdf_column** end() except +
 
-        gdf_column* get_column(gdf_index_type index) except +
+        gdf_column* get_column(size_type index) except +
 
-        gdf_size_type num_columns() except +
+        size_type num_columns() except +
 
-        gdf_size_type num_rows() except +
+        size_type num_rows() except +
 
 # Todo? add const overloads
 #        const gdf_column* const* begin() const except +
 #        gdf_column const* const* end() const
-#        gdf_column const* get_column(gdf_index_type index) const except +
+#        gdf_column const* get_column(size_type index) const except +
 
 cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid

@@ -441,7 +441,7 @@ class RangeIndex(Index):
             index += self._start
             return index
         elif isinstance(index, (list, np.ndarray)):
-            index = np.array(index)
+            index = np.asarray(index)
             index = rmm.to_device(index)
 
         else:
@@ -797,6 +797,10 @@ class DatetimeIndex(GenericIndex):
     @property
     def second(self):
         return self.get_dt_field("second")
+
+    @property
+    def weekday(self):
+        return self.get_dt_field("weekday")
 
     def to_pandas(self):
         nanos = self.as_column().astype("datetime64[ns]")

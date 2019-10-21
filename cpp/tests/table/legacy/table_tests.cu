@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <gmock/gmock.h>
@@ -98,7 +98,7 @@ TYPED_TEST(TableTest, ConstructColumns) {
   // Construct columns, no bitmask allocation
   cudf::table t{size, dtypes, dtype_infos};
 
-  for (gdf_size_type i = 0; i < t.num_columns(); ++i) {
+  for (cudf::size_type i = 0; i < t.num_columns(); ++i) {
     gdf_column* col = t.get_column(i);
     EXPECT_NE(nullptr, col->data);
     EXPECT_EQ(nullptr, col->valid);
@@ -131,7 +131,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
   // are null
   cudf::table t{size, dtypes, dtype_infos, true, false};
 
-  for (gdf_size_type i = 0; i < t.num_columns(); ++i) {
+  for (cudf::size_type i = 0; i < t.num_columns(); ++i) {
     gdf_column* col = t.get_column(i);
     EXPECT_NE(nullptr, col->data);
     EXPECT_NE(nullptr, col->valid);
@@ -140,7 +140,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
     EXPECT_EQ(dtypes[i], col->dtype);
     EXPECT_EQ(dtype_infos[i].time_unit, col->dtype_info.time_unit);
 
-    gdf_size_type valid_count{-1};
+    cudf::size_type valid_count{-1};
     gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
     EXPECT_EQ(0, valid_count);
   }
@@ -169,7 +169,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
   // are null
   cudf::table t{size, dtypes, dtype_infos, true, true};
 
-  for (gdf_size_type i = 0; i < t.num_columns(); ++i) {
+  for (cudf::size_type i = 0; i < t.num_columns(); ++i) {
     gdf_column* col = t.get_column(i);
     EXPECT_NE(nullptr, col->data);
     EXPECT_NE(nullptr, col->valid);
@@ -178,7 +178,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
     EXPECT_EQ(dtypes[i], col->dtype);
     EXPECT_EQ(dtype_infos[i].time_unit, col->dtype_info.time_unit);
 
-    gdf_size_type valid_count{-1};
+    cudf::size_type valid_count{-1};
     gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
     EXPECT_EQ(size, valid_count);
   }
@@ -205,7 +205,7 @@ TYPED_TEST(TableTest, GetTableWithSelectedColumns)
     cols.push_back(col4.get());
 
     cudf::table table(cols);
-    cudf::table selected_table = table.select(std::vector<gdf_size_type>{2,3});
+    cudf::table selected_table = table.select(std::vector<cudf::size_type>{2,3});
     columns_are_equal(table.get_column(2), selected_table.get_column(0));
     columns_are_equal(table.get_column(3), selected_table.get_column(1));
 }
@@ -220,7 +220,7 @@ TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
     cols.push_back(col2.get());
 
     cudf::table table(cols);
-    CUDF_EXPECT_THROW_MESSAGE (table.select(std::vector<gdf_size_type>{0,1,2}), "Requested too many columns.");
+    CUDF_EXPECT_THROW_MESSAGE (table.select(std::vector<cudf::size_type>{0,1,2}), "Requested too many columns.");
 }
 
 TYPED_TEST(TableTest, SelectingNoColumns)
@@ -233,7 +233,7 @@ TYPED_TEST(TableTest, SelectingNoColumns)
     cols.push_back(col2.get());
 
     cudf::table table(cols);
-    cudf::table selected_table = table.select(std::vector<gdf_size_type>{});
+    cudf::table selected_table = table.select(std::vector<cudf::size_type>{});
 
     EXPECT_EQ(selected_table.num_columns(), 0);
 }

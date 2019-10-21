@@ -15,11 +15,11 @@
  */
 
 // See this header for all of the recursive handling of tuples of vectors
-#include <tests/utilities/tuple_vectors.h>
+#include <tests/utilities/legacy/tuple_vectors.h>
 
 // See this header for all of the handling of valids' vectors
-#include <tests/utilities/valid_vectors.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/valid_vectors.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <join/joining.h>
 #include <join/join_compute_api.h>
@@ -127,8 +127,8 @@ struct JoinTest : public GdfTest
   * @returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
-          const gdf_size_type n_count)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, cudf::valid_type* host_valid,
+          const cudf::size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type;
@@ -179,14 +179,14 @@ struct JoinTest : public GdfTest
   // a gdf_column and append it to a vector of gdf_columns
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const cudf::size_type n_count)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const cudf::size_type n_count)
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
@@ -203,7 +203,7 @@ struct JoinTest : public GdfTest
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer>
   initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids,
-          const gdf_size_type n_count)
+          const cudf::size_type n_count)
   {
     std::vector<gdf_col_pointer> gdf_columns;
     convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids, n_count);
@@ -224,7 +224,7 @@ struct JoinTest : public GdfTest
    * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
-                     bool print = false, const gdf_size_type n_count = 0)
+                     bool print = false, const cudf::size_type n_count = 0)
   {
     initialize_tuple(left_columns, left_column_length, left_column_range, static_cast<size_t>(ctxt.flag_sorted));
     initialize_tuple(right_columns, right_column_length, right_column_range, static_cast<size_t>(ctxt.flag_sorted));
@@ -264,8 +264,8 @@ struct JoinTest : public GdfTest
    * @param left_column_length The length of the left column
    * @param right_column_length The length of the right column
    * -------------------------------------------------------------------------*/
-  void create_dummy_input( gdf_size_type const left_column_length, 
-                           gdf_size_type const right_column_length)
+  void create_dummy_input( cudf::size_type const left_column_length, 
+                           cudf::size_type const right_column_length)
   {
     using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
     
@@ -414,7 +414,7 @@ struct JoinTest : public GdfTest
     gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
-    std::vector<gdf_size_type> range;
+    std::vector<cudf::size_type> range;
     std::vector<std::pair<int, int>> columns_in_common (num_columns);
 
     for (int i = 0; i < num_columns; ++i) 
@@ -786,9 +786,9 @@ TYPED_TEST_CASE(MaxJoinTest, MaxImplementations);
 
 TYPED_TEST(MaxJoinTest, InputTooLarge)
 {   
-    const gdf_size_type left_table_size = 100;  
-    const gdf_size_type right_table_size = 
-      static_cast<gdf_size_type>(std::numeric_limits<int>::max());
+    const cudf::size_type left_table_size = 100;  
+    const cudf::size_type right_table_size = 
+      static_cast<cudf::size_type>(std::numeric_limits<int>::max());
 
     this->create_dummy_input(left_table_size, right_table_size);
 

@@ -16,14 +16,14 @@
 
 #include "sort_helper.hpp"
 
-#include <copying/scatter.hpp>
+#include <copying/legacy/scatter.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>
@@ -46,7 +46,7 @@ namespace {
 template <bool nullable = true>
 struct permuted_row_equality_comparator {
   row_equality_comparator<nullable> _comparator;
-  gdf_size_type const *_map;
+  cudf::size_type const *_map;
 
   /**
    * @brief Construct a permuted_row_equality_comparator.
@@ -56,7 +56,7 @@ struct permuted_row_equality_comparator {
    *`t`. Must be the same size as `t.num_rows()`
    */
   permuted_row_equality_comparator(device_table const &t,
-                                   gdf_size_type const *map)
+                                   cudf::size_type const *map)
       : _comparator(t, t, true), _map{map} {}
 
   /**
@@ -71,7 +71,7 @@ struct permuted_row_equality_comparator {
    * @returns if the two specified rows in the permuted order are equivalent
    */
   CUDA_DEVICE_CALLABLE
-  bool operator()(gdf_size_type lhs, gdf_size_type rhs) {
+  bool operator()(cudf::size_type lhs, cudf::size_type rhs) {
     return _comparator(_map[lhs], _map[rhs]);
   }
 };
@@ -84,7 +84,7 @@ namespace groupby {
 namespace sort {
 namespace detail { 
 
-gdf_size_type helper::num_keys() {
+cudf::size_type helper::num_keys() {
   if (_num_keys > -1)
     return _num_keys;
 
@@ -93,7 +93,7 @@ gdf_size_type helper::num_keys() {
     // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
     // in the sorted order are considered for grouping. 
     CUDF_TRY(gdf_count_nonzero_mask(
-      reinterpret_cast<gdf_valid_type*>(keys_row_bitmask().data().get()),
+      reinterpret_cast<cudf::valid_type*>(keys_row_bitmask().data().get()),
       _keys.num_rows(),
       &_num_keys));
   } else {
@@ -109,7 +109,7 @@ gdf_column const& helper::key_sort_order() {
 
   _key_sorted_order = gdf_col_pointer(
     new gdf_column(
-      allocate_column(gdf_dtype_of<gdf_index_type>(),
+      allocate_column(gdf_dtype_of<cudf::size_type>(),
                       _keys.num_rows(),
                       false,
                       gdf_dtype_extra_info{},
@@ -117,7 +117,7 @@ gdf_column const& helper::key_sort_order() {
     [](gdf_column* col) { gdf_column_free(col); });
 
   if (_keys_pre_sorted) {
-    auto d_key_sorted_order = static_cast<gdf_index_type*>(_key_sorted_order->data);
+    auto d_key_sorted_order = static_cast<cudf::size_type*>(_key_sorted_order->data);
 
     thrust::sequence(rmm::exec_policy(_stream)->on(_stream), 
                      d_key_sorted_order,
@@ -143,7 +143,7 @@ gdf_column const& helper::key_sort_order() {
    // a null value to the end of the sorted order. 
     gdf_column null_row_representative = *(_keys.get_column(0));
     null_row_representative.valid =
-        reinterpret_cast<gdf_valid_type*>(keys_row_bitmask().data().get());
+        reinterpret_cast<cudf::valid_type*>(keys_row_bitmask().data().get());
 
     cudf::table keys{_keys};
     std::vector<gdf_column*> modified_keys(keys.begin(), keys.end());
@@ -161,38 +161,38 @@ gdf_column const& helper::key_sort_order() {
   return *_key_sorted_order;
 }
 
-rmm::device_vector<gdf_size_type> const& helper::group_offsets() {
+rmm::device_vector<cudf::size_type> const& helper::group_offsets() {
   if (_group_offsets)
     return *_group_offsets;
 
   _group_offsets = std::make_unique<index_vector>(num_keys());
 
   auto device_input_table = device_table::create(_keys, _stream);
-  auto sorted_order = static_cast<gdf_size_type*>(key_sort_order().data);
+  auto sorted_order = static_cast<cudf::size_type*>(key_sort_order().data);
   decltype(_group_offsets->begin()) result_end;
   auto exec = rmm::exec_policy(_stream)->on(_stream);
 
   if (has_nulls(_keys)) {
     result_end = thrust::unique_copy(exec,
-      thrust::make_counting_iterator<gdf_size_type>(0),
-      thrust::make_counting_iterator<gdf_size_type>(num_keys()),
+      thrust::make_counting_iterator<cudf::size_type>(0),
+      thrust::make_counting_iterator<cudf::size_type>(num_keys()),
       _group_offsets->begin(),
       permuted_row_equality_comparator<true>(*device_input_table, sorted_order));
   } else {
     result_end = thrust::unique_copy(exec, 
-      thrust::make_counting_iterator<gdf_size_type>(0),
-      thrust::make_counting_iterator<gdf_size_type>(num_keys()),
+      thrust::make_counting_iterator<cudf::size_type>(0),
+      thrust::make_counting_iterator<cudf::size_type>(num_keys()),
       _group_offsets->begin(),
       permuted_row_equality_comparator<false>(*device_input_table, sorted_order));
   }
 
-  gdf_size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
+  cudf::size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
   _group_offsets->resize(num_groups);
 
   return *_group_offsets;
 }
 
-rmm::device_vector<gdf_size_type> const& helper::group_labels() {
+rmm::device_vector<cudf::size_type> const& helper::group_labels() {
   if (_group_labels)
     return *_group_labels;
 
@@ -221,7 +221,7 @@ gdf_column const& helper::unsorted_keys_labels() {
 
   _unsorted_keys_labels = gdf_col_pointer(
     new gdf_column(
-      allocate_column(gdf_dtype_of<gdf_size_type>(),
+      allocate_column(gdf_dtype_of<cudf::size_type>(),
                       key_sort_order().size,
                       true,
                       gdf_dtype_extra_info{},
@@ -234,14 +234,14 @@ gdf_column const& helper::unsorted_keys_labels() {
   
   gdf_column group_labels_col{};
   gdf_column_view(&group_labels_col, 
-                  const_cast<gdf_size_type*>(group_labels().data().get()), 
+                  const_cast<cudf::size_type*>(group_labels().data().get()), 
                   nullptr,
                   group_labels().size(), 
-                  gdf_dtype_of<gdf_size_type>());
+                  gdf_dtype_of<cudf::size_type>());
   cudf::table t_sorted_labels{&group_labels_col};
   cudf::table t_unsorted_keys_labels{_unsorted_keys_labels.get()};
   cudf::detail::scatter(&t_sorted_labels,
-                        static_cast<gdf_size_type*>(key_sort_order().data),
+                        static_cast<cudf::size_type*>(key_sort_order().data),
                         &t_unsorted_keys_labels);
   return *_unsorted_keys_labels;
 }
@@ -257,13 +257,13 @@ helper::keys_row_bitmask() {
   return *_keys_row_bitmask;
 }
 
-std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
+std::pair<gdf_column, rmm::device_vector<cudf::size_type> >
 helper::sort_values(gdf_column const& values) {
   CUDF_EXPECTS(values.size == _keys.num_rows(),
     "Size mismatch between keys and values.");
   auto values_sort_order = gdf_col_pointer(
     new gdf_column(
-      allocate_column(gdf_dtype_of<gdf_index_type>(),
+      allocate_column(gdf_dtype_of<cudf::size_type>(),
                       _keys.num_rows(),
                       false,
                       gdf_dtype_extra_info{},
@@ -289,16 +289,16 @@ helper::sort_values(gdf_column const& values) {
   auto sorted_values = allocate_like(values, num_keys(), RETAIN, _stream);
   cudf::table sorted_values_table{&sorted_values};
   cudf::gather(&unsorted_values_table,
-              static_cast<gdf_size_type*>(values_sort_order->data),
+              static_cast<cudf::size_type*>(values_sort_order->data),
               &sorted_values_table);
 
   // Get number of valid values in each group
-  rmm::device_vector<gdf_size_type> val_group_sizes(num_groups());
+  rmm::device_vector<cudf::size_type> val_group_sizes(num_groups());
   auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_values.valid);
   
   auto bitmask_iterator = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), 
-    [col_valid] __device__ (gdf_size_type i) -> int { 
+    [col_valid] __device__ (cudf::size_type i) -> int { 
       return (col_valid) ? bit_mask::is_valid(col_valid, i) : true;
     });
 
@@ -314,17 +314,17 @@ helper::sort_values(gdf_column const& values) {
 
 cudf::table helper::unique_keys() {
   cudf::table unique_keys = allocate_like(_keys, 
-                                          (gdf_size_type)num_groups(),
+                                          (cudf::size_type)num_groups(),
                                           RETAIN,
                                           _stream);
-  auto idx_data = static_cast<gdf_size_type*>(key_sort_order().data);
+  auto idx_data = static_cast<cudf::size_type*>(key_sort_order().data);
   auto transformed_group_ids = index_vector(num_groups());
 
   auto exec = rmm::exec_policy(_stream)->on(_stream);
 
   thrust::transform(exec, group_offsets().begin(), group_offsets().end(),
                     transformed_group_ids.begin(),
-    [=] __device__ (gdf_size_type i) { return idx_data[i]; } );
+    [=] __device__ (cudf::size_type i) { return idx_data[i]; } );
   
   cudf::gather(&_keys,
               transformed_group_ids.data().get(),

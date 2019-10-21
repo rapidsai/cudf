@@ -64,7 +64,7 @@ struct target_type<SourceType, MAX> { using type = SourceType; };
 
 // Always use int64_t accumulator for COUNT
 template <typename SourceType>
-struct target_type<SourceType, COUNT> { using type = gdf_size_type; };
+struct target_type<SourceType, COUNT> { using type = cudf::size_type; };
 
 // Always use `double` for MEAN
 template <typename SourceType>

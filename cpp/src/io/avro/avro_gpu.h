@@ -58,7 +58,7 @@ struct schemadesc_s {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
+cudaError_t DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, const uint8_t *avro_data,
     uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows = ~0, size_t first_row = 0, uint32_t min_row_size = 0, cudaStream_t stream = (cudaStream_t)0);
 
 

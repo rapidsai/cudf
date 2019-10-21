@@ -5,11 +5,15 @@
 
 #include "nvstrings/NVStrings.h"
 
+#include "./utils.h"
+
+struct TestCount : public GdfTest{};
+
 std::vector<const char*> hstrs{
         "The quick brown @fox jumps", "ovér the", "lazy @dog",
         "1234", "00:0:00", nullptr, "" };
 
-TEST(TestCount, Contains)
+TEST_F(TestCount, Contains)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -39,7 +43,7 @@ TEST(TestCount, Contains)
     NVStrings::destroy(strs);
 }
 
-TEST(TestCount, Match)
+TEST_F(TestCount, Match)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -69,7 +73,7 @@ TEST(TestCount, Match)
     NVStrings::destroy(strs);
 }
 
-TEST(TestCount, Count)
+TEST_F(TestCount, Count)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -97,11 +101,4 @@ TEST(TestCount, Count)
     }
 
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

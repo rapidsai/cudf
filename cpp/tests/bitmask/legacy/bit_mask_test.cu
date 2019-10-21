@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <bitmask/legacy/BitMask.cuh>
 
@@ -67,7 +67,7 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
 //  Testing function, will set a bit in a container.  This assumes <1,1>
 //  for simplicity - all of the tests are small.
 //
-__global__ void set_bit(gdf_size_type bit, BitMask bits) {
+__global__ void set_bit(cudf::size_type bit, BitMask bits) {
   bits.set_bit_unsafe(bit);
 }
 
@@ -95,7 +95,7 @@ __global__ void test_safe_set_clear_g(BitMask bits) {
 }
 
 
-__host__ gdf_error count_bits(gdf_size_type *count, const BitMask &bit_mask, int a = 1, int b = 1) {
+__host__ gdf_error count_bits(cudf::size_type *count, const BitMask &bit_mask, int a = 1, int b = 1) {
   int *count_d;
   CUDA_TRY(cudaMalloc(&count_d, sizeof(int)));
   CUDA_TRY(cudaMemset(count_d, 0, sizeof(int)));
@@ -118,12 +118,12 @@ TEST_F(BitMaskTest, NoValids)
 
   BitMask bit_mask(bits, num_rows);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{0}, local_count);
+  EXPECT_EQ(cudf::size_type{0}, local_count);
 }
 
 TEST_F(BitMaskTest, AllValids)
@@ -135,12 +135,12 @@ TEST_F(BitMaskTest, AllValids)
 
   BitMask bit_mask(bits, num_rows);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{100}, local_count);
+  EXPECT_EQ(cudf::size_type{100}, local_count);
 }
 
 TEST_F(BitMaskTest, FirstRowValid)
@@ -154,10 +154,10 @@ TEST_F(BitMaskTest, FirstRowValid)
 
   set_bit<<<1,1>>>(0, bit_mask);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(gdf_size_type{1}, local_count);
+  EXPECT_EQ(cudf::size_type{1}, local_count);
 
   bit_mask_t temp = 0;
   bit_mask.get_element_host(0, temp);
@@ -181,10 +181,10 @@ TEST_F(BitMaskTest, EveryOtherBit)
   set_bit<<<1,1>>>(4, bit_mask);
   set_bit<<<1,1>>>(6, bit_mask);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(gdf_size_type{4}, local_count);
+  EXPECT_EQ(cudf::size_type{4}, local_count);
 
   bit_mask_t temp = 0;
   bit_mask.get_element_host(0, temp);
@@ -208,10 +208,10 @@ TEST_F(BitMaskTest, OtherEveryOtherBit)
   set_bit<<<1,1>>>(5, bit_mask);
   set_bit<<<1,1>>>(7, bit_mask);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(gdf_size_type{4}, local_count);
+  EXPECT_EQ(cudf::size_type{4}, local_count);
 
   bit_mask_t temp = 0;
   bit_mask.get_element_host(0, temp);
@@ -233,10 +233,10 @@ TEST_F(BitMaskTest, 15rows)
   set_bit<<<1,1>>>(0, bit_mask);
   set_bit<<<1,1>>>(8, bit_mask);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(gdf_size_type{2}, local_count);
+  EXPECT_EQ(cudf::size_type{2}, local_count);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
@@ -252,12 +252,12 @@ TEST_F(BitMaskTest, 5rows)
 
   set_bit<<<1,1>>>(0, bit_mask);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{1}, local_count);
+  EXPECT_EQ(cudf::size_type{1}, local_count);
 }
 
 TEST_F(BitMaskTest, 10ValidRows)
@@ -269,12 +269,12 @@ TEST_F(BitMaskTest, 10ValidRows)
 
   BitMask bit_mask(bits, num_rows);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{10}, local_count);
+  EXPECT_EQ(cudf::size_type{10}, local_count);
 }
 
 TEST_F(BitMaskTest, MultipleOfEight)
@@ -290,12 +290,12 @@ TEST_F(BitMaskTest, MultipleOfEight)
     set_bit<<<1,1>>>(i, bit_mask);
   }
   
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{128}, local_count);
+  EXPECT_EQ(cudf::size_type{128}, local_count);
 }
 
 TEST_F(BitMaskTest, NotMultipleOfEight)
@@ -311,12 +311,12 @@ TEST_F(BitMaskTest, NotMultipleOfEight)
     set_bit<<<1,1>>>(i, bit_mask);
   }
   
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{127}, local_count);
+  EXPECT_EQ(cudf::size_type{127}, local_count);
 }
 
 TEST_F(BitMaskTest, TenThousandRows)
@@ -328,12 +328,12 @@ TEST_F(BitMaskTest, TenThousandRows)
 
   BitMask bit_mask(bits, num_rows);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(gdf_size_type{10000}, local_count);
+  EXPECT_EQ(cudf::size_type{10000}, local_count);
 }
 
 TEST_F(BitMaskTest, PerformanceTest)
@@ -359,7 +359,7 @@ TEST_F(BitMaskTest, PerformanceTest)
   auto start = std::chrono::system_clock::now();
   cudaProfilerStart();
   for(int i = 0; i < 1000; ++i) {
-    gdf_size_type local_count = 0;
+    cudf::size_type local_count = 0;
     count_bits(&local_count, bit_mask, grid_size, block_size);
   }
   cudaProfilerStop();
@@ -382,10 +382,10 @@ TEST_F(BitMaskTest, CudaThreadingTest)
 
   test_safe_set_clear_g<<<1,bit_mask::bits_per_element>>>(bit_mask);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ((gdf_size_type) (num_rows/2), local_count);
+  EXPECT_EQ((cudf::size_type) (num_rows/2), local_count);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
@@ -404,10 +404,10 @@ TEST_F(BitMaskTest, PaddingTest)
 
   BitMask bit_mask(bits, num_rows);
 
-  gdf_size_type local_count = 0;
+  cudf::size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ((gdf_size_type) num_rows, local_count);
+  EXPECT_EQ((cudf::size_type) num_rows, local_count);
 
   //
   //  To test this, we should be able to access the last element

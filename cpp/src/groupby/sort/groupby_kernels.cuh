@@ -59,13 +59,13 @@ template <bool skip_rows_with_nulls, bool values_have_nulls>
 __global__ void aggregate_all_rows(
     device_table input_values,
     device_table output_values,
-    gdf_size_type const* key_sorted_order, 
-    gdf_size_type const* group_labels, 
+    cudf::size_type const* key_sorted_order, 
+    cudf::size_type const* group_labels, 
     bool skip_null_keys,
     operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
 
-  gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_values.num_rows()) {
     if (skip_null_keys and skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {

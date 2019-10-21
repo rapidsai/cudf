@@ -1,7 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from functools import lru_cache
-from math import fmod
 
 import numpy as np
 from numba import cuda, int32, numpy_support
@@ -16,6 +15,7 @@ from cudf.utils.utils import (
     mask_bitsize,
     mask_get,
     mask_set,
+    rint,
 )
 
 
@@ -548,27 +548,13 @@ def gpu_diff(in_col, out_col, N):
 @cuda.jit
 def gpu_round(in_col, out_col, decimal):
     i = cuda.grid(1)
-    round_val = 10 ** (-1.0 * decimal)
+    f = 10 ** decimal
 
     if i < in_col.size:
-        current = in_col[i]
-        newval = current // round_val * round_val
-        remainder = fmod(current, round_val)
-
-        if remainder != 0 and remainder > (0.5 * round_val) and current > 0:
-            newval = newval + round_val
-            out_col[i] = newval
-
-        elif (
-            remainder != 0
-            and abs(remainder) < (0.5 * round_val)
-            and current < 0
-        ):
-            newval = newval + round_val
-            out_col[i] = newval
-
-        else:
-            out_col[i] = newval
+        ret = in_col[i] * f
+        ret = rint(ret)
+        tmp = ret / f
+        out_col[i] = tmp
 
 
 def apply_round(data, decimal):

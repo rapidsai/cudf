@@ -23,7 +23,13 @@ namespace cudf {
 namespace {
 struct size_of_helper {
   template <typename T>
-  constexpr int operator()() const noexcept {
+  constexpr std::enable_if_t<not is_fixed_width<T>(), int> operator()() const {
+    CUDF_FAIL("Invalid, non fixed-width element type.");
+  }
+
+  template <typename T>
+  constexpr std::enable_if_t<is_fixed_width<T>(), int> operator()() const
+      noexcept {
     return sizeof(T);
   }
 };
@@ -31,7 +37,7 @@ struct size_of_helper {
 
 std::size_t size_of(data_type element_type) {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::exp::type_dispatcher(element_type, size_of_helper{});
+  return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
 }
 
 // Allocate storage for a specified number of numeric elements
@@ -45,4 +51,17 @@ std::unique_ptr<column> make_numeric_column(
       create_null_mask(size, state, stream, mr), state_null_count(state, size),
       std::vector<std::unique_ptr<column>>{});
 }
+
+// Allocate storage for a specified number of timestamp elements
+std::unique_ptr<column> make_timestamp_column(
+    data_type type, size_type size, mask_state state, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
+  CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
+
+  return std::make_unique<column>(
+      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      create_null_mask(size, state, stream, mr), state_null_count(state, size),
+      std::vector<std::unique_ptr<column>>{});
+}
+
 }  // namespace cudf
