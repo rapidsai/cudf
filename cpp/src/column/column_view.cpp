@@ -61,7 +61,7 @@ column_view_base::column_view_base(data_type type, size_type size,
 // If null count is known, returns it. Else, compute and return it
 size_type column_view_base::null_count() const {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::count_unset_bits(null_mask(), offset(), size());
+    _null_count = cudf::count_unset_bits(null_mask(), offset(), offset()+size());
   }
   return _null_count;
 }
@@ -78,6 +78,25 @@ column_view::column_view(data_type type, size_type size, void const* data,
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
 }
+
+// Slicer for immutable view
+std::unique_ptr<column_view> column_view::slice(size_type slice_offset, 
+                                                size_type slice_size) const {
+   size_type expecetd_size = offset() + slice_offset + slice_size;
+   CUDF_EXPECTS(slice_size >= 0, "size should be non negative value");
+   CUDF_EXPECTS(slice_offset >= 0, "offset should be non negative value");
+   CUDF_EXPECTS(expecetd_size <= size(), "Expected slice exceeds the size of the column_view");
+
+   // If an empty `column_view` is created, it will not have null_mask. So this will help in
+   // comparing in such situation.
+   auto tmp_null_mask = (slice_size > 0)? null_mask() : nullptr;
+
+   return std::make_unique<column_view>(type(), slice_size, 
+                                        head(), tmp_null_mask,
+                                        cudf::UNKNOWN_NULL_COUNT, 
+                                        offset() + slice_offset, _children);
+}
+
 
 // Mutable view constructor
 mutable_column_view::mutable_column_view(

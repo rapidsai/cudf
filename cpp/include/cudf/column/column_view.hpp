@@ -294,6 +294,26 @@ class column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   size_type num_children() const noexcept { return _children.size(); }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Constrcuts a slice of column_view as per requested offset and size.
+   * The new column_view will start at offset and will have the size requested.
+   * @throws `cudf::logic_error` if `slice_offset` with `slice_size` goes beyond
+   * the size of the `column_view`.
+   * @throws `cudf::logic_error` if `slice_size` < 0.
+   * @throws `cudf::logic_error` if `slice_offset` < 0.
+   *
+   * As the views can have offsets, so actual start would be offset of `input` +
+   * offset requested.
+   *
+   * @param slice_offset The offset from which the new column_view should start.
+   * @param slice_size The size of the column_view requested from the offset.
+   *
+   * @return unique_ptr<column_view> The unique pointer to the column view
+   * constrcuted as per the offset and size requested.
+   *---------------------------------------------------------------------------**/
+  std::unique_ptr<column_view> slice (size_type slice_offset,
+                                      size_type slice_size) const;
+
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data

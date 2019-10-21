@@ -34,6 +34,7 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3143 Define and implement new copying APIs `slice` and `split`
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 
 ## Bug Fixes
