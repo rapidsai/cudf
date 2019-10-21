@@ -18,13 +18,7 @@
 #include <utilities/nvtx/nvtx_utils.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/copying.hpp> // TODO use internal <copying/copy.hpp>
-
-//#include <rmm/thrust_rmm_allocator.h>
-//#include <cudf/cudf.h>
-//#include <cub/cub.cuh>
-//#include <memory>
-//#include <algorithm>
+#include <copying/copy_detail.hpp>
 
 namespace cudf {
 
@@ -116,6 +110,7 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
 
       bitmask_type* const __restrict__ out_mask32 = output.column(j).null_mask();
 
+      // TODO need to update this to make use of _offset
       cudf::size_type const out_location = i / BITS_PER_MASK;
 
       // Only one thread writes output
@@ -181,8 +176,7 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
   // If there are no rows in the input, return successfully
   if (input_ncols == 0 || input_nrows == 0) {
     // NOTE this returns a table with the same shape as the input, not transposed
-    // TODO this could take stream as a parameter
-    return experimental::empty_like(input/*, stream*/);
+    return experimental::detail::empty_like(input, stream);
   }
 
   // Check datatype homogeneity
@@ -208,9 +202,8 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
   std::vector<std::unique_ptr<column>> out_columns;
   out_columns.reserve(output_ncols);
   for (size_type i = 0; i < output_ncols; ++i) {
-    // TODO this could take stream as a parameter
-    out_columns.push_back(experimental::allocate_like(input.column(0), output_nrows,
-      allocation_policy, mr/*, stream*/));
+    out_columns.push_back(experimental::detail::allocate_like(input.column(0), output_nrows,
+      allocation_policy, mr, stream));
   }
   auto output = std::make_unique<experimental::table>(std::move(out_columns));
   auto output_view = output->mutable_view();
