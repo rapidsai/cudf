@@ -60,7 +60,7 @@ test:
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/legacy/functions.h
-    - test -f $PREFIX/include/cudf/groupby.hpp
+    - test -f $PREFIX/include/cudf/legacy/groupby.hpp
     - test -f $PREFIX/include/cudf/legacy/io_functions.h
     - test -f $PREFIX/include/cudf/legacy/io_functions.hpp
     - test -f $PREFIX/include/cudf/legacy/io_readers.hpp
