@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/chrono.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -27,6 +28,11 @@ namespace cudf {
 
 template <typename...>
 using void_t = void;
+
+template <typename T> struct is_timestamp_t : std::false_type {};
+
+template <typename ToDuration>
+struct is_timestamp_t<simt::std::chrono::time_point<ToDuration>> : std::true_type {};
 
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {};

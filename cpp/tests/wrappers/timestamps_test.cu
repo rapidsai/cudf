@@ -15,6 +15,7 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/utilities/chrono.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 
@@ -22,7 +23,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/timestamp_utilities.cuh>
 
-#include <simt/chrono>
 #include <gmock/gmock.h>
 
 template <typename T>

@@ -357,6 +357,7 @@ add_library(cudf
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_duplicates.cu
+            src/datetime/datetime_ops.cu
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
