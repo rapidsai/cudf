@@ -326,7 +326,7 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/strings/nvcategory_util.cpp
-            src/join/joining.cu
+            src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/is_sorted.cu
             src/sort/legacy/digitize.cu
@@ -379,6 +379,7 @@ add_library(cudf
             src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
+            src/unary/null_ops.cu
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
@@ -416,17 +417,17 @@ add_library(cudf
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
             src/copying/legacy/slice.cu
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu
             src/copying/legacy/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
-            src/search/search.cu
+            src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
@@ -438,6 +439,9 @@ add_library(cudf
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
+            src/strings/utilities.cu
+            src/strings/copying/copying.cu
+            src/strings/sorting/sorting.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding
