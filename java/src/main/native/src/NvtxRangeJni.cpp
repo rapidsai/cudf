@@ -17,7 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "cudf/cudf.h"
-#include "utilities/nvtx/nvtx_utils.hpp"
+#include <cudf/utilities/nvtx_utils.hpp>
 
 #include "jni_utils.hpp"
 
