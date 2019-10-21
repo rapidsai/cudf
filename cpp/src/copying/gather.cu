@@ -84,8 +84,6 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
   std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(columns));
   
   CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
-  CUDF_EXPECTS(source_table.num_columns() == destination_table->num_columns(),
-               "Mismatched number of columns");
 
   mutable_table_view v {destination_table->mutable_view()};
 
