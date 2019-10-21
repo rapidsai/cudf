@@ -34,6 +34,7 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3021 Java host side concat of serialized buffers
 
 ## Bug Fixes
 
@@ -41,6 +42,7 @@
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
 - PR #3060 Move copying.hpp includes to legacy
+- PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 
