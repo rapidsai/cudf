@@ -113,7 +113,7 @@ std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type st
  * @param utf8_char Single UTF-8 character to convert.
  * @return Device memory pointer to character flags table.
  */
-__device__ inline uint16_t utf8_to_codepoint(uint32_t utf8_char)
+__device__ inline uint32_t utf8_to_codepoint(uint32_t utf8_char)
 {
     uint32_t unchr = 0;
     if( utf8_char < 0x00000080 )
@@ -136,7 +136,7 @@ __device__ inline uint16_t utf8_to_codepoint(uint32_t utf8_char)
         unchr |= (utf8_char & 0x00003F00) >> 2;
         unchr |= (utf8_char & 0x0000003F);
     }
-    return static_cast<uint16_t>(unchr);
+    return unchr;
 }
 
 

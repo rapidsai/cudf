@@ -121,15 +121,6 @@ std::unique_ptr<column> make_empty_strings_column(
  */
 uint8_t* get_character_flags_table();
 
-/**
- * @brief Returns pointer to device memory that contains the static
- * characters case table. On first call, this will copy the table into
- * device memory and is guaranteed to be thread-safe.
- *
- * @param stream Stream to use for any device memory or kernel calls.
- * @return Device memory pointer to character case table.
- */
-uint16_t* get_character_case_table();
 
 } // namespace detail
 } // namespace strings
