@@ -1865,10 +1865,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     /**
      * This returns total memory allocated in device for the ColumnVector.
-     * If DTYpe is STRING_CATEGORY, approximate size is returned by guessing. It assumes
-     * length of strings to be 10 in each row and returns 240 bytes per row.
+     * NOTE: If DType is STRING_CATEGORY, the size is estimated. The estimate assumes the length
+     * of strings to be 10 characters in each row and returns 24 bytes per row.
      * @param type
-     * @return memoru allocated in device
+     * @return number of device bytes allocated for this column
      */
     public long getDeviceMemoryLength(DType type) {
       long length;
