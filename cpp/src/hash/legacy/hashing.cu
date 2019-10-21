@@ -19,7 +19,7 @@
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
-#include <join/joining.h>
+#include <join/legacy/joining.h>
 #include <table/legacy/device_table.cuh>
 #include "hash/hash_functions.cuh"
 #include <utilities/int_fastdiv.h>
