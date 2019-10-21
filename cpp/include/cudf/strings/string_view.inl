@@ -110,9 +110,24 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator++(int)
 {
-    const_iterator tmp(*this);
+    string_view::const_iterator tmp(*this);
     operator++();
     return tmp;
+}
+
+__device__ inline string_view::const_iterator string_view::const_iterator::operator+(string_view::const_iterator::difference_type off)
+{
+    const_iterator tmp(*this);
+    while(off-- > 0)
+        ++tmp;
+    return tmp;
+}
+
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator+=(string_view::const_iterator::difference_type off)
+{
+    while(off-- > 0)
+        operator++();
+    return *this;
 }
 
 __device__ inline bool string_view::const_iterator::operator==(const string_view::const_iterator& rhs) const
@@ -123,6 +138,11 @@ __device__ inline bool string_view::const_iterator::operator==(const string_view
 __device__ inline bool string_view::const_iterator::operator!=(const string_view::const_iterator& rhs) const
 {
     return (p != rhs.p) || (cpos != rhs.cpos);
+}
+
+__device__ inline bool string_view::const_iterator::operator<(const string_view::const_iterator& rhs) const
+{
+    return (p == rhs.p) && (cpos < rhs.cpos);
 }
 
 // unsigned int can hold 1-4 bytes for the UTF8 char
