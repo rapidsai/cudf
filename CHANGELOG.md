@@ -16,7 +16,7 @@
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3143 Define and implement new copying APIs `slice` and `split`
 - PR #3161 Move merge files to legacy
-- PR #3168 Add GPU-accelerated parquet writer
+- PR #3169 Add GPU-accelerated parquet writer
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
