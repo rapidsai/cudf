@@ -3707,3 +3707,192 @@ def test_tolist_mixed_nulls():
     np.testing.assert_equal(num_data_got, num_data_expect)
     for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
         assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
+
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_df_astype_numeric_to_all(dtype, as_dtype):
+    if "int" in dtype:
+        data = [1, 2, None, 4, -7]
+    elif "float" in dtype:
+        data = [1.0, 2.0, None, 4.0, np.nan, -7.0]
+
+    gdf = DataFrame()
+    gdf["foo"] = Series(data, dtype=dtype)
+    gdf["bar"] = Series(data, dtype=dtype)
+
+    if as_dtype == "str":  # normal constructor results in None -> 'None'
+        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
+    else:
+        insert_data = Series(data, dtype=as_dtype)
+
+    expect = DataFrame()
+    expect["foo"] = insert_data
+    expect["bar"] = insert_data
+
+    got = gdf.astype(as_dtype)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_df_astype_string_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
+        kwargs = {"format": "%Y-%m-%d"}
+    elif as_dtype == "int32":
+        data = [1, 2, 3, None]
+        kwargs = {}
+    elif as_dtype == "category":
+        data = ["1", "2", "3", None]
+        kwargs = {}
+    elif "float" in as_dtype:
+        data = [1.0, 2.0, 3.0, None]
+        kwargs = {}
+
+    insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
+    expect_data = Series(data, dtype=as_dtype)
+
+    gdf = DataFrame()
+    expect = DataFrame()
+
+    gdf["foo"] = insert_data
+    gdf["bar"] = insert_data
+
+    expect["foo"] = expect_data
+    expect["bar"] = expect_data
+
+    got = gdf.astype(as_dtype, **kwargs)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int64",
+        "datetime64[s]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+        "category",
+    ],
+)
+def test_df_astype_datetime_to_other(as_dtype):
+    data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+
+    gdf = DataFrame()
+    gdf["foo"] = Series(data, dtype="datetime64[ms]")
+    gdf["bar"] = Series(data, dtype="datetime64[ms]")
+
+    expect = DataFrame()
+
+    if as_dtype == "int64":
+        expect["foo"] = Series(
+            [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
+        )
+        expect["bar"] = Series(
+            [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
+        )
+    elif as_dtype == "str":
+        expect["foo"] = Series(data, dtype="str")
+        expect["bar"] = Series(data, dtype="str")
+    elif as_dtype == "category":
+        expect["foo"] = Series(gdf["foo"], dtype="category")
+        expect["bar"] = Series(gdf["bar"], dtype="category")
+    else:
+        expect["foo"] = Series(data, dtype=as_dtype)
+        expect["bar"] = Series(data, dtype=as_dtype)
+
+    got = gdf.astype(as_dtype, format="%Y-%m-%d")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
+def test_df_astype_categorical_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
+        kwargs = {"format": "%Y-%m-%d"}
+    else:
+        data = [1, 2, 3, 1]
+        kwargs = {}
+    psr = pd.Series(data, dtype="category")
+    pdf = pd.DataFrame()
+    pdf["foo"] = psr
+    pdf["bar"] = psr
+    gdf = DataFrame.from_pandas(pdf)
+    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_df_astype_to_categorical_ordered(ordered):
+    psr = pd.Series([1, 2, 3, 1], dtype="category")
+    pdf = pd.DataFrame()
+    pdf["foo"] = psr
+    pdf["bar"] = psr
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(
+        gdf.astype("int32", ordered=ordered),
+        gdf.astype("int32", ordered=ordered),
+    )
+
+
+@pytest.mark.parametrize(
+    "errors",
+    [
+        pytest.param(
+            "raise", marks=pytest.mark.xfail(reason="should raise error here")
+        ),
+        pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
+        "ignore",
+        pytest.param(
+            "warn", marks=pytest.mark.filterwarnings("ignore:Traceback")
+        ),
+    ],
+)
+def test_series_astype_error_handling(errors):
+    sr = Series(["random", "words"])
+    got = sr.astype("datetime64", errors=errors)
+    assert_eq(sr, got)
