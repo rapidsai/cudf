@@ -379,19 +379,19 @@ add_library(cudf
             src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
-            src/io/cuio_common.cpp
-            src/io/io_functions.cpp
-            src/io/convert/csr/cudf_to_csr.cu
+            src/io/legacy/cuio_common.cpp
+            src/io/legacy/io_functions.cpp
+            src/io/convert/csr/legacy/cudf_to_csr.cu
             src/io/convert/dlpack/legacy/cudf_dlpack.cpp
-            src/io/avro/avro_reader_impl.cu
+            src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
-            src/io/csv/csv_reader_impl.cu
-            src/io/csv/csv_writer.cu
-            src/io/csv/csv_gpu.cu
-            src/io/json/json_reader_impl.cu
-            src/io/orc/orc_reader_impl.cu
-            src/io/orc/orc_writer_impl.cu
+            src/io/csv/legacy/csv_reader_impl.cu
+            src/io/csv/legacy/csv_writer.cu
+            src/io/csv/legacy/csv_gpu.cu
+            src/io/json/legacy/json_reader_impl.cu
+            src/io/orc/legacy/orc_reader_impl.cu
+            src/io/orc/legacy/orc_writer_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
@@ -400,7 +400,7 @@ add_library(cudf
             src/io/orc/dict_enc.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
-            src/io/parquet/parquet_reader_impl.cu
+            src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
@@ -410,11 +410,12 @@ add_library(cudf
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/utilities/datasource.cpp
-            src/io/utilities/parsing_utils.cu
+            src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -425,7 +426,7 @@ add_library(cudf
             src/copying/legacy/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
-            src/search/search.cu
+            src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
@@ -437,6 +438,9 @@ add_library(cudf
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
+            src/strings/utilities.cu
+            src/strings/copying/copying.cu
+            src/strings/sorting/sorting.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding

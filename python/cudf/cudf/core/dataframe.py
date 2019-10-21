@@ -7,7 +7,7 @@ import itertools
 import logging
 import numbers
 import pickle
-import random
+import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -2453,18 +2453,37 @@ class DataFrame(object):
         lhs = DataFrame()
         rhs = DataFrame()
 
-        # Creating unique column name to use libgdf join
-        idx_col_name = str(random.randint(2 ** 29, 2 ** 31))
+        idx_col_names = []
+        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
+            if not isinstance(other.index, cudf.core.multiindex.MultiIndex):
+                raise TypeError(
+                    "Left index is MultiIndex, but right index is "
+                    + type(other.index)
+                )
 
-        while idx_col_name in self.columns or idx_col_name in other.columns:
-            idx_col_name = str(random.randint(2 ** 29, 2 ** 31))
+            index_frame_l = self.index.copy().to_frame(index=False)
+            index_frame_r = other.index.copy().to_frame(index=False)
 
-        lhs[idx_col_name] = Series(self.index.as_column()).set_index(
-            self.index
-        )
-        rhs[idx_col_name] = Series(other.index.as_column()).set_index(
-            other.index
-        )
+            if (index_frame_l.columns != index_frame_r.columns).any():
+                raise ValueError(
+                    "Left and Right indice-column names must match."
+                )
+
+            for name in index_frame_l.columns:
+                idx_col_name = str(uuid.uuid4())
+                idx_col_names.append(idx_col_name)
+
+                lhs[idx_col_name] = index_frame_l[name].set_index(self.index)
+                rhs[idx_col_name] = index_frame_r[name].set_index(other.index)
+
+        else:
+            idx_col_names.append(str(uuid.uuid4()))
+            lhs[idx_col_names[0]] = Series(self.index.as_column()).set_index(
+                self.index
+            )
+            rhs[idx_col_names[0]] = Series(other.index.as_column()).set_index(
+                other.index
+            )
 
         for name in self.columns:
             lhs[name] = self[name]
@@ -2475,31 +2494,35 @@ class DataFrame(object):
         lhs = lhs.reset_index(drop=True)
         rhs = rhs.reset_index(drop=True)
 
-        cat_join = False
+        cat_join = []
+        for name in idx_col_names:
+            if is_categorical_dtype(lhs[name]):
 
-        if is_categorical_dtype(lhs[idx_col_name]):
-            cat_join = True
-            lcats = lhs[idx_col_name].cat.categories
-            rcats = rhs[idx_col_name].cat.categories
+                lcats = lhs[name].cat.categories
+                rcats = rhs[name].cat.categories
 
-            def set_categories(col, cats):
-                return col.cat.set_categories(cats, is_unique=True).fillna(-1)
+                def _set_categories(col, cats):
+                    return col.cat._set_categories(
+                        cats, is_unique=True
+                    ).fillna(-1)
 
-            if how == "left":
-                cats = lcats
-                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
-            elif how == "right":
-                cats = rcats
-                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
-            elif how in ["inner", "outer"]:
-                cats = column.as_column(lcats).append(rcats)
-                cats = Series(cats).drop_duplicates()._column
+                if how == "left":
+                    cats = lcats
+                    rhs[name] = _set_categories(rhs[name], cats)
+                elif how == "right":
+                    cats = rcats
+                    lhs[name] = _set_categories(lhs[name], cats)
+                elif how in ["inner", "outer"]:
+                    cats = column.as_column(lcats).append(rcats)
+                    cats = Series(cats).drop_duplicates()._column
 
-                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
-                lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
+                    lhs[name] = _set_categories(lhs[name], cats)
+                    lhs[name] = lhs[name]._column.as_numerical
 
-                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
-                rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
+                    rhs[name] = _set_categories(rhs[name], cats)
+                    rhs[name] = rhs[name]._column.as_numerical
+
+                cat_join.append((name, cats))
 
         if lsuffix == "":
             lsuffix = "l"
@@ -2508,23 +2531,27 @@ class DataFrame(object):
 
         df = lhs.merge(
             rhs,
-            on=[idx_col_name],
+            on=idx_col_names,
             how=how,
             suffixes=(lsuffix, rsuffix),
             method=method,
         )
 
-        if cat_join:
-            df[idx_col_name] = CategoricalColumn(
-                data=df[idx_col_name].data, categories=cats, ordered=False
+        for name, cats in cat_join:
+            df[name] = CategoricalColumn(
+                data=df[name].data, categories=cats, ordered=False
             )
 
-        df = df.set_index(idx_col_name)
-        # change random number index to None to better reflect pandas behavior
+        if sort and len(df):
+            df = df.sort_values(idx_col_names)
+
+        df = df.set_index(idx_col_names)
+        # change index to None to better reflect pandas behavior
         df.index.name = None
 
-        if sort and len(df):
-            return df.sort_index()
+        if len(idx_col_names) > 1:
+            df.index._source_data.columns = index_frame_l.columns
+            df.index.names = index_frame_l.columns
 
         return df
 
