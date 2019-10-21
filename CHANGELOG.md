@@ -10,6 +10,7 @@
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
+- PR #3168 Add GPU-accelerated parquet writer
 
 ## Improvements
 
