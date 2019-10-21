@@ -379,6 +379,7 @@ add_library(cudf
             src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
+            src/unary/null_ops.cu
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu

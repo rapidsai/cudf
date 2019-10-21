@@ -70,4 +70,26 @@ gdf_column cast(gdf_column const& input, gdf_dtype out_type,
                 gdf_dtype_extra_info out_info = gdf_dtype_extra_info{});
 
 
+/**
+ * @brief Checks the `input` column for `null` values, and creates a `bool`
+ * column of same size with `true` representing `null` values and `false` for
+ * other.
+ *
+ * @param input A gdf_column as input
+ *
+ * @returns gdf_column A column of type GDF_BOOL8 with `true` representing `null` values.
+ */
+gdf_column is_null(gdf_column const& input);
+
+/**
+ * @brief Checks the `input` column for `null` values, and creates a `bool`
+ * column of same size with `false` representing `null` values and `true` for
+ * other.
+ *
+ * @param input A gdf_column as input
+ *
+ * @returns gdf_column A column of type GDF_BOOL8 with `false` representing `null` values.
+ */
+gdf_column is_not_null(gdf_column const& input);
+
 } // namespace cudf
