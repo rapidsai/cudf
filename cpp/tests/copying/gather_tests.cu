@@ -178,12 +178,7 @@ TYPED_TEST(GatherTest, AllNull) {
 
 
 TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
-
   constexpr cudf::size_type source_size{1000};
-  constexpr cudf::size_type destination_size{1000};
-
-  static_assert(source_size == destination_size,
-		"Source and destination columns must be the same size.");
 
   constexpr cudf::size_type n_cols = 3;
 
@@ -200,7 +195,6 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
 						 data+source_size));
     source_columns.push_back(source_column_wrappers[i]);
   }
-
 
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
     reversed_data,
@@ -221,4 +215,56 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
   }
+}
+
+
+TYPED_TEST(GatherTest, MultiColNulls) {
+  constexpr cudf::size_type source_size{1000};
+
+  static_assert(0 == source_size % 2,
+		"Size of source data must be a multiple of 2.");
+
+  constexpr cudf::size_type n_cols = 3;
+
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return i%2;});
+
+  std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
+  std::vector<cudf::column_view> source_columns;
+
+  for (int i=0; i<n_cols; ++i) {
+    source_column_wrappers.push_back(cudf::test::fixed_width_column_wrapper
+				     <TypeParam>(data,
+						 data+source_size,
+						 validity));
+    source_columns.push_back(source_column_wrappers[i]);
+  }
+
+  auto reversed_data =
+    cudf::test::make_counting_transform_iterator (0, [](auto i){return source_size-1-i;});
+
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+    reversed_data,
+    reversed_data+source_size};
+
+  cudf::table_view source_table {source_columns};
+
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+					 source_table,
+					 gather_map
+					 ));
+
+  // Expected data
+  auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){
+      return source_size - i - 1;});
+  auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i+1)%2;});
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    expect_data, expect_data+source_size, expect_valid};
+
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+  }
+
 }
