@@ -18,7 +18,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/column_utilities.hpp>
 
 #include <gmock/gmock.h>
 
