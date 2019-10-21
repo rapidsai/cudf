@@ -168,9 +168,9 @@ ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
 
-ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
+ConfigureTest(LEGACY_JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
 # - orderby tests ---------------------------------------------------------------------------------
@@ -481,14 +481,6 @@ set(ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
-
-###################################################################################################
-# - point in polygon test --------------------------------------------------------------------------
-
-set(GIS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu")
-
-ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
 
 ###################################################################################################
 # - filling test --------------------------------------------------------------------------

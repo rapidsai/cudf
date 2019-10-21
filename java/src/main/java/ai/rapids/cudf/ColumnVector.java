@@ -581,12 +581,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     DATA
   }
 
-  void copyHostBufferBytes(byte[] dst, int dstOffset, BufferType src, long srcOffset,
-                           int length) {
-    assert dstOffset >= 0;
-    assert srcOffset >= 0;
-    assert length >= 0;
-    assert dstOffset + length <= dst.length;
+  HostMemoryBuffer getHostBufferFor(BufferType src) {
     HostMemoryBuffer srcBuffer;
     switch(src) {
       case VALIDITY:
@@ -601,6 +596,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       default:
         throw new IllegalArgumentException(src + " is not a supported buffer type.");
     }
+    return srcBuffer;
+  }
+
+  void copyHostBufferBytes(byte[] dst, int dstOffset, BufferType src, long srcOffset,
+                           int length) {
+    assert dstOffset >= 0;
+    assert srcOffset >= 0;
+    assert length >= 0;
+    assert dstOffset + length <= dst.length;
+
+    HostMemoryBuffer srcBuffer = getHostBufferFor(src);
 
     assert srcOffset + length <= srcBuffer.length : "would copy off end of buffer "
         + srcOffset + " + " + length + " > " + srcBuffer.length;
