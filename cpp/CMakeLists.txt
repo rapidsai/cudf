@@ -424,8 +424,8 @@ add_library(cudf
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/copying/legacy/copy_range.cu
-            src/filling/fill.cu
-            src/filling/repeat.cu
+            src/filling/legacy/fill.cu
+            src/filling/legacy/repeat.cu
             src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp

@@ -475,13 +475,13 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - filling test --------------------------------------------------------------------------
+# - legacy filling test ---------------------------------------------------------------------------
 
-set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
+set(LEGACY_FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/filling_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu")
 
-ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+ConfigureTest(LEGACY_FILLING_TEST "${LEGACY_FILLING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy search test -----------------------------------------------------------------------------------

@@ -21,6 +21,7 @@
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3026 Move fill and repeat files to legacy
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
