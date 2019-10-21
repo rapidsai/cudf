@@ -37,9 +37,9 @@ template <typename SourceType, operators op, bool values_have_nulls,
           typename Enable = void>
 struct update_target_element {
   __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
+                                    cudf::size_type target_index,
                                     gdf_column const& source,
-                                    gdf_size_type source_index) {
+                                    cudf::size_type source_index) {
     release_assert(false && "Invalid Source type and Aggregation combination.");
   }
 };
@@ -77,9 +77,9 @@ struct update_target_element<
    * @param source_index Index of source element
    *---------------------------------------------------------------------------**/
   __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
+                                    cudf::size_type target_index,
                                     gdf_column const& source,
-                                    gdf_size_type source_index) {
+                                    cudf::size_type source_index) {
     using TargetType = target_type_t<SourceType, op>;
     
     assert(gdf_dtype_of<TargetType>() == target.dtype); 
@@ -124,8 +124,8 @@ struct update_target_element<SourceType, COUNT, source_has_nulls,
    * @param target_index Index of target element
    *---------------------------------------------------------------------------**/
   __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
-                                    gdf_column const&, gdf_size_type) {
+                                    cudf::size_type target_index,
+                                    gdf_column const&, cudf::size_type) {
     using TargetType = target_type_t<SourceType, COUNT>;
     assert(gdf_dtype_of<TargetType>() == target.dtype);
 
@@ -141,9 +141,9 @@ template <bool source_has_nulls>
 struct elementwise_aggregator {
   template <typename SourceType>
   __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
+                                    cudf::size_type target_index,
                                     gdf_column const& source,
-                                    gdf_size_type source_index, operators op) {
+                                    cudf::size_type source_index, operators op) {
     switch (op) {
       case MIN: {
         update_target_element<SourceType, MIN, source_has_nulls>{}(
@@ -200,12 +200,12 @@ struct elementwise_aggregator {
  *---------------------------------------------------------------------------**/
 template <bool values_have_nulls = true>
 __device__ inline void aggregate_row(device_table const& target,
-                                     gdf_size_type target_index,
+                                     cudf::size_type target_index,
                                      device_table const& source,
-                                     gdf_size_type source_index,
+                                     cudf::size_type source_index,
                                      operators* ops) {
   using namespace bit_mask;
-  for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
+  for (cudf::size_type i = 0; i < target.num_columns(); ++i) {
     bit_mask_t const* const __restrict__ source_mask{
         reinterpret_cast<bit_mask_t const*>(source.get_column(i)->valid)};
 

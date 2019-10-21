@@ -20,7 +20,7 @@ namespace cudf{
 
 gdf_scalar reduce(const gdf_column *col,
                   cudf::reduction::operators op, gdf_dtype output_dtype,
-                  gdf_size_type ddof)
+                  cudf::size_type ddof)
 {
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
@@ -39,6 +39,12 @@ gdf_scalar reduce(const gdf_column *col,
         break;
     case cudf::reduction::MAX:
         scalar = cudf::reduction::max(*col, output_dtype);
+        break;
+    case cudf::reduction::ANY:
+        scalar = cudf::reduction::any(*col, output_dtype);
+        break;
+    case cudf::reduction::ALL:
+        scalar = cudf::reduction::all(*col, output_dtype);
         break;
     case cudf::reduction::PRODUCT:
         scalar = cudf::reduction::product(*col, output_dtype);

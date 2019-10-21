@@ -16,18 +16,17 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
 #include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
-
-#include "parquet.h"
-#include "parquet_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -103,9 +102,9 @@ class reader::Impl {
    * @param[in] chunks List of column chunk descriptors
    * @param[in] pages List of page information
    *
-   * @return device_buffer<uint8_t> Device buffer to decompressed page data
+   * @return rmm::device_buffer Device buffer to decompressed page data
    **/
-  device_buffer<uint8_t> decompress_page_data(
+  rmm::device_buffer decompress_page_data(
       const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
       const hostdevice_vector<parquet::gpu::PageInfo> &pages);
 
@@ -134,6 +133,6 @@ class reader::Impl {
   gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
-} // namespace parquet
-} // namespace io
-} // namespace cudf
+}  // namespace parquet
+}  // namespace io
+}  // namespace cudf

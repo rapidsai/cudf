@@ -189,6 +189,12 @@ $ ./build.sh libcudf                   # compile the cuDF libraries and install 
 $ make test
 ```
 
+- Build the `nvstrings` python packages, in the `python/nvstrings` folder:
+```bash
+$ cd $CUDF_HOME/python/nvstrings
+$ python setup.py install
+```
+
 - Build the `cudf` python package, in the `python/cudf` folder:
 ```bash
 $ cd $CUDF_HOME/python/cudf
@@ -212,12 +218,6 @@ $ python setup.py install
 ```bash
 $ cd $CUDF_HOME
 $ ./build.sh dask_cudf
-```
-
-- You will also need the following environment variables, including `$CUDA_HOME`.
-```bash
-NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
-NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
 ```
 
 - To run Python tests (Optional):

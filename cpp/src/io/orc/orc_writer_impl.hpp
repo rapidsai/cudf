@@ -16,17 +16,15 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+
 #include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "orc.h"
-#include "orc_gpu.h"
-
 #include <io/utilities/wrapper_utils.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/integer_utils.hpp>
@@ -75,14 +73,13 @@ class writer::Impl {
    * @param[in] columns List of columns
    * @param[in] num_rows Total number of rows
    * @param[in] str_col_ids List of columns that are strings type
-   * @param[in] dict_data Dictionary data memory
-   * @param[in] dict_index Dictionary index memory
+   * @param[in,out] dict_data Dictionary data memory
+   * @param[in,out] dict_index Dictionary index memory
    * @param[in,out] dict List of dictionary chunks
    **/
   void init_dictionaries(orc_column* orc_columns, size_t num_rows,
                          const std::vector<int>& str_col_ids,
-                         const device_buffer<uint32_t>& dict_data,
-                         const device_buffer<uint32_t>& dict_index,
+                         uint32_t* dict_data, uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>& dict);
 
   /**
@@ -93,14 +90,13 @@ class writer::Impl {
    * @param[in] str_col_ids List of columns that are strings type
    * @param[in] stripe_list List of stripe boundaries
    * @param[in] dict List of dictionary chunks
-   * @param[in] dict_index List of dictionary indices
+   * @param[in,out] dict_index List of dictionary indices
    * @param[in,out] stripe_dict List of stripe dictionaries
    **/
   void build_dictionaries(
       orc_column* columns, size_t num_rows, const std::vector<int>& str_col_ids,
       const std::vector<uint32_t>& stripe_list,
-      const hostdevice_vector<gpu::DictionaryChunk>& dict,
-      const device_buffer<uint32_t>& dict_index,
+      const hostdevice_vector<gpu::DictionaryChunk>& dict, uint32_t* dict_index,
       hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   /**
@@ -131,14 +127,15 @@ class writer::Impl {
    * @param[in] strm_ids List of unique stream identifiers
    * @param[in,out] chunks List of column data chunks
    *
-   * @return Device buffer containing encoded RLE and string data
+   * @return rmm::device_buffer Device buffer containing encoded data
    **/
-  device_buffer<uint8_t> encode_columns(
-      orc_column* columns, size_t num_columns, size_t num_rows,
-      size_t num_rowgroups, const std::vector<int>& str_col_ids,
-      const std::vector<uint32_t>& stripe_list,
-      const std::vector<Stream>& streams, const std::vector<int32_t>& strm_ids,
-      hostdevice_vector<gpu::EncChunk>& chunks);
+  rmm::device_buffer encode_columns(orc_column* columns, size_t num_columns,
+                                    size_t num_rows, size_t num_rowgroups,
+                                    const std::vector<int>& str_col_ids,
+                                    const std::vector<uint32_t>& stripe_list,
+                                    const std::vector<Stream>& streams,
+                                    const std::vector<int32_t>& strm_ids,
+                                    hostdevice_vector<gpu::EncChunk>& chunks);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data

@@ -1856,14 +1856,96 @@ def test_tail_for_string():
 
 @pytest.mark.parametrize("drop", [True, False])
 def test_reset_index(pdf, gdf, drop):
-    assert_eq(pdf.reset_index(drop=drop), gdf.reset_index(drop=drop))
-    assert_eq(pdf.x.reset_index(drop=drop), gdf.x.reset_index(drop=drop))
+    assert_eq(
+        pdf.reset_index(drop=drop, inplace=False),
+        gdf.reset_index(drop=drop, inplace=False),
+    )
+    assert_eq(
+        pdf.x.reset_index(drop=drop, inplace=False),
+        gdf.x.reset_index(drop=drop, inplace=False),
+    )
+
+
+@pytest.mark.parametrize("drop", [True, False])
+def test_reset_named_index(pdf, gdf, drop):
+    pdf.index.name = "cudf"
+    gdf.index.name = "cudf"
+    assert_eq(
+        pdf.reset_index(drop=drop, inplace=False),
+        gdf.reset_index(drop=drop, inplace=False),
+    )
+    assert_eq(
+        pdf.x.reset_index(drop=drop, inplace=False),
+        gdf.x.reset_index(drop=drop, inplace=False),
+    )
+
+
+@pytest.mark.parametrize("drop", [True, False])
+def test_reset_index_inplace(pdf, gdf, drop):
+    pdf.reset_index(drop=drop, inplace=True)
+    gdf.reset_index(drop=drop, inplace=True)
+    assert_eq(pdf, gdf)
+
+
+def test_series_reset_index_inplace(pdf, gdf):
+    pdf.x.reset_index(drop=True, inplace=True)
+    gdf.x.reset_index(drop=True, inplace=True)
+    assert_eq(pdf.x, gdf.x)
+
+
+@pytest.mark.parametrize("drop", [True, False])
+def test_reset_named_index_inplace(pdf, gdf, drop):
+    pdf.index.name = "cudf"
+    gdf.index.name = "cudf"
+    pdf.reset_index(drop=drop, inplace=True)
+    gdf.reset_index(drop=drop, inplace=True)
+    assert_eq(pdf, gdf)
+
+
+def test_series_reset_named_index_inplace(pdf, gdf):
+    pdf.x.index.name = "cudf"
+    gdf.x.index.name = "cudf"
+    pdf.x.reset_index(drop=True, inplace=True)
+    gdf.x.reset_index(drop=True, inplace=True)
+    assert_eq(pdf.x, gdf.x)
 
 
 @pytest.mark.parametrize("drop", [True, False])
 def test_set_index(pdf, gdf, drop):
     for col in pdf.columns:
         assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
+
+
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("nelem", [10, 200, 1333])
+def test_set_index_multi(drop, nelem):
+    np.random.seed(0)
+    a = np.arange(nelem)
+    np.random.shuffle(a)
+    df = pd.DataFrame(
+        {
+            "a": a,
+            "b": np.random.randint(0, 4, size=nelem),
+            "c": np.random.uniform(low=0, high=4, size=nelem),
+            "d": np.random.choice(["green", "black", "white"], nelem),
+        }
+    )
+    df["e"] = df["d"].astype("category")
+    gdf = DataFrame.from_pandas(df)
+
+    assert_eq(gdf.set_index("a", drop=drop), gdf.set_index(["a"], drop=drop))
+    assert_eq(
+        df.set_index(["b", "c"], drop=drop),
+        gdf.set_index(["b", "c"], drop=drop),
+    )
+    assert_eq(
+        df.set_index(["d", "b"], drop=drop),
+        gdf.set_index(["d", "b"], drop=drop),
+    )
+    assert_eq(
+        df.set_index(["b", "d", "e"], drop=drop),
+        gdf.set_index(["b", "d", "e"], drop=drop),
+    )
 
 
 @pytest.mark.parametrize("copy", [True, False])
@@ -3649,19 +3731,20 @@ def test_tolist_mixed_nulls():
 )
 def test_df_astype_numeric_to_all(dtype, as_dtype):
     if "int" in dtype:
-        data = [1, 2, None, 4]
+        data = [1, 2, None, 4, -7]
     elif "float" in dtype:
-        data = [1.0, 2.0, None, 4.0]
+        data = [1.0, 2.0, None, 4.0, np.nan, -7.0]
 
     gdf = DataFrame()
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
-    expect = DataFrame()
     if as_dtype == "str":  # normal constructor results in None -> 'None'
         insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
     else:
         insert_data = Series(data, dtype=as_dtype)
+
+    expect = DataFrame()
     expect["foo"] = insert_data
     expect["bar"] = insert_data
 
@@ -3673,7 +3756,6 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
 @pytest.mark.parametrize(
     "as_dtype",
     [
-        "str",
         "int32",
         "float32",
         "category",
@@ -3685,50 +3767,74 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
 )
 def test_df_astype_string_to_other(as_dtype):
     if "datetime64" in as_dtype:
-        data = ["2001-01-01", "2002-02-02", "2000-01-05"]
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
         kwargs = {"format": "%Y-%m-%d"}
-    else:
-        data = ["1", "2", "3"]
+    elif as_dtype == "int32":
+        data = [1, 2, 3, None]
         kwargs = {}
-    pdf = pd.DataFrame(data, columns=["test"])
-    gdf = gd.from_pandas(pdf)
-    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
+    elif as_dtype == "category":
+        data = ["1", "2", "3", None]
+        kwargs = {}
+    elif "float" in as_dtype:
+        data = [1.0, 2.0, 3.0, None]
+        kwargs = {}
+
+    insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
+    expect_data = Series(data, dtype=as_dtype)
+
+    gdf = DataFrame()
+    expect = DataFrame()
+
+    gdf["foo"] = insert_data
+    gdf["bar"] = insert_data
+
+    expect["foo"] = expect_data
+    expect["bar"] = expect_data
+
+    got = gdf.astype(as_dtype, **kwargs)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
     "as_dtype",
     [
-        pytest.param(
-            "category",
-            marks=pytest.mark.xfail(
-                reason=".categories.name not reset when assigned"
-            ),
-        ),
+        "int64",
         "datetime64[s]",
-        "datetime64[ms]",
         "datetime64[us]",
         "datetime64[ns]",
         "str",
+        "category",
     ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
-    data = ["2001-01-01", "2002-02-02", "2001-01-05", None]
+    data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
 
     gdf = DataFrame()
-    gdf["foo"] = Series(data)
-    gdf["bar"] = Series(data)
+    gdf["foo"] = Series(data, dtype="datetime64[ms]")
+    gdf["bar"] = Series(data, dtype="datetime64[ms]")
 
     expect = DataFrame()
-    if as_dtype == "str":  # normal constructor results in None -> 'None'
-        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
+
+    if as_dtype == "int64":
+        expect["foo"] = Series(
+            [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
+        )
+        expect["bar"] = Series(
+            [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
+        )
+    elif as_dtype == "str":
+        expect["foo"] = Series(data, dtype="str")
+        expect["bar"] = Series(data, dtype="str")
+    elif as_dtype == "category":
+        expect["foo"] = Series(gdf["foo"], dtype="category")
+        expect["bar"] = Series(gdf["bar"], dtype="category")
     else:
-        insert_data = Series(data, dtype=as_dtype)
-    expect["foo"] = insert_data
-    expect["bar"] = insert_data
+        expect["foo"] = Series(data, dtype=as_dtype)
+        expect["bar"] = Series(data, dtype=as_dtype)
 
     got = gdf.astype(as_dtype, format="%Y-%m-%d")
 
-    assert_eq(expect, got, check_names=False)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -3771,6 +3877,24 @@ def test_df_astype_to_categorical_ordered(ordered):
         gdf.astype("int32", ordered=ordered),
         gdf.astype("int32", ordered=ordered),
     )
+
+@pytest.mark.parametrize(
+    "errors",
+    [
+        pytest.param(
+            "raise", marks=pytest.mark.xfail(reason="should raise error here")
+        ),
+        pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
+        "ignore",
+        pytest.param(
+            "warn", marks=pytest.mark.filterwarnings("ignore:Traceback")
+        ),
+    ],
+)
+def test_series_astype_error_handling(errors):
+    sr = Series(["random", "words"])
+    got = sr.astype("datetime64", errors=errors)
+    assert_eq(sr, got)
 
 
 @pytest.mark.parametrize(

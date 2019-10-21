@@ -288,7 +288,7 @@ INSTANTIATE_TEST_CASE_P(OrcWriter, OrcWriterValueParamTest,
 TEST_F(OrcWriterTest, Strings) {
   std::vector<const char *> data{"Monday", "Monday", "Friday", "Monday",
                                  "Friday", "Friday", "Friday", "Funday"};
-  gdf_size_type column_size = data.size();
+  cudf::size_type column_size = data.size();
 
   cudf::test::column_wrapper<int> col0{random_values<int>(column_size),
                                        [](size_t row) { return true; }};

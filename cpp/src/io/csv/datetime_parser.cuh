@@ -140,10 +140,10 @@ __inline__ __device__ long findFirstOccurrence(const char *data, long start_idx,
  * @return returns the number of days since epoch
  */
 __inline__ __device__
-gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
+int32_t parseDateFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int day, month, year;
-	gdf_date32 e = -1;
+	int32_t e = -1;
 
 	bool status = extractDate(data, start_idx, end_idx, dayfirst, &year, &month, &day);
 
@@ -167,11 +167,11 @@ gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool 
  * 
  * @return Milliseconds since epoch
  */
-__inline__ __device__ gdf_date64 parseDateTimeFormat(const char *data, long start,
+__inline__ __device__ int64_t parseDateTimeFormat(const char *data, long start,
                                           long end, bool dayfirst) {
   int day, month, year;
   int hour, minute, second, millisecond = 0;
-  gdf_date64 answer = -1;
+  int64_t answer = -1;
 
   // Find end of the date portion
   // TODO: Refactor all the date/time parsing to remove multiple passes over
