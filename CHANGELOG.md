@@ -47,6 +47,7 @@
 - PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
+- PR #3168 Fix mutable_column_device_view head const_cast
 
 
 # cuDF 0.10.0 (Date TBD)
