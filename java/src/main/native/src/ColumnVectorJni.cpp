@@ -573,8 +573,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemoryStringSi
     if (dtype == GDF_STRING) {
       NVStrings *nvstr = static_cast<NVStrings *>(column->data);
       return static_cast<jlong>(nvstr->memsize());
+    } else if (dtype == GDF_STRING_CATEGORY) {
+      NVCategory *cats = static_cast<NVCategory *>(column->dtype_info.category);
+      unsigned long dict_size = cats->keys_size();
+      unsigned long dict_size_total = dict_size * GDF_INT32;
+      unsigned long category_size_total = dict_size * 240;  // assumption:240B per row (10 chars in each string)
+      return static_cast<jlong>(category_size_total + dict_size_total);
     } else {
-      throw std::logic_error("ONLY STRING TYPES ARE SUPPORTED...");
+      throw std::logic_error("ONLY STRING AND CATEGORY TYPES ARE SUPPORTED...");
     }
   }
   CATCH_STD(env, 0);
