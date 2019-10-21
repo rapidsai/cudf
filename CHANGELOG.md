@@ -6,11 +6,11 @@
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
+- PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3161 Move merge files to legacy
-
 
 ## Improvements
 
@@ -25,6 +25,7 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 - PR #3070 Move functions.h and related source to legacy
