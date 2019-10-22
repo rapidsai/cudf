@@ -19,6 +19,7 @@
 #include <cudf/quantiles.hpp>
 
 #include <benchmark/benchmark.h>
+#include <random>
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"

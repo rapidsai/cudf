@@ -68,20 +68,6 @@ class RmmMemoryAccessorTest extends CudfTestBase {
   }
 
   @Test
-  public void implicitInit() {
-    if (Rmm.isInitialized()) {
-      Rmm.shutdown();
-    }
-    long address = Rmm.alloc(10, 0);
-    try {
-      assertNotEquals(0, address);
-    } finally {
-      Rmm.free(address, 0);
-    }
-    Rmm.shutdown();
-  }
-
-  @Test
   public void doubleInitFails() {
     if (!Rmm.isInitialized()) {
       Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0);
