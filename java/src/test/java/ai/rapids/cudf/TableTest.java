@@ -1521,36 +1521,4 @@ public class TableTest extends CudfTestBase {
       tempFileUncompressed.delete();
     }
   }
-
-  @Test
-  void testORCSnappyCompression() throws IOException {
-    File tempFile = File.createTempFile("test", ".orc");
-    File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
-    try (Table table0 = Table.readParquet(TEST_PARQUET_FILE)) {
-      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.SNAPPY).build(), tempFile.getAbsoluteFile());
-      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
-
-      /**
-       * WARNING!!!
-       * We are replacing the Date columns because the ORC writer currently doesn't support Date32
-       * It's also setting the timeunit to MILLISECONDS. This discrepancy is being tracked by gitlab
-       * issue (https://gitlab-master.nvidia.com/nvspark/cudf/issues/110) to investigate further.
-       *
-       */
-      ColumnVector old = table0.getColumn(5); // no need to close as we are not increasing the reference
-      table0.replaceColumn(5, old.castTo(DType.DATE64, TimeUnit.MILLISECONDS));
-      old = table0.getColumn(6); // no need to close as we are not increasing the reference
-      table0.replaceColumn(6, old.castTo(DType.DATE64, TimeUnit.MILLISECONDS));
-
-      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile());
-           Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-        assertTablesAreEqual(table0, table2);
-        assertTablesAreEqual(table2, table1);
-      }
-    } finally {
-      tempFile.delete();
-      tempFileUncompressed.delete();
-    }
-  }
 }
