@@ -317,44 +317,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfWriteORC(JNIEnv *env, jclass,
-                                                              jint compression_type,
-                                                              jstring outputfilepath, jlong buffer,
-                                                              jlong buffer_length, jlong table) {
-  bool write_buffer = true;
-  if (buffer == 0) {
-    JNI_NULL_CHECK(env, outputfilepath, "output file or buffer must be supplied", 0);
-    write_buffer = false;
-  } else if (outputfilepath != NULL) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "cannot pass in both a buffer and an outputfilepath", 0);
-  } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
-  }
-
-  try {
-    cudf::jni::native_jstring filename(env, outputfilepath);
-    namespace orc = cudf::io::orc;
-    orc::compression_type n_compressionType = static_cast<orc::compression_type>(compression_type);
-    if (write_buffer) {
-      JNI_THROW_NEW(env, "java/lang/UnsupportedOperationException",
-                        "buffers are not supported", 0);
-    } else {
-      cudf::sink_info info(filename.get());
-      cudf::orc_write_arg args(info);
-      auto writer = [&]() {
-
-        orc::writer_options options(n_compressionType);
-        return std::make_unique<orc::writer>(args.sink.filepath, options);
-      }();
-
-      args.table = *reinterpret_cast<cudf::table *>(table);
-      writer->write_all(args.table);
-    }
-  }
-  CATCH_STD(env, 0);
-}
-
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     JNIEnv *env, jclass clazz, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices) {
