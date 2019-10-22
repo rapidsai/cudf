@@ -168,10 +168,12 @@ class DataFrame(object):
                     def to_col(rows, idx):
                         return [r[idx] if idx < len(r) else None for r in rows]
 
+                    row_count = len(data)
                     column_count = max(len(row) for row in data)
                     data = {
                         idx: to_col(data, idx) for idx in range(column_count)
                     }
+                    index = self._index = RangeIndex(start=0, stop=row_count)
 
                 elif not isinstance(data[0], list):
                     # a nested list is something pandas supports and

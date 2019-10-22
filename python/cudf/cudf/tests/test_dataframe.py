@@ -18,6 +18,29 @@ from cudf.tests.utils import assert_eq, gen_rand
 from cudf.utils.utils import _have_cupy
 
 
+def test_init_via_list_of_tuples():
+    data = [
+        (5, "cats", "jump", np.nan),  # 3 columns
+        (2, "dogs", "dig", 7.5),  # 3 columns
+        (3, "cows", "moo", -2.1, "occasionally"),  # 4 columns
+    ]
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("rows", [0, 1, 2, 100])
+def test_init_via_list_of_empty_tuples(rows):
+    data = [()] * rows
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf, check_like=True)
+
+
 def test_buffer_basic():
     n = 10
     buf = Buffer(np.arange(n, dtype=np.float64))
