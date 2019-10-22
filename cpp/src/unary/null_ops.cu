@@ -39,7 +39,7 @@ std::unique_ptr<column> null_op(column_view const& input,
     auto output_data = output_mutable_view.data<bool>();
 
     thrust::transform(exec,
-                      thrust::make_counting_iterator(static_cast<size_type>(0)),
+                      thrust::make_counting_iterator(static_cast<size_type>(input.offset())),
                       thrust::make_counting_iterator(static_cast<size_type>(input.size())),
                       output_data,
                       [input_device_column_view, nulls_are_false]__device__(auto index){
