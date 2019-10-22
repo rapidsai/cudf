@@ -47,10 +47,12 @@
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Move unary files to legacy
 - PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3175 Set cmake cuda version variables
 
 
 ## Bug Fixes
 
+- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
@@ -152,6 +154,7 @@
 - PR #2788 Guide to Python UDFs
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
+- PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
 
 ## Bug Fixes
 

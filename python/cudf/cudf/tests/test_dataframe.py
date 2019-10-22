@@ -239,7 +239,7 @@ def test_dataframe_drop_method():
     raises.match("Need to specify at least")
 
 
-def test_dataframe_column_add_drop():
+def test_dataframe_column_add_drop_via_setitem():
     df = DataFrame()
     data = np.asarray(range(10))
     df["a"] = data
@@ -251,6 +251,49 @@ def test_dataframe_column_add_drop():
     assert tuple(df.columns) == ("b", "c")
     df["a"] = data
     assert tuple(df.columns) == ("b", "c", "a")
+
+
+def test_dataframe_column_set_via_attr():
+    data_0 = np.asarray([0, 2, 4, 5])
+    data_1 = np.asarray([1, 4, 2, 3])
+    data_2 = np.asarray([2, 0, 3, 0])
+    df = DataFrame({"a": data_0, "b": data_1, "c": data_2})
+
+    for i in range(10):
+        df.c = df.a
+        assert assert_eq(df.c, df.a, check_names=False)
+        assert tuple(df.columns) == ("a", "b", "c")
+
+        df.c = df.b
+        assert assert_eq(df.c, df.b, check_names=False)
+        assert tuple(df.columns) == ("a", "b", "c")
+
+
+def test_dataframe_column_drop_via_attr():
+    df = DataFrame({"a": []})
+
+    with pytest.raises(AttributeError):
+        del df.a
+
+    assert tuple(df.columns) == tuple("a")
+
+
+def test_dataframe_attribute_add_drop():
+    df = DataFrame()
+
+    with pytest.warns(UserWarning) as record:
+        df.some_new_attr = 5
+
+    assert len(record) == 1
+    assert "A new attribute will be created" in str(record[0].message)
+
+    assert hasattr(df, "some_new_attr")
+    assert isinstance(df.some_new_attr, int)
+    assert df.some_new_attr == 5
+
+    del df.some_new_attr
+
+    assert not hasattr(df, "some_new_attr")
 
 
 def test_dataframe_pop():
