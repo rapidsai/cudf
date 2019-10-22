@@ -124,37 +124,37 @@ ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 
-set(HASH_GROUPBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_count.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_sum.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_avg.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_max.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_min.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_multi_agg.cu")
+set(LEGACY_HASH_GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_count.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_avg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_max.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_min.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_multi_agg.cu")
 
-ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
+ConfigureTest(LEGACY_HASH_GROUPBY_TEST "${LEGACY_HASH_GROUPBY_TEST_SRC}")
 
-set(SORT_GROUPBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_avg.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_sum.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_count.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_min.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_max.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_quantile.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_median.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_multi_agg.cu"
+set(LEGACY_SORT_GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_avg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_count.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_min.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_max.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_quantile.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_median.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_multi_agg.cu"
 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/not_ignore_null_keys/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/not_ignore_null_keys/legacy/single_column_sum.cu"
 )
 
-ConfigureTest(SORT_GROUPBY_TEST "${SORT_GROUPBY_TEST_SRC}")
+ConfigureTest(LEGACY_SORT_GROUPBY_TEST "${LEGACY_SORT_GROUPBY_TEST_SRC}")
 
-set(GROUPBY_WO_AGG_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/single_column_groupby.cu"
+set(LEGACY_GROUPBY_WO_AGG_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/legacy/groupby_wo_agg_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/legacy/single_column_groupby.cu"
     )
 
-ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
+ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
@@ -265,10 +265,10 @@ ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
-set(UNARY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cu")
+set(LEGACY_UNARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
 
-ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
+ConfigureTest(LEGACY_UNARY_TEST "${LEGACY_UNARY_TEST_SRC}")
 
 ###################################################################################################
 # - binary tests ----------------------------------------------------------------------------------
@@ -475,21 +475,13 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - point in polygon test --------------------------------------------------------------------------
+# - legacy filling test ---------------------------------------------------------------------------
 
-set(GIS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu")
+set(LEGACY_FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/filling_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu")
 
-ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
-
-###################################################################################################
-# - filling test --------------------------------------------------------------------------
-
-set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
-
-ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+ConfigureTest(LEGACY_FILLING_TEST "${LEGACY_FILLING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy search test -----------------------------------------------------------------------------------
