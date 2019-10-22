@@ -72,7 +72,7 @@ test:
     - test -f $PREFIX/include/cudf/legacy/join.hpp
     - test -f $PREFIX/include/cudf/predicates.hpp
     - test -f $PREFIX/include/cudf/reduction.hpp
-    - test -f $PREFIX/include/cudf/replace.hpp
+    - test -f $PREFIX/include/cudf/legacy/replace.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
     - test -f $PREFIX/include/cudf/legacy/search.hpp
     - test -f $PREFIX/include/cudf/stream_compaction.hpp
