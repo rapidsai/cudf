@@ -30,6 +30,7 @@
 - PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #2955 Add cmake option to only build for present GPU architecture
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
 - PR #3093 Move groupby files to legacy
