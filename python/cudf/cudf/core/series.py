@@ -1167,9 +1167,10 @@ class Series(object):
         if self.name is None:
             result = result[0]
             result.name = None
-            return result
         else:
-            return result[self.name]
+            result = result[self.name]
+        result._column.name = self._column.name
+        return result
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1417,7 +1418,7 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
@@ -1433,10 +1434,26 @@ class Series(object):
             Copy of ``self`` cast to the given dtype. Returns
             ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
+        if errors not in ("ignore", "raise", "warn"):
+            raise ValueError("invalid error value specified")
+
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
+        try:
+            return self._copy_construct(
+                data=self._column.astype(dtype, **kwargs)
+            )
+        except Exception as e:
+            if errors == "raise":
+                raise e
+            elif errors == "warn":
+                import traceback
 
-        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
+                tb = traceback.format_exc()
+                warnings.warn(tb)
+            elif errors == "ignore":
+                pass
+            return self
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
