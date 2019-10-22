@@ -544,6 +544,11 @@ class DataFrame(object):
     def __str__(self):
         return self.to_string()
 
+    def astype(self, dtype, errors="raise", **kwargs):
+        return self._apply_support_method(
+            "astype", dtype, errors=errors, **kwargs
+        )
+
     def get_renderable_dataframe(self):
         nrows = np.max([pd.options.display.max_rows, 1])
         if pd.options.display.max_rows == 0:
@@ -3341,9 +3346,9 @@ class DataFrame(object):
             }
 
         df = cls()
-        for col in table.columns:
+        for name, col in zip(table.schema.names, table.columns):
             if dtypes:
-                dtype = dtypes[col.name]
+                dtype = dtypes[name]
                 if dtype == "categorical":
                     dtype = "category"
                 elif dtype == "date":
@@ -3351,7 +3356,7 @@ class DataFrame(object):
             else:
                 dtype = None
 
-            df[col.name] = column.as_column(col.data, dtype=dtype)
+            df[name] = column.as_column(col, dtype=dtype, name=name)
         if index_col:
             if isinstance(index_col[0], dict):
                 assert index_col[0]["kind"] == "range"
@@ -3691,9 +3696,10 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(self, method, **kwargs):
+    def _apply_support_method(self, method, *args, **kwargs):
         result = [
-            getattr(self[col], method)(**kwargs) for col in self._cols.keys()
+            getattr(self[col], method)(*args, **kwargs)
+            for col in self._cols.keys()
         ]
         if isinstance(result[0], Series):
             support_result = result
