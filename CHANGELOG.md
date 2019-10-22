@@ -6,10 +6,12 @@
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
+- PR #3022 adds DataFrame.astype for cuDF dataframes
 - PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
+- PR #3079 Added support to write ORC files given a local path
 
 ## Improvements
 
@@ -20,26 +22,35 @@
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3026 Move fill and repeat files to legacy
 - PR #3027 Move copying.hpp and related source to legacy folder
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3052 Moved replace.hpp functionality to legacy
 - PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #2955 Add cmake option to only build for present GPU architecture
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
+- PR #3093 Move groupby files to legacy
+- PR #2988 Removing GIS functionality (now part of cuSpatial library)
 - PR #3067 Java method to return size of device memory buffer
 - PR #3083 Improved some binary operation tests to include null testing.
+- PR #3084 Update to arrow-cpp and pyarrow 0.15.0
 - PR #3071 Move cuIO to legacy
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
+- PR #3138 Movey unary files to legacy
 - PR #3165 Java device memory size for string category
 
 ## Bug Fixes
 
+- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
@@ -47,9 +58,10 @@
 - PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
+- PR #3168 Fix mutable_column_device_view head const_cast
 
 
-# cuDF 0.10.0 (Date TBD)
+# cuDF 0.10.0 (16 Oct 2019)
 
 ## New Features
 

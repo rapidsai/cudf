@@ -1,7 +1,7 @@
 #include <utility>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <cudf/replace.hpp>
+#include <cudf/legacy/replace.hpp>
 #include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
 #include <nvstrings/NVCategory.h>
