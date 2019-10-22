@@ -1,12 +1,12 @@
-cimport cudf._libxx.lib as libcuxx
+cimport cudf._libxx.lib as libcudf
 
 cdef class Column:
-    cdef libcuxx.column *c_obj
+    cdef libcudf.column *c_obj
 
 cdef class ColumnView:
     cdef Column owner
-    cdef libcuxx.column_view *c_obj
+    cdef libcudf.column_view *c_obj
 
 cdef class MutableColumnView:
     cdef Column owner
-    cdef libcuxx.mutable_column_view *c_obj
+    cdef libcudf.mutable_column_view *c_obj

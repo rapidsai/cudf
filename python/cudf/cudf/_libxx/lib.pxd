@@ -1,6 +1,7 @@
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 
@@ -86,3 +87,27 @@ cdef extern from "column/column_view.hpp" namespace "cudf" nogil:
         bool has_nulls()
         const bitmask_type * null_mask()
         size_type offset()
+
+cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
+    cdef cppclass table_view:
+        table_view(const vector[column_view])
+        column_view column(size_type column_index)
+        size_type num_columns()
+        size_type num_rows()
+
+    cdef cppclass mutable_table_view:
+        mutable_table_view(const vector[mutable_column_view])
+        mutable_column_view column(size_type column_index)
+        size_type num_columns()
+        size_type num_rows()
+
+cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
+    cdef cppclass table:
+        table(const table&)
+        table(vector[unique_ptr[column]]&& columns)
+        table(table_view)
+        size_type num_columns()
+        table_view view()
+        mutable_table_view mutable_view()
+        vector[unique_ptr[column]] release()
+
