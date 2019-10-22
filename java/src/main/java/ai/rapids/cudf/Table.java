@@ -870,17 +870,6 @@ public final class Table implements AutoCloseable {
     return new Table(gdfFilter(nativeHandle, mask.getNativeCudfColumnAddress()));
   }
 
-  /**
-   * Used strictly for testing
-   * @param index - The index at which we want to replace the vector
-   * @param columnVector - The new vector to be used
-   */
-  void replaceColumn(int index, ColumnVector columnVector) {
-    ColumnVector oldVector = columns[index];
-    columns[index] = columnVector;
-    oldVector.close();
-  }
-
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
