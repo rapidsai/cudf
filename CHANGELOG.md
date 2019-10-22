@@ -46,6 +46,7 @@
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Movey unary files to legacy
+- PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
 
 
 ## Bug Fixes
