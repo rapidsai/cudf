@@ -45,7 +45,8 @@
 - PR #3128 Support MultiIndex in DataFrame.join
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3138 Move unary files to legacy
+- PR #3170 Port NVStrings substring functions to cudf strings column
 
 
 ## Bug Fixes
@@ -60,7 +61,7 @@
 - PR #3168 Fix mutable_column_device_view head const_cast
 
 
-# cuDF 0.10.0 (Date TBD)
+# cuDF 0.10.0 (16 Oct 2019)
 
 ## New Features
 
