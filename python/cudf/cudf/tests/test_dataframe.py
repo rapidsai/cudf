@@ -3951,12 +3951,7 @@ def test_series_astype_error_handling(errors):
         "float32",
         "float64",
         "str",
-        pytest.param(
-            "category",
-            marks=pytest.mark.xfail(
-                reason=".categories.name not reset when assigned"
-            ),
-        ),
+        "category",
         "datetime64[s]",
         "datetime64[ms]",
         "datetime64[us]",
