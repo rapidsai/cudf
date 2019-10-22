@@ -108,7 +108,7 @@ if hasArg clean; then
 fi
 
 if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-    GPU_ARCH=""
+    GPU_ARCH="-DGPU_ARCHS="
     echo "Building for the architecture of the GPU in the system..."
 else
     GPU_ARCH="-DGPU_ARCHS=ALL"
