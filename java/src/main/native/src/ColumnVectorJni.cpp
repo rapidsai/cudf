@@ -577,8 +577,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemoryStringSi
       NVCategory *cats = static_cast<NVCategory *>(column->dtype_info.category);
       unsigned long dict_size = cats->keys_size();
       unsigned long dict_size_total = dict_size * GDF_INT32;
-      /*NOTE: Assumption being made that strings in each row is of 10 chars. So the result would be approximate.
-       custring_view structure is allocated 8B and 16B for 10 chars as it is aligned to 8 bytes. */
+      // NOTE: Assumption being made that strings in each row is of 10 chars. So the result would be approximate.
+      // custring_view structure is allocated 8B and 16B for 10 chars as it is aligned to 8 bytes.
       unsigned long category_size_total = dict_size * 24;
       return static_cast<jlong>(category_size_total + dict_size_total);
     } else {
