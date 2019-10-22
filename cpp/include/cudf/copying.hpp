@@ -113,8 +113,8 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * @return vector<std::unique_ptr<column_view>> A vector of `column_view` unique_ptr each of which may have a different number of rows. 
  */
 
-std::vector<std::unique_ptr<column_view>> slice(column_view const& input,
-                                                std::vector<size_type> const& indices);
+std::vector<column_view> slice(column_view const& input,
+                               std::vector<size_type> const& indices);
 
 /**
  * @brief Splits a `column_view` (including null values) into a set of `column_view`s
@@ -149,8 +149,8 @@ std::vector<std::unique_ptr<column_view>> slice(column_view const& input,
  * @param indices A vector indices that are used to split the `input`
  * @return vector<std::unique_ptr<column_view>> A vector of `column_view` unique_ptr each of which may have a different number of rows. 
  */
-std::vector<std::unique_ptr<column_view>> split(column_view const& input,
-                                                std::vector<size_type> const& splits);
+std::vector<column_view> split(column_view const& input,
+                               std::vector<size_type> const& splits);
 
 }  // namespace experimental
 }  // namespace cudf

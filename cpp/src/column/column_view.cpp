@@ -80,21 +80,28 @@ column_view::column_view(data_type type, size_type size, void const* data,
 }
 
 // Slicer for immutable view
-std::unique_ptr<column_view> column_view::slice(size_type slice_offset, 
-                                                size_type slice_size) const {
-   size_type expecetd_size = offset() + slice_offset + slice_size;
+column_view slice(column_view const& input,
+                  size_type slice_offset,
+                  size_type slice_size) {
+   size_type expecetd_size = input.offset() + slice_offset + slice_size;
    CUDF_EXPECTS(slice_size >= 0, "size should be non negative value");
    CUDF_EXPECTS(slice_offset >= 0, "offset should be non negative value");
-   CUDF_EXPECTS(expecetd_size <= size(), "Expected slice exceeds the size of the column_view");
+   CUDF_EXPECTS(expecetd_size <= input.size(), "Expected slice exceeds the size of the column_view");
 
    // If an empty `column_view` is created, it will not have null_mask. So this will help in
    // comparing in such situation.
-   auto tmp_null_mask = (slice_size > 0)? null_mask() : nullptr;
+   auto tmp_null_mask = (slice_size > 0)? input.null_mask() : nullptr;
 
-   return std::make_unique<column_view>(type(), slice_size, 
-                                        head(), tmp_null_mask,
-                                        cudf::UNKNOWN_NULL_COUNT, 
-                                        offset() + slice_offset, _children);
+   std::vector<column_view> children {};
+   children.reserve(input.num_children());
+   for (size_type index = 0; index < input.num_children(); index++) {
+       children.emplace_back(input.child(index));
+   }
+
+   return column_view(input.type(), slice_size,
+                      input.head(), tmp_null_mask,
+                      cudf::UNKNOWN_NULL_COUNT,
+                      input.offset() + slice_offset, children);
 }
 
 

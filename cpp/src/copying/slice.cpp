@@ -28,11 +28,11 @@ namespace experimental {
 
 namespace detail {
 
-std::vector<std::unique_ptr<cudf::column_view>> slice(cudf::column_view const& input,
+std::vector<cudf::column_view> slice(cudf::column_view const& input,
                                                 std::vector<size_type> const& indices){
 
     CUDF_EXPECTS(indices.size()%2 == 0, "indices size must be even");
-    std::vector<std::unique_ptr<cudf::column_view>> result{};
+    std::vector<cudf::column_view> result{};
 
     if(indices.size() == 0 or input.size() == 0) {
         return result;
@@ -47,7 +47,7 @@ std::vector<std::unique_ptr<cudf::column_view>> slice(cudf::column_view const& i
         indices_tuple.push_back(std::make_pair(*it_start, *it_end));
     }
     const auto slicer = [&input] (auto indices) {
-             return input.slice(indices.first, indices.second-indices.first);
+             return slice(input, indices.first, indices.second-indices.first);
     }; 
 
     std::transform(indices_tuple.begin(), indices_tuple.end(), std::back_inserter(result),
@@ -56,7 +56,7 @@ std::vector<std::unique_ptr<cudf::column_view>> slice(cudf::column_view const& i
 };
 
 }
-std::vector<std::unique_ptr<cudf::column_view>> slice(cudf::column_view const&  input,
+std::vector<cudf::column_view> slice(cudf::column_view const&  input,
                                                 std::vector<size_type> const & indices){
     return detail::slice(input, indices);
 }

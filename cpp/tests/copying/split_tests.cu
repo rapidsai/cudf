@@ -106,12 +106,12 @@ TYPED_TEST(SplitTest, SplitEndLessThanSize) {
 
     std::vector<cudf::size_type> splits{2, 5, 7};
     std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(splits, size, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col, splits);
+    std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
 
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_columns_equal(expected[index], *(result[index]));
+        cudf::test::expect_columns_equal(expected[index], result[index]);
     }
 }
 
@@ -126,12 +126,12 @@ TYPED_TEST(SplitTest, SplitEndToSize) {
 
     std::vector<cudf::size_type> splits{2, 5, 10};
     std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(splits, size, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col, splits);
+    std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
 
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_columns_equal(expected[index], *(result[index]));
+        cudf::test::expect_columns_equal(expected[index], result[index]);
     }
 }
 
@@ -145,12 +145,12 @@ TEST_F(SplitStringTest, StringWithInvalids) {
     std::vector<cudf::size_type> splits{2, 5, 9};
 
     std::vector<cudf::test::strings_column_wrapper> expected = create_expected_string_columns_for_splits(strings, splits, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(s, splits);
+    std::vector<cudf::column_view> result = cudf::experimental::split(s, splits);
 
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_column_properties_equal(expected[index], *(result[index]));
+        cudf::test::expect_column_properties_equal(expected[index], result[index]);
     }
 }
 
@@ -160,7 +160,7 @@ TEST_F(SplitCornerCases, EmptyColumn) {
     cudf::column col {};
     std::vector<cudf::size_type> splits{2, 5, 9};
 
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col.view(), splits);
+    std::vector<cudf::column_view> result = cudf::experimental::split(col.view(), splits);
 
     unsigned long expected = 0;
 
@@ -175,7 +175,7 @@ TEST_F(SplitCornerCases, EmptyIndices) {
     cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns_for_splits<int8_t>(start, size, valids);
     std::vector<cudf::size_type> splits{};
 
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::split(col, splits);
+    std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
 
     unsigned long expected = 0;
 
