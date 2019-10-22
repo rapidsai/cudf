@@ -3875,7 +3875,7 @@ class DataFrame(object):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None):
+    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -3887,6 +3887,8 @@ class DataFrame(object):
             Scatter assignment for each row
         map_size : int
             Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
 
         Returns
         -------
@@ -3920,9 +3922,17 @@ class DataFrame(object):
                 "Use an integer array/column for better performance."
             )
 
+        if keep_index:
+            if isinstance(self.index, cudf.MultiIndex):
+                index = self.index.to_frame()._columns
+            else:
+                index = [self.index.as_column()]
+        else:
+            index = None
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
-            self._columns, map_index._column
+            self._columns, map_index._column, index
         )
 
         if map_size:
@@ -3935,7 +3945,7 @@ class DataFrame(object):
 
             # Append empty dataframes if map_size > len(tables)
             for i in range(map_size - len(tables)):
-                tables.append(self.iloc[[]])
+                tables.append(self.take([]))
         return tables
 
     def repeat(self, repeats, axis=None):
