@@ -33,9 +33,9 @@ namespace detail {
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
- *
- * Creates a new table by repeating the rows of @p input_table. The number of
- * repetitions of each element is defined by the value at the corresponding
+ * 
+ * Creates a new table by repeating the rows of @p input_table. The number of 
+ * repetitions of each element is defined by the value at the corresponding 
  * index of @p count
  * Example:
  * ```
@@ -43,10 +43,17 @@ namespace detail {
  * count = [1,2,3]
  * return = [4,5,5,6,6,6]
  * ```
- * @p count should be non-nullable; should not contain negative values; and the
- * sum of count elements should not overflow the size_type's limit. It is
- * undefined behavior if @p count has negative values or the sum overflows and
- * @p check_count is set to false.
+ * @p count should not have null values; should not contain negative values;
+ * and the sum of count elements should not overflow the size_type's limit.
+ * It is undefined behavior if @p count has negative values or the sum overflows
+ * and @p check_count is set to false.
+ *
+ * @throws `cudf::logic_error` if the data type of @p count is not size_type.
+ * @throws `cudf::logic_error` if @p input_table and @p count have different
+ * number of rows.
+ * @throws `cudf::logic_error` if @p count has null values.
+ * @throws `cudf::logic_error` if @p check_count is set to true and @p count
+ * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
  * @param count Non-nullable column of a integral type
@@ -62,7 +69,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
- *
+ * 
  * Creates a new table by repeating @p count times the rows of @p input_table.
  * Example:
  * ```
@@ -70,8 +77,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * count = 2
  * return = [4,4,5,5,6,6]
  * ```
- * @p count should be non-null and should hold a non-negative value.
- *
+ * @throws `cudf::logic_error` if the data type of @p count is not size_type.
+ * @throws `cudf::logic_error` if @p count is invalid or @p count is negative.
+ * @throws `cudf::logic_error` if @p input_table.num_rows() * @p count overflows
+ * size_type.
+ * 
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
  * @param stream CUDA stream to run this function

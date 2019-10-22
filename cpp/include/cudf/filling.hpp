@@ -29,17 +29,24 @@ namespace cudf {
 namespace experimental {
 
 /**---------------------------------------------------------------------------*
- * @brief Fills a range of elements in a column with a scalar value.
+ * @brief Fills a range of elements in-place in a column with a scalar value.
  * 
  * Fills N elements of @p destination starting at @p begin with @p value, where
  * N = (@p end - @p begin).
  *
- * The datatypes of @p destination and @p value must be the same. This function
- * assumes that no memory reallocation is necessary for @p destination. This
- * function updates in-place and throws an exception if memory reallocation is
- * necessary (e.g. for variable width types). Use the out-of-place fill function
- * returning std::unique_ptr<column> for use cases requiring memory
- * reallocation.
+ * This function updates in-place assuming that no memory reallocation is
+ * necessary for @p destination. Use the out-of-place fill function returning
+ * std::unique_ptr<column> for use cases requiring memory reallocation.
+ *
+ * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
+ * variable width types).
+ * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
+ * @p begin > @p end, @p begin >= @p destination.size(), or
+ * @p end > @p destination.size()).
+ * @throws `cudf::logic_error` if @p destination and @p value have different
+ * types.
+ * @throws `cudf::logic_error` if @p value is invalid but @p destination is not
+ * nullable.
  *
  * @param destination The preallocated column to fill into
  * @param begin The starting index of the fill range
@@ -51,14 +58,21 @@ void fill(mutable_column_view& destination, size_type begin, size_type end,
           gdf_scalar const& value);
 
 /**---------------------------------------------------------------------------*
- * @brief Fills a range of elements in a column with a scalar value.
+ * @brief Fills a range of elements in a column out-of-place with a scalar
+ * value.
  * 
  * This fill function updates out-of-place creating a new column object to
  * return. The returned column holds @p value for N elements from @p begin,
- * where N = (@p end - @p begin). The returned column stores same values to
- * @p input outside the fill range.
+ * where N = (@p end - @p begin). The returned column stores the same values to
+ * @p input outside the fill range (i.e. the returned column stores the fill
+ * value in [@p begin, @p end) and has the same values to @p input in
+ * [0, @p begin) and [@p end, @p input.size()).
  *
- * The datatypes of @p input and @p value must be the same.
+ * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
+ * @p begin > @p end, @p begin >= @p destination.size(), or
+ * @p end > @p destination.size()).
+ * @throws `cudf::logic_error` if @p destination and @p value have different
+ * types.
  *
  * @param input The input column used to create a new column. The new column
  * is created by replacing the values of @p input in the specified range with
@@ -86,10 +100,17 @@ std::unique_ptr<column> fill(
  * count = [1,2,3]
  * return = [4,5,5,6,6,6]
  * ```
- * @p count should be non-nullable; should not contain negative values; and the
- * sum of count elements should not overflow the size_type's limit. It is
- * undefined behavior if @p count has negative values or the sum overflows and
- * @p check_count is set to false.
+ * @p count should not have null values; should not contain negative values;
+ * and the sum of count elements should not overflow the size_type's limit.
+ * It is undefined behavior if @p count has negative values or the sum overflows
+ * and @p check_count is set to false.
+ *
+ * @throws `cudf::logic_error` if the data type of @p count is not size_type.
+ * @throws `cudf::logic_error` if @p input_table and @p count have different
+ * number of rows.
+ * @throws `cudf::logic_error` if @p count has null values.
+ * @throws `cudf::logic_error` if @p check_count is set to true and @p count
+ * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
  * @param count Non-nullable column of a integral type
@@ -99,7 +120,7 @@ std::unique_ptr<column> fill(
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(
     table_view const& input_table, column_view const& count,
-    bool check_nonnegative = false,
+    bool check_count = false,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
@@ -112,7 +133,10 @@ std::unique_ptr<table> repeat(
  * count = 2
  * return = [4,4,5,5,6,6]
  * ```
- * @p count should be non-null and should hold a non-negative value.
+ * @throws `cudf::logic_error` if the data type of @p count is not size_type.
+ * @throws `cudf::logic_error` if @p count is invalid or @p count is negative.
+ * @throws `cudf::logic_error` if @p input_table.num_rows() * @p count overflows
+ * size_type.
  * 
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
