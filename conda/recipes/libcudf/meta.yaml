@@ -31,7 +31,7 @@ requirements:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 0.14.1.*
+    - arrow-cpp 0.15.0.*
     - double-conversion
     - rapidjson
     - flatbuffers
@@ -39,7 +39,7 @@ requirements:
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - arrow-cpp 0.14.1.*
+    - arrow-cpp 0.15.0.*
     - dlpack
 
 test:
@@ -59,9 +59,9 @@ test:
     - test -f $PREFIX/include/cudf/cudf.h
     - test -f $PREFIX/include/cudf/digitize.hpp
     - test -f $PREFIX/include/cudf/datetime.hpp
-    - test -f $PREFIX/include/cudf/filling.hpp
+    - test -f $PREFIX/include/cudf/legacy/filling.hpp
     - test -f $PREFIX/include/cudf/legacy/functions.h
-    - test -f $PREFIX/include/cudf/groupby.hpp
+    - test -f $PREFIX/include/cudf/legacy/groupby.hpp
     - test -f $PREFIX/include/cudf/legacy/io_functions.h
     - test -f $PREFIX/include/cudf/legacy/io_functions.hpp
     - test -f $PREFIX/include/cudf/legacy/io_readers.hpp
