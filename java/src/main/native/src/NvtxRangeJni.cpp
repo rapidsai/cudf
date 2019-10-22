@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "cudf/cudf.h"
+#include <cudf/utilities/nvtx_utils.hpp>
 
 #include "jni_utils.hpp"
 
@@ -27,7 +28,7 @@ Java_ai_rapids_cudf_NvtxRange_push(JNIEnv *env, jclass clazz,
     jstring name, jint color_bits) {
   try {
     cudf::jni::native_jstring range_name(env, name);
-    JNI_GDF_TRY(env, , gdf_nvtx_range_push_hex(range_name.get(), color_bits));
+    cudf::nvtx::range_push_hex(range_name.get(), color_bits);
   }
   CATCH_STD(env, );
 }
@@ -35,7 +36,7 @@ Java_ai_rapids_cudf_NvtxRange_push(JNIEnv *env, jclass clazz,
 JNIEXPORT void JNICALL
 Java_ai_rapids_cudf_NvtxRange_pop(JNIEnv *env, jclass clazz) {
   try {
-    JNI_GDF_TRY(env, , gdf_nvtx_range_pop());
+    cudf::nvtx::range_pop();
   }
   CATCH_STD(env, );
 }
