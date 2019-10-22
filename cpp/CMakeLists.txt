@@ -330,6 +330,7 @@ add_library(cudf
             src/orderby/legacy/orderby.cu
             src/predicates/is_sorted.cu
             src/sort/legacy/digitize.cu
+            src/digitize/digitize.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/sort_helper.cu
             src/groupby/sort/groupby.cu
