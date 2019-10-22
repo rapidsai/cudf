@@ -353,8 +353,7 @@ __device__ inline string_view string_view::substr(size_type pos, size_type lengt
         epos = size_bytes();
     if(spos >= epos)
         return string_view("",0);
-    length = epos - spos; // converts length to bytes
-    return string_view(data()+spos,length);
+    return string_view(data()+spos,epos-spos);
 }
 
 __device__ inline size_type string_view::split(const char* delim, int count, string_view* strs) const
@@ -405,7 +404,7 @@ __device__ inline size_type string_view::split(const char* delim, int count, str
     return rtn;
 }
 
-
+//
 __device__ inline size_type string_view::rsplit(const char* delim, int count, string_view* strs) const
 {
     const char* sptr = data();
