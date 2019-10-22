@@ -436,6 +436,7 @@ add_library(cudf
             src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
+            src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/column/legacy/interop.cpp
             src/scalar/scalar.cpp

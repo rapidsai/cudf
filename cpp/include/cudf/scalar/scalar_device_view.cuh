@@ -175,6 +175,10 @@ auto get_scalar_device_view(numeric_scalar<T>& s) {
   return numeric_scalar_device_view<T>(s.type(), s.data(), s.valid_mask());
 }
 
+auto get_scalar_device_view(string_scalar& s) {
+  return string_scalar_device_view(s.type(), s.data(), s.valid_mask(), s.size());
+}
+
 template <typename T>
 auto get_scalar_device_view(timestamp_scalar<T>& s) {
   return timestamp_scalar_device_view<T>(s.type(), s.data(), s.valid_mask());

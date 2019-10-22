@@ -15,6 +15,8 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -136,4 +138,13 @@ TEST_F(FactoriesTest, CreateColumnFromOffsets)
     thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second);
     EXPECT_EQ( memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0 );
     EXPECT_EQ( memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size()*sizeof(cudf::size_type)), 0);
+}
+
+TEST_F(FactoriesTest, CreateScalar)
+{
+    std::string value = "test string";
+    auto s = cudf::make_string_scalar(value);
+    auto string_s = static_cast<cudf::string_scalar*>(s.get());
+
+    EXPECT_EQ(string_s->value(), value);
 }

@@ -49,7 +49,7 @@ TYPED_TEST(NumericScalarFactory, FactoryDefault) {
   EXPECT_FALSE(s->is_valid());
 }
 
-TYPED_TEST(NumericScalarFactory, DynamicCast) {
+TYPED_TEST(NumericScalarFactory, TypeCast) {
   std::unique_ptr<cudf::scalar> s = this->factory(
     cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
     this->stream(), this->mr());
@@ -81,7 +81,7 @@ TYPED_TEST(TimestampScalarFactory, FactoryDefault) {
   EXPECT_FALSE(s->is_valid());
 }
 
-TYPED_TEST(TimestampScalarFactory, DynamicCast) {
+TYPED_TEST(TimestampScalarFactory, TypeCast) {
   std::unique_ptr<cudf::scalar> s = this->factory(
     cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
     this->stream(), this->mr());

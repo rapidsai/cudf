@@ -16,34 +16,16 @@
 
 #include <cudf/scalar/scalar.hpp>
 
-#include <rmm/device_buffer.hpp>
-
-#include <string>
-
 namespace cudf {
 
-// Copy constructor
-scalar::scalar(scalar const &other)
-    : _type{other._type},
-      _is_valid{other._is_valid} {}
-
-// Move constructor
-scalar::scalar(scalar &&other)
-    : _type{other._type},
-      _is_valid{std::move(other._is_valid)}
+// Create a strings-type column from array of pointer/size pairs
+std::unique_ptr<scalar> make_string_scalar(
+    std::string const& string,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
 {
-  other._type = data_type{EMPTY};
-}
-
-string_scalar::string_scalar(std::string const& string, bool is_valid)
- : scalar(data_type(STRING), is_valid), _data(string.data(), string.size())
-{}
-
-std::string string_scalar::value() const {
-  std::string result;
-  result.resize(_data.size());
-  CUDA_TRY(cudaMemcpy(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost));
-  return result;
+    auto s = new string_scalar(string, false);
+    return std::unique_ptr<scalar>(s);
 }
 
 }  // namespace cudf

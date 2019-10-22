@@ -46,8 +46,8 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value) {
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
-  CUDA_CHECK_LAST();
   test_value<<<1, 1>>>(scalar_device_view, value, result.get());
+  CUDA_CHECK_LAST();
 
   EXPECT_TRUE(result.value());
 }
@@ -63,8 +63,8 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
-  CUDA_CHECK_LAST();
   test_null<<<1, 1>>>(scalar_device_view, result.get());
+  CUDA_CHECK_LAST();
 
   EXPECT_FALSE(result.value());
 }
@@ -103,4 +103,30 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
   CUDA_CHECK_LAST();
 
   EXPECT_FALSE(s.is_valid());
+}
+
+
+struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};
+
+
+__global__ void test_string_value(cudf::string_scalar_device_view s, 
+                                  const char* value, cudf::size_type size,
+                                  bool* result)
+{
+  *result = (s.value() == cudf::string_view(value, size));
+}
+
+TEST_F(StringScalarDeviceViewTest, Value) {
+  std::string value("test string");
+  cudf::string_scalar s(value);
+  
+  auto scalar_device_view = cudf::get_scalar_device_view(s);
+  rmm::device_scalar<bool> result;
+  rmm::device_vector<char> value_v(value.begin(), value.end());
+
+  test_string_value<<<1, 1>>>(scalar_device_view, value_v.data().get(),
+                              value.size(), result.get());
+  CUDA_CHECK_LAST();
+
+  EXPECT_TRUE(result.value());  
 }

@@ -131,19 +131,15 @@ class string_scalar : public scalar {
   string_scalar() = default;
   ~string_scalar() = default;
 
-  // TODO: implement with copying string
-  string_scalar(std::string& string) : scalar(data_type(STRING), true) {}
+  string_scalar(std::string const& string, bool is_valid = true);
 
-  // std::string value() {} // TODO: implement
+  std::string value() const;
+  size_type size() const { return _data.size(); }
 
-  // TODO: implement
-  // string_scalar_device_view device_view() {
-  //   return string_scalar_device_view(this->_type, this->_data.data().get(),
-  //                                    this->_is_valid.get(), this->_data.size());
-  // }
+  const char* data() const { return static_cast<const char*>(_data.data()); }
 
  protected:
-  rmm::device_vector<char> _data{};  ///< device memory containing the string
+  rmm::device_buffer _data{};  ///< device memory containing the string
 };
 
 template <typename T>

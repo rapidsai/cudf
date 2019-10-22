@@ -102,3 +102,30 @@ TYPED_TEST(TypedScalarTest, CopyConstructor) {
 
 //   EXPECT_FALSE(s.is_valid());
 // }
+
+
+struct StringScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(StringScalarTest, DefaultValidity) {
+  std::string value = "test string";
+  auto s = cudf::string_scalar(value);
+
+  EXPECT_TRUE(s.is_valid());
+  EXPECT_EQ(value, s.value());
+}
+
+TEST_F(StringScalarTest, ConstructNull) {
+  auto s = cudf::string_scalar();
+
+  EXPECT_FALSE(s.is_valid());
+}
+
+TEST_F(StringScalarTest, CopyConstructor) {
+  std::string value = "test_string";
+  auto s = cudf::string_scalar(value);
+  auto s2 = s;
+
+  EXPECT_TRUE(s2.is_valid());
+  EXPECT_EQ(value, s2.value());
+}
+
