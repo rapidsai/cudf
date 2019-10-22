@@ -400,6 +400,7 @@ add_library(cudf
             src/reductions/scan.cu
             src/transpose/legacy/transpose.cu
             src/merge/merge.cu
+            src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
