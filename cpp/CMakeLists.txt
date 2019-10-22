@@ -61,9 +61,32 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     endif(CMAKE_CXX11_ABI)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
-#set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
+# Auto-detect available GPU compute architectures
+set(GPU_ARCHS "ALL" CACHE STRING
+  "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
+
+if("${GPU_ARCHS}" STREQUAL "")
+  include(cmake/EvalGpuArchs.cmake)
+  evaluate_gpu_archs(GPU_ARCHS)
+endif()
+
+if("${GPU_ARCHS}" STREQUAL "ALL")
+  set(GPU_ARCHS "60")
+  if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+    set(GPU_ARCHS "${GPU_ARCHS};70")
+  endif()
+  if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
+    set(GPU_ARCHS "${GPU_ARCHS};75")
+  endif()
+endif()
+message("GPU_ARCHS = ${GPU_ARCHS}")
+
+foreach(arch ${GPU_ARCHS})
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
+endforeach()
+
+list(GET GPU_ARCHS -1 ptx)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
@@ -326,15 +349,15 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/strings/nvcategory_util.cpp
-            src/join/joining.cu
+            src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/is_sorted.cu
             src/sort/legacy/digitize.cu
-            src/groupby/hash/groupby.cu
-            src/groupby/sort/sort_helper.cu
-            src/groupby/sort/groupby.cu
-            src/groupby/groupby_without_aggregation.cu
-            src/groupby/common/aggregation_requests.cpp
+            src/groupby/hash/legacy/groupby.cu
+            src/groupby/sort/legacy/sort_helper.cu
+            src/groupby/sort/legacy/groupby.cu
+            src/groupby/legacy/groupby_without_aggregation.cu
+            src/groupby/common/legacy/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
@@ -373,12 +396,13 @@ add_library(cudf
             src/reductions/mean.cu
             src/reductions/var.cu
             src/reductions/std.cu
-            src/replace/replace.cu
+            src/replace/legacy/replace.cu
             src/reductions/scan.cu
             src/transpose/legacy/transpose.cu
             src/merge/merge.cu
-            src/unary/math_ops.cu
-            src/unary/cast_ops.cu
+            src/unary/legacy/math_ops.cu
+            src/unary/legacy/cast_ops.cu
+            src/unary/legacy/null_ops.cu
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
@@ -414,6 +438,7 @@ add_library(cudf
             src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/legacy/error_utils.cpp
+            src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
             src/copying/legacy/copy.cpp
@@ -422,10 +447,9 @@ add_library(cudf
             src/copying/legacy/slice.cu
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu
             src/copying/legacy/copy_range.cu
-            src/filling/fill.cu
-            src/filling/repeat.cu
+            src/filling/legacy/fill.cu
+            src/filling/legacy/repeat.cu
             src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp

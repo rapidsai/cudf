@@ -17,7 +17,7 @@
 #include "./utilities.h"
 
 #include <cudf/column/column_factories.hpp>
-#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/column_utilities.hpp>
 
 #include <cstring>
 #include <thrust/execution_policy.h>
