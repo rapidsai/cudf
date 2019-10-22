@@ -28,7 +28,7 @@ namespace cudf {
 namespace test {
 
 using time_point_ms = simt::std::chrono::time_point<
-  simt::std::chrono::steady_clock,
+  simt::std::chrono::system_clock,
   simt::std::chrono::milliseconds
 >;
 
