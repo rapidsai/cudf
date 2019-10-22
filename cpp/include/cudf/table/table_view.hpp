@@ -150,7 +150,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
   mutable_column_view& column(size_type column_index) const noexcept {
-    return const_cast<mutable_column_view&>(table_view_base::column(column_index));;
+    return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
   /**---------------------------------------------------------------------------*
    * @brief Creates an immutable `table_view` of the columns
