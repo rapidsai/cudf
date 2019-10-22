@@ -3878,6 +3878,7 @@ def test_df_astype_to_categorical_ordered(ordered):
         gdf.astype("int32", ordered=ordered),
     )
 
+
 @pytest.mark.parametrize(
     "errors",
     [
