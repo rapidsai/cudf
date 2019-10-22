@@ -80,7 +80,7 @@ std::vector<std::unique_ptr<column>> table::release() {
 }
 
 // Returns a table_view with set of specified columns
-table_view table::select(std::vector<gdf_size_type> const& column_indices) const {
+table_view table::select(std::vector<cudf::size_type> const& column_indices) const {
     CUDF_EXPECTS(column_indices.size() <= _columns.size(), "Requested too many columns.");
 
     std::vector<column_view> columns;

@@ -103,7 +103,7 @@ class table {
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
    *---------------------------------------------------------------------------**/
-  table_view select(std::vector<gdf_size_type> const& column_indices) const;
+  table_view select(std::vector<cudf::size_type> const& column_indices) const;
 
  private:
   std::vector<std::unique_ptr<column>> _columns{};
