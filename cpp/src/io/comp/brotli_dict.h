@@ -51,6 +51,9 @@ THE SOFTWARE.
 #ifndef __BROTLI_DICT_H__
 #define __BROTLI_DICT_H__
 
+namespace cudf {
+namespace io {
+
 struct brotli_dictionary_s {
     /**
     * Number of bits to encode index of dictionary word in a bucket.
@@ -78,5 +81,7 @@ struct brotli_dictionary_s {
 
 const brotli_dictionary_s *get_brotli_dictionary(void);
 
+} // namespace io
+} // namespace cudf
 
 #endif // __BROTLI_DICT_H__

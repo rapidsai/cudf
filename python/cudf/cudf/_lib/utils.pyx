@@ -10,6 +10,8 @@ from libcpp.vector cimport vector
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
+from io import BytesIO, StringIO
+
 
 cdef cudf_table* table_from_dataframe(df) except? NULL:
     cdef cudf_table* c_table
@@ -83,3 +85,23 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
         c_columns.push_back(c_col)
     c_table = new cudf_table(c_columns)
     return c_table
+
+
+cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer):
+    """
+    Util to obtain a 1-D char-typed memoryview into a Python buffer
+
+    Parameters
+    ----------
+    filepath_or_buffer : filepath or buffer
+        The Python object from which to retrieve a memoryview. To succeed, the
+        object needs to export the Python buffer protocol interface.
+    """
+    cdef const unsigned char[::1] buffer = None
+    if isinstance(filepath_or_buffer, BytesIO):
+        buffer = filepath_or_buffer.getbuffer()
+    elif isinstance(filepath_or_buffer, StringIO):
+        buffer = filepath_or_buffer.read().encode()
+    elif isinstance(filepath_or_buffer, bytes):
+        buffer = filepath_or_buffer
+    return buffer

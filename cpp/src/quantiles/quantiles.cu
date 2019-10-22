@@ -17,7 +17,7 @@
 //Quantile (percentile) functionality
 
 #include <cudf/cudf.h>
-#include <quantiles/quantiles.hpp>
+#include <quantiles/quantiles_util.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
@@ -33,7 +33,7 @@ namespace{ // anonymous
   // compute quantile value as `result` from `quant` value by `interpolation` method
   template<typename T, typename RetT>
   gdf_error select_quantile(T* devarr,
-                          gdf_size_type n,
+                          cudf::size_type n,
                           double quant, 
                           cudf::interpolation interpolation,
                           RetT& result,

@@ -94,18 +94,7 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
 
 
 @pytest.mark.parametrize(
-    "agg",
-    [
-        "sum",
-        pytest.param(
-            "min", marks=pytest.mark.xfail(reason="Pandas bug fixed in 0.24.2")
-        ),
-        pytest.param(
-            "max", marks=pytest.mark.xfail(reason="Pandas bug fixed in 0.24.2")
-        ),
-        "mean",
-        "count",
-    ],
+    "agg", ["sum", pytest.param("min"), pytest.param("max"), "mean", "count"]
 )
 def test_rolling_with_offset(agg):
     psr = pd.Series(

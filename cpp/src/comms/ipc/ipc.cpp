@@ -19,15 +19,3 @@ std::unique_ptr<arrow::ipc::MessageReader> CudaMessageReader::Open(arrow::cuda::
                                                                    arrow::io::BufferReader* schema) {
     return std::unique_ptr<arrow::ipc::MessageReader>(new CudaMessageReader(stream, schema));
 }
-
-// This pass-through class is declared because there's a bug in the pyarrow cython types
-
-arrow::Status CudaRecordBatchStreamReader::Open(std::unique_ptr<arrow::ipc::MessageReader> message_reader,
-                                                std::shared_ptr<RecordBatchReader>* out) {
-    return arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader), out);
-}
-
-arrow::Status CudaRecordBatchStreamReader::Open(std::unique_ptr<arrow::ipc::MessageReader> message_reader,
-                                                std::unique_ptr<RecordBatchReader>* out) {
-    return arrow::ipc::RecordBatchStreamReader::Open(std::move(message_reader), out);
-}

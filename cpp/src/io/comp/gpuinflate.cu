@@ -44,24 +44,10 @@ Mark Adler    madler@alumni.caltech.edu
 */
 
 #include "gpuinflate.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
-
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d)  __nanosleep(d)
-#else
-#define NANOSLEEP(d)  clock()
-#endif
+namespace cudf {
+namespace io {
 
 #define NUMTHREADS 128  // Threads per block
 
@@ -1149,8 +1135,8 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 
 
 // blockDim {128,1,1}
-extern "C" __global__ void __launch_bounds__(NUMTHREADS)
-inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count, int parse_hdr)
+__global__ void __launch_bounds__(NUMTHREADS)
+inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
 {
     __shared__ __align__(16) inflate_state_s state_g;
 
@@ -1158,10 +1144,6 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int c
     int z = blockIdx.x;
     inflate_state_s *state = &state_g;
     
-    if (z >= count)
-    {
-        return;
-    }
     if (!t)
     {
         uint8_t *p = (uint8_t *)inputs[z].srcDevice;
@@ -1278,14 +1260,84 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int c
 }
 
 
+// blockDim {1024,1,1}
+__global__ void __launch_bounds__(1024)
+copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
+{
+    __shared__ const uint8_t * volatile src_g;
+    __shared__ uint8_t * volatile dst_g;
+    __shared__ uint32_t volatile copy_len_g;
+
+    uint32_t t = threadIdx.x;
+    uint32_t z = blockIdx.x;
+    const uint8_t *src;
+    uint8_t *dst;
+    uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
+
+    if (!t) {
+        src = reinterpret_cast<const uint8_t *>(inputs[z].srcDevice);
+        dst = reinterpret_cast<uint8_t *>(inputs[z].dstDevice);
+        len = min((uint32_t)inputs[z].srcSize, (uint32_t)inputs[z].dstSize);
+        src_g = src;
+        dst_g = dst;
+        copy_len_g = len;
+    }
+    __syncthreads();
+    src = src_g;
+    dst = dst_g;
+    len = copy_len_g;
+    // Align output to 32-bit
+    dst_align_bytes = 3 & -reinterpret_cast<intptr_t>(dst);
+    if (dst_align_bytes != 0) {
+        uint32_t align_len = min(dst_align_bytes, len);
+        if (t < align_len) {
+            dst[t] = src[t];
+        }
+        src += align_len;
+        dst += align_len;
+        len -= align_len;
+    }
+    src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
+    src_align_bits = src_align_bytes << 3;
+    while (len >= 32) {
+        const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align_bytes);
+        uint32_t copy_cnt = min(len >> 2, 1024);
+        if (t < copy_cnt) {
+            uint32_t v = src32[t];
+            if (src_align_bits != 0) {
+                v = __funnelshift_r(v, src32[t + 1], src_align_bits);
+            }
+            reinterpret_cast<uint32_t *>(dst)[t] = v;
+        }
+        src += copy_cnt * 4;
+        dst += copy_cnt * 4;
+        len -= copy_cnt * 4;
+    }
+    if (t < len) {
+        dst[t] = src[t];
+    }
+}
+
+
+
 cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count, int parse_hdr, cudaStream_t stream)
 {
-    uint32_t count32 = (count > 0) ? count : 0;
-    dim3 dim_block(NUMTHREADS, 1);
-    dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
-
-    inflate_kernel << < dim_grid, dim_block, 0, stream >> >(inputs, outputs, count32, parse_hdr);
-
+    if (count > 0) {
+        inflate_kernel <<< count, NUMTHREADS, 0, stream >>>(inputs, outputs, parse_hdr);
+    }
     return cudaSuccess;
 }
+
+
+cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs, int count, cudaStream_t stream)
+{
+    if (count > 0) {
+        copy_uncompressed_kernel <<< count, 1024, 0, stream >>>(inputs);
+    }
+    return cudaSuccess;
+}
+
+
+} // namespace io
+} // namespace cudf
 

@@ -4,13 +4,12 @@ import functools
 import pickle
 import warnings
 
-import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
@@ -588,7 +587,10 @@ class StringColumn(column.TypedColumnBase):
 
     def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
-        return pd.Series(pd_series, index=index, name=self.name)
+        if index is not None:
+            pd_series.index = index
+        pd_series.name = self.name
+        return pd_series
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -606,7 +608,7 @@ class StringColumn(column.TypedColumnBase):
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
 
-        return self.to_arrow().to_pandas()
+        return self.to_arrow().to_pandas().array
 
     def serialize(self):
         header = {"null_count": self._null_count}
@@ -644,19 +646,6 @@ class StringColumn(column.TypedColumnBase):
             if isinstance(frame, memoryview):
                 sheader = header["subheaders"][i]
                 dtype = sheader["dtype"]
-                frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
-            elif not (
-                isinstance(frame, np.ndarray)
-                or numba.cuda.driver.is_device_memory(frame)
-            ):
-                # this is probably a ucp_py.BufferRegion memory object
-                # check the header for info -- this should be encoded from
-                # serialization process.  Lastly, `typestr` and `shape` *must*
-                # manually set *before* consuming the buffer as a DeviceNDArray
-                sheader = header["subheaders"][i]
-                frame.typestr = sheader.get("dtype", "B")
-                frame.shape = sheader.get("shape", len(frame))
                 frame = np.frombuffer(frame, dtype=dtype)
                 frame = cudautils.to_device(frame)
 

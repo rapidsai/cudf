@@ -31,6 +31,8 @@ import java.io.InputStream;
  * NOTE: Instances must be explicitly closed or native memory will be leaked!
  */
 public class HostMemoryBuffer extends MemoryBuffer {
+  private static final boolean defaultPreferPinned = Boolean.getBoolean(
+      "ai.rapids.cudf.prefer-pinned");
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   private static final class HostBufferCleaner extends MemoryCleaner.Cleaner {
@@ -56,8 +58,19 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
   }
 
-  HostMemoryBuffer(long address, long length) {
-    super(address, length, new HostBufferCleaner(address));
+  /**
+   * Factory method to create this buffer
+   * @param bytes - size in bytes to allocate
+   * @return - return this newly created buffer
+   */
+  public static HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
+    if (preferPinned) {
+      HostMemoryBuffer pinnedBuffer = PinnedMemoryPool.tryAllocate(bytes);
+      if (pinnedBuffer != null) {
+        return pinnedBuffer;
+      }
+    }
+    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
   }
 
   /**
@@ -66,7 +79,15 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @return - return this newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes) {
-    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
+    return allocate(bytes, defaultPreferPinned);
+  }
+
+  HostMemoryBuffer(long address, long length) {
+    super(address, length, new HostBufferCleaner(address));
+  }
+
+  HostMemoryBuffer(long address, long length, MemoryCleaner.Cleaner cleaner) {
+    super(address, length, cleaner);
   }
 
   private HostMemoryBuffer(long address, long lengthInBytes, HostMemoryBuffer parent) {
@@ -138,7 +159,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param dst       the data to be copied.
    */
   public final void getBytes(byte[] dst, long dstOffset, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0;
     assert len <= dst.length - dstOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + srcOffset;
@@ -152,7 +173,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data   the data to be copied.
    */
   public final void setBytes(long offset, byte[] data, long srcOffset, long len) {
-    assert len > 0 : "length is not allowed " + len;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + offset;

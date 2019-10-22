@@ -7,7 +7,7 @@ import numpy as np
 import six
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils import applyutils, cudautils
 

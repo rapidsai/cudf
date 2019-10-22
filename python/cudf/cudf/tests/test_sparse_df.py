@@ -4,7 +4,7 @@ import os.path
 import numpy as np
 import pytest
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.comm.gpuarrow import GpuArrowReader
 from cudf.core import DataFrame, Series

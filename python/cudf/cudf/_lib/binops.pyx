@@ -13,7 +13,7 @@ from libc.stdlib cimport free
 
 from libcpp.string cimport string
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.includes.binops cimport *
 
