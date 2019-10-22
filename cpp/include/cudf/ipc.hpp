@@ -16,13 +16,3 @@ class CudaMessageReader : arrow::ipc::MessageReader {
         arrow::io::BufferReader* host_schema_reader_ = nullptr;
         std::shared_ptr<arrow::cuda::CudaBufferReader> owned_stream_;
 };
-
-// This pass-through class is declared because there's a bug in the pyarrow cython types
-
-class CudaRecordBatchStreamReader : arrow::ipc::RecordBatchStreamReader {
-    public:
-        static arrow::Status Open(std::unique_ptr<arrow::ipc::MessageReader> message_reader,
-                                  std::shared_ptr<RecordBatchReader>* out);
-        static arrow::Status Open(std::unique_ptr<arrow::ipc::MessageReader> message_reader,
-                                  std::unique_ptr<RecordBatchReader>* out);
-};

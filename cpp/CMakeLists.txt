@@ -326,15 +326,15 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/strings/nvcategory_util.cpp
-            src/join/joining.cu
+            src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/is_sorted.cu
             src/sort/legacy/digitize.cu
-            src/groupby/hash/groupby.cu
-            src/groupby/sort/sort_helper.cu
-            src/groupby/sort/groupby.cu
-            src/groupby/groupby_without_aggregation.cu
-            src/groupby/common/aggregation_requests.cpp
+            src/groupby/hash/legacy/groupby.cu
+            src/groupby/sort/legacy/sort_helper.cu
+            src/groupby/sort/legacy/groupby.cu
+            src/groupby/legacy/groupby_without_aggregation.cu
+            src/groupby/common/legacy/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
@@ -379,6 +379,7 @@ add_library(cudf
             src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
+            src/unary/null_ops.cu
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
@@ -422,10 +423,9 @@ add_library(cudf
             src/copying/legacy/slice.cu
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu
             src/copying/legacy/copy_range.cu
-            src/filling/fill.cu
-            src/filling/repeat.cu
+            src/filling/legacy/fill.cu
+            src/filling/legacy/repeat.cu
             src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
