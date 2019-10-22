@@ -164,16 +164,8 @@ class DataFrame(object):
             if is_list_like(data) and len(data) > 0:
 
                 if isinstance(data[0], tuple):
-                    # treat each tuple as a row
-                    def to_col(rows, idx):
-                        return [r[idx] if idx < len(r) else None for r in rows]
-
-                    row_count = len(data)
-                    column_count = max(len(row) for row in data)
-                    data = {
-                        idx: to_col(data, idx) for idx in range(column_count)
-                    }
-                    index = self._index = RangeIndex(start=0, stop=row_count)
+                    index = self._index = RangeIndex(start=0, stop=len(data))
+                    data = enumerate(itertools.zip_longest(*data))
 
                 elif not isinstance(data[0], list):
                     # a nested list is something pandas supports and
@@ -183,14 +175,6 @@ class DataFrame(object):
 
             if isinstance(data, dict):
                 data = data.items()
-            # elif is_list_like(data) and len(data) > 0:
-            #     if isinstance(data[0], tuple):
-
-            #     elif not isinstance(data[0], list):
-            #         # a nested list is something pandas supports and
-            #         # we don't support list-like values in a record yet
-            #         self._add_rows(data, index, keys)
-            #         return
 
             for col_name, series in data:
                 self.add_column(col_name, series, forceindex=index is not None)
