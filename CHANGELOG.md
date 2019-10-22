@@ -46,10 +46,12 @@
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Movey unary files to legacy
+- PR #3175 Set cmake cuda version variables
 
 
 ## Bug Fixes
 
+- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
@@ -60,7 +62,7 @@
 - PR #3168 Fix mutable_column_device_view head const_cast
 
 
-# cuDF 0.10.0 (Date TBD)
+# cuDF 0.10.0 (16 Oct 2019)
 
 ## New Features
 
@@ -151,6 +153,7 @@
 - PR #2788 Guide to Python UDFs
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
+- PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
 
 ## Bug Fixes
 

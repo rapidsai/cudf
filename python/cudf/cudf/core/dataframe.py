@@ -166,6 +166,9 @@ class DataFrame(object):
         for col in self._cols:
             self._cols[col]._index = self._index
 
+        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
+        self._allow_setattr_to_setitem = True
+
     @property
     def _constructor(self):
         return DataFrame
@@ -270,6 +273,33 @@ class DataFrame(object):
             c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
+
+    def __setattr__(self, key, col):
+        if getattr(self, "_allow_setattr_to_setitem", False):
+            # if an attribute already exists, set it.
+            try:
+                object.__getattribute__(self, key)
+                object.__setattr__(self, key, col)
+                return
+            except AttributeError:
+                pass
+
+            # if a column already exists, set it.
+            try:
+                self[key]  # __getitem__ to verify key exists
+                self[key] = col
+                return
+            except KeyError:
+                pass
+
+            warnings.warn(
+                "Columns may not be added to a DataFrame using a new "
+                + "attribute name. A new attribute will be created: '%s'"
+                % key,
+                UserWarning,
+            )
+
+        object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
         if key != "_cols" and key in self._cols:
@@ -3875,7 +3905,7 @@ class DataFrame(object):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None):
+    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -3887,6 +3917,8 @@ class DataFrame(object):
             Scatter assignment for each row
         map_size : int
             Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
 
         Returns
         -------
@@ -3920,9 +3952,17 @@ class DataFrame(object):
                 "Use an integer array/column for better performance."
             )
 
+        if keep_index:
+            if isinstance(self.index, cudf.MultiIndex):
+                index = self.index.to_frame()._columns
+            else:
+                index = [self.index.as_column()]
+        else:
+            index = None
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
-            self._columns, map_index._column
+            self._columns, map_index._column, index
         )
 
         if map_size:
@@ -3935,7 +3975,7 @@ class DataFrame(object):
 
             # Append empty dataframes if map_size > len(tables)
             for i in range(map_size - len(tables)):
-                tables.append(self.iloc[[]])
+                tables.append(self.take([]))
         return tables
 
     def repeat(self, repeats, axis=None):
