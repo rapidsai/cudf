@@ -8,7 +8,7 @@
 from cudf._lib.cudf cimport *
 
 
-cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/filling.hpp" namespace "cudf" nogil:
 
     cdef void fill(
         gdf_column * column,
