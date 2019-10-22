@@ -310,8 +310,18 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
         with pytest.raises(ValueError):
             df.scatter_by_map("a", 1)  # Bad map_size
 
+    # Test GenericIndex
+    df2 = df.set_index("c")
+    generic_result = df2.scatter_by_map("b", map_size, keep_index=keep)
+    _check_scatter_by_map(generic_result, df2["b"])
+    if keep:
+        for frame in generic_result:
+            isinstance(frame.index, type(df2.index))
+
     # Test MultiIndex
-    df = df.set_index(["a", "c"])
-    _check_scatter_by_map(
-        df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
-    )
+    df2 = df.set_index(["a", "c"])
+    multiindex_result = df2.scatter_by_map("b", map_size, keep_index=keep)
+    _check_scatter_by_map(multiindex_result, df2["b"])
+    if keep:
+        for frame in multiindex_result:
+            isinstance(frame.index, type(df2.index))
