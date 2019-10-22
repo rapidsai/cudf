@@ -46,9 +46,11 @@ void print_column(cudf::column_view col) {
     1);
 }
 
-// TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::TimestampTypes);
+TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::TimestampTypes);
 
-TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::Types<cudf::timestamp_D>);
+// TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::Types<cudf::timestamp_D>);
+
+// TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::Types<cudf::timestamp_ms>);
 
 TYPED_TEST(DatetimeOpsTest, TimestampDurationsMatchPrimitiveRepresentation) {
 
@@ -68,41 +70,38 @@ TYPED_TEST(DatetimeOpsTest, TimestampDurationsMatchPrimitiveRepresentation) {
                                                    this->stream(), this->mr());
 
   cudf::mutable_column_view timestamp_view = *timestamp_col;
-  // auto timestamp_dev_view = cudf::column_device_view::create(timestamp_view);
 
   CUDA_TRY(cudaMemcpy(timestamp_view.data<Rep>(),
     thrust::raw_pointer_cast(test_timestamps.data()),
     test_timestamps.size() * sizeof(Rep), cudaMemcpyDefault));
 
-  print_column<Rep>(timestamp_view);
+  // print_column<Rep>(timestamp_view);
 
-  auto expected_years = fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033};
-  auto actual_years = *cudf::datetime::extract_year(timestamp_view);
-  print_column<int16_t>(expected_years);
-  print_column<int16_t>(actual_years);
-  expect_columns_equal(expected_years, actual_years);
+  expect_columns_equal(
+    *cudf::datetime::extract_year(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033});
 
-  // auto expected_months = fixed_width_column_wrapper<int16_t>{9, 7, 5, 3, 1, 0, 10, 8, 6, 4};
-  // auto actual_months = *cudf::datetime::extract_month(timestamp_view);
-  // expect_columns_equal(expected_months, actual_months);
+  expect_columns_equal(
+    *cudf::datetime::extract_month(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{10, 8, 6, 4, 2, 1, 11, 9, 7, 5});
 
-  // auto expected_days = fixed_width_column_wrapper<int16_t>{11, 16, 20, 24, 26, 1, 5, 9, 14, 18};
-  // auto actual_days = *cudf::datetime::extract_day(timestamp_view);
-  // expect_columns_equal(expected_days, actual_days);
+  expect_columns_equal(
+    *cudf::datetime::extract_day(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{12, 17, 21, 25, 27, 1, 5, 9, 14, 18});
 
-  // auto expected_weekdays = fixed_width_column_wrapper<int16_t>{6, 4, 2, 0, 5, 4, 2, 0, 5, 3};
-  // auto actual_weekdays = *cudf::datetime::extract_weekday(timestamp_view);
-  // expect_columns_equal(expected_weekdays, actual_weekdays);
+  expect_columns_equal(
+    *cudf::datetime::extract_weekday(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{7, 5, 3, 1, 6, 4, 2, 7, 5, 3});
 
-  // auto expected_hours = fixed_width_column_wrapper<int16_t>{19, 20, 21, 22, 23, 0, 0, 1, 2, 3};
-  // auto actual_hours = *cudf::datetime::extract_hour(timestamp_view);
-  // expect_columns_equal(expected_hours, actual_hours);
+  expect_columns_equal(
+    *cudf::datetime::extract_hour(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{19, 20, 21, 22, 23, 0, 0, 1, 2, 3});
 
-  // auto expected_minutes = fixed_width_column_wrapper<int16_t>{33, 26, 20, 13, 6, 0, 53, 46, 40, 33};
-  // auto actual_minutes = *cudf::datetime::extract_minute(timestamp_view);
-  // expect_columns_equal(expected_minutes, actual_minutes);
+  expect_columns_equal(
+    *cudf::datetime::extract_minute(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{33, 26, 20, 13, 6, 0, 53, 46, 40, 33});
 
-  // auto expected_seconds = fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20, 40, 0, 20};
-  // auto actual_seconds = *cudf::datetime::extract_second(timestamp_view);
-  // expect_columns_equal(expected_seconds, actual_seconds);
+  expect_columns_equal(
+    *cudf::datetime::extract_second(timestamp_view),
+    fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20, 40, 0, 20});
 }

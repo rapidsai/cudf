@@ -16,18 +16,18 @@
 
 #pragma once
 
-// #define _LIBCPP_STD_VER_PREV _LIBCPP_STD_VER
-// #undef _LIBCPP_STD_VER
-// #define _LIBCPP_STD_VER 20
+#define _LIBCPP_STD_VER_PREV _LIBCPP_STD_VER
+#undef _LIBCPP_STD_VER
+#define _LIBCPP_STD_VER 17
 #include <simt/type_traits>
-#include <simt/ratio>
-// #undef _LIBCPP_STD_VER
-// #define _LIBCPP_STD_VER _LIBCPP_STD_VER_PREV
-// #undef _LIBCPP_STD_VER_PREV
+#undef _LIBCPP_STD_VER
+#define _LIBCPP_STD_VER _LIBCPP_STD_VER_PREV
+#undef _LIBCPP_STD_VER_PREV
 
 // #define _LIBCPP_STD_VER_PREV _LIBCPP_STD_VER
 // #undef _LIBCPP_STD_VER
 // #define _LIBCPP_STD_VER 20
+#include <simt/ratio>
 #include <simt/chrono>
 // #undef _LIBCPP_STD_VER
 // #define _LIBCPP_STD_VER _LIBCPP_STD_VER_PREV

@@ -29,10 +29,14 @@ namespace cudf {
 template <typename...>
 using void_t = void;
 
-template <typename T> struct is_timestamp_t : std::false_type {};
-
-template <typename ToDuration>
-struct is_timestamp_t<simt::std::chrono::time_point<ToDuration>> : std::true_type {};
+template <typename T>
+using is_timestamp_t = simt::std::disjunction<
+  std::is_same<cudf::timestamp_D, T>,
+  std::is_same<cudf::timestamp_s, T>,
+  std::is_same<cudf::timestamp_ms, T>,
+  std::is_same<cudf::timestamp_us, T>,
+  std::is_same<cudf::timestamp_ns, T>
+>;
 
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {};
@@ -108,12 +112,7 @@ constexpr inline bool is_numeric(data_type type) {
  *---------------------------------------------------------------------------**/
 template <typename T>
 constexpr inline bool is_timestamp() {
-  return (
-    std::is_same<cudf::timestamp_D, T>::value ||
-    std::is_same<cudf::timestamp_s, T>::value ||
-    std::is_same<cudf::timestamp_ms, T>::value ||
-    std::is_same<cudf::timestamp_us, T>::value ||
-    std::is_same<cudf::timestamp_ns, T>::value );
+  return is_timestamp_t<T>::value;
 }
 
 struct is_timestamp_impl {
