@@ -23,13 +23,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-class RmmMemoryAccessorTest {
+class RmmMemoryAccessorTest extends CudfTestBase {
   @Test
   public void log() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
@@ -47,7 +47,6 @@ class RmmMemoryAccessorTest {
 
   @Test
   public void init() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
@@ -60,12 +59,21 @@ class RmmMemoryAccessorTest {
 
   @Test
   public void allocate() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     long address = Rmm.alloc(10, 0);
     try {
       assertNotEquals(0, address);
     } finally {
       Rmm.free(address, 0);
     }
+  }
+
+  @Test
+  public void doubleInitFails() {
+    if (!Rmm.isInitialized()) {
+      Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0);
+    }
+    assertThrows(IllegalStateException.class, () -> {
+      Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024);
+    });
   }
 }
