@@ -3939,9 +3939,7 @@ class DataFrame(object):
 
             # Append empty dataframes if map_size > len(tables)
             for i in range(map_size - len(tables)):
-                empty_df = cudf.DataFrame(columns=self.columns)
-                empty_df.index = self.index.take([])
-                tables.append(empty_df)
+                tables.append(self.take([]))
         return tables
 
     def repeat(self, repeats, axis=None):
