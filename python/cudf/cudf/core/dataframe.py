@@ -127,12 +127,12 @@ class DataFrame(object):
 
     >>> import cudf
     >>> df = cudf.DataFrame([
-    >>>   (5, 'cats', 'jump', 7.5),                # 3 columns
-    >>>   (2, 'dogs', 'dig', np.nan),              # 3 columns
-    >>>   (3, 'cows', 'moo', -2.1, 'occasionally') # 4 columns
-    >>> ])
+        (5, "cats", "jump", np.nan),
+        (2, "dogs", "dig", 7.5),
+        (3, "cows", "moo", -2.1, "occasionally"),
+    ])
     >>> df
-       0     1     2     3             4
+    0     1     2     3             4
     0  5  cats  jump  null          None
     1  2  dogs   dig   7.5          None
     2  3  cows   moo  -2.1  occasionally

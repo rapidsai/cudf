@@ -20,9 +20,9 @@ from cudf.utils.utils import _have_cupy
 
 def test_init_via_list_of_tuples():
     data = [
-        (5, "cats", "jump", np.nan),  # 3 columns
-        (2, "dogs", "dig", 7.5),  # 3 columns
-        (3, "cows", "moo", -2.1, "occasionally"),  # 4 columns
+        (5, "cats", "jump", np.nan),
+        (2, "dogs", "dig", 7.5),
+        (3, "cows", "moo", -2.1, "occasionally"),
     ]
 
     pdf = pd.DataFrame(data)
