@@ -265,10 +265,10 @@ ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
-set(UNARY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cu")
+set(LEGACY_UNARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
 
-ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
+ConfigureTest(LEGACY_UNARY_TEST "${LEGACY_UNARY_TEST_SRC}")
 
 ###################################################################################################
 # - binary tests ----------------------------------------------------------------------------------
