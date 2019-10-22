@@ -44,29 +44,33 @@ namespace detail {
   } datetime_component;
 
   template <datetime_component component>
-  struct extract_component_op {
+  struct extract_each_component {
 
-    template <typename element_t>
-    typename std::enable_if_t<not cudf::is_timestamp_t<element_t>::value, int16_t>
-    __device__ operator()(element_t const ts) const { return 0; }
+    cudf::column_device_view input;
+    extract_each_component(cudf::column_device_view _input) : input(_input) {}
 
-    template <typename timestamp_t>
-    typename std::enable_if_t<cudf::is_timestamp_t<timestamp_t>::value, int16_t>
-    __device__ operator()(timestamp_t const ts) const {
+    template <typename Element>
+    typename std::enable_if_t<not cudf::is_timestamp_t<Element>::value, int16_t>
+    __device__ operator()(size_type const i) const { return 0; }
+
+    template <typename Timestamp>
+    typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, int16_t>
+    __device__ operator()(size_type const i) const {
 
       using namespace simt::std::chrono;
 
+      auto ts = input.element<Timestamp>(i);
       auto time_since_epoch = ts.time_since_epoch();
       auto days_since_epoch = sys_days(time_since_epoch);
 
-      if (component == cudf::datetime::detail::year) { return static_cast<int>(year_month_day{days_since_epoch}.year()); }
-      if (component == cudf::datetime::detail::month) { return static_cast<unsigned>(year_month_day{days_since_epoch}.month()); }
-      if (component == cudf::datetime::detail::day) { return static_cast<unsigned>(year_month_day{days_since_epoch}.day()); }
-      if (component == cudf::datetime::detail::weekday) { return year_month_weekday{days_since_epoch}.weekday().iso_encoding(); }
+      if (component == cudf::datetime::detail::year) { return static_cast<int>(year_month_day(days_since_epoch).year()); }
+      if (component == cudf::datetime::detail::month) { return static_cast<unsigned>(year_month_day(days_since_epoch).month()); }
+      if (component == cudf::datetime::detail::day) { return static_cast<unsigned>(year_month_day(days_since_epoch).day()); }
+      if (component == cudf::datetime::detail::weekday) { return year_month_weekday(days_since_epoch).weekday().iso_encoding(); }
 
       auto days_since_epoch_clamped = time_since_epoch.count() < 0
-        ? time_point_cast<timestamp_t>(ceil<days>(days_since_epoch))
-        : time_point_cast<timestamp_t>(floor<days>(days_since_epoch));
+        ? time_point_cast<Timestamp>(ceil<days>(days_since_epoch))
+        : time_point_cast<Timestamp>(floor<days>(days_since_epoch));
 
       auto duration_since_midnight = abs(ts - days_since_epoch_clamped);
       auto hrs_ = duration_cast<hours>(duration_since_midnight);
@@ -87,115 +91,86 @@ namespace detail {
   };
 
   template <datetime_component component>
-  struct extract_component {
+  struct extract_component_impl {
 
-    cudf::column_view input;
-    cudf::mutable_column_view output;
-    extract_component(column_view const& _input,
-                      mutable_column_view _output)
-                      : input(_input), output(_output) {}
+    cudaStream_t stream;
+    column_view input;
+    mutable_column_view output;
 
-    template <typename element_t>
-    typename std::enable_if_t<not cudf::is_timestamp_t<element_t>::value, void>
+    extract_component_impl(cudaStream_t _stream,
+                           column_view const& _input,
+                           mutable_column_view _output)
+                           : stream(_stream) , input(_input), output(_output) {}
+
+    template <typename Element>
+    typename std::enable_if_t<not cudf::is_timestamp_t<Element>::value, void>
     __host__ __device__ operator()() {}
 
-    template <typename timestamp_t>
-    typename std::enable_if_t<cudf::is_timestamp_t<timestamp_t>::value, void>
+    template <typename Timestamp>
+    typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void>
     __host__ __device__ operator()() {
-
-      cudaStream_t stream = 0;
-
-      thrust::transform(
-        rmm::exec_policy(stream)->on(stream),
-        input.begin<timestamp_t>(), input.end<timestamp_t>(),
-        output.begin<int16_t>(), extract_component_op<component>{}
-      );
+      auto func = extract_each_component<component>{input};
+      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+                       output.begin<int16_t>(), output.end<int16_t>(),
+                       [=] __device__ (size_type const i) {
+                         return func.template operator()<Timestamp>(i);
+                       });
     }
   };
+
+  template <datetime_component component>
+  std::unique_ptr<cudf::column> extract_component(cudf::column_view const& input) {
+
+    cudaStream_t stream = 0;
+    auto bitmask_state = input.nullable() ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
+    auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16}, input.size(),
+                                            bitmask_state, stream, rmm::mr::get_default_resource());
+
+    auto m_output = static_cast<cudf::mutable_column_view>(*output);
+
+    printf("extract_component: {comp=%d, bitmask_state=%d}\n", component, bitmask_state);
+
+    if (bitmask_state == mask_state::UNINITIALIZED) {
+      CUDA_TRY(cudaMemcpy(m_output.null_mask(), input.null_mask(),
+                          input.size() * sizeof(bitmask_type),
+                          cudaMemcpyDefault));
+    }
+
+    cudf::experimental::type_dispatcher(input.type(),
+                                        detail::extract_component_impl<component>{
+                                          stream, input, m_output
+                                        });
+
+    return std::move(output);
+  }
 } // detail
 
 std::unique_ptr<cudf::column> extract_year(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::month>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::year>(input));
 }
 
 std::unique_ptr<cudf::column> extract_month(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::month>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::month>(input));
 }
 
 std::unique_ptr<cudf::column> extract_day(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::day>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::day>(input));
 }
 
 std::unique_ptr<cudf::column> extract_weekday(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::weekday>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::weekday>(input));
 }
 
 std::unique_ptr<cudf::column> extract_hour(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::hour>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::hour>(input));
 }
 
 std::unique_ptr<cudf::column> extract_minute(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::minute>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::minute>(input));
 }
 
 std::unique_ptr<cudf::column> extract_second(cudf::column_view const& input) {
-  cudaStream_t stream = 0;
-  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT16},
-                                          input.size(), mask_state::UNINITIALIZED,
-                                          stream, rmm::mr::get_default_resource());
-  cudf::experimental::type_dispatcher(input.type(),
-                                      detail::extract_component<cudf::datetime::detail::second>{
-                                        input, *output
-                                      });
-  return std::move(output);
+  return std::move(detail::extract_component<detail::second>(input));
 }
 
 } // datetime
