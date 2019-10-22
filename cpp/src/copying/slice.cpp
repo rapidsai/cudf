@@ -47,7 +47,7 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
         indices_tuple.push_back(std::make_pair(*it_start, *it_end));
     }
     const auto slicer = [&input] (auto indices) {
-             return slice(input, indices.first, indices.second-indices.first);
+             return slice(input, indices.first, indices.second);
     }; 
 
     std::transform(indices_tuple.begin(), indices_tuple.end(), std::back_inserter(result),

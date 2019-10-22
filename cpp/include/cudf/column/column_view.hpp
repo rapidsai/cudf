@@ -474,25 +474,23 @@ class mutable_column_view : public detail::column_view_base {
 size_type count_descendants(column_view parent);
 
 /**---------------------------------------------------------------------------*
- * @brief Constrcuts a slice of column_view as per requested offset and size.
- * The new column_view will start at offset and will have the size requested.
+ * @brief Constrcuts a slice of column_view as per requested `begin` and `end`.
+ * The new column_view will start at `begin` and will end at `end`,
+ * from the offset of `input`[input.offset() + begin, input.offset() + end).
  * @throws `cudf::logic_error` if `slice_offset` with `slice_size` goes beyond
  * the size of the `column_view`.
  * @throws `cudf::logic_error` if `slice_size` < 0.
  * @throws `cudf::logic_error` if `slice_offset` < 0.
  *
- * As the views can have offsets, so actual start would be offset of `input` +
- * offset requested.
- *
  * @param input Immutable view of input column to emulate
- * @param slice_offset The offset from which the new column_view should start.
- * @param slice_size The size of the column_view requested from the offset.
+ * @param begin The index from which the new column_view should begin.
+ * @param end The index before which the new column_view will end.
  *
  * @return unique_ptr<column_view> The unique pointer to the column view
  * constrcuted as per the offset and size requested.
  *---------------------------------------------------------------------------**/
 column_view slice(column_view const& input,
-                  size_type slice_offset,
-                  size_type slice_size);
+                  size_type begin,
+                  size_type end);
 
 }  // namespace cudf
