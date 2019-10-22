@@ -22,7 +22,7 @@
 #include <cub/cub.cuh>
 
 #include <cudf/legacy/copying.hpp>
-#include <cudf/replace.hpp>
+#include <cudf/legacy/replace.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
