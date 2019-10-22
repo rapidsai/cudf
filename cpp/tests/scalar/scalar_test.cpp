@@ -76,32 +76,16 @@ TYPED_TEST(TypedScalarTest, CopyConstructor) {
   EXPECT_EQ(value, s2.value());
 }
 
-// TYPED_TEST(TypedScalarTest, MoveConstructor) {
-//   TypeParam value = 8;
-//   cudf::experimental::type_to_scalar_type<TypeParam> s(value);
-//   auto s2(std::move(s));
+TYPED_TEST(TypedScalarTest, MoveConstructor) {
+  TypeParam value = 8;
+  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  auto data_ptr = s.data();
+  auto mask_ptr = s.valid_mask();
+  decltype(s) s2(std::move(s));
 
-//   EXPECT_TRUE(s2.is_valid());
-//   EXPECT_EQ(value, s2.value());
-//   EXPECT_FALSE(s.is_valid());
-// }
-
-// struct StringScalarTest : public cudf::test::BaseFixture {}
-
-// TEST_F(StringScalarTest, DefaultValidity) {
-//   std::string value = "test string";
-//   cudf::experimental::type_to_scalar_type<TypeParam> s(value);
-
-//   EXPECT_TRUE(s.is_valid());
-//   EXPECT_EQ(value, s.value());
-// }
-
-// TYPED_TEST(TypedScalarTest, ConstructNull) {
-//   std::string value = "another test string";
-//   cudf::experimental::type_to_scalar_type<TypeParam> s(value, false);
-
-//   EXPECT_FALSE(s.is_valid());
-// }
+  EXPECT_EQ(mask_ptr, s2.valid_mask());
+  EXPECT_EQ(data_ptr, s2.data());
+}
 
 
 struct StringScalarTest : public cudf::test::BaseFixture {};
@@ -129,3 +113,13 @@ TEST_F(StringScalarTest, CopyConstructor) {
   EXPECT_EQ(value, s2.value());
 }
 
+TEST_F(StringScalarTest, MoveConstructor) {
+  std::string value = "another test string";
+  auto s = cudf::string_scalar(value);
+  auto data_ptr = s.data();
+  auto mask_ptr = s.valid_mask();
+  decltype(s) s2(std::move(s));
+
+  EXPECT_EQ(mask_ptr, s2.valid_mask());
+  EXPECT_EQ(data_ptr, s2.data());
+}

@@ -17,7 +17,6 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-// #include "scalar_device_view.cuh"
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -46,6 +45,11 @@ class scalar {
   ~scalar() = default;
   scalar& operator=(scalar const& other) = delete;
   scalar& operator=(scalar&& other) = delete;
+  
+  scalar(data_type type, bool is_valid = false, cudaStream_t stream_ = 0,
+      rmm::mr::device_memory_resource *mr_ = rmm::mr::get_default_resource())
+   : _type(type), _is_valid(is_valid, stream_, mr_)
+  {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar by deep copying the contents of `other`.
@@ -110,9 +114,13 @@ class numeric_scalar : public scalar {
 
   numeric_scalar() = default;
   ~numeric_scalar() = default;
+  numeric_scalar(numeric_scalar&& other) = default;
+  numeric_scalar(numeric_scalar const& other) = default;
 
-  numeric_scalar(T value, bool is_valid = true)
-   : scalar(data_type(experimental::type_to_id<T>()), is_valid), _data(value)
+  numeric_scalar(T value, bool is_valid = true, cudaStream_t stream_ = 0,
+      rmm::mr::device_memory_resource *mr_ = rmm::mr::get_default_resource())
+   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream_, mr_)
+   , _data(value, stream_, mr_)
   {}
 
   void set_value(T value) { _data.set_value(value); _is_valid.set_value(true); }
@@ -130,6 +138,8 @@ class string_scalar : public scalar {
 
   string_scalar() = default;
   ~string_scalar() = default;
+  string_scalar(string_scalar&& other) = default;
+  string_scalar(string_scalar const& other) = default;
 
   string_scalar(std::string const& string, bool is_valid = true);
 
@@ -151,9 +161,13 @@ class timestamp_scalar : public scalar {
 
   timestamp_scalar() = default;
   ~timestamp_scalar() = default;
+  timestamp_scalar(timestamp_scalar&& other) = default;
+  timestamp_scalar(timestamp_scalar const& other) = default;
 
-  timestamp_scalar(T value, bool is_valid = true)
-   : scalar(data_type(experimental::type_to_id<T>()), is_valid), _data(value)
+  timestamp_scalar(T value, bool is_valid = true, cudaStream_t stream_ = 0,
+      rmm::mr::device_memory_resource *mr_ = rmm::mr::get_default_resource())
+   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream_, mr_)
+   , _data(value, stream_, mr_)
   {}
 
   void set_value(T value) { _data.set_value(value); _is_valid.set_value(true); }
