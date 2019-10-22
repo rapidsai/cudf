@@ -43,7 +43,7 @@ namespace detail {
     second,
   } datetime_component;
 
-  template <datetime_component ToExtract>
+  template <datetime_component DatetimeComponent>
   struct extract_component_operator {
 
     column_device_view column;
@@ -62,42 +62,36 @@ namespace detail {
       using Duration = typename Element::duration;
 
       auto ts = column.element<Element>(i);
-      auto days_since_epoch = sys_days(duration_cast<days>(ts.time_since_epoch()));
+      auto days_since_epoch = floor<days>(ts);
 
-      switch (ToExtract) {
-        case cudf::datetime::detail::year:
-          return static_cast<int>(year_month_day(days_since_epoch).year());
-        case cudf::datetime::detail::month:
-          return static_cast<unsigned>(year_month_day(days_since_epoch).month());
-        case cudf::datetime::detail::day:
-          return static_cast<unsigned>(year_month_day(days_since_epoch).day());
-        case cudf::datetime::detail::weekday:
-          return year_month_weekday(days_since_epoch).weekday().iso_encoding();
+      switch (DatetimeComponent) {
+        case cudf::datetime::detail::year: return static_cast<int>(year_month_day(days_since_epoch).year());
+        case cudf::datetime::detail::month: return static_cast<unsigned>(year_month_day(days_since_epoch).month());
+        case cudf::datetime::detail::day: return static_cast<unsigned>(year_month_day(days_since_epoch).day());
+        case cudf::datetime::detail::weekday: return year_month_weekday(days_since_epoch).weekday().iso_encoding();
         default: break;
       }
-  
-      auto time_since_midnight = ts.time_since_epoch().count() < 0 ?
-        duration_cast<Duration>(ts - days_since_epoch) + days(1) :
-        duration_cast<Duration>(ts - days_since_epoch);
+
+      auto time_since_midnight = ts - days_since_epoch;
+
+      if (time_since_midnight.count() < 0) {
+        time_since_midnight += days(1);
+      }
 
       auto hrs_ = duration_cast<hours>(time_since_midnight);
       auto mins_ = duration_cast<minutes>(time_since_midnight - hrs_);
       auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
 
-      switch (ToExtract) {
-        case cudf::datetime::detail::hour:
-          return hrs_.count();
-        case cudf::datetime::detail::minute:
-          return mins_.count();
-        case cudf::datetime::detail::second:
-          return secs_.count();
-        default:
-          return 0;
+      switch (DatetimeComponent) {
+        case cudf::datetime::detail::hour: return hrs_.count();
+        case cudf::datetime::detail::minute: return mins_.count();
+        case cudf::datetime::detail::second: return secs_.count();
+        default: return 0;
       }
     }
   };
 
-  template <datetime_component ToExtract>
+  template <datetime_component DatetimeComponent>
   struct launch_extract_component {
 
     column_device_view input;
@@ -114,7 +108,7 @@ namespace detail {
     template <typename Element>
     typename std::enable_if_t<cudf::is_timestamp_t<Element>::value, void>
     operator()(cudaStream_t stream) {
-      auto functor = extract_component_operator<ToExtract>{input};
+      auto functor = extract_component_operator<DatetimeComponent>{input};
       auto bound_f = [=] __device__ (size_type const i) {
         return functor.template operator()<Element>(i);
       };
@@ -125,7 +119,7 @@ namespace detail {
     }
   };
 
-  template <datetime_component ToExtract>
+  template <datetime_component DatetimeComponent>
   std::unique_ptr<column> extract_component(column_view const& input, cudaStream_t stream) {
 
     auto null_mask_state = input.nullable() ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
@@ -135,7 +129,7 @@ namespace detail {
 
     auto d_input = column_device_view::create(input);
     auto m_output = static_cast<mutable_column_view>(*output);
-    auto launch = launch_extract_component<ToExtract>{*d_input, m_output};
+    auto launch = launch_extract_component<DatetimeComponent>{*d_input, m_output};
 
     if (null_mask_state == mask_state::UNINITIALIZED) {
       CUDA_TRY(cudaMemcpy(m_output.null_mask(), input.null_mask(),

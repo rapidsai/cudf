@@ -29,15 +29,6 @@ namespace cudf {
 template <typename...>
 using void_t = void;
 
-template <typename T>
-using is_timestamp_t = simt::std::disjunction<
-  std::is_same<cudf::timestamp_D, T>,
-  std::is_same<cudf::timestamp_s, T>,
-  std::is_same<cudf::timestamp_ms, T>,
-  std::is_same<cudf::timestamp_us, T>,
-  std::is_same<cudf::timestamp_ns, T>
->;
-
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {};
 
@@ -51,6 +42,15 @@ template <typename L, typename R>
 struct is_relationally_comparable_impl<
     L, R, void_t<less_comparable<L, R>, greater_comparable<L, R> > >
     : std::true_type {};
+
+template <typename T>
+using is_timestamp_t = simt::std::disjunction<
+  std::is_same<cudf::timestamp_D, T>,
+  std::is_same<cudf::timestamp_s, T>,
+  std::is_same<cudf::timestamp_ms, T>,
+  std::is_same<cudf::timestamp_us, T>,
+  std::is_same<cudf::timestamp_ns, T>
+>;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether objects of types `L` and `R` can be relationally
