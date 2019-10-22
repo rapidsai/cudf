@@ -31,8 +31,12 @@ namespace detail {
  * such that `bins[i - 1] < x <= bins[i]`. Finally, if `x < bins[0]` or
  * `x > bins[num_bins - 1]`, it sets the index to `0` or `num_bins`, respectively.
  *
- * NOTE: This function does not handle null values and will return an error if `col`
+ * NOTE: This function does not handle null values and will throw if `col`
  * or `bins` contain any.
+ * 
+ * @throws cudf::logic_error if `col` and `bins` types mismatch
+ * @throws cudf::logic_error if type is not numeric or timestamp
+ * @throws cudf::logic_error if `col` or `bins` contain any null values
  *
  * @param col column_view with the values to be binned
  * @param bins column_view of ascending bin boundaries
@@ -42,11 +46,10 @@ namespace detail {
  *
  * @returns device array of same size as `col` to be filled with bin indices
  */
-rmm::device_vector<size_type> digitize(column_view const& col,
-                                       column_view const& bins,
-                                       bool right,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                       cudaStream_t stream = 0);
+rmm::device_vector<size_type>
+digitize(column_view const& col, column_view const& bins, bool right,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+         cudaStream_t stream = 0);
 
 }  // namespace detail
 }  // namespace cudf
