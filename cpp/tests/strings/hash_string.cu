@@ -17,8 +17,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include "../src/hash/hash_functions.cuh"
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include "../src/hash/hash_functions.cuh"
 #include "./utilities.h"
 
 #include <gmock/gmock.h>
@@ -48,9 +49,10 @@ TEST_F(StringsHashTest, HashTest)
                                         "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
                                         "0123456789", "4", "", nullptr,
                                         "last one" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
-    auto d_strings = cudf::test::create_strings_column(h_strings);
-    auto strings_view = cudf::strings_column_view(d_strings->view());
+    auto strings_view = cudf::strings_column_view(strings);
     auto strings_column = cudf::column_device_view::create(strings_view.parent());
     auto d_view = *strings_column;
 
@@ -59,6 +61,7 @@ TEST_F(StringsHashTest, HashTest)
         thrust::make_counting_iterator<uint32_t>(0),
         thrust::make_counting_iterator<uint32_t>(strings_view.size()),
         d_values.begin(), hash_string_fn{d_view});
+
     uint32_t h_expected[] = {2739798893, 2739798893, 3506676360, 1891213601, 3778137224, 0, 0, 1551088011};
     thrust::host_vector<uint32_t> h_values(d_values);
     for( uint32_t idx=0; idx < h_values.size(); ++idx )
