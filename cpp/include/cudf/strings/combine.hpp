@@ -23,8 +23,17 @@ namespace cudf
 namespace strings
 {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Row-wise concatenates the given list of strings columns.
+ * 
+ * Each new string is created by concatenating the strings from the same
+ * row delimited by the separator provided.
+ * 
+ * Any row with a null entry will result in the corresponding output
+ * row to be null entry unless a narep string is specified to be used
+ * in its place.
+ * 
+ * The number of strings in the columns must be the same.
  *
  * ```
  * s1 = ['aa', null, '', 'aa']
@@ -41,14 +50,17 @@ namespace strings
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
                                            const char* separator="",
                                            const char* narep=nullptr,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates all strings in the column into one new string.
+ * 
+ * This produces a column with one string. Any null entries are ignored unless
+ * the narep parameter specifies a replacement string.
  *
  * ```
  * s = ['aa', null, '', 'zz' ]
@@ -62,7 +74,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New column containing one string.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                                             const char* separator="",
                                             const char* narep=nullptr,
