@@ -24,26 +24,31 @@
 //#include <tests/utilities/type_list_utilities.hpp>
 //#include <tests/utilities/type_lists.hpp>
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <random>
+#include <memory>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
+using CVector     = std::vector<std::unique_ptr<cudf::column>>;
+using column      = cudf::column;
 using column_view = cudf::column_view;
 using TView       = cudf::table_view;
 using Table       = cudf::experimental::table;
 
+struct TableViewTest : public cudf::test::BaseFixture {};
+
 template <typename T>
-struct TableTest : public GdfTest {
+struct TableTest : public cudf::test::BaseFixture {
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution{1000, 10000};
   int random_size() { return distribution(generator); }
@@ -51,6 +56,16 @@ struct TableTest : public GdfTest {
 
 using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
                                       double>;
+
+TEST_F(TableViewTest, EmptyColumnedTable)
+{
+    std::vector<column_view> cols{};
+
+    TView input(cols);
+    cudf::size_type expected = 0;
+
+    EXPECT_EQ(input.num_columns(), expected);
+}
 
 TYPED_TEST_CASE(TableTest, TestingTypes);
 
@@ -61,18 +76,17 @@ TYPED_TEST(TableTest, GetTableWithSelectedColumns)
   column_wrapper <int32_t> col3{{4,5,6,7}};
   column_wrapper <int64_t> col4{{4,5,6,7}};
 
-  std::vector<column_view> cols;
-  cols.push_back(col1);
-  cols.push_back(col2);
-  cols.push_back(col3);
-  cols.push_back(col4);
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
 
-  TView tview(cols);
-  Table t(tview);
+  Table t(std::move(cols));
 
   cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{2,3});
-  cudf::test::expect_columns_equal(tview.column(2), selected_tview.column(0));
-  cudf::test::expect_columns_equal(tview.column(3), selected_tview.column(1));
+  cudf::test::expect_columns_equal(t.view().column(2), selected_tview.column(0));
+  cudf::test::expect_columns_equal(t.view().column(3), selected_tview.column(1));
 }
 
 TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
@@ -80,14 +94,13 @@ TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
 
-  std::vector<column_view> cols;
-  cols.push_back(col1);
-  cols.push_back(col2);
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
 
-  TView tview(cols);
-  Table t(tview);
+  Table t(std::move(cols));
 
-  CUDF_EXPECT_THROW_MESSAGE (t.select(std::vector<cudf::size_type>{0,1,2}), "Requested too many columns.");
+  EXPECT_THROW (t.select(std::vector<cudf::size_type>{0,1,2}), cudf::logic_error);
 }
 
 TYPED_TEST(TableTest, SelectingNoColumns)
@@ -95,12 +108,10 @@ TYPED_TEST(TableTest, SelectingNoColumns)
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
 
-  std::vector<column_view> cols;
-  cols.push_back(col1);
-  cols.push_back(col2);
-
-  TView tview(cols);
-  Table t(tview);
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  Table t(std::move(cols));
   TView selected_table = t.select(std::vector<cudf::size_type>{});
 
   EXPECT_EQ(selected_table.num_columns(), 0);
@@ -127,7 +138,7 @@ TYPED_TEST(TableTest, ConcatTablesRowsMismatch)
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{col1});
   views.emplace_back(std::vector<column_view>{col2});
-  CUDF_EXPECT_THROW_MESSAGE(cudf::experimental::concat(views), "Number of rows mismatch");
+  EXPECT_THROW (cudf::experimental::concat(views), cudf::logic_error);
 }
 
 TYPED_TEST(TableTest, ConcatEmptyTables)
