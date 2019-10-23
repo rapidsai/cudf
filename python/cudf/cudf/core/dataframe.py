@@ -3988,11 +3988,49 @@ class DataFrame(object):
         return result.set_index(new_index)
 
     def tile(self, reps):
+        """Construct a DataFrame by repeating this DataFrame the number of 
+        times given by reps
+
+        Parameters
+        ----------
+        reps : non-negative integer
+            The number of repetitions of this DataFrame along axis 0
+
+        Returns
+        -------
+        The tiled output cudf.DataFrame
+        """
         cols = libcudf.filling.tile(self._columns, reps)
         column_names = self._cols.keys()
         return DataFrame(data=dict(zip(column_names, cols)))
 
     def stack(self, level=-1, dropna=True):
+        """Stack the prescribed level(s) from columns to index
+
+        Return a reshaped Series
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Whether to drop rows in the resulting Series with missing values.
+
+        Returns
+        -------
+        The stacked cudf.Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[0,1,3], 'b':[1,2,4]})
+        >>> df.stack()
+        0  a    0
+           b    1
+        1  a    1
+           b    2
+        2  a    3
+           b    4
+        dtype: int64
+        """
         assert level in (None, -1)
         index_as_cols = self.index.to_frame(index=False)._columns
         new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
