@@ -55,7 +55,7 @@ enum TwoPass
 template <TwoPass Pass=SizeOnly>
 struct substring_fn
 {
-    const column_device_view& d_column;
+    const column_device_view d_column;
     int32_t start, stop, step;
     const int32_t* d_offsets{};
     char* d_chars{};
@@ -145,7 +145,7 @@ namespace
 template <typename PositionType, TwoPass Pass=SizeOnly>
 struct substring_from_fn
 {
-    const column_device_view& d_column;
+    const column_device_view d_column;
     const PositionType* starts;
     const PositionType* stops;
     const int32_t* d_offsets{};
