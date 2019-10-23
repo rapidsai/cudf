@@ -70,7 +70,7 @@ TYPED_TEST(IsNull, AllValid)
     cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(IsNull, WithInValids)
+TYPED_TEST(IsNull, WithInvalids)
 {
     using T = TypeParam;
 
@@ -117,7 +117,7 @@ TYPED_TEST(IsNotNull, AllValid)
     cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(IsNotNull, WithInValids)
+TYPED_TEST(IsNotNull, WithInvalids)
 {
     using T = TypeParam;
 

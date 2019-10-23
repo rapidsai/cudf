@@ -19,6 +19,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/unary_detail.hpp>
 
 namespace cudf {
 
@@ -28,9 +29,8 @@ namespace detail {
 
 std::unique_ptr<column> null_op(column_view const& input,
                                 bool nulls_are_false = true,
-                                rmm::mr::device_memory_resource* mr = 
-                                    rmm::mr::get_default_resource(), 
-                                cudaStream_t stream = 0) {
+                                rmm::mr::device_memory_resource* mr
+                                cudaStream_t stream) {
     auto output = make_numeric_column(data_type(BOOL8), input.size(), UNALLOCATED, stream, mr);
     auto output_mutable_view = output->mutable_view();
     auto input_device_view = column_device_view::create(input);
