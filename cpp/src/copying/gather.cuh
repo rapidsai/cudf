@@ -1,5 +1,6 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/copying.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/cudf_utils.h>
 #include <cudf/utilities/traits.hpp>
@@ -16,9 +17,11 @@
 #include <thrust/gather.h>
 #include <thrust/iterator/transform_iterator.h>
 
+
 #include <cub/cub.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
+#include <utilities/release_assert.cuh>
 
 #include <bitmask/valid_if.cuh>
 
@@ -138,17 +141,19 @@ struct column_gatherer {
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
   template <typename column_type, typename iterator_type,
-    std::enable_if_t<std::is_integral<column_type>::value or
-                     std::is_floating_point<column_type>::value>* = nullptr>
-    void operator()(column_view const& source_column,
-		  iterator_type gather_map,
-		  mutable_column_view& destination_column,
-		  bool ignore_out_of_bounds,
-		  cudaStream_t stream) {
-    column_type const *source_data{source_column.data<column_type>()};
-    column_type *destination_data{destination_column.data<column_type>()};
+    std::enable_if_t<is_fixed_width<column_type>()>* = nullptr>
+    std::unique_ptr<column> operator()(column_view const& source_column,
+				       iterator_type gather_map,
+				       size_type num_destination_rows,
+				       bool ignore_out_of_bounds,
+				       cudaStream_t stream) {
 
-    size_type const num_destination_rows{destination_column.size()};
+    std::unique_ptr<column> destination_column =
+      allocate_like(source_column, num_destination_rows);
+
+
+    column_type const *source_data{source_column.data<column_type>()};
+    column_type *destination_data{destination_column->mutable_view().data<column_type>()};
 
     if (ignore_out_of_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
@@ -162,16 +167,16 @@ struct column_gatherer {
     }
 
     CHECK_STREAM(stream);
+    return destination_column;
   }
 
   template <typename column_type, typename iterator_type,
-    std::enable_if_t<not std::is_integral<column_type>::value and
-                     not std::is_floating_point<column_type>::value>* = nullptr>
-  void operator()(column_view const& source_column,
-		  iterator_type gather_map,
-		  mutable_column_view& destination_column,
-		  bool ignore_out_of_bounds,
-		  util::cuda::scoped_stream stream) {
+    std::enable_if_t<not is_fixed_width<column_type>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& source_column,
+				     iterator_type gather_map,
+				     size_type num_destination_rows,
+				     bool ignore_out_of_bounds,
+				     util::cuda::scoped_stream stream) {
     CUDF_FAIL("Column type must be numeric");
   }
 
@@ -231,35 +236,34 @@ struct index_converter<map_type, index_conversion::NONE>
 
 
 template <typename iterator_type>
-void gather(table_view const& source_table, iterator_type gather_map,
-	    mutable_table_view& destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds = false, bool allow_negative_indices = false,
-	    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
-	    )
+std::unique_ptr<table>
+gather(table_view const& source_table, iterator_type gather_map,
+       size_type num_destination_rows, bool check_bounds = false,
+       bool ignore_out_of_bounds = false,
+       bool allow_negative_indices = false,
+       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   auto source_n_cols = source_table.num_columns();
   auto source_n_rows = source_table.num_rows();
 
   std::vector<util::cuda::scoped_stream> v_stream(source_n_cols);
 
-  for (size_type i = 0; i < source_n_cols; i++) {
-    // Perform sanity checks
-    mutable_column_view dest_col = destination_table.column(i);
-    column_view src_col = source_table.column(i);
+  std::vector<std::unique_ptr<column>> destination_columns;
 
-    CUDF_EXPECTS(src_col.type() == dest_col.type(), "Column type mismatch");
+  for (size_type i = 0; i < source_n_cols; i++) {
+    column_view src_col = source_table.column(i);
+    // Perform sanity checks
     CUDF_EXPECTS(src_col.data<void*>() != nullptr, "Missing source data buffer");
 
-
     // The data gather for n columns will be put on the first n streams
-    cudf::experimental::type_dispatcher(src_col.type(), column_gatherer{}, src_col,
-					gather_map, dest_col, ignore_out_of_bounds,
-					v_stream[i]);
-
-    if (src_col.has_nulls()) {
-      CUDF_EXPECTS(dest_col.nullable(),
-		   "Missing destination null mask.");
-    }
+    destination_columns.push_back(
+				  cudf::experimental::type_dispatcher(src_col.type(),
+								      column_gatherer{},
+								      src_col,
+								      gather_map,
+								      num_destination_rows,
+								      ignore_out_of_bounds,
+								      v_stream[i]));
   }
 
 
@@ -272,7 +276,7 @@ void gather(table_view const& source_table, iterator_type gather_map,
 
   // loop over each column, check if inplace and allocate buffer if true.
   for (size_type i = 0; i < source_n_cols; i++) {
-    mutable_column_view dest_col = destination_table.column(i);
+    mutable_column_view dest_col = destination_columns[i]->mutable_view();
     source_bitmasks_host[i] = source_table.column(i).null_mask();
     // Allocate inplace buffer
     if (dest_col.nullable() &&
@@ -299,7 +303,7 @@ void gather(table_view const& source_table, iterator_type gather_map,
 
   bitmask_kernel<<<gather_grid_size, gather_block_size>>>(
       source_bitmasks.data().get(), source_table.num_rows(),
-      gather_map, destination_bitmasks.data().get(), destination_table.num_rows(),
+      gather_map, destination_bitmasks.data().get(), num_destination_rows,
       null_counts.data().get(), source_n_cols);
 
   std::vector<size_type> h_count(source_n_cols);
@@ -308,8 +312,8 @@ void gather(table_view const& source_table, iterator_type gather_map,
 
   // loop over each column, check if inplace and copy the result from the
   // buffer back to destination if true.
-  for (size_type i = 0; i < destination_table.num_columns(); i++) {
-    mutable_column_view dest_col = destination_table.column(i);
+  for (size_type i = 0; i < source_table.num_columns(); i++) {
+    mutable_column_view dest_col = destination_columns[i]->mutable_view();
     if (dest_col.nullable()) {
       // Copy temp buffer content back to column
       if (dest_col.null_mask() == source_table.column(i).null_mask()) {
@@ -323,6 +327,8 @@ void gather(table_view const& source_table, iterator_type gather_map,
       dest_col.set_null_count(0);
     }
   }
+
+  return std::make_unique<table>(std::move(destination_columns));
 }
 
 
