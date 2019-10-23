@@ -2387,6 +2387,7 @@ class DataFrame(object):
         method="hash",
     ):
         """Join columns with other DataFrame on index or on a key column.
+
         Parameters
         ----------
         other : DataFrame
@@ -2397,12 +2398,15 @@ class DataFrame(object):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
+
         Returns
         -------
         joined : DataFrame
+
         Notes
         -----
         Difference from pandas:
+
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
