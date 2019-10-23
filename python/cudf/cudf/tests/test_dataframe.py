@@ -3959,14 +3959,18 @@ def test_series_astype_error_handling(errors):
     ],
 )
 def test_df_constructor_dtype(dtype):
-    if dtype in ["str", "category"]:
-        data = ["a", "b", "c", None]
-    elif "datetime" in dtype:
+    if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
-    else:
+        sr = Series(data, dtype=dtype)
+    elif dtype == "str":
         data = [1, 2, 3, None]
-
-    sr = Series(data, dtype=dtype)
+        sr = Series.from_pandas(pd.Series(data, dtype=dtype))
+    elif "float" in dtype:
+        data = [1, 2, 3, None]
+        sr = Series(data, dtype=dtype)
+    else:
+        data = [1.0, 0.5, -1.1, np.nan, None]
+        sr = Series(data, dtype=dtype)
 
     expect = DataFrame()
     expect["foo"] = sr
