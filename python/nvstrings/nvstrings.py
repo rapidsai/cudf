@@ -1,3 +1,7 @@
+import weakref
+
+import rmm  # noqa: F401
+
 import pyniNVStrings
 
 
@@ -363,7 +367,7 @@ def create_from_ipc(ipc_data):
 def free(dstrs):
     """Force free resources for the specified instance."""
     if dstrs is not None:
-        pyniNVStrings.n_destroyStrings(dstrs.m_cptr)
+        dstrs._finalizer()
         dstrs.m_cptr = 0
 
 
@@ -374,6 +378,11 @@ def bind_cpointer(cptr, own=True):
         rtn = nvstrings(cptr)
         rtn._own = own
     return rtn
+
+
+def _destroy_nvstrings_instance(own, cptr):
+    if own:
+        pyniNVStrings.n_destroyStrings(cptr)
 
 
 # this will be documented with all the public methods
@@ -395,11 +404,9 @@ class nvstrings:
         """
         self.m_cptr = cptr
         self._own = True
-
-    def __del__(self):
-        if self._own:
-            pyniNVStrings.n_destroyStrings(self.m_cptr)
-        self.m_cptr = 0
+        self._finalizer = weakref.finalize(
+            self, _destroy_nvstrings_instance, self._own, self.m_cptr
+        )
 
     def __str__(self):
         return str(pyniNVStrings.n_createHostStrings(self.m_cptr))

@@ -44,9 +44,9 @@ static constexpr int warp_size = 32;
 
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
-__global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
-                                     gdf_size_type size,
-                                     gdf_size_type per_thread,
+__global__ void compute_block_counts(cudf::size_type  * __restrict__ block_counts,
+                                     cudf::size_type size,
+                                     cudf::size_type per_thread,
                                      Filter filter)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -63,12 +63,12 @@ __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
 
 // Compute the exclusive prefix sum of each thread's mask value within each block
 template <int block_size>
-__device__ gdf_index_type block_scan_mask(bool mask_true, 
-                                          gdf_index_type &block_sum)
+__device__ cudf::size_type block_scan_mask(bool mask_true, 
+                                          cudf::size_type &block_sum)
 {
   int offset = 0;
 
-  using BlockScan = cub::BlockScan<gdf_size_type, block_size>;
+  using BlockScan = cub::BlockScan<cudf::size_type, block_size>;
   __shared__ typename BlockScan::TempStorage temp_storage;
   BlockScan(temp_storage).ExclusiveSum(mask_true, offset, block_sum);
   
@@ -94,32 +94,32 @@ template <typename T, typename Filter,
 __launch_bounds__(block_size, 2048/block_size)
 __global__ void scatter_kernel(T* __restrict__ output_data,
                                bit_mask_t * __restrict__ output_valid,
-                               gdf_size_type * output_null_count,
+                               cudf::size_type * output_null_count,
                                T const * __restrict__ input_data,
                                bit_mask_t const * __restrict__ input_valid,
-                               gdf_size_type  * __restrict__ block_offsets,
-                               gdf_size_type size,
-                               gdf_size_type per_thread,
+                               cudf::size_type  * __restrict__ block_offsets,
+                               cudf::size_type size,
+                               cudf::size_type per_thread,
                                Filter filter)
 {
   static_assert(block_size <= 1024, "Maximum thread block size exceeded");
 
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
-  gdf_size_type block_offset = block_offsets[blockIdx.x];
+  cudf::size_type block_offset = block_offsets[blockIdx.x];
   
   // one extra warp worth in case the block is not aligned
   __shared__ bool temp_valids[has_validity ? block_size+warp_size : 1];
   __shared__ T    temp_data[block_size];
   
   // Note that since the maximum gridDim.x on all supported GPUs is as big as
-  // gdf_size_type, this loop is sufficient to cover our maximum column size
+  // cudf::size_type, this loop is sufficient to cover our maximum column size
   // regardless of the value of block_size and per_thread.
   for (int i = 0; i < per_thread; i++) {
     bool mask_true = (tid < size) && filter(tid);
 
     // get output location using a scan of the mask result
-    gdf_index_type block_sum = 0;
-    const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
+    cudf::size_type block_sum = 0;
+    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true,
                                                                    block_sum);
 
     if (has_validity) {
@@ -134,7 +134,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
       // scatter validity mask to shared memory
       if (has_validity && bit_mask::is_valid(input_valid, tid)) {
         // determine aligned offset for this warp's output
-        const gdf_size_type aligned_offset = block_offset % warp_size;
+        const cudf::size_type aligned_offset = block_offset % warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -218,8 +218,8 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
 
 template <typename Kernel>
 int elements_per_thread(Kernel kernel,
-                        gdf_size_type total_size,
-                        gdf_size_type block_size)
+                        cudf::size_type total_size,
+                        cudf::size_type block_size)
 {
   // calculate theoretical occupancy
   int max_blocks = 0;
@@ -241,7 +241,7 @@ struct scatter_functor
   template <typename T>
   void operator()(gdf_column & output_column,
                   gdf_column const & input_column,
-                  gdf_size_type  *block_offsets,
+                  cudf::size_type  *block_offsets,
                   Filter filter,
                   cudaStream_t stream = 0) {
     bool has_valid = cudf::is_nullable(input_column);
@@ -250,15 +250,15 @@ struct scatter_functor
       scatter_kernel<T, Filter, block_size, true> :
       scatter_kernel<T, Filter, block_size, false>;
 
-    gdf_size_type per_thread =
+    cudf::size_type per_thread =
       elements_per_thread(scatter, input_column.size, block_size);
     cudf::util::cuda::grid_config_1d grid{input_column.size,
                                           block_size, per_thread};
 
-    gdf_size_type *null_count = nullptr;
+    cudf::size_type *null_count = nullptr;
     if (has_valid) {
-      RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
-      CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(gdf_size_type), stream));
+      RMM_ALLOC(&null_count, sizeof(cudf::size_type), stream);
+      CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(cudf::size_type), stream));
       // Have to initialize the output mask to all zeros because we may update 
       // it with atomicOr().
       CUDA_TRY(cudaMemsetAsync(output_column.valid, 0,
@@ -278,7 +278,7 @@ struct scatter_functor
 
     if (has_valid) {
       CUDA_TRY(cudaMemcpyAsync(&output_column.null_count, null_count,
-                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+                               sizeof(cudf::size_type), cudaMemcpyDefault, stream));
       RMM_FREE(null_count, stream);
     }
   }
@@ -286,18 +286,18 @@ struct scatter_functor
 
 // Computes the output size of apply_boolean_mask, which is the sum of the
 // last block's offset and the last block's pass count
-gdf_size_type get_output_size(gdf_size_type * block_counts,
-                              gdf_size_type * block_offsets,
-                              gdf_size_type num_blocks,
+cudf::size_type get_output_size(cudf::size_type * block_counts,
+                              cudf::size_type * block_offsets,
+                              cudf::size_type num_blocks,
                               cudaStream_t stream = 0)
 {
-  gdf_size_type last_block_count = 0;
+  cudf::size_type last_block_count = 0;
   cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
-                  sizeof(gdf_size_type), cudaMemcpyDefault, stream);
-  gdf_size_type last_block_offset = 0;
+                  sizeof(cudf::size_type), cudaMemcpyDefault, stream);
+  cudf::size_type last_block_offset = 0;
   if (num_blocks > 1)
     cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
-                    sizeof(gdf_size_type), cudaMemcpyDefault, stream);
+                    sizeof(cudf::size_type), cudaMemcpyDefault, stream);
   cudaStreamSynchronize(stream);
   return last_block_count + last_block_offset;
 }
@@ -312,7 +312,7 @@ namespace detail {
  * @brief Filters a column using a Filter function object
  * 
  * @p filter must be a functor or lambda with the following signature:
- * __device__ bool operator()(gdf_index_type i);
+ * __device__ bool operator()(cudf::size_type i);
  * It return true if element i of @p input should be copied, false otherwise.
  *
  * @tparam Filter the filter functor type
@@ -340,16 +340,16 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
                "Null input data"); // nonzero size but null
 
   constexpr int block_size = 256;
-  gdf_size_type per_thread =
+  cudf::size_type per_thread =
       elements_per_thread(compute_block_counts<Filter, block_size>,
                           input.num_rows(), block_size);
   cudf::util::cuda::grid_config_1d grid{input.num_rows(), block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
   // TODO: use an uninitialized buffer to avoid the initialization kernel
-  rmm::device_vector<gdf_size_type> temp_counts(2 * grid.num_blocks);
-  gdf_size_type *block_counts = thrust::raw_pointer_cast(temp_counts.data());
-  gdf_size_type *block_offsets = block_counts + grid.num_blocks;
+  rmm::device_vector<cudf::size_type> temp_counts(2 * grid.num_blocks);
+  cudf::size_type *block_counts = thrust::raw_pointer_cast(temp_counts.data());
+  cudf::size_type *block_offsets = block_counts + grid.num_blocks;
 
   // 1. Find the count of elements in each block that "pass" the mask
   compute_block_counts<Filter, block_size>
@@ -377,14 +377,14 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
     RMM_FREE(d_temp_storage, stream);
   }
   else {
-    cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(gdf_size_type),
+    cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(cudf::size_type),
                     stream);
   }
 
   CHECK_STREAM(stream);
   
   // 3. compute the output size from the last block's offset + count
-  gdf_size_type output_size = 
+  cudf::size_type output_size = 
     get_output_size(block_counts, block_offsets, grid.num_blocks, stream);
 
   table output;

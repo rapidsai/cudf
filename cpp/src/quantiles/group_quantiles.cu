@@ -18,7 +18,7 @@
 
 #include <utilities/cuda_utils.hpp>
 #include <quantiles/quantiles_util.hpp>
-#include <groupby/sort/sort_helper.hpp>
+#include <groupby/sort/legacy/sort_helper.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
@@ -38,8 +38,8 @@ struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void >
   operator()(gdf_column const& values_col,
-             rmm::device_vector<gdf_size_type> const& group_offsets,
-             rmm::device_vector<gdf_size_type> const& group_sizes,
+             rmm::device_vector<cudf::size_type> const& group_offsets,
+             rmm::device_vector<cudf::size_type> const& group_sizes,
              gdf_column* result_col, rmm::device_vector<double> const& quantile,
              cudf::interpolation interpolation, cudaStream_t stream = 0)
   {
@@ -55,8 +55,8 @@ struct quantiles_functor {
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator(0),
       group_offsets.size(),
-      [=] __device__ (gdf_size_type i) {
-        gdf_size_type segment_size = group_size[i];
+      [=] __device__ (cudf::size_type i) {
+        cudf::size_type segment_size = group_size[i];
 
         auto value = values + group_id[i];
         thrust::transform(thrust::seq, d_quantiles, d_quantiles + num_quantiles,
@@ -83,8 +83,8 @@ struct quantiles_functor {
 namespace detail {
 
 void group_quantiles(gdf_column const& values,
-                     rmm::device_vector<gdf_size_type> const& group_offsets,
-                     rmm::device_vector<gdf_size_type> const& group_sizes,
+                     rmm::device_vector<cudf::size_type> const& group_offsets,
+                     rmm::device_vector<cudf::size_type> const& group_sizes,
                      gdf_column * result,
                      std::vector<double> const& quantiles,
                      cudf::interpolation interpolation,
@@ -98,8 +98,8 @@ void group_quantiles(gdf_column const& values,
 }
 
 void group_medians(gdf_column const& values,
-                   rmm::device_vector<gdf_size_type> const& group_offsets,
-                   rmm::device_vector<gdf_size_type> const& group_sizes,
+                   rmm::device_vector<cudf::size_type> const& group_offsets,
+                   rmm::device_vector<cudf::size_type> const& group_sizes,
                    gdf_column * result,
                    cudaStream_t stream)
 {
@@ -130,10 +130,10 @@ group_quantiles(cudf::table const& keys,
                            std::vector<gdf_dtype>(values.num_columns(), GDF_FLOAT64),
                            std::vector<gdf_dtype_extra_info>(values.num_columns()));
 
-  for (gdf_size_type i = 0; i < values.num_columns(); i++)
+  for (cudf::size_type i = 0; i < values.num_columns(); i++)
   {
     gdf_column sorted_values;
-    rmm::device_vector<gdf_size_type> group_sizes;
+    rmm::device_vector<cudf::size_type> group_sizes;
     std::tie(sorted_values, group_sizes) =
       gb_obj.sort_values(*(values.get_column(i)));
 

@@ -129,7 +129,7 @@ TEST_F(gdf_quantile, ReportValidMaskError)
 {
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};
-  std::vector<gdf_valid_type> bitmask(gdf_valid_allocation_size(v.size()), 0xF3);
+  std::vector<cudf::valid_type> bitmask(gdf_valid_allocation_size(v.size()), 0xF3);
   cudf::test::column_wrapper<VType> col(v, bitmask);
 
   std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
