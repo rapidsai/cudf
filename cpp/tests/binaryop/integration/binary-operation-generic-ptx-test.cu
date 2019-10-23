@@ -74,11 +74,11 @@ R"***(
     auto CADD = [](float a, float b) {return a*a*a + b;};
 
     auto lhs = cudf::test::column_wrapper<float>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto rhs = cudf::test::column_wrapper<float>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     
     gdf_column cpp_output_col;
     CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_FLOAT32));
@@ -140,11 +140,11 @@ R"***(
     auto CADD = [](dtype a,  dtype b) {return a*a*a + b;};
 
     auto lhs = cudf::test::column_wrapper<dtype>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto rhs = cudf::test::column_wrapper<dtype>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
 
     gdf_column cpp_output_col;
     CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
@@ -206,11 +206,11 @@ R"***(
     auto CADD = [](int32_t a,  int64_t b) {return a*a*a + b*b;};
 
     auto lhs = cudf::test::column_wrapper<int32_t>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
 
     gdf_column cpp_output_col;
     CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));

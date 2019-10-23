@@ -29,8 +29,8 @@
 #include <utilities/bit_util.cuh>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 
-// host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
-using host_valid_pointer = typename std::unique_ptr<gdf_valid_type, std::function<void(gdf_valid_type*)>>;
+// host_valid_pointer is a wrapper for cudf::valid_type* with custom deleter
+using host_valid_pointer = typename std::unique_ptr<cudf::valid_type, std::function<void(cudf::valid_type*)>>;
 
 
 // Create a valid pointer and init it with null_count invalids
@@ -40,7 +40,7 @@ void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, siz
 
 // Prints a vector and valids
 template <typename T>
-void print_vector_and_valid(std::vector<T>& v, const gdf_valid_type* valid)
+void print_vector_and_valid(std::vector<T>& v, const cudf::valid_type* valid)
 {
   auto functor = [&valid, &v](int index) -> std::string {
     std::string ret = (sizeof(v[index]) == 1)

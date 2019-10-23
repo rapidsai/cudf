@@ -6,9 +6,11 @@
 
 #include "./utils.h"
 
+struct TestArray : public GdfTest{};
+
 std::vector<const char*> hstrs{ "John Smith", "Joe Blow", "Jane Smith", nullptr, "" };
 
-TEST(TestArray, Sublist)
+TEST_F(TestArray, Sublist)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -21,7 +23,7 @@ TEST(TestArray, Sublist)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, Gather)
+TEST_F(TestArray, Gather)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -38,7 +40,7 @@ TEST(TestArray, Gather)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, GatherBool)
+TEST_F(TestArray, GatherBool)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -57,7 +59,7 @@ TEST(TestArray, GatherBool)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, Scatter)
+TEST_F(TestArray, Scatter)
 {
     NVStrings* strs1 = NVStrings::create_from_array(hstrs.data(),hstrs.size());
     const char* h2[] = { "", "Joe Schmoe" };
@@ -84,7 +86,7 @@ TEST(TestArray, Scatter)
     NVStrings::destroy(strs2);
 }
 
-TEST(TestArray, RemoveStrings)
+TEST_F(TestArray, RemoveStrings)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -101,7 +103,7 @@ TEST(TestArray, RemoveStrings)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, SortLength)
+TEST_F(TestArray, SortLength)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -113,7 +115,7 @@ TEST(TestArray, SortLength)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, SortName)
+TEST_F(TestArray, SortName)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -125,7 +127,7 @@ TEST(TestArray, SortName)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, OrderLength)
+TEST_F(TestArray, OrderLength)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -139,7 +141,7 @@ TEST(TestArray, OrderLength)
     NVStrings::destroy(strs);
 }
 
-TEST(TestArray, OrderName)
+TEST_F(TestArray, OrderName)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
@@ -151,10 +153,4 @@ TEST(TestArray, OrderName)
         EXPECT_EQ(indexes[idx],expected[idx]);
 
     NVStrings::destroy(strs);
-}
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

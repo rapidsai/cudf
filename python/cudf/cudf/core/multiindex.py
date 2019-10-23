@@ -98,7 +98,14 @@ class MultiIndex(Index):
         self._source_data = DataFrame()
         for i, name in enumerate(self._codes.columns):
             codes = as_index(self._codes[name]._column)
-            level = DataFrame({name: self._levels[i]})
+            if -1 in self._codes[name].values:
+                # Must account for null(s) in _source_data column
+                level = DataFrame(
+                    {name: [None] + list(self._levels[i])},
+                    index=range(-1, len(self._levels[i])),
+                )
+            else:
+                level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
             self._source_data[name] = level[name].reset_index(drop=True)
 

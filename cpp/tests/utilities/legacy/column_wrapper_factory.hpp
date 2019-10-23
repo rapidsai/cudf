@@ -58,20 +58,20 @@ template <typename T>
 struct column_wrapper_factory
 {
   template<typename DataInitializer>
-  column_wrapper<T> make(gdf_size_type size, DataInitializer data_init) {
+  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init) {
     return column_wrapper<T>(size,
-      [&](gdf_index_type row) { return convert(data_init(row)); });
+      [&](cudf::size_type row) { return convert(data_init(row)); });
   }
 
   template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<T> make(gdf_size_type size,
+  column_wrapper<T> make(cudf::size_type size,
                          DataInitializer data_init, BitInitializer bit_init) {
     return column_wrapper<T>(size,
-      [&](gdf_index_type row) { return convert(data_init(row)); },
+      [&](cudf::size_type row) { return convert(data_init(row)); },
       bit_init);
   }
 protected: 
-  T convert(gdf_index_type row) {
+  T convert(cudf::size_type row) {
     return static_cast<T>(row);
   }
 };
@@ -80,7 +80,7 @@ template <>
 struct column_wrapper_factory<cudf::nvstring_category>
 {
   template<typename DataInitializer>
-  column_wrapper<cudf::nvstring_category> make(gdf_size_type size,
+  column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
                                                DataInitializer data_init) {
     std::vector<const char*> strings = generate_strings(size, data_init);
     auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data()};
@@ -89,7 +89,7 @@ struct column_wrapper_factory<cudf::nvstring_category>
   }
 
   template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<cudf::nvstring_category> make(gdf_size_type size,
+  column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
                                                DataInitializer data_init,
                                                BitInitializer bit_init) {
     std::vector<const char*> strings = generate_strings(size, data_init);
@@ -100,8 +100,8 @@ struct column_wrapper_factory<cudf::nvstring_category>
   }
 
 protected:
-  const char* convert(gdf_index_type row) {
-    static int str_width = std::to_string(std::numeric_limits<gdf_index_type>().max()).size();
+  const char* convert(cudf::size_type row) {
+    static int str_width = std::to_string(std::numeric_limits<cudf::size_type>().max()).size();
     
     std::ostringstream convert;
     convert << std::setfill('0') << std::setw(str_width) << row;
@@ -111,7 +111,7 @@ protected:
   }
 
   template <typename DataInitializer>
-  std::vector<const char*> generate_strings(gdf_size_type size,
+  std::vector<const char*> generate_strings(cudf::size_type size,
                                             DataInitializer data_init)
   {
     std::vector<const char*> strings(size);

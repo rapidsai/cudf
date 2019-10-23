@@ -17,7 +17,7 @@
 
 /*#include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table.hpp>
 #include "table/device_table.cuh"
@@ -94,11 +94,11 @@ get_unique_ordered_indices(const cudf::table& keys,
                            const bool nulls_are_equal = true,
                            cudaStream_t stream=0)
 {
-  gdf_size_type ncols = keys.num_columns();
-  gdf_size_type nrows = keys.num_rows();
+  cudf::size_type ncols = keys.num_columns();
+  cudf::size_type nrows = keys.num_rows();
 
   // sort only indices
-  rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  rmm::device_vector<cudf::size_type> sorted_indices(nrows);
   gdf_context context;
   gdf_column sorted_indices_col;
   CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
@@ -110,10 +110,10 @@ get_unique_ordered_indices(const cudf::table& keys,
         &context));
 
   // extract unique indices 
-  rmm::device_vector<gdf_index_type> unique_indices(nrows);
+  rmm::device_vector<cudf::size_type> unique_indices(nrows);
   auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(keys, stream);
-  rmm::device_vector<gdf_size_type>::iterator result_end;
+  rmm::device_vector<cudf::size_type>::iterator result_end;
 
   if(cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
@@ -140,15 +140,15 @@ get_unique_ordered_indices(const cudf::table& keys,
                         thrust::distance(unique_indices.begin(), result_end));
 }
 
-gdf_size_type unique_count(const cudf::table& keys,
+cudf::size_type unique_count(const cudf::table& keys,
              const bool nulls_are_equal = true,
              cudaStream_t stream=0)
 {
-  gdf_size_type ncols = keys.num_columns();
-  gdf_size_type nrows = keys.num_rows();
+  cudf::size_type ncols = keys.num_columns();
+  cudf::size_type nrows = keys.num_rows();
 
   // sort only indices
-  rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  rmm::device_vector<cudf::size_type> sorted_indices(nrows);
   gdf_context context;
   gdf_column sorted_indices_col;
   CUDF_TRY(gdf_column_view(&sorted_indices_col, static_cast<void*>(sorted_indices.data().get()),
@@ -168,20 +168,20 @@ gdf_size_type unique_count(const cudf::table& keys,
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
     return thrust::count_if(exec,
-              thrust::counting_iterator<gdf_size_type>(0),
-              thrust::counting_iterator<gdf_size_type>(nrows),
+              thrust::counting_iterator<cudf::size_type>(0),
+              thrust::counting_iterator<cudf::size_type>(nrows),
               [sorted_row_index, comp] 
-              __device__ (const gdf_size_type i) {
+              __device__ (const cudf::size_type i) {
               return (i == 0 || !comp(sorted_row_index[i], sorted_row_index[i-1]));
               });
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
         nulls_are_equal);
     return thrust::count_if(exec,
-              thrust::counting_iterator<gdf_size_type>(0),
-              thrust::counting_iterator<gdf_size_type>(nrows),
+              thrust::counting_iterator<cudf::size_type>(0),
+              thrust::counting_iterator<cudf::size_type>(nrows),
               [sorted_row_index, comp]
-              __device__ (const gdf_size_type i) {
+              __device__ (const cudf::size_type i) {
               return (i == 0 || !comp(sorted_row_index[i], sorted_row_index[i-1]));
               });
   }
@@ -203,8 +203,8 @@ rows in input table should be equal to number of rows in key colums table");
       ) {
     return cudf::empty_like(input);
   }
-  rmm::device_vector<gdf_index_type> unique_indices;
-  gdf_size_type unique_count; 
+  rmm::device_vector<cudf::size_type> unique_indices;
+  cudf::size_type unique_count; 
   std::tie(unique_indices, unique_count) =
     detail::get_unique_ordered_indices(keys, keep, nulls_are_equal);
 
@@ -236,7 +236,7 @@ rows in input table should be equal to number of rows in key colums table");
   return destination_table;
 }
 
-gdf_size_type unique_count(gdf_column const& input,
+cudf::size_type unique_count(gdf_column const& input,
                            bool const ignore_nulls,
                            bool const nan_as_null)
 {
@@ -248,7 +248,7 @@ gdf_size_type unique_count(gdf_column const& input,
   //if (nan_as_null)
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64)) {
     auto temp = nans_to_nulls(col);
-    col.valid = reinterpret_cast<gdf_valid_type*>(temp.first);
+    col.valid = reinterpret_cast<cudf::valid_type*>(temp.first);
     col.null_count = temp.second;
   }
   bool const has_nans{col.null_count > input.null_count};

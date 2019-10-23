@@ -22,9 +22,8 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class UnaryOpTest {
+public class UnaryOpTest extends CudfTestBase {
   private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null};
   private static final Integer[] INTS_1 = new Integer[]{1, 10, -100, 5, 50, 100, null};
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, false, true, false, true, false, null};
@@ -116,7 +115,6 @@ public class UnaryOpTest {
 
   @Test
   public void testSin() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.sin();
          ColumnVector expected = forEach(dcv, doubleFun(Math::sin))) {
@@ -126,7 +124,6 @@ public class UnaryOpTest {
 
   @Test
   public void testCos() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.cos();
          ColumnVector expected = forEach(dcv, doubleFun(Math::cos))) {
@@ -136,7 +133,6 @@ public class UnaryOpTest {
 
   @Test
   public void testTan() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.tan();
          ColumnVector expected = forEach(dcv, doubleFun(Math::tan))) {
@@ -146,7 +142,6 @@ public class UnaryOpTest {
 
   @Test
   public void testArcsin() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.arcsin();
          ColumnVector expected = forEach(dcv, doubleFun(Math::asin))) {
@@ -156,7 +151,6 @@ public class UnaryOpTest {
 
   @Test
   public void testArccos() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.arccos();
          ColumnVector expected = forEach(dcv, doubleFun(Math::acos))) {
@@ -166,7 +160,6 @@ public class UnaryOpTest {
 
   @Test
   public void testArctan() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.arctan();
          ColumnVector expected = forEach(dcv, doubleFun(Math::atan))) {
@@ -176,7 +169,6 @@ public class UnaryOpTest {
 
   @Test
   public void testExp() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.exp();
          ColumnVector expected = forEach(dcv, doubleFun(Math::exp))) {
@@ -186,7 +178,6 @@ public class UnaryOpTest {
 
   @Test
   public void testLog() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.log();
          ColumnVector expected = forEach(dcv, doubleFun(Math::log))) {
@@ -196,7 +187,6 @@ public class UnaryOpTest {
 
   @Test
   public void testSqrt() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.sqrt();
          ColumnVector expected = forEach(dcv, doubleFun(Math::sqrt))) {
@@ -206,7 +196,6 @@ public class UnaryOpTest {
 
   @Test
   public void testCeil() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.ceil();
          ColumnVector expected = forEach(dcv, doubleFun(Math::ceil))) {
@@ -216,7 +205,6 @@ public class UnaryOpTest {
 
   @Test
   public void testFloor() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.floor();
          ColumnVector expected = forEach(dcv, doubleFun(Math::floor))) {
@@ -226,7 +214,6 @@ public class UnaryOpTest {
 
   @Test
   public void testAbs() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.abs();
          ColumnVector expected = forEach(dcv, doubleFun(Math::abs))) {
@@ -236,7 +223,6 @@ public class UnaryOpTest {
 
   @Test
   public void testBitInvert() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector answer = icv.bitInvert();
          ColumnVector expected = forEach(icv, intFun((i) -> ~i))) {
@@ -246,7 +232,6 @@ public class UnaryOpTest {
 
   @Test
   public void testNot() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedBooleans(BOOLEANS_1);
          ColumnVector answer = icv.not();
          ColumnVector expected = forEach(icv, boolFun((i) -> !i))) {
@@ -257,7 +242,6 @@ public class UnaryOpTest {
   // String to string cat conversion has more to do with correctness as we wrote that all ourselves
   @Test
   public void testStringCastFullCircle() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector origStr = ColumnVector.fromStrings(STRINGS_1);
          ColumnVector origCat = ColumnVector.categoryFromStrings(STRINGS_1);
          ColumnVector cat = origStr.asStringCategories();
