@@ -14,6 +14,7 @@
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
+- PR #3192 Add dtype param to cast `DataFrame` on init
 
 ## Improvements
 
