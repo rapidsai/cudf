@@ -1470,7 +1470,7 @@ class Series(object):
         """Sort by the index.
         """
         inds = self.index.argsort(ascending=ascending)
-        return self.take(inds.to_gpu_array())
+        return self.take(inds.data.mem)
 
     def sort_values(self, ascending=True, na_position="last"):
         """
@@ -1505,7 +1505,7 @@ class Series(object):
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        index = self.index.take(inds.to_gpu_array())
+        index = self.index.take(inds.data.mem)
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
@@ -2092,7 +2092,7 @@ class Series(object):
             raise NotImplementedError(msg)
         vmin = self.min()
         vmax = self.max()
-        gpuarr = self.to_gpu_array()
+        gpuarr = self.data.mem
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
@@ -2196,7 +2196,7 @@ class Series(object):
         )
 
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
-        mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
+        mod_vals = cudautils.modulo(hashed_values.data.mem, stop)
         return Series(mod_vals)
 
     def quantile(
