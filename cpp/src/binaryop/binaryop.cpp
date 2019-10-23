@@ -18,13 +18,13 @@
  */
 
 #include <bitmask/legacy/bitmask_ops.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/legacy/copying.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <nvstrings/NVCategory.h>
 
 #include "compiled/binary_ops.hpp"
