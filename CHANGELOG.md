@@ -48,6 +48,7 @@
 - PR #3138 Movey unary files to legacy
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3191 Port NVStrings integer convert ops to cudf column
 
 
 ## Bug Fixes
