@@ -19,6 +19,7 @@ from . import (
     quantile,
     reduce,
     replace,
+    reshape,
     rolling,
     search,
     sort,
