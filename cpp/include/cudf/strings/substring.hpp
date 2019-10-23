@@ -23,7 +23,7 @@ namespace cudf
 namespace strings
 {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column.
  *
@@ -50,13 +50,13 @@ namespace strings
  * @param step Character count to skip when retrieving substring.
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<cudf::column> substring( strings_column_view strings,
                                          int32_t start, int32_t stop=-1, int32_t step=1,
                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column using unique ranges for each string.
  *
@@ -83,7 +83,7 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
  * @param stops Last character (exclusive) positions to end the substring.
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
                                               column_view starts, column_view stops,
                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
