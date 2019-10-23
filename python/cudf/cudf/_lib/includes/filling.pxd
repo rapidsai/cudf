@@ -8,7 +8,7 @@
 from cudf._lib.cudf cimport *
 
 
-cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/filling.hpp" namespace "cudf" nogil:
 
     cdef void fill(
         gdf_column * column,
@@ -25,4 +25,9 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
     cdef cudf_table repeat(
         const cudf_table & input,
         const gdf_scalar & count
+    ) except +
+
+    cdef cudf_table tile(
+        const cudf_table & input,
+        size_type count
     ) except +

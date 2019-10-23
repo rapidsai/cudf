@@ -150,6 +150,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
 
+  private static native void gdfWriteORC(int compressionType, String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
+
   /**
    * Ugly long function to read CSV.  This is a long function to avoid the overhead of reaching
    * into a java
@@ -717,6 +719,24 @@ public final class Table implements AutoCloseable {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
                 opts.timeUnit().getNativeId()));
+  }
+
+  /**
+   * Writes this table to a file on the host
+   *
+   * @param outputFile - File to write the table to
+   */
+  public void writeORC(File outputFile) {
+    gdfWriteORC(ORCWriterOptions.DEFAULT.getCompressionType().nativeId, outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
+  }
+
+  /**
+   * Writes this table to a file on the host
+   *
+   * @param outputFile - File to write the table to
+   */
+  public void writeORC(ORCWriterOptions options, File outputFile) {
+    gdfWriteORC(options.getCompressionType().nativeId, outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
   }
 
   /**

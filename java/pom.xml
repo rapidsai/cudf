@@ -327,7 +327,6 @@
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
-                                    <!--<arg value="-DUSE_NVTX"/>-->
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
