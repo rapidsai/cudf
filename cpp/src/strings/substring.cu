@@ -220,11 +220,17 @@ struct dispatch_substring_from_fn
         return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                    null_count, std::move(null_mask), stream, mr);
     }
-    template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(strings_column_view&, column_view&, column_view&,
-                                             rmm::mr::device_memory_resource*, cudaStream_t)  const noexcept
+    //
+    template <typename PositionType, std::enable_if_t<not std::is_integral<PositionType>::value>* = nullptr>
+    std::unique_ptr<cudf::column> operator()(strings_column_view&,
+                                             column_view&, column_view&,
+                                             rmm::mr::device_memory_resource*,
+                                             cudaStream_t ) const noexcept
     {
-        CUDF_FAIL("Positions must be integral type.");
+        // this line causes the following compile error:
+        // "error: throw will always call terminate()""
+        //CUDF_FAIL("Positions must be integral type.");
+        return nullptr;
     }
 };
 } // namespace
