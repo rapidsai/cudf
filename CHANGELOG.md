@@ -54,13 +54,13 @@
 - PR #3171 Move deprecated error macros to legacy
 - PR #3195 Support for zero columned `table_view`
 
-
 ## Bug Fixes
 
 - PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3056 Add additional cmake hint for finding local build of RMM files
 - PR #3060 Move copying.hpp includes to legacy
 - PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
