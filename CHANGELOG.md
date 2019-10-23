@@ -47,6 +47,7 @@
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Movey unary files to legacy
 - PR #3175 Set cmake cuda version variables
+- PR #3171 Move deprecated error macros to legacy
 
 
 ## Bug Fixes
