@@ -63,7 +63,7 @@ def tile(input, count):
     cdef cudf_table* c_input_table = table_from_columns(input)
     cdef cudf_table c_result_table
 
-    cdef gdf_index_type c_count = count
+    cdef size_type c_count = count
 
     if np.isscalar(count):
         with nogil:

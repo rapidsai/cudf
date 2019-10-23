@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/filling.hpp>
+#include <cudf/legacy/filling.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
@@ -38,14 +38,14 @@ TYPED_TEST(TileTest, Tile)
 {
   using T = TypeParam;
 
-  gdf_size_type repeat_count = 4;
-  gdf_size_type num_values = 9;
+  cudf::size_type repeat_count = 4;
+  cudf::size_type num_values = 9;
 
   // set your expectations
-  gdf_size_type column_size = num_values * repeat_count;
+  cudf::size_type column_size = num_values * repeat_count;
   std::vector<int> expect_vals;
-  for (gdf_size_type i = 0; i < repeat_count; i++) {
-    for (gdf_size_type j = 0; j < num_values; j++) {
+  for (cudf::size_type i = 0; i < repeat_count; i++) {
+    for (cudf::size_type j = 0; j < num_values; j++) {
       expect_vals.push_back(2 * j);
     }
   }
@@ -53,12 +53,12 @@ TYPED_TEST(TileTest, Tile)
   cudf::test::column_wrapper_factory<T> factory;
 
   column_wrapper<T> values = factory.make(num_values,
-    [&](gdf_size_type i) { return 2 * i; },
-    [&](gdf_size_type i) { return i % 2; });
+    [&](cudf::size_type i) { return 2 * i; },
+    [&](cudf::size_type i) { return i % 2; });
 
   column_wrapper<T> expected = factory.make(column_size,
-    [&](gdf_index_type row) { return expect_vals[row]; },
-    [&](gdf_size_type i) { return (i % num_values) % 2; });
+    [&](cudf::size_type row) { return expect_vals[row]; },
+    [&](cudf::size_type i) { return (i % num_values) % 2; });
 
   cudf::table result = cudf::tile({values.get()}, repeat_count);
   column_wrapper<T> actual(*result.get_column(0));

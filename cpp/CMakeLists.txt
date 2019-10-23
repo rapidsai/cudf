@@ -466,7 +466,7 @@ add_library(cudf
             src/copying/legacy/copy_range.cu
             src/filling/legacy/fill.cu
             src/filling/legacy/repeat.cu
-            src/filling/tile.cu
+            src/filling/legacy/tile.cu
             src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp

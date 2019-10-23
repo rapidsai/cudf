@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/column_wrapper_factory.hpp>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper_factory.hpp>
 
 #include <cudf/reshape.hpp>
+#include <cudf/types.h>
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
@@ -55,8 +56,8 @@ void BM_stack(benchmark::State& state){
 
     for (gdf_size_type i = 0; i < num_columns; i++) {
       cols.emplace_back(factory.make(col_size,
-        [=](gdf_index_type row) { return random_int(0, 10); }
-        ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+        [=](cudf::size_type row) { return random_int(0, 10); }
+        ,[=](cudf::size_type row) { return random_int(0, 10) < 90; }
       ));
     }
 
@@ -131,8 +132,8 @@ void BM_mar(benchmark::State& state){
 
   for (gdf_size_type i = 0; i < num_columns; i++) {
     columns.emplace_back(factory.make(column_size,
-      [=](gdf_index_type row) { return random_int(0, 10); }
-      ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+      [=](cudf::size_type row) { return random_int(0, 10); }
+      ,[=](cudf::size_type row) { return random_int(0, 10) < 90; }
     ));
   }
 
@@ -184,8 +185,8 @@ void BM_cfc(benchmark::State& state){
 
   for (gdf_size_type i = 0; i < num_columns; i++) {
     columns.emplace_back(factory.make(column_size,
-      [=](gdf_index_type row) { return random_int(0, 10); }
-      ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+      [=](cudf::size_type row) { return random_int(0, 10); }
+      ,[=](cudf::size_type row) { return random_int(0, 10) < 90; }
     ));
   }
 

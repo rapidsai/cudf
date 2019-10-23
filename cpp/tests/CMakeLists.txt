@@ -480,7 +480,7 @@ ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 set(LEGACY_FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/filling_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/tiling_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/tiling_tests.cu")
 
 ConfigureTest(LEGACY_FILLING_TEST "${LEGACY_FILLING_TEST_SRC}")
 

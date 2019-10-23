@@ -15,7 +15,7 @@
  */
 
 #include <utilities/error_utils.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/types.h>
