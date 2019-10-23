@@ -20,7 +20,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "copy_detail.hpp"
+#include <detail/copy_detail.hpp>
 
 #include <algorithm>
 
