@@ -166,6 +166,9 @@ class DataFrame(object):
         for col in self._cols:
             self._cols[col]._index = self._index
 
+        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
+        self._allow_setattr_to_setitem = True
+
     @property
     def _constructor(self):
         return DataFrame
@@ -270,6 +273,33 @@ class DataFrame(object):
             c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
+
+    def __setattr__(self, key, col):
+        if getattr(self, "_allow_setattr_to_setitem", False):
+            # if an attribute already exists, set it.
+            try:
+                object.__getattribute__(self, key)
+                object.__setattr__(self, key, col)
+                return
+            except AttributeError:
+                pass
+
+            # if a column already exists, set it.
+            try:
+                self[key]  # __getitem__ to verify key exists
+                self[key] = col
+                return
+            except KeyError:
+                pass
+
+            warnings.warn(
+                "Columns may not be added to a DataFrame using a new "
+                + "attribute name. A new attribute will be created: '%s'"
+                % key,
+                UserWarning,
+            )
+
+        object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
         if key != "_cols" and key in self._cols:
