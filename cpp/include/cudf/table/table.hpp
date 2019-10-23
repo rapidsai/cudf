@@ -102,6 +102,13 @@ class table {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
+   *
+   * @throws cudf::logic_error
+   * If any element in `column_indices` is outside [0, num_columns())
+   *
+   * @param column_indices Indices of columns in the table
+   * @return A table_view consisting of columns from the original table
+   * specified by the elements of `column_indices`
    *---------------------------------------------------------------------------**/
   table_view select(std::vector<cudf::size_type> const& column_indices) const;
 
