@@ -23,26 +23,24 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Checks the `input` column_view for `null` values, and creates a `bool`
- * column of same size with `true` representing `null` values and `false` for
- * other.
+ * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
+ * indicates the value is null and `false` indicates the value is valid.
  *
  * @param[in] input A `column_view` as input
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `true` representing `null` values.
  */
 std::unique_ptr<cudf::column> is_null(cudf::column_view const& input);
 
 /**
- * @brief Checks the `input` column for `null` values, and creates a `bool`
- * column of same size with `false` representing `null` values and `true` for
- * other.
+ * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
+ * indicates the value is valid and `false` indicates the value is null.
  *
  * @param[in] input A `column_view` as input
  *
- * @returns std::unique_ptr<cudf::column>  A column of type `BOOL8` with `false` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `false` representing `null` values.
  */
-std::unique_ptr<cudf::column> is_not_null(cudf::column_view const& input);
+std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input);
 
 } // namespace experimental
 } // namespace cudf

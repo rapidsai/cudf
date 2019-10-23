@@ -25,37 +25,26 @@ namespace cudf {
 
 namespace experimental {
 
-namespace detail {
-
-std::unique_ptr<column> null_op(column_view const& input,
-                                bool nulls_are_false = true,
-                                rmm::mr::device_memory_resource* mr
-                                cudaStream_t stream) {
-    auto output = make_numeric_column(data_type(BOOL8), input.size(), UNALLOCATED, stream, mr);
-    auto output_mutable_view = output->mutable_view();
-    auto input_device_view = column_device_view::create(input);
-    auto input_device_column_view = *input_device_view;
-    auto exec = rmm::exec_policy(stream)->on(stream);
-    auto output_data = output_mutable_view.data<bool>();
-
-    thrust::transform(exec,
-                      thrust::make_counting_iterator(static_cast<size_type>(input.offset())),
-                      thrust::make_counting_iterator(static_cast<size_type>(input.size())),
-                      output_data,
-                      [input_device_column_view, nulls_are_false]__device__(auto index){
-                          return (nulls_are_false == input_device_column_view.is_valid(index));
-                      });
-
-    return output;
-}
-}// detail
-
 std::unique_ptr<column> is_null(cudf::column_view const& input) {
-    return detail::null_op(input, false);
+    auto input_device_view = column_device_view::create(input);
+    auto device_view = *input_device_view;
+    auto predicate = [device_view] __device__(auto index){
+                         return (false == device_view.is_valid(index));
+                     };
+    return detail::true_if(thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(input.size()),
+                           input.size(), predicate);
 }
 
-std::unique_ptr<column> is_not_null(cudf::column_view const& input) {
-    return detail::null_op(input, true);
+std::unique_ptr<column> is_valid(cudf::column_view const& input) {
+    auto input_device_view = column_device_view::create(input);
+    auto device_view = *input_device_view;
+    auto predicate = [device_view] __device__(auto index){
+                         return device_view.is_valid(index);
+                     };
+    return detail::true_if(thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(input.size()),
+                           input.size(), predicate);
 }
 
 }// experimental

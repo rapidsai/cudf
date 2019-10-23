@@ -1,4 +1,4 @@
-i/*
+/*
  * Copyright (c) 2018-2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,29 +18,44 @@ i/*
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/column/column_factories.hpp>
 
 namespace cudf {
 namespace experimental {
 namespace detail{
 
 /**
- * @brief Checks the `input` column_view for `null` values, and creates a `bool`
- * column of same size with `null`s being represented as `false` and others as `true`
- * if `nulls_are_false` is `true`, else `null`s will be represented by `true` and
- * others as `false`.
+ * @brief Creates a column of `BOOL8` elements where for every element between [`begin, `end`)
+ * `true` indicates the value is satisfies the predicate and `false` indicates it doesn't.
  *
- * @param[in] input A `column_view` as input
- * @param[in] nulls_are_false Value to represent `null`s
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @tparam Predicate A predicator type which will be evaludated
+ * @param begin Begining of the sequence of elements
+ * @param end End of the sequence of elements
+ * @param p Predicate to be evaluated
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
-std::unique_ptr<column> null_op(column_view const& input,
-                                bool nulls_are_false = true,
-                                rmm::mr::device_memory_resource* mr =
-                                  rmm::mr::get_default_resource(),
-                                cudaStream_t stream = 0)
+
+template <typename InputIterator, typename Predicate>
+std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
+                           size_type size, Predicate p,
+                           rmm::mr::device_memory_resource * mr =
+                               rmm::mr::get_default_resource(),
+                           cudaStream_t stream = 0) {
+    auto output = make_numeric_column(data_type(BOOL8), size, UNALLOCATED, stream, mr);
+    auto output_mutable_view = output->mutable_view();
+    auto output_data = output_mutable_view.data<bool>();
+    auto exec = rmm::exec_policy(stream)->on(stream);
+
+    thrust::transform(exec, begin, end, output_data, p);
+
+    return output;
+}
+
+
 } // namespace detail
-} //namespace experimental
-} //namespace cudf
+} // namespace experimental
+} // namespace cudf

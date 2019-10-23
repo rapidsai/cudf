@@ -112,7 +112,7 @@ TYPED_TEST(IsNotNull, AllValid)
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, false);
     cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, false, false);
 
-    std::unique_ptr<cudf::column> got = cudf::experimental::is_not_null(col);
+    std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -126,7 +126,7 @@ TYPED_TEST(IsNotNull, WithInvalids)
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
     cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, false);
 
-    std::unique_ptr<cudf::column> got = cudf::experimental::is_not_null(col);
+    std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -140,7 +140,7 @@ TYPED_TEST(IsNotNull, EmptyColumns)
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
     cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, false);
 
-    std::unique_ptr<cudf::column> got = cudf::experimental::is_not_null(col);
+    std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
