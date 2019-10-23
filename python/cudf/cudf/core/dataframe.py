@@ -394,6 +394,7 @@ class DataFrame(object):
         for col in self.columns:
             if col in other.columns:
                 boolbits = cudautils.compact_mask_bytes(
+                    # leave this alone
                     other[col].to_gpu_array()
                 )
             else:
@@ -1169,7 +1170,7 @@ class DataFrame(object):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
+                df = df.take(idx.argsort(True).argsort(True).data.mem)
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)

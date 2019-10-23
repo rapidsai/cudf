@@ -437,6 +437,7 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
+            # leave this alone -- fails 'test_string_repr' test
             indices = indices.to_gpu_array()
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
