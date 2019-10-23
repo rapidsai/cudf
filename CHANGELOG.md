@@ -50,6 +50,7 @@
 - PR #3171 Move deprecated error macros to legacy
 - PR #3165 Java device memory size for string category
 
+
 ## Bug Fixes
 
 - PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
