@@ -70,10 +70,11 @@ template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
-  using uniform_distribution =
+  using uniform_distribution = std::conditional_t<
+      std::is_same<T, bool>::value, std::bernoulli_distribution,
       std::conditional_t<std::is_floating_point<T>::value,
                          std::uniform_real_distribution<T>,
-                         std::uniform_int_distribution<T>>;
+                         std::uniform_int_distribution<T>>>;
 
   UniformRandomGenerator() = default;
 
