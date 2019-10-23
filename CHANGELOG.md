@@ -11,6 +11,7 @@
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
+- PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 
 ## Improvements
