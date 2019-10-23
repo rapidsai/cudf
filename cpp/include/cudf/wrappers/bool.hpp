@@ -52,7 +52,7 @@ struct bool8 {
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator=(from_type&& rhs) {
-    this->value = static_cast<uint8_t>(static_cast<bool>(rhs));
+    this->value = static_cast<uint8_t>(static_cast<bool>(std::move(rhs)));
     return *this;
   }
 
