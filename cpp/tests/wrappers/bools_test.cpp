@@ -17,47 +17,31 @@
 #include <cudf/wrappers/bool.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
 
-#include <random>
-
-struct Bool8Test : public ::testing::Test {
+struct Bool8Test
+  : public cudf::test::BaseFixture
+  , cudf::test::UniformRandomGenerator<uint8_t> {
 
   Bool8Test()
-      : dist{std::numeric_limits<uint8_t>::lowest(),
-             std::numeric_limits<uint8_t>::max()} {
+    : cudf::test::UniformRandomGenerator<uint8_t>{
+        std::numeric_limits<uint8_t>::lowest(), 
+        std::numeric_limits<uint8_t>::max()} {}
 
-    // Use constant seed for deterministic results
-    rng.seed(0);
-  }
-
-  std::mt19937 rng;
-  std::uniform_int_distribution<uint8_t> dist;
-
-  uint8_t rand(){
-      return dist(rng);
-  }
+  uint8_t rand(){ return this->generate(); }
 };
 
-template <typename SourceType>
-struct Bool8CtorTest : public ::testing::Test {
-  Bool8CtorTest() {
-    // Use constant seed for deterministic results
-    rng.seed(0);
-  }
+template <typename T>
+struct Bool8CtorTest
+  : public cudf::test::BaseFixture
+  , cudf::test::UniformRandomGenerator<T> {
 
-  std::mt19937 rng;
+  Bool8CtorTest()
+    : cudf::test::UniformRandomGenerator<T>{}{}
 
-  using uniform_distribution = typename std::conditional_t<
-      std::is_same<SourceType, bool>::value, std::bernoulli_distribution,
-      std::conditional_t<std::is_floating_point<SourceType>::value,
-                         std::uniform_real_distribution<SourceType>,
-                         std::uniform_int_distribution<SourceType>>>;
-
-  uniform_distribution dist{};
-
-  SourceType rand(){
-      return dist(rng);
-  }
+  T rand(){ return this->generate(); }
 };
 
 /**
@@ -65,7 +49,7 @@ struct Bool8CtorTest : public ::testing::Test {
  */
 static constexpr int NUM_TRIALS{10000};
 
-using Bool8CastSourceTypes = ::testing::Types<char, bool, float, double, int32_t, int64_t>;
+using Bool8CastSourceTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::Types<bool>>;
 
 TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 
