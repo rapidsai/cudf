@@ -14,6 +14,7 @@
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
+- PR #3192 Add dtype param to cast `DataFrame` on init
 
 ## Improvements
 
@@ -52,6 +53,7 @@
 - PR #3138 Movey unary files to legacy
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3195 Support for zero columned `table_view`
 
 
 ## Bug Fixes

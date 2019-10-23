@@ -3958,3 +3958,43 @@ def test_series_astype_error_handling(errors):
     sr = Series(["random", "words"])
     got = sr.astype("datetime64", errors=errors)
     assert_eq(sr, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_df_constructor_dtype(dtype):
+    if "datetime" in dtype:
+        data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+        sr = Series(data, dtype=dtype)
+    elif dtype == "str":
+        data = [1, 2, 3, None]
+        sr = Series.from_pandas(pd.Series(data, dtype=dtype))
+    elif "float" in dtype:
+        data = [1, 2, 3, None]
+        sr = Series(data, dtype=dtype)
+    else:
+        data = [1.0, 0.5, -1.1, np.nan, None]
+        sr = Series(data, dtype=dtype)
+
+    expect = DataFrame()
+    expect["foo"] = sr
+    expect["bar"] = sr
+
+    got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
+
+    assert_eq(expect, got)
