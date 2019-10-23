@@ -109,13 +109,22 @@ We do not yet expose CUDA streams in external libcudf APIs.
 However, in order to ease the transition to future use of streams, all libcudf APIs that allocate device memory or execute a kernel should be implemented using asynchronous APIs on the default stream (e.g., stream 0). 
 
 The recommended pattern for doing this is to make the definition of the external API invoke an internal API in the `detail` namespace. The internal `detail` API will have all the same parameters, plus a `cudaStream_t` parameter at the end defaulted to `0`. 
-The implementation should be wholly contained in the `detail` API definition and use only asynchronous versions of CUDA APIs with the defaulted stream parameter. For example:
+The implementation should be wholly contained in the `detail` API definition and use only asynchronous versions of CUDA APIs with the defaulted stream parameter. 
+
+In order to make the `detail` API callable from other libcudf functions, it should be exposed in a header placed in the `cudf/cpp/include/detail/` directory.
+
+For example:
 
 ```c++
-// header.hpp
+// include/header.hpp
 void external_function(...);
 
-// implementation.cpp
+// include/detail/header.hpp
+namespace detail{
+void external_function(..., cudaStream_t stream = 0)
+} // namespace detail
+
+// src/implementation.cpp
 namespace detail{
     // defaulted stream parameter
     void external_function(..., cudaStream_t stream = 0){
