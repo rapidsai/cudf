@@ -15,7 +15,7 @@
  */
 
 #include "unary_ops.cuh"
-#include <cudf/unary.hpp>
+#include <cudf/legacy/unary.hpp>
 #include <cudf/legacy/copying.hpp>
 
 #include <cudf/utilities/legacy/type_dispatcher.hpp>

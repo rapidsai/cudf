@@ -103,22 +103,18 @@ class DataFrame(object):
     3    3  13.0
     4    4  14.0
 
-    Build dataframe with initializer:
+    Build DataFrame via dict of columns:
 
     >>> import cudf
     >>> import numpy as np
     >>> from datetime import datetime, timedelta
-    >>> ids = np.arange(5)
-
-    Create some datetime data
 
     >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-    >>> datetimes = [(t0+ timedelta(seconds=x)) for x in range(5)]
-    >>> dts = np.array(datetimes, dtype='datetime64')
-
-    Create the GPU DataFrame
-
-    >>> df = cudf.DataFrame([('id', ids), ('datetimes', dts)])
+    >>> n = 5
+    >>> df = cudf.DataFrame({
+    >>>   'id': np.arange(n),
+    >>>   'datetimes', np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
+    >>> })
     >>> df
         id                datetimes
     0    0  2018-10-07T12:00:00.000
@@ -126,6 +122,20 @@ class DataFrame(object):
     2    2  2018-10-07T12:00:02.000
     3    3  2018-10-07T12:00:03.000
     4    4  2018-10-07T12:00:04.000
+
+    Build DataFrame via list of rows as tuples:
+
+    >>> import cudf
+    >>> df = cudf.DataFrame([
+        (5, "cats", "jump", np.nan),
+        (2, "dogs", "dig", 7.5),
+        (3, "cows", "moo", -2.1, "occasionally"),
+    ])
+    >>> df
+    0     1     2     3             4
+    0  5  cats  jump  null          None
+    1  2  dogs   dig   7.5          None
+    2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
 
@@ -151,20 +161,30 @@ class DataFrame(object):
         # has initializer?
 
         if data is not None:
-            if isinstance(data, dict):
-                data = data.items()
-            elif is_list_like(data) and len(data) > 0:
-                if not isinstance(data[0], (list, tuple)):
+            if is_list_like(data) and len(data) > 0:
+
+                if isinstance(data[0], tuple):
+                    index = self._index = RangeIndex(start=0, stop=len(data))
+                    data = enumerate(itertools.zip_longest(*data))
+
+                elif not isinstance(data[0], list):
                     # a nested list is something pandas supports and
                     # we don't support list-like values in a record yet
                     self._add_rows(data, index, keys)
                     return
+
+            if isinstance(data, dict):
+                data = data.items()
+
             for col_name, series in data:
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
         for col in self._cols:
             self._cols[col]._index = self._index
+
+        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
+        self._allow_setattr_to_setitem = True
 
     @property
     def _constructor(self):
@@ -270,6 +290,33 @@ class DataFrame(object):
             c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
+
+    def __setattr__(self, key, col):
+        if getattr(self, "_allow_setattr_to_setitem", False):
+            # if an attribute already exists, set it.
+            try:
+                object.__getattribute__(self, key)
+                object.__setattr__(self, key, col)
+                return
+            except AttributeError:
+                pass
+
+            # if a column already exists, set it.
+            try:
+                self[key]  # __getitem__ to verify key exists
+                self[key] = col
+                return
+            except KeyError:
+                pass
+
+            warnings.warn(
+                "Columns may not be added to a DataFrame using a new "
+                + "attribute name. A new attribute will be created: '%s'"
+                % key,
+                UserWarning,
+            )
+
+        object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
         if key != "_cols" and key in self._cols:
@@ -1630,9 +1677,9 @@ class DataFrame(object):
         else:
             result_index = cudf.core.index.as_index(result_index_cols[0])
 
-            df = DataFrame._from_columns(
-                result_data_cols, index=result_index, columns=self.columns
-            )
+        df = DataFrame._from_columns(
+            result_data_cols, index=result_index, columns=self.columns
+        )
         return df
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1758,21 +1805,19 @@ class DataFrame(object):
 
         # Concatenate cudf.series for all columns
 
-        data = [
-            (
-                c,
-                Series._concat(
-                    [
-                        o[c]
-                        if c in o.columns
-                        else utils.get_null_series(size=len(o), dtype=np.bool)
-                        for o in objs
-                    ],
-                    index=index,
-                ),
+        data = {
+            c: Series._concat(
+                [
+                    o[c]
+                    if c in o.columns
+                    else utils.get_null_series(size=len(o), dtype=np.bool)
+                    for o in objs
+                ],
+                index=index,
             )
             for c in unique_columns_ordered_ls
-        ]
+        }
+
         out = cls(data)
         out._index = index
         libcudf.nvtx.nvtx_range_pop()
@@ -3875,7 +3920,7 @@ class DataFrame(object):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None):
+    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -3887,6 +3932,8 @@ class DataFrame(object):
             Scatter assignment for each row
         map_size : int
             Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
 
         Returns
         -------
@@ -3920,9 +3967,17 @@ class DataFrame(object):
                 "Use an integer array/column for better performance."
             )
 
+        if keep_index:
+            if isinstance(self.index, cudf.MultiIndex):
+                index = self.index.to_frame()._columns
+            else:
+                index = [self.index.as_column()]
+        else:
+            index = None
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
-            self._columns, map_index._column
+            self._columns, map_index._column, index
         )
 
         if map_size:
@@ -3935,7 +3990,7 @@ class DataFrame(object):
 
             # Append empty dataframes if map_size > len(tables)
             for i in range(map_size - len(tables)):
-                tables.append(self.iloc[[]])
+                tables.append(self.take([]))
         return tables
 
     def repeat(self, repeats, axis=None):
@@ -3946,6 +4001,77 @@ class DataFrame(object):
         column_names = self._cols.keys()
         result = DataFrame(data=dict(zip(column_names, cols)))
         return result.set_index(new_index)
+
+    def tile(self, reps):
+        """Construct a DataFrame by repeating this DataFrame the number of
+        times given by reps
+
+        Parameters
+        ----------
+        reps : non-negative integer
+            The number of repetitions of this DataFrame along axis 0
+
+        Returns
+        -------
+        The tiled output cudf.DataFrame
+        """
+        cols = libcudf.filling.tile(self._columns, reps)
+        column_names = self._cols.keys()
+        return DataFrame(data=dict(zip(column_names, cols)))
+
+    def stack(self, level=-1, dropna=True):
+        """Stack the prescribed level(s) from columns to index
+
+        Return a reshaped Series
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Whether to drop rows in the resulting Series with missing values.
+
+        Returns
+        -------
+        The stacked cudf.Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[0,1,3], 'b':[1,2,4]})
+        >>> df.stack()
+        0  a    0
+           b    1
+        1  a    1
+           b    2
+        2  a    3
+           b    4
+        dtype: int64
+        """
+        assert level in (None, -1)
+        index_as_cols = self.index.to_frame(index=False)._columns
+        new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
+        [last_index] = libcudf.filling.tile(
+            [column.as_column(self.columns)], self.shape[0]
+        )
+        new_index_cols.append(last_index)
+        index_df = DataFrame(
+            dict(zip(range(0, len(new_index_cols)), new_index_cols))
+        )
+        new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
+
+        # Collect datatypes and cast columns as that type
+        common_type = np.result_type(*self.dtypes)
+        homogenized_cols = [
+            c.astype(common_type)
+            if not np.issubdtype(c.dtype, common_type)
+            else c
+            for c in self._columns
+        ]
+        data_col = libcudf.reshape.stack(homogenized_cols)
+        result = Series(data=data_col, index=new_index)
+        if dropna:
+            return result.dropna()
+        else:
+            return result
 
 
 def from_pandas(obj):
