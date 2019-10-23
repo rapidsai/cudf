@@ -116,15 +116,15 @@ In order to make the `detail` API callable from other libcudf functions, it shou
 For example:
 
 ```c++
-// include/header.hpp
+// cpp/include/cudf/header.hpp
 void external_function(...);
 
-// include/detail/header.hpp
+// cpp/include/cudf/detail/header.hpp
 namespace detail{
 void external_function(..., cudaStream_t stream = 0)
 } // namespace detail
 
-// src/implementation.cpp
+// cudf/src/implementation.cpp
 namespace detail{
     // defaulted stream parameter
     void external_function(..., cudaStream_t stream){
