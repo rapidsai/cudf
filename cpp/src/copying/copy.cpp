@@ -60,7 +60,7 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
  * Supports only fixed-width types.
  */
 std::unique_ptr<column> allocate_like(column_view input,
-		                      size_type size,
+   		                              size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr,
 				      cudaStream_t stream)
@@ -108,7 +108,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 }
 
 std::unique_ptr<column> allocate_like(column_view input,
-		                      size_type size,
+		                              size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr) {
   return detail::allocate_like(input, size, mask_alloc, mr);

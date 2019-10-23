@@ -35,7 +35,7 @@ enum class  mask_allocation_policy {
 /*
  * Initializes and returns an empty column of the same type as the `input`.
  *
- * @param input Immutable view of input column to emulate
+ * @param[in] input Immutable view of input column to emulate
  * @return std::unique_ptr<column> An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(column_view input);
@@ -44,9 +44,9 @@ std::unique_ptr<column> empty_like(column_view input);
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
  * Supports only fixed-width types.
  *
- * @param input Immutable view of input column to emulate
- * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
- * @param mr Optional, The resource to use for all allocations
+ * @param[in] input Immutable view of input column to emulate
+ * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
+ * @param[in] mr Optional, The resource to use for all allocations
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input,
@@ -58,10 +58,10 @@ std::unique_ptr<column> allocate_like(column_view input,
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  * Supports only fixed-width types.
  *
- * @param input Immutable view of input column to emulate
- * @param size The desired number of elements that the new column should have capacity for
- * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
- * @param mr Optional, The resource to use for all allocations
+ * @param[in] input Immutable view of input column to emulate
+ * @param[in] size The desired number of elements that the new column should have capacity for
+ * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
+ * @param[in] mr Optional, The resource to use for all allocations
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input, size_type size,
@@ -75,7 +75,7 @@ std::unique_ptr<column> allocate_like(column_view input, size_type size,
  * Creates the `cudf::column` objects, but does not allocate any underlying device
  * memory for the column's data or bitmask.
  *
- * @param input_table Immutable view of input table to emulate
+ * @param[in] input_table Immutable view of input table to emulate
  * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in `input_table`
  */
 std::unique_ptr<table> empty_like(table_view input_table);
