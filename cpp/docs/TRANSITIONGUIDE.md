@@ -127,7 +127,7 @@ void external_function(..., cudaStream_t stream = 0)
 // src/implementation.cpp
 namespace detail{
     // defaulted stream parameter
-    void external_function(..., cudaStream_t stream = 0){
+    void external_function(..., cudaStream_t stream){
         // implementation uses stream w/ async APIs
         RMM_ALLOC(...,stream);
         cudaMemcpyAsync(...,stream);
