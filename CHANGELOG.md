@@ -52,6 +52,7 @@
 - PR #3138 Movey unary files to legacy
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3195 Support for zero columned `table_view`
 
 
 ## Bug Fixes
