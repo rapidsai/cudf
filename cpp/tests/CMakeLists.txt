@@ -250,25 +250,25 @@ set(REDUCTION_TEST_SRC
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
-# - replace tests ---------------------------------------------------------------------------------
+# - legacy replace tests ---------------------------------------------------------------------------------
 
-set(REPLACE_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+set(LEGACY_REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/legacy/replace_tests.cu")
 
-ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+ConfigureTest(LEGACY_REPLACE_TEST "${LEGACY_REPLACE_TEST_SRC}")
 
-set(REPLACE_NULLS_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace-nulls_tests.cu")
+set(LEGACY_REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/legacy/replace-nulls_tests.cu")
 
-ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
-set(UNARY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cu")
+set(LEGACY_UNARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
 
-ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
+ConfigureTest(LEGACY_UNARY_TEST "${LEGACY_UNARY_TEST_SRC}")
 
 ###################################################################################################
 # - binary tests ----------------------------------------------------------------------------------
@@ -458,10 +458,10 @@ ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 ###################################################################################################
 # - sorted-merge tests -------------------------------------------------------------------------------------
 
-set(MERGE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu")
+set(LEGACY_MERGE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/merge/legacy/merge-test.cu")
 
-ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
+ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
@@ -486,7 +486,8 @@ ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 set(LEGACY_FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/filling_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/tiling_tests.cu")
 
 ConfigureTest(LEGACY_FILLING_TEST "${LEGACY_FILLING_TEST_SRC}")
 
@@ -497,6 +498,14 @@ set(LEGACY_SEARCH_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/search/legacy/search_test.cu")
 
 ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
+
+###################################################################################################
+# - reshape test ----------------------------------------------------------------------------------
+
+set(RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_test.cu")
+
+ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
 
 ###################################################################################################
 # - traits test -----------------------------------------------------------------------------------

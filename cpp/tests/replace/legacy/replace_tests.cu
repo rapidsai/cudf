@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/replace.hpp>
+#include <cudf/legacy/replace.hpp>
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>

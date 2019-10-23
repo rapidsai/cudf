@@ -17,8 +17,8 @@
 #ifndef REPLACE_HPP
 #define REPLACE_HPP
 
-#include "cudf.h"
-#include "types.hpp"
+#include "cudf/cudf.h"
+#include "cudf/types.hpp"
 
 // Forward declaration
 typedef struct CUstream_st* cudaStream_t;
