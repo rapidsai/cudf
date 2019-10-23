@@ -22,6 +22,7 @@
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
+#include <utilities/legacy/error_utils.hpp>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
