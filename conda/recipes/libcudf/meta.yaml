@@ -68,8 +68,8 @@ test:
     - test -f $PREFIX/include/cudf/legacy/io_types.hpp
     - test -f $PREFIX/include/cudf/legacy/io_writers.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
+    - test -f $PREFIX/include/cudf/legacy/merge.hpp
     - test -f $PREFIX/include/cudf/legacy/join.hpp
-    - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/predicates.hpp
     - test -f $PREFIX/include/cudf/reduction.hpp
     - test -f $PREFIX/include/cudf/legacy/replace.hpp

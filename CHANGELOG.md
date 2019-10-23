@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
@@ -11,13 +12,16 @@
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
+- PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
+- PR #3192 Add dtype param to cast `DataFrame` on init
 
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
 - PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
@@ -49,7 +53,8 @@
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
 - PR #3191 Port NVStrings integer convert ops to cudf column
-
+- PR #3195 Support for zero columned `table_view`
+- PR #3165 Java device memory size for string category
 
 ## Bug Fixes
 
@@ -57,6 +62,7 @@
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3056 Add additional cmake hint for finding local build of RMM files
 - PR #3060 Move copying.hpp includes to legacy
 - PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
@@ -156,6 +162,7 @@
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 - PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
+- PR #3147 DataFrame can be initialized from rows via list of tuples
 
 ## Bug Fixes
 
