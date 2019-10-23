@@ -79,32 +79,6 @@ column_view::column_view(data_type type, size_type size, void const* data,
   }
 }
 
-// Slicer for immutable view
-column_view slice(column_view const& input,
-                  size_type begin,
-                  size_type end) {
-   size_type expecetd_size = input.offset() + end;
-   CUDF_EXPECTS(begin >= 0, "begin should be non negative value");
-   CUDF_EXPECTS(end >= 0, "end should be non negative value");
-   CUDF_EXPECTS(expecetd_size <= input.size(), "Expected slice exceeds the size of the column_view");
-
-   // If an empty `column_view` is created, it will not have null_mask. So this will help in
-   // comparing in such situation.
-   auto tmp_null_mask = (end-begin > 0)? input.null_mask() : nullptr;
-
-   std::vector<column_view> children {};
-   children.reserve(input.num_children());
-   for (size_type index = 0; index < input.num_children(); index++) {
-       children.emplace_back(input.child(index));
-   }
-
-   return column_view(input.type(), end - begin,
-                      input.head(), tmp_null_mask,
-                      cudf::UNKNOWN_NULL_COUNT,
-                      input.offset() + begin, children);
-}
-
-
 // Mutable view constructor
 mutable_column_view::mutable_column_view(
     data_type type, size_type size, void* data, bitmask_type* null_mask,
