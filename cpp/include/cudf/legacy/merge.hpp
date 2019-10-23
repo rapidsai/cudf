@@ -18,8 +18,8 @@
 #define MERGE_HPP
 
 #include <vector>
-#include "cudf.h"
-#include "types.hpp"
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 
 namespace cudf {
 /**
