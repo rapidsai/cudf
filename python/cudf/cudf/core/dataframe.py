@@ -103,22 +103,18 @@ class DataFrame(object):
     3    3  13.0
     4    4  14.0
 
-    Build dataframe with initializer:
+    Build DataFrame via dict of columns:
 
     >>> import cudf
     >>> import numpy as np
     >>> from datetime import datetime, timedelta
-    >>> ids = np.arange(5)
-
-    Create some datetime data
 
     >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-    >>> datetimes = [(t0+ timedelta(seconds=x)) for x in range(5)]
-    >>> dts = np.array(datetimes, dtype='datetime64')
-
-    Create the GPU DataFrame
-
-    >>> df = cudf.DataFrame([('id', ids), ('datetimes', dts)])
+    >>> n = 5
+    >>> df = cudf.DataFrame({
+    >>>   'id': np.arange(n),
+    >>>   'datetimes', np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
+    >>> })
     >>> df
         id                datetimes
     0    0  2018-10-07T12:00:00.000
@@ -126,6 +122,20 @@ class DataFrame(object):
     2    2  2018-10-07T12:00:02.000
     3    3  2018-10-07T12:00:03.000
     4    4  2018-10-07T12:00:04.000
+
+    Build DataFrame via list of rows as tuples:
+
+    >>> import cudf
+    >>> df = cudf.DataFrame([
+        (5, "cats", "jump", np.nan),
+        (2, "dogs", "dig", 7.5),
+        (3, "cows", "moo", -2.1, "occasionally"),
+    ])
+    >>> df
+    0     1     2     3             4
+    0  5  cats  jump  null          None
+    1  2  dogs   dig   7.5          None
+    2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
 
@@ -151,14 +161,21 @@ class DataFrame(object):
         # has initializer?
 
         if data is not None:
-            if isinstance(data, dict):
-                data = data.items()
-            elif is_list_like(data) and len(data) > 0:
-                if not isinstance(data[0], (list, tuple)):
+            if is_list_like(data) and len(data) > 0:
+
+                if isinstance(data[0], tuple):
+                    index = self._index = RangeIndex(start=0, stop=len(data))
+                    data = enumerate(itertools.zip_longest(*data))
+
+                elif not isinstance(data[0], list):
                     # a nested list is something pandas supports and
                     # we don't support list-like values in a record yet
                     self._add_rows(data, index, keys)
                     return
+
+            if isinstance(data, dict):
+                data = data.items()
+
             for col_name, series in data:
                 self.add_column(col_name, series, forceindex=index is not None)
 
@@ -1788,21 +1805,19 @@ class DataFrame(object):
 
         # Concatenate cudf.series for all columns
 
-        data = [
-            (
-                c,
-                Series._concat(
-                    [
-                        o[c]
-                        if c in o.columns
-                        else utils.get_null_series(size=len(o), dtype=np.bool)
-                        for o in objs
-                    ],
-                    index=index,
-                ),
+        data = {
+            c: Series._concat(
+                [
+                    o[c]
+                    if c in o.columns
+                    else utils.get_null_series(size=len(o), dtype=np.bool)
+                    for o in objs
+                ],
+                index=index,
             )
             for c in unique_columns_ordered_ls
-        ]
+        }
+
         out = cls(data)
         out._index = index
         libcudf.nvtx.nvtx_range_pop()

@@ -35,11 +35,11 @@ def test_from_cudf():
 def test_from_cudf_with_generic_idx():
 
     cdf = cudf.DataFrame(
-        [
-            ("a", list(range(20))),
-            ("b", list(reversed(range(20)))),
-            ("c", list(range(20))),
-        ]
+        {
+            "a": list(range(20)),
+            "b": list(reversed(range(20))),
+            "c": list(range(20)),
+        }
     )
 
     ddf = dgd.from_cudf(cdf, npartitions=2)
