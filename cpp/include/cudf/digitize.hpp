@@ -16,8 +16,9 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/column/column.hpp>
 #include <cudf/types.hpp>
+#include <memory>
 
 namespace cudf {
 
@@ -44,7 +45,7 @@ namespace cudf {
  *
  * @returns device array of same size as `col` to be filled with bin indices
  */
-rmm::device_vector<size_type>
+std::unique_ptr<column>
 digitize(column_view const& col, column_view const& bins, bool right,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
