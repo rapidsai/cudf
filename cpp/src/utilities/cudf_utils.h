@@ -2,6 +2,7 @@
 #define GDF_UTILS_H
 
 #include <utilities/error_utils.hpp>
+#include <utilities/legacy/error_utils.hpp>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <cudf/legacy/bitmask.hpp>

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame, Series
+from cudf.core.column import NumericalColumn
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]
@@ -263,7 +264,8 @@ def test_series_nlargest_nelem(nelem):
 
 @pytest.mark.parametrize("map_size", [1, 2, 8])
 @pytest.mark.parametrize("nelem", [1, 10, 100])
-def test_dataframe_scatter_by_map(map_size, nelem):
+@pytest.mark.parametrize("keep", [True, False])
+def test_dataframe_scatter_by_map(map_size, nelem, keep):
 
     strlist = ["dog", "cat", "fish", "bird", "pig", "fox", "cow", "goat"]
     np.random.seed(0)
@@ -276,17 +278,50 @@ def test_dataframe_scatter_by_map(map_size, nelem):
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
         nrows = 0
-        for df in dfs:
+        # print(col._column)
+        name = col.name
+        for i, df in enumerate(dfs):
             nrows += len(df)
-            assert df[col].astype(np.int32).nunique() <= 1
+            if len(df) > 0:
+                # Make sure the column types were preserved
+                assert isinstance(df[name]._column, type(col._column))
+            sr = df[name].astype(np.int32)
+            assert sr.nunique() <= 1
+            if sr.nunique() == 1:
+                if isinstance(df[name]._column, NumericalColumn):
+                    assert sr[0] == i
         assert nrows == nelem
 
-    _check_scatter_by_map(df.scatter_by_map("a", map_size), "a")
-    _check_scatter_by_map(df.scatter_by_map("b", map_size), "b")
-    _check_scatter_by_map(df.scatter_by_map("c", map_size), "c")
-    _check_scatter_by_map(df.scatter_by_map("d", map_size), "d")
+    _check_scatter_by_map(
+        df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("c", map_size, keep_index=keep), df["c"]
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
+    )
 
     if map_size == 2 and nelem == 100:
         df.scatter_by_map("a")  # Auto-detect map_size
         with pytest.raises(ValueError):
             df.scatter_by_map("a", 1)  # Bad map_size
+
+    # Test GenericIndex
+    df2 = df.set_index("c")
+    generic_result = df2.scatter_by_map("b", map_size, keep_index=keep)
+    _check_scatter_by_map(generic_result, df2["b"])
+    if keep:
+        for frame in generic_result:
+            isinstance(frame.index, type(df2.index))
+
+    # Test MultiIndex
+    df2 = df.set_index(["a", "c"])
+    multiindex_result = df2.scatter_by_map("b", map_size, keep_index=keep)
+    _check_scatter_by_map(multiindex_result, df2["b"])
+    if keep:
+        for frame in multiindex_result:
+            isinstance(frame.index, type(df2.index))

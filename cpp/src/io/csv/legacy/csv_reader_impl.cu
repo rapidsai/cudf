@@ -32,7 +32,7 @@
 #include "type_conversion.cuh"
 #include "datetime_parser.cuh"
 
-#include <cudf/unary.hpp>
+#include <cudf/legacy/unary.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/trie.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
