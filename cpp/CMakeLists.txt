@@ -413,6 +413,7 @@ add_library(cudf
             src/reductions/std.cu
             src/replace/legacy/replace.cu
             src/reductions/scan.cu
+            src/reshape/stack.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
             src/unary/legacy/math_ops.cu
@@ -465,6 +466,7 @@ add_library(cudf
             src/copying/legacy/copy_range.cu
             src/filling/legacy/fill.cu
             src/filling/legacy/repeat.cu
+            src/filling/legacy/tile.cu
             src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
