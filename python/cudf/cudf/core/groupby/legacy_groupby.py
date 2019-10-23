@@ -226,9 +226,7 @@ class Groupby(object):
 
         for k in self._by:
             outdf[k] = (
-                grouped_df[k]
-                .take(sr_segs.data.mem)
-                .reset_index(drop=True)
+                grouped_df[k].take(sr_segs.data.mem).reset_index(drop=True)
             )
 
         size = len(outdf)
