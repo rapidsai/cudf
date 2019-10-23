@@ -6,6 +6,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - rapidsai/label/cuda10.0::cupy>=6*
   - rmm=0.10.*
   - cmake>=3.12
   - cmake_setuptools>=0.1.3
