@@ -9,7 +9,7 @@
 
 from cudf._lib.cudf cimport *
 
-cdef extern from "cudf/search.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/search.hpp" namespace "cudf" nogil:
 
     cdef gdf_column lower_bound(
         const cudf_table& t,

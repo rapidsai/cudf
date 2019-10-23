@@ -73,7 +73,7 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         ) except +
 
 cdef extern from "cudf/cudf.h" nogil:
-    # See cpp/include/cudf/io_types.h:146
+
     ctypedef struct csv_write_arg:
         # Arguments to csv writer function
         gdf_column** columns
