@@ -3988,7 +3988,7 @@ class DataFrame(object):
         return result.set_index(new_index)
 
     def tile(self, reps):
-        """Construct a DataFrame by repeating this DataFrame the number of 
+        """Construct a DataFrame by repeating this DataFrame the number of
         times given by reps
 
         Parameters
