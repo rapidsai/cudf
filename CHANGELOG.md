@@ -12,7 +12,7 @@
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3079 Added support to write ORC files given a local path
-- PR #3023 Add dtype param to cast `DataFrame` on init
+- PR #3192 Add dtype param to cast `DataFrame` on init
 
 ## Improvements
 
