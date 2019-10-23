@@ -54,6 +54,7 @@
 - PR #3171 Move deprecated error macros to legacy
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
+- PR #3205 Move transform files to legacy
 
 ## Bug Fixes
 
