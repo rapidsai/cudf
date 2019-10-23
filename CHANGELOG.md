@@ -53,6 +53,7 @@
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
 - PR #3195 Support for zero columned `table_view`
+- PR #3165 Java device memory size for string category
 
 ## Bug Fixes
 
