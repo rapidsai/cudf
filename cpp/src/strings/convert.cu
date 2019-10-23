@@ -210,7 +210,10 @@ struct dispatch_from_integers_fn
     template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
     std::unique_ptr<cudf::column> operator()(column_view&, rmm::mr::device_memory_resource*, cudaStream_t) const noexcept
     {
-        CUDF_FAIL("Values must be integral type.");
+        // this line causes compile error:
+        // "error: throw will always call terminate()"
+        //CUDF_FAIL("Values must be integral type.");
+        return nullptr;
     }
 };
 
