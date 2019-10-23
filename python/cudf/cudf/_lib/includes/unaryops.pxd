@@ -62,7 +62,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +
 
 
-cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/unary.hpp" namespace "cudf" nogil:
 
     ctypedef enum unary_op:
         SIN,
@@ -90,4 +90,12 @@ cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
         const gdf_column &input,
         gdf_dtype out_type,
         gdf_dtype_extra_info out_info
+    ) except +
+
+    cdef gdf_column is_null(
+        const gdf_column& input
+    ) except +
+
+    cdef gdf_column is_not_null(
+        const gdf_column& input
     ) except +

@@ -21,9 +21,8 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class BinaryOpTest {
+public class BinaryOpTest extends CudfTestBase {
   private static final Integer[] INTS_1 = new Integer[]{1, 2, 3, 4, 5, null, 100};
   private static final Integer[] INTS_2 = new Integer[]{10, 20, 30, 40, 50, 60, 100};
   private static final Byte[] BYTES_1 = new Byte[]{-1, 7, 123, null, 50, 60, 100};
@@ -92,7 +91,6 @@ public class BinaryOpTest {
 
   @Test
   public void testAdd() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
          ColumnVector bcv1 = ColumnVector.fromBoxedBytes(BYTES_1);
@@ -164,7 +162,6 @@ public class BinaryOpTest {
 
   @Test
   public void testSub() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
          ColumnVector bcv1 = ColumnVector.fromBoxedBytes(BYTES_1);
@@ -242,7 +239,6 @@ public class BinaryOpTest {
 
   @Test
   public void testMul() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.mul(dcv);
@@ -267,7 +263,6 @@ public class BinaryOpTest {
 
   @Test
   public void testDiv() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.div(dcv);
@@ -292,7 +287,6 @@ public class BinaryOpTest {
 
   @Test
   public void testTrueDiv() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.trueDiv(dcv);
@@ -317,7 +311,6 @@ public class BinaryOpTest {
 
   @Test
   public void testFloorDiv() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.floorDiv(dcv);
@@ -342,7 +335,6 @@ public class BinaryOpTest {
 
   @Test
   public void testMod() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.mod(dcv);
@@ -367,7 +359,6 @@ public class BinaryOpTest {
 
   @Test
   public void testPow() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.pow(dcv);
@@ -392,7 +383,6 @@ public class BinaryOpTest {
 
   @Test
   public void testEqual() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.equalTo(dcv);
@@ -417,7 +407,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryEqualScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -442,7 +431,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryEqualScalarNotPresent() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", null, "b", null)) {
       Scalar s = Scalar.fromString("boo");
@@ -461,7 +449,6 @@ public class BinaryOpTest {
 
   @Test
   public void testNotEqual() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.notEqualTo(dcv);
@@ -486,7 +473,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryNotEqualScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -511,7 +497,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryNotEqualScalarNotPresent() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", null, "b", null)) {
       Scalar s = Scalar.fromString("abc");
@@ -530,7 +515,6 @@ public class BinaryOpTest {
 
   @Test
   public void testLessThan() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.lessThan(dcv);
@@ -555,7 +539,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryLessThanScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -581,7 +564,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryLessThanScalarNotPresent() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -606,7 +588,6 @@ public class BinaryOpTest {
 
   @Test
   public void testGreaterThan() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.greaterThan(dcv);
@@ -631,7 +612,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryGreaterThanScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -656,7 +636,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryGreaterThanScalarNotPresent() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -681,7 +660,6 @@ public class BinaryOpTest {
 
   @Test
   public void testLessOrEqualTo() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.lessOrEqualTo(dcv);
@@ -706,7 +684,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryLessOrEqualToScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -731,7 +708,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryLessOrEqualToScalarNotPresent() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -756,7 +732,6 @@ public class BinaryOpTest {
 
   @Test
   public void testGreaterOrEqualTo() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
       try (ColumnVector answer = icv.greaterOrEqualTo(dcv);
@@ -781,7 +756,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryGreaterOrEqualToScalar() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -806,7 +780,6 @@ public class BinaryOpTest {
 
   @Test
   public void testStringCategoryGreaterOrEqualToScalarNotPresent() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
@@ -831,7 +804,6 @@ public class BinaryOpTest {
 
   @Test
   public void testBitAnd() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2)) {
       try (ColumnVector answer = icv1.bitAnd(icv2);
@@ -856,7 +828,6 @@ public class BinaryOpTest {
 
   @Test
   public void testBitOr() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2)) {
       try (ColumnVector answer = icv1.bitOr(icv2);
@@ -881,7 +852,6 @@ public class BinaryOpTest {
 
   @Test
   public void testBitXor() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2)) {
       try (ColumnVector answer = icv1.bitXor(icv2);
@@ -906,8 +876,7 @@ public class BinaryOpTest {
 
   @Test
   public void testAnd() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(BOOLEANS_1); 
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(BOOLEANS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedBooleans(BOOLEANS_2)) {
       try (ColumnVector answer = icv1.and(icv2);
            ColumnVector expected = forEach(DType.BOOL8, icv1, icv2,
@@ -943,8 +912,7 @@ public class BinaryOpTest {
 
   @Test
   public void testOr() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(BOOLEANS_1); 
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(BOOLEANS_1);
          ColumnVector icv2 = ColumnVector.fromBoxedBooleans(BOOLEANS_2)) {
       try (ColumnVector answer = icv1.or(icv2);
            ColumnVector expected = forEach(DType.BOOL8, icv1, icv2,

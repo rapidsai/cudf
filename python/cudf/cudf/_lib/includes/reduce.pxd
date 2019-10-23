@@ -14,6 +14,8 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf::reduction" nogil:
         SUM = 0,
         MIN,
         MAX,
+        ANY,
+        ALL,
         PRODUCT,
         SUMOFSQUARES,
         MEAN,

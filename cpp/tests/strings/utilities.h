@@ -24,23 +24,6 @@ namespace cudf {
 namespace test {
 
 /**---------------------------------------------------------------------------*
- * @brief Utility for creating a strings column from a vector of host strings
- *
- * @param h_strings Pointer to null-terminated, UTF-8 encode chars arrays.
- * @return column instance of type STRING
- *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> create_strings_column( const std::vector<const char*>& h_strings );
-
-/**---------------------------------------------------------------------------*
- * @brief Utility will verify the given column string elements match the
- * expected vector of host strings.
- *
- * @param strings_column Column of strings to check
- * @param h_strings Vector of host strings
- *---------------------------------------------------------------------------**/
-void expect_strings_equal(cudf::column_view strings_column, const std::vector<const char*>& h_expected );
-
-/**---------------------------------------------------------------------------*
  * @brief Utility will verify the given strings column is empty.
  *
  * @param strings_column Column of strings to check
