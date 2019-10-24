@@ -33,6 +33,8 @@ namespace experimental {
 
 struct bool8 {
 
+  using value_type = uint8_t;
+
   // defaulted bool8 move/copy constructors
 
   bool8() = default;
