@@ -20,7 +20,7 @@
 
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>

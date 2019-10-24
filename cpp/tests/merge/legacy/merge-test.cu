@@ -2,7 +2,7 @@
 #include <nvstrings/NVStrings.h>
 #include <cudf/cudf.h>
 #include <cudf/legacy/functions.h>
-#include <cudf/merge.hpp>
+#include <cudf/legacy/merge.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
