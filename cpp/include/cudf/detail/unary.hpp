@@ -25,14 +25,14 @@ namespace experimental {
 namespace detail{
 
 /**
- * @brief Creates a column of `BOOL8` elements where for every element between [`begin, `end`)
+ * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between [`begin, `end`)
  * `true` indicates the value is satisfies the predicate and `false` indicates it doesn't.
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @tparam Predicate A predicator type which will be evaludated
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
- * @param p Predicate to be evaluated
+ * @param p Predicate to be applied to each element in `[begin,end)`
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *

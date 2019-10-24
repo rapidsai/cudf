@@ -19,7 +19,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/unary_detail.hpp>
+#include <cudf/detail/unary.hpp>
 
 namespace cudf {
 
@@ -29,7 +29,7 @@ std::unique_ptr<column> is_null(cudf::column_view const& input) {
     auto input_device_view = column_device_view::create(input);
     auto device_view = *input_device_view;
     auto predicate = [device_view] __device__(auto index){
-                         return (false == device_view.is_valid(index));
+                         return (device_view.is_null(index));
                      };
     return detail::true_if(thrust::make_counting_iterator(0),
                            thrust::make_counting_iterator(input.size()),
