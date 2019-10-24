@@ -21,7 +21,7 @@
 #include <vector>
 
 #include <cudf/cudf.h>
-#include <cudf/unary.hpp>
+#include <cudf/legacy/unary.hpp>
 #include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>

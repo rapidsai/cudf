@@ -23,7 +23,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
-#include <bitmask/valid_if.cuh>
+#include <bitmask/legacy/valid_if.cuh>
 
 using bit_mask::bit_mask_t;
 
