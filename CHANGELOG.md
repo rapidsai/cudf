@@ -31,6 +31,7 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3080 Move `valid_if.cuh` to `legacy/`
 - PR #3052 Moved replace.hpp functionality to legacy
 - PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
