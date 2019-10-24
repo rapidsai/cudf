@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 
 /**

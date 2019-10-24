@@ -17,7 +17,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/legacy/copying.hpp>
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>

@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 #include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace io {
