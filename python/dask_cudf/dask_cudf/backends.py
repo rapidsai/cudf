@@ -50,7 +50,7 @@ try:
                 out_dev_arr = rmm.device_array(len(frame), dtype="int32")
                 ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
                 frame[col]._column.data.hash(devptr=ptr)
-                frame[col] = Series(Buffer(out_dev_arr))
+                frame[col] = cudf.Series(Buffer(out_dev_arr))
         return frame.hash_columns()
 
     @hash_object_dispatch.register(cudf.DataFrame)
