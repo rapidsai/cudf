@@ -117,6 +117,31 @@ struct ColumnChunkDesc {
   int32_t ts_clock_rate;        // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
+
+/**
+ * @brief Struct describing an encoder column
+ **/
+struct EncColumnDesc
+{
+  const uint32_t *valid_map_base;   //!< base ptr of column valid map (null if not present)
+  const void *column_data_base;     //!< base ptr of column data
+  uint32_t num_rows;                //!< number of rows in column
+  uint8_t physical_type;            //!< physical data type
+  uint8_t pad[3];
+};
+
+#define MAX_PAGE_FRAGMENT_SIZE  5000    //!< Max number of rows in a page fragment
+
+/**
+ * @brief Struct describing an encoder page fragment
+ **/
+struct PageFragment
+{
+  uint32_t fragment_data_size;      //!< Size of fragment data in bytes
+  uint16_t num_rows;                //!< Number of rows in fragment
+  uint16_t non_nulls;               //!< Number of non-null values
+};
+
 /**
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
@@ -163,6 +188,24 @@ cudaError_t DecodePageData(PageInfo *pages, int32_t num_pages,
                            ColumnChunkDesc *chunks, int32_t num_chunks,
                            size_t num_rows, size_t min_row = 0,
                            cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for initializing encoder page fragments
+ *
+ * @param[in] frag Fragment array [fragment_id][column_id]
+ * @param[in] col_desc Column description array [column_id]
+ * @param[in] num_fragments Number of fragments per column
+ * @param[in] num_columns Number of columns
+ * @param[in] fragment_size Number of rows per fragment
+ * @param[in] num_rows Number of rows per column
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
+                              int32_t num_fragments, int32_t num_columns,
+                              uint32_t fragment_size, uint32_t num_rows,
+                              cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu
 } // namespace parquet
