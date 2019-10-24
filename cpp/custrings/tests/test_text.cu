@@ -188,7 +188,7 @@ TEST_F(TestText, PorterStemmerMeasure)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, VowelsAndConsonants)
+TEST_F(TestText, VowelsAndConsonants)
 {
     std::vector<const char*> hstrs{ "abandon", nullptr, "abbey", "cleans",
                                     "trouble", "", "yearly" };
