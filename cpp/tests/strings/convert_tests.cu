@@ -20,6 +20,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 #include "./utilities.h"
 
 #include <vector>
@@ -71,4 +72,44 @@ TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
     cudf::column_view zero_size_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto results = cudf::strings::to_integers(zero_size_column);
     EXPECT_EQ(0,results->size());
+}
+
+template <typename T>
+class StringsIntegerConvertTest : public StringsConvertTest {};
+
+using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+TYPED_TEST_CASE(StringsIntegerConvertTest, IntegerTypes);
+
+TYPED_TEST(StringsIntegerConvertTest, FromInteger)
+{
+    cudf::size_type size = 255;
+    thrust::device_vector<TypeParam> integers(size);
+    thrust::sequence( thrust::device, integers.begin(), integers.end(), -(size/2) );
+    auto column = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size);
+    auto view = column->mutable_view();
+    cudaMemcpy( view.data<TypeParam>(), integers.data().get(), size * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
+    view.set_null_count(0);
+
+    auto results = cudf::strings::from_integers(column->view());
+
+    thrust::host_vector<TypeParam> h_integers(integers);
+    std::vector<std::string> h_strings;
+    for( auto itr = h_integers.begin(); itr != h_integers.end(); ++itr )
+        h_strings.push_back(std::to_string(*itr));
+
+    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+//
+template <typename T>
+class StringsFloatConvertTest : public StringsConvertTest {};
+
+using FloatTypes = cudf::test::Types<float, double>;
+TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
+
+TYPED_TEST(StringsFloatConvertTest, FromIntegerError)
+{
+    auto column = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 100);
+    EXPECT_THROW(cudf::strings::from_integers(column->view()), cudf::logic_error);
 }
