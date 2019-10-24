@@ -18,7 +18,7 @@
 #define _BIT_MASK_H_
 
 #include "bit_mask.cuh"
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 
