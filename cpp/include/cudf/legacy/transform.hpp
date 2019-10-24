@@ -17,8 +17,8 @@
 #ifndef CUDF_TRANSFORM_HPP
 #define CUDF_TRANSFORM_HPP
 
-#include "cudf.h"
-#include "types.h"
+#include "cudf/cudf.h"
+#include "cudf/types.h"
 
 namespace cudf {
 
