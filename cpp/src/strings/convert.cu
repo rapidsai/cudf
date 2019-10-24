@@ -24,8 +24,6 @@
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 
-#include <rmm/thrust_rmm_allocator.h>
-
 namespace cudf
 {
 namespace strings
@@ -36,6 +34,13 @@ namespace detail
 namespace
 {
 
+/**
+ * @brief Converts a single string into an integer.
+ * The '+' and '-' are allowed but only at the beginning of the string.
+ * The string is expected to contain base-10 [0-9] characters only.
+ * Any other character will end the parse.
+ * Overflow of int64 type is not detected.
+ */
 __device__ int64_t string_to_integer( const string_view& d_str )
 {
     int64_t value = 0;
@@ -60,13 +65,16 @@ __device__ int64_t string_to_integer( const string_view& d_str )
 
 } // namespace
 
+//
 std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream = 0)
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return std::make_unique<column>( data_type{INT32}, 0,
+                          rmm::device_buffer{0,stream,mr}, // data
+                          rmm::device_buffer{0,stream,mr}, 0 ); // nulls
 
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -101,6 +109,10 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
 namespace
 {
 
+/**
+ * @brief Calculate the size of the each string required for
+ * converting each integer in base-10 format.
+ */
 template <typename IntegerType>
 struct integer_to_string_size_fn
 {
@@ -116,16 +128,23 @@ struct integer_to_string_size_fn
         bool sign = value < 0;
         if( sign )
             value = -value;
-        size_type digits = 0;
+        constexpr IntegerType base = 10;
+        size_type digits = static_cast<size_type>(sign);
         while( value > 0 )
         {
             ++digits;
-            value = value/10;
+            value = value/base;
         }
-        return digits + static_cast<size_type>(sign);
+        return digits;
     }
 };
 
+/**
+ * @brief Convert each integer into a string.
+ * The integer is converted using base-10 using only characters [0-9].
+ * No formatting is done for the string other than prepending the '-'
+ * character for negative values.
+ */
 template <typename IntegerType>
 struct integer_to_string_fn
 {
@@ -141,17 +160,18 @@ struct integer_to_string_fn
         char* d_buffer = d_chars + d_offsets[idx];
         if( value==0 )
         {
-            memcpy( d_buffer, "0", 1);
+            *d_buffer = '0';
             return;
         }
         bool sign = value < 0;
         if( sign )
             value = -value;
+        constexpr IntegerType base = 10;
         char* ptr = d_buffer;
         while( value > 0 )
         {
-            *ptr++ = '0' + (value % 10);
-            value = value/10;
+            *ptr++ = '0' + (value % base);
+            value = value/base;
         }
         if( sign )
             *ptr++ = '-';
@@ -167,6 +187,10 @@ struct integer_to_string_fn
     }
 };
 
+/**
+ * @brief This dispatch method is for converting integers into strings.
+ * The template function declaration ensures only integer types are used.
+ */
 struct dispatch_from_integers_fn
 {
     template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
@@ -207,19 +231,17 @@ struct dispatch_from_integers_fn
                                    null_count, std::move(null_mask), stream, mr);
     }
 
+    // non-integral types throw an exception
     template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(column_view&, rmm::mr::device_memory_resource*, cudaStream_t) const noexcept
+    std::unique_ptr<cudf::column> operator()(column_view&, rmm::mr::device_memory_resource*, cudaStream_t) const
     {
-        // suppress 'throw will always call terminate() [-Wterminate]'
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wterminate"
-        CUDF_FAIL("Values must be integral type.");
-        #pragma GCC diagnostic pop        
+        CUDF_FAIL("Values for from_integers function must be integral type.");
     }
 };
 
-}
+} // namespace
 
+// This will convert all integer column types into a strings column.
 std::unique_ptr<cudf::column> from_integers( column_view integers,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                              cudaStream_t stream = 0)
@@ -234,6 +256,8 @@ std::unique_ptr<cudf::column> from_integers( column_view integers,
 }
 
 } // namespace detail
+
+// APIS
 
 std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
                                            rmm::mr::device_memory_resource* mr )
