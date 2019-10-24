@@ -31,20 +31,20 @@ namespace detail
 template <bool use_source_validity>
 struct column_range_factory {
   gdf_column column;
-  gdf_index_type begin;
+  cudf::size_type begin;
 
   template <typename T>
   struct column_range {
     T const * column_data;
     bit_mask_t const * bitmask;
-    gdf_index_type begin;
+    cudf::size_type begin;
 
     __device__
-    T data(gdf_index_type index) { 
+    T data(cudf::size_type index) { 
       return column_data[begin + index]; }
 
     __device__
-    bool valid(gdf_index_type index) {
+    bool valid(cudf::size_type index) {
       return use_source_validity
         ? bit_mask::is_valid(bitmask, begin + index)
         : true;

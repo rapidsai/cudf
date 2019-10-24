@@ -134,7 +134,7 @@ Note: `std::tuple` *could* be used if not for the fact that Cython does not supp
 
 The `gdf_error` codes are deprecated. Instead, `libcudf` functions should prefer throwing exceptions.
 
-In place of the `GDF_REQUIRES` convenience macro, the `CUDF_EXPECTS` macro is provided in `cudf/cpp/src/utilities/error_utils.hpp`. 
+In place of the `GDF_REQUIRES` convenience macro, the `CUDF_EXPECTS` macro is provided in `cudf/cpp/include/cudf/utilities/error.hpp`. 
 
 Similar to `GDF_REQUIRES`, `CUDF_EXPECTS` will throw an exception if a condition is violated. The first argument is the conditional expression that can be evaluated as a `boolean` expression and is expected to resolve to `true` under normal conditions. If the conditional evaluates to `false`, then an error has occurred and an instance of `cudf::logic_error` is thrown. The second argument to `CUDF_EXPECTS` is a short description of the error that has occurred if the conditional is false. 
 
@@ -183,7 +183,7 @@ You can also construct a `gdf_column` that uses a `std::vector` to initialize th
 ```
  std::vector<T> values(size);
 
- std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
+ std::vector<cudf::valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
 
  cudf::test::column_wrapper<T> const col(values, bitmask);
 ```

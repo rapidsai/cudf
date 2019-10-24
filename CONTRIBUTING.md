@@ -189,6 +189,12 @@ $ ./build.sh libcudf                   # compile the cuDF libraries and install 
 $ make test
 ```
 
+- Build the `nvstrings` python packages, in the `python/nvstrings` folder:
+```bash
+$ cd $CUDF_HOME/python/nvstrings
+$ python setup.py install
+```
+
 - Build the `cudf` python package, in the `python/cudf` folder:
 ```bash
 $ cd $CUDF_HOME/python/cudf
@@ -212,12 +218,6 @@ $ python setup.py install
 ```bash
 $ cd $CUDF_HOME
 $ ./build.sh dask_cudf
-```
-
-- You will also need the following environment variables, including `$CUDA_HOME`.
-```bash
-NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
-NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
 ```
 
 - To run Python tests (Optional):
@@ -322,7 +322,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.14.1 | Not supported | set pyarrow version |
+| `PYARROW_VERSION` | 0.15.0 | Not supported | set pyarrow version |
 | `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
