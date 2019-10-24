@@ -58,6 +58,7 @@
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
+- PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 
 ## Bug Fixes
