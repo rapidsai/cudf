@@ -27,7 +27,7 @@
 #include <vector>
 
 template <typename T>
-cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start, cudf::size_type size, bool nullable) {
+cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start, cudf::size_type size, cudf::bool8 nullable) {
     auto iter = cudf::test::make_counting_transform_iterator(start, [](auto i) { return T(i);});
 
     if(not nullable) {
@@ -40,7 +40,7 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
 }
 
 template <typename T>
-cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_type size, bool nullable, bool nulls_to_be) {
+cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_type size, cudf::bool8 nullable, cudf::bool8 nulls_to_be) {
 
     if(not nullable) {
         auto iter = cudf::test::make_counting_transform_iterator(0, [nulls_to_be](auto i) { return not nulls_to_be;});
@@ -63,7 +63,7 @@ TYPED_TEST(IsNull, AllValid)
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, false);
-    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, false, true);
+    cudf::test::fixed_width_column_wrapper<cudf::bool8> expected = create_expected_columns<cudf::bool8>(size, false, true);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_null(col);
 
@@ -77,7 +77,7 @@ TYPED_TEST(IsNull, WithInvalids)
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, true);
+    cudf::test::fixed_width_column_wrapper<cudf::bool8> expected = create_expected_columns<cudf::bool8>(size, true, true);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_null(col);
 
@@ -91,7 +91,7 @@ TYPED_TEST(IsNull, EmptyColumns)
     cudf::size_type start = 0;
     cudf::size_type size = 0;
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, true);
+    cudf::test::fixed_width_column_wrapper<cudf::bool8> expected = create_expected_columns<cudf::bool8>(size, true, true);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_null(col);
 
@@ -110,7 +110,7 @@ TYPED_TEST(IsNotNull, AllValid)
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, false);
-    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, false, false);
+    cudf::test::fixed_width_column_wrapper<cudf::bool8> expected = create_expected_columns<cudf::bool8>(size, false, false);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
@@ -124,7 +124,7 @@ TYPED_TEST(IsNotNull, WithInvalids)
     cudf::size_type start = 0;
     cudf::size_type size = 10;
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, false);
+    cudf::test::fixed_width_column_wrapper<cudf::bool8> expected = create_expected_columns<cudf::bool8>(size, true, false);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
@@ -138,7 +138,7 @@ TYPED_TEST(IsNotNull, EmptyColumns)
     cudf::size_type start = 0;
     cudf::size_type size = 0;
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, false);
+    cudf::test::fixed_width_column_wrapper<cudf::bool8> expected = create_expected_columns<cudf::bool8>(size, true, false);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
