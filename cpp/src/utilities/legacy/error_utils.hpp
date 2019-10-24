@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cudf/types.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 /**---------------------------------------------------------------------------*
  * @brief DEPRECATED error checking macro that verifies a condition evaluates to

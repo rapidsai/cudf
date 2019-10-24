@@ -21,7 +21,7 @@
 #include <src/rolling/rolling_detail.hpp>
 #include <cudf/cudf.h>
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/cudf_utils.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 

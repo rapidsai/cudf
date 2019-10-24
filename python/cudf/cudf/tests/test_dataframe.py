@@ -18,6 +18,29 @@ from cudf.tests.utils import assert_eq, gen_rand
 from cudf.utils.utils import _have_cupy
 
 
+def test_init_via_list_of_tuples():
+    data = [
+        (5, "cats", "jump", np.nan),
+        (2, "dogs", "dig", 7.5),
+        (3, "cows", "moo", -2.1, "occasionally"),
+    ]
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("rows", [0, 1, 2, 100])
+def test_init_via_list_of_empty_tuples(rows):
+    data = [()] * rows
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf, check_like=True)
+
+
 def test_buffer_basic():
     n = 10
     buf = Buffer(np.arange(n, dtype=np.float64))
@@ -366,30 +389,26 @@ def test_dataframe_to_string():
     pd.options.display.max_rows = 5
     pd.options.display.max_columns = 8
     # Test basic
-    df = DataFrame(
-        [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
-    )
+    df = DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]})
     string = str(df)
     print(string)
     assert string.splitlines()[-1] == "[6 rows x 2 columns]"
 
     # Test skipped columns
     df = DataFrame(
-        [
-            ("a", [1, 2, 3, 4, 5, 6]),
-            ("b", [11, 12, 13, 14, 15, 16]),
-            ("c", [11, 12, 13, 14, 15, 16]),
-            ("d", [11, 12, 13, 14, 15, 16]),
-        ]
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [11, 12, 13, 14, 15, 16],
+            "c": [11, 12, 13, 14, 15, 16],
+            "d": [11, 12, 13, 14, 15, 16],
+        }
     )
     string = df.to_string()
     print(string)
     assert string.splitlines()[-1] == "[6 rows x 4 columns]"
 
     # Test masked
-    df = DataFrame(
-        [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
-    )
+    df = DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]})
 
     data = np.arange(6)
     mask = np.zeros(1, dtype=np.uint8)
@@ -511,7 +530,7 @@ def test_dataframe_dtypes():
     dtypes = pd.Series(
         [np.int32, np.float32, np.float64], index=["c", "a", "b"]
     )
-    df = DataFrame([(k, np.ones(10, dtype=v)) for k, v in dtypes.iteritems()])
+    df = DataFrame({k: np.ones(10, dtype=v) for k, v in dtypes.iteritems()})
     assert df.dtypes.equals(dtypes)
 
 
@@ -536,12 +555,12 @@ def test_dataframe_add_col_to_object_dataframe():
 
 def test_dataframe_dir_and_getattr():
     df = DataFrame(
-        [
-            ("a", np.ones(10)),
-            ("b", np.ones(10)),
-            ("not an id", np.ones(10)),
-            ("oop$", np.ones(10)),
-        ]
+        {
+            "a": np.ones(10),
+            "b": np.ones(10),
+            "not an id": np.ones(10),
+            "oop$": np.ones(10),
+        }
     )
     o = dir(df)
     assert {"a", "b"}.issubset(o)
@@ -2931,7 +2950,7 @@ def test_dataframe_sizeof(indexed):
     rows = int(1e6)
     index = list(i for i in range(rows)) if indexed else None
 
-    gdf = gd.DataFrame([("A", [8] * rows), ("B", [32] * rows)], index=index)
+    gdf = gd.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
 
     for c in gdf._cols.values():
         assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
@@ -3939,3 +3958,43 @@ def test_series_astype_error_handling(errors):
     sr = Series(["random", "words"])
     got = sr.astype("datetime64", errors=errors)
     assert_eq(sr, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_df_constructor_dtype(dtype):
+    if "datetime" in dtype:
+        data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+        sr = Series(data, dtype=dtype)
+    elif dtype == "str":
+        data = [1, 2, 3, None]
+        sr = Series.from_pandas(pd.Series(data, dtype=dtype))
+    elif "float" in dtype:
+        data = [1, 2, 3, None]
+        sr = Series(data, dtype=dtype)
+    else:
+        data = [1.0, 0.5, -1.1, np.nan, None]
+        sr = Series(data, dtype=dtype)
+
+    expect = DataFrame()
+    expect["foo"] = sr
+    expect["bar"] = sr
+
+    got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
+
+    assert_eq(expect, got)

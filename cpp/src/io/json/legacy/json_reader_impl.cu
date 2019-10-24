@@ -26,7 +26,7 @@
 #include <vector>
 
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <io/comp/io_uncomp.h>
