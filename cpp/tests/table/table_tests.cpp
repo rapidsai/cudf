@@ -45,19 +45,9 @@ using column_view = cudf::column_view;
 using TView       = cudf::table_view;
 using Table       = cudf::experimental::table;
 
-struct TableViewTest : public cudf::test::BaseFixture {};
+struct TableTest : public cudf::test::BaseFixture {};
 
-template <typename T>
-struct TableTest : public cudf::test::BaseFixture {
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution{1000, 10000};
-  int random_size() { return distribution(generator); }
-};
-
-using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
-                                      double>;
-
-TEST_F(TableViewTest, EmptyColumnedTable)
+TEST_F(TableTest, EmptyColumnedTable)
 {
     std::vector<column_view> cols{};
 
@@ -67,9 +57,7 @@ TEST_F(TableViewTest, EmptyColumnedTable)
     EXPECT_EQ(input.num_columns(), expected);
 }
 
-TYPED_TEST_CASE(TableTest, TestingTypes);
-
-TYPED_TEST(TableTest, GetTableWithSelectedColumns)
+TEST_F(TableTest, GetTableWithSelectedColumns)
 {
   column_wrapper <int8_t>  col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
@@ -89,7 +77,7 @@ TYPED_TEST(TableTest, GetTableWithSelectedColumns)
   cudf::test::expect_columns_equal(t.view().column(3), selected_tview.column(1));
 }
 
-TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
+TEST_F(TableTest, SelectingMoreThanNumberOfColumns)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
@@ -103,7 +91,7 @@ TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
   EXPECT_THROW (t.select(std::vector<cudf::size_type>{0,1,2}), cudf::logic_error);
 }
 
-TYPED_TEST(TableTest, SelectingNoColumns)
+TEST_F(TableTest, SelectingNoColumns)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
@@ -117,7 +105,7 @@ TYPED_TEST(TableTest, SelectingNoColumns)
   EXPECT_EQ(selected_table.num_columns(), 0);
 }
 
-TYPED_TEST(TableTest, ConcatTables)
+TEST_F(TableTest, ConcatTables)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
@@ -130,7 +118,7 @@ TYPED_TEST(TableTest, ConcatTables)
   cudf::test::expect_columns_equal(concat_view.column(1), views[1].column(0));
 }
 
-TYPED_TEST(TableTest, ConcatTablesRowsMismatch)
+TEST_F(TableTest, ConcatTablesRowsMismatch)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3}};
@@ -141,7 +129,7 @@ TYPED_TEST(TableTest, ConcatTablesRowsMismatch)
   EXPECT_THROW (cudf::experimental::concat(views), cudf::logic_error);
 }
 
-TYPED_TEST(TableTest, ConcatEmptyTables)
+TEST_F(TableTest, ConcatEmptyTables)
 {
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{});
