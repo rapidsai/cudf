@@ -20,13 +20,13 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/sequence.h>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 namespace detail {
 
@@ -86,5 +86,5 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      rmm::mr::device_memory_resource* mr) {
   return detail::sorted_order(input, column_order, null_precedence, 0, mr);
 }
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

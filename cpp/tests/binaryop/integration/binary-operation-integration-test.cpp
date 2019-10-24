@@ -33,8 +33,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64) {
 
     auto lhs = cudf::test::scalar_wrapper<float>{100};
     auto rhs = cudf::test::column_wrapper<int64_t>(100000, 
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int32_t>(rhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
@@ -48,8 +48,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_SI64) {
 
     auto lhs = cudf::test::scalar_wrapper<float>{10000};
     auto rhs = cudf::test::column_wrapper<int64_t>(100000, 
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int32_t>(rhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_SUB));
@@ -62,8 +62,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32) {
     using ADD = cudf::library::operation::Add<int8_t, int16_t, int32_t>;
 
     auto lhs = cudf::test::column_wrapper<int16_t>(100,
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::scalar_wrapper<int32_t>(100);
     auto out = cudf::test::column_wrapper<int8_t>(lhs.get()->size, true);
 
@@ -77,11 +77,11 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
     using ADD = cudf::library::operation::Add<int32_t, double, int8_t>;
 
     auto lhs = cudf::test::column_wrapper<double>(100,
-        [](gdf_size_type row) {return row * 2.0;},
-        [](gdf_size_type row) {return (row % 3 > 0);});
+        [](cudf::size_type row) {return row * 2.0;},
+        [](cudf::size_type row) {return (row % 3 > 0);});
     auto rhs = cudf::test::column_wrapper<int8_t>(100,
-        [](gdf_size_type row) {return row * 1;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return row * 1;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int32_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
@@ -94,11 +94,11 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
     using SUB = cudf::library::operation::Sub<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 100000 + row * 2;},
-        [](gdf_size_type row) {return (row % 4 == 0);});
+        [](cudf::size_type row) {return 100000 + row * 2;},
+        [](cudf::size_type row) {return (row % 4 == 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 50000 + row;},
-        [](gdf_size_type row) {return (row % 3 > 0);});
+        [](cudf::size_type row) {return 50000 + row;},
+        [](cudf::size_type row) {return (row % 3 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_SUB));
@@ -111,11 +111,11 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64) {
     using MUL = cudf::library::operation::Mul<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 100000 + row * 2;},
-        [](gdf_size_type row) {return (row % 3 > 0);});
+        [](cudf::size_type row) {return 100000 + row * 2;},
+        [](cudf::size_type row) {return (row % 3 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 50000 + row;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 50000 + row;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_MUL));
@@ -128,11 +128,11 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64) {
     using DIV = cudf::library::operation::Div<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 100000 + row * 2;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return 100000 + row * 2;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 50000 + row;},
-        [](gdf_size_type row) {return (row % 8 > 0);});
+        [](cudf::size_type row) {return 50000 + row;},
+        [](cudf::size_type row) {return (row % 8 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_DIV));
@@ -145,11 +145,11 @@ TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64) {
     using TRUEDIV = cudf::library::operation::TrueDiv<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 100000 + row * 2;},
-        [](gdf_size_type row) {return (row % 3 == 0);});
+        [](cudf::size_type row) {return 100000 + row * 2;},
+        [](cudf::size_type row) {return (row % 3 == 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 50000 + row;},
-        [](gdf_size_type row) {return (row % 4 == 0);});
+        [](cudf::size_type row) {return 50000 + row;},
+        [](cudf::size_type row) {return (row % 4 == 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_TRUE_DIV));
@@ -162,11 +162,11 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64) {
     using FLOORDIV = cudf::library::operation::FloorDiv<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 100000 + row * 2;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return 100000 + row * 2;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(50000,
-        [](gdf_size_type row) {return 50000 + row;},
-        [](gdf_size_type row) {return (row % 8 > 0);});
+        [](cudf::size_type row) {return 50000 + row;},
+        [](cudf::size_type row) {return (row % 8 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_FLOOR_DIV));
@@ -179,11 +179,11 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64) {
     using MOD = cudf::library::operation::Mod<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(50,
-        [](gdf_size_type row) {return 120 + row * 2;},
-        [](gdf_size_type row) {return (row % 3 > 0);});
+        [](cudf::size_type row) {return 120 + row * 2;},
+        [](cudf::size_type row) {return (row % 3 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(50,
-        [](gdf_size_type row) {return 50 + row;},
-        [](gdf_size_type row) {return (row % 5 > 0);});
+        [](cudf::size_type row) {return 50 + row;},
+        [](cudf::size_type row) {return (row % 5 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_MOD));
@@ -196,11 +196,11 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32) {
     using MOD = cudf::library::operation::Mod<float, float, float>;
 
     auto lhs = cudf::test::column_wrapper<float>(50,
-        [](gdf_size_type row) {return 120 + row * 2;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 120 + row * 2;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto rhs = cudf::test::column_wrapper<float>(50,
-        [](gdf_size_type row) {return 50 + row;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return 50 + row;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto out = cudf::test::column_wrapper<float>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_MOD));
@@ -213,11 +213,11 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64) {
     using MOD = cudf::library::operation::Mod<double, double, double>;
 
     auto lhs = cudf::test::column_wrapper<double>(50,
-        [](gdf_size_type row) {return 120 + row * 2;},
-        [](gdf_size_type row) {return (row % 3 == 0);});
+        [](cudf::size_type row) {return 120 + row * 2;},
+        [](cudf::size_type row) {return (row % 3 == 0);});
     auto rhs = cudf::test::column_wrapper<double>(50,
-        [](gdf_size_type row) {return 50 + row;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 50 + row;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<double>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_MOD));
@@ -230,11 +230,11 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64) {
     using POW = cudf::library::operation::Pow<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(500,
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(500,
-        [](gdf_size_type row) {return 2;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 2;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_POW));
@@ -247,11 +247,11 @@ TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32) {
     using AND = cudf::library::operation::BitwiseAnd<int16_t, int64_t, int32_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(500,
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int64_t>(500,
-        [](gdf_size_type row) {return 2;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 2;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int32_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_BITWISE_AND));
@@ -264,11 +264,11 @@ TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32) {
     using OR = cudf::library::operation::BitwiseOr<int64_t, int16_t, int32_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>(500,
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int16_t>(500,
-        [](gdf_size_type row) {return 2;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 2;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int32_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_BITWISE_OR));
@@ -281,11 +281,11 @@ TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64) {
     using XOR = cudf::library::operation::BitwiseXor<int32_t, int16_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int32_t>(500,
-        [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return row;},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int16_t>(500,
-        [](gdf_size_type row) {return 2;},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return 2;},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int64_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_BITWISE_XOR));
@@ -298,11 +298,11 @@ TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8) 
     using AND = cudf::library::operation::LogicalAnd<int16_t, double, int8_t>;
 
     auto lhs = cudf::test::column_wrapper<double>(500,
-        [](gdf_size_type row) {return (row % 5);},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return (row % 5);},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<int8_t>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int16_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_LOGICAL_AND));
@@ -314,11 +314,11 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_FP32) {
     using OR = cudf::library::operation::LogicalOr<cudf::bool8, int16_t, float>;
 
     auto lhs = cudf::test::column_wrapper<int16_t>(500,
-        [](gdf_size_type row) {return (row % 5);},
-        [](gdf_size_type row) {return (row % 6 > 0);});
+        [](cudf::size_type row) {return (row % 5);},
+        [](cudf::size_type row) {return (row % 6 > 0);});
     auto rhs = cudf::test::column_wrapper<float>(500,
-        [](gdf_size_type row) {return (row % 3 > 0);},
-        [](gdf_size_type row) {return (row % 4 > 0);});
+        [](cudf::size_type row) {return (row % 3 > 0);},
+        [](cudf::size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int8_t>(lhs.get()->size, true);
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_LOGICAL_OR));

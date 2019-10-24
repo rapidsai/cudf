@@ -41,7 +41,7 @@ namespace gpu {
  **/
 // blockDim {32,NWARPS,1}
 extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
-gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
+gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_s *global_dictionary, const uint8_t *avro_data,
     uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, uint32_t min_row_size, size_t max_rows, size_t first_row)
 {
     __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
@@ -303,7 +303,7 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
+cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, const uint8_t *avro_data,
     uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows, size_t first_row, uint32_t min_row_size, cudaStream_t stream)
 {
     dim3 dim_block(32, NWARPS); // NWARPS warps per threadblock

@@ -5,9 +5,11 @@
 
 #include "./utils.h"
 
+struct TestStrip : public GdfTest{};
+
 std::vector<const char*> hstrs{ " hello  ", "   thesé ", nullptr, "ARE THE", " tést  strings ", "" };
 
-TEST(TestStrip, Strip)
+TEST_F(TestStrip, Strip)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -31,11 +33,4 @@ TEST(TestStrip, Strip)
     }
 
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

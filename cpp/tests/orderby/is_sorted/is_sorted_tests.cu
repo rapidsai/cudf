@@ -20,7 +20,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/predicates.hpp>
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>

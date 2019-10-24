@@ -2,16 +2,7 @@ import pathlib
 
 import pytest
 
-import rmm
-
-
-# Set up a fixture for the RMM memory manager to initialize and finalize it
-# before and after tests.
-@pytest.fixture(scope="session", autouse=True)
-def setup_rmm():
-    rmm.initialize()
-    yield rmm
-    rmm.finalize()
+import rmm  # noqa: F401
 
 
 @pytest.fixture(scope="session")

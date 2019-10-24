@@ -25,8 +25,7 @@
 // will not work because this module is built before libcudf
 // and therefore will not be able to link to any functions there.
 // This module will be reworked appropriately in the future.
-#include <utilities/error_utils.hpp>
-#include <cudf/cudf.h>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
@@ -175,7 +174,7 @@ unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
     }
     RMM_FREE(d_vowels,0);
     return 0;
-}                               
+}
 
 
 // check individual characters are vowels or consonants

@@ -26,7 +26,7 @@ namespace io {
  * @brief Input parameters for the decompression interface
  **/
 struct gpu_inflate_input_s {
-  void *srcDevice;
+  const void *srcDevice;
   uint64_t srcSize;
   void *dstDevice;
   uint64_t dstSize;

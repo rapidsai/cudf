@@ -21,7 +21,8 @@
 
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
+#include <utilities/legacy/error_utils.hpp>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
@@ -33,10 +34,10 @@
 #include <nvstrings/NVStrings.h>
 
 // forward decl -- see validops.cu
-gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
-                          gdf_size_type output_column_length,
+gdf_error gdf_mask_concat(cudf::valid_type *output_mask,
+                          cudf::size_type output_column_length,
                           gdf_column *columns_to_concat[],
-                          gdf_size_type num_columns);
+                          cudf::size_type num_columns);
 
 // Concatenates multiple gdf_columns into a single, contiguous column,
 // including the validity bitmasks.
@@ -51,11 +52,11 @@ gdf_error gdf_column_concat(gdf_column *output_column,
 
   const gdf_dtype column_type = columns_to_concat[0]->dtype;
 
-  gdf_size_type total_size{0};
+  cudf::size_type total_size{0};
 
   // Ensure all the columns are properly allocated
   // and have matching types
-  for (gdf_size_type i = 0; i < num_columns; ++i) {
+  for (cudf::size_type i = 0; i < num_columns; ++i) {
     gdf_column *current_column = columns_to_concat[i];
 
     GDF_REQUIRE(current_column != nullptr, GDF_DATASET_EMPTY);
@@ -115,22 +116,22 @@ gdf_error gdf_column_concat(gdf_column *output_column,
     // TODO: async
     CUDA_TRY( cudaMemset(output_column->valid, 
                          0xff, 
-                         gdf_num_bitmask_elements(total_size) * sizeof(gdf_valid_type)) );
+                         gdf_num_bitmask_elements(total_size) * sizeof(cudf::valid_type)) );
   }
 
   return GDF_SUCCESS;
 }
 
 // Return the size of the gdf_column data type.
-gdf_size_type gdf_column_sizeof() {
+cudf::size_type gdf_column_sizeof() {
   return sizeof(gdf_column);
 }
 
 // Constructor for the gdf_context struct
 gdf_error gdf_column_view(gdf_column *column,
                           void *data,
-                          gdf_valid_type *valid,
-                          gdf_size_type size,
+                          cudf::valid_type *valid,
+                          cudf::size_type size,
                           gdf_dtype dtype)
 {
   column->data = data;
@@ -149,10 +150,10 @@ gdf_error gdf_column_view(gdf_column *column,
 //        datatype, and count of null (non-valid) elements
 gdf_error gdf_column_view_augmented(gdf_column *column,
                                     void *data,
-                                    gdf_valid_type *valid,
-                                    gdf_size_type size,
+                                    cudf::valid_type *valid,
+                                    cudf::size_type size,
                                     gdf_dtype dtype,
-                                    gdf_size_type null_count,
+                                    cudf::size_type null_count,
                                     gdf_dtype_extra_info extra_info,
                                     const char* name)
 {
@@ -216,7 +217,7 @@ void allocate_column_fields(gdf_column& column,
 /*
  * Allocates a new column of the given size and type.
  */
-gdf_column allocate_column(gdf_dtype dtype, gdf_size_type size,
+gdf_column allocate_column(gdf_dtype dtype, cudf::size_type size,
                            bool allocate_mask,
                            gdf_dtype_extra_info info,
                            cudaStream_t stream)

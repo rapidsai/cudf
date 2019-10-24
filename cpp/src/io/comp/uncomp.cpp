@@ -287,7 +287,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst)
+gdf_error io_uncompress_single_h2d(const void *src, cudf::size_type src_size, int strm_type, std::vector<char>& dst)
 {
     const uint8_t *raw = (const uint8_t *)src;
     const uint8_t *comp_data = nullptr;

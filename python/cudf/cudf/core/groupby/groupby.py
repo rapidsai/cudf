@@ -604,17 +604,24 @@ def _align_by_and_df(obj, by, how="inner"):
           3    1.0
           Name: a, dtype: float64]
     """
-    new_obj = None
-    new_by = []
     if not isinstance(by, (list, tuple)):
         by = [by]
 
     series_count = 0
+    join_required = False
+    series = []
     for by_col in by:
         if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
             sr = by_col
             if not isinstance(by_col, cudf.Series):
                 sr = cudf.Series(by_col)
+            if not join_required and not obj.index.equals(sr.index):
+                join_required = True
+            series.append(sr)
+
+    new_obj = None
+    if join_required:
+        for sr in series:
             if new_obj is None:
                 new_obj = sr.to_frame(series_count)
             else:
@@ -624,6 +631,7 @@ def _align_by_and_df(obj, by, how="inner"):
             series_count += 1
 
     series_count = 0
+    new_by = []
     if new_obj is not None:
         new_obj = new_obj.join(obj, how=how, sort="True")
         columns = new_obj.columns

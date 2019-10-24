@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.10-SNAPSHOT</version>
+    <version>0.11-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -327,7 +327,6 @@
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
-                                    <!--<arg value="-DUSE_NVTX"/>-->
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"

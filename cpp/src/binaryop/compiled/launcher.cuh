@@ -17,8 +17,9 @@
 #ifndef COMPILED_BINARY_OPS_LAUNCHER_H
 #define COMPILED_BINARY_OPS_LAUNCHER_H
 
-#include <utilities/nvtx/nvtx_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
+#include <utilities/legacy/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 
 namespace cudf {
@@ -27,9 +28,9 @@ namespace compiled {
 
 template<typename T, typename Tout, typename F>
 __global__
-void gpu_binary_op(const T *lhs_data, const gdf_valid_type *lhs_valid,
-                   const T *rhs_data, const gdf_valid_type *rhs_valid,
-                   gdf_size_type size, Tout *results, F functor) {
+void gpu_binary_op(const T *lhs_data, const cudf::valid_type *lhs_valid,
+                   const T *rhs_data, const cudf::valid_type *rhs_valid,
+                   cudf::size_type size, Tout *results, F functor) {
     int tid = threadIdx.x;
     int blkid = blockIdx.x;
     int blksz = blockDim.x;
@@ -57,7 +58,7 @@ struct BinaryOp {
         GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
 
-        PUSH_RANGE("LIBGDF_BINARY_OP", BINARY_OP_COLOR);
+        nvtx::range_push("CUDF_BINARY_OP", nvtx::BINARY_OP_COLOR);
         // find optimal blocksize
         int mingridsize, blocksize;
         CUDA_TRY(
@@ -82,7 +83,7 @@ struct BinaryOp {
 
         cudaDeviceSynchronize();
 
-        POP_RANGE();
+        nvtx::range_pop();
 
         CUDA_CHECK_LAST();
         return GDF_SUCCESS;
