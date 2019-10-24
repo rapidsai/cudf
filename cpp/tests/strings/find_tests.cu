@@ -18,7 +18,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/find.hpp>
-#include <utilities/error_utils.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>

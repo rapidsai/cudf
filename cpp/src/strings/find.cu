@@ -19,7 +19,7 @@
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
