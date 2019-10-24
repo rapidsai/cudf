@@ -20,7 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
