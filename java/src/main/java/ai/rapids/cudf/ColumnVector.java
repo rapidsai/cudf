@@ -581,12 +581,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     DATA
   }
 
-  void copyHostBufferBytes(byte[] dst, int dstOffset, BufferType src, long srcOffset,
-                           int length) {
-    assert dstOffset >= 0;
-    assert srcOffset >= 0;
-    assert length >= 0;
-    assert dstOffset + length <= dst.length;
+  HostMemoryBuffer getHostBufferFor(BufferType src) {
     HostMemoryBuffer srcBuffer;
     switch(src) {
       case VALIDITY:
@@ -601,6 +596,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       default:
         throw new IllegalArgumentException(src + " is not a supported buffer type.");
     }
+    return srcBuffer;
+  }
+
+  void copyHostBufferBytes(byte[] dst, int dstOffset, BufferType src, long srcOffset,
+                           int length) {
+    assert dstOffset >= 0;
+    assert srcOffset >= 0;
+    assert length >= 0;
+    assert dstOffset + length <= dst.length;
+
+    HostMemoryBuffer srcBuffer = getHostBufferFor(src);
 
     assert srcOffset + length <= srcBuffer.length : "would copy off end of buffer "
         + srcOffset + " + " + length + " > " + srcBuffer.length;
@@ -1857,12 +1863,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return deviceData;
     }
 
+    /**
+     * This returns total memory allocated in device for the ColumnVector.
+     * NOTE: If DType is STRING_CATEGORY, the size is estimated. The estimate assumes the length
+     * of strings to be 10 characters in each row and returns 24 bytes per dictionary entry.
+     * @param type
+     * @return number of device bytes allocated for this column
+     */
     public long getDeviceMemoryLength(DType type) {
-      assert type != DType.STRING_CATEGORY;
       long length;
-
       length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
-      if (type == DType.STRING) {
+
+      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
         length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
       } else {
         length += deviceData.data != null ? deviceData.data.getLength() : 0;

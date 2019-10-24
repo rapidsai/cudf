@@ -17,7 +17,7 @@
 #include <memory>
 
 #include "cudf/binaryop.hpp"
-#include "cudf/filling.hpp"
+#include "cudf/legacy/filling.hpp"
 #include "cudf/reduction.hpp"
 #include "cudf/replace.hpp"
 #include "cudf/stream_compaction.hpp"

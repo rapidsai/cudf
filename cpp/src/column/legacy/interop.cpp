@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/legacy/interop.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace legacy {
