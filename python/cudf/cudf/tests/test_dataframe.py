@@ -3979,7 +3979,7 @@ def test_series_astype_error_handling(errors):
 )
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
-        data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+        data = ["1991-11-20T00:00:00", "2004-12-04T00:00:00", "2016-09-13T00:00:00", None]
         sr = Series(data, dtype=dtype)
     elif dtype == "str":
         data = [1, 2, 3, None]
