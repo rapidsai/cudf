@@ -23,7 +23,7 @@
 
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/cuda_utils.hpp>

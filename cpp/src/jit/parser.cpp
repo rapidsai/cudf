@@ -18,7 +18,7 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include "parser.h"
 
