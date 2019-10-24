@@ -22,7 +22,7 @@
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <quantiles/quantiles_util.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/cudf.h>

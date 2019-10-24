@@ -17,6 +17,7 @@ from cudf._lib.utils cimport (
 from cudf._lib.includes.filling cimport (
     fill as cpp_fill,
     repeat as cpp_repeat,
+    tile as cpp_tile,
 )
 
 import numpy as np
@@ -52,5 +53,26 @@ def repeat(input, repeats):
     free(c_repeats_scalar)
     del c_input_table
     free_column(c_repeats_col)
+
+    return columns_from_table(&c_result_table)
+
+
+def tile(input, count):
+    from cudf.core.column import as_column
+
+    cdef cudf_table* c_input_table = table_from_columns(input)
+    cdef cudf_table c_result_table
+
+    cdef size_type c_count = count
+
+    if np.isscalar(count):
+        with nogil:
+            c_result_table = cpp_tile(
+                c_input_table[0],
+                c_count)
+    else:
+        raise ValueError("Count has to be numerical scalar")
+
+    del c_input_table
 
     return columns_from_table(&c_result_table)
