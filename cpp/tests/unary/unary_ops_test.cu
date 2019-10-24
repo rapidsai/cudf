@@ -27,7 +27,7 @@
 #include <vector>
 
 template <typename T>
-cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start, cudf::size_type size, cudf::bool8 nullable) {
+cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start, cudf::size_type size, bool nullable) {
     auto iter = cudf::test::make_counting_transform_iterator(start, [](auto i) { return T(i);});
 
     if(not nullable) {
@@ -40,7 +40,7 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
 }
 
 template <typename T>
-cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_type size, cudf::bool8 nullable, cudf::bool8 nulls_to_be) {
+cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_type size, bool nullable, bool nulls_to_be) {
 
     if(not nullable) {
         auto iter = cudf::test::make_counting_transform_iterator(0, [nulls_to_be](auto i) { return not nulls_to_be;});
