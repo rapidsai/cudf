@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-#include <cudf/replace.hpp>
+#include <cudf/legacy/replace.hpp>
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>

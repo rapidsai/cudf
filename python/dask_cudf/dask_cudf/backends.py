@@ -74,7 +74,7 @@ try:
 
     @group_split_dispatch.register(cudf.DataFrame)
     def group_split_cudf(df, c, k):
-        return df.scatter_by_map(c, map_size=k)
+        return dict(zip(range(k), df.scatter_by_map(c, map_size=k)))
 
 
 except ImportError:

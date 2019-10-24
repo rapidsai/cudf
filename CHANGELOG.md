@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
@@ -11,12 +12,16 @@
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
+- PR #3161 Move merge files to legacy
+- PR #3079 Added support to write ORC files given a local path
+- PR #3192 Add dtype param to cast `DataFrame` on init
 
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
 - PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
@@ -26,9 +31,12 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3080 Move `valid_if.cuh` to `legacy/`
+- PR #3052 Moved replace.hpp functionality to legacy
 - PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #2955 Add cmake option to only build for present GPU architecture
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
 - PR #3093 Move groupby files to legacy
@@ -40,22 +48,33 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
+- PR #3138 Movey unary files to legacy
+- PR #3175 Set cmake cuda version variables
+- PR #3171 Move deprecated error macros to legacy
+- PR #3193 Add cuPy as a formal dependency
+- PR #3195 Support for zero columned `table_view`
+- PR #3165 Java device memory size for string category
+- PR #3202 Rename and move error.hpp to public headers
 
 ## Bug Fixes
 
+- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3056 Add additional cmake hint for finding local build of RMM files
 - PR #3060 Move copying.hpp includes to legacy
 - PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 - PR #3168 Fix mutable_column_device_view head const_cast
+- PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
 - PR #2994 Fix split_out-support but with hash_object_dispatch
 
 
-# cuDF 0.10.0 (Date TBD)
+# cuDF 0.10.0 (16 Oct 2019)
 
 ## New Features
 
@@ -146,6 +165,8 @@
 - PR #2788 Guide to Python UDFs
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
+- PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
+- PR #3147 DataFrame can be initialized from rows via list of tuples
 
 ## Bug Fixes
 

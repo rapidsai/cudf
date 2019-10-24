@@ -15,13 +15,12 @@
  */
 
 #include <cudf/cudf.h>
-#include <utilities/nvtx/legacy/nvtx_utils.h>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/fill.h>
 #include <algorithm>
