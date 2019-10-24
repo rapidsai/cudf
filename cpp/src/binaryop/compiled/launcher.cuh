@@ -19,7 +19,7 @@
 
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <utilities/legacy/error_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 
 namespace cudf {

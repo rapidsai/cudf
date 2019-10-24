@@ -17,7 +17,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.cuh>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/integer_utils.hpp>
 
 #include <thrust/extrema.h>

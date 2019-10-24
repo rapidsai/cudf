@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 

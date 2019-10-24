@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/legacy/copying.hpp>
