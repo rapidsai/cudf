@@ -24,7 +24,6 @@
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf
 {
@@ -140,7 +139,9 @@ namespace
 {
 
 /**
- * @brief Function logic for strings_from API.
+ * @brief Function logic for substring_from API.
+ * This does both calculate and the execute based on template parameter.
+ *
  */
 template <typename PositionType, TwoPass Pass=SizeOnly>
 struct substring_from_fn
@@ -225,12 +226,9 @@ struct dispatch_substring_from_fn
     std::unique_ptr<cudf::column> operator()(strings_column_view&,
                                              column_view&, column_view&,
                                              rmm::mr::device_memory_resource*,
-                                             cudaStream_t ) const noexcept
+                                             cudaStream_t ) const
     {
-        // this line causes the following compile error:
-        // "error: throw will always call terminate()""
-        //CUDF_FAIL("Positions must be integral type.");
-        return nullptr;
+        CUDF_FAIL("Positions values for substring must be an integral type.");
     }
 };
 } // namespace
@@ -247,6 +245,8 @@ std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
     CUDF_EXPECTS( starts_column.size()==strings_count, "Parameter starts must have the same number of rows as strings.");
     CUDF_EXPECTS( stops_column.size()==strings_count, "Parameter stops must have the same number of rows as strings.");
     CUDF_EXPECTS( starts_column.type()==stops_column.type(), "Parameters starts and stops must be of the same type.");
+    CUDF_EXPECTS( starts_column.null_count()==0, "Parameter starts must not contain nulls." );
+    CUDF_EXPECTS( stops_column.null_count()==0, "Parameter stops must not contain nulls." );
 
     // perhaps another candidate for index-normalizer
     return cudf::experimental::type_dispatcher(starts_column.type(),
@@ -256,7 +256,8 @@ std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
 
 } // namespace detail
 
-//
+// APIS
+
 std::unique_ptr<cudf::column> substring( strings_column_view strings,
                                          int32_t start, int32_t stop, int32_t step,
                                          rmm::mr::device_memory_resource* mr )
