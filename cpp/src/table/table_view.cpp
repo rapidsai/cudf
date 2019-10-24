@@ -38,8 +38,8 @@ table_view_base<ColumnView>::table_view_base(
 }
 
 template <typename ColumnView>
-ColumnView& table_view_base<ColumnView>::column(
-    size_type column_index) noexcept {
+ColumnView const& table_view_base<ColumnView>::column(
+    size_type column_index) const noexcept {
   assert(column_index >= 0);
   assert(column_index < _columns.size());
   return _columns[column_index];

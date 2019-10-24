@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/types.hpp>
+#include <cudf/utilities/cuda.cuh>
 
 #include <cassert>
 
@@ -31,17 +34,51 @@ constexpr inline std::size_t size_in_bits() {
 /**---------------------------------------------------------------------------*
  * @brief Returns the index of the word containing the specified bit.
  *---------------------------------------------------------------------------**/
-constexpr __host__ __device__ inline size_type word_index(size_type bit_index) {
+constexpr inline size_type word_index(size_type bit_index) {
   return bit_index / detail::size_in_bits<bitmask_type>();
 }
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the position within a word of the specified bit.
  *---------------------------------------------------------------------------**/
-constexpr __host__ __device__ inline size_type intra_word_index(
+constexpr inline size_type intra_word_index(
     size_type bit_index) {
   return bit_index % detail::size_in_bits<bitmask_type>();
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Sets the specified bit to `1`
+ *
+ * This function is not thread-safe, i.e., attempting to update bits within the
+ * same word concurrently from multiple threads results in undefined behavior.
+ *
+ * @param bitmask The bitmask containing the bit to set
+ * @param bit_index Index of the bit to set
+ *---------------------------------------------------------------------------**/
+CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
+                                               size_type bit_index) {
+  assert(nullptr != bitmask);
+  bitmask[word_index(bit_index)] |=
+      (bitmask_type{1} << intra_word_index(bit_index));
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Sets the specified bit to `0`
+ *
+ * This function is not thread-safe, i.e., attempting to update bits within the
+ * same word concurrently from multiple threads results in undefined behavior.
+ *
+ * @param bitmask The bitmask containing the bit to clear
+ * @param bit_index The index of the bit to clear
+ *---------------------------------------------------------------------------**/
+CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
+                                                 size_type bit_index) {
+  assert(nullptr != bitmask);
+  bitmask[word_index(bit_index)] |=
+      ~(bitmask_type{1} << intra_word_index(bit_index));
+}
+
+#ifdef __CUDACC__
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether the specified bit is set to `1`
@@ -67,6 +104,7 @@ __device__ inline bool bit_is_set(bitmask_type const* bitmask,
  *
  * This function is thread-safe.
  *
+ * @param bitmask The bitmask containing the bit to set
  * @param bit_index  Index of the bit to set
  *---------------------------------------------------------------------------**/
 __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
@@ -114,12 +152,12 @@ __device__ constexpr inline bitmask_type set_most_significant_bits(
 
  * This function is thread-safe.
  *
- * @param bit_index  Index of the bit to set
+ * @param bit_index  Index of the bit to clear
  *---------------------------------------------------------------------------**/
 __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index) {
   assert(nullptr != bitmask);
   atomicAnd(&bitmask[word_index(bit_index)],
             ~(bitmask_type{1} << intra_word_index(bit_index)));
 }
-
+#endif
 }  // namespace cudf
