@@ -31,6 +31,8 @@
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 - PR #3065 Select and Concat for cudf::experimental::table
+- PR #3080 Move `valid_if.cuh` to `legacy/`
+- PR #3052 Moved replace.hpp functionality to legacy
 - PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
@@ -52,8 +54,11 @@
 - PR #3138 Movey unary files to legacy
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
-
+- PR #3165 Java device memory size for string category
+- PR #3205 Move transform files to legacy
+- PR #3202 Rename and move error.hpp to public headers
 
 ## Bug Fixes
 
@@ -61,11 +66,14 @@
 - PR #3048 Support for zero columned tables
 - PR #3030 Fix snappy decoding regression in PR #3014
 - PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3056 Add additional cmake hint for finding local build of RMM files
 - PR #3060 Move copying.hpp includes to legacy
 - PR #3139 Fixed java RMM auto initalization
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 - PR #3168 Fix mutable_column_device_view head const_cast
+- PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
+- PR #2994 Fix split_out-support but with hash_object_dispatch
 
 
 # cuDF 0.10.0 (16 Oct 2019)

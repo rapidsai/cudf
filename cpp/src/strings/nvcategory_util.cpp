@@ -7,7 +7,7 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/legacy/error_utils.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>

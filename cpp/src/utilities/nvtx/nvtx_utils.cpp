@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/utilities/nvtx_utils.hpp>
-#include "utilities/error_utils.hpp"
+#include "cudf/utilities/error.hpp"
 
 #ifdef USE_NVTX
 #include <nvToolsExt.h>

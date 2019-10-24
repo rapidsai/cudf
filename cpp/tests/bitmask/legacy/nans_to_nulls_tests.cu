@@ -28,7 +28,7 @@
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <random>
-#include <cudf/transform.hpp>
+#include <cudf/legacy/transform.hpp>
 
 using bit_mask::bit_mask_t;
 
