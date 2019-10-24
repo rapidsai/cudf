@@ -52,6 +52,7 @@
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Move unary files to legacy
 - PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
 - PR #3193 Add cuPy as a formal dependency
@@ -73,6 +74,7 @@
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 - PR #3168 Fix mutable_column_device_view head const_cast
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
+- PR #2994 Fix split_out-support but with hash_object_dispatch
 
 
 # cuDF 0.10.0 (16 Oct 2019)
