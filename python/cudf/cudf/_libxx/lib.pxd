@@ -55,11 +55,9 @@ cdef extern from "column/column_view.hpp" namespace "cudf" nogil:
 
         column_view& operator=(const column_view&)
         column_view& operator=(column_view&&)
+        column_view(data_type type, size_type size, const void* data)
         column_view(data_type type, size_type size, const void* data,
-                    const bitmask_type* null_mask=NULL,
-                    size_type null_count=UNKNOWN_NULL_COUNT,
-                    size_type offset=0, const vector[column_view]& children=[])
-
+                    const bitmask_type* null_mask)
         T* data[T]()
         bitmask_type* null_mask()
         size_type size()
@@ -74,10 +72,9 @@ cdef extern from "column/column_view.hpp" namespace "cudf" nogil:
         mutable_column_view()
         mutable_column_view(const mutable_column_view&)
         mutable_column_view& operator=(const mutable_column_view&)
-        mutablecolumn_view(data_type type, size_type size, const void* data,
-                           const bitmask_type* null_mask=NULL,
-                           size_type null_count=UNKNOWN_NULL_COUNT,
-                           size_type offset=0,const vector[mutable_column_view]& children=[])
+        mutable_column_view(data_type type, size_type size, const void* data)
+        mutable_column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask)
         T* data[T]()
         bitmask_type* null_mask()
         size_type size()
@@ -111,3 +108,5 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
         mutable_table_view mutable_view()
         vector[unique_ptr[column]] release()
 
+cdef extern from "<utility>" namespace "std" nogil:
+    cdef device_buffer move(device_buffer)
