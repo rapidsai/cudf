@@ -913,7 +913,6 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     @property
     def names(self):
