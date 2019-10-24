@@ -16,7 +16,6 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/convert.hpp>
-#include <utilities/error_utils.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>

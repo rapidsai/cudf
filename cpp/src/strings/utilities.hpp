@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
-#include <bitmask/valid_if.cuh>
+#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 

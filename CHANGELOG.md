@@ -57,6 +57,7 @@
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
+- PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 
 ## Bug Fixes
@@ -72,6 +73,7 @@
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 - PR #3168 Fix mutable_column_device_view head const_cast
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
+- PR #2994 Fix split_out-support but with hash_object_dispatch
 
 
 # cuDF 0.10.0 (16 Oct 2019)
