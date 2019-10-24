@@ -21,7 +21,7 @@
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <utilities/column_utils.hpp>
 
