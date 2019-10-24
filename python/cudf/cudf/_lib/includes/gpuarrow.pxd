@@ -17,13 +17,3 @@ cdef extern from "cudf/ipc.hpp" nogil:
         unique_ptr[CMessageReader] Open(CCudaBufferReader* stream,
                                         CBufferReader* schema)
         CStatus ReadNextMessage(unique_ptr[CMessage]* out)
-
-    # This declaration is here because there's currently a bug in the pyarrow
-    # Cython type signatures. They're declaring
-    # `shared_ptr[CRecordBatchStreamReader]* out`, but the actual type in
-    # Arrow C++ is `shared_ptr[CRecordBatchReader]* out`, like we have here
-    cdef cppclass CCudaRecordBatchStreamReader \
-            " CudaRecordBatchStreamReader"(CRecordBatchStreamReader):
-        @staticmethod
-        CStatus Open(unique_ptr[CMessageReader] message_reader,
-                     shared_ptr[CRecordBatchReader]* out)

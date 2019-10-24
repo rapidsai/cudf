@@ -18,7 +18,7 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/cudf_utils.h>
 
 #include <gtest/gtest.h>
