@@ -68,26 +68,16 @@ TEST_F(StringsFindTest, ZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    {
-        auto results = cudf::strings::find(strings_view, "é");
-        cudf::test::expect_strings_empty(results->view());
-    }
-    {
-        auto results = cudf::strings::rfind(strings_view, "é");
-        cudf::test::expect_strings_empty(results->view());
-    }
-    {
-        auto results = cudf::strings::contains(strings_view, "é");
-        cudf::test::expect_strings_empty(results->view());
-    }
-    {
-        auto results = cudf::strings::starts_with(strings_view, "é");
-        cudf::test::expect_strings_empty(results->view());
-    }
-    {
-        auto results = cudf::strings::ends_with(strings_view, "é");
-        cudf::test::expect_strings_empty(results->view());
-    }
+    auto results = cudf::strings::find(strings_view, "é");
+    EXPECT_EQ(results->size(),0);
+    results = cudf::strings::rfind(strings_view, "é");
+    EXPECT_EQ(results->size(),0);
+    results = cudf::strings::contains(strings_view, "é");
+    EXPECT_EQ(results->size(),0);
+    results = cudf::strings::starts_with(strings_view, "é");
+    EXPECT_EQ(results->size(),0);
+    results = cudf::strings::ends_with(strings_view, "é");
+    EXPECT_EQ(results->size(),0);
 }
 
 TEST_F(StringsFindTest, AllEmpty)
@@ -102,26 +92,16 @@ TEST_F(StringsFindTest, AllEmpty)
     cudf::test::fixed_width_column_wrapper<int8_t> expected8( h_expected8.begin(), h_expected8.end() );
 
     auto strings_view = cudf::strings_column_view(strings);
-    {
-        auto results = cudf::strings::find(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected32);
-    }
-    {
-        auto results = cudf::strings::rfind(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected32);
-    }
-    {
-        auto results = cudf::strings::contains(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected8);
-    }
-    {
-        auto results = cudf::strings::starts_with(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected8);
-    }
-    {
-        auto results = cudf::strings::ends_with(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected8);
-    }
+    auto results = cudf::strings::find(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected32);
+    results = cudf::strings::rfind(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected32);
+    results = cudf::strings::contains(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected8);
+    results = cudf::strings::starts_with(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected8);
+    results = cudf::strings::ends_with(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected8);
 }
 
 TEST_F(StringsFindTest, AllNull)
@@ -139,26 +119,16 @@ TEST_F(StringsFindTest, AllNull)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto strings_view = cudf::strings_column_view(strings);
-    {
-        auto results = cudf::strings::find(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected32);
-    }
-    {
-        auto results = cudf::strings::rfind(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected32);
-    }
-    {
-        auto results = cudf::strings::contains(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected8);
-    }
-    {
-        auto results = cudf::strings::starts_with(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected8);
-    }
-    {
-        auto results = cudf::strings::ends_with(strings_view,"e");
-        cudf::test::expect_columns_equal(*results,expected8);
-    }
+    auto results = cudf::strings::find(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected32);
+    results = cudf::strings::rfind(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected32);
+    results = cudf::strings::contains(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected8);
+    results = cudf::strings::starts_with(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected8);
+    results = cudf::strings::ends_with(strings_view,"e");
+    cudf::test::expect_columns_equal(*results,expected8);
 }
 
 class FindParmsTest : public StringsFindTest,

@@ -43,7 +43,7 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with character position values.
  */
-std::unique_ptr<cudf::column> find( strings_column_view strings,
+std::unique_ptr<cudf::column> find( cudf::strings_column_view strings,
                                     const char* target,
                                     int32_t start=0, int32_t stop=-1,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
@@ -68,7 +68,7 @@ std::unique_ptr<cudf::column> find( strings_column_view strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with character position values.
  */
-std::unique_ptr<cudf::column> rfind( strings_column_view strings,
+std::unique_ptr<cudf::column> rfind( cudf::strings_column_view strings,
                                      const char* target,
                                      int32_t start=0, int32_t stop=-1,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
@@ -84,9 +84,9 @@ std::unique_ptr<cudf::column> rfind( strings_column_view strings,
  * @param strings Strings instance for this operation.
  * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New strings column with sorted elements of this instance.
+ * @return New INT8 column.
  */
-std::unique_ptr<cudf::column> contains( strings_column_view strings,
+std::unique_ptr<cudf::column> contains( cudf::strings_column_view strings,
                                         const char* target,
                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
@@ -102,9 +102,9 @@ std::unique_ptr<cudf::column> contains( strings_column_view strings,
  * @param strings Strings instance for this operation.
  * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New strings column with sorted elements of this instance.
+ * @return New INT8 column.
  */
-std::unique_ptr<cudf::column> starts_with( strings_column_view strings,
+std::unique_ptr<cudf::column> starts_with( cudf::strings_column_view strings,
                                            const char* target,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
@@ -120,9 +120,9 @@ std::unique_ptr<cudf::column> starts_with( strings_column_view strings,
  * @param strings Strings instance for this operation.
  * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New strings column with sorted elements of this instance.
+ * @return New INT8 column.
  */
-std::unique_ptr<cudf::column> ends_with( strings_column_view strings,
+std::unique_ptr<cudf::column> ends_with( cudf::strings_column_view strings,
                                          const char* target,
                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 

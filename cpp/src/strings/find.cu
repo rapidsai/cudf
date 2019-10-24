@@ -22,8 +22,6 @@
 #include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 
-#include <rmm/thrust_rmm_allocator.h>
-
 namespace
 {
 
@@ -142,7 +140,10 @@ std::unique_ptr<cudf::column> find( strings_column_view strings,
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr);
+        return std::make_unique<column>( data_type{INT32}, 0,
+                                         rmm::device_buffer{}, // data
+                                         rmm::device_buffer{}, 0 ); // nulls
+
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
     CUDF_EXPECTS( start >= 0, "Parameter start must be positive integer or zero.");
     if( (stop) > 0 && (start >stop) )
@@ -167,7 +168,10 @@ std::unique_ptr<cudf::column> rfind( strings_column_view strings,
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr);
+        return std::make_unique<column>( data_type{INT32}, 0,
+                                         rmm::device_buffer{}, // data
+                                         rmm::device_buffer{}, 0 ); // nulls
+
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
     CUDF_EXPECTS( start >= 0, "Parameter start must be positive integer or zero.");
     if( (stop) > 0 && (start >stop) )
@@ -191,7 +195,10 @@ std::unique_ptr<cudf::column> contains( strings_column_view strings,
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr);
+        return std::make_unique<column>( data_type{INT8}, 0,
+                                         rmm::device_buffer{}, // data
+                                         rmm::device_buffer{}, 0 ); // nulls
+
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
 
     auto target_ptr = detail::string_from_host(target);
@@ -210,7 +217,10 @@ std::unique_ptr<cudf::column> starts_with( strings_column_view strings,
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr);
+        return std::make_unique<column>( data_type{INT8}, 0,
+                                         rmm::device_buffer{}, // data
+                                         rmm::device_buffer{}, 0 ); // nulls
+
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
 
     auto target_ptr = detail::string_from_host(target);
@@ -229,7 +239,10 @@ std::unique_ptr<cudf::column> ends_with( strings_column_view strings,
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr);
+        return std::make_unique<column>( data_type{INT8}, 0,
+                                         rmm::device_buffer{}, // data
+                                         rmm::device_buffer{}, 0 ); // nulls
+
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
 
     auto target_ptr = detail::string_from_host(target);
