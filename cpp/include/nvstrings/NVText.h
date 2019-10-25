@@ -56,6 +56,17 @@ public:
     static NVStrings* unique_tokens(NVStrings& strs, const char* delimiter=nullptr);
 
     /**
+     * @brief Tokenize all the strings into a single characters only.
+     * This will create a single character per string entry in the returned instance.
+     *
+     * Note these are UTF-8 characters and so may be more than one byte per string.
+     *
+     * @param strs Strings to tokenize
+     * @return Strings with single characters.
+     */
+    static NVStrings* character_tokenize(NVStrings& strs);
+
+    /**
      * @brief Computes the number of tokens in each string.
      * @param strs Strings to tokenize.
      * @param delimiter String or character used to identify tokens.
