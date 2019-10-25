@@ -23,10 +23,10 @@ namespace cudf
 namespace strings
 {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Character type values.
  * These types can be or'd to check for combination of types
-*---------------------------------------------------------------------------**/
+ */
 enum string_character_types {
     DECIMAL  =  1,
     NUMERIC  =  2,
@@ -38,7 +38,7 @@ enum string_character_types {
     LOWER    = 64
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a boolean column containing identifying strings entry in which all
  * the characters for that string are of the type specified. The output row entry
  * will be set to false if the corresponding string element is empty or has at
@@ -50,8 +50,8 @@ enum string_character_types {
  * @param strings Strings instance for this operation.
  * @param types The character types to check in each string.
  * @param mr Resource for allocating device memory.
- * @return New column with lengths for each string in strings.
- *---------------------------------------------------------------------------**/
+ * @return New column of boolean results for each string.
+ */
 std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings,
                                                      string_character_types types,
                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

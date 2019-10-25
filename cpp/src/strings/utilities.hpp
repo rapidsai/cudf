@@ -111,6 +111,9 @@ std::unique_ptr<column> make_empty_strings_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+// Type for the character flags table.
+using character_flags_table_type = uint8_t;
+
 /**
  * @brief Returns pointer to device memory that contains the static
  * characters flags table. On first call, this will copy the table into
@@ -121,7 +124,10 @@ std::unique_ptr<column> make_empty_strings_column(
  *
  * @return Device memory pointer to character flags table.
  */
-uint8_t* get_character_flags_table();
+const character_flags_table_type* get_character_flags_table();
+
+// Type for the character cases table.
+using character_cases_table_type = uint16_t;
 
 /**
  * @brief Returns pointer to device memory that contains the static
@@ -133,7 +139,7 @@ uint8_t* get_character_flags_table();
  *
  * @return Device memory pointer to character flags table.
  */
-const uint16_t* get_character_case_table();
+const character_cases_table_type* get_character_case_table();
 
 
 } // namespace detail

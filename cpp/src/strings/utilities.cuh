@@ -111,30 +111,30 @@ std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type st
  * can be used for lookup in the character flags or the character case tables.
  *
  * @param utf8_char Single UTF-8 character to convert.
- * @return Device memory pointer to character flags table.
+ * @return Code-point for the UTF-8 character.
  */
-__device__ inline uint32_t utf8_to_codepoint(uint32_t utf8_char)
+__device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
 {
     uint32_t unchr = 0;
-    if( utf8_char < 0x00000080 )
+    if( utf8_char < 0x00000080 ) // single-byte pass thru
         unchr = utf8_char;
-    else if( utf8_char < 0x0000E000 )
+    else if( utf8_char < 0x0000E000 ) // two bytes
     {
-        unchr =  (utf8_char & 0x1F00) >> 2;
-        unchr |= (utf8_char & 0x003F);
+        unchr =  (utf8_char & 0x1F00) >> 2; // shift and
+        unchr |= (utf8_char & 0x003F);      // unmask
     }
-    else if( utf8_char < 0x00F00000 )
+    else if( utf8_char < 0x00F00000 ) // three bytes
     {
-        unchr =  (utf8_char & 0x0F0000) >> 4;
-        unchr |= (utf8_char & 0x003F00) >> 2;
-        unchr |= (utf8_char & 0x00003F);
+        unchr =  (utf8_char & 0x0F0000) >> 4;  // get upper 4 bits
+        unchr |= (utf8_char & 0x003F00) >> 2;  // shift and
+        unchr |= (utf8_char & 0x00003F);       // unmask
     }
-    else if( utf8_char <= (unsigned)0xF8000000 )
+    else if( utf8_char <= (unsigned)0xF8000000 ) // four bytes
     {
-        unchr =  (utf8_char & 0x03000000) >> 6;
-        unchr |= (utf8_char & 0x003F0000) >> 4;
-        unchr |= (utf8_char & 0x00003F00) >> 2;
-        unchr |= (utf8_char & 0x0000003F);
+        unchr =  (utf8_char & 0x03000000) >> 6; // upper 3 bits
+        unchr |= (utf8_char & 0x003F0000) >> 4; // next 6 bits
+        unchr |= (utf8_char & 0x00003F00) >> 2; // next 6 bits
+        unchr |= (utf8_char & 0x0000003F);      // unmask
     }
     return unchr;
 }
@@ -145,9 +145,9 @@ __device__ inline uint32_t utf8_to_codepoint(uint32_t utf8_char)
  * @param unchr Character code-point to convert.
  * @return Single UTF-8 character.
  */
-__host__ __device__ inline uint32_t codepoint_to_utf8( uint32_t unchr )
+__host__ __device__ inline cudf::char_utf8 codepoint_to_utf8( uint32_t unchr )
 {
-    uint32_t utf8 = 0;
+    cudf::char_utf8 utf8 = 0;
     if( unchr < 0x00000080 ) // single byte utf8
         utf8 = unchr;
     else if( unchr < 0x00000800 )  // double byte utf8

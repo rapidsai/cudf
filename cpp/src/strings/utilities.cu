@@ -147,16 +147,15 @@ namespace
 {
 
 std::mutex g_flags_table_mutex;
-static uint8_t* d_character_flags_table = nullptr;
+static character_flags_table_type* d_character_flags_table = nullptr;
 
 } // namespace
 
-uint8_t* get_character_flags_table()
+const character_flags_table_type* get_character_flags_table()
 {
     std::lock_guard<std::mutex> guard(g_flags_table_mutex);
     if( !d_character_flags_table )
     {
-        // leave this out of RMM since it is never freed
         RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
         CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
     }
@@ -167,16 +166,15 @@ namespace
 {
 
 std::mutex g_case_table_mutex;
-static uint16_t* d_character_case_table = nullptr;
+static character_cases_table_type* d_character_case_table = nullptr;
 
 }
 
-const uint16_t* get_character_case_table()
+const character_cases_table_type* get_character_case_table()
 {
     std::lock_guard<std::mutex> guard(g_case_table_mutex);
     if( !d_character_case_table )
     {
-        // leave this out of RMM since it is never freed
         RMM_TRY(RMM_ALLOC(&d_character_case_table,sizeof(g_character_case_table),0));
         CUDA_TRY(cudaMemcpy(d_character_case_table,g_character_case_table,sizeof(g_character_case_table),cudaMemcpyHostToDevice));
     }
