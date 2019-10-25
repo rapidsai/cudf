@@ -16,7 +16,7 @@
  */
 
 #include "column_utils.hpp"
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 

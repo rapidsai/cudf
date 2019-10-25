@@ -15,7 +15,7 @@
  */
 #include "cudf/legacy/copying.hpp"
 #include "cudf/quantiles.hpp"
-#include "cudf/replace.hpp"
+#include "cudf/legacy/replace.hpp"
 #include "cudf/rolling.hpp"
 
 #include "jni_utils.hpp"
@@ -573,8 +573,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemoryStringSi
     if (dtype == GDF_STRING) {
       NVStrings *nvstr = static_cast<NVStrings *>(column->data);
       return static_cast<jlong>(nvstr->memsize());
+    } else if (dtype == GDF_STRING_CATEGORY) {
+      NVCategory *cats = static_cast<NVCategory *>(column->dtype_info.category);
+      unsigned long dict_size = cats->keys_size();
+      unsigned long dict_size_total = dict_size * GDF_INT32;
+      // NOTE: Assumption being made that strings in each row is of 10 chars. So the result would be approximate.
+      // custring_view structure is allocated 8B and 16B for 10 chars as it is aligned to 8 bytes.
+      unsigned long category_size_total = dict_size * 24;
+      return static_cast<jlong>(category_size_total + dict_size_total);
     } else {
-      throw std::logic_error("ONLY STRING TYPES ARE SUPPORTED...");
+      throw std::logic_error("ONLY STRING AND CATEGORY TYPES ARE SUPPORTED...");
     }
   }
   CATCH_STD(env, 0);

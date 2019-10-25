@@ -27,7 +27,7 @@
 
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/device_atomics.cuh>
 
 
