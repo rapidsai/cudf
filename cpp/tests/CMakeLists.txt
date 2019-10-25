@@ -331,6 +331,14 @@ ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 
+set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cu")
+
+ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
+
+###################################################################################################
+# - legacy sort tests ------------------------------------------------------------------------------------
+
 set(LEGACY_SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/legacy/digitize_test.cu")
 
