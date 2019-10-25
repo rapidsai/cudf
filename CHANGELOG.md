@@ -30,6 +30,7 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3051 Specialized hash function for strings column
 - PR #3065 Select and Concat for cudf::experimental::table
 - PR #3080 Move `valid_if.cuh` to `legacy/`
 - PR #3052 Moved replace.hpp functionality to legacy
