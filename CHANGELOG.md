@@ -77,7 +77,7 @@
 - PR #3199 Update JNI includes for legacy moves
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
 - PR #2994 Fix split_out-support but with hash_object_dispatch
-- PR #3128 Fixes `row_lexicographic_comparator` issue with handling two tables
+- PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 
 
 # cuDF 0.10.0 (16 Oct 2019)

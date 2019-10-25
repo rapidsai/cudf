@@ -332,7 +332,7 @@ ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 
