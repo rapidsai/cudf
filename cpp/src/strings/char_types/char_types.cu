@@ -20,13 +20,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include <cudf/utilities/error.hpp>
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <thrust/transform.h>
-#include <thrust/transform_scan.h>
 
 namespace cudf
 {
@@ -61,7 +57,7 @@ std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int8_t>();
     //
-    uint8_t* d_flags = get_character_flags_table();
+    auto d_flags = get_character_flags_table();
     // set the output values by checking the character types
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), strings_count,
@@ -69,11 +65,11 @@ std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings
             if( d_column.is_null(idx) )
                 return;
             auto d_str = d_column.element<string_view>(idx);
-            bool check = !d_str.empty(); // requires at least one character
+            bool check = !d_str.empty(); // positive result requires at least one character
             for( auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr )
             {
                 uint32_t code_point = utf8_to_codepoint(*itr);
-                unsigned int flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+                uint32_t flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
                 check = (types & flag) > 0;
             }
             d_results[idx] = static_cast<int8_t>(check);
@@ -82,7 +78,8 @@ std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings
     results->set_null_count(null_count);
     return results;
 }
-} // detail
+
+} // namespace detail
 
 //
 std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings,

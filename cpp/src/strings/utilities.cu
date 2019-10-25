@@ -142,15 +142,19 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
                                      rmm::device_buffer{0,stream,mr}, 0 ); // nulls
 }
 
-std::mutex g_flags_table_mutex;
-static uint8_t* d_character_flags_table = nullptr;
+namespace
+{
 
-uint8_t* get_character_flags_table()
+std::mutex g_flags_table_mutex;
+static character_flags_table_type* d_character_flags_table = nullptr;
+
+} // namespace
+
+const character_flags_table_type* get_character_flags_table()
 {
     std::lock_guard<std::mutex> guard(g_flags_table_mutex);
     if( !d_character_flags_table )
     {
-        // leave this out of RMM since it is never freed
         RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
         CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
     }
