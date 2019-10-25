@@ -138,3 +138,37 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllNull) {
   EXPECT_EQ(view.null_count(), 5);
   EXPECT_EQ(view.offset(), 0);
 }
+
+TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid) {
+  auto all_valid = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return true; });
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5},
+                                                        all_valid);
+  auto colPtr = col.release();
+  cudf::column_view view = *colPtr;
+  EXPECT_EQ(view.size(), 5);
+  EXPECT_NE(nullptr, view.head());
+  EXPECT_EQ(view.type(), this->data_type());
+  EXPECT_TRUE(view.nullable());
+  EXPECT_FALSE(view.has_nulls());
+  EXPECT_EQ(view.offset(), 0);
+}
+
+TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull) {
+  auto all_null = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return false; });
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5},
+                                                        all_null);
+  auto colPtr = col.release();
+  cudf::column_view view = *colPtr;
+  EXPECT_EQ(view.size(), 5);
+  EXPECT_NE(nullptr, view.head());
+  EXPECT_EQ(view.type(), this->data_type());
+  EXPECT_TRUE(view.nullable());
+  EXPECT_TRUE(view.has_nulls());
+  EXPECT_EQ(view.null_count(), 5);
+  EXPECT_EQ(view.offset(), 0);
+}
+
