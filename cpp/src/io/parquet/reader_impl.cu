@@ -52,7 +52,7 @@ namespace {
 constexpr type_id to_type_id(parquet::Type physical,
                              parquet::ConvertedType logical,
                              bool strings_to_categorical,
-                             data_type timestamp_type, int32_t decimal_scale) {
+                             type_id timestamp_type_id, int32_t decimal_scale) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -65,12 +65,12 @@ constexpr type_id to_type_id(parquet::Type physical,
     case parquet::DATE:
       return type_id::TIMESTAMP_DAYS;
     case parquet::TIMESTAMP_MICROS:
-      return (timestamp_type.id() != type_id::EMPTY)
-                 ? timestamp_type.id()
+      return (timestamp_type_id != type_id::EMPTY)
+                 ? timestamp_type_id
                  : type_id::TIMESTAMP_MICROSECONDS;
     case parquet::TIMESTAMP_MILLIS:
-      return (timestamp_type.id() != type_id::EMPTY)
-                 ? timestamp_type.id()
+      return (timestamp_type_id != type_id::EMPTY)
+                 ? timestamp_type_id
                  : type_id::TIMESTAMP_MILLISECONDS;
     case parquet::DECIMAL:
       if (decimal_scale != 0 ||
@@ -100,8 +100,8 @@ constexpr type_id to_type_id(parquet::Type physical,
       // Can be mapped to GDF_CATEGORY (32-bit hash) or GDF_STRING (nvstring)
       return strings_to_categorical ? type_id::CATEGORY : type_id::STRING;
     case parquet::INT96:
-      return (timestamp_type.id() != type_id::EMPTY)
-                 ? timestamp_type.id()
+      return (timestamp_type_id != type_id::EMPTY)
+                 ? timestamp_type_id
                  : type_id::TIMESTAMP_NANOSECONDS;
     default:
       break;
@@ -582,11 +582,11 @@ table reader::impl::read(int skip_rows, int num_rows, int row_group,
           _metadata->schema[_metadata->row_groups[selected_row_groups[0].first]
                                 .columns[col.first]
                                 .schema_idx];
-      auto type_id = to_type_id(col_schema.type, col_schema.converted_type,
-                                _strings_to_categorical, _timestamp_type,
-                                col_schema.decimal_scale);
-      CUDF_EXPECTS(type_id != type_id::EMPTY, "Unknown type");
-      column_types.emplace_back(type_id);
+      auto col_type = to_type_id(col_schema.type, col_schema.converted_type,
+                                 _strings_to_categorical, _timestamp_type.id(),
+                                 col_schema.decimal_scale);
+      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
+      column_types.emplace_back(col_type);
     }
 
     // Descriptors for all the chunks that make up the selected columns

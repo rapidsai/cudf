@@ -51,7 +51,7 @@ namespace {
  * @brief Function that translates ORC data kind to cuDF type enum
  **/
 constexpr type_id to_type_id(const orc::SchemaType &schema, bool use_np_dtypes,
-                             data_type timestamp_type) {
+                             type_id timestamp_type_id) {
   switch (schema.kind) {
     case orc::BOOLEAN:
       return type_id::BOOL8;
@@ -74,8 +74,8 @@ constexpr type_id to_type_id(const orc::SchemaType &schema, bool use_np_dtypes,
       // Variable-length types can all be mapped to STRING
       return type_id::STRING;
     case orc::TIMESTAMP:
-      return (timestamp_type.id() != type_id::EMPTY)
-                 ? timestamp_type.id()
+      return (timestamp_type_id != type_id::EMPTY)
+                 ? timestamp_type_id
                  : type_id::TIMESTAMP_NANOSECONDS;
     case orc::DATE:
       // There isn't a (DAYS -> np.dtype) mapping
@@ -620,10 +620,10 @@ table reader::impl::read(int skip_rows, int num_rows, int stripe,
   // Get a list of column data types
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
-    auto type_id =
-        to_type_id(_metadata->ff.types[col], _use_np_dtypes, _timestamp_type);
-    CUDF_EXPECTS(type_id != type_id::EMPTY, "Unknown type");
-    column_types.emplace_back(type_id);
+    auto col_type = to_type_id(_metadata->ff.types[col], _use_np_dtypes,
+                               _timestamp_type.id());
+    CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
+    column_types.emplace_back(col_type);
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;

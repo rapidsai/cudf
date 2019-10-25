@@ -130,8 +130,8 @@ class metadata : public file_metadata {
     } else {
       // Iterate backwards as fastavro returns from last-to-first?!
       for (int i = num_avro_columns - 1; i >= 0; --i) {
-        const auto type_id = to_type_id(&schema[columns[i].schema_data_idx]);
-        CUDF_EXPECTS(type_id != type_id::EMPTY, "Unsupported data type");
+        auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
+        CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
         selection.emplace_back(i, columns[i].name);
       }
     }
@@ -323,7 +323,8 @@ void reader::impl::decode_data(
     if (_metadata->schema[schema_data_idx].kind == type_enum) {
       schema_desc[schema_data_idx].count = dict[i].first;
     }
-    //cudaMemsetAsync(out_buffers[i].null_mask(), -1, bitmask_allocation_size_bytes(num_rows));
+    cudaMemsetAsync(out_buffers[i].null_mask(), -1,
+                    bitmask_allocation_size_bytes(num_rows));
   }
   rmm::device_buffer block_list(
       _metadata->block_list.data(),
@@ -382,9 +383,9 @@ table reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream) {
       auto &col_schema =
           _metadata->schema[_metadata->columns[col.first].schema_data_idx];
 
-      auto type_id = to_type_id(&col_schema);
-      CUDF_EXPECTS(type_id != type_id::EMPTY, "Unknown type");
-      column_types.emplace_back(type_id);
+      auto col_type = to_type_id(&col_schema);
+      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
+      column_types.emplace_back(col_type);
     }
 
     if (_metadata->total_data_size > 0) {
