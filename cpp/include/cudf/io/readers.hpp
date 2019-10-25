@@ -47,6 +47,120 @@ namespace io {
 //! Inner interfaces and implementations
 namespace detail {
 
+//! ORC format
+namespace orc {
+
+/**
+ * @brief Options for the ORC reader.
+ */
+struct reader_options {
+  std::vector<std::string> columns;
+  bool use_index = true;
+  bool use_np_dtypes = true;
+  data_type timestamp_type{EMPTY};
+
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
+
+  /**
+   * @brief Constructor to populate reader options.
+   *
+   * @param columns Set of columns to read; empty for all columns
+   * @param use_index_lookup Whether to use row index for faster scanning
+   * @param np_compat Whether to use numpy-compatible dtypes
+   * @param timestamp_type Cast timestamp columns to a specific type
+   */
+  reader_options(std::vector<std::string> columns, bool use_index_lookup,
+                 bool np_compat, data_type timestamp_type)
+      : columns(std::move(columns)),
+        use_index(use_index_lookup),
+        use_np_dtypes(np_compat),
+        timestamp_type(timestamp_type) {}
+};
+
+/**
+ * @brief Class to read ORC dataset data into columns.
+ */
+class reader {
+ private:
+  class impl;
+  std::unique_ptr<impl> _impl;
+
+ public:
+  /**
+   * @brief Constructor for a filepath to dataset.
+   *
+   * @param filepath Path to whole dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      std::string filepath, reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for a memory buffer to dataset.
+   *
+   * @param buffer Pointer to whole dataset
+   * @param length Host buffer size in bytes
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      const char *buffer, size_t length, reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for an Arrow file to dataset.
+   *
+   * @param file Arrow file object of dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      std::shared_ptr<arrow::io::RandomAccessFile> file,
+      reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~reader();
+
+  /**
+   * @brief Reads the entire dataset.
+   *
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_all(cudaStream_t stream = 0);
+
+  /**
+   * @brief Reads and returns a specific stripe.
+   *
+   * @param stripe Index of the stripe
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_stripe(size_type stripe, cudaStream_t stream = 0);
+
+  /**
+   * @brief Reads and returns a range of rows.
+   *
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read; use `0` for all remaining data
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_rows(size_type skip_rows, size_type num_rows,
+                  cudaStream_t stream = 0);
+};
+
+}  // namespace orc
+
 //! Parquet format
 namespace parquet {
 

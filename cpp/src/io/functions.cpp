@@ -44,6 +44,23 @@ std::unique_ptr<Reader> make_reader(source_info source, ReaderOptions options) {
 }  // namespace
 
 // Freeform API wraps the detail reader class API
+table read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr) {
+  namespace orc = cudf::experimental::io::detail::orc;
+
+  orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes,
+                              args.timestamp_type};
+  auto reader = make_reader<orc::reader>(args.source, options);
+
+  if (args.stripe != -1) {
+    return reader->read_stripe(args.stripe);
+  } else if (args.skip_rows != -1 || args.num_rows != -1) {
+    return reader->read_rows(args.skip_rows, args.num_rows);
+  } else {
+    return reader->read_all();
+  }
+}
+
+// Freeform API wraps the detail reader class API
 table read_parquet(read_parquet_args const& args,
                    rmm::mr::device_memory_resource* mr) {
   namespace parquet = cudf::experimental::io::detail::parquet;
