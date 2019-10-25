@@ -44,6 +44,21 @@ std::unique_ptr<Reader> make_reader(source_info source, ReaderOptions options) {
 }  // namespace
 
 // Freeform API wraps the detail reader class API
+table read_avro(read_avro_args const& args,
+                rmm::mr::device_memory_resource* mr) {
+  namespace avro = cudf::experimental::io::detail::avro;
+
+  avro::reader_options options{args.columns};
+  auto reader = make_reader<avro::reader>(args.source, options);
+
+  if (args.skip_rows != -1 || args.num_rows != -1) {
+    return reader->read_rows(args.skip_rows, args.num_rows);
+  } else {
+    return reader->read_all();
+  }
+}
+
+// Freeform API wraps the detail reader class API
 table read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr) {
   namespace orc = cudf::experimental::io::detail::orc;
 

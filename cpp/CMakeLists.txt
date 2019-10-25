@@ -426,6 +426,7 @@ add_library(cudf
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
+            src/io/avro/reader_impl.cu
             src/io/csv/legacy/csv_reader_impl.cu
             src/io/csv/legacy/csv_writer.cu
             src/io/csv/legacy/csv_gpu.cu

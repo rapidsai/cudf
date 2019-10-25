@@ -47,6 +47,237 @@ namespace io {
 //! Inner interfaces and implementations
 namespace detail {
 
+//! Avro format
+namespace avro {
+
+/**
+ * @brief Options for the Avro reader.
+ */
+struct reader_options {
+  std::vector<std::string> columns;
+
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
+
+  /**
+   * @brief Constructor to populate reader options.
+   *
+   * @param columns Set of columns to read; empty for all columns
+   */
+  reader_options(std::vector<std::string> columns)
+      : columns(std::move(columns)) {}
+};
+
+/**
+ * @brief Class to read Avro dataset data into columns.
+ */
+class reader {
+ private:
+  class impl;
+  std::unique_ptr<impl> _impl;
+
+ public:
+  /**
+   * @brief Constructor for a filepath to dataset.
+   *
+   * @param filepath Path to whole dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      std::string filepath, reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for a memory buffer to dataset.
+   *
+   * @param buffer Pointer to whole dataset
+   * @param length Host buffer size in bytes
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      const char *buffer, size_t length, reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for an Arrow file to dataset.
+   *
+   * @param file Arrow file object of dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      std::shared_ptr<arrow::io::RandomAccessFile> file,
+      reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~reader();
+
+  /**
+   * @brief Reads the entire dataset.
+   *
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_all(cudaStream_t stream = 0);
+
+  /**
+   * @brief Reads and returns a range of rows.
+   *
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read; use `0` for all remaining data
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_rows(size_type skip_rows, size_type num_rows,
+                  cudaStream_t stream = 0);
+};
+
+}  // namespace avro
+
+//! CSV format
+namespace csv {
+
+/**
+ * @brief Options for the CSV reader.
+ */
+struct reader_options {
+  compression_type compression = compression_type::AUTO;
+  std::vector<std::string> columns;
+
+  std::vector<std::string> column_filter_by_name;
+  std::vector<int> column_filter_by_index;
+  size_type header_row = 0;
+
+  char terminator = '\n';
+  char delimiter = ',';
+  char thousands_char = '\0';
+  char decimal_char = '.';
+  char comment_char = '\0';
+
+  bool windowslinetermination = false;
+  bool whitespace_delimiter = false;
+  bool ignore_leading_whitespace = false;
+  bool ignore_empty_lines = true;
+
+  bool quoting = true;
+  char quote_char = '"';
+  bool double_quote = true;
+
+  std::unordered_map<std::string, std::shared_ptr<data_type>> column_types;
+  std::vector<std::string> true_values{"True", "TRUE", "true"};
+  std::vector<std::string> false_values{"False", "FALSE", "false"};
+  std::vector<std::string> null_values{
+      "#N/A", "#N/A N/A", "#NA",     "-1.#IND", "-1.#QNAN", "-NaN",
+      "-nan", "1.#IND",   "1.#QNAN", "N/A",     "NA",       "NULL",
+      "NaN",  "n/a",      "nan",     "null"};
+
+  std::string prefix;
+  bool day_first_dates = false;
+  data_type timestamp_type{EMPTY};
+
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
+
+  /**
+   * @brief Constructor to populate reader options.
+   *
+   * @param compression Source dataset compression format
+   * @param columns Set of columns to read; empty for all columns
+   */
+  reader_options(compression_type compression, std::vector<std::string> columns)
+      : compression(compression), columns(std::move(columns)) {}
+};
+
+/**
+ * @brief Class to read CSV dataset data into columns.
+ */
+class reader {
+ private:
+  class impl;
+  std::unique_ptr<impl> _impl;
+
+ public:
+  /**
+   * @brief Constructor for a filepath to dataset.
+   *
+   * @param filepath Path to whole dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      std::string filepath, reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for a memory buffer to dataset.
+   *
+   * @param buffer Pointer to whole dataset
+   * @param length Host buffer size in bytes
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      const char *buffer, size_t length, reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for an Arrow file to dataset.
+   *
+   * @param file Arrow file object of dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit reader(
+      std::shared_ptr<arrow::io::RandomAccessFile> file,
+      reader_options const &options,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~reader();
+
+  /**
+   * @brief Reads the entire dataset.
+   *
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_all(cudaStream_t stream = 0);
+
+  /**
+   * @brief Reads a complete group of rows in the next chunk of data.
+   *
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_chunk(cudaStream_t stream = 0);
+
+  /**
+   * @brief Reads a range of rows.
+   *
+   * @param skip_rows Number of rows to skip from the start
+   * @param skip_rows_end Number of rows to skip from the end
+   * @param num_rows Number of rows to read; use `0` for all remaining data
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return `table` The set of columns
+   */
+  table read_rows(size_type skip_rows, size_type skip_rows_end,
+                  size_type num_rows, cudaStream_t stream = 0);
+};
+
+}  // namespace csv
+
 //! ORC format
 namespace orc {
 

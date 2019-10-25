@@ -35,6 +35,45 @@ namespace experimental {
 namespace io {
 
 /**
+ * @brief Settings to use for `read_avro()`
+ */
+struct read_avro_args {
+  source_info source;
+
+  /// Names of column to read; empty is all
+  std::vector<std::string> columns;
+
+  /// Rows to skip from the start; -1 is none
+  size_type skip_rows = -1;
+  /// Rows to read; -1 is all
+  size_type num_rows = -1;
+
+  explicit read_avro_args(const source_info& src) : source(src) {}
+};
+
+/**
+ * @brief Reads an Avro dataset into a set of columns
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.avro";
+ *  cudf::read_avro_args args{cudf::source_info(filepath)};
+ *  ...
+ *  auto result = cudf::read_avro(args);
+ * @endcode
+ *
+ * @param args Settings for controlling reading behavior
+ * @param mr Optional resource to use for device memory allocation
+ *
+ * @return `table` The set of columns
+ */
+table read_avro(
+    read_avro_args const& args,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
  * @brief Settings to use for `read_orc()`
  */
 struct read_orc_args {
