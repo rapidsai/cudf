@@ -437,7 +437,7 @@ ConfigureTest(LEGACY_TRANSPOSE_TEST "${LEGACY_TRANSPOSE_TEST_SRC}")
 # - table tests -----------------------------------------------------------------------------------
 
 set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_view_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cpp")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 ###################################################################################################
