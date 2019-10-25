@@ -189,12 +189,12 @@ set(LEGACY_BITMASK_TEST_SRC
 ConfigureTest(LEGACY_BITMASK_TEST "${LEGACY_BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - nans_to_nulls tests ---------------------------------------------------------------------------
+# - legacy nans_to_nulls tests ---------------------------------------------------------------------------
 
-set(NANS_TO_NULLS_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/nans_to_nulls_tests.cu")
+set(LEGACY_NANS_TO_NULLS_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/legacy/nans_to_nulls_tests.cu")
 
-ConfigureTest(NANS_TO_NULLS_TEST "${NANS_TO_NULLS_TEST_SRC}")
+ConfigureTest(LEGACY_NANS_TO_NULLS_TEST "${LEGACY_NANS_TO_NULLS_TEST_SRC}")
 
 
 ###################################################################################################
@@ -282,12 +282,12 @@ set(BINARY_TEST_SRC
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 
 ###################################################################################################
-# - unary transform tests -------------------------------------------------------------------------
+# - legacy unary transform tests -------------------------------------------------------------------------
 
-set(TRANSFORM_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-operation-integration-test.cu")
+set(LEGACY_TRANSFORM_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/legacy/unary-operation-integration-test.cu")
 
-ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
+ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
 # - jit cache tests -------------------------------------------------------------------------------
@@ -437,7 +437,7 @@ ConfigureTest(LEGACY_TRANSPOSE_TEST "${LEGACY_TRANSPOSE_TEST_SRC}")
 # - table tests -----------------------------------------------------------------------------------
 
 set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_view_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cpp")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 ###################################################################################################
