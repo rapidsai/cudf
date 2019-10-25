@@ -88,7 +88,7 @@ class DataFrame(object):
 
     Parameters
     ----------
-    data: data-type to coerce. Infers date format if to date. 
+    data : data-type to coerce. Infers date format if to date.
 
     Examples
     --------
