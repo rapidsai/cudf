@@ -101,6 +101,33 @@ def token_count(strs, delimiter=" ", devptr=0):
     return rtn
 
 
+def character_tokenize(strs):
+    """
+    Each string is split into individual characters.
+    The nvstrings instance returned contains each character as an
+    individual string.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["hello world",
+    ...                          "goodbye"])
+    >>> t = nvtext.character_tokenize(s)
+    >>> print(t)
+    ["h","e","l","l","o"," ","w","o","r","l","d","g","o","o","d","b","y","e"]
+
+    """
+    rtn = pyniNVText.n_character_tokenize(strs)
+    if rtn is not None:
+        rtn = nvs.nvstrings(rtn)
+    return rtn
+
+
 def contains_strings(strs, tgts, devptr=0):
     """
     The tgts strings are searched for within each strs.

@@ -762,18 +762,17 @@ NVStrings* NVText::character_tokenize(NVStrings& strs)
         [d_strings, d_offsets, d_indexes] __device__ (unsigned int idx) {
             custring_view* dstr = d_strings[idx];
             size_t offset = d_offsets[idx];
-            size_t out_idx = idx + offset;
             if( !dstr )
             {
-                d_indexes[out_idx] = thrust::pair<const char*,size_t>{nullptr,0};
+                d_indexes[offset] = thrust::pair<const char*,size_t>{nullptr,0};
                 return;
             }
             for( auto itr = dstr->begin(); itr != dstr->end(); ++itr )
             {
-                d_indexes[out_idx++] = thrust::pair<const char*,size_t>{
+                d_indexes[offset++] = thrust::pair<const char*,size_t>{
                     dstr->data() + itr.byte_offset(), custring_view::bytes_in_char(*itr)};
             }
         });
     //
-    return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_indexes,count);
+    return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_indexes,total_characters);
 }
