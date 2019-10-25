@@ -483,6 +483,7 @@ add_library(cudf
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
             src/strings/char_types/char_types.cu
+            src/strings/case.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding

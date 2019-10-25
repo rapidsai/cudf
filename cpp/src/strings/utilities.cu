@@ -21,6 +21,7 @@
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 #include "char_types/char_flags.h"
+#include "char_types/char_cases.h"
 
 #include <mutex>
 #include <rmm/rmm.h>
@@ -142,8 +143,13 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
                                      rmm::device_buffer{0,stream,mr}, 0 ); // nulls
 }
 
+namespace
+{
+
 std::mutex g_flags_table_mutex;
 static uint8_t* d_character_flags_table = nullptr;
+
+} // namespace
 
 uint8_t* get_character_flags_table()
 {
@@ -155,6 +161,26 @@ uint8_t* get_character_flags_table()
         CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
     }
     return d_character_flags_table;
+}
+
+namespace
+{
+
+std::mutex g_case_table_mutex;
+static uint16_t* d_character_case_table = nullptr;
+
+}
+
+const uint16_t* get_character_case_table()
+{
+    std::lock_guard<std::mutex> guard(g_case_table_mutex);
+    if( !d_character_case_table )
+    {
+        // leave this out of RMM since it is never freed
+        RMM_TRY(RMM_ALLOC(&d_character_case_table,sizeof(g_character_case_table),0));
+        CUDA_TRY(cudaMemcpy(d_character_case_table,g_character_case_table,sizeof(g_character_case_table),cudaMemcpyHostToDevice));
+    }
+    return d_character_case_table;
 }
 
 } // namespace detail
