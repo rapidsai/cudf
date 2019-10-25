@@ -37,12 +37,12 @@ TYPED_TEST(SortedOrder, WithNullMax)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
-    cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 1, 0, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
+    cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
+    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
     cudf::table_view input {{col1, col2, col3}};
 
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{{1, 0, 3, 4, 2}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{1, 0, 5, 3, 4, 2}};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
 
     auto got = cudf::experimental::sorted_order(input, column_order, cudf::null_order::AFTER);
