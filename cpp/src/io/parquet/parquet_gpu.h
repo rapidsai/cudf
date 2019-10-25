@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,6 +143,26 @@ struct PageFragment
 };
 
 /**
+ * @brief Struct describing an encoder data page
+ **/
+struct EncPage
+{
+    uint16_t num_fragments;
+    uint16_t pad;
+};
+
+/**
+ * @brief Struct describing an encoder column chunk
+ **/
+struct EncColumnChunk
+{
+    const PageFragment *fragments;  //!< First fragment in chunk
+    uint32_t num_rows;              //!< Number of rows in chunk
+    uint32_t first_page;            //!< First page of chunk
+    uint32_t num_pages;             //!< Number of pages in chunk
+};
+
+/**
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
  * @param[in] chunks List of column chunks
@@ -192,7 +212,7 @@ cudaError_t DecodePageData(PageInfo *pages, int32_t num_pages,
 /**
  * @brief Launches kernel for initializing encoder page fragments
  *
- * @param[in] frag Fragment array [fragment_id][column_id]
+ * @param[out] frag Fragment array [column_id][fragment_id]
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_fragments Number of fragments per column
  * @param[in] num_columns Number of columns
@@ -206,6 +226,23 @@ cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
                               int32_t num_fragments, int32_t num_columns,
                               uint32_t fragment_size, uint32_t num_rows,
                               cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for initializing encoder data pages
+ *
+ * @param[in,out] chunks Column chunks [rowgroup][column]
+ * @param[out] pages Encode page array (null if just counting pages)
+ * @param[in] col_desc Column description array [column_id]
+ * @param[in] num_rowgroups Number of fragments per column
+ * @param[in] num_columns Number of columns
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc,
+                             int32_t num_rowgroups, int32_t num_columns,
+                             cudaStream_t stream = (cudaStream_t)0);
+
 
 } // namespace gpu
 } // namespace parquet
