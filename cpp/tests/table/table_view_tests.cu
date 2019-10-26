@@ -54,7 +54,7 @@ TEST_F(TableViewTest, EmptyColumnedTable)
     EXPECT_EQ(input.num_columns(), expected);
 }
 
-TEST_F(TableViewTest, TestLexiologicalComparatorTwoTableCase)
+TEST_F(TableViewTest, TestLexicographicalComparatorTwoTableCase)
 {
     cudf::test::fixed_width_column_wrapper<int16_t> col1 {{1, 2, 3, 4}};
     cudf::test::fixed_width_column_wrapper<int16_t> col2 {{0, 1, 4, 3}};
@@ -70,7 +70,7 @@ TEST_F(TableViewTest, TestLexiologicalComparatorTwoTableCase)
     cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(TableViewTest, TestLexiologicalComparatorSameTable)
+TEST_F(TableViewTest, TestLexicographicalComparatorSameTable)
 {
     cudf::test::fixed_width_column_wrapper<int16_t> col1 {{1, 2, 3, 4}};
     std::vector<cudf::order> column_order {cudf::order::DESCENDING};
