@@ -437,7 +437,7 @@ ConfigureTest(LEGACY_TRANSPOSE_TEST "${LEGACY_TRANSPOSE_TEST_SRC}")
 # - table tests -----------------------------------------------------------------------------------
 
 set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_view_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cpp")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 ###################################################################################################
@@ -537,7 +537,8 @@ ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
