@@ -539,8 +539,9 @@ class StringColumn(column.TypedColumnBase):
             kwargs.update(units=np.datetime_data(mem_dtype)[0])
             mem_dtype = np.dtype(np.int64)
             if "format" not in kwargs:
-                fmt = pd.core.tools.datetimes._guess_datetime_format_for_array(
-                    self.data.to_host()
+                # infer on host from the first not na element
+                fmt = pd.core.tools.datetimes._guess_datetime_format(
+                    self[self.notna()][0]
                 )
                 kwargs.update(format=fmt)
 
