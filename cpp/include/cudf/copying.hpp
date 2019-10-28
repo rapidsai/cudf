@@ -80,26 +80,16 @@ std::unique_ptr<column> allocate_like(column_view input, size_type size,
 std::unique_ptr<table> empty_like(table_view input_table);
 
 /**
- * @brief Slices a column_view (including null values) into a set of column_views
- * according to a set of indices.
+ * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
+ * The returned view's of `input` are constructed from an even number indices where
+ * the `i`th returned `column_view` will view the elements in `input` indicated by the range
+ * `[indices[i], indices[i+1])`.
  *
- * The `slice` function creates `column_view`s from `input` with multiple intervals
- * of rows using the `indices` values. Regarding the interval of indices, a pair of 
- * values are taken from the indices vector in a consecutive manner.
- * The pair of indices are left-closed and right-open.
+ * For all `i` it is expected `indices[i] <= input.size()`
+ * For all `i%2==0`, it is expected that `indices[i] <= indices[i+1]`
  *
- * The pairs of indices in the vector are required to comply with the following
- * conditions:
- * a, b belongs to Range[0, input column size]
- * a <= b, where the position of a is less or equal to the position of b.
- *
- * Exceptional cases for the indices array are:
- * When the values in the pair are equal, the function returns an empty `column_view`.
- * When the values in the pair are 'strictly decreasing', the outcome is
- * undefined.
- * When any of the values in the pair don't belong to the range[0, input column
- * size), the outcome is undefined.
- * When the indices vector is empty, an empty vector of `column_view` unique_ptr is returned.
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
  *
  * @example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
@@ -107,47 +97,43 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
  * @throws `cudf::logic_error` if `indices` size is not even.
+ * @throws `cudf::logic_error` When the values in the pair are 'strictly decreasing'.
+ * @throws `cudf::logic_error` When any of the values in the pair don't belong to
+ * the range [0, input.size()).
  *
- * @param input Immutable view of input column for slicing
+ * @param input View of column to slice
  * @param indices A vector indices that are used to take 'slices' of the `input`.
- * @return vector<std::unique_ptr<column_view>> A vector of `column_view` unique_ptr each of which may have a different number of rows. 
+ * @return The set of requested views of `input` indicated by the ranges in `indices`.
  */
 
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices);
 
 /**
- * @brief Splits a `column_view` (including null values) into a set of `column_view`s
- * according to a set of splits.
+ * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
+ * derived from expected splits.
+ * The returned view's of `input` are constructed from vector of splits, which indicates
+ * indices where the split should occur. For `i`th returned `column_view`, the view would be
+ * sliced as [0, splits[i]) if i=0, else [splits[i], input.size()) if `i` is last view and
+ * splits[i] != input.size(), [splits[i-1], splits[i]] for other.
  *
- * The `splits` vector is required to be a monotonic non-decreasing set.
- * The indices in the vector are required to comply with the following conditions:
- * a, b belongs to Range[0, input column size]
- * a <= b, where the position of a is less or equal to the position of b.
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  *
- * The split function will take a pair of indices from the `splits` vector
- * in a consecutive manner. For the first pair, the function will
- * take the value 0 and the first element of the `splits` vector. For the last pair,
- * the function will take the last element of the `splits` vector and the size of
- * the `input`.
- *
- * Exceptional cases for the indices array are:
- * When the value in `splits` is not in the range [0, size], the outcome is
- * undefined..
- * When the values in the `splits` are 'strictly decreasing', the outcome is
- * undefined.
- * When the `splits` is empty, an empty vector of `column_view` unique_ptr is returned.
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * splits: {2, 5, 9}
+ * splits:  {2, 5, 9}
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
  * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
+ * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
  *
- * @param input Immutable view of input column for spliting
- * @param indices A vector indices that are used to split the `input`
- * @return vector<std::unique_ptr<column_view>> A vector of `column_view` unique_ptr each of which may have a different number of rows. 
+ * @param input View of column to slice
+ * @param splits A vector of indices where the view will be split
+ * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<column_view> split(column_view const& input,
                                std::vector<size_type> const& splits);

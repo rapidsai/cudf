@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <vector>
 
@@ -474,40 +474,35 @@ class mutable_column_view : public detail::column_view_base {
  *---------------------------------------------------------------------------**/
 size_type count_descendants(column_view parent);
 
+namespace detail {
 /**---------------------------------------------------------------------------*
- * @brief Constrcuts a slice of column_view/mutable_column_view as per
- * requested `begin` and `end`.
- * The new column_view/mutable_column_view will start at `begin` and will
- * end at `end`, from the offset of `input`
- * [input.offset() + begin, input.offset() + end).
+ * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
+ * elements in the range `[begin,end)` in `input`.
+ *
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
  *
  * @throws `cudf::logic_error` if `begin` with `end` goes beyond
  * the size of the `input`.
  * @throws `cudf::logic_error` if `begin` < 0.
  * @throws `cudf::logic_error` if `end` < 0.
  *
- * @param input view of input column to emulate
- * @param begin The index from which the new column_view should begin.
- * @param end The index before which the new column_view will end.
+ * @param input View of input column to emulate
+ * @param begin Index of the first desired element in the slice (inclusive).
+ * @param end Index of the last desired element in the slice (exclusive).
  *
- * @return unique_ptr<column_view> The unique pointer to the column view
- * constrcuted as per the offset and size requested.
+ * @return ColumnView View of the elements `[begin,end)` from `input`.
  *---------------------------------------------------------------------------**/
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input,
                   cudf::size_type begin,
                   cudf::size_type end) {
-  static_assert(std::is_same<ColumnView, cudf::column_view>::value or
+   static_assert(std::is_same<ColumnView, cudf::column_view>::value or
                     std::is_same<ColumnView, cudf::mutable_column_view>::value,
                 "slice can be performed only on column_view and mutable_column_view");
-   cudf::size_type expecetd_size = input.offset() + end;
-   CUDF_EXPECTS(begin >= 0, "begin should be non negative value");
-   CUDF_EXPECTS(end >= 0, "end should be non negative value");
-   CUDF_EXPECTS(expecetd_size <= input.size(), "Expected slice exceeds the size of the column_view");
-
-   // If an empty `column_view` is created, it will not have null_mask. So this will help in
-   // comparing in such situation.
-   auto tmp_null_mask = (end-begin > 0)? input.null_mask() : nullptr;
+   CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
+   CUDF_EXPECTS(end >= begin, "Invalid end of range.");
+   CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
 
    std::vector<ColumnView> children {};
    children.reserve(input.num_children());
@@ -516,9 +511,10 @@ ColumnView slice(ColumnView const& input,
    }
 
    return ColumnView(input.type(), end - begin,
-                     input.head(), tmp_null_mask,
+                     input.head(), input.null_mask(),
                      cudf::UNKNOWN_NULL_COUNT,
                      input.offset() + begin, children);
 }
 
+}//namespace detail
 }// namespace cudf

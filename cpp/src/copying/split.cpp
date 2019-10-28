@@ -1,7 +1,5 @@
 /*
- * Copyright 2019 BlazingDB, Inc.
- *     Copyright 2019 Christian Noboa Mardini <christian@blazingdb.com>
- *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <utilities/error_utils.hpp>
-#include <cudf/column/column_view.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <algorithm>
 

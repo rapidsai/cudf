@@ -1,7 +1,5 @@
 /*
- * Copyright 2019 BlazingDB, Inc.
- *     Copyright 2019 Christian Noboa Mardini <christian@blazingdb.com>
- *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <algorithm>
@@ -40,12 +38,10 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
 
     std::vector<std::pair<size_type, size_type>> indices_tuple{};
 
-    auto it_start = indices.begin();
-    auto it_end = indices.begin() + 1;
-
-    for(;it_start != indices.end(); std::advance(it_start, 2), std::advance(it_end, 2)) { 
-        indices_tuple.push_back(std::make_pair(*it_start, *it_end));
+    for(size_t i = 0; i < indices.size(); i+=2){
+        result.emplace_back(slice(input, indices[i], indices[i+1]));
     }
+
     const auto slicer = [&input] (auto indices) {
              return slice(input, indices.first, indices.second);
     }; 
