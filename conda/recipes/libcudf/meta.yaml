@@ -81,7 +81,6 @@ test:
     - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/include/cudf/types.hpp
     - test -f $PREFIX/include/cudf/legacy/unary.hpp
-    # - test -f $PREFIX/include/cudf/unary.hpp
 
 about:
   home: http://rapids.ai/
