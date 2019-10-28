@@ -66,7 +66,7 @@ class column {
    *
    * @param other The column whose contents will be moved into the new column
    *---------------------------------------------------------------------------**/
-  column(column&& other);
+  column(column&& other) noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from existing device memory.

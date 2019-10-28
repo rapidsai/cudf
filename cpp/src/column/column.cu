@@ -42,6 +42,7 @@ column::column(column const &other)
   }
 }
 
+// Copy ctor w/ explicit stream/mr
 column::column(column const &other, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr)
     : _type{other._type},
@@ -56,7 +57,7 @@ column::column(column const &other, cudaStream_t stream,
 }
 
 // Move constructor
-column::column(column &&other)
+column::column(column &&other) noexcept
     : _type{other._type},
       _size{other._size},
       _data{std::move(other._data)},
