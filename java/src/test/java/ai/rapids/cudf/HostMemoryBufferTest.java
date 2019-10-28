@@ -49,6 +49,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
     try (HostMemoryBuffer buff = HostMemoryBuffer.allocate(size)) {
       ByteBuffer dbuff = buff.asByteBuffer();
       assertEquals(size, dbuff.capacity());
+      assertEquals(ByteOrder.nativeOrder(), dbuff.order());
       dbuff.putInt(101);
       dbuff.putDouble(101.1);
       assertEquals(101, buff.getInt(0));

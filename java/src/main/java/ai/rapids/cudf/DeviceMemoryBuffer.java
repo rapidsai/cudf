@@ -78,7 +78,6 @@ public class DeviceMemoryBuffer extends MemoryBuffer {
    */
   public final void copyFromHostBuffer(long destOffset, HostMemoryBuffer src, long srcOffset, long length) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy range dest");
-    assert !src.closed;
     src.addressOutOfBoundsCheck(src.address + srcOffset, length, "copy range src");
     Cuda.memcpy(address + destOffset, src.address + srcOffset, length, CudaMemcpyKind.HOST_TO_DEVICE);
   }

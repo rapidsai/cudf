@@ -400,21 +400,39 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Return true if the data is on the device, or false if it is not. Note that
+   * if there are no rows there is no data to be on the device, but this will
+   * still return true.
+   */
+  public boolean hasDeviceData() {
+    return offHeap.getDeviceData() != null || rows == 0;
+  }
+
+  /**
+   * Return true if the data is on the host, or false if it is not. Note that
+   * if there are no rows there is no data to be on the host, but this will
+   * still return true.
+   */
+  public boolean hasHostData() {
+    return offHeap.getHostData() != null || rows == 0;
+  }
+
   private void checkHasDeviceData() {
-    if (offHeap.getDeviceData() == null && rows != 0) {
+    if (!hasDeviceData()) {
       if (refCount <= 0) {
         throw new IllegalStateException("Vector was already closed.");
       }
-      throw new IllegalStateException("Vector not on Device");
+      throw new IllegalStateException("Vector not on device");
     }
   }
 
   private void checkHasHostData() {
-    if (offHeap.getHostData() == null && rows != 0) {
+    if (!hasHostData()) {
       if (refCount <= 0) {
         throw new IllegalStateException("Vector was already closed.");
       }
-      throw new IllegalStateException("Vector not on Host");
+      throw new IllegalStateException("Vector not on host");
     }
   }
 
@@ -597,9 +615,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Get access to the raw host buffer for this column.  This is intended to be used with a lot
-   * of caution.  The life time of the buffer is tied to the life time of the column (Do not close
-   * the buffer column will take care of it).  Do not modify the contents of the buffer or it might
-   * negatively impact what happens on the column.  The data must be on the host for this to work.
+   * of caution.  The lifetime of the buffer is tied to the lifetime of the column (Do not close
+   * the buffer, as the column will take care of it).  Do not modify the contents of the buffer or
+   * it might negatively impact what happens on the column.  The data must be on the host for this
+   * to work.
    * @param type the type of buffer to get access to.
    * @return the underlying buffer or null if no buffer is associated with it for this column.
    * Please note that if the column is empty there may be no buffers at all associated with the
@@ -633,11 +652,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Get access to the raw device buffer for this column.  This is intended to be used with a lot
-   * of caution.  The life time of the buffer is tied to the life time of the column (Do not close
-   * the buffer column will take care of it).  Do not modify the contents of the buffer or it might
-   * negatively impact what happens on the column.  The data must be on the device for this to work.
-   * Strings and string categories do not currently work because their underlying device layout is
-   * currently hidden.
+   * of caution.  The lifetime of the buffer is tied to the lifetime of the column (Do not close
+   * the buffer, as the column will take care of it).  Do not modify the contents of the buffer or
+   * it might negatively impact what happens on the column.  The data must be on the device for
+   * this to work. Strings and string categories do not currently work because their underlying
+   * device layout is currently hidden.
    * @param type the type of buffer to get access to.
    * @return the underlying buffer or null if no buffer is associated with it for this column.
    * Please note that if the column is empty there may be no buffers at all associated with the

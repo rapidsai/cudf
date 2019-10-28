@@ -29,7 +29,7 @@ import java.nio.ByteOrder;
 
 /**
  * This class holds an off-heap buffer in the host/CPU memory.
- * Please not that instances must be explicitly closed or native memory will be leaked!
+ * Please note that instances must be explicitly closed or native memory will be leaked!
  *
  * Internally this class may optionally use PinnedMemoryPool to allocate and free the memory
  * it uses. To try to use the pinned memory pool for allocations set the java system property
@@ -48,8 +48,8 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * This will turn a address into a ByteBuffer.  The buffer will NOT own the memory
-   * so closing it has no impact on the underlying memory, but it should never
+   * This will turn an address into a ByteBuffer.  The buffer will NOT own the memory
+   * so closing it has no impact on the underlying memory. It should never
    * be used if the corresponding HostMemoryBuffer is closed.
    */
   private static native ByteBuffer wrapRangeInBuffer(long address, long len);
@@ -80,9 +80,10 @@ public class HostMemoryBuffer extends MemoryBuffer {
   /**
    * Allocate memory, but be sure to close the returned buffer to avoid memory leaks.
    * @param bytes size in bytes to allocate
-   * @param preferPinned true if the pinned memory pool should be used, else false to fall
-   *                     back to using regular off heap memory.
-   * @return return this newly created buffer
+   * @param preferPinned If set to true, the pinned memory pool will be used if possible with a
+   *                    fallback to off-heap memory.  If set to false, the allocation will always
+   *                    be from off-heap memory.
+   * @return return the newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
     if (preferPinned) {
@@ -99,7 +100,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * will be preferred for allocations if the java system property ai.rapids.cudf.prefer-pinned is
    * set to true.
    * @param bytes size in bytes to allocate
-   * @return return this newly created buffer
+   * @return the newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes) {
     return allocate(bytes, defaultPreferPinned);
@@ -118,17 +119,24 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * Return a ByteBuffer that provides access to the underlying memory.  Please note <ol></ol> if the buffer is
-   * larger than a ByteBuffer can handle (2GB) only the first part of it will be exposed.  Also be
-   * aware that the ByteBuffer will be in native endian order, which is different from
+   * Return a ByteBuffer that provides access to the underlying memory.  Please note: if the buffer
+   * is larger than a ByteBuffer can handle (2GB) an exception will be thrown.  Also
+   * be aware that the ByteBuffer will be in native endian order, which is different from regular
+   * ByteBuffers that are big endian by default.
    */
   public final ByteBuffer asByteBuffer() {
-    long len = Math.min(Integer.MAX_VALUE, length);
-    return asByteBuffer(0, len);
+    assert length <= Integer.MAX_VALUE : "2GB limit on ByteBuffers";
+    return asByteBuffer(0, (int) length);
   }
 
-  public final ByteBuffer asByteBuffer(long offset, long length) {
-    assert length <= Integer.MAX_VALUE; // Buffers have a 2GB limit
+  /**
+   * Return a ByteBuffer that provides access to the underlying memory.  Be aware that the
+   * ByteBuffer will be in native endian order, which is different from regular
+   * ByteBuffers that are big endian by default.
+   * @param offset the offset to start at
+   * @param length how many bytes to include.
+   */
+  public final ByteBuffer asByteBuffer(long offset, int length) {
     addressOutOfBoundsCheck(address + offset, length, "asByteBuffer");
     return wrapRangeInBuffer(address + offset, length)
         .order(ByteOrder.nativeOrder());
