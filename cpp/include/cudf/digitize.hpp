@@ -35,14 +35,14 @@ namespace cudf {
  *
  * @param col column_view with the values to be binned
  * @param bins column_view of ascending bin boundaries
- * @param right Whether the intervals should include the left or right bin edge
+ * @param bound Whether the intervals should include or exclude the bin edge
  * @param order Whether nulls should be sorted before or after other values
  * @param mr Optional resource to use for device memory allocation
  *
  * @returns device array of same size as `col` to be filled with bin indices
  */
 std::unique_ptr<column>
-digitize(column_view const& col, column_view const& bins, bool right, null_order order,
+digitize(column_view const& col, column_view const& bins, range_bound bound, null_order order,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

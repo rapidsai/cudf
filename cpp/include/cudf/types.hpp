@@ -98,6 +98,14 @@ enum class null_order : bool {
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates whether the bound of a range is included or excluded.
+ *---------------------------------------------------------------------------**/
+enum class range_bound : bool {
+  INCLUSIVE,  ///< Range includes values less than or equal to the bound
+  EXCLUSIVE   ///< Range excludes values greater than or equal to the bound
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
 enum mask_state {

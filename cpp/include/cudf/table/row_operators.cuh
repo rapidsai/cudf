@@ -205,6 +205,49 @@ class element_relational_comparator {
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Performs a relational comparison between two elements in two columns.
+ *
+ * @tparam has_nulls Indicates the potential for null values in either column.
+ *---------------------------------------------------------------------------**/
+template <bool has_nulls = true>
+class element_less_comparator {
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Construct function object for performing a less-than comparison
+   * between two elements by index.
+   *
+   * @note `lhs` and `rhs` may be the same.
+   *
+   * @param lhs The column containing the first element
+   * @param rhs The column containg the second element (may be the same as lhs)
+   * @param null_precedence Indicates how null values are ordered with other
+   * values
+   *---------------------------------------------------------------------------**/
+  element_less_comparator(column_device_view lhs, column_device_view rhs,
+                          null_order null_precedence = null_order::BEFORE)
+      : _comparator{lhs, rhs, null_precedence}, _dtype(lhs.type()) {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Checks whether the element at row `lhs_index` in the `lhs` column
+   * compares less than the element at row `rhs_index` in the `rhs` column.
+   *
+   * @param lhs_index The index of row in the `lhs` column to examine
+   * @param rhs_index The index of the row in the `rhs` column to examine
+   * @return `true` if element from the `lhs` column compares less than element
+   * in the `rhs` column
+   *---------------------------------------------------------------------------**/
+  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const
+      noexcept {
+    return experimental::type_dispatcher(_dtype, _comparator, lhs_index,
+        rhs_index) == weak_ordering::LESS;
+  }
+
+ private:
+  experimental::element_relational_comparator<has_nulls> _comparator;
+  data_type _dtype;
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Computes whether one row is lexicographically *less* than another row.
  *
  * Lexicographic ordering is determined by:
