@@ -21,7 +21,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
-#include <utilities/error_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -80,6 +79,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // Handle empty inputs
   if (t.num_rows() == 0) {
     CUDA_TRY(cudaMemset(result_view.data<int32_t>(), 0, values.num_rows() * sizeof(int32_t)));
+    return result;
   }
 
   if (not column_order.empty()) {
@@ -93,7 +93,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto count_it = thrust::make_counting_iterator<int32_t>(0);
 
   //  Need an order*
-  rmm::device_vector<order> d_column_order(column_order);
+  rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
 
   if (has_nulls(t)) {
     auto ineq_op = (find_first)
@@ -102,8 +102,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
     launch_search(count_it, count_it, t.num_rows(), values.num_rows(),
                   result_view.data<int32_t>(), ineq_op, find_first, stream);
-  }
-  else {
+  } else {
     auto ineq_op = (find_first)
                  ? row_lexicographic_comparator<false>(*d_t, *d_values, null_precedence, d_column_order.data().get())
                  : row_lexicographic_comparator<false>(*d_values, *d_t, null_precedence, d_column_order.data().get());

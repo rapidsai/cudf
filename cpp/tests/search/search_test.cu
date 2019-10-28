@@ -14,699 +14,602 @@
  * limitations under the License.
  */
 
+#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
+
+// TODO:  temporary
+#include <tests/utilities/column_utilities.hpp>
 
 #include "cudf/search.hpp"
 
-using cudf::test::column_wrapper;
+using cudf::test::fixed_width_column_wrapper;
 using cudf::test::scalar_wrapper;
+// TODO::  temporary
+using cudf::test::expect_columns_equal;
+using cudf::test::column_values_equal;
+using cudf::test::column_view_to_str;
 
 using cudf::column_view;
 
 class SearchTest : public GdfTest {};
 
+using index_type = int32_t;
+
 TEST_F(SearchTest, empty_table)
 {
     using element_type = int64_t;
 
-    //
-    // TODO:  Convert these back to auto once column_wrapper does
-    //    the right thing
-    //
-    // Need to work to get this correct once column_wrapper
-    // has been migrated.
-    //
-    std::unique_ptr<column_view> column = column_wrapper<element_type>  {};
-    std::unique_ptr<column_view> values = column_wrapper<element_type>  {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
-    std::unique_ptr<column_view> expect = column_wrapper<gdf_index_type>{  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 };
+    fixed_width_column_wrapper<element_type>  column {};
+    fixed_width_column_wrapper<element_type>  values {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
+    fixed_width_column_wrapper<index_type>    expect {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 };
 
-    std::unique_ptr<cudf::column> result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::experimental::lower_bound(
-                                                        {cudf::table_view{{*column.get()}}},
-                                                        {cudf::table_view{{*values.get()}}},
-                                                        {cudf::order::ASCENDING},
-                                                        cudf::null_order::BEFORE)
+        result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::BEFORE)
                     );
 
-    auto result = result_column.get();
-
-    ASSERT_EQ(result.view(), expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
-#if 0
 TEST_F(SearchTest, empty_values)
 {
     using element_type = int64_t;
 
-    auto column = column_wrapper<element_type>  { 10, 20, 30, 40, 50 };
-    auto values = column_wrapper<element_type>  {};
-    auto expect = column_wrapper<gdf_index_type>{};
+    fixed_width_column_wrapper<element_type>  column { 10, 20, 30, 40, 50 };
+    fixed_width_column_wrapper<element_type>  values {};
+    fixed_width_column_wrapper<index_type>    expect {};
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            {column.get()},
-            {values.get()},
-            {false}
-        )
-    );
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::BEFORE)
+                    );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__find_first)
 {
     using element_type = int64_t;
 
-    auto column = column_wrapper<element_type>  { 10, 20, 30, 40, 50 };
-    auto values = column_wrapper<element_type>  {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
-    auto expect = column_wrapper<gdf_index_type>{  0,  0,  0,  1,  2,  3,  3,  4,  4,  5 };
+    fixed_width_column_wrapper<element_type>  column { 10, 20, 30, 40, 50 };
+    fixed_width_column_wrapper<element_type>  values {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
+    fixed_width_column_wrapper<index_type>    expect {  0,  0,  0,  1,  2,  3,  3,  4,  4,  5 };
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            {column.get()},
-            {values.get()},
-            {false}
-        )
-    );
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::BEFORE)
+                    );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__find_last)
 {
     using element_type = int64_t;
 
-    auto column = column_wrapper<element_type>  { 10, 20, 30, 40, 50 };
-    auto values = column_wrapper<element_type>  {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
-    auto expect = column_wrapper<gdf_index_type>{  0,  0,  1,  1,  3,  3,  4,  4,  5,  5 };
+    fixed_width_column_wrapper<element_type>  column { 10, 20, 30, 40, 50 };
+    fixed_width_column_wrapper<element_type>  values {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
+    fixed_width_column_wrapper<index_type>    expect {  0,  0,  1,  1,  3,  3,  4,  4,  5,  5 };
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            {column.get()},
-            {values.get()},
-            {false}
-        )
-    );
+                    result = cudf::experimental::upper_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::BEFORE)
+                    );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column_desc__find_first)
 {
     using element_type = int64_t;
 
-    auto column = column_wrapper<element_type>  { 50, 40, 30, 20, 10 };
-    auto values = column_wrapper<element_type>  {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
-    auto expect = column_wrapper<gdf_index_type>{  5,  5,  4,  4,  2,  2,  1,  1,  0,  0 };
+    fixed_width_column_wrapper<element_type>  column { 50, 40, 30, 20, 10 };
+    fixed_width_column_wrapper<element_type>  values {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
+    fixed_width_column_wrapper<index_type>    expect {  5,  5,  4,  4,  2,  2,  1,  1,  0,  0 };
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            {column.get()},
-            {values.get()},
-            {true})   // descending
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::DESCENDING},
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column_desc__find_last)
 {
     using element_type = int64_t;
 
-    auto column = column_wrapper<element_type>  { 50, 40, 30, 20, 10 };
-    auto values = column_wrapper<element_type>  {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
-    auto expect = column_wrapper<gdf_index_type>{  5,  5,  5,  4,  3,  2,  2,  1,  1,  0 };
+    fixed_width_column_wrapper<element_type>  column { 50, 40, 30, 20, 10 };
+    fixed_width_column_wrapper<element_type>  values {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
+    fixed_width_column_wrapper<index_type>    expect {  5,  5,  5,  4,  3,  2,  2,  1,  1,  0 };
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            {column.get()},
-            {values.get()},
-            {true})   // descending
+                    result = cudf::experimental::upper_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::DESCENDING},
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
 {
     using element_type = int64_t;
 
-    std::vector<element_type>   column_data     { 10, 60, 10, 20, 30, 40, 50 };
-    std::vector<gdf_valid_type> column_valids   {  0,  0,  1,  1,  1,  1,  1 };
-    std::vector<element_type>   values_data     {  8,  8, 10, 11, 30, 32, 40, 47, 50, 90 };
-    std::vector<element_type>   value_valids    {  0,  1,  1,  1,  1,  1,  1,  1,  1,  1 };
+    fixed_width_column_wrapper<element_type>   column { { 10, 60, 10, 20, 30, 40, 50 },
+                                                        {  0,  0,  1,  1,  1,  1,  1 } };
+    fixed_width_column_wrapper<element_type>   values { {  8,  8, 10, 11, 30, 32, 40, 47, 50, 90 },
+                                                        {  0,  1,  1,  1,  1,  1,  1,  1,  1,  1 } };
 
-    auto expect = column_wrapper<gdf_index_type>{  2,  2,  3,  3,  5,  5,  6,  6,  7,  7 };
+    fixed_width_column_wrapper<index_type>     expect {  2,  2,  3,  3,  5,  5,  6,  6,  7,  7 };
     
-    auto column = column_wrapper<element_type> ( column_data,
-        [&]( gdf_index_type row ) { return column_valids[row]; }
-    );
-    auto values = column_wrapper<element_type> ( values_data,
-        [&]( gdf_index_type row ) { return value_valids[row]; }
-    );
-
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            {column.get()},
-            {values.get()},
-            {false},   // descending
-            false)  // nulls_as_largest
-    );
+                    result = cudf::experimental::upper_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::BEFORE)
+                    );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
 {
     using element_type = int64_t;
 
-    std::vector<element_type>   column_data     { 10, 60, 10, 20, 30, 40, 50 };
-    std::vector<gdf_valid_type> column_valids   {  0,  0,  1,  1,  1,  1,  1 };
-    std::vector<element_type>   values_data     {  8,  8, 10, 11, 30, 32, 40, 47, 50, 90 };
-    std::vector<element_type>   value_valids    {  0,  1,  1,  1,  1,  1,  1,  1,  1,  1 };
+    fixed_width_column_wrapper<element_type>   column { { 10, 60, 10, 20, 30, 40, 50 },
+                                                        {  0,  0,  1,  1,  1,  1,  1 } };
+    fixed_width_column_wrapper<element_type>   values { {  8,  8, 10, 11, 30, 32, 40, 47, 50, 90 },
+                                                        {  0,  1,  1,  1,  1,  1,  1,  1,  1,  1 } };
 
-    auto expect = column_wrapper<gdf_index_type>{  0,  2,  2,  3,  4,  5,  5,  6,  6,  7 };
+    fixed_width_column_wrapper<index_type>     expect {  0,  2,  2,  3,  4,  5,  5,  6,  6,  7 };
     
-    auto column = column_wrapper<element_type> ( column_data,
-        [&]( gdf_index_type row ) { return column_valids[row]; }
-    );
-    auto values = column_wrapper<element_type> ( values_data,
-        [&]( gdf_index_type row ) { return value_valids[row]; }
-    );
-
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            {column.get()},
-            {values.get()},
-            {false},   // descending
-            false)  // nulls_as_largest
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
 {
     using element_type = int64_t;
 
-    std::vector<element_type>   column_data     { 10, 20, 30, 40, 50, 10, 60 };
-    std::vector<gdf_valid_type> column_valids   {  1,  1,  1,  1,  1,  0,  0 };
-    std::vector<element_type>   values_data     {  8, 10, 11, 30, 32, 40, 47, 50, 90,  8 };
-    std::vector<element_type>   value_valids    {  1,  1,  1,  1,  1,  1,  1,  1,  1,  0 };
-
-    auto expect = column_wrapper<gdf_index_type>{  0,  1,  1,  3,  3,  4,  4,  5,  5,  7 };
+    fixed_width_column_wrapper<element_type>   column { { 10, 20, 30, 40, 50, 10, 60 },
+                                                        {  1,  1,  1,  1,  1,  0,  0 } };
+    fixed_width_column_wrapper<element_type>   values { {  8, 10, 11, 30, 32, 40, 47, 50, 90,  8 },
+                                                        {  1,  1,  1,  1,  1,  1,  1,  1,  1,  0 } };
+    fixed_width_column_wrapper<index_type>     expect {  0,  1,  1,  3,  3,  4,  4,  5,  5,  7 };
     
-    auto column = column_wrapper<element_type> ( column_data,
-        [&]( gdf_index_type row ) { return column_valids[row]; }
-    );
-    auto values = column_wrapper<element_type> ( values_data,
-        [&]( gdf_index_type row ) { return value_valids[row]; }
-    );
-
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            {column.get()},
-            {values.get()},
-            {false},  // descending
-            true)  // nulls_as_largest
+                    result = cudf::experimental::upper_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::AFTER)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
 {
     using element_type = int64_t;
 
-    std::vector<element_type>   column_data     { 10, 20, 30, 40, 50, 10, 60 };
-    std::vector<gdf_valid_type> column_valids   {  1,  1,  1,  1,  1,  0,  0 };
-    std::vector<element_type>   values_data     {  8, 10, 11, 30, 32, 40, 47, 50, 90,  8 };
-    std::vector<element_type>   value_valids    {  1,  1,  1,  1,  1,  1,  1,  1,  1,  0 };
-
-    auto expect = column_wrapper<gdf_index_type>{  0,  0,  1,  2,  3,  3,  4,  4,  5,  5 };
+    fixed_width_column_wrapper<element_type>   column { { 10, 20, 30, 40, 50, 10, 60 },
+                                                        {  1,  1,  1,  1,  1,  0,  0 } };
+    fixed_width_column_wrapper<element_type>   values { {  8, 10, 11, 30, 32, 40, 47, 50, 90,  8 },
+                                                        {  1,  1,  1,  1,  1,  1,  1,  1,  1,  0 } };
+    fixed_width_column_wrapper<index_type>     expect {  0,  0,  1,  2,  3,  3,  4,  4,  5,  5 };
     
-    auto column = column_wrapper<element_type> ( column_data,
-        [&]( gdf_index_type row ) { return column_valids[row]; }
-    );
-    auto values = column_wrapper<element_type> ( values_data,
-        [&]( gdf_index_type row ) { return value_valids[row]; }
-    );
-
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            {column.get()},
-            {values.get()},
-            {false},   // descending
-            true)  // nulls_as_largest
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             cudf::null_order::AFTER)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first)
 {
-    auto column_0 = column_wrapper<int32_t> {  10,  20,  20,  20,  20,  20,  50 };
-    auto column_1 = column_wrapper<float>   { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
-    auto column_2 = column_wrapper<int8_t>  {  90,  77,  78,  61,  62,  63,  41 };
+    fixed_width_column_wrapper<int32_t> column_0 {  10,  20,  20,  20,  20,  20,  50 };
+    fixed_width_column_wrapper<float>   column_1 { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
+    fixed_width_column_wrapper<int8_t>  column_2 {  90,  77,  78,  61,  62,  63,  41 };
 
-    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
-    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+    fixed_width_column_wrapper<int32_t> values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    fixed_width_column_wrapper<int8_t>  values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                            { 0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  1,  1,  1,  1,  1,  1,  2,  1,  3,  3,  3,  6,  4,  6,  6,  6,  7 };
+    fixed_width_column_wrapper<index_type> expect { 0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  1,  1,  1,  1,  1,  1,  2,  1,  3,  3,  3,  6,  4,  6,  6,  6,  7 };
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>(3, false);
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
 
-    gdf_column result_column{};
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
+
+    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            input_table,
-            values_table,
-            desc_flags)
+                    result = cudf::experimental::lower_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last)
 {
-    auto column_0 = column_wrapper<int32_t> {  10,  20,  20,  20,  20,  20,  50 };
-    auto column_1 = column_wrapper<float>   { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
-    auto column_2 = column_wrapper<int8_t>  {  90,  77,  78,  61,  62,  63,  41 };
+    fixed_width_column_wrapper<int32_t> column_0 {  10,  20,  20,  20,  20,  20,  50 };
+    fixed_width_column_wrapper<float>   column_1 { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
+    fixed_width_column_wrapper<int8_t>  column_2 {  90,  77,  78,  61,  62,  63,  41 };
 
-    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
-    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+    fixed_width_column_wrapper<int32_t> values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    fixed_width_column_wrapper<int8_t>  values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                            { 0,  0,  0,  0,  0,  0,  1,  1,  0,  1,  1,  1,  1,  1,  1,  2,  3,  1,  3,  3,  3,  6,  5,  6,  6,  7,  7 };
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    fixed_width_column_wrapper<index_type> expect { 0,  0,  0,  0,  0,  0,  1,  1,  0,  1,  1,  1,  1,  1,  1,  2,  3,  1,  3,  3,  3,  6,  5,  6,  6,  7,  7 };
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>(3, false);
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    gdf_column result_column{};
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
+
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
+
+    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+
+
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            input_table,
-            values_table,
-            desc_flags)
+                    result = cudf::experimental::upper_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table_partial_desc__find_first)
 {
-    auto column_0 = column_wrapper<int32_t> {  50,  20,  20,  20,  20,  20,  10 };
-    auto column_1 = column_wrapper<float>   {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
-    auto column_2 = column_wrapper<int8_t>  {  41,  78,  77,  63,  62,  61,  90 };
+    fixed_width_column_wrapper<int32_t>    column_0 {  50,  20,  20,  20,  20,  20,  10 };
+    fixed_width_column_wrapper<float>      column_1 {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
+    fixed_width_column_wrapper<int8_t>     column_2 {  41,  78,  77,  63,  62,  61,  90 };
 
-    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
-    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+    fixed_width_column_wrapper<int32_t>    values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    fixed_width_column_wrapper<float>      values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    fixed_width_column_wrapper<int8_t>     values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                            { 7,  7,  7,  7,  6,  7,  6,  6,  7,  7,  7,  7,  6,  1,  3,  2,  1,  3,  3,  3,  3,  3,  4,  3,  1,  0,  0 };
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    fixed_width_column_wrapper<index_type> expect   { 7,  7,  7,  7,  6,  7,  6,  6,  7,  7,  7,  7,  6,  1,  3,  2,  1,  3,  3,  3,  3,  3,  4,  3,  1,  0,  0 };
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>{true, false, true};
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    gdf_column result_column{};
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
+
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
+
+    std::vector<cudf::order> order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            input_table,
-            values_table,
-            desc_flags)
+                    result = cudf::experimental::lower_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table_partial_desc__find_last)
 {
-    auto column_0 = column_wrapper<int32_t> {  50,  20,  20,  20,  20,  20,  10 };
-    auto column_1 = column_wrapper<float>   {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
-    auto column_2 = column_wrapper<int8_t>  {  41,  78,  77,  63,  62,  61,  90 };
+    fixed_width_column_wrapper<int32_t>    column_0 {  50,  20,  20,  20,  20,  20,  10 };
+    fixed_width_column_wrapper<float>      column_1 {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
+    fixed_width_column_wrapper<int8_t>     column_2 {  41,  78,  77,  63,  62,  61,  90 };
 
-    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
-    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+    fixed_width_column_wrapper<int32_t>    values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    fixed_width_column_wrapper<float>      values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    fixed_width_column_wrapper<int8_t>     values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                            { 7,  7,  7,  7,  6,  7,  7,  6,  7,  7,  7,  7,  6,  1,  3,  3,  2,  3,  3,  3,  3,  3,  5,  3,  1,  1,  0 };
+    fixed_width_column_wrapper<index_type> expect   { 7,  7,  7,  7,  6,  7,  7,  6,  7,  7,  7,  7,  6,  1,  3,  3,  2,  3,  3,  3,  3,  3,  5,  3,  1,  1,  0 };
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>{true, false, true};
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
 
-    gdf_column result_column{};
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
+
+    std::vector<cudf::order> order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            input_table,
-            values_table,
-            desc_flags)
+                    result = cudf::experimental::upper_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first__nulls_as_smallest)
 {
-    std::vector<int32_t> column_0_data  {  30,  10,  10,  20,  20,  20,  20,  20,  20,  20,  50 };
-    std::vector<bool>    column_0_valid {   0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
-    std::vector<float>   column_1_data  {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 };
-    std::vector<bool>    column_1_valid {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
-    std::vector<int8_t>  column_2_data  {  50,  95,  90,  79,  76,  77,  78,  61,  62,  63,  41 };
-    std::vector<bool>    column_2_valid {   1,   1,   1,   0,   0,   1,   1,   1,   1,   1,   1 };
+    fixed_width_column_wrapper<int32_t>        column_0 { {  30,  10,  10,  20,  20,  20,  20,  20,  20,  20,  50 },
+                                                          {   0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+    fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
+                                                          {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+    fixed_width_column_wrapper<int8_t>         column_2 { {  50,  95,  90,  79,  76,  77,  78,  61,  62,  63,  41 },
+                                                          {   1,   1,   1,   0,   0,   1,   1,   1,   1,   1,   1 } };
 
-    std::vector<int32_t> values_0_data  { 10, 40, 20 };
-    std::vector<bool>    values_0_valid {  1,  0,  1 };
-    std::vector<float>   values_1_data  {  6, .5, .5 };
-    std::vector<bool>    values_1_valid {  0,  1,  1 };
-    std::vector<int8_t>  values_2_data  { 95, 50, 77 };
-    std::vector<bool>    values_2_valid {  1,  1,  0 };
+    fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
+                                                          {  1,  0,  1 } };
+    fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                          {  0,  1,  1 } };
+    fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
+                                                          {  1,  1,  0 } };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                        {  1,  0,  3 };
+    fixed_width_column_wrapper<index_type>     expect   {  1,  0,  3 };
 
-    auto column_0 = column_wrapper<int32_t> ( column_0_data,
-        [&]( gdf_index_type row ) { return column_0_valid[row]; }
-    );
-    auto column_1 = column_wrapper<float> ( column_1_data,
-        [&]( gdf_index_type row ) { return column_1_valid[row]; }
-    );
-    auto column_2 = column_wrapper<int8_t> ( column_2_data,
-        [&]( gdf_index_type row ) { return column_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    auto values_0 = column_wrapper<int32_t> ( values_0_data,
-        [&]( gdf_index_type row ) { return values_0_valid[row]; }
-    );
-    auto values_1 = column_wrapper<float> ( values_1_data,
-        [&]( gdf_index_type row ) { return values_1_valid[row]; }
-    );
-    auto values_2 = column_wrapper<int8_t> ( values_2_data,
-        [&]( gdf_index_type row ) { return values_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>(3, false);
+    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            input_table,
-            values_table,
-            desc_flags,
-            false)  // nulls_as_largest
+                    result = cudf::experimental::lower_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last__nulls_as_smallest)
 {
-    std::vector<int32_t> column_0_data  {  30,  10,  10,  20,  20,  20,  20,  20,  20,  20,  50 };
-    std::vector<bool>    column_0_valid {   0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
-    std::vector<float>   column_1_data  {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 };
-    std::vector<bool>    column_1_valid {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
-    std::vector<int8_t>  column_2_data  {  50,  95,  90,  79,  76,  77,  78,  61,  62,  63,  41 };
-    std::vector<bool>    column_2_valid {   1,   1,   1,   0,   0,   1,   1,   1,   1,   1,   1 };
+    fixed_width_column_wrapper<int32_t>        column_0 { {  30,  10,  10,  20,  20,  20,  20,  20,  20,  20,  50 },
+                                                          {   0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+    fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
+                                                          {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+    fixed_width_column_wrapper<int8_t>         column_2 { {  50,  95,  90,  79,  76,  77,  78,  61,  62,  63,  41 },
+                                                          {   1,   1,   1,   0,   0,   1,   1,   1,   1,   1,   1 } };
 
-    std::vector<int32_t> values_0_data  { 10, 40, 20 };
-    std::vector<bool>    values_0_valid {  1,  0,  1 };
-    std::vector<float>   values_1_data  {  6, .5, .5 };
-    std::vector<bool>    values_1_valid {  0,  1,  1 };
-    std::vector<int8_t>  values_2_data  { 96, 50, 77 };
-    std::vector<bool>    values_2_valid {  1,  1,  0 };
+    fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
+                                                          {  1,  0,  1 } };
+    fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                          {  0,  1,  1 } };
+    fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
+                                                          {  1,  1,  0 } };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                        {  2,  1,  5 };
+    fixed_width_column_wrapper<index_type>     expect   {  2,  1,  5 };
 
-    auto column_0 = column_wrapper<int32_t> ( column_0_data,
-        [&]( gdf_index_type row ) { return column_0_valid[row]; }
-    );
-    auto column_1 = column_wrapper<float> ( column_1_data,
-        [&]( gdf_index_type row ) { return column_1_valid[row]; }
-    );
-    auto column_2 = column_wrapper<int8_t> ( column_2_data,
-        [&]( gdf_index_type row ) { return column_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    auto values_0 = column_wrapper<int32_t> ( values_0_data,
-        [&]( gdf_index_type row ) { return values_0_valid[row]; }
-    );
-    auto values_1 = column_wrapper<float> ( values_1_data,
-        [&]( gdf_index_type row ) { return values_1_valid[row]; }
-    );
-    auto values_2 = column_wrapper<int8_t> ( values_2_data,
-        [&]( gdf_index_type row ) { return values_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>(3, false);
+    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            input_table,
-            values_table,
-            desc_flags,
-            false)   // nulls_as_largest
+                    result = cudf::experimental::upper_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::BEFORE)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first__nulls_as_largest)
 {
-    std::vector<int32_t> column_0_data  {  10,  10,  20,  20,  20,  20,  20,  20,  20,  50,  30 };
-    std::vector<bool>    column_0_valid {   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   0 };
-    std::vector<float>   column_1_data  { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 };
-    std::vector<bool>    column_1_valid {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
-    std::vector<int8_t>  column_2_data  {  90,  95,  77,  78,  79,  76,  61,  62,  63,  41,  50 };
-    std::vector<bool>    column_2_valid {   1,   1,   1,   1,   0,   0,   1,   1,   1,   1,   1 };
+    fixed_width_column_wrapper<int32_t>        column_0 { {  10,  10,  20,  20,  20,  20,  20,  20,  20,  50,  30 },
+                                                          {   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   0 } };
+    fixed_width_column_wrapper<float>          column_1 { { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 },
+                                                          {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+    fixed_width_column_wrapper<int8_t>         column_2 { {  90,  95,  77,  78,  79,  76,  61,  62,  63,  41,  50 },
+                                                          {   1,   1,   1,   1,   0,   0,   1,   1,   1,   1,   1 } };
 
-    std::vector<int32_t> values_0_data  { 10, 40, 20 };
-    std::vector<bool>    values_0_valid {  1,  0,  1 };
-    std::vector<float>   values_1_data  {  6, .5, .5 };
-    std::vector<bool>    values_1_valid {  0,  1,  1 };
-    std::vector<int8_t>  values_2_data  { 95, 50, 77 };
-    std::vector<bool>    values_2_valid {  1,  1,  0 };
+    fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
+                                                          {  1,  0,  1 } };
+    fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                          {  0,  1,  1 } };
+    fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
+                                                          {  1,  1,  0 } };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                        {  1, 10,  4 };
+    fixed_width_column_wrapper<index_type>     expect   {  1, 10,  4 };
 
-    auto column_0 = column_wrapper<int32_t> ( column_0_data,
-        [&]( gdf_index_type row ) { return column_0_valid[row]; }
-    );
-    auto column_1 = column_wrapper<float> ( column_1_data,
-        [&]( gdf_index_type row ) { return column_1_valid[row]; }
-    );
-    auto column_2 = column_wrapper<int8_t> ( column_2_data,
-        [&]( gdf_index_type row ) { return column_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    auto values_0 = column_wrapper<int32_t> ( values_0_data,
-        [&]( gdf_index_type row ) { return values_0_valid[row]; }
-    );
-    auto values_1 = column_wrapper<float> ( values_1_data,
-        [&]( gdf_index_type row ) { return values_1_valid[row]; }
-    );
-    auto values_2 = column_wrapper<int8_t> ( values_2_data,
-        [&]( gdf_index_type row ) { return values_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>(3, false);
+    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::lower_bound(
-            input_table,
-            values_table,
-            desc_flags,
-            true)   // nulls_as_largest
+                    result = cudf::experimental::lower_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::AFTER)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last__nulls_as_largest)
 {
-    std::vector<int32_t> column_0_data  {  10,  10,  20,  20,  20,  20,  20,  20,  20,  50,  30 };
-    std::vector<bool>    column_0_valid {   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   0 };
-    std::vector<float>   column_1_data  { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 };
-    std::vector<bool>    column_1_valid {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
-    std::vector<int8_t>  column_2_data  {  90,  95,  77,  78,  79,  76,  61,  62,  63,  41,  50 };
-    std::vector<bool>    column_2_valid {   1,   1,   1,   1,   0,   0,   1,   1,   1,   1,   1 };
+    fixed_width_column_wrapper<int32_t>        column_0 { {  10,  10,  20,  20,  20,  20,  20,  20,  20,  50,  30 },
+                                                          {   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   0 } };
+    fixed_width_column_wrapper<float>          column_1 { { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 },
+                                                          {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+    fixed_width_column_wrapper<int8_t>         column_2 { {  90,  95,  77,  78,  79,  76,  61,  62,  63,  41,  50 },
+                                                          {   1,   1,   1,   1,   0,   0,   1,   1,   1,   1,   1 } };
 
-    std::vector<int32_t> values_0_data  { 10, 40, 20 };
-    std::vector<bool>    values_0_valid {  1,  0,  1 };
-    std::vector<float>   values_1_data  {  6, .5, .5 };
-    std::vector<bool>    values_1_valid {  0,  1,  1 };
-    std::vector<int8_t>  values_2_data  { 96, 50, 77 };
-    std::vector<bool>    values_2_valid {  1,  1,  0 };
+    fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
+                                                          {  1,  0,  1 } };
+    fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                          {  0,  1,  1 } };
+    fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
+                                                          {  1,  1,  0 } };
 
-    auto expect = column_wrapper<gdf_index_type>
-                                        {  2, 11,  6 };
+    fixed_width_column_wrapper<index_type>     expect   {  2, 11,  6 };
 
-    auto column_0 = column_wrapper<int32_t> ( column_0_data,
-        [&]( gdf_index_type row ) { return column_0_valid[row]; }
-    );
-    auto column_1 = column_wrapper<float> ( column_1_data,
-        [&]( gdf_index_type row ) { return column_1_valid[row]; }
-    );
-    auto column_2 = column_wrapper<int8_t> ( column_2_data,
-        [&]( gdf_index_type row ) { return column_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(column_0.release());
+    columns.push_back(column_1.release());
+    columns.push_back(column_2.release());
 
-    auto values_0 = column_wrapper<int32_t> ( values_0_data,
-        [&]( gdf_index_type row ) { return values_0_valid[row]; }
-    );
-    auto values_1 = column_wrapper<float> ( values_1_data,
-        [&]( gdf_index_type row ) { return values_1_valid[row]; }
-    );
-    auto values_2 = column_wrapper<int8_t> ( values_2_data,
-        [&]( gdf_index_type row ) { return values_2_valid[row]; }
-    );
+    std::vector<std::unique_ptr<cudf::column>> values;
+    values.push_back(values_0.release());
+    values.push_back(values_1.release());
+    values.push_back(values_2.release());
 
-    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
-    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+    cudf::experimental::table input_table(std::move(columns));
+    cudf::experimental::table values_table(std::move(values));
 
-    auto input_table  = cudf::table(columns);
-    auto values_table = cudf::table(values);
-    auto desc_flags   = std::vector<bool>(3, false);
+    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
 
-    gdf_column result_column{};
+    std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::upper_bound(
-            input_table,
-            values_table,
-            desc_flags,
-            true)    // nulls_as_largest
+                    result = cudf::experimental::upper_bound(
+                                                             input_table,
+                                                             values_table,
+                                                             order_flags,
+                                                             cudf::null_order::AFTER)
     );
 
-    auto result = column_wrapper<gdf_index_type>(result_column);
-    
-    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
-                              << "Expected:" << expect.to_str();
+    expect_columns_equal(*result, expect);
 }
 
+#if 0
 TEST_F(SearchTest, contains_true)
 {
     using element_type = int64_t;
     bool expect = true;
     bool  result = false;
 
-    auto column = column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
+    auto column = fixed_width_column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
     auto value = scalar_wrapper<element_type>{23};
 
     result = cudf::contains(
@@ -723,7 +626,7 @@ TEST_F(SearchTest, contains_false)
     bool expect = false;
     bool  result = false;
 
-    auto column = column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
+    auto column = fixed_width_column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
     auto value = scalar_wrapper<element_type> {24};
 
     result = cudf::contains(
@@ -739,7 +642,7 @@ TEST_F(SearchTest, contains_empty_value)
     bool expect = false;
     bool  result = false;
 
-    auto column = column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
+    auto column = fixed_width_column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
     auto value = scalar_wrapper<element_type> (23, false);
 
     result = cudf::contains(
@@ -755,7 +658,7 @@ TEST_F(SearchTest, contains_empty_column)
     bool expect = false;
     bool  result = false;
 
-    auto column = column_wrapper<element_type> {};
+    auto column = fixed_width_column_wrapper<element_type> {};
     auto value = scalar_wrapper<element_type> {24};
 
     result = cudf::contains(
@@ -775,8 +678,8 @@ TEST_F(SearchTest, contains_nullable_column_true)
     std::vector<gdf_valid_type> column_valids   { 0,  0,  1,  1,  1,  1,  1 };
     auto value = scalar_wrapper<element_type> {23};
 
-    auto column = column_wrapper<element_type> ( column_data,
-        [&]( gdf_index_type row ) { return column_valids[row]; }
+    auto column = fixed_width_column_wrapper<element_type> ( column_data,
+        [&]( index_type row ) { return column_valids[row]; }
     );
 
         result = cudf::contains(
@@ -796,8 +699,8 @@ TEST_F(SearchTest, contains_nullable_column_false)
     std::vector<gdf_valid_type> column_valids   { 0, 0, 1, 1, 0, 1, 1};
     auto value = scalar_wrapper<element_type> {23};
 
-    auto column = column_wrapper<element_type> ( column_data,
-        [&]( gdf_index_type row ) { return column_valids[row]; }
+    auto column = fixed_width_column_wrapper<element_type> ( column_data,
+        [&]( index_type row ) { return column_valids[row]; }
     );
 
         result = cudf::contains(

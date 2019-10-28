@@ -41,6 +41,18 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
 void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
 
 /**---------------------------------------------------------------------------*
+ * @brief Verifies the element-wise equality of two columns.
+ *
+ * Treats null elements as equivalent.
+ *
+ * @param lhs The first column
+ * @param rhs The second column
+ * @return true if values are equal between two columns,
+ *         false otherwise
+ *---------------------------------------------------------------------------**/
+bool column_values_equal(cudf::column_view lhs, cudf::column_view rhs);
+
+/**---------------------------------------------------------------------------*
  * @brief Verifies the bitwise equality of two device memory buffers.
  *
  * @param lhs The first buffer
@@ -49,6 +61,15 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
  *---------------------------------------------------------------------------**/
 void expect_equal_buffers(void const* lhs, void const* rhs,
                           std::size_t size_bytes);
+
+/**---------------------------------------------------------------------------*
+ * @brief Displays a column view as a string
+ *
+ * @param col The column view
+ * @param sep The separator for 
+ * @param size_bytes The number of bytes to check for equality
+ *---------------------------------------------------------------------------**/
+std::string column_view_to_str(cudf::column_view const& col, const char *delimiter);
 
 }  // namespace test
 }  // namespace cudf
