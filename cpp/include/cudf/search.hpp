@@ -105,11 +105,10 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
- * @brief Find if the `value` is present in the `column` and dtype of both
- * `value` and `column` should match.
+ * @brief Find if the `value` is present in the `col`
  *
  * @throws cudf::logic_error
- * If dtype of `column` and `value` doesn't match
+ * If `col.type() != values.type()`
  *
  * @example:
  *
