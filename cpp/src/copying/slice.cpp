@@ -24,8 +24,6 @@ namespace cudf {
 
 namespace experimental {
 
-namespace detail {
-
 std::vector<cudf::column_view> slice(cudf::column_view const& input,
                                                 std::vector<size_type> const& indices){
 
@@ -50,12 +48,6 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
                    slicer);
     return result;
 };
-
-}
-std::vector<cudf::column_view> slice(cudf::column_view const&  input,
-                                                std::vector<size_type> const & indices){
-    return detail::slice(input, indices);
-}
 
 } // experimental
 } // cudf
