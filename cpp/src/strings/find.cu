@@ -136,7 +136,8 @@ namespace strings
 std::unique_ptr<cudf::column> find( strings_column_view strings,
                                     const char* target,
                                     int32_t start, int32_t stop,
-                                    rmm::mr::device_memory_resource* mr )
+                                    rmm::mr::device_memory_resource* mr,
+                                    cudaStream_t stream )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
@@ -149,7 +150,7 @@ std::unique_ptr<cudf::column> find( strings_column_view strings,
     if( (stop) > 0 && (start >stop) )
         CUDF_FAIL( "Parameter start must be less than stop.");
 
-    auto target_ptr = detail::string_from_host(target);
+    auto target_ptr = detail::string_from_host(target, stream);
     auto d_target = *target_ptr;
 
     auto pfn = [d_target, start, stop] __device__ (const cudf::string_view& d_str) {
@@ -164,7 +165,8 @@ std::unique_ptr<cudf::column> find( strings_column_view strings,
 std::unique_ptr<cudf::column> rfind( strings_column_view strings,
                                      const char* target,
                                      int32_t start, int32_t stop,
-                                     rmm::mr::device_memory_resource* mr )
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
@@ -177,7 +179,7 @@ std::unique_ptr<cudf::column> rfind( strings_column_view strings,
     if( (stop) > 0 && (start >stop) )
         CUDF_FAIL( "Parameter start must be less than stop.");
 
-    auto target_ptr = detail::string_from_host(target);
+    auto target_ptr = detail::string_from_host(target, stream);
     auto d_target = *target_ptr;
 
     auto pfn = [d_target, start, stop] __device__ (const cudf::string_view& d_str) {
@@ -186,12 +188,13 @@ std::unique_ptr<cudf::column> rfind( strings_column_view strings,
         return d_str.rfind( d_target, start, end-start );
     };
 
-    return find_fn( strings, pfn, mr);
+    return find_fn( strings, pfn, mr, stream );
 }
 
 std::unique_ptr<cudf::column> contains( strings_column_view strings,
                                         const char* target,
-                                        rmm::mr::device_memory_resource* mr )
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream )
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
@@ -201,19 +204,20 @@ std::unique_ptr<cudf::column> contains( strings_column_view strings,
 
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
 
-    auto target_ptr = detail::string_from_host(target);
+    auto target_ptr = detail::string_from_host(target, stream);
     auto d_target = *target_ptr;
 
     auto pfn = [d_target] __device__ (const cudf::string_view& d_str) {
         return d_str.find( d_target )>=0;
     };
 
-    return contains_fn( strings, pfn, mr );
+    return contains_fn( strings, pfn, mr, stream );
 }
 
 std::unique_ptr<cudf::column> starts_with( strings_column_view strings,
                                            const char* target,
-                                           rmm::mr::device_memory_resource* mr )
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream )
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
@@ -223,19 +227,20 @@ std::unique_ptr<cudf::column> starts_with( strings_column_view strings,
 
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
 
-    auto target_ptr = detail::string_from_host(target);
+    auto target_ptr = detail::string_from_host(target,stream);
     auto d_target = *target_ptr;
 
     auto pfn = [d_target] __device__ (const cudf::string_view& d_str) {
         return d_str.find( d_target )==0;
     };
 
-    return contains_fn( strings, pfn, mr );
+    return contains_fn( strings, pfn, mr, stream );
 }
 
 std::unique_ptr<cudf::column> ends_with( strings_column_view strings,
                                          const char* target,
-                                         rmm::mr::device_memory_resource* mr )
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream )
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
@@ -245,7 +250,7 @@ std::unique_ptr<cudf::column> ends_with( strings_column_view strings,
 
     CUDF_EXPECTS( target!=nullptr, "Parameter target must not be null.");
 
-    auto target_ptr = detail::string_from_host(target);
+    auto target_ptr = detail::string_from_host(target,stream);
     auto d_target = *target_ptr;
 
     auto pfn = [d_target] __device__ (const cudf::string_view& d_str) {
@@ -256,7 +261,7 @@ std::unique_ptr<cudf::column> ends_with( strings_column_view strings,
         return d_str.find( d_target, str_length - tgt_length )>=0;
     };
 
-    return contains_fn( strings, pfn, mr );
+    return contains_fn( strings, pfn, mr, stream );
 }
 
 } // namespace strings
