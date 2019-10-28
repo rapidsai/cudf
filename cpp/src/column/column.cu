@@ -69,6 +69,17 @@ column::column(column &&other) noexcept
   other._type = data_type{EMPTY};
 }
 
+// Release contents
+column::contents column::release() noexcept {
+  _size = 0;
+  _null_count = 0;
+  _type = data_type{EMPTY};
+  return column::contents{
+      std::make_unique<rmm::device_buffer>(std::move(_data)),
+      std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
+      std::move(_children)};
+}
+
 // Create immutable view
 column_view column::view() const {
   // Create views of children
