@@ -53,54 +53,50 @@ TYPED_TEST(DatetimeOpsTest, TestExtractingDatetimeComponents) {
   using namespace simt::std::chrono;
 
   auto test_timestamps_D = fixed_width_column_wrapper<cudf::timestamp_D>{
-    cudf::timestamp_D{-1528}, // 1965-10-26
-    cudf::timestamp_D{17716}, // 2018-07-04
-    cudf::timestamp_D{19382}, // 2023-01-25
+    -1528, // 1965-10-26
+    17716, // 2018-07-04
+    19382, // 2023-01-25
   };
 
   auto test_timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
-		cudf::timestamp_s{-131968728}, // 1965-10-26 14:01:12
-		cudf::timestamp_s{1530705600}, // 2018-07-04 12:00:00
-		cudf::timestamp_s{1674631932}, // 2023-01-25 07:32:12
+		-131968728, // 1965-10-26 14:01:12
+		1530705600, // 2018-07-04 12:00:00
+		1674631932, // 2023-01-25 07:32:12
 	};
 
   auto test_timestamps_ms = fixed_width_column_wrapper<cudf::timestamp_ms>{
-		cudf::timestamp_ms{-131968727238}, // 1965-10-26 14:01:12.762
-		cudf::timestamp_ms{1530705600000}, // 2018-07-04 12:00:00.000
-		cudf::timestamp_ms{1674631932929}, // 2023-01-25 07:32:12.929
+		-131968727238, // 1965-10-26 14:01:12.762
+		1530705600000, // 2018-07-04 12:00:00.000
+		1674631932929, // 2023-01-25 07:32:12.929
 	};
 
-  auto test_timestamps_D_view = static_cast<cudf::column_view>(test_timestamps_D);
-  auto test_timestamps_s_view = static_cast<cudf::column_view>(test_timestamps_s);
-  auto test_timestamps_ms_view = static_cast<cudf::column_view>(test_timestamps_ms);
+  expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_D), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_s), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
 
-  expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  expect_columns_equal(*cudf::datetime::extract_month(test_timestamps_D), fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  expect_columns_equal(*cudf::datetime::extract_month(test_timestamps_s), fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  expect_columns_equal(*cudf::datetime::extract_month(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{10, 7, 1});
 
-  expect_columns_equal(*cudf::datetime::extract_month(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  expect_columns_equal(*cudf::datetime::extract_month(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  expect_columns_equal(*cudf::datetime::extract_month(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  expect_columns_equal(*cudf::datetime::extract_day(test_timestamps_D), fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  expect_columns_equal(*cudf::datetime::extract_day(test_timestamps_s), fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  expect_columns_equal(*cudf::datetime::extract_day(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{26, 4, 25});
 
-  expect_columns_equal(*cudf::datetime::extract_day(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  expect_columns_equal(*cudf::datetime::extract_day(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  expect_columns_equal(*cudf::datetime::extract_day(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  expect_columns_equal(*cudf::datetime::extract_weekday(test_timestamps_D), fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  expect_columns_equal(*cudf::datetime::extract_weekday(test_timestamps_s), fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  expect_columns_equal(*cudf::datetime::extract_weekday(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{2, 3, 3});
 
-  expect_columns_equal(*cudf::datetime::extract_weekday(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  expect_columns_equal(*cudf::datetime::extract_weekday(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  expect_columns_equal(*cudf::datetime::extract_weekday(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  expect_columns_equal(*cudf::datetime::extract_hour(test_timestamps_D), fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  expect_columns_equal(*cudf::datetime::extract_hour(test_timestamps_s), fixed_width_column_wrapper<int16_t>{14, 12, 7});
+  expect_columns_equal(*cudf::datetime::extract_hour(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{14, 12, 7});
 
-  expect_columns_equal(*cudf::datetime::extract_hour(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  expect_columns_equal(*cudf::datetime::extract_hour(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{14, 12, 7});
-  expect_columns_equal(*cudf::datetime::extract_hour(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{14, 12, 7});
+  expect_columns_equal(*cudf::datetime::extract_minute(test_timestamps_D), fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  expect_columns_equal(*cudf::datetime::extract_minute(test_timestamps_s), fixed_width_column_wrapper<int16_t>{1, 0, 32});
+  expect_columns_equal(*cudf::datetime::extract_minute(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{1, 0, 32});
 
-  expect_columns_equal(*cudf::datetime::extract_minute(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  expect_columns_equal(*cudf::datetime::extract_minute(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{1, 0, 32});
-  expect_columns_equal(*cudf::datetime::extract_minute(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{1, 0, 32});
-
-  expect_columns_equal(*cudf::datetime::extract_second(test_timestamps_D_view), fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  expect_columns_equal(*cudf::datetime::extract_second(test_timestamps_s_view), fixed_width_column_wrapper<int16_t>{12, 0, 12});
-  expect_columns_equal(*cudf::datetime::extract_second(test_timestamps_ms_view), fixed_width_column_wrapper<int16_t>{12, 0, 12});
+  expect_columns_equal(*cudf::datetime::extract_second(test_timestamps_D), fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  expect_columns_equal(*cudf::datetime::extract_second(test_timestamps_s), fixed_width_column_wrapper<int16_t>{12, 0, 12});
+  expect_columns_equal(*cudf::datetime::extract_second(test_timestamps_ms), fixed_width_column_wrapper<int16_t>{12, 0, 12});
 
 }
 

@@ -32,7 +32,7 @@ namespace cudf {
 namespace datetime {
 namespace detail {
 
-  typedef enum {
+  enum class datetime_component {
     invalid = 0,
     year,
     month,
@@ -41,34 +41,29 @@ namespace detail {
     hour,
     minute,
     second,
-  } datetime_component;
+  };
 
-  template <datetime_component DatetimeComponent>
+  template <typename Timestamp, datetime_component Component>
   struct extract_component_operator {
+
+    static_assert(cudf::is_timestamp<Timestamp>(),"");
 
     column_device_view column;
 
-    CUDA_HOST_DEVICE_CALLABLE extract_component_operator(column_device_view col) : column(col) {}
+    extract_component_operator(column_device_view col) : column(col) {}
 
-    template <typename Element>
-    typename std::enable_if_t<not cudf::is_timestamp_t<Element>::value, int16_t>
-    CUDA_HOST_DEVICE_CALLABLE operator()(size_type const i) const { return 0; }
-
-    template <typename Element>
-    typename std::enable_if_t<cudf::is_timestamp_t<Element>::value, int16_t>
-    CUDA_HOST_DEVICE_CALLABLE operator()(size_type const i) const {
+    CUDA_DEVICE_CALLABLE int16_t operator()(size_type const i) const {
 
       using namespace simt::std::chrono;
-      using Duration = typename Element::duration;
 
-      auto ts = column.element<Element>(i);
+      auto ts = column.element<Timestamp>(i);
       auto days_since_epoch = floor<days>(ts);
 
-      switch (DatetimeComponent) {
-        case cudf::datetime::detail::year: return static_cast<int>(year_month_day(days_since_epoch).year());
-        case cudf::datetime::detail::month: return static_cast<unsigned>(year_month_day(days_since_epoch).month());
-        case cudf::datetime::detail::day: return static_cast<unsigned>(year_month_day(days_since_epoch).day());
-        case cudf::datetime::detail::weekday: return year_month_weekday(days_since_epoch).weekday().iso_encoding();
+      switch (Component) {
+        case datetime_component::year: return static_cast<int>(year_month_day(days_since_epoch).year());
+        case datetime_component::month: return static_cast<unsigned>(year_month_day(days_since_epoch).month());
+        case datetime_component::day: return static_cast<unsigned>(year_month_day(days_since_epoch).day());
+        case datetime_component::weekday: return year_month_weekday(days_since_epoch).weekday().iso_encoding();
         default: break;
       }
 
@@ -82,44 +77,42 @@ namespace detail {
       auto mins_ = duration_cast<minutes>(time_since_midnight - hrs_);
       auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
 
-      switch (DatetimeComponent) {
-        case cudf::datetime::detail::hour: return hrs_.count();
-        case cudf::datetime::detail::minute: return mins_.count();
-        case cudf::datetime::detail::second: return secs_.count();
+      switch (Component) {
+        case datetime_component::hour: return hrs_.count();
+        case datetime_component::minute: return mins_.count();
+        case datetime_component::second: return secs_.count();
         default: return 0;
       }
     }
   };
 
-  template <datetime_component DatetimeComponent>
+  template <datetime_component Component>
   struct launch_extract_component {
 
     column_device_view input;
     mutable_column_view output;
 
-    launch_extract_component(column_device_view inp, mutable_column_view out) : input(inp), output(out) {}
+    launch_extract_component(
+      column_device_view inp,
+      mutable_column_view out
+    ) : input(inp), output(out) {}
 
     template <typename Element>
-    typename std::enable_if_t<not cudf::is_timestamp_t<Element>::value, void>
+    typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void>
     operator()(cudaStream_t stream) {
       CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
     }
 
-    template <typename Element>
-    typename std::enable_if_t<cudf::is_timestamp_t<Element>::value, void>
+    template <typename Timestamp>
+    typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void>
     operator()(cudaStream_t stream) {
-      auto functor = extract_component_operator<DatetimeComponent>{input};
-      auto bound_f = [=] __device__ (size_type const i) {
-        return functor.template operator()<Element>(i);
-      };
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-                       output.begin<int16_t>(),
-                       output.end<int16_t>(),
-                       bound_f);
+                       output.begin<int16_t>(), output.end<int16_t>(),
+                       extract_component_operator<Timestamp, Component>{input});
     }
   };
 
-  template <datetime_component DatetimeComponent>
+  template <datetime_component Component>
   std::unique_ptr<column> extract_component(column_view const& input, cudaStream_t stream) {
 
     auto null_mask_state = input.nullable() ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
@@ -129,7 +122,7 @@ namespace detail {
 
     auto d_input = column_device_view::create(input);
     auto m_output = static_cast<mutable_column_view>(*output);
-    auto launch = launch_extract_component<DatetimeComponent>{*d_input, m_output};
+    auto launch = launch_extract_component<Component>{*d_input, m_output};
 
     if (null_mask_state == mask_state::UNINITIALIZED) {
       CUDA_TRY(cudaMemcpy(m_output.null_mask(), input.null_mask(),
@@ -144,31 +137,31 @@ namespace detail {
 } // detail
 
 std::unique_ptr<column> extract_year(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::year>(column, stream));
+  return detail::extract_component<detail::datetime_component::year>(column, stream);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::month>(column, stream));
+  return detail::extract_component<detail::datetime_component::month>(column, stream);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::day>(column, stream));
+  return detail::extract_component<detail::datetime_component::day>(column, stream);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::weekday>(column, stream));
+  return detail::extract_component<detail::datetime_component::weekday>(column, stream);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::hour>(column, stream));
+  return detail::extract_component<detail::datetime_component::hour>(column, stream);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::minute>(column, stream));
+  return detail::extract_component<detail::datetime_component::minute>(column, stream);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column, cudaStream_t stream) {
-  return std::move(detail::extract_component<detail::second>(column, stream));
+  return detail::extract_component<detail::datetime_component::second>(column, stream);
 }
 
 } // datetime
