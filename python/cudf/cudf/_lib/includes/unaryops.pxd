@@ -49,7 +49,7 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_column *output
     ) except +
 
-cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/transform.hpp" namespace "cudf" nogil:
     cdef gdf_column transform(
         const gdf_column& input,
         const string& ptx,
@@ -62,7 +62,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +
 
 
-cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/unary.hpp" namespace "cudf" nogil:
 
     ctypedef enum unary_op:
         SIN,
