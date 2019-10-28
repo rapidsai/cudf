@@ -43,9 +43,11 @@ namespace cudf {
  * @param[in] left The left table
  * @param[in] right The right table
  * @param[in] left_on The column's indices from `left` to join on.
- * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * The column from `left` indicated by `left_on[i]` will be compared against the column 
+ * from `right` indicated by `right_on[i]`.
  * @param[in] right_on The column's indices from `right` to join on.
- * Column `i` from `right_on` will be compared with column `i` of `left_on`.
+ * The column from `right` indicated by `right_on[i]` will be compared against the column 
+ * from `left` indicated by `left_on[i]`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
@@ -56,12 +58,14 @@ namespace cudf {
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-cudf::table inner_join(
-                         cudf::table& left,
-                         cudf::table& right,
+std::unique_ptr<cudf::table> inner_join(
+                         cudf::table_view const& left,
+                         cudf::table_view const& right,
                          std::vector<cudf::size_type> const& left_on,
                          std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common);
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                         cudaStream_t stream=0,
+                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
@@ -86,9 +90,11 @@ cudf::table inner_join(
  * @param[in] left The left table
  * @param[in] right The right table
  * @param[in] left_on The column's indices from `left` to join on.
- * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * The column from `left` indicated by `left_on[i]` will be compared against the column 
+ * from `right` indicated by `right_on[i]`.
  * @param[in] right_on The column's indices from `right` to join on.
- * Column `i` from `right_on` will be compared with column `i` of `left_on`.
+ * The column from `right` indicated by `right_on[i]` will be compared against the column 
+ * from `left` indicated by `left_on[i]`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
@@ -99,12 +105,14 @@ cudf::table inner_join(
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-cudf::table left_join(
-                         cudf::table const& left,
-                         cudf::table const& right,
+std::unique_ptr<cudf::table> left_join(
+                         cudf::table_view const& left,
+                         cudf::table_view const& right,
                          std::vector<cudf::size_type> const& left_on,
                          std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common);
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                         cudaStream_t stream=0,
+                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** 
  * @brief  Performs a full join (also known as full outer join) on the
@@ -130,9 +138,11 @@ cudf::table left_join(
  * @param[in] left The left table
  * @param[in] right The right table
  * @param[in] left_on The column's indices from `left` to join on.
- * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * The column from `left` indicated by `left_on[i]` will be compared against the column 
+ * from `right` indicated by `right_on[i]`.
  * @param[in] right_on The column's indices from `right` to join on.
- * Column `i` from `right_on` will be compared with column `i` of `left_on`.
+ * The column from `right` indicated by `right_on[i]` will be compared against the column 
+ * from `left` indicated by `left_on[i]`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
@@ -143,11 +153,13 @@ cudf::table left_join(
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-cudf::table full_join(
-                         cudf::table const& left,
-                         cudf::table const& right,
+std::unique_ptr<cudf::table> full_join(
+                         cudf::table_view const& left,
+                         cudf::table_view const& right,
                          std::vector<cudf::size_type> const& left_on,
                          std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common);
+                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                         cudaStream_t stream=0,
+                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 } //namespace cudf
 
