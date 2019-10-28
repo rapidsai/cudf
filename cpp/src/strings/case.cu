@@ -33,9 +33,6 @@ namespace cudf
 {
 namespace strings
 {
-namespace detail
-{
-
 namespace
 {
 
@@ -59,9 +56,9 @@ template <TwoPass Pass=SizeOnly>
 struct upper_lower_fn
 {
     const column_device_view d_column;
-    uint8_t case_flag; // flag to check with on each character
-    const uint8_t* d_flags;
-    const uint16_t* d_case_table;
+    detail::character_flags_table_type case_flag; // flag to check with on each character
+    const detail::character_flags_table_type* d_flags;
+    const detail::character_cases_table_type* d_case_table;
     const int32_t* d_offsets{};
     char* d_chars{};
 
@@ -76,28 +73,26 @@ struct upper_lower_fn
             d_buffer = d_chars + d_offsets[idx];
         for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
         {
-            uint32_t code_point = utf8_to_codepoint(*itr);
-            uint32_t flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+            uint32_t code_point = detail::utf8_to_codepoint(*itr);
+            detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
             if( flag & case_flag )
             {
                 if( Pass==SizeOnly )
-                    bytes += bytes_in_char_utf8(codepoint_to_utf8(d_case_table[code_point]));
+                    bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(d_case_table[code_point]));
                 else
-                    d_buffer += from_char_utf8(codepoint_to_utf8(d_case_table[code_point]),d_buffer);
+                    d_buffer += detail::from_char_utf8(detail::codepoint_to_utf8(d_case_table[code_point]),d_buffer);
             }
             else
             {
                 if( Pass==SizeOnly )
-                    bytes += bytes_in_char_utf8(*itr);
+                    bytes += detail::bytes_in_char_utf8(*itr);
                 else
-                    d_buffer += from_char_utf8(*itr, d_buffer);
+                    d_buffer += detail::from_char_utf8(*itr, d_buffer);
             }
         }
         return bytes;
     }
 };
-
-}
 
 /**
  * @brief Utility method for converting upper and lower case characters
@@ -110,13 +105,13 @@ struct upper_lower_fn
  * @return New strings column with characters converted.
  */
 std::unique_ptr<cudf::column> convert_case( strings_column_view strings,
-                                            uint8_t case_flag,
+                                            detail::character_flags_table_type case_flag,
                                             rmm::mr::device_memory_resource* mr,
-                                            cudaStream_t stream = 0)
+                                            cudaStream_t stream)
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(0);
     auto strings_column = column_device_view::create(strings.parent(),stream);
@@ -130,8 +125,8 @@ std::unique_ptr<cudf::column> convert_case( strings_column_view strings,
                                         stream, mr);
 
     // get the lookup tables used for case conversion
-    auto d_flags = get_character_flags_table();
-    auto d_case_table = get_character_case_table();
+    auto d_flags = detail::get_character_flags_table();
+    auto d_case_table = detail::get_character_case_table();
 
     // build offsets column
     // calculate the size of each output string
@@ -156,33 +151,35 @@ std::unique_ptr<cudf::column> convert_case( strings_column_view strings,
                                null_count, std::move(null_mask), stream, mr);
 }
 
-
-} // detail
+} // namespace
 
 // APIS
 //
 std::unique_ptr<cudf::column> to_lower( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr )
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream )
 {
-    uint8_t case_flag = IS_UPPER(0xFF); // convert only uppercase characters
-    return detail::convert_case(strings,case_flag,mr);
+    detail::character_flags_table_type case_flag = IS_UPPER(0xFF); // convert only uppercase characters
+    return convert_case(strings,case_flag,mr,stream);
 }
 
 //
 std::unique_ptr<cudf::column> to_upper( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr )
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream )
 {
-    uint8_t case_flag = IS_LOWER(0xFF); // convert only lowercase characters
-    return detail::convert_case(strings,case_flag,mr);
+    detail::character_flags_table_type case_flag = IS_LOWER(0xFF); // convert only lowercase characters
+    return convert_case(strings,case_flag,mr,stream);
 }
 
 //
 std::unique_ptr<cudf::column> swapcase( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream )
 {
     // convert only upper or lower case characters
-    uint8_t case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);
-    return detail::convert_case(strings,case_flag,mr);
+    detail::character_flags_table_type case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);
+    return convert_case(strings,case_flag,mr,stream);
 }
 
 } // namespace strings
