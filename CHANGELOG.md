@@ -30,6 +30,7 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3051 Specialized hash function for strings column
 - PR #3065 Select and Concat for cudf::experimental::table
 - PR #3080 Move `valid_if.cuh` to `legacy/`
 - PR #3052 Moved replace.hpp functionality to legacy
@@ -76,8 +77,10 @@
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 - PR #3168 Fix mutable_column_device_view head const_cast
+- PR #3199 Update JNI includes for legacy moves
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
 - PR #2994 Fix split_out-support but with hash_object_dispatch
+- PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 
 
 # cuDF 0.10.0 (16 Oct 2019)
