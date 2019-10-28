@@ -105,16 +105,16 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
 __global__ void __launch_bounds__(128)
 gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc, int32_t num_rowgroups, int32_t num_columns)
 {
-    //__shared__ __align__(8) EncColumnDesc col_g;
+    __shared__ __align__(8) EncColumnDesc col_g;
     __shared__ __align__(8) EncColumnChunk ck_g;
     __shared__ __align__(8) PageFragment frag_g;
     __shared__ __align__(8) EncPage page_g;
 
     uint32_t t = threadIdx.x;
     
-    /*if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
+    if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&col_g)[t] = reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
-    }*/
+    }
     if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&ck_g)[t] = reinterpret_cast<const uint32_t *>(&chunks[blockIdx.y * num_columns + blockIdx.x])[t];
     }
@@ -126,6 +126,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         uint32_t num_pages = 0;
         uint32_t num_rows = 0;
         uint32_t page_start = 0;
+        uint32_t page_offset = 0;
         do {
             uint32_t fragment_data_size, max_page_size;
             SYNCWARP();
@@ -143,7 +144,13 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
             if (num_rows >= ck_g.num_rows || page_size + fragment_data_size > max_page_size)
             {
                 if (!t) {
+                    uint32_t def_level_bits = col_g.level_bits & 0xf;
+                    uint32_t def_level_size = (def_level_bits) ? 4 + 5 + ((def_level_bits * rows_in_page + 7) >> 3) : 0;
                     page_g.num_fragments = fragments_in_chunk - page_start;
+                    page_g.max_hdr_size = 32; // Max size excluding statistics
+                    page_g.max_data_size = page_size + def_level_size;
+                    page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+                    page_offset += page_g.max_hdr_size + page_g.max_data_size;
                 }
                 SYNCWARP();
                 if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
@@ -161,6 +168,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         } while (frag_g.num_rows != 0);
         if (!t) {
             ck_g.num_pages = num_pages;
+            ck_g.bfr_size = page_offset;
         }
     }
     __syncthreads();
