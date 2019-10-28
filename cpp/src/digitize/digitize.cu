@@ -20,7 +20,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <thrust/binary_search.h>
 
 namespace cudf {
