@@ -79,6 +79,7 @@
 - PR #3199 Update JNI includes for legacy moves
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
 - PR #2994 Fix split_out-support but with hash_object_dispatch
+- PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 
 
