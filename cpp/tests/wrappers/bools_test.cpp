@@ -24,24 +24,17 @@
 struct Bool8Test
   : public cudf::test::BaseFixture
   , cudf::test::UniformRandomGenerator<uint8_t> {
-
-  Bool8Test()
-    : cudf::test::UniformRandomGenerator<uint8_t>{
-        std::numeric_limits<uint8_t>::lowest(), 
-        std::numeric_limits<uint8_t>::max()} {}
-
-  uint8_t rand(){ return this->generate(); }
+  Bool8Test() : cudf::test::UniformRandomGenerator<uint8_t>{
+    std::numeric_limits<uint8_t>::lowest(), 
+    std::numeric_limits<uint8_t>::max()
+  } {}
 };
 
 template <typename T>
 struct Bool8CtorTest
   : public cudf::test::BaseFixture
   , cudf::test::UniformRandomGenerator<T> {
-
-  Bool8CtorTest()
-    : cudf::test::UniformRandomGenerator<T>{}{}
-
-  T rand(){ return this->generate(); }
+  Bool8CtorTest() : cudf::test::UniformRandomGenerator<T>{}{}
 };
 
 /**
@@ -55,9 +48,9 @@ TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 
 TEST_F(Bool8Test, TestBool8Constructor) {
   for (int i = 0; i < NUM_TRIALS; ++i) {
-    uint8_t t{this->rand()};
+    uint8_t t{this->generate()};
     cudf::experimental::bool8 const w{t};
-    EXPECT_EQ(w.operator uint8_t(), static_cast<uint8_t>(static_cast<bool>(t)));
+    EXPECT_EQ(static_cast<uint8_t>(w), static_cast<uint8_t>(static_cast<bool>(t)));
   }
 }
 
@@ -65,29 +58,29 @@ TEST_F(Bool8Test, TestBool8Constructor) {
 TYPED_TEST(Bool8CtorTest, TestBool8ConstructorCast) {
   using SourceType = TypeParam;
   for (int i = 0; i < NUM_TRIALS; ++i) {
-    SourceType t{this->rand()};
+    SourceType t{this->generate()};
     cudf::experimental::bool8 const w{t};
-    EXPECT_EQ(w.operator uint8_t(), static_cast<uint8_t>(static_cast<bool>(t)));
+    EXPECT_EQ(static_cast<uint8_t>(w), static_cast<uint8_t>(static_cast<bool>(t)));
   }
 }
 
 TEST_F(Bool8Test, TestBool8Assignment) {
     for (int i = 0; i < NUM_TRIALS; ++i) {
-      uint8_t const t0{this->rand()};
-      uint8_t const t1{this->rand()};
+      uint8_t const t0{this->generate()};
+      uint8_t const t1{this->generate()};
       cudf::experimental::bool8 w0{t0};
       cudf::experimental::bool8 w1{t1};
 
       w0 = w1;
 
-      EXPECT_EQ(w0.operator bool(), static_cast<bool>(t1));
+      EXPECT_EQ(static_cast<bool>(w0), static_cast<bool>(t1));
     }
 }
 
 TEST_F(Bool8Test, TestBool8ArithmeticOperators) {
     for(int i = 0; i < NUM_TRIALS; ++i) {
-        uint8_t const t0{static_cast<bool>(this->rand())};
-        uint8_t const t1{static_cast<bool>(this->rand())};
+        uint8_t const t0{static_cast<bool>(this->generate())};
+        uint8_t const t1{static_cast<bool>(this->generate())};
 
         cudf::experimental::bool8 const w0{t0};
         cudf::experimental::bool8 const w1{t1};
@@ -95,14 +88,14 @@ TEST_F(Bool8Test, TestBool8ArithmeticOperators) {
         // Types smaller than int are implicitly promoted to `int` for
         // arithmetic operations. Therefore, need to convert it back to the
         // original type
-        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 + w1}.operator uint8_t()),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 + w1}),
                   static_cast<bool>(t0 + t1));
-        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 - w1}.operator uint8_t()),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 - w1}),
                   static_cast<bool>(t0 - t1));
-        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 * w1}.operator uint8_t()),
+        EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 * w1}),
                   static_cast<bool>(t0 * t1));
         if (0 != t1) {
-            EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 / w1}.operator uint8_t()),
+            EXPECT_EQ(static_cast<bool>(cudf::experimental::bool8{w0 / w1}),
                       static_cast<bool>(t0 / t1));
         }
     }
@@ -110,8 +103,8 @@ TEST_F(Bool8Test, TestBool8ArithmeticOperators) {
 
 TEST_F(Bool8Test, TestBool8BinaryOperators) {
     for(int i = 0; i < NUM_TRIALS; ++i) {
-        bool const t0{this->rand() != 0};
-        bool const t1{this->rand() != 0};
+        bool const t0{this->generate() != 0};
+        bool const t1{this->generate() != 0};
 
         cudf::experimental::bool8 const w0{t0};
         cudf::experimental::bool8 const w1{t1};
@@ -180,8 +173,8 @@ TEST_F(Bool8Test, TestBool8ArithmeticCast) {
 
 TEST_F(Bool8Test, TestBool8CompoundAssignmentOperators) {
     for(int i = 0; i < NUM_TRIALS; ++i) {
-        bool t0{static_cast<bool>(this->rand())};
-        bool const t1{static_cast<bool>(this->rand())};
+        bool t0{static_cast<bool>(this->generate())};
+        bool const t1{static_cast<bool>(this->generate())};
 
         cudf::experimental::bool8 w0{t0};
         cudf::experimental::bool8 const w1{t1};

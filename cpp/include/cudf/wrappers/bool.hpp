@@ -48,19 +48,19 @@ struct bool8 {
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit bool8(from_type v)
-    : value{static_cast<uint8_t>(static_cast<bool>(v))} {}
+    : value{static_cast<value_type>(static_cast<bool>(v))} {}
 
   // move/copy assignment operators for non-bool8 types
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator=(from_type&& rhs) {
-    this->value = static_cast<uint8_t>(static_cast<bool>(std::move(rhs)));
+    this->value = static_cast<value_type>(static_cast<bool>(std::move(rhs)));
     return *this;
   }
 
   template <typename from_type>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator=(const from_type& rhs) {
-    this->value = static_cast<uint8_t>(static_cast<bool>(rhs));
+    this->value = static_cast<value_type>(static_cast<bool>(rhs));
     return *this;
   }
 
@@ -70,8 +70,8 @@ struct bool8 {
     return static_cast<bool>(this->value);
   }
 
-  CUDA_HOST_DEVICE_CALLABLE explicit operator uint8_t() const {
-    return static_cast<uint8_t>(static_cast<bool>(this->value));
+  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
+    return static_cast<value_type>(static_cast<bool>(this->value));
   }
 
   // ostream << operator overload
@@ -153,7 +153,7 @@ struct bool8 {
   }
 
 private:
-  uint8_t value{0};
+  value_type value{0};
 };
 
 // This is necessary for global, constant, non-fundamental types
@@ -161,11 +161,11 @@ private:
 // scalar type. See CUDA Programming guide
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
 #ifdef __CUDA_ARCH__
-__device__ __constant__ static bool8 true_v{uint8_t{1}};
-__device__ __constant__ static bool8 false_v{uint8_t{0}};
+__device__ __constant__ static bool8 true_v{bool8::value_type{1}};
+__device__ __constant__ static bool8 false_v{bool8::value_type{0}};
 #else
-static constexpr bool8 true_v{uint8_t{1}};
-static constexpr bool8 false_v{uint8_t{0}};
+static constexpr bool8 true_v{bool8::value_type{1}};
+static constexpr bool8 false_v{bool8::value_type{0}};
 #endif
 
 } // experimental
