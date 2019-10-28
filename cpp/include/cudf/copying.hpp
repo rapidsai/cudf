@@ -83,7 +83,7 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
  * The returned view's of `input` are constructed from an even number indices where
  * the `i`th returned `column_view` will view the elements in `input` indicated by the range
- * `[indices[i], indices[i+1])`.
+ * `[indices[2*i], indices[(2*i)+1])`.
  *
  * For all `i` it is expected `indices[i] <= input.size()`
  * For all `i%2==0`, it is expected that `indices[i] <= indices[i+1]`
