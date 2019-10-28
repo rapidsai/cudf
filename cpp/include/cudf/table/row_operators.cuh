@@ -265,10 +265,6 @@ class row_lexicographic_comparator {
 
       weak_ordering state{weak_ordering::EQUIVALENT};
 
-      if (not ascending) {
-        thrust::swap(lhs_index, rhs_index);
-      }
-
       auto comparator = element_relational_comparator<has_nulls>{
           _lhs.column(i), _rhs.column(i), _null_precedence};
 
@@ -279,7 +275,7 @@ class row_lexicographic_comparator {
         continue;
       }
 
-      return (state == weak_ordering::LESS) ? true : false;
+      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
     return false;
   }
