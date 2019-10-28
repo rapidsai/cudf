@@ -18,22 +18,23 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
 
 /**
- * @brief Row-wise concatenates the given list of strings columns.
- * 
+ * @brief Row-wise concatenates the given list of strings columns and
+ * returns a single strings column result.
+ *
  * Each new string is created by concatenating the strings from the same
  * row delimited by the separator provided.
- * 
+ *
  * Any row with a null entry will result in the corresponding output
  * row to be null entry unless a narep string is specified to be used
  * in its place.
- * 
- * The number of strings in the columns must be the same.
+ *
+ * The number of strings in the columns provided must be the same.
  *
  * ```
  * s1 = ['aa', null, '', 'aa']
@@ -44,22 +45,25 @@ namespace strings
  *
  * @param strings_columns List of string columns to concatenate.
  * @param separator Null-terminated CPU string that should appear between each instance.
- *        Default is empty string.
- * @param narep Null-terminated CPU string that should be used in place of any null strings found.
- *        Default of null means any null operand produces a null result.
- * @param stream CUDA stream to use kernels in this method.
+ *        Default is an empty string.
+ * @param narep Null-terminated CPU string that should be used in place of any null strings
+ *        found in any column. Default of null means any null entry in any column will
+ *        produces a null result for that row.
  * @param mr Resource for allocating device memory.
- * @return New column with concatenated results
+ * @param stream CUDA stream to use any for kernels in this method.
+ * @return New column with concatenated results.
  */
 std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
                                            const char* separator="",
                                            const char* narep=nullptr,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                           cudaStream_t stream=0 );
 
 /**
- * @brief Concatenates all strings in the column into one new string.
- * 
- * This produces a column with one string. Any null entries are ignored unless
+ * @brief Concatenates all strings in the column into one new string delimited
+ * by an optional separator string.
+ *
+ * This returns a column with one string. Any null entries are ignored unless
  * the narep parameter specifies a replacement string.
  *
  * ```
@@ -70,16 +74,18 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
  *
  * @param strings Strings for this operation.
  * @param separator Null-terminated CPU string that should appear between each string.
+ *        Default is an empty string.
  * @param narep Null-terminated CPU string that should represent any null strings found.
- * @param stream CUDA stream to use kernels in this method.
+ *        Default of nullptr will ignore any null entries.
  * @param mr Resource for allocating device memory.
+ * @param stream CUDA stream to use kernels in this method.
  * @return New column containing one string.
  */
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                                             const char* separator="",
                                             const char* narep=nullptr,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                            cudaStream_t stream=0 );
 
 } // namespace strings
 } // namespace cudf

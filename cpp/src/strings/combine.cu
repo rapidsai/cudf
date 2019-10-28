@@ -34,8 +34,7 @@ namespace cudf
 {
 namespace strings
 {
-namespace detail
-{
+
 //
 std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
                                            const char* separator,
@@ -54,7 +53,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
         CUDF_FAIL( "concatenate requires all columns have an equal number of rows");
     }
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
     if( !separator )
@@ -194,7 +193,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
     if( !separator )
@@ -285,27 +284,6 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
     return make_strings_column(1, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
-
-} // namespace detail
-
-//
-std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
-                                           const char* separator,
-                                           const char* narep,
-                                           rmm::mr::device_memory_resource* mr )
-{
-    return detail::concatenate( strings_columns, separator, narep, mr );
-}
-
-//
-std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const char* separator,
-                                            const char* narep,
-                                            rmm::mr::device_memory_resource* mr )
-{
-    return detail::join_strings( strings, separator, narep, mr );
-}
-
 
 } // namespace strings
 } // namespace cudf
