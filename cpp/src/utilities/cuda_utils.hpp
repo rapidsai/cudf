@@ -24,7 +24,7 @@
  */
 
 #include <utilities/integer_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/types.h>
 
 namespace cudf {

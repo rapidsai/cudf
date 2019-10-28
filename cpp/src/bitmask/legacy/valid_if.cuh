@@ -18,7 +18,7 @@
 #define __BITMASK_VALID_IF_CUH__
 
 #include <cudf/types.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>

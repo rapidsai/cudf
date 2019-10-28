@@ -201,6 +201,7 @@ class MultiIndex(Index):
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
+            cats.name = None
             cats = cats.reset_index(drop=True)._copy_construct(name=None)
             levels.append(cats)
 

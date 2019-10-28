@@ -14,18 +14,28 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#pragma once
 
-#include <thrust/sequence.h>
-#include <random>
+#include "cudf.h"
 
-#include <gmock/gmock.h>
+namespace cudf {
+
+/**
+ * @brief Stack rows of a Table into a single column
+ * 
+ * Converts the column major table @p in into a row major contiguous buffer,
+ * which is returned as a `gdf_column`.
+ * Example:
+ * ```
+ * in = [[4,5,6], [1,2,3]]
+ * return = [4,1,5,2,6,3]
+ * ```
+ * 
+ * @note: The dtype of all columns in @p input should be the same
+ * 
+ * @param input Input table
+ * @return gdf_column The result stacked buffer as column
+ */
+gdf_column stack(const cudf::table &input);
+
+}; // namespace cudf

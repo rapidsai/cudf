@@ -109,7 +109,7 @@ class table_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
-  ColumnView& column(size_type column_index) noexcept;
+  ColumnView const& column(size_type column_index) const noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of columns
@@ -149,6 +149,9 @@ class table_view : public detail::table_view_base<column_view> {
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
+  mutable_column_view& column(size_type column_index) const noexcept {
+    return const_cast<mutable_column_view&>(table_view_base::column(column_index));
+  }
   /**---------------------------------------------------------------------------*
    * @brief Creates an immutable `table_view` of the columns
    *---------------------------------------------------------------------------**/
