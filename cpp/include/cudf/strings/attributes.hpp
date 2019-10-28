@@ -23,52 +23,64 @@ namespace cudf
 namespace strings
 {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a numeric column containing the length of each string in
- * characters. The column will have the same number of entries/rows as the
- * specified strings column. Each value is the number of characters in the
- * corresponding string entry in the strings column.
+ * characters.
  *
- * A null entry will report a character length of 0.
+ * The output column will have the same number of rows as the
+ * specified strings column. Each row value will be the number of
+ * characters in the corresponding string.
+ *
+ * Any null string will result in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
- * @return New column with lengths for each string in strings.
- *---------------------------------------------------------------------------**/
+ * @param stream Stream to use for any kernels in this function.
+ * @return New column with lengths for each string.
+ */
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                 cudaStream_t stream = 0);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a numeric column containing the length of each string in
- * bytes. The column will have the same number of entries/rows as the
- * specified strings column. Each value is the number of bytes in the
- * corresponding string entry in the strings column.
+ * bytes.
  *
- * A null entry will report a length of 0.
+ * The output column will have the same number of rows as the
+ * specified strings column. Each row value will be the number of
+ * bytes in the corresponding string.
+ *
+ * Any null string will result in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
- * @return New column with bytes for each string in strings.
- *---------------------------------------------------------------------------**/
+ * @param stream Stream to use for any kernels in this function.
+ * @return New column with the number of bytes for each string.
+ */
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                            cudaStream_t stream = 0);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Creates a numeric column with code point values (integers) for each
  * character of each string.
+ *
  * A code point is the integer value representation of a character.
  * For example, the code point value for the character 'A' in UTF-8 is 65.
  *
  * The size of the output column will be the total number of characters in the
  * strings column.
  *
+ * Any null string is ignored. No null entries will appear in the output column.
+ *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
+ * @param stream Stream to use for any kernels in this function.
  * @return New column with code point integer values for each character.
  */
 std::unique_ptr<cudf::column> code_points( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                           cudaStream_t stream = 0);
 
 } // namespace strings
 } // namespace cudf

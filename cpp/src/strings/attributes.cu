@@ -26,6 +26,12 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 namespace
 {
 
@@ -40,6 +46,7 @@ std::unique_ptr<cudf::column> counts( cudf::strings_column_view strings,
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    // copy the null mask
     rmm::device_buffer null_mask;
     cudf::size_type null_count = d_column.null_count();
     if( d_column.nullable() )
@@ -67,34 +74,29 @@ std::unique_ptr<cudf::column> counts( cudf::strings_column_view strings,
 }
 
 } // namespace
+} // detail
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                                                  rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream = 0)
+                                                 cudaStream_t stream)
 {
     auto ufn = [] __device__ (const cudf::string_view& d_str) { return d_str.length(); };
-    return counts(strings,ufn,stream,mr);
+    return detail::counts(strings,ufn,stream,mr);
 }
 
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                                             rmm::mr::device_memory_resource* mr,
-                                            cudaStream_t stream = 0 )
+                                            cudaStream_t stream )
 {
     auto pfn = [] __device__ (const cudf::string_view& d_str) { return d_str.size_bytes(); };
-    return counts(strings,pfn,stream,mr);
+    return detail::counts(strings,pfn,stream,mr);
 }
 
 //
 //
 std::unique_ptr<cudf::column> code_points( strings_column_view strings,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream = 0 )
+                                           cudaStream_t stream )
 {
     auto count = strings.size();
     auto execpol = rmm::exec_policy(0);
@@ -138,27 +140,6 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
     //
     results->set_null_count(0); // no nulls here
     return results;
-}
-} // detail
-
-//
-std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
-                                                 rmm::mr::device_memory_resource* mr )
-{
-    return detail::characters_counts(strings,mr);
-}
-
-//
-std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
-                                            rmm::mr::device_memory_resource* mr )
-{
-    return detail::bytes_counts(strings,mr);
-}
-
-std::unique_ptr<cudf::column> code_points( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr )
-{
-    return detail::code_points(strings,mr);
 }
 
 } // namespace strings
