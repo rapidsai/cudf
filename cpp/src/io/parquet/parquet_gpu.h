@@ -127,7 +127,8 @@ struct EncColumnDesc
   const void *column_data_base;     //!< base ptr of column data
   uint32_t num_rows;                //!< number of rows in column
   uint8_t physical_type;            //!< physical data type
-  uint8_t pad[3];
+  uint8_t level_bits;               //!< bits to encode max definition (lower nibble) & repetition (upper nibble) levels
+  uint8_t pad[2];
 };
 
 #define MAX_PAGE_FRAGMENT_SIZE  5000    //!< Max number of rows in a page fragment
@@ -147,8 +148,11 @@ struct PageFragment
  **/
 struct EncPage
 {
-    uint16_t num_fragments;
-    uint16_t pad;
+  uint8_t *page_data;               //!< Ptr to uncompressed page
+  uint16_t num_fragments;           //!< Number of fragments in page
+  uint16_t pad;
+  uint32_t max_hdr_size;            //!< Maximum size of page header
+  uint32_t max_data_size;           //!< Maximum size of coded page data (excluding header)
 };
 
 /**
@@ -156,10 +160,12 @@ struct EncPage
  **/
 struct EncColumnChunk
 {
-    const PageFragment *fragments;  //!< First fragment in chunk
-    uint32_t num_rows;              //!< Number of rows in chunk
-    uint32_t first_page;            //!< First page of chunk
-    uint32_t num_pages;             //!< Number of pages in chunk
+  const PageFragment *fragments;    //!< First fragment in chunk
+  uint8_t *uncompressed_bfr;        //!< Uncompressed page data
+  uint32_t bfr_size;                //!< Uncompressed buffer size
+  uint32_t num_rows;                //!< Number of rows in chunk
+  uint32_t first_page;              //!< First page of chunk
+  uint32_t num_pages;               //!< Number of pages in chunk
 };
 
 /**
