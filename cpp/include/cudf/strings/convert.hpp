@@ -26,37 +26,39 @@ namespace strings
 /**
  * @brief Returns a new numeric column parsing integer values from the
  * provided strings column.
- * 
- * Null entries will create null entries in the output column.
- * 
+ *
+ * Any null entries will result in corresponding null entries in the output column.
+ *
  * Only characters [0-9] plus a prefix '-' and '+' are recognized.
  * When any other character is encountered, the parsing ends for that string
  * and the current digits are converted into an integer.
  *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
- * @return New strings column with integers as strings.
+ * @param stream Stream to use for any kernels in this function.
+ * @return New INT32 column with integers converted from strings.
  */
 std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                           cudaStream_t stream = 0);
 
 /**
  * @brief Returns a new strings column converting the integer values from the
  * provided column into strings.
- * 
- * Null entries will create null entries in the output column.
- * 
+ *
+ * Any null entries will result in corresponding null entries in the output column.
+ *
  * For each integer, a string is created in base-10 decimal.
  * Negative numbers will include a '-' prefix.
  *
  * @param column Numeric column to convert.
  * @param mr Resource for allocating device memory.
+ * @param stream Stream to use for any kernels in this function.
  * @return New strings column with integers as strings.
  */
 std::unique_ptr<cudf::column> from_integers( column_view integers,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                             cudaStream_t stream = 0);
 
 } // namespace strings
 } // namespace cudf

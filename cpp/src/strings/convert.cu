@@ -28,9 +28,6 @@ namespace cudf
 {
 namespace strings
 {
-namespace detail
-{
-
 namespace
 {
 
@@ -67,8 +64,8 @@ __device__ int64_t string_to_integer( const string_view& d_str )
 
 //
 std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                           cudaStream_t stream = 0)
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream)
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
@@ -80,6 +77,7 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_column = *strings_column;
 
+    // copy null mask
     rmm::device_buffer null_mask;
     cudf::size_type null_count = d_column.null_count();
     if( d_column.nullable() )
@@ -213,15 +211,15 @@ struct dispatch_from_integers_fn
         // build offsets column
         auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
             integer_to_string_size_fn<IntegerType>{d_column} );
-        auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
-                                                        offsets_transformer_itr+strings_count,
-                                                        mr, stream);
+        auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
+                                                                offsets_transformer_itr+strings_count,
+                                                                mr, stream);
         auto offsets_view = offsets_column->view();
         auto d_new_offsets = offsets_view.template data<int32_t>();
 
         // build chars column
         size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-        auto chars_column = create_chars_child_column( strings_count, null_count, bytes, mr, stream );
+        auto chars_column = detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
         auto chars_view = chars_column->mutable_view();
         auto d_chars = chars_view.template data<char>();
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
@@ -243,33 +241,16 @@ struct dispatch_from_integers_fn
 
 // This will convert all integer column types into a strings column.
 std::unique_ptr<cudf::column> from_integers( column_view integers,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                             cudaStream_t stream = 0)
+                                             rmm::mr::device_memory_resource* mr,
+                                             cudaStream_t stream)
 {
     size_type strings_count = integers.size();
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return detail::make_empty_strings_column(mr,stream);
 
     return cudf::experimental::type_dispatcher(integers.type(),
                 dispatch_from_integers_fn{},
                 integers, mr, stream );
-}
-
-} // namespace detail
-
-// APIS
-
-std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr )
-{
-    return detail::to_integers(strings,mr);
-}
-
-
-std::unique_ptr<cudf::column> from_integers( column_view integers,
-                                             rmm::mr::device_memory_resource* mr )
-{
-    return detail::from_integers(integers,mr);
 }
 
 } // namespace strings
