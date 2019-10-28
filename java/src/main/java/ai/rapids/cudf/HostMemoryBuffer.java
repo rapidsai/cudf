@@ -83,7 +83,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param preferPinned If set to true, the pinned memory pool will be used if possible with a
    *                    fallback to off-heap memory.  If set to false, the allocation will always
    *                    be from off-heap memory.
-   * @return return the newly created buffer
+   * @return the newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
     if (preferPinned) {

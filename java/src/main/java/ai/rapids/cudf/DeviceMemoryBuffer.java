@@ -93,7 +93,7 @@ public class DeviceMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * Copy everything from src to this buffer starting at the beginning fo this buffer.
+   * Copy everything from src to this buffer starting at the beginning of this buffer.
    * @param src - Buffer to copy data from
    */
   public final void copyFromHostBuffer(HostMemoryBuffer src) {
