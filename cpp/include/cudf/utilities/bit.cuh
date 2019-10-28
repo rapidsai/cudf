@@ -78,8 +78,6 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
       ~(bitmask_type{1} << intra_word_index(bit_index));
 }
 
-#ifdef __CUDACC__
-
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether the specified bit is set to `1`
  *
@@ -87,12 +85,14 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
  *---------------------------------------------------------------------------**/
-__device__ inline bool bit_is_set(bitmask_type const* bitmask,
+CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
                                   size_type bit_index) {
   assert(nullptr != bitmask);
   return bitmask[word_index(bit_index)] &
          (bitmask_type{1} << intra_word_index(bit_index));
 }
+
+#ifdef __CUDACC__
 
 /**---------------------------------------------------------------------------*
  * @brief Sets the specified bit to `1`
