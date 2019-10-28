@@ -38,18 +38,14 @@ struct MurmurHash3_32
     using argument_type = Key;
     using result_type = hash_value_type;
     
-    __forceinline__ 
-    __host__ __device__ 
-    MurmurHash3_32() : m_seed( 0 ) {}
+    CUDA_HOST_DEVICE_CALLABLE  MurmurHash3_32() : m_seed( 0 ) {}
     
-    __forceinline__ 
-    __host__ __device__ uint32_t rotl32( uint32_t x, int8_t r ) const
+    CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32( uint32_t x, int8_t r ) const
     {
       return (x << r) | (x >> (32 - r));
     }
     
-    __forceinline__ 
-    __host__ __device__ uint32_t fmix32( uint32_t h ) const
+    CUDA_HOST_DEVICE_CALLABLE uint32_t fmix32( uint32_t h ) const
     {
         h ^= h >> 16;
         h *= 0x85ebca6b;
@@ -72,7 +68,7 @@ struct MurmurHash3_32
      * @returns A hash value that intelligently combines the lhs and rhs hash values
      */
     /* ----------------------------------------------------------------------------*/
-    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs)
+    CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
     {
       result_type combined{lhs};
 
@@ -83,16 +79,16 @@ struct MurmurHash3_32
     
     template <typename TKey = Key>
     typename std::enable_if_t<std::is_same<TKey, cudf::bool8>::value, result_type>
-    __forceinline__ __host__ __device__ operator()(const TKey& key) const
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
     {
-      return this->operator()(static_cast<bool>(static_cast<int8_t>(key)));
+      return this->operator()(static_cast<int8_t>(key));
     }
 
     template <typename TKey = Key>
     typename std::enable_if_t<std::is_same<TKey, cudf::experimental::bool8>::value, result_type>
-    __forceinline__ __host__ __device__ operator()(const TKey& key) const
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
     {
-      return this->operator()(static_cast<bool>(static_cast<uint8_t>(key)));
+      return this->operator()(static_cast<uint8_t>(key));
     }
 
     /**
@@ -100,7 +96,7 @@ struct MurmurHash3_32
     */
     template <typename TKey = Key>
     typename std::enable_if_t<std::is_same<TKey, cudf::string_view>::value, result_type>
-    __forceinline__ __host__ __device__ operator()(const TKey& key) const
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
     {
         const int len = (int)key.size_bytes();
         const uint8_t* data = (const uint8_t*)key.data();
@@ -153,7 +149,7 @@ struct MurmurHash3_32
       !std::is_same<TKey, cudf::string_view>::value &&
       !std::is_same<TKey, cudf::experimental::bool8>::value,
     result_type>
-    __forceinline__  __host__ __device__ operator()(const TKey& key) const
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
     {
         constexpr int len = sizeof(argument_type);
         const uint8_t * const data = (const uint8_t*)&key;
@@ -220,7 +216,7 @@ struct IdentityHash
      * @returns A hash value that intelligently combines the lhs and rhs hash values
      */
     /* ----------------------------------------------------------------------------*/
-    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const
+    CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
     {
       result_type combined{lhs};
 
@@ -229,8 +225,7 @@ struct IdentityHash
       return combined;
     }
 
-    __forceinline__ 
-    __host__ __device__ result_type operator()(const Key& key) const
+    CUDA_HOST_DEVICE_CALLABLE result_type operator()(const Key& key) const
     {
       return static_cast<result_type>(key);
     }
@@ -244,7 +239,7 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
 {
     using result_type = hash_value_type;
 
-    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const
+    CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
     {
       result_type combined{lhs};
 
@@ -255,14 +250,14 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
 
     template <gdf_dtype dtype = type_id>
     typename std::enable_if_t<(dtype == GDF_BOOL8), result_type>
-    __forceinline__  __host__ __device__ operator()(cudf::detail::wrapper<T, dtype> const& key) const
+    CUDA_HOST_DEVICE_CALLABLE operator()(cudf::detail::wrapper<T, dtype> const& key) const
     {
       return static_cast<result_type>(key);
     }
 
     template <gdf_dtype dtype = type_id>
     typename std::enable_if_t<(dtype != GDF_BOOL8), result_type>
-    __forceinline__  __host__ __device__ operator()(cudf::detail::wrapper<T, dtype> const& key) const
+    CUDA_HOST_DEVICE_CALLABLE operator()(cudf::detail::wrapper<T, dtype> const& key) const
     {
       return static_cast<result_type>(key.value);
     }
