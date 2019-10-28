@@ -79,6 +79,7 @@
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
 - PR #2994 Fix split_out-support but with hash_object_dispatch
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
+- PR #3228 Default initialize RMM when Java native dependencies are loaded
 
 
 # cuDF 0.10.0 (16 Oct 2019)
