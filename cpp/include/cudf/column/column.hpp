@@ -210,8 +210,8 @@ class column {
    * - `null_count() == 0`
    * - `num_children() == 0`
    *
-   * @return A `std::pair` containing a `std::pair` of `unique_ptr`s to the
-   * column's data and bitmask buffers and a vector of the column's children.
+   * @return A `contents` struct containing the data, null mask, and children of
+   * the column.
    *---------------------------------------------------------------------------**/
   contents release() noexcept;
 
