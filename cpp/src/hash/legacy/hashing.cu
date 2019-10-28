@@ -18,7 +18,7 @@
 
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <join/legacy/joining.h>
 #include <table/legacy/device_table.cuh>
 #include "hash/hash_functions.cuh"

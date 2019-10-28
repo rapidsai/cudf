@@ -26,7 +26,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <cudf/legacy/table.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/integer_utils.hpp>
 
 namespace cudf {

@@ -27,7 +27,7 @@
 #include <cudf/legacy/table.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
-#include <cudf/transform.hpp>
+#include <cudf/legacy/transform.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>

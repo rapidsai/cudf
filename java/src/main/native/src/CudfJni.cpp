@@ -19,9 +19,9 @@
 #include "cudf/binaryop.hpp"
 #include "cudf/legacy/filling.hpp"
 #include "cudf/reduction.hpp"
-#include "cudf/replace.hpp"
+#include "cudf/legacy/replace.hpp"
 #include "cudf/stream_compaction.hpp"
-#include "cudf/unary.hpp"
+#include "cudf/legacy/unary.hpp"
 
 #include "jni_utils.hpp"
 
