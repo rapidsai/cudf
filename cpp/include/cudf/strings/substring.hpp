@@ -46,14 +46,16 @@ namespace strings
  * @param strings Strings instance for this operation.
  * @param start First character position to begin the substring.
  * @param stop Last character position (exclusive) to end the substring.
- *             Default of -1 indicates to the end of each string.
+ *             Default of -1 indicates to use the end of each string.
  * @param step Character count to skip when retrieving substring.
  * @param mr Resource for allocating device memory.
+ * @param stream Stream to use for any kernels in this function.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<cudf::column> substring( strings_column_view strings,
                                          int32_t start, int32_t stop=-1, int32_t step=1,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                         cudaStream_t stream = 0 );
 
 
 /**
@@ -82,12 +84,13 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
  * @param starts First character positions to begin the substring.
  * @param stops Last character (exclusive) positions to end the substring.
  * @param mr Resource for allocating device memory.
+ * @param stream Stream to use for any kernels in this function.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
                                               column_view starts, column_view stops,
-                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
+                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                              cudaStream_t stream = 0 );
 
 } // namespace strings
 } // namespace cudf

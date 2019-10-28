@@ -29,8 +29,6 @@ namespace cudf
 {
 namespace strings
 {
-namespace detail
-{
 
 namespace
 {
@@ -78,7 +76,7 @@ struct substring_fn
             if( Pass==SizeOnly )
                 bytes += detail::bytes_in_char_utf8(*itr);
             else
-                d_buffer += from_char_utf8(*itr,d_buffer);
+                d_buffer += detail::from_char_utf8(*itr,d_buffer);
             itr += step;
         }
         return bytes;
@@ -87,15 +85,15 @@ struct substring_fn
 
 } // namespace
 
-// Returns strings column of substrings each string in the provided column.
+//
 std::unique_ptr<cudf::column> substring( strings_column_view strings,
-                                         int32_t start, int32_t stop=-1, int32_t step=1,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                         cudaStream_t stream = 0 )
+                                         int32_t start, int32_t stop, int32_t step,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return detail::make_empty_strings_column(mr,stream);
     CUDF_EXPECTS( start >= 0, "Parameter start must be zero or positive integer.");
     if( step == 0 )
         step = 1;
@@ -233,15 +231,15 @@ struct dispatch_substring_from_fn
 };
 } // namespace
 
-// Returns strings column of substrings each string in the provided column.
+//
 std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
                                               column_view starts_column, column_view stops_column,
-                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                              cudaStream_t stream = 0 )
+                                              rmm::mr::device_memory_resource* mr,
+                                              cudaStream_t stream )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+        return detail::make_empty_strings_column(mr,stream);
     CUDF_EXPECTS( starts_column.size()==strings_count, "Parameter starts must have the same number of rows as strings.");
     CUDF_EXPECTS( stops_column.size()==strings_count, "Parameter stops must have the same number of rows as strings.");
     CUDF_EXPECTS( starts_column.type()==stops_column.type(), "Parameters starts and stops must be of the same type.");
@@ -252,25 +250,6 @@ std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
     return cudf::experimental::type_dispatcher(starts_column.type(),
                 dispatch_substring_from_fn{},
                 strings, starts_column, stops_column, mr, stream );
-}
-
-} // namespace detail
-
-// APIS
-
-std::unique_ptr<cudf::column> substring( strings_column_view strings,
-                                         int32_t start, int32_t stop, int32_t step,
-                                         rmm::mr::device_memory_resource* mr )
-{
-    return detail::substring(strings, start, stop, step, mr );
-}
-
-//
-std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
-                                              column_view starts, column_view stops,
-                                              rmm::mr::device_memory_resource* mr )
-{
-    return detail::substring_from(strings, starts, stops, mr );
 }
 
 } // namespace strings
