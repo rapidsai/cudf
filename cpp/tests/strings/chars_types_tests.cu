@@ -66,7 +66,7 @@ TEST_P(StringsCharsTypesTest, AllTypes)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
-INSTANTIATE_TEST_CASE_P(CharsTypes, StringsCharsTypesTest,
+INSTANTIATE_TEST_CASE_P(StringsAllCharsTypes, StringsCharsTypesTest,
     testing::ValuesIn(std::array<cudf::strings::string_character_types,7>
     { cudf::strings::string_character_types::DECIMAL,
       cudf::strings::string_character_types::NUMERIC,
