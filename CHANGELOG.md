@@ -15,13 +15,13 @@
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3223 Java expose underlying buffers
 
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
 - PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
-- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
@@ -31,11 +31,14 @@
 - PR #3014 Snappy decompression optimizations
 - PR #3032 Use `asarray` to coerce indices to a NumPy array
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+- PR #3051 Specialized hash function for strings column
+- PR #3065 Select and Concat for cudf::experimental::table
 - PR #3080 Move `valid_if.cuh` to `legacy/`
 - PR #3052 Moved replace.hpp functionality to legacy
 - PR #3091 Move join files to legacy
 - PR #3092 Implicitly init RMM if Java allocates before init
 - PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
+- PR #3052 Moved replace.hpp functionality to legacy
 - PR #2955 Add cmake option to only build for present GPU architecture
 - PR #3070 Move functions.h and related source to legacy
 - PR #2951 Allow set_index to handle a list of column names
@@ -59,6 +62,7 @@
 - PR #3165 Java device memory size for string category
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
+- PR #2878 Use upstream merge code in dask_cudf
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 
 ## Bug Fixes
@@ -73,8 +77,12 @@
 - PR #3141 Java fix for relocated IO headers
 - PR #3149 Rename column_wrapper.cuh to column_wrapper.hpp
 - PR #3168 Fix mutable_column_device_view head const_cast
+- PR #3199 Update JNI includes for legacy moves
 - PR #3204 ORC writer: Fix ByteRLE encoding of NULLs
 - PR #2994 Fix split_out-support but with hash_object_dispatch
+- PR #3212 Fix string to date casting when format is not specified
+- PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
+- PR #3228 Default initialize RMM when Java native dependencies are loaded
 
 
 # cuDF 0.10.0 (16 Oct 2019)
