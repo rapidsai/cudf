@@ -319,36 +319,6 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
                              ValidityIterator v)
       : fixed_width_column_wrapper{std::cbegin(element_list),
                                    std::cend(element_list), v} {}
-
-  /**---------------------------------------------------------------------------*
-   * @brief Copies the data and bitmask to the host.
-   *
-   * Returns a tuple of two std::vectors. The first is the column's data, and
-   * the second is the column's bitmask.
-   *
-   *---------------------------------------------------------------------------**/
-  auto to_host() const {
-    std::size_t const mask_bytes{bitmask_allocation_size_bytes(wrapped->size())};
-    std::vector<Element> host_data;
-    std::vector<cudf::bitmask_type> host_bitmask;
-
-    if (wrapped->size() > 0) {
-      host_data.resize(wrapped->size());
-      CUDA_TRY(cudaMemcpy(host_data.data(), wrapped->view().head<Element>(),
-                          wrapped->size() * sizeof(Element),
-                          cudaMemcpyDeviceToHost));
-    }
-
-    if (wrapped->nullable()) {
-      size_t num_mask_elements = 
-        std::ceil(static_cast<float>(mask_bytes) / sizeof(cudf::bitmask_type));
-      host_bitmask.resize(num_mask_elements);
-      CUDA_TRY(cudaMemcpy(host_bitmask.data(), wrapped->view().null_mask(),
-                          mask_bytes, cudaMemcpyDeviceToHost));
-    }
-
-    return std::make_pair(host_data, host_bitmask);
-  }
 };
 
 /**---------------------------------------------------------------------------*
