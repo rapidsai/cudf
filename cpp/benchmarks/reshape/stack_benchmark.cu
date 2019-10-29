@@ -22,6 +22,7 @@
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
+#include <random>
 
 template <class T>
 class Reshape : public ::benchmark::Fixture {
