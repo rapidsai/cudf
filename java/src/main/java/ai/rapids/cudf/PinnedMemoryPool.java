@@ -256,7 +256,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     numAllocatedSections++;
     availableBytes -= allocated.size;
     log.debug("Allocated {} free {} outstanding {}", allocated, freeHeap, numAllocatedSections);
-    return new HostMemoryBuffer(allocated.baseAddress, allocated.size,
+    return new HostMemoryBuffer(allocated.baseAddress, bytes,
         new PinnedHostBufferCleaner(allocated));
   }
 
