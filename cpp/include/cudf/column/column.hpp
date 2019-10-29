@@ -204,6 +204,9 @@ class column {
   /**---------------------------------------------------------------------------*
    * @brief Releases ownership of the column's contents.
    *
+   * It is the caller's responsibility to query the `size(), null_count(),
+   * type()` before invoking `release()`.
+   *
    * After calling `release()` on a column it will be empty, i.e.:
    * - `type() == data_type{EMPTY}`
    * - `size() == 0`
