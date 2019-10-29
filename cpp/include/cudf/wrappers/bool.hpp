@@ -47,7 +47,7 @@ struct bool8 {
   // bool8 constructor that takes non-bool8 types
 
   template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit bool8(from_type v)
+  CUDA_HOST_DEVICE_CALLABLE constexpr bool8(from_type v)
     : value{static_cast<value_type>(static_cast<bool>(v))} {}
 
   // move/copy assignment operators for non-bool8 types
