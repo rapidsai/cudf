@@ -331,6 +331,14 @@ ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 
+set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
+
+ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
+
+###################################################################################################
+# - legacy sort tests ------------------------------------------------------------------------------------
+
 set(LEGACY_SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/legacy/digitize_test.cu")
 
@@ -366,7 +374,9 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -438,7 +448,8 @@ ConfigureTest(LEGACY_TRANSPOSE_TEST "${LEGACY_TRANSPOSE_TEST_SRC}")
 # - table tests -----------------------------------------------------------------------------------
 
 set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_view_tests.cu")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 ###################################################################################################
@@ -546,7 +557,8 @@ ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
