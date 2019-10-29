@@ -1,6 +1,8 @@
 import numpy as np
 
 from libc.stdint cimport uintptr_t
+from libcpp.pair cimport pair
+from libcpp cimport bool
 
 from rmm import device_array_from_ptr
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
@@ -20,8 +22,49 @@ cudf_to_np_types = {INT32: np.dtype('int32'),
                     FLOAT64: np.dtype('float64')}
 
 
+
+cdef class _Column:
+    def __cinit__(self):
+        pass
+
+    @staticmethod
+    cdef from_ptr(unique_ptr[column] ptr):
+        cdef _Column col = _Column.__new__(_Column)
+        col.c_obj = move(ptr)
+        return col
+
+    cdef size_type size(self):
+        return self.c_obj.get()[0].size()
+
+    cdef data_type type(self):
+        return self.c_obj.get()[0].type()
+
+    cpdef bool has_nulls(self):
+        return self.c_obj.get()[0].has_nulls()
+
+    @property
+    def dtype(self):
+        return cudf_to_np_types[self.type().id()]
+
+    def release_into_column(self):
+        data = DeviceBuffer.from_ptr(
+            ptr=int(<uintptr_t>(self.c_obj.get()[0].view().data[void]())),
+            size=self.dtype.itemsize * self.size())
+
+        if self.has_nulls():
+            mask = DeviceBuffer.from_ptr(
+                ptr=int(<uintptr_t>(self.c_obj.get()[0].view().null_mask())),
+                size=self.dtype.itemsize * self.size())
+        else:
+            mask = None
+        return Column(data=data,
+                      size=self.size(),
+                      dtype=self.dtype,
+                      mask=mask)
+
+
 cdef class Column:
-    def __cinit__(self, data, size, dtype, mask=None):
+    def __init__(self, data, size, dtype, mask=None):
         self.data = data
         self.size = size
         self.dtype = dtype
@@ -33,9 +76,9 @@ cdef class Column:
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
         cdef bitmask_type* mask
         if self.mask is not None:
-            data = <bitmask_type*><uintptr_t>(self.mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
-            data = NULL
+            mask = NULL
         return mutable_column_view(
             dtype,
             self.size,
@@ -48,38 +91,12 @@ cdef class Column:
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
         cdef bitmask_type* mask
         if self.mask is not None:
-            data = <bitmask_type*><uintptr_t>(self.mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
-            data = NULL
+            mask = NULL
         return column_view(
             dtype,
             self.size,
             data,
             mask)
-        
 
-cdef class _Column:
-    def __cinit__(self):
-        pass
-
-    @property
-    def data(self):
-        """
-        Return the underlying data as a `Buffer` whose lifetime
-        is tied to the column itself.
-        """
-        return Buffer(
-            ptr=self.c_obj[0].view().data(),
-            size=self.c_obj[0].size(),
-            owner=self)
-
-    @property
-    def mask(self):
-        """
-        Return the underlying mask as a `Buffer` whose lifetime
-        is tied to the column itself.
-        """
-        return Buffer(
-            ptr=self.c_obj[0].view().null_mask(),
-            size=self.c_obj[0].size(),
-            owner=self)

@@ -121,7 +121,7 @@ class table_view_base {
    *---------------------------------------------------------------------------**/
   size_type num_rows() const noexcept { return _num_rows; }
 
-  table_view_base() = delete;
+  table_view_base() = default;
 
   ~table_view_base() = default;
 
