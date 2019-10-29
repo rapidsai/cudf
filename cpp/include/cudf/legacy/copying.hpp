@@ -478,7 +478,7 @@ std::vector<gdf_column*> split(gdf_column const &         input,
 * @param[in] fill_value The value used in place of undefined outputs.
 */
 gdf_column shift(const gdf_column& input,
-                 gdf_index_type periods,
+                 cudf::size_type periods,
                  const gdf_scalar fill_value);
 
 /**

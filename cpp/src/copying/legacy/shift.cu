@@ -16,7 +16,7 @@
  
 #include <cudf/cudf.h>
 #include <cudf/legacy/copying.hpp>
-#include <cudf/filling.hpp>
+#include <cudf/legacy/filling.hpp>
 
 #include <copying/legacy/copy_range.cuh>
 #include <filling/scalar_factory.cuh>
@@ -30,15 +30,15 @@ namespace detail {
   void shift(
     gdf_column *out,
     gdf_column const &in,
-    gdf_index_type periods,
+    cudf::size_type periods,
     gdf_scalar const fill_value
   )
   {
-    gdf_index_type in_start = 0;
-    gdf_index_type out_start = periods;
-    gdf_index_type out_end = out->size;
-    gdf_index_type fill_start = 0;
-    gdf_index_type fill_end = out_start;
+    cudf::size_type in_start = 0;
+    cudf::size_type out_start = periods;
+    cudf::size_type out_end = out->size;
+    cudf::size_type fill_start = 0;
+    cudf::size_type fill_end = out_start;
   
     if (periods < 0) {
       in_start = -periods;
@@ -74,7 +74,7 @@ namespace detail {
 
 gdf_column shift(
   const gdf_column& in,
-  gdf_index_type periods,
+  cudf::size_type periods,
   const gdf_scalar fill_value
 )
 {

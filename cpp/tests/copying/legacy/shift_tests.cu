@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/copying/copying_test_helper.hpp>
+#include <tests/copying/legacy/copying_test_helper.hpp>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
@@ -40,7 +40,7 @@ column_wrapper<ColumnType> make_column_wrapper(
 
 template <typename ColumnType>
 column_wrapper<ColumnType> shift(
-  gdf_index_type periods,
+  cudf::size_type periods,
   column_wrapper<ColumnType> source,
   scalar_wrapper<ColumnType> fill_value
 )
