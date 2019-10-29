@@ -104,9 +104,9 @@ class scalar {
 
 template <typename T>
 class numeric_scalar : public scalar {
-  // TODO: prevent construction using anything other than arithmetic types
+   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
  public:
-  using ValueType = T;
+  using value_type = T;
 
   numeric_scalar() = default;
   ~numeric_scalar() = default;
@@ -130,7 +130,7 @@ class numeric_scalar : public scalar {
 
 class string_scalar : public scalar {
  public:
-  using ValueType = cudf::string_view;
+  using value_type = cudf::string_view;
 
   string_scalar() = default;
   ~string_scalar() = default;
@@ -151,10 +151,10 @@ class string_scalar : public scalar {
 
 template <typename T>
 class timestamp_scalar : public scalar {
-  // TODO: prevent construction using anything other than timestamp types
+  static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
  public:
 
-  using ValueType = T;
+  using value_type = T;
 
   timestamp_scalar() = default;
   ~timestamp_scalar() = default;
@@ -167,7 +167,10 @@ class timestamp_scalar : public scalar {
    , _data(value, stream_, mr_)
   {}
 
-  void set_value(T value) { _data.set_value(value); _is_valid.set_value(true); }
+  void set_value(T value) { 
+     _data.set_value(value); 
+     _is_valid.set_value(true); 
+  }
   T value() { return _data.value(); }
 
   T* data() { return _data.get(); }
