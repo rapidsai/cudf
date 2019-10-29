@@ -66,6 +66,7 @@
 - PR #2878 Use upstream merge code in dask_cudf
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3232 Port NVStrings datetime conversion to cudf strings column
 
 ## Bug Fixes
 
