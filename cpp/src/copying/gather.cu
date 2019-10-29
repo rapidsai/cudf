@@ -5,7 +5,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/copying.hpp>
-#include <utilities/error_utils.hpp>
+#include <utilities/legacy/error_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/count.h>

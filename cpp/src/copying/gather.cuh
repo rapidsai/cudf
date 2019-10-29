@@ -23,7 +23,7 @@
 #include <utilities/cuda_utils.hpp>
 #include <utilities/release_assert.cuh>
 
-#include <bitmask/valid_if.cuh>
+#include <bitmask/legacy/valid_if.cuh>
 
 namespace cudf {
 namespace experimental {
