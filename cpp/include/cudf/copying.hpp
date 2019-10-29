@@ -82,16 +82,14 @@ std::unique_ptr<table> empty_like(table_view input_table);
 /**
  * @brief Copies a range of elements in-place from one column to another.
  *
- * Copies N elements of @p input starting at @p in_begin to the N
- * elements of @p output starting at @p out_begin, where
- * N = (@p out_end - @p out_begin).
- *
- * This function updates in-place assuming that no memory reallocation is
- * necessary for @p output. Use the out-of-place copy function returning
+ * Overwrites the range of elements in @p output indicated by the indices
+ * [@p out_begin, @p out_ned) with the elements from @p input indicated by the
+ * indices [@p in_begin, @p in_begin + N) (where N =
+ * (@p out_end - @p out_begin)). Use the out-of-place copy function returning
  * std::unique_ptr<column> for uses cases requiring memory reallocation.
  *
- * If the input and output are the same object and the ranges overlap, the
- * behavior is undefined.
+ * If @p input and @p output refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
  *
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
@@ -105,9 +103,9 @@ std::unique_ptr<table> empty_like(table_view input_table);
  *
  * @param output The preallocated column to copy into
  * @param input The column to copy from
- * @param out_begin The starting index of the output range
- * @param out_end The index one past the end of the output range
- * @param in_begin The starting index of the input range
+ * @param out_begin The starting index of the output range (inclusive)
+ * @param out_end The index of the last element in the output range (exclusive)
+ * @param in_begin The starting index of the input range (inclusive)
  * @return void
  */
 void copy_range(mutable_column_view& output, column_view const& input,
@@ -116,17 +114,14 @@ void copy_range(mutable_column_view& output, column_view const& input,
 /**
  * @brief Copies a range of elements out-of-place from one column to another.
  *
- * This copy function updates out-of-place creating a new column object to
- * return. The returned column and @p input holds the same values for the
- * N (= @p out_end - @p out_begin) elements from @p out_beign and @p in_begin,
- * respectively. The returned column stores the same values to @p output outside
- * the copy range (i.e. [@p out_begin, @p out_end) of the returned column and
- * [@p in_begin, @p in_begin + N) of @p input are identical, and the returned
- * column and @p output holds the same values in [0, @p out_begin) and
- * [@p out_end, output.size())).
+ * Creates a new column as-if an in-place copy was performed into @p output;
+ * i.e. it is as if a copy of @p output was created first and then the elements
+ * indicated by the indices [@p out_begin, @p out_end) were overwritten by the
+ * elements from the indices [@p in_begin, @p in_begin + N) (where N =
+ * (@p out_end - @p out_begin)).
  *
- * If the input and output are the same object and the ranges overlap, the
- * behavior is undefined.
+ * If @p input and @p output refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
  *
  * @throws `cudf::logic_error` for invalid range (if @p out_begin < 0,
  * @p out_begin > @p out_end, @p out_begin >= @p output.size(),
@@ -136,9 +131,9 @@ void copy_range(mutable_column_view& output, column_view const& input,
  *
  * @param output The column to copy from outside the range.
  * @param input The column to copy from inside the range.
- * @param out_begin The starting index of the output range
- * @param out_end The index one past the end of the output range
- * @param in_begin The starting index of the input range
+ * @param out_begin The starting index of the output range (inclusive)
+ * @param out_end The index of the last element in the output range (exclusive)
+ * @param in_begin The starting index of the input range (inclusive)
  * @param mr Memory resource to allocate the result output column.
  * @return std::unique_ptr<column> The result output column
  */

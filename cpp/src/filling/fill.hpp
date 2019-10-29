@@ -16,11 +16,7 @@
 
 #pragma once
 
-#if 1
-#include <cudf/filling_untracked.hpp>
-#else
 #include <cudf/filling.hpp>
-#endif
 #include <cudf/types.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
@@ -42,9 +38,10 @@ namespace detail {
  * Fills N elements of @p destination starting at @p begin with @p value, where
  * N = (@p end - @p begin).
  *
- * This function updates in-place assuming that no memory reallocation is
- * necessary for @p destination. Use the out-of-place fill function returning
- * std::unique_ptr<column> for use cases requiring memory reallocation.
+ * Overwrites the range of elements in @p destination indicated by the indices
+ * [@p begin, @p end) with @p value. Use the out-of-place fill function
+ * returning std::unique_ptr<column> for use cases requiring memory
+ * reallocation.
  *
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
@@ -57,8 +54,8 @@ namespace detail {
  * nullable.
  *
  * @param destination The preallocated column to fill into
- * @param begin The starting index of the fill range
- * @param end The index one past the end of the fill range
+ * @param begin The starting index of the fill range (inclusive)
+ * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
  * @return void
  *---------------------------------------------------------------------------**/
@@ -69,12 +66,9 @@ void fill(mutable_column_view& destination, size_type begin, size_type end,
  * @brief Internal API to fill a range of elements in a column out-of-place with
  a scalar value.
  * 
- * This fill function updates out-of-place creating a new column object to
- * return. The returned column holds @p value for N elements from @p begin,
- * where N = (@p end - @p begin). The returned column stores the same values to
- * @p input outside the fill range (i.e. the returned column stores the fill
- * value in [@p begin, @p end) and has the same values to @p input in
- * [0, @p begin) and [@p end, @p input.size()).
+ * Creates a new column as-if an in-place fill was performed into @p input;
+ * i.e. it is as if a copy of @p input was created first and then the elements
+ * indicated by the indices [@p begin, @p end) were overwritten by @p value.
  *
  * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
  * @p begin > @p end, @p begin >= @p destination.size(), or
@@ -85,8 +79,8 @@ void fill(mutable_column_view& destination, size_type begin, size_type end,
  * @param input The input column used to create a new column. The new column
  * is created by replacing the values of @p input in the specified range with
  * @p value.
- * @param begin The starting index of the fill range
- * @param end The index one past the end of the fill range
+ * @param begin The starting index of the fill range (inclusive)
+ * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
  * @param stream CUDA stream to run this function
  * @param mr Memory resource to allocate the result output column
