@@ -16,6 +16,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 #include <cudf/strings/datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -35,6 +37,23 @@ namespace strings
 {
 namespace
 {
+
+/**
+ * @brief  Units for timestamp conversion.
+ * These are defined since there are more than what cudf supports.
+ */
+enum timestamp_units {
+    years,           ///< precision is years
+    months,          ///< precision is months
+    days,            ///< precision is days
+    hours,           ///< precision is hours
+    minutes,         ///< precision is minutes
+    seconds,         ///< precision is seconds
+    ms,              ///< precision is milliseconds
+    us,              ///< precision is microseconds
+    ns               ///< precision is nanoseconds
+};
+
 
 // used to index values in a timeparts array
 enum timestamp_parse_component {
@@ -339,24 +358,44 @@ struct parse_datetime
     }
 };
 
+// convert cudf type to timestamp units
+struct dispatch_timestamp_to_units_fn
+{
+    template <typename T>
+    timestamp_units operator()()
+    {
+        CUDF_FAIL("Invalid type for timestamp conversion.");
+    }
+};
+
+template<>
+timestamp_units dispatch_timestamp_to_units_fn::operator()<cudf::timestamp_D>() { return timestamp_units::days; }
+template<>
+timestamp_units dispatch_timestamp_to_units_fn::operator()<cudf::timestamp_s>() { return timestamp_units::seconds; }
+template<>
+timestamp_units dispatch_timestamp_to_units_fn::operator()<cudf::timestamp_ms>() { return timestamp_units::ms; }
+template<>
+timestamp_units dispatch_timestamp_to_units_fn::operator()<cudf::timestamp_us>() { return timestamp_units::us; }
+template<>
+timestamp_units dispatch_timestamp_to_units_fn::operator()<cudf::timestamp_ns>() { return timestamp_units::ns; }
+
 } // namespace
 
 //
 std::unique_ptr<cudf::column> to_timestamps( strings_column_view strings,
-                                             timestamp_units units,
-                                             const char* format,
+                                             data_type timestamp_type,
+                                             std::string format,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream )
 {
     size_type strings_count = strings.size();
     if( strings_count==0 )
-        return std::make_unique<column>( data_type{INT64}, 0,
-                          rmm::device_buffer{0,stream,mr}, // data
-                          rmm::device_buffer{0,stream,mr}, 0 ); // nulls}
+        return make_timestamp_column( timestamp_type, 0 );
 
-    CUDF_EXPECTS( format!=nullptr, "Format parameter must not be nullptr");
+    CUDF_EXPECTS( !format.empty(), "Format parameter must not be empty.");
+    timestamp_units units = cudf::experimental::type_dispatcher( timestamp_type, dispatch_timestamp_to_units_fn() );
 
-    format_compiler compiler(format,units);
+    format_compiler compiler(format.c_str(),units);
     format_program* d_prog = compiler.compile_to_device();
 
     auto execpol = rmm::exec_policy(stream);
@@ -368,11 +407,11 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view strings,
     cudf::size_type null_count = d_column.null_count();
     if( d_column.nullable() )
         null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(strings_count),
+                                        bitmask_allocation_size_bytes(strings_count),
                                         stream, mr);
     // create output column
-    auto results = std::make_unique<cudf::column>( cudf::data_type{cudf::INT64}, strings_count,
-        rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
+    auto results = std::make_unique<cudf::column>( timestamp_type, strings_count,
+        rmm::device_buffer(strings_count * size_of(timestamp_type), stream, mr),
         null_mask, null_count);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int64_t>();
@@ -397,6 +436,7 @@ struct datetime_formatter
     char* d_chars;
 
     // divide timestamp integer into time components (year, month, day, etc)
+    // TODO call the simt::std::chrono methods here instead when the are ready
     __device__ void dissect_timestamp( int64_t timestamp, int32_t* timeparts )
     {
         if( units==timestamp_units::years )
@@ -636,9 +676,10 @@ struct datetime_formatter
 
 } // namespace
 
+
+//
 std::unique_ptr<cudf::column> from_timestamps( column_view timestamps,
-                                               timestamp_units units,
-                                               const char* format,
+                                               std::string format,
                                                rmm::mr::device_memory_resource* mr,
                                                cudaStream_t stream )
 {
@@ -646,9 +687,10 @@ std::unique_ptr<cudf::column> from_timestamps( column_view timestamps,
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
 
-    CUDF_EXPECTS( format!=nullptr, "Format parameter must not be nullptr");
+    CUDF_EXPECTS( !format.empty(), "Format parameter must not be empty.");
+    timestamp_units units = cudf::experimental::type_dispatcher( timestamps.type(), dispatch_timestamp_to_units_fn() );
 
-    format_compiler compiler(format,units);
+    format_compiler compiler(format.c_str(),units);
     format_program* d_prog = compiler.compile_to_device();
 
     auto execpol = rmm::exec_policy(stream);
@@ -660,7 +702,7 @@ std::unique_ptr<cudf::column> from_timestamps( column_view timestamps,
     cudf::size_type null_count = d_column.null_count();
     if( d_column.nullable() )
         null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(strings_count),
+                                        bitmask_allocation_size_bytes(strings_count),
                                         stream, mr);
     // Each string will be the same number of bytes which can be determined
     // directly from the format string.
