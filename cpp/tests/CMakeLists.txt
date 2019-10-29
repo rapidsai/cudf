@@ -344,6 +344,9 @@ set(LEGACY_SORT_TEST_SRC
 
 ConfigureTest(LEGACY_SORT_TEST "${LEGACY_SORT_TEST_SRC}")
 
+###################################################################################################
+# - digitize tests -----------------------------------------------------------------------------------
+
 set(DIGITIZE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/digitize/digitize_test.cu")
 
