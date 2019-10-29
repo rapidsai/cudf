@@ -141,7 +141,7 @@ MAP_TIMESTAMP_SCALAR(timestamp_us)
 MAP_TIMESTAMP_SCALAR(timestamp_ns)
 
 template <typename T>
-using type_to_scalar_type = typename type_to_scalar_type_impl<T>::ScalarType;
+using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
