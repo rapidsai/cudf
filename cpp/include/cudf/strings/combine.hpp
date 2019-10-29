@@ -39,10 +39,14 @@ namespace strings
  * ```
  * s1 = ['aa', null, '', 'aa']
  * s2 = ['', 'bb', 'bb', null]
- * r = concatenate(s1,s2)
- * r is ['aa', null, 'bb', null]
+ * r1 = concatenate([s1,s2])
+ * r1 is ['aa', null, 'bb', null]
+ * r2 = concatenate([s1,s2],':','_')
+ * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
  * ```
  *
+ * @throws cudf::logic_error if input columns are not all the same size.
+ * 
  * @param strings_columns List of string columns to concatenate.
  * @param separator Null-terminated CPU string that should appear between each instance.
  *        Default is an empty string.
@@ -53,8 +57,8 @@ namespace strings
  * @param stream CUDA stream to use any for kernels in this method.
  * @return New column with concatenated results.
  */
-std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
-                                           const char* separator="",
+std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
+                                           const std::string separator = "",
                                            const char* narep=nullptr,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream=0 );
@@ -82,7 +86,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
  * @return New column containing one string.
  */
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const char* separator="",
+                                            const std::string separator = "",
                                             const char* narep=nullptr,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream=0 );

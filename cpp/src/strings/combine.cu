@@ -36,13 +36,15 @@ namespace strings
 {
 
 //
-std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
-                                           const char* separator,
+std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
+                                           const std::string separator,
                                            const char* narep,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
 {
     auto num_columns = strings_columns.size();
+    // TODO  Return a copy of the single column instead.
+    //       Use the column(column_view) ctor once available in 3219.
     CUDF_EXPECTS( num_columns>1, "concatenate requires at least 2 columns");
 
     auto first_column = column_device_view::create(strings_columns[0].parent(),stream);
@@ -56,9 +58,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
         return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
-    if( !separator )
-        separator = "";
-    auto separator_ptr = detail::string_from_host(separator, stream);
+    auto separator_ptr = detail::string_from_host(separator.c_str(), stream);
     auto d_separator = *separator_ptr;
     auto narep_ptr = detail::string_from_host(narep, stream);
     string_view d_narep(nullptr,0);
@@ -70,7 +70,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
     // First calculate the size of memory needed to hold the
     // column_device_views. This is done by calling extent()
     // for each of the column_views of the strings_columns.
-    size_type views_size_bytes =
+    size_t views_size_bytes =
         std::accumulate(strings_columns.begin(), strings_columns.end(), 0,
             [](size_type init, strings_column_view col) {
                 return init + column_device_view::extent(col.parent());
@@ -78,8 +78,8 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
     // Allocate the device memory to be used in the device methods.
     // We need to pass this down when creating the column_device_views
     // so they can be resolved to point to any child objects.
-    column_device_view* d_columns;
-    RMM_TRY(RMM_ALLOC(&d_columns, views_size_bytes, stream));
+    rmm::device_buffer d_columns_memory{views_size_bytes,stream,mr};
+    column_device_view* d_columns = reinterpret_cast<column_device_view*>(d_columns_memory.data());
     column_device_view* d_column = d_columns; // point to the first one
     // A buffer of CPU memory is created to hold the column_device_view
     // objects and then copied to device memory at the d_columns pointer.
@@ -92,24 +92,25 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
         // The beginning of the memory must be the fixed-sized column_device_view
         // objects in order for d_columns to be used as array. Therefore, any
         // child data is assigned to the end of this array.
-        int8_t* h_end = (int8_t*)(h_column + num_columns);
-        int8_t* d_end = (int8_t*)(d_column + num_columns);
+        int8_t* h_end = reinterpret_cast<int8_t*>(h_column + num_columns);
+        int8_t* d_end = reinterpret_cast<int8_t*>(d_column + num_columns);
         // Create the column_device_view from each column within the CPU memory
         // array. Any column child data should be copied into h_end and any
         // internal pointers should be set using d_end.
-        for( auto itr=strings_columns.begin(); itr!=strings_columns.end(); ++itr )
+        for( auto itr = strings_columns.begin(); itr != strings_columns.end(); ++itr )
         {
-            auto col = itr->parent();
+            auto column = itr->parent();
             // convert the column_view into column_device_view
-            new(h_column) column_device_view(col,(ptrdiff_t)h_end,(ptrdiff_t)d_end);
+            new(h_column) column_device_view(column,reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
             h_column++; // next element in array
             // point to the next chunk of memory for use of the children of the next column
-            auto col_child_data_size = (column_device_view::extent(col) - sizeof(column_device_view));
+            auto col_child_data_size = (column_device_view::extent(column) - sizeof(column_device_view));
             h_end += col_child_data_size;
             d_end += col_child_data_size;
         }
         CUDA_TRY(cudaMemcpyAsync(d_columns, h_buffer.data(),
                                  views_size_bytes, cudaMemcpyDefault, stream));
+        CUDA_TRY(cudaStreamSynchronize(stream)); // h_buffer is about to be destroyed
     }
 
     // create resulting null mask
@@ -186,7 +187,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
 
 //
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const char* separator,
+                                            const std::string separator,
                                             const char* narep,
                                             rmm::mr::device_memory_resource* mr,
                                             cudaStream_t stream=0 )
@@ -196,9 +197,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
-    if( !separator )
-        separator = "";
-    auto separator_ptr = detail::string_from_host(separator, stream);
+    auto separator_ptr = detail::string_from_host(separator.c_str(), stream);
     auto d_separator = *separator_ptr;
     auto narep_ptr = detail::string_from_host(narep, stream);
     string_view d_narep(nullptr,0);
@@ -254,12 +253,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         null_mask = create_null_mask(1,cudf::ALL_NULL,stream,mr);
         null_count = 1;
     }
-    else if( bytes==0 ) // If not all nulls and bytes is zero, then all strings are empty.
-        bytes = 1;      // Still need 1 byte to make a valid/non-null chars column
-
-    // build chars column
-    auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
-                                             stream, mr );
+    auto chars_column = detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
