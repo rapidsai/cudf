@@ -40,6 +40,11 @@ cdef extern from "types.hpp" namespace "cudf" nogil:
         type_id id()
 
 cdef extern from "column/column.hpp" namespace "cudf" nogil:
+    cdef cppclass column_contents "cudf::column::contents":
+        unique_ptr[device_buffer] data
+        unique_ptr[device_buffer] null_mask
+        vector[column] children
+    
     cdef cppclass column:
         column()
         column(const column& other)
@@ -49,6 +54,7 @@ cdef extern from "column/column.hpp" namespace "cudf" nogil:
         data_type type()
         column_view view()
         mutable_column_view mutable_view()
+        column_contents release()
 
 cdef extern from "column/column_view.hpp" namespace "cudf" nogil:
     cdef cppclass column_view:
@@ -118,4 +124,5 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
+    cdef unique_ptr[device_buffer] move(unique_ptr[device_buffer])
     cdef device_buffer move(device_buffer)

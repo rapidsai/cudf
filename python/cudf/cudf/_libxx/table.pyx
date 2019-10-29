@@ -5,25 +5,6 @@ from libc.stdint cimport uintptr_t
 from cudf._libxx.column cimport *
 from cudf._libxx.lib cimport *
 
-cdef class _Table:
-
-    def __cinit__(self):
-        pass
-
-    @staticmethod
-    cdef _Table from_ptr(unique_ptr[table] ptr):
-        cdef _Table tbl = _Table.__new__(_Table)
-        tbl.c_obj = move(ptr)
-        return tbl
-
-    def release_into_table(self):
-        cdef vector[unique_ptr[column]] columns
-        columns = self.c_obj.get()[0].release()
-        result = []
-        for i in range(columns.size()):
-            result.append(_Column.from_ptr(move(columns[i])).release_into_column())
-        return result
-        
 
 cdef class Table:
 
@@ -50,3 +31,11 @@ cdef class Table:
         
         return mutable_table_view(column_views)
 
+
+cdef Table release_table(unique_ptr[table] c_tbl):
+    cdef vector[unique_ptr[column]] columns
+    columns = c_tbl.get()[0].release()
+    result = []
+    for i in range(columns.size()):
+        result.append(release_column(move(columns[i])))
+    return Table(result)

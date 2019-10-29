@@ -4,11 +4,11 @@ from cudf._libxx.table cimport *
 
 
 def gather(Table source_table, Column gather_map):
-    c_result = _Table.from_ptr(
+    cdef unique_ptr[table] c_result = (
         libcudf.gather(
             source_table.view(),
             gather_map.view()
             )
         )
-    return c_result.release_into_table()
+    return release_table(move(c_result))
 
