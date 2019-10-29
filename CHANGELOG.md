@@ -12,6 +12,7 @@
 - PR #3025 Move search files to legacy
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
+- PR #3143 Define and implement new copying APIs `slice` and `split`
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
@@ -63,7 +64,7 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
-- PR #3143 Define and implement new copying APIs `slice` and `split`
+- PR #3157 Use enum class rather than enum for mask_allocation_policy
 
 ## Bug Fixes
 
