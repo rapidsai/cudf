@@ -100,10 +100,6 @@ class scalar {
  protected:
   data_type _type{EMPTY};      ///< Logical type of elements in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
-
-  scalar(data_type type, bool is_valid = true)
-   : _type(type), _is_valid(is_valid)
-  {}
 };
 
 template <typename T>
@@ -141,6 +137,7 @@ class string_scalar : public scalar {
   string_scalar(string_scalar&& other) = default;
   string_scalar(string_scalar const& other) = default;
 
+  // TODO: stream and memory resource
   string_scalar(std::string const& string, bool is_valid = true);
 
   std::string value() const;

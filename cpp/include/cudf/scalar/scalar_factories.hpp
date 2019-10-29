@@ -25,7 +25,7 @@
 // TODO: update documentation
 
 namespace cudf {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Construct scalar with uninitialized storage to hold a value of the
  * specified numeric `data_type` and a null mask.
  * 
@@ -37,13 +37,13 @@ namespace cudf {
  * and device kernels
  * @param[in] mr Optional resource to use for device memory
  * allocation of the scalar's `data` and `is_valid` bool.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<scalar> make_numeric_scalar(
     data_type type,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Construct scalar with sufficient uninitialized storage
  * to hold `size` elements of the specified timestamp `data_type` with an optional
  * null mask.
@@ -56,13 +56,13 @@ std::unique_ptr<scalar> make_numeric_scalar(
  * and device kernels
  * @param[in] mr Optional resource to use for device memory
  * allocation of the scalar's `data` and `is_valid` bool.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<scalar> make_timestamp_scalar(
     data_type type,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Construct STRING type scalar given a `std::string`.
  * The size of the `std::string` must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char bytes.
@@ -74,7 +74,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  *               and device kernels
  * @param mr Optional resource to use for device memory
  *           allocation of the scalar's `is_valid`.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<scalar> make_string_scalar(
     std::string const& string,
     cudaStream_t stream = 0,
