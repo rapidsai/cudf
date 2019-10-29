@@ -86,6 +86,10 @@ class DataFrame(object):
     """
     A GPU Dataframe object.
 
+    Parameters
+    ----------
+    data : data-type to coerce. Infers date format if to date.
+
     Examples
     --------
 
