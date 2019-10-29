@@ -30,6 +30,63 @@ namespace cudf {
 namespace experimental {
 
 /**---------------------------------------------------------------------------*
+ * @brief Result type of the `element_relational_comparator` function object.
+ *
+ * Indicates how two elements `a` and `b` compare with one and another.
+ *
+ * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are are
+ * EQUIVALENT may not necessarily be *equal*.
+ *
+ *---------------------------------------------------------------------------**/
+enum class weak_ordering {
+  LESS,        ///< Indicates `a` is less than (ordered before) `b`
+  EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
+  GREATER      ///< Indicates `a` is greater than (ordered after) `b`
+};
+
+/**---------------------------------------------------------------------------*
+* @brief Evaluates elements `lhs` and `rhs` for nan and expected ordering, and
+* this will be available for only floating point `Element` types.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @param[in] expected_ordering expected relation between elements
+* @returns bool true if elements are in order as per `expected_ordering` else false
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool evaluate_nan_ordering(Element const lhs, Element const rhs, weak_ordering expected_ordering) {
+
+    bool result = false;
+
+    switch(expected_ordering) {
+        case weak_ordering::EQUIVALENT: result =  std::isnan(lhs) and std::isnan(rhs);
+                                        break;
+        case weak_ordering::LESS: result = std::isnan(rhs) and not std::isnan(lhs);
+                                     break;
+        case weak_ordering::GREATER: result = std::isnan(lhs) and not std::isnan(rhs);
+                                     break;
+    }
+
+    return result;
+}
+
+/**---------------------------------------------------------------------------*
+* @brief This funtion is to handle non-floating `Element` types and it will
+* always return false.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @param[in] expected_ordering expected relation between elements
+* @returns bool always returns `false`
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool evaluate_nan_ordering(Element lhs, Element rhs, weak_ordering expected_ordering) {
+    return false;
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Performs an equality comparison between two elements in two columns.
  *
  * @tparam has_nulls Indicates the potential for null values in either column.
@@ -71,8 +128,15 @@ class element_equality_comparator {
         return false;
       }
     }
-    return lhs.element<Element>(lhs_element_index) ==
-           rhs.element<Element>(rhs_element_index);
+    // NaNs are equal
+    Element const lhs_element = lhs.element<Element>(lhs_element_index);
+    Element const rhs_element = rhs.element<Element>(rhs_element_index);
+
+    if(evaluate_nan_ordering(lhs_element, rhs_element, weak_ordering::EQUIVALENT)) {
+        return true;
+    }
+
+    return lhs_element == rhs_element;
   }
 
  private:
@@ -107,21 +171,6 @@ class row_equality_comparator {
   table_device_view lhs;
   table_device_view rhs;
   bool nulls_are_equal;
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Result type of the `element_relational_comparator` function object.
- *
- * Indicates how two elements `a` and `b` compare with one and another.
- *
- * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are are
- * EQUIVALENT may not necessarily be *equal*.
- *
- *---------------------------------------------------------------------------**/
-enum class weak_ordering {
-  LESS,        ///< Indicates `a` is less than (ordered before) `b`
-  EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
-  GREATER      ///< Indicates `a` is greater than (ordered after) `b`
 };
 
 /**---------------------------------------------------------------------------*
@@ -181,11 +230,14 @@ class element_relational_comparator {
     Element const lhs_element = lhs.element<Element>(lhs_element_index);
     Element const rhs_element = rhs.element<Element>(rhs_element_index);
 
-    if (lhs_element < rhs_element) {
+    if ((lhs_element < rhs_element) or
+         evaluate_nan_ordering(lhs_element, rhs_element, weak_ordering::LESS)) {
       return weak_ordering::LESS;
-    } else if (rhs_element < lhs_element) {
+    } else if ((rhs_element < lhs_element) or
+                evaluate_nan_ordering(lhs_element, rhs_element, weak_ordering::GREATER)) {
       return weak_ordering::GREATER;
     }
+
     return weak_ordering::EQUIVALENT;
   }
 
