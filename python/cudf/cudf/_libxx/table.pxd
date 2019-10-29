@@ -13,5 +13,5 @@ cdef class _Table:
 
 cdef class Table:
     cdef dict __dict__
-    cdef table_view view(self)
-    cdef mutable_table_view mutable_view(self)
+    cdef table_view view(self) except *
+    cdef mutable_table_view mutable_view(self) except *

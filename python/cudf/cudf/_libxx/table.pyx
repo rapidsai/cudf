@@ -30,7 +30,7 @@ cdef class Table:
     def __init__(self, columns):
         self.columns = columns
 
-    cdef table_view view(self):
+    cdef table_view view(self) except *:
         cdef vector[column_view] column_views
 
         cdef Column col
@@ -40,7 +40,7 @@ cdef class Table:
         
         return table_view(column_views)
 
-    cdef mutable_table_view mutable_view(self):
+    cdef mutable_table_view mutable_view(self) except *:
         cdef vector[mutable_column_view] column_views
 
         cdef Column col

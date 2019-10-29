@@ -4,10 +4,6 @@ from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
 
-from rmm import device_array_from_ptr
-from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
-from rmm._lib.device_buffer import DeviceBuffer
-
 from cudf._libxx.lib cimport *
 from cudf._libxx.buffer import Buffer
 
@@ -28,18 +24,18 @@ cdef class _Column:
         pass
 
     @staticmethod
-    cdef from_ptr(unique_ptr[column] ptr):
+    cdef _Column from_ptr(unique_ptr[column] ptr):
         cdef _Column col = _Column.__new__(_Column)
         col.c_obj = move(ptr)
         return col
 
-    cdef size_type size(self):
+    cdef size_type size(self) except *:
         return self.c_obj.get()[0].size()
 
-    cdef data_type type(self):
+    cdef data_type type(self) except *:
         return self.c_obj.get()[0].type()
 
-    cpdef bool has_nulls(self):
+    cpdef bool has_nulls(self) except *:
         return self.c_obj.get()[0].has_nulls()
 
     @property
@@ -47,14 +43,16 @@ cdef class _Column:
         return cudf_to_np_types[self.type().id()]
 
     def release_into_column(self):
-        data = DeviceBuffer.from_ptr(
+        data = Buffer(
             ptr=int(<uintptr_t>(self.c_obj.get()[0].view().data[void]())),
-            size=self.dtype.itemsize * self.size())
+            size=self.dtype.itemsize * self.size(),
+            owner=self)
 
         if self.has_nulls():
-            mask = DeviceBuffer.from_ptr(
+            mask = Buffer(
                 ptr=int(<uintptr_t>(self.c_obj.get()[0].view().null_mask())),
-                size=self.dtype.itemsize * self.size())
+                size=self.dtype.itemsize * self.size(),
+                owner=self)
         else:
             mask = None
         return Column(data=data,
@@ -70,7 +68,7 @@ cdef class Column:
         self.dtype = dtype
         self.mask = mask
 
-    cdef mutable_column_view mutable_view(self):
+    cdef mutable_column_view mutable_view(self) except *:
         cdef type_id tid = np_to_cudf_types[np.dtype(self.dtype)]
         cdef data_type dtype = data_type(tid)
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
@@ -85,7 +83,7 @@ cdef class Column:
             data,
             mask)
 
-    cdef column_view view(self):
+    cdef column_view view(self) except *:
         cdef type_id tid = np_to_cudf_types[np.dtype(self.dtype)]
         cdef data_type dtype = data_type(tid)
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
@@ -100,3 +98,9 @@ cdef class Column:
             data,
             mask)
 
+    def to_pandas(self):
+        from rmm import device_array_from_ptr
+        import pandas as pd
+
+        arr = device_array_from_ptr(self.data.ptr, self.size, self.dtype)
+        return pd.Series(arr.copy_to_host())
