@@ -28,7 +28,7 @@
 #include <memory>
 #include <iostream>
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <rmm/device_buffer.hpp>

@@ -20,7 +20,7 @@
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <iterator/iterator.cuh>
 
 #include <utilities/device_operators.cuh>

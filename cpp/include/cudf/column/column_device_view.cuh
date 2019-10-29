@@ -161,7 +161,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is null
    *---------------------------------------------------------------------------**/
   __device__ bool is_valid_nocheck(size_type element_index) const noexcept {
-    return bit_is_set(_null_mask, element_index);
+    return bit_is_set(_null_mask, offset()+element_index);
   }
 
   /**---------------------------------------------------------------------------*
@@ -401,11 +401,11 @@ class alignas(16) mutable_column_device_view
    *`data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   __host__ __device__ T* head() const noexcept {
-    return const_cast<T*>(detail::column_device_view_base::head());
+    return const_cast<T*>(detail::column_device_view_base::head<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -417,11 +417,11 @@ class alignas(16) mutable_column_device_view
    * @TODO Clarify behavior for variable-width types.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
   __host__ __device__ T* data() const noexcept {
-    return head<T>() + _offset;
+    return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
 
   /**---------------------------------------------------------------------------*

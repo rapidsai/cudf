@@ -20,7 +20,7 @@
 #include <cudf/legacy/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/bit_util.cuh>
 #include <rmm/thrust_rmm_allocator.h>

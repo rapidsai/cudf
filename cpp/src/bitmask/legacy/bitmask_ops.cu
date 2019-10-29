@@ -6,7 +6,7 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
