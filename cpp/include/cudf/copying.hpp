@@ -81,8 +81,8 @@ std::unique_ptr<table> empty_like(table_view input_table);
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
- * The returned view's of `input` are constructed from an even number indices where
- * the `i`th returned `column_view` will view the elements in `input` indicated by the range
+ * The returned views of `input` are constructed from an even number indices where
+ * the `i`th returned `column_view` views the elements in `input` indicated by the range
  * `[indices[2*i], indices[(2*i)+1])`.
  *
  * For all `i` it is expected `indices[i] <= input.size()`
@@ -97,25 +97,25 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
  * @throws `cudf::logic_error` if `indices` size is not even.
- * @throws `cudf::logic_error` When the values in the pair are 'strictly decreasing'.
+ * @throws `cudf::logic_error` When the values in the pair are strictly decreasing.
  * @throws `cudf::logic_error` When any of the values in the pair don't belong to
  * the range [0, input.size()).
  *
  * @param input View of column to slice
- * @param indices A vector indices that are used to take 'slices' of the `input`.
- * @return The set of requested views of `input` indicated by the ranges in `indices`.
+ * @param indices A vector of indices used to take slices of `input`.
+ * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices);
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
  * derived from expected splits.
+ *
  * The returned view's of `input` are constructed from vector of splits, which indicates
- * indices where the split should occur. For `i`th returned `column_view`, the view would be
- * sliced as [0, splits[i]) if i=0, else [splits[i], input.size()) if `i` is last view and
- * splits[i] != input.size(), [splits[i-1], splits[i]] for other.
+ * where the split should occur. The `i`th returned `column_view` is sliced as
+ * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
+ * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  *
@@ -131,7 +131,7 @@ std::vector<column_view> slice(column_view const& input,
  * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
  * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
  *
- * @param input View of column to slice
+ * @param input View of column to split
  * @param splits A vector of indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */

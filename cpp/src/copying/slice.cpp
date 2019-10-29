@@ -34,8 +34,6 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
         return result;
     }
 
-    std::vector<std::pair<size_type, size_type>> indices_tuple{};
-
     for(size_t i = 0; i < indices.size(); i+=2){
         result.emplace_back(slice(input, indices[i], indices[i+1]));
     }
@@ -44,8 +42,6 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
              return slice(input, indices.first, indices.second);
     }; 
 
-    std::transform(indices_tuple.begin(), indices_tuple.end(), std::back_inserter(result),
-                   slicer);
     return result;
 };
 

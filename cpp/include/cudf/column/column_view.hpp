@@ -482,12 +482,10 @@ namespace detail {
  * @note It is the caller's responsibility to ensure that the returned view
  * does not outlive the viewed device memory.
  *
- * @throws `cudf::logic_error` if `begin` with `end` goes beyond
- * the size of the `input`.
- * @throws `cudf::logic_error` if `begin` < 0.
- * @throws `cudf::logic_error` if `end` < 0.
+ * @throws `cudf::logic_error` if `begin < 0`, `end < begin` or
+ * `end > input.size()`.
  *
- * @param input View of input column to emulate
+ * @param input View of input column to slice
  * @param begin Index of the first desired element in the slice (inclusive).
  * @param end Index of the last desired element in the slice (exclusive).
  *
