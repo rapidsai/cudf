@@ -63,6 +63,7 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
+- PR #3143 Define and implement new copying APIs `slice` and `split`
 
 ## Bug Fixes
 
