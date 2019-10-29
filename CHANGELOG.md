@@ -35,6 +35,8 @@
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
 - PR #3021 Java host side concat of serialized buffers
+- PR #3166 Move reductions to legacy
+
 
 ## Bug Fixes
 
