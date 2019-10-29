@@ -134,7 +134,7 @@ std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type st
     rmm::device_buffer null_mask;
     if( null_count > 0 )
         null_mask = rmm::device_buffer(valid_mask.first,
-                                       gdf_valid_allocation_size(strings_count),
+                                       bitmask_allocation_size_bytes(strings_count),
                                        stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
     return std::make_pair(null_mask,null_count);

@@ -38,7 +38,7 @@ namespace
  * Any other character will end the parse.
  * Overflow of int64 type is not detected.
  */
-__device__ int64_t string_to_integer( const string_view& d_str )
+__device__ int64_t string_to_integer( const string_view d_str )
 {
     int64_t value = 0;
     size_type bytes = d_str.size_bytes();
@@ -63,15 +63,13 @@ __device__ int64_t string_to_integer( const string_view& d_str )
 } // namespace
 
 //
-std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
+std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return std::make_unique<column>( data_type{INT32}, 0,
-                          rmm::device_buffer{0,stream,mr}, // data
-                          rmm::device_buffer{0,stream,mr}, 0 ); // nulls
+        return make_numeric_column( data_type(INT32), 0 );
 
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -80,9 +78,9 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
     // copy null mask
     rmm::device_buffer null_mask;
     cudf::size_type null_count = d_column.null_count();
-    if( d_column.nullable() )
+    if( d_column.has_nulls() )
         null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(strings_count),
+                                        bitmask_allocation_size_bytes(strings_count),
                                         stream, mr);
     // create output column
     auto results = std::make_unique<cudf::column>( cudf::data_type{cudf::INT32}, strings_count,
@@ -123,17 +121,39 @@ struct integer_to_string_size_fn
         IntegerType value = d_column.element<IntegerType>(idx);
         if( value==0 )
             return 1;
-        bool sign = value < 0;
-        if( sign )
+        bool is_negative = value < 0;
+        if( is_negative )
             value = -value;
-        constexpr IntegerType base = 10;
-        size_type digits = static_cast<size_type>(sign);
-        while( value > 0 )
-        {
-            ++digits;
-            value = value/base;
-        }
-        return digits;
+        //constexpr IntegerType base = 10;
+        //size_type digits = static_cast<size_type>(is_negative);
+        //while( value > 0 )
+        //{
+        //    ++digits;
+        //    value = value/base;
+        //}
+
+        // largest 8-byte unsigned value is 18446744073709551615
+        size_type digits = (value < 10 ? 1 :
+                           (value < 100 ? 2 :
+                           (value < 1000 ? 3 :
+                           (value < 10000 ? 4 :
+                           (value < 100000 ? 5 :
+                           (value < 1000000 ? 6 :
+                           (value < 10000000 ? 7 :
+                           (value < 100000000 ? 8 :
+                           (value < 1000000000 ? 9 :
+                           (value < 10000000000 ? 10 :
+                           (value < 100000000000 ? 11 :
+                           (value < 1000000000000 ? 12 :
+                           (value < 10000000000000 ? 13 :
+                           (value < 100000000000000 ? 14 :
+                           (value < 1000000000000000 ? 15 :
+                           (value < 10000000000000000 ? 16 :
+                           (value < 100000000000000000 ? 17 :
+                           (value < 1000000000000000000 ? 18 :
+                           (value < 10000000000000000000 ? 19 :
+                           20)))))))))))))))))));
+        return digits + static_cast<size_type>(is_negative);
     }
 };
 
@@ -161,8 +181,8 @@ struct integer_to_string_fn
             *d_buffer = '0';
             return;
         }
-        bool sign = value < 0;
-        if( sign )
+        bool is_negative = value < 0;
+        if( is_negative )
             value = -value;
         constexpr IntegerType base = 10;
         char* ptr = d_buffer;
@@ -171,17 +191,11 @@ struct integer_to_string_fn
             *ptr++ = '0' + (value % base);
             value = value/base;
         }
-        if( sign )
+        if( is_negative )
             *ptr++ = '-';
         size_type length = static_cast<size_type>(ptr-d_buffer);
         // numbers are backwards, reverse the string
-        for( size_type j=0; j<(length/2); ++j )
-        {
-            char ch1 = d_buffer[j];
-            char ch2 = d_buffer[length-j-1];
-            d_buffer[j] = ch2;
-            d_buffer[length-j-1] = ch1;
-        }
+        thrust::reverse( thrust::seq, d_buffer, d_buffer + length);
     }
 };
 
@@ -192,7 +206,7 @@ struct integer_to_string_fn
 struct dispatch_from_integers_fn
 {
     template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()( column_view& integers,
+    std::unique_ptr<cudf::column> operator()( column_view const& integers,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream ) const noexcept
     {
@@ -204,9 +218,9 @@ struct dispatch_from_integers_fn
         // copy the null mask
         rmm::device_buffer null_mask;
         cudf::size_type null_count = d_column.null_count();
-        if( d_column.nullable() )
+        if( d_column.has_nulls() )
             null_mask = rmm::device_buffer( d_column.null_mask(),
-                                            gdf_valid_allocation_size(strings_count),
+                                            bitmask_allocation_size_bytes(strings_count),
                                             stream, mr);
         // build offsets column
         auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
@@ -231,7 +245,7 @@ struct dispatch_from_integers_fn
 
     // non-integral types throw an exception
     template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(column_view&, rmm::mr::device_memory_resource*, cudaStream_t) const
+    std::unique_ptr<cudf::column> operator()(column_view const&, rmm::mr::device_memory_resource*, cudaStream_t) const
     {
         CUDF_FAIL("Values for from_integers function must be integral type.");
     }
@@ -240,7 +254,7 @@ struct dispatch_from_integers_fn
 } // namespace
 
 // This will convert all integer column types into a strings column.
-std::unique_ptr<cudf::column> from_integers( column_view integers,
+std::unique_ptr<cudf::column> from_integers( column_view const& integers,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {

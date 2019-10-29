@@ -38,7 +38,7 @@ namespace strings
  * @param stream Stream to use for any kernels in this function.
  * @return New INT32 column with integers converted from strings.
  */
-std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
+std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream = 0);
 
@@ -56,7 +56,7 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view strings,
  * @param stream Stream to use for any kernels in this function.
  * @return New strings column with integers as strings.
  */
-std::unique_ptr<cudf::column> from_integers( column_view integers,
+std::unique_ptr<cudf::column> from_integers( column_view const& integers,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                              cudaStream_t stream = 0);
 
