@@ -156,6 +156,7 @@ class Series(object):
             return cupy.asarray([], dtype=self.dtype)
 
         return cupy.asarray(
+            # Temporary fix for CuPy < 7.0, numba = 0.46
             numbautils.PatchedNumbaDeviceArray(self.to_gpu_array())
         )
 
