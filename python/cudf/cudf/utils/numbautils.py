@@ -3,6 +3,8 @@ class PatchedNumbaDeviceArray(object):
         self.parent = numba_ary
 
     def __getattr__(self, name):
+        if name == "parent":
+            raise AttributeError()
         if name != "__cuda_array_interface__":
             return getattr(self.parent, name)
         else:
