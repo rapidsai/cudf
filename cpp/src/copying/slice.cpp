@@ -38,10 +38,6 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
         result.emplace_back(slice(input, indices[i], indices[i+1]));
     }
 
-    const auto slicer = [&input] (auto indices) {
-             return slice(input, indices.first, indices.second);
-    }; 
-
     return result;
 };
 
