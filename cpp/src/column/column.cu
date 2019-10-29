@@ -20,12 +20,14 @@
 #include <cudf/utilities/bit.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <utilities/cuda_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <algorithm>
 #include <vector>
+#include <cudf/strings/copying.hpp>
 
 namespace cudf {
 
@@ -174,11 +176,86 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Copies the bits starting at the specified offset from a source
+ * bitmask into the destination bitmask.
+ *
+ * Bit `i` in `destination` will be equal to bit `i + offset` from `source`.
+ *
+ * @param destination The mask to copy into
+ * @param source The mask to copy from
+ * @param bit_offset The offset into `source` from which to begin the copy
+ * @param number_of_bits The number of bits to copy
+ *---------------------------------------------------------------------------**/
+template <int BLOCK_SIZE>
+__global__ void copy_offset_nullmask(bitmask_type *__restrict__ destination,
+                                     bitmask_type const *__restrict__ source,
+                                     size_type bit_offset,
+                                     size_type number_of_mask_words) {
+  constexpr size_type warp_size{32};
+  size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+  size_type source_word_index = destination_word_index + word_index(bit_offset);
+
+  if (destination_word_index < number_of_mask_words) {
+    bitmask_type curr_word = source[source_word_index];
+    bitmask_type next_word = 0;
+    if (destination_word_index + 1 < number_of_mask_words) {
+      next_word = source[source_word_index + 1];
+    }
+    bitmask_type write_word = __funnelshift_r(curr_word, next_word, bit_offset);
+    destination[destination_word_index] = write_word;
+  }
+}
+
+rmm::device_buffer copy_bitmask(column_view view, cudaStream_t stream,
+               rmm::mr::device_memory_resource *mr) {
+  rmm::device_buffer mask;
+  if (view.offset() == 0) {
+    mask = std::move(rmm::device_buffer{static_cast<void const *>(view.null_mask()),
+      bitmask_allocation_size_bytes(view.size()), stream, mr});
+  } else {
+    CUDF_EXPECTS(view.offset() > 0, "Invalid view offset.");
+    // If there's a non-zero offset, need to handle offset bitmask elements
+    mask = std::move(rmm::device_buffer{bitmask_allocation_size_bytes(view.size()), stream, mr});
+    cudf::util::cuda::grid_config_1d config(bitmask_allocation_size_bytes(view.size()), 256);
+    copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
+                 stream>>>(
+    static_cast<bitmask_type *>(mask.data()), view.null_mask(),
+    view.offset(), view.size());
+    CHECK_STREAM(stream);
+  }
+  return mask;
+}
+
+
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr) {
-  CUDF_FAIL("Copying from a view is not supported yet.");
+  if (type_id::STRING == view.type().id()) {
+    cudf::strings_column_view sview(view);
+    auto col = cudf::strings::detail::slice(sview, view.offset(), -1, 1, stream, mr);
+    _type = col->_type;
+    _size = col->_size;
+    _data = std::move(col->_data);
+    _null_mask = std::move(col->_null_mask);
+    _null_count = std::move(col->_null_count);
+    _children = std::move(col->_children);
+  } else {
+    _type = view.type();
+    _size = view.size();
+    _data = std::move(rmm::device_buffer{
+        static_cast<const char*>(view.head()) +
+        (view.offset() * cudf::size_of(view.type())),
+    view.size() * cudf::size_of(view.type()), stream, mr});
+    if (view.nullable()) { _null_mask = copy_bitmask(view, stream, mr); }
+    _null_count = view.null_count();
+    for (size_type i = 0; i < view.num_children(); ++i) {
+      _children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+    }
+
+  }
 }
+
 /*
 : _type{view.type()},
 _size{view.size()},
