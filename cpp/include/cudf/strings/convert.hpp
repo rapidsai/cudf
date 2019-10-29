@@ -24,7 +24,7 @@ namespace strings
 {
 
 /**
- * @brief Returns a new numeric column parsing integer values from the
+ * @brief Returns a new integer numeric column parsing integer values from the
  * provided strings column.
  *
  * Any null entries will result in corresponding null entries in the output column.
@@ -33,12 +33,16 @@ namespace strings
  * When any other character is encountered, the parsing ends for that string
  * and the current digits are converted into an integer.
  *
+ * @throw cudf::logic_error if output_type is not integral type.
+ *
  * @param strings Strings instance for this operation.
+ * @param output_type Type of integer numeric column to return.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
- * @return New INT32 column with integers converted from strings.
+ * @return New column with integers converted from strings.
  */
 std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
+                                           cudf::data_type output_type,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream = 0);
 
@@ -50,6 +54,8 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
  *
  * For each integer, a string is created in base-10 decimal.
  * Negative numbers will include a '-' prefix.
+ *
+ * @throw cudf::logic_error if integers column is not integral type.
  *
  * @param column Numeric column to convert.
  * @param mr Resource for allocating device memory.

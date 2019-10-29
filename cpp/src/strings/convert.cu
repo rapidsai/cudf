@@ -24,54 +24,104 @@
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 
-namespace cudf
-{
-namespace strings
-{
+#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/transform.h>
+#include <thrust/iterator/counting_iterator.h>
+
 namespace
 {
 
 /**
- * @brief Converts a single string into an integer.
- * The '+' and '-' are allowed but only at the beginning of the string.
- * The string is expected to contain base-10 [0-9] characters only.
- * Any other character will end the parse.
- * Overflow of int64 type is not detected.
+ * @brief Converts strings into an integers.
+ * Used by the dispatch method to convert to different integer types.
  */
-__device__ int64_t string_to_integer( const string_view d_str )
+template <typename IntegerType>
+struct string_to_integer_fn
 {
-    int64_t value = 0;
-    size_type bytes = d_str.size_bytes();
-    const char* ptr = d_str.data();
-    int sign = 1;
-    if( *ptr == '-' || *ptr == '+' )
+    const cudf::column_device_view strings_column; // strings to convert
+
+    /**
+     * @brief Converts a single string into an integer.
+     * The '+' and '-' are allowed but only at the beginning of the string.
+     * The string is expected to contain base-10 [0-9] characters only.
+     * Any other character will end the parse.
+     * Overflow of the int64 type is not detected.
+     */
+    __device__ int64_t string_to_integer( const cudf::string_view d_str )
     {
-        sign = (*ptr=='-' ? -1:1);
-        ++ptr;
-        --bytes;
+        int64_t value = 0;
+        cudf::size_type bytes = d_str.size_bytes();
+        const char* ptr = d_str.data();
+        int sign = 1;
+        if( *ptr == '-' || *ptr == '+' )
+        {
+            sign = (*ptr=='-' ? -1:1);
+            ++ptr;
+            --bytes;
+        }
+        for( cudf::size_type idx=0; idx < bytes; ++idx )
+        {
+            char chr = *ptr++;
+            if( chr < '0' || chr > '9' )
+                break;
+            value = (value * 10) + static_cast<int64_t>(chr - '0');
+        }
+        return value * static_cast<int64_t>(sign);
     }
-    for( size_type idx=0; idx < bytes; ++idx )
+
+    __device__ IntegerType operator()(cudf::size_type idx)
     {
-        char chr = *ptr++;
-        if( chr < '0' || chr > '9' )
-            break;
-        value = (value * 10) + static_cast<int64_t>(chr - '0');
+        if( strings_column.is_null(idx) )
+            return static_cast<IntegerType>(0);
+        // the cast to IntegerType will create predictable results
+        // for integers that are larger than the IntegerType can hold
+        return static_cast<IntegerType>(string_to_integer(strings_column.element<cudf::string_view>(idx)));
     }
-    return value * static_cast<int64_t>(sign);
-}
+};
+
+/**
+ * @brief The dispatch functions for converting strings to integers.
+ * The output_column is expected to be one of the integer types only.
+ */
+struct dispatch_to_integers_fn
+{
+    template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
+    void operator()( const cudf::column_device_view& strings_column,
+                     cudf::mutable_column_view& output_column,
+                     cudaStream_t stream ) const noexcept
+    {
+        auto d_results = output_column.data<IntegerType>();
+        thrust::transform( rmm::exec_policy(stream)->on(stream),
+            thrust::make_counting_iterator<cudf::size_type>(0),
+            thrust::make_counting_iterator<cudf::size_type>(strings_column.size()),
+            d_results, string_to_integer_fn<IntegerType>{strings_column});
+    }
+    // non-integral types throw an exception
+    template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+    void operator()(const cudf::column_device_view&, cudf::mutable_column_view&, cudaStream_t) const
+    {
+        CUDF_FAIL("Output for to_integers must be integral type.");
+    }
+};
 
 } // namespace
 
-//
+namespace cudf
+{
+namespace strings
+{
+
+// This will convert a strings column into any integer column type.
 std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
+                                           cudf::data_type output_type,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return make_numeric_column( data_type(INT32), 0 );
+        return make_numeric_column( output_type, 0 );
 
-    auto execpol = rmm::exec_policy(stream);
+    //auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_column = *strings_column;
 
@@ -83,21 +133,15 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
                                         bitmask_allocation_size_bytes(strings_count),
                                         stream, mr);
     // create output column
-    auto results = std::make_unique<cudf::column>( cudf::data_type{cudf::INT32}, strings_count,
-        rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
+    auto results = std::make_unique<cudf::column>( output_type, strings_count,
+        rmm::device_buffer(strings_count * size_of(output_type), stream, mr),
         null_mask, null_count);
     auto results_view = results->mutable_view();
-    auto d_results = results_view.data<int32_t>();
-    // set the values
-    thrust::transform( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count),
-        d_results,
-        [d_column] __device__ (size_type idx) {
-            if( d_column.is_null(idx) )
-                return int32_t(0);
-            return static_cast<int32_t>(string_to_integer(d_column.element<cudf::string_view>(idx)));
-        });
+
+    cudf::experimental::type_dispatcher( output_type,
+                dispatch_to_integers_fn{},
+                d_column, results_view, stream );
+
     results->set_null_count(null_count);
     return results;
 }
@@ -124,14 +168,6 @@ struct integer_to_string_size_fn
         bool is_negative = value < 0;
         if( is_negative )
             value = -value;
-        //constexpr IntegerType base = 10;
-        //size_type digits = static_cast<size_type>(is_negative);
-        //while( value > 0 )
-        //{
-        //    ++digits;
-        //    value = value/base;
-        //}
-
         // largest 8-byte unsigned value is 18446744073709551615
         size_type digits = (value < 10 ? 1 :
                            (value < 100 ? 2 :
@@ -159,7 +195,7 @@ struct integer_to_string_size_fn
 
 /**
  * @brief Convert each integer into a string.
- * The integer is converted using base-10 using only characters [0-9].
+ * The integer is converted into base-10 using only characters [0-9].
  * No formatting is done for the string other than prepending the '-'
  * character for negative values.
  */

@@ -37,7 +37,7 @@ TEST_F(StringsConvertTest, ToInteger)
     std::vector<int32_t> h_expected{ 0, 1234, 0, 0, -9832, 93, 765, -1 };
 
     auto strings_view = cudf::strings_column_view(strings);
-    auto results = cudf::strings::to_integers(strings_view);
+    auto results = cudf::strings::to_integers(strings_view, cudf::data_type{cudf::INT32} );
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
@@ -70,7 +70,7 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
 TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
 {
     cudf::column_view zero_size_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    auto results = cudf::strings::to_integers(zero_size_column);
+    auto results = cudf::strings::to_integers(zero_size_column, cudf::data_type{cudf::INT32});
     EXPECT_EQ(0,results->size());
 }
 
@@ -80,25 +80,31 @@ class StringsIntegerConvertTest : public StringsConvertTest {};
 using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
 TYPED_TEST_CASE(StringsIntegerConvertTest, IntegerTypes);
 
-TYPED_TEST(StringsIntegerConvertTest, FromInteger)
+TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
     cudf::size_type size = 255;
-    thrust::device_vector<TypeParam> integers(size);
-    thrust::sequence( thrust::device, integers.begin(), integers.end(), -(size/2) );
-    auto column = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size);
-    auto view = column->mutable_view();
-    cudaMemcpy( view.data<TypeParam>(), integers.data().get(), size * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
-    view.set_null_count(0);
+    thrust::device_vector<TypeParam> d_integers(size);
+    thrust::sequence( thrust::device, d_integers.begin(), d_integers.end(), -(size/2) );
+    auto integers = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size);
+    auto integers_view = integers->mutable_view();
+    cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), size * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
+    integers_view.set_null_count(0);
 
-    auto results = cudf::strings::from_integers(column->view());
+    // convert to strings
+    auto results_strings = cudf::strings::from_integers(integers->view());
 
-    thrust::host_vector<TypeParam> h_integers(integers);
+    thrust::host_vector<TypeParam> h_integers(d_integers);
     std::vector<std::string> h_strings;
     for( auto itr = h_integers.begin(); itr != h_integers.end(); ++itr )
         h_strings.push_back(std::to_string(*itr));
 
     cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
-    cudf::test::expect_columns_equal(*results,expected);
+    cudf::test::expect_columns_equal(*results_strings,expected);
+
+    // convert back to integers
+    auto strings_view = cudf::strings_column_view(results_strings->view());
+    auto results_integers = cudf::strings::to_integers(strings_view, cudf::data_type(cudf::experimental::type_to_id<TypeParam>()));
+    cudf::test::expect_columns_equal(*results_integers,integers->view());
 }
 
 //
@@ -108,8 +114,12 @@ class StringsFloatConvertTest : public StringsConvertTest {};
 using FloatTypes = cudf::test::Types<float, double>;
 TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
 
-TYPED_TEST(StringsFloatConvertTest, FromIntegerError)
+TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {
-    auto column = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 100);
+    auto dtype = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
+    auto column = cudf::make_numeric_column(dtype, 100);
     EXPECT_THROW(cudf::strings::from_integers(column->view()), cudf::logic_error);
+
+    cudf::test::strings_column_wrapper strings{ "this string intentionally left blank" };
+    EXPECT_THROW(cudf::strings::to_integers(column->view(),dtype), cudf::logic_error);
 }
