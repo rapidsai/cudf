@@ -5,6 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from libcpp.memory cimport unique_ptr, make_unique
+
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.utils cimport *
@@ -20,6 +22,8 @@ from cudf._lib.includes.stream_compaction cimport (
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask
 )
+
+from cudf._lib.table cimport Table, TableView, move
 
 
 def drop_duplicates(in_index, in_cols, subset=None, keep='first'):
@@ -112,20 +116,21 @@ def apply_boolean_mask(cols, mask):
     -------
     List of Columns
     """
-    cdef cudf_table  c_out_table
-    cdef cudf_table* c_in_table = table_from_columns(cols)
+    in_table = TableView(cols)
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
 
+    cdef unique_ptr[cudf_table] c_result
     with nogil:
-        c_out_table = cpp_apply_boolean_mask(
-            c_in_table[0],
-            c_mask_col[0]
+        c_result = make_unique[cudf_table](
+            cpp_apply_boolean_mask(
+                in_table.ptr[0],
+                c_mask_col[0]
+            )
         )
-
-    free_table(c_in_table)
     free_column(c_mask_col)
 
-    return columns_from_table(&c_out_table)
+    result = Table.from_ptr(move(c_result))
+    return result.release()
 
 
 def drop_nulls(cols, how="any", subset=None, thresh=None):
@@ -157,8 +162,8 @@ def drop_nulls(cols, how="any", subset=None, thresh=None):
                                      else table_from_columns(subset))
 
     # default: "any" means threshold should be number of key columns
-    cdef gdf_size_type c_keep_threshold = (len(cols) if subset is None
-                                           else len(subset))
+    cdef size_type c_keep_threshold = (len(cols) if subset is None
+                                       else len(subset))
 
     # Use `thresh` if specified, otherwise set threshold based on `how`
     if thresh is not None:

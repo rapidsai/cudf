@@ -298,12 +298,20 @@ class Series(object):
         idx = self._index if index is None else index
         return self.to_frame(name).reindex(idx, copy=copy)[name]
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False, inplace=False):
         """ Reset index to RangeIndex """
         if not drop:
+            if inplace is True:
+                raise TypeError(
+                    "Cannot reset_index inplace on a Series "
+                    "to create a DataFrame"
+                )
             return self.to_frame().reset_index(drop=drop)
         else:
-            return self._copy_construct(index=RangeIndex(len(self)))
+            if inplace is True:
+                self._index = RangeIndex(len(self))
+            else:
+                return self._copy_construct(index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -1159,9 +1167,10 @@ class Series(object):
         if self.name is None:
             result = result[0]
             result.name = None
-            return result
         else:
-            return result[self.name]
+            result = result[self.name]
+        result._column.name = self._column.name
+        return result
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1278,15 +1287,10 @@ class Series(object):
     def isnull(self):
         """Identify missing values in a Series.
         """
-        if not self.has_null_mask:
-            return Series(
-                cudautils.zeros(len(self), np.bool_),
-                name=self.name,
-                index=self.index,
-            )
-
-        mask = cudautils.isnull_mask(self.data, self.nullmask.mem)
-        return Series(mask, name=self.name, index=self.index)
+        result = Series(
+            self._column.isnull(), name=self.name, index=self.index
+        )
+        return result
 
     def isna(self):
         """Identify missing values in a Series. Alias for isnull.
@@ -1296,15 +1300,8 @@ class Series(object):
     def notna(self):
         """Identify non-missing values in a Series.
         """
-        if not self.has_null_mask:
-            return Series(
-                cudautils.ones(len(self), np.bool_),
-                name=self.name,
-                index=self.index,
-            )
-
-        mask = cudautils.notna_mask(self.data, self.nullmask.mem)
-        return Series(mask, name=self.name, index=self.index)
+        result = Series(self._column.notna(), name=self.name, index=self.index)
+        return result
 
     def notnull(self):
         """Identify non-missing values in a Series. Alias for notna.
@@ -1421,7 +1418,7 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
@@ -1437,10 +1434,26 @@ class Series(object):
             Copy of ``self`` cast to the given dtype. Returns
             ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
+        if errors not in ("ignore", "raise", "warn"):
+            raise ValueError("invalid error value specified")
+
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
+        try:
+            return self._copy_construct(
+                data=self._column.astype(dtype, **kwargs)
+            )
+        except Exception as e:
+            if errors == "raise":
+                raise e
+            elif errors == "warn":
+                import traceback
 
-        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
+                tb = traceback.format_exc()
+                warnings.warn(tb)
+            elif errors == "ignore":
+                pass
+            return self
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.

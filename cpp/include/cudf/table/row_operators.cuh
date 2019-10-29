@@ -27,7 +27,7 @@
 #include <thrust/swap.h>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 /**---------------------------------------------------------------------------*
  * @brief Performs an equality comparison between two elements in two columns.
@@ -93,7 +93,7 @@ class row_equality_comparator {
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::exp::type_dispatcher(
+      return cudf::experimental::type_dispatcher(
           l.type(),
           element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
           lhs_row_index, rhs_row_index);
@@ -265,21 +265,17 @@ class row_lexicographic_comparator {
 
       weak_ordering state{weak_ordering::EQUIVALENT};
 
-      if (not ascending) {
-        thrust::swap(lhs_index, rhs_index);
-      }
-
       auto comparator = element_relational_comparator<has_nulls>{
           _lhs.column(i), _rhs.column(i), _null_precedence};
 
-      state = cudf::exp::type_dispatcher(_lhs.column(i).type(), comparator,
+      state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
                                          lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) {
         continue;
       }
 
-      return (state == weak_ordering::LESS) ? true : false;
+      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
     return false;
   }
@@ -291,5 +287,5 @@ class row_lexicographic_comparator {
   order const* _column_order{};
 };  // class row_lexicographic_comparator
 
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

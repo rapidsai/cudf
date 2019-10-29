@@ -11,7 +11,7 @@ from cudf._lib.cudf cimport *
 cdef extern from "cudf/cudf.h" nogil:
 
     cdef gdf_error gdf_transpose(
-        gdf_size_type ncols,
+        size_type ncols,
         gdf_column** in_cols,
         gdf_column** out_cols
     ) except +
