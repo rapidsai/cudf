@@ -149,7 +149,6 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
  *---------------------------------------------------------------------------**/
 static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
     cudf::EMPTY,
-    cudf::BOOL8,
     cudf::TIMESTAMP_DAYS,
     cudf::TIMESTAMP_SECONDS,
     cudf::TIMESTAMP_MILLISECONDS,
