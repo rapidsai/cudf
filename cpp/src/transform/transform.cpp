@@ -15,20 +15,12 @@
  */
 
 #include <cudf/cudf.h>
-// #include <nvstrings/NVCategory.h>
 #include <utilities/cudf_utils.h>
-// #include <bitmask/legacy/bitmask_ops.hpp>
-// #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <bitmask/legacy/bitmask_ops.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/legacy/copying.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/legacy/interop.hpp>
-// #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <utilities/column_utils.hpp>
 
@@ -45,21 +37,44 @@
 namespace cudf {
 namespace transformation {
 
-/**
- * @brief Computes output valid mask for op between a column and a scalar
- *
- * @param out_null_coun[out] number of nulls in output
- * @param valid_out preallocated output mask
- * @param valid_col input mask of column
- * @param num_values number of values in input mask valid_col
- */
-
 namespace jit {
+
+namespace detail {
+
+/**
+ * @brief Functor to enable the internal working of `get_data_ptr`
+ * @ref get_data_ptr
+ */
+template <typename column_view_type>
+struct get_data_ptr_functor {
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), const void *>
+  operator()(column_view_type& view) {
+    return static_cast<const void*>(view.template data<T>());
+  }
+  template <typename T>
+  std::enable_if_t<not is_fixed_width<T>(), const void *>
+  operator()(column_view_type& view) {
+    CUDF_FAIL("Invalid data type for transform operation");
+  }
+};
+
+/**
+ * @brief Get the raw pointer to data in a (mutable_)column_view
+ */
+template <typename column_view_type>
+auto get_data_ptr(column_view_type& view) {
+  return experimental::type_dispatcher(view.type(),
+                         get_data_ptr_functor<column_view_type>{}, view);
+}
+
+} // namespace detail
+
 
 void unary_operation(mutable_column_view output, column_view input,
                      const std::string& udf, data_type output_type, bool is_ptx) {
  
-  std::string hash = "prog_tranform." 
+  std::string hash = "prog_transform." 
     + std::to_string(std::hash<std::string>{}(udf));
 
   std::string cuda_source;
@@ -86,10 +101,8 @@ void unary_operation(mutable_column_view output, column_view input,
       cudf::jit::get_type_name(input.type()) }
   ).launch(
     output.size(),
-    // TODO: replace with type dispatched (in/out)put.data<T>()
-    // Sad that we still need to use type_dispatcher in Jitified functionality
-    output.head<void>(),
-    input.head<void>()
+    detail::get_data_ptr(output),
+    detail::get_data_ptr(input)
   );
 
 }
