@@ -365,7 +365,8 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -480,6 +481,14 @@ set(ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - filling test ----------------------------------------------------------------------------------
+
+set(FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cu")
+
+ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy filling test ---------------------------------------------------------------------------
