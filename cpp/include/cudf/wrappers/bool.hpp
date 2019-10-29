@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <iosfwd>
+#include <type_traits>
 
 /**---------------------------------------------------------------------------*
  * @file bools.hpp
@@ -193,6 +194,12 @@ struct numeric_limits<cudf::experimental::bool8> {
     return cudf::experimental::bool8{false};
   }
 };
+
+template <>
+struct is_integral<cudf::experimental::bool8> : true_type {};
+
+template <>
+struct is_arithmetic<cudf::experimental::bool8> : true_type {};
 
 } // std
 
