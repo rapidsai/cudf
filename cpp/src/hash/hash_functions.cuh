@@ -18,6 +18,7 @@
 #define HASH_FUNCTIONS_CUH
 
 #include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <cudf/strings/string_view.cuh>
 
 using hash_value_type = uint32_t;
 
@@ -78,13 +79,14 @@ struct MurmurHash3_32
 
       return combined;
     }
-  
+
     __forceinline__ 
     __host__ __device__ result_type operator()(const Key& key) const
     {
         constexpr int len = sizeof(argument_type);
         const uint8_t * const data = (const uint8_t*)&key;
         constexpr int nblocks = len / 4;
+
         uint32_t h1 = m_seed;
         constexpr uint32_t c1 = 0xcc9e2d51;
         constexpr uint32_t c2 = 0x1b873593;
@@ -188,5 +190,58 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
 
 template <typename Key>
 using default_hash = MurmurHash3_32<Key>;
+
+/**
+* @brief Specialization of MurmurHash3_32 operator for strings.
+*/
+template<>
+__forceinline__ 
+__host__ __device__ hash_value_type MurmurHash3_32<cudf::string_view>::operator()(const cudf::string_view& key) const
+{
+    const int len = (int)key.size_bytes();
+    const uint8_t* data = (const uint8_t*)key.data();
+    const int nblocks = len / 4;
+    result_type h1 = m_seed;
+    constexpr uint32_t c1 = 0xcc9e2d51;
+    constexpr uint32_t c2 = 0x1b873593;
+    auto getblock32 = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
+      // Individual byte reads for unaligned accesses (very likely)
+      #ifndef __CUDA_ARCH__
+        CUDF_FAIL("Hashing a string in host code is not supported.");
+      #else
+        auto q = (const uint8_t*)(p + i);
+        return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+      #endif
+    };
+
+    //----------
+    // body
+    const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+    for (int i = -nblocks; i; i++) {
+      uint32_t k1 = getblock32(blocks, i);
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
+    }
+    //----------
+    // tail
+    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+    uint32_t k1 = 0;
+    switch (len & 3) {
+      case 3: k1 ^= tail[2] << 16;
+      case 2: k1 ^= tail[1] << 8;
+      case 1: k1 ^= tail[0];
+        k1 *= c1; k1 = rotl32(k1, 15); k1 *= c2; h1 ^= k1;
+    };
+    //----------
+    // finalization
+    h1 ^= len;
+    h1 = fmix32(h1);
+    return h1;
+}
+
 
 #endif //HASH_FUNCTIONS_CUH

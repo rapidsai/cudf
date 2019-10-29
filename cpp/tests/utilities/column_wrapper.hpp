@@ -98,6 +98,11 @@ class column_wrapper {
    *---------------------------------------------------------------------------**/
   operator mutable_column_view() { return wrapped->mutable_view(); }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Releases internal unique_ptr to wrapped column
+   *---------------------------------------------------------------------------**/
+  std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
+
  protected:
   std::unique_ptr<cudf::column> wrapped{};  ///< The wrapped column
 };
