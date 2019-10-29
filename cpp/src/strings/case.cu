@@ -121,7 +121,7 @@ std::unique_ptr<cudf::column> convert_case( strings_column_view strings,
     cudf::size_type null_count = d_column.null_count();
     if( d_column.nullable() ) // copy null_mask
         null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(strings_count),
+                                        bitmask_allocation_size_bytes(strings_count),
                                         stream, mr);
 
     // get the lookup tables used for case conversion
