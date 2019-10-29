@@ -388,9 +388,9 @@ add_library(cudf
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
-            src/transform/transform.cpp
+            src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
-            src/transform/nans_to_nulls.cu
+            src/transform/legacy/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -457,6 +457,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/slice.cpp
+            src/copying/split.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu

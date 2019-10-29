@@ -18,7 +18,7 @@
 #include <vector>
 #include <cudf/cudf.h>
 #include <cudf/legacy/join.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include "generate_input_tables.cuh"

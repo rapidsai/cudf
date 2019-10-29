@@ -20,7 +20,7 @@
 
 #include <cudf/cudf.h>
 #include <utilities/column_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <nvstrings/NVStrings.h>
 

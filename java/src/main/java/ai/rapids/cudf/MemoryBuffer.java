@@ -104,6 +104,7 @@ abstract class MemoryBuffer implements AutoCloseable {
 
   protected final void addressOutOfBoundsCheck(long address, long size, String type) {
     assert !closed : "Buffer is already closed " + Long.toHexString(this.address);
+    assert size >= 0 : "A positive size is required";
     assert address >= this.address : "Start address is too low for " + type +
         " 0x" + Long.toHexString(address) + " < 0x" + Long.toHexString(this.address);
     assert (address + size) <= (this.address + length) : "End address is too high for " + type +

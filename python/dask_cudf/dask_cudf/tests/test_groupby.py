@@ -159,3 +159,39 @@ def test_reset_index_multiindex():
         .reset_index()
         .merge(ddf_lookup, on="id_1"),
     )
+
+
+@pytest.mark.parametrize("split_out", [1, 2, 3])
+@pytest.mark.parametrize(
+    "column", ["c", "d", "e", ["b", "c"], ["b", "d"], ["b", "e"]]
+)
+def test_groupby_split_out(split_out, column):
+    df = pd.DataFrame(
+        {
+            "a": np.arange(8),
+            "b": [1, 0, 0, 2, 1, 1, 2, 0],
+            "c": [0, 1] * 4,
+            "d": ["dog", "cat", "cat", "dog", "dog", "dog", "cat", "bird"],
+        }
+    )
+    df["e"] = df["d"].astype("category")
+    gdf = cudf.from_pandas(df)
+
+    ddf = dd.from_pandas(df, npartitions=3)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=3)
+
+    ddf_result = (
+        ddf.groupby(column)
+        .a.mean(split_out=split_out)
+        .compute()
+        .sort_values()
+        .dropna()
+    )
+    gddf_result = (
+        gddf.groupby(column)
+        .a.mean(split_out=split_out)
+        .compute()
+        .sort_values()
+    )
+
+    dd.assert_eq(gddf_result, ddf_result, check_index=False)

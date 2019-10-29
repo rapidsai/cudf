@@ -17,7 +17,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <vector>
@@ -42,8 +42,8 @@ table_view_base<ColumnView>::table_view_base(
 }
 
 template <typename ColumnView>
-ColumnView& table_view_base<ColumnView>::column(
-    size_type column_index) noexcept {
+ColumnView const& table_view_base<ColumnView>::column(
+    size_type column_index) const noexcept {
   assert(column_index >= 0);
   assert(column_index < _columns.size());
   return _columns[column_index];
