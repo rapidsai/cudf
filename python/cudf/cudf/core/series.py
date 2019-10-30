@@ -16,7 +16,7 @@ from cudf.core.column import Column, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import cudautils, ioutils, numbautils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -155,7 +155,10 @@ class Series(object):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
-        return cupy.asarray(self.to_gpu_array())
+        return cupy.asarray(
+            # Temporary fix for CuPy < 7.0, numba = 0.46
+            numbautils.PatchedNumbaDeviceArray(self.to_gpu_array())
+        )
 
     @property
     def values_host(self):
