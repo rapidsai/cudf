@@ -202,9 +202,6 @@ gather(table_view const& source_table, MapIterator gather_map,
 
   for (size_type i = 0; i < source_n_cols; i++) {
     column_view src_col = source_table.column(i);
-    // Perform sanity checks
-    CUDF_EXPECTS(src_col.data<void*>() != nullptr, "Missing source data buffer");
-
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
 				  cudf::experimental::type_dispatcher(src_col.type(),
