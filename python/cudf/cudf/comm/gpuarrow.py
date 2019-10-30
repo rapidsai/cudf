@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.arrow._cuda import CudaBuffer
 from cudf._lib.gpuarrow import (
@@ -178,10 +178,6 @@ def array_to_series(array):
     if isinstance(array, pa.ChunkedArray):
         return Series._concat(
             [array_to_series(chunk) for chunk in array.chunks]
-        )
-    if isinstance(array, pa.Column):
-        return Series._concat(
-            [array_to_series(chunk) for chunk in array.data.chunks]
         )
 
     array_len = len(array)

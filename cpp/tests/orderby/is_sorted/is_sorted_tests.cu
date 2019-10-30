@@ -20,12 +20,12 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/predicates.hpp>
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/column_wrapper_factory.hpp>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper_factory.hpp>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;

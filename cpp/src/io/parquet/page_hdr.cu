@@ -15,18 +15,7 @@
  */
 
 #include "parquet_gpu.h"
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
+#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace io {

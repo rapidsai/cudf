@@ -295,6 +295,20 @@ def test_parquet_reader_spark_timestamps(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_spark_decimals(datadir):
+    fname = datadir / "spark_decimal.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    expect = expect.apply(pd.to_numeric)
+
+    # np.testing.assert_allclose(expect, got)
+    assert_eq(expect, got)
+
+
 def test_parquet_reader_microsecond_timestamps(datadir):
     fname = datadir / "usec_timestamp.parquet"
 
@@ -314,6 +328,30 @@ def test_parquet_reader_invalids(tmpdir):
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
+
+
+def test_parquet_chunked_skiprows(tmpdir):
+    processed = 0
+    batch = 10000
+    n = 100000
+    out_df = cudf.DataFrame(
+        {
+            "y": np.arange(n),
+            "z": np.random.choice(range(1000000, 2000000), n, replace=False),
+            "s": np.random.choice(range(20), n, replace=True),
+            "a": np.round(np.random.uniform(1, 5000, n), 2),
+        }
+    )
+
+    fname = tmpdir.join("skiprows.parquet")
+    out_df.to_pandas().to_parquet(fname)
+
+    for i in range(10):
+        chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
+        expect = out_df[processed : processed + batch].reset_index(drop=True)
+        assert_eq(chunk.reset_index(drop=True), expect)
+        processed += batch
+        del chunk
 
 
 def test_parquet_reader_filenotfound(tmpdir):
@@ -356,14 +394,25 @@ def test_parquet_writer(tmpdir, pdf, gdf):
     expect = pa.parquet.read_pandas(pdf_fname)
     got = pa.parquet.read_pandas(gdf_fname)
 
+    def clone_field(table, name, datatype):
+        f = table.schema.field_by_name(name)
+        return pa.field(f.name, datatype, f.nullable, f.metadata)
+
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
     expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    got_idx = got.schema.get_field_index("col_datetime64[ms]")
+    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
     expect = expect.set_column(
-        expect_idx, expect.column(expect_idx).cast(pa.date64())
+        expect_idx,
+        expect_field,
+        expect.column(expect_idx).cast(expect_field.type),
     )
     expect = expect.replace_schema_metadata()
-    got = got.set_column(got_idx, got.column(got_idx).cast(pa.date64()))
+
+    got_idx = got.schema.get_field_index("col_datetime64[ms]")
+    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
+    got = got.set_column(
+        got_idx, got_field, got.column(got_idx).cast(got_field.type)
+    )
     got = got.replace_schema_metadata()
 
     # assert_eq(expect, got)

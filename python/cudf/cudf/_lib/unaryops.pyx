@@ -13,7 +13,7 @@ import numpy as np
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.string cimport string
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils import cudautils
 
@@ -116,6 +116,11 @@ def apply_dt_extract_op(incol, outcol, op):
                 <gdf_column*>c_incol,
                 <gdf_column*>c_outcol
             )
+        elif op == 'weekday':
+            result = cpp_unaryops.gdf_extract_datetime_weekday(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
         elif op == 'hour':
             result = cpp_unaryops.gdf_extract_datetime_hour(
                 <gdf_column*>c_incol,
@@ -145,7 +150,7 @@ def nans_to_nulls(py_col):
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
 
-    cdef pair[cpp_unaryops.bit_mask_t_ptr, gdf_size_type] result
+    cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
 
     with nogil:
         result = cpp_unaryops.nans_to_nulls(c_col[0])
@@ -160,4 +165,32 @@ def nans_to_nulls(py_col):
             finalizer=rmm._make_finalizer(mask_ptr, 0)
         )
 
+    free_column(c_col)
+
     return mask
+
+
+def is_null(col):
+    from cudf.core.column import as_column, Column
+
+    if (not isinstance(col, Column)):
+        col = as_column(col)
+    cdef gdf_column* c_col = column_view_from_column(col)
+
+    cdef gdf_column result = cpp_unaryops.is_null(c_col[0])
+    free_column(c_col)
+
+    return gdf_column_to_column(&result)
+
+
+def is_not_null(col):
+    from cudf.core.column import as_column, Column
+
+    if (not isinstance(col, Column)):
+        col = as_column(col)
+    cdef gdf_column* c_col = column_view_from_column(col)
+
+    cdef gdf_column result = cpp_unaryops.is_not_null(c_col[0])
+    free_column(c_col)
+
+    return gdf_column_to_column(&result)

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf

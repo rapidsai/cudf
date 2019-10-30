@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.core import DataFrame, GenericIndex
 from cudf.core.buffer import Buffer

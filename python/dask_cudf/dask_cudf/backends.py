@@ -33,3 +33,49 @@ def concat_cudf(
     assert axis == 0
     assert join == "outer"
     return cudf.concat(dfs)
+
+
+try:
+
+    from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+    from cudf.core.column import column, CategoricalColumn, StringColumn
+    import rmm
+    import cudf._lib as libcudf
+    from cudf.core.buffer import Buffer
+
+    def _string_safe_hash(df):
+        frame = df.copy(deep=False)
+        for col in frame.columns:
+            if isinstance(frame[col]._column, StringColumn):
+                out_dev_arr = rmm.device_array(len(frame), dtype="int32")
+                ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+                frame[col]._column.data.hash(devptr=ptr)
+                frame[col] = cudf.Series(Buffer(out_dev_arr))
+        return frame.hash_columns()
+
+    @hash_object_dispatch.register(cudf.DataFrame)
+    def hash_object_cudf(frame, index=True):
+        if index:
+            return _string_safe_hash(frame.reset_index)
+        return _string_safe_hash(frame)
+
+    @hash_object_dispatch.register(cudf.Index)
+    def hash_object_cudf_index(ind, index=None):
+
+        if isinstance(ind, cudf.MultiIndex):
+            return _string_safe_hash(ind.to_frame(index=False))
+
+        col = column.as_column(ind)
+        if isinstance(col, StringColumn):
+            col = col.as_numerical_column("int32")
+        elif isinstance(col, CategoricalColumn):
+            col = col.as_numerical
+        return cudf.Series(col).hash_values()
+
+    @group_split_dispatch.register(cudf.DataFrame)
+    def group_split_cudf(df, c, k):
+        return dict(zip(range(k), df.scatter_by_map(c, map_size=k)))
+
+
+except ImportError:
+    pass

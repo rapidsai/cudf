@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
-#include <cudf/search.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/search.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -29,14 +29,14 @@
 class Search : public cudf::benchmark {};
 
 void BM_non_null_column(benchmark::State& state){
-  const gdf_size_type column_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type values_size = column_size;
+  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type values_size = column_size;
 
   cudf::test::column_wrapper<float> column(column_size,
-    [=](gdf_index_type row) { return static_cast<float>(row); }
+    [=](cudf::size_type row) { return static_cast<float>(row); }
   );
   cudf::test::column_wrapper<float> values(values_size,
-    [=](gdf_index_type row) { return static_cast<float>(values_size - row); }
+    [=](cudf::size_type row) { return static_cast<float>(values_size - row); }
   );
   
   for(auto _ : state){
@@ -56,16 +56,16 @@ BENCHMARK_REGISTER_F(Search, AllValidColumn)
   ->Arg(100000000);
 
 void BM_nullable_column(benchmark::State& state){
-  const gdf_size_type column_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type values_size = column_size;
+  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type values_size = column_size;
 
   cudf::test::column_wrapper<float> column(column_size,
-    [=](gdf_index_type row) { return static_cast<float>(row); },
-    [=](gdf_index_type row) { return row < (9 * column_size / 10); }
+    [=](cudf::size_type row) { return static_cast<float>(row); },
+    [=](cudf::size_type row) { return row < (9 * column_size / 10); }
   );
   cudf::test::column_wrapper<float> values(values_size,
-    [=](gdf_index_type row) { return static_cast<float>(values_size - row); },
-    [=](gdf_index_type row) { return row < (9 * column_size / 10); }
+    [=](cudf::size_type row) { return static_cast<float>(values_size - row); },
+    [=](cudf::size_type row) { return row < (9 * column_size / 10); }
   );
   
   for(auto _ : state){
@@ -103,27 +103,27 @@ void sort_table(cudf::table& t, std::vector<bool>& desc_flags) {
   gdf_context ctxt{};
   gdf_order_by(t.begin(), d_desc_flags, t.num_columns(), out_indices.get(), &ctxt);
 
-  auto indices = static_cast<gdf_index_type*>(out_indices.get()->data);
+  auto indices = static_cast<cudf::size_type*>(out_indices.get()->data);
   cudf::gather(&t, indices, &t);
 }
 
 void BM_table(benchmark::State& state){
   using wrapper = cudf::test::column_wrapper<float>;
 
-  const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
-  const gdf_size_type column_size{(gdf_size_type)state.range(1)};
-  const gdf_size_type values_size = column_size;
+  const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
+  const cudf::size_type column_size{(cudf::size_type)state.range(1)};
+  const cudf::size_type values_size = column_size;
 
   std::vector<wrapper> columns;
   std::vector<wrapper> values;
 
   auto make_table = [&] (std::vector<wrapper>& cols,
-                         gdf_size_type col_size) -> cudf::table
+                         cudf::size_type col_size) -> cudf::table
   {
-    for (gdf_size_type i = 0; i < num_columns; i++) {
+    for (cudf::size_type i = 0; i < num_columns; i++) {
       cols.emplace_back(col_size,
-        [=](gdf_index_type row) { return random_int(0, 100); },
-        [=](gdf_index_type row) { return random_int(0, 100) < 90; }
+        [=](cudf::size_type row) { return random_int(0, 100); },
+        [=](cudf::size_type row) { return random_int(0, 100) < 90; }
       );
     }
 

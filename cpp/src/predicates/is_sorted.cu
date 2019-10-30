@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
@@ -47,7 +47,7 @@ bool is_sorted(cudf::table const& table,
   auto device_input_table = device_table::create(table);
   bool const nullable = cudf::has_nulls(table);
 
-  gdf_size_type nrows = table.num_rows();
+  cudf::size_type nrows = table.num_rows();
  
   if (nullable)
   { 

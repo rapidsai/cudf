@@ -21,7 +21,7 @@
 #define GDF_JIT_LAUNCHER_H
 
 #include <jit/cache.h>
-#include <jit/type.h>
+#include <cudf/types.h>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>

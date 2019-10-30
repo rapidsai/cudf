@@ -15,18 +15,7 @@
  */
 
 #include "parquet_gpu.h"
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
+#include <io/utilities/block_utils.cuh>
 
 #define LOG2_NTHREADS   (5+2)
 #define NTHREADS        (1 << LOG2_NTHREADS)
@@ -54,9 +43,9 @@ struct page_state_s {
     int32_t valid_map_offset;       // offset in valid_map, in bits
     uint32_t out_valid;
     uint32_t out_valid_mask;
-    int32_t first_row;
-    int32_t num_rows;
-    int32_t dtype_len;              // Output data type
+    int32_t first_row;              // First row in page to output
+    int32_t num_rows;               // Rows in page to decode (including rows to be skipped)
+    int32_t dtype_len;              // Output data type length
     int32_t dtype_len_in;           // Can be larger than dtype_len if truncating 32-bit into 8-bit
     int32_t dict_bits;              // # of bits to store dictionary indices
     uint32_t dict_run;
@@ -883,6 +872,102 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
 
 
 /**
+ * @brief Powers of 10
+ **/
+static const __device__ __constant__ double kPow10[40] =
+{
+    1.0,    1.e1,   1.e2,   1.e3,   1.e4,   1.e5,   1.e6,   1.e7,
+    1.e8,   1.e9,   1.e10,  1.e11,  1.e12,  1.e13,  1.e14,  1.e15,
+    1.e16,  1.e17,  1.e18,  1.e19,  1.e20,  1.e21,  1.e22,  1.e23,
+    1.e24,  1.e25,  1.e26,  1.e27,  1.e28,  1.e29,  1.e30,  1.e31,
+    1.e32,  1.e33,  1.e34,  1.e35,  1.e36,  1.e37,  1.e38,  1.e39,
+};
+
+/**
+ * @brief Output a decimal type ([INT32..INT128] + scale) as a 64-bit float
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ * @param[in] dtype Stored data type
+ **/
+inline __device__ void gpuOutputDecimal(volatile page_state_s *s, int src_pos, double *dst, int dtype)
+{
+    const uint8_t *dict;
+    uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
+    int64_t i128_hi, i128_lo;
+    int32_t scale;
+    double d;
+
+    if (s->dict_base)
+    {
+        // Dictionary
+        dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (NZ_BFRSZ - 1)] : 0;
+        dict = s->dict_base;
+    }
+    else
+    {
+        // Plain
+        dict_pos = src_pos;
+        dict = s->data_start;
+    }
+    dtype_len_in = s->dtype_len_in;
+    dict_pos *= dtype_len_in;
+    // FIXME: Not very efficient (currently reading 1 byte at a time) -> need a variable-length unaligned
+    // load utility function (both little-endian and big-endian versions)
+    if (dtype == INT32)
+    {
+        int32_t lo32 = 0;
+        for (unsigned int i = 0; i < dtype_len_in; i++) {
+            uint32_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+            lo32 |= v << (i * 8);
+        }
+        i128_lo = lo32;
+        i128_hi = lo32 >> 31;
+    }
+    else if (dtype == INT64)
+    {
+        int64_t lo64 = 0;
+        for (unsigned int i = 0; i < dtype_len_in; i++) {
+            uint64_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+            lo64 |= v << (i*8);
+        }
+        i128_lo = lo64;
+        i128_hi = lo64 >> 63;
+    }
+    else // if (dtype == FIXED_LENGTH_BYTE_ARRAY)
+    {
+        i128_lo = 0;
+        for (unsigned int i = dtype_len_in - min(dtype_len_in, 8); i < dtype_len_in; i++) {
+            uint32_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+            i128_lo = (i128_lo << 8) | v;
+        }
+        if (dtype_len_in > 8) {
+            i128_hi = 0;
+            for (unsigned int i = dtype_len_in - min(dtype_len_in, 16); i < dtype_len_in - 8; i++) {
+                uint32_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+                i128_hi = (i128_hi << 8) | v;
+            }
+            if (dtype_len_in < 16) {
+                i128_hi <<= 64 - (dtype_len_in - 8) * 8;
+                i128_hi >>= 64 - (dtype_len_in - 8) * 8;
+            }
+        }
+        else {
+            if (dtype_len_in < 8) {
+                i128_lo <<= 64 - dtype_len_in * 8;
+                i128_lo >>= 64 - dtype_len_in * 8;
+            }
+            i128_hi = i128_lo >> 63;
+        }
+    }
+    scale = s->col.decimal_scale;
+    d = Int128ToDouble_rn(i128_lo, i128_hi);
+    *dst = (scale < 0) ? (d * kPow10[min(-scale, 39)]) : (d / kPow10[min(scale, 39)]);
+}
+
+
+/**
  * @brief Output a small fixed-length value
  *
  * @param[in,out] s Page state input/output
@@ -1072,7 +1157,11 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             }
             // Special check for downconversions
             s->dtype_len_in = s->dtype_len;
-            if ((s->col.data_type & 7) == INT32)
+            if (s->col.converted_type == DECIMAL)
+            {
+                s->dtype_len = 8; // Convert DECIMAL to 64-bit float
+            }
+            else if ((s->col.data_type & 7) == INT32)
             {
                 if (dtype_len_out == 1)
                     s->dtype_len = 1; // INT8 output
@@ -1091,7 +1180,6 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             s->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base);
             s->valid_map = s->col.valid_map_base;
             s->valid_map_offset = 0;
-            s->first_row = 0;
             if (page_start_row >= min_row)
             {
                 if (s->data_out)
@@ -1103,13 +1191,13 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     s->valid_map += (page_start_row - min_row) >> 5;
                     s->valid_map_offset = (int32_t)((page_start_row - min_row) & 0x1f);
                 }
-                s->num_rows = s->page.num_rows;
+                s->first_row = 0;
             }
             else // First row starts after the beginning of the page
             {
                 s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
-                s->num_rows = s->page.num_rows - s->first_row;
             }
+            s->num_rows = s->page.num_rows;
             s->out_valid = 0;
             s->out_valid_mask = (~0) << s->valid_map_offset;
             if (page_start_row + s->num_rows > min_row + num_rows)
@@ -1177,7 +1265,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
         s->nz_count = 0;
         s->dict_pos = 0;
         s->out_pos = 0;
-        s->num_values = min(s->page.num_values, s->first_row + s->num_rows);
+        s->num_values = min(s->page.num_values, s->num_rows);
         __threadfence_block();
     }
     __syncthreads();
@@ -1238,7 +1326,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             int dtype = s->col.data_type & 7;
             int out_pos = s->out_pos + t - out_thread0;
             int row_idx = s->nz_idx[out_pos & (NZ_BFRSZ - 1)];
-            if (out_pos < target_pos && row_idx >= 0 && row_idx < s->num_rows)
+            if (out_pos < target_pos && row_idx >= 0 && s->first_row + row_idx < s->num_rows)
             {
                 uint32_t dtype_len = s->dtype_len;
                 uint8_t *dst = s->data_out + (size_t)row_idx * dtype_len;
@@ -1246,6 +1334,8 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     gpuOutputString(s, out_pos, dst);
                 else if (dtype == BOOLEAN)
                     gpuOutputBoolean(s, out_pos, dst);
+                else if (s->col.converted_type == DECIMAL)
+                    gpuOutputDecimal(s, out_pos, reinterpret_cast<double *>(dst), dtype);
                 else if (dtype == INT96)
                     gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                 else if (dtype_len == 8)
@@ -1271,7 +1361,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
     if (!t)
     {
         // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of valid values
-        pages[page_idx].num_rows = s->num_rows;
+        pages[page_idx].num_rows = s->num_rows - s->first_row;
         pages[page_idx].valid_count = (s->error) ? -s->error : s->page.valid_count;
     }
 }

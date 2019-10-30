@@ -21,6 +21,7 @@
 #include <thrust/transform_scan.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"
 

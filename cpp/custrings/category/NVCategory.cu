@@ -26,6 +26,7 @@
 #include <thrust/copy.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVCategory.h"
 #include "nvstrings/NVStrings.h"

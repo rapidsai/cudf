@@ -16,20 +16,8 @@
 
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)        __shfl_sync(~0, v, 0)
-#define SHFL(v, t)      __shfl_sync(~0, v, t)
-#define SHFL_XOR(v, m)  __shfl_xor_sync(~0, v, m)
-#define SYNCWARP()      __syncwarp()
-#define BALLOT(v)       __ballot_sync(~0, v)
-#else
-#define SHFL0(v)        __shfl(v, 0)
-#define SHFL(v, t)      __shfl(v, t)
-#define SHFL_XOR(v, m)  __shfl_xor(v, m)
-#define SYNCWARP()
-#define BALLOT(v)       __ballot(v)
-#endif
 
 #define LOG2_BYTESTREAM_BFRSZ   13  // Must be able to handle 512x 8-byte values
 
@@ -82,10 +70,7 @@ struct orc_rlev2_state_s
         uint64_t u64[NWARPS];
     } baseval;
     uint16_t m2_pw_byte3[NWARPS];
-    union {
-        int32_t i32[NWARPS];
-        int64_t i64[NWARPS];
-    } delta;
+    int64_t delta[NWARPS];
     uint16_t runs_loc[NTHREADS];
 };
 
@@ -809,22 +794,19 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     else
                     {
                         T baseval;
+                        int64_t delta;
                         // Delta
                         pos = decode_varint(bs, pos, baseval);
                         if (sizeof(T) <= 4)
                         {
-                            int32_t delta;
-                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u32[r] = baseval;
-                            rle->delta.i32[r] = delta;
                         }
                         else
                         {
-                            int64_t delta;
-                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u64[r] = baseval;
-                            rle->delta.i64[r] = delta;
                         }
+                        pos = decode_varint(bs, pos, delta);
+                        rle->delta[r] = delta;
                     }
                 }
             }
@@ -855,9 +837,16 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else
                 {
-                    int32_t delta = rle->delta.i32[r];
-                    uint32_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) : abs(delta);
-                    vals[base + i] = (delta < 0) ? -ofs : ofs;
+                    int64_t delta = rle->delta[r];
+                    if (w > 1 && i > 1)
+                    {
+                        int32_t delta_s = (delta < 0) ? -1 : 0;
+                        vals[base + i] = (bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) ^ delta_s) - delta_s;
+                    }
+                    else
+                    {
+                        vals[base + i] = (i == 0) ? 0 : static_cast<uint32_t>(delta);
+                    }
                 }
             }
             else
@@ -879,9 +868,17 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else
                 {
-                    int64_t delta = rle->delta.i64[r];
-                    uint64_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) : llabs(delta);
-                    vals[base + i] = (delta < 0) ? -ofs : ofs;
+                    int64_t delta = rle->delta[r], ofs;
+                    if (w > 1 && i > 1)
+                    {
+                        int64_t delta_s = (delta < 0) ? -1 : 0;                        
+                        ofs = (bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) ^ delta_s) - delta_s;
+                    }
+                    else
+                    {
+                        ofs = (i == 0) ? 0 : delta;
+                    }
+                    vals[base + i] = ofs;
                 }
             }
         }

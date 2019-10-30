@@ -24,7 +24,15 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
     if isinstance(chunksize, str):
         chunksize = parse_bytes(chunksize)
 
-    filenames = sorted(glob(str(path)))
+    if isinstance(path, list):
+        filenames = path
+    elif isinstance(path, str):
+        filenames = sorted(glob(path))
+    elif hasattr(path, "__fspath__"):
+        filenames = sorted(glob(path.__fspath__()))
+    else:
+        raise TypeError("Path type not understood:{}".format(type(path)))
+
     if not filenames:
         msg = f"A file in: {filenames} does not exist."
         raise FileNotFoundError(msg)

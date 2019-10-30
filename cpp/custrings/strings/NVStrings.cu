@@ -28,6 +28,7 @@
 #include <thrust/unique.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/ipc_transfer.h"
