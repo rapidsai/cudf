@@ -64,7 +64,10 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
+- PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3245 Move binaryop files to legacy
+- PR #3241 Move stream_compaction files to legacy
 - PR #3214 Port unary to libcudf++
 
 ## Bug Fixes
@@ -85,6 +88,7 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 
 
 # cuDF 0.10.0 (16 Oct 2019)
