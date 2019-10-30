@@ -45,7 +45,9 @@ struct dispatch_map_type {
 	       thrust::make_transform_iterator(
 					       gather_map.begin<map_type>(),
 					       index_converter<map_type>{source_table.num_rows()}),
-	       num_destination_rows,
+	       thrust::make_transform_iterator(
+					       gather_map.end<map_type>(),
+					       index_converter<map_type>{source_table.num_rows()}),
 	       check_bounds,
 	       ignore_out_of_bounds,
 	       allow_negative_indices
@@ -55,7 +57,7 @@ struct dispatch_map_type {
       destination_table =
 	gather(source_table,
 	       gather_map.begin<map_type>(),
-	       num_destination_rows,
+	       gather_map.end<map_type>(),
 	       check_bounds,
 	       ignore_out_of_bounds,
 	       allow_negative_indices

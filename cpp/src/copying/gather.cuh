@@ -118,11 +118,12 @@ struct column_gatherer {
   template <typename Element, typename MapIterator,
     std::enable_if_t<is_fixed_width<Element>()>* = nullptr>
     std::unique_ptr<column> operator()(column_view const& source_column,
-				       MapIterator gather_map,
-				       size_type num_destination_rows,
+				       MapIterator gather_map_begin,
+				       MapIterator gather_map_end,
 				       bool ignore_out_of_bounds,
 				       cudaStream_t stream) {
 
+    auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
     std::unique_ptr<column> destination_column =
       allocate_like(source_column, num_destination_rows);
 
@@ -131,14 +132,13 @@ struct column_gatherer {
     Element *destination_data{destination_column->mutable_view().data<Element>()};
 
     if (ignore_out_of_bounds) {
-      thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
-			gather_map + num_destination_rows, gather_map,
+      thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map_begin,
+			gather_map_end, gather_map_begin,
 			source_data, destination_data,
-			bounds_checker<decltype(*gather_map)>{0, source_column.size()});
+			bounds_checker<decltype(*gather_map_begin)>{0, source_column.size()});
     } else {
-      thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
-		     gather_map+num_destination_rows, source_data,
-		     destination_data);
+      thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_begin,
+		     gather_map_end, source_data, destination_data);
     }
 
     CHECK_STREAM(stream);
@@ -148,8 +148,8 @@ struct column_gatherer {
   template <typename Element, typename MapIterator,
     std::enable_if_t<not is_fixed_width<Element>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& source_column,
-				     MapIterator gather_map,
-				     size_type num_destination_rows,
+				     MapIterator gather_map_begin,
+				     MapIterator gather_map_end,
 				     bool ignore_out_of_bounds,
 				     util::cuda::scoped_stream stream) {
     CUDF_FAIL("Column type must be numeric");
@@ -187,14 +187,15 @@ struct index_converter : public thrust::unary_function<map_type,map_type>
 
 template <typename MapIterator>
 std::unique_ptr<table>
-gather(table_view const& source_table, MapIterator gather_map,
-       size_type num_destination_rows, bool check_bounds = false,
+gather(table_view const& source_table, MapIterator gather_map_begin,
+       MapIterator gather_map_end, bool check_bounds = false,
        bool ignore_out_of_bounds = false,
        bool allow_negative_indices = false,
        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   auto source_n_cols = source_table.num_columns();
   auto source_n_rows = source_table.num_rows();
+  auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
 
   std::vector<util::cuda::scoped_stream> v_stream(source_n_cols);
 
@@ -207,17 +208,19 @@ gather(table_view const& source_table, MapIterator gather_map,
 				  cudf::experimental::type_dispatcher(src_col.type(),
 								      column_gatherer{},
 								      src_col,
-								      gather_map,
-								      num_destination_rows,
+								      gather_map_begin,
+								      gather_map_end,
 								      ignore_out_of_bounds,
 								      v_stream[i]));
   }
 
 
+
+
   std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(destination_columns));
 
   auto bitmask_kernel =
-    ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map)> : gather_bitmask_kernel<false, decltype(gather_map)>;
+    ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> : gather_bitmask_kernel<false, decltype(gather_map_begin)>;
 
   int gather_grid_size;
   int gather_block_size;
@@ -230,7 +233,7 @@ gather(table_view const& source_table, MapIterator gather_map,
 
   bitmask_kernel<<<gather_grid_size, gather_block_size>>>(
 							  *source_table_view,
-							  gather_map,
+							  gather_map_begin,
 							  *destination_table_view);
 
 
