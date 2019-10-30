@@ -104,7 +104,8 @@ struct Options : groupby::Options {
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(table_view const& keys,
                                                                   table_view const& values,
                                                                   std::vector<operators> const& ops,
-                                                                  Options options = Options{});
+                                                                  Options options = Options{},
+                                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace hash
 
@@ -122,7 +123,7 @@ struct quantile_args : operation_args {
   std::vector<double> quantiles;
   cudf::interpolation interpolation;
   
-  quantile_args(const std::vector<double> &_quantiles,  cudf::interpolation _interpolation)
+  quantile_args(std::vector<double> const&_quantiles,  cudf::interpolation _interpolation)
   : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
   {}
 };
@@ -138,18 +139,18 @@ struct operation {
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the sort-based groupby
  * The priority of determining the sort flags:
- * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
+ * - The `ignore_null_keys` take precedence over the `null_precedence`
  *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {
-  null_order null_sort_behavior; ///< Indicates how nulls are treated
-  bool input_sorted; ///< Indicates if the input data is sorted. 
+  null_order null_precedence; ///< Indicates how nulls are treated
+  bool input_sorted;          ///< Indicates if the input data is sorted. 
 
   Options(bool _ignore_null_keys = true,
-          null_order _null_sort_behavior = null_order::AFTER,
+          null_order _null_precedence = null_order::AFTER,
           bool _input_sorted = false)
       : groupby::Options(_ignore_null_keys),
         input_sorted(_input_sorted),
-        null_sort_behavior(_null_sort_behavior) {}
+        null_precedence(_null_precedence) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -175,7 +176,8 @@ struct Options : groupby::Options {
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(table_view const& keys,
                                                                   table_view const& values,
                                                                   std::vector<operation> const& ops,
-                                                                  Options options = Options{});
+                                                                  Options options = Options{},
+                                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace sort
 }  // namespace groupby
 }  // namespace experimental
@@ -185,11 +187,14 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(table_view con
  * @brief Returns the first index of each unique row. Assumes the data is
  * already sorted
  *
- * @param[in]  input_table          The input columns whose rows are sorted.
+ * @param[in]  input_table        The input columns whose rows are sorted.
+ * @param[in]  mr                 Device memory resource to use for device memory
+ *                                allocation
  *
  * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
  */
-std::unique_ptr<column> unique_indices(table_view const& input_table);
+std::unique_ptr<column> unique_indices(table_view const& input_table,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Sorts a set of columns based on specified "key" columns. Returns a
@@ -212,8 +217,8 @@ std::unique_ptr<column> unique_indices(table_view const& input_table);
  *            the first occurrences of each unique row.
  */
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>>
-  gdf_group_by_without_aggregations(table_view const& input_table,
-                                    std::vector<size_type> const& key_col_indices,
-                                    null_order null_precedence = null_order::AFTER,
-                                    bool ignore_null_keys = true,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  group_by_without_aggregations(table_view const& input_table,
+                                std::vector<size_type> const& key_col_indices,
+                                null_order null_precedence = null_order::AFTER,
+                                bool ignore_null_keys = true,
+                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
