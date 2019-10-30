@@ -417,10 +417,7 @@ class DataFrame(object):
         df = self.copy()
         for col in self.columns:
             if col in other.columns:
-                boolbits = cudautils.compact_mask_bytes(
-                    # leave this alone
-                    other[col].to_gpu_array()
-                )
+                boolbits = cudautils.compact_mask_bytes(other[col].data.mem)
             else:
                 boolbits = cudautils.make_empty_mask(len(self[col]))
             df[col]._column = df[col]._column.set_mask(boolbits)

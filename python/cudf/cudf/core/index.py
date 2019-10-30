@@ -124,7 +124,7 @@ class Index(object):
 
     @property
     def gpu_values(self):
-        return self.as_column().to_gpu_array()
+        return self.as_column().data.mem
 
     def min(self):
         return self.as_column().min()
@@ -597,7 +597,7 @@ class RangeIndex(Index):
         return _to_frame(self, index, name)
 
     def to_gpu_array(self):
-        return self.as_column().to_gpu_array()
+        return self.as_column().data.mem
 
     def to_pandas(self):
         return pd.RangeIndex(

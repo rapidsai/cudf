@@ -675,7 +675,7 @@ class Column(object):
            logical inverted mask
         """
 
-        gpu_mask = self.to_gpu_array()
+        gpu_mask = self.data.mem
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
@@ -749,7 +749,7 @@ class Column(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+        return cudautils.compact_mask_bytes(self.data.mem)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):

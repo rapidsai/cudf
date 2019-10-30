@@ -157,7 +157,7 @@ class Series(object):
 
         return cupy.asarray(
             # Temporary fix for CuPy < 7.0, numba = 0.46
-            numbautils.PatchedNumbaDeviceArray(self.to_gpu_array())
+            numbautils.PatchedNumbaDeviceArray(self.data.mem)
         )
 
     @property
@@ -1419,7 +1419,7 @@ class Series(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+        return cudautils.compact_mask_bytes(self.data.mem)
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
