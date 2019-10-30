@@ -150,9 +150,13 @@ struct EncPage
 {
   uint8_t *page_data;               //!< Ptr to uncompressed page
   uint16_t num_fragments;           //!< Number of fragments in page
-  uint16_t pad;
+  uint8_t page_type;                //!< Page type (0=data, 2=dictionary)
+  uint8_t pad;
+  uint32_t chunk_id;                //!< Index in chunk array
   uint32_t max_hdr_size;            //!< Maximum size of page header
   uint32_t max_data_size;           //!< Maximum size of coded page data (excluding header)
+  uint32_t start_row;               //!< First row of page
+  uint32_t num_rows;                //!< Rows in page
 };
 
 /**
@@ -160,9 +164,11 @@ struct EncPage
  **/
 struct EncColumnChunk
 {
+  const EncColumnDesc *col_desc;    //!< Column description
   const PageFragment *fragments;    //!< First fragment in chunk
   uint8_t *uncompressed_bfr;        //!< Uncompressed page data
   uint32_t bfr_size;                //!< Uncompressed buffer size
+  uint32_t start_row;               //!< First row of chunk
   uint32_t num_rows;                //!< Number of rows in chunk
   uint32_t first_page;              //!< First page of chunk
   uint32_t num_pages;               //!< Number of pages in chunk
@@ -249,6 +255,17 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncCo
                              int32_t num_rowgroups, int32_t num_columns,
                              cudaStream_t stream = (cudaStream_t)0);
 
+/**
+ * @brief Launches kernel for packing column data into parquet pages
+ *
+ * @param[in,out] pages Device array of EncPages (unordered)
+ * @param[in] chunks Column chunks
+ * @param[in] num_pages Number of pages
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu
 } // namespace parquet
