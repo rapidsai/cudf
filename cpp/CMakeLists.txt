@@ -392,9 +392,9 @@ add_library(cudf
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/apply_boolean_mask.cu
-            src/stream_compaction/drop_nulls.cu
-            src/stream_compaction/drop_duplicates.cu
+            src/stream_compaction/legacy/apply_boolean_mask.cu
+            src/stream_compaction/legacy/drop_nulls.cu
+            src/stream_compaction/legacy/drop_duplicates.cu
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
@@ -457,6 +457,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/slice.cpp
+            src/copying/split.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu

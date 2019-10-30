@@ -18,7 +18,7 @@
 /*#include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/legacy/copying.hpp>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/legacy/stream_compaction.hpp>
 #include <cudf/table.hpp>
 #include "table/device_table.cuh"
 #include <table/device_table_row_operators.cuh>*/
