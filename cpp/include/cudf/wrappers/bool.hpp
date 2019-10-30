@@ -48,14 +48,6 @@ struct bool8 {
   CUDA_HOST_DEVICE_CALLABLE constexpr bool8(bool v)
     : value{static_cast<value_type>(v)} {}
 
-  // bool8 constructor that takes non-bool8 types
-
-  template <typename from_type,
-            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
-                                      from_type>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit bool8(from_type v)
-    : value{static_cast<value_type>(static_cast<bool>(v))} {}
-
   // move/copy assignment operators for non-bool8 types
 
   template <typename from_type>
@@ -123,7 +115,7 @@ struct bool8 {
   }
 
   CUDA_HOST_DEVICE_CALLABLE bool8 operator*(bool8 const &rhs) const {
-    return static_cast<bool8>(static_cast<bool>(*this) *
+    return static_cast<bool8>(static_cast<bool>(*this) &&
                               static_cast<bool>(rhs));
   }
 
