@@ -50,5 +50,14 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
 void expect_equal_buffers(void const* lhs, void const* rhs,
                           std::size_t size_bytes);
 
+/**---------------------------------------------------------------------------*
+ * @brief Displays a column view as a string
+ *
+ * @param col The column view
+ * @param sep The separator for 
+ * @param size_bytes The number of bytes to check for equality
+ *---------------------------------------------------------------------------**/
+std::string column_view_to_str(cudf::column_view const& col, const char *delimiter);
+
 }  // namespace test
 }  // namespace cudf
