@@ -127,13 +127,13 @@ std::unique_ptr<column> fill(column_view const& input,
 
   auto destination = ret->mutable_view();
   if (begin > 0) {
-    copy_range(destination, input, 0, begin, 0);
+    copy_range(destination, input, 0, begin, 0, stream);
   }
   if (end != begin) {  // otherwise no fill
-    fill(destination, begin, end, value);
+    fill(destination, begin, end, value, stream);
   }
   if (end < input.size()) {
-    copy_range(destination, input, end, input.size(), end);
+    copy_range(destination, input, end, input.size(), end, stream);
   }
 
   return ret;

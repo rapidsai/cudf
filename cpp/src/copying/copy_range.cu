@@ -87,7 +87,7 @@ void copy_range(mutable_column_view& output, column_view const& input,
                "output should be nullable if input has null values.");
 
   if (out_end != out_begin) {  // otherwise no-op
-    detail::copy_range(
+    copy_range(
       output,
       column_range_factory{input, in_begin},
       out_begin, out_end, stream);
@@ -133,13 +133,13 @@ std::unique_ptr<column> copy_range(column_view const& output,
 
   auto ret_view = ret->mutable_view();
   if (out_begin > 0) {
-    copy_range(ret_view, output, 0, out_begin, 0);
+    copy_range(ret_view, output, 0, out_begin, 0, stream);
   }
   if (out_end != out_begin) {
-    copy_range(ret_view, input, out_begin, out_end, in_begin);
+    copy_range(ret_view, input, out_begin, out_end, in_begin, stream);
   }
   if (out_end < output.size()) {
-    copy_range(ret_view, output, out_end, output.size(), out_end);
+    copy_range(ret_view, output, out_end, output.size(), out_end, stream);
   }
 
   return ret;
