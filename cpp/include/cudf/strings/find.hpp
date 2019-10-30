@@ -31,22 +31,28 @@ namespace strings
  *
  * The target string is searched within each string in the character
  * position range [start,stop). If the stop parameter is -1, then the
- * end of the string becomes the final position to include in the search.
+ * end of each string becomes the final position to include in the search.
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * @throw cudf::logic_error if output_type is not an integer type.
+ * @throw cudf::logic_error if start position is greater than stop position.
+ *
  * @param strings Strings instance for this operation.
- * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
+ * @param target UTF-8 encoded string to search for in each string.
  * @param start First character position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search to the end of the string.
+ * @param output_type Integer type for output column.
+ *                    Default is INT32.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
- * @return New INT32 column with character position values.
+ * @return New integer column with character position values.
  */
-std::unique_ptr<cudf::column> find( cudf::strings_column_view strings,
-                                    const char* target,
-                                    int32_t start=0, int32_t stop=-1,
+std::unique_ptr<cudf::column> find( const cudf::strings_column_view strings,
+                                    const std::string target,
+                                    cudf::size_type start=0, cudf::size_type stop=-1,
+                                    cudf::data_type output_type = cudf::data_type{INT32},
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                     cudaStream_t stream=0 );
 
@@ -58,22 +64,28 @@ std::unique_ptr<cudf::column> find( cudf::strings_column_view strings,
  *
  * The target string is searched within each string in the character
  * position range [start,stop). If the stop parameter is -1, then the
- * end of the string becomes the final position to include in the search.
+ * end of each string becomes the final position to include in the search.
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * @throw cudf::logic_error if output_type is not an integer type.
+ * @throw cudf::logic_error if start position is greater than stop position.
+ *
  * @param strings Strings instance for this operation.
- * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
+ * @param target UTF-8 encoded string to search for in each string.
  * @param start First position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search starting at the end of the string.
+ * @param output_type Integer type for output column.
+ *                    Default is INT32.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
- * @return New INT32 column with character position values.
+ * @return New integer column with character position values.
  */
-std::unique_ptr<cudf::column> rfind( cudf::strings_column_view strings,
-                                     const char* target,
-                                     int32_t start=0, int32_t stop=-1,
+std::unique_ptr<cudf::column> rfind( const cudf::strings_column_view strings,
+                                     const std::string target,
+                                     cudf::size_type start=0, cudf::size_type stop=-1,
+                                     cudf::data_type output_type = cudf::data_type{INT32},
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                      cudaStream_t stream=0 );
 /**
@@ -85,13 +97,13 @@ std::unique_ptr<cudf::column> rfind( cudf::strings_column_view strings,
  * Any null string entries return corresponding null entries in the output columns.
  *
  * @param strings Strings instance for this operation.
- * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
+ * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New INT8 column.
  */
-std::unique_ptr<cudf::column> contains( cudf::strings_column_view strings,
-                                        const char* target,
+std::unique_ptr<cudf::column> contains( const cudf::strings_column_view strings,
+                                        const std::string target,
                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                         cudaStream_t stream=0 );
 
@@ -105,13 +117,13 @@ std::unique_ptr<cudf::column> contains( cudf::strings_column_view strings,
  * Any null string entries return corresponding null entries in the output columns.
  *
  * @param strings Strings instance for this operation.
- * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
+ * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New INT8 column.
  */
-std::unique_ptr<cudf::column> starts_with( cudf::strings_column_view strings,
-                                           const char* target,
+std::unique_ptr<cudf::column> starts_with( const cudf::strings_column_view strings,
+                                           const std::string target,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream=0 );
 
@@ -125,13 +137,13 @@ std::unique_ptr<cudf::column> starts_with( cudf::strings_column_view strings,
  * Any null string entries return corresponding null entries in the output columns.
  *
  * @param strings Strings instance for this operation.
- * @param target Null-terminated, UTF-8 encoded host string to search for in each string.
+ * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New INT8 column.
  */
-std::unique_ptr<cudf::column> ends_with( cudf::strings_column_view strings,
-                                         const char* target,
+std::unique_ptr<cudf::column> ends_with( const cudf::strings_column_view strings,
+                                         const std::string target,
                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                          cudaStream_t stream=0 );
 
