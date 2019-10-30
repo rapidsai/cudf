@@ -22,8 +22,6 @@ public class Rmm {
   private static volatile boolean defaultInitialized;
   static {
     NativeDepsLoader.loadNativeDeps();
-    initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0);
-    defaultInitialized = true;
   }
 
   /**
@@ -48,6 +46,16 @@ public class Rmm {
       }
     }
     initializeInternal(allocationMode, enableLogging, poolSize);
+  }
+
+  /**
+   * Initialize RMM in CUDA default mode.
+   */
+  static synchronized void defaultInitialize() {
+    if (!defaultInitialized && !isInitializedInternal()) {
+      initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0);
+      defaultInitialized = true;
+    }
   }
 
   private static native void initializeInternal(int allocationMode, boolean enableLogging, long poolSize)

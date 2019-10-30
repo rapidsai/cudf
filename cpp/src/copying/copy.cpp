@@ -20,6 +20,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/copy.hpp>
 
 #include <algorithm>
 
@@ -31,7 +32,8 @@ namespace detail
 {
 
 inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
-  if ((mask_alloc == ALWAYS) || (mask_alloc == RETAIN && mask_exists)) {
+  if ((mask_alloc == mask_allocation_policy::ALWAYS) ||
+      (mask_alloc == mask_allocation_policy::RETAIN && mask_exists)) {
     return UNINITIALIZED;
   } else {
     return UNALLOCATED;
@@ -41,7 +43,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
 /*
  * Initializes and returns an empty column of the same type as the `input`.
  */
-std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream = 0)
+std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> children {};
   children.reserve(input.num_children());
@@ -58,10 +60,10 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream = 0)
  * Supports only fixed-width types.
  */
 std::unique_ptr<column> allocate_like(column_view input,
-		                      size_type size,
+   		                      size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr,
-				      cudaStream_t stream = 0)
+				      cudaStream_t stream)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
@@ -83,7 +85,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 /*
  * Creates a table of empty columns with the same types as the `input_table`
  */
-std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream = 0) {
+std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> columns(input_table.num_columns());
   std::transform(input_table.begin(), input_table.end(), columns.begin(),
     [&](column_view in_col) {
