@@ -26,7 +26,7 @@ namespace detail {
  * @brief An immutable, non-owning view of scalar from device that is trivially 
  * copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
-class alignas(16) scalar_device_view_base {
+class scalar_device_view_base {
  public:
   scalar_device_view_base() = default;
   ~scalar_device_view_base() = default;
@@ -81,9 +81,10 @@ class alignas(16) scalar_device_view_base {
 };
 
 template <typename T>
-class alignas(16) primitive_scalar_device_view
+class primitive_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
+  using ValueType = T;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
@@ -121,18 +122,16 @@ class alignas(16) primitive_scalar_device_view
 
 
 template <typename T>
-class alignas(16) numeric_scalar_device_view
+class numeric_scalar_device_view
     : public detail::primitive_scalar_device_view<T>
 {
  public:
-  using ValueType = T;
-
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid) 
     : detail::primitive_scalar_device_view<T>(type, data, is_valid)
   {}
 };
 
-class alignas(16) string_scalar_device_view
+class string_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
   using ValueType = cudf::string_view;
@@ -159,12 +158,10 @@ class alignas(16) string_scalar_device_view
 };
 
 template <typename T>
-class alignas(16) timestamp_scalar_device_view
+class timestamp_scalar_device_view
     : public detail::primitive_scalar_device_view<T>
 {
  public:
-  using ValueType = T;
-
   timestamp_scalar_device_view(data_type type, T* data, bool* is_valid) 
     : detail::primitive_scalar_device_view<T>(type, data, is_valid)
   {}

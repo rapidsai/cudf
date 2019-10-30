@@ -29,21 +29,14 @@
 #include <utility>
 #include <vector>
 
-// Forward declarations
-template <typename T>
-class numeric_scalar_device_view;
-
-class string_scalar_device_view;
-
-template <typename T>
-class timestamp_scalar_device_view;
-
 namespace cudf {
 
 class scalar {
  public:
   scalar() = default;
   ~scalar() = default;
+  scalar(scalar&& other) = default;
+  scalar(scalar const& other) = default;
   scalar& operator=(scalar const& other) = delete;
   scalar& operator=(scalar&& other) = delete;
   
@@ -51,25 +44,6 @@ class scalar {
       rmm::mr::device_memory_resource *mr_ = rmm::mr::get_default_resource())
    : _type(type), _is_valid(is_valid, stream_, mr_)
   {}
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new scalar by deep copying the contents of `other`.
-   *
-   * All device memory allocation and copying is done using the
-   * `device_memory_resource` and `stream` from `other`.
-   *
-   * @param other The scalar to copy
-   *---------------------------------------------------------------------------**/
-  scalar(scalar const& other);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Move the contents from `other` to create a new scalar.
-   *
-   * After the move, `other.type() = {EMPTY}`
-   *
-   * @param other The scalar whose contents will be moved into the new scalar
-   *---------------------------------------------------------------------------**/
-  scalar(scalar&& other);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the scalar's logical element type
@@ -172,6 +146,7 @@ class timestamp_scalar : public scalar {
      _data.set_value(value); 
      _is_valid.set_value(true); 
   }
+
   T value() { return _data.value(); }
 
   T* data() { return _data.get(); }

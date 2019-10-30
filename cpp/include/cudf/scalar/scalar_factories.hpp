@@ -19,8 +19,6 @@
 #include <cudf/types.hpp>
 #include "scalar.hpp"
 
-#include <rmm/thrust_rmm_allocator.h>
-
 // TODO: make use of stream and memory resource
 // TODO: update documentation
 

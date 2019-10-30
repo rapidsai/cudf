@@ -22,19 +22,6 @@
 
 namespace cudf {
 
-// Copy constructor
-scalar::scalar(scalar const &other)
-    : _type{other._type},
-      _is_valid{other._is_valid} {}
-
-// Move constructor
-scalar::scalar(scalar &&other)
-    : _type{other._type},
-      _is_valid{std::move(other._is_valid)}
-{
-  other._type = data_type{EMPTY};
-}
-
 string_scalar::string_scalar(std::string const& string, bool is_valid)
  : scalar(data_type(STRING), is_valid), _data(string.data(), string.size())
 {}
