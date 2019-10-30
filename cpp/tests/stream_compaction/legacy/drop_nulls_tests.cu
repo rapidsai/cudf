@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/stream_compaction.hpp>
+#include <cudf/legacy/stream_compaction.hpp>
 #include <cudf/legacy/copying.hpp>
 
 #include <cudf/utilities/error.hpp>

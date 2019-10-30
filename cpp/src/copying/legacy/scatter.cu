@@ -32,7 +32,7 @@
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <reductions/reduction_functions.cuh>
-#include <stream_compaction/copy_if.cuh>
+#include <stream_compaction/legacy/copy_if.cuh>
 
 
 
