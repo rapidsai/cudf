@@ -1,4 +1,4 @@
-#include "gather.cuh"
+#include <cudf/detail/gather.cuh>
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
