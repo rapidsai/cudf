@@ -121,7 +121,6 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
     if( strings_count == 0 )
         return make_numeric_column( output_type, 0 );
 
-    //auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_column = *strings_column;
 
@@ -138,10 +137,10 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
         null_mask, null_count);
     auto results_view = results->mutable_view();
 
+    // fill output column with integers
     cudf::experimental::type_dispatcher( output_type,
                 dispatch_to_integers_fn{},
                 d_column, results_view, stream );
-
     results->set_null_count(null_count);
     return results;
 }
