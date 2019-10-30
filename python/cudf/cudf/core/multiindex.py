@@ -438,7 +438,6 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            # assert no nulls and fix tests
             indices = indices.data.mem
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
