@@ -25,7 +25,7 @@ namespace {
 
 struct scalar_construction_helper {
   template <typename T,
-            typename ScalarType = experimental::type_to_scalar_type<T>>
+            typename ScalarType = experimental::scalar_type_t<T>>
   std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>>
   operator()(cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
   {
