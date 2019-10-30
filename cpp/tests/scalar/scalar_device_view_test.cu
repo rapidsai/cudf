@@ -42,7 +42,7 @@ __global__ void test_value(ScalarDeviceViewType s, T value, bool* result) {
 
 TYPED_TEST(TypedScalarDeviceViewTest, Value) {
   TypeParam value{7};
-  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  cudf::experimental::scalar_type_t<TypeParam> s(value);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
@@ -59,7 +59,7 @@ __global__ void test_null(ScalarDeviceViewType s, bool* result) {
 
 TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
   TypeParam value = 5;
-  cudf::experimental::type_to_scalar_type<TypeParam> s(value, false);
+  cudf::experimental::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
@@ -78,7 +78,7 @@ __global__ void test_setvalue(ScalarDeviceViewType s, T value) {
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetValue) {
   TypeParam value = 9;
-  cudf::experimental::type_to_scalar_type<TypeParam> s;
+  cudf::experimental::scalar_type_t<TypeParam> s;
   auto scalar_device_view = cudf::get_scalar_device_view(s);
 
   test_setvalue<<<1, 1>>>(scalar_device_view, value);
@@ -94,7 +94,7 @@ __global__ void test_setnull(ScalarDeviceViewType s) {
 }
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
-  cudf::experimental::type_to_scalar_type<TypeParam> s;
+  cudf::experimental::scalar_type_t<TypeParam> s;
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   s.set_valid();
   EXPECT_TRUE(s.is_valid());

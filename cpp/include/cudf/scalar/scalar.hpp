@@ -17,6 +17,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
