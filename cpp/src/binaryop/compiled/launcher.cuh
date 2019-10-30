@@ -17,8 +17,9 @@
 #ifndef COMPILED_BINARY_OPS_LAUNCHER_H
 #define COMPILED_BINARY_OPS_LAUNCHER_H
 
-#include <utilities/nvtx/nvtx_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
+#include <utilities/legacy/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 
 namespace cudf {

@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "nvtx_utils.hpp"
-#include "utilities/error_utils.hpp"
+#include <cudf/utilities/nvtx_utils.hpp>
+#include "cudf/utilities/error.hpp"
 
 #ifdef USE_NVTX
 #include <nvToolsExt.h>
@@ -30,9 +30,9 @@ void range_push(const char* name, color color)
 
 void range_push_hex(const char* name, uint32_t color)
 {
+#ifdef USE_NVTX
   CUDF_EXPECTS(name != nullptr, "Null name string.");
 
-#ifdef USE_NVTX
   nvtxEventAttributes_t eventAttrib{};
   eventAttrib.version = NVTX_VERSION;
   eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;

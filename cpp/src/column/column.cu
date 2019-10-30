@@ -42,6 +42,7 @@ column::column(column const &other)
   }
 }
 
+// Copy ctor w/ explicit stream/mr
 column::column(column const &other, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr)
     : _type{other._type},
@@ -56,7 +57,7 @@ column::column(column const &other, cudaStream_t stream,
 }
 
 // Move constructor
-column::column(column &&other)
+column::column(column &&other) noexcept
     : _type{other._type},
       _size{other._size},
       _data{std::move(other._data)},
@@ -66,6 +67,17 @@ column::column(column &&other)
   other._size = 0;
   other._null_count = 0;
   other._type = data_type{EMPTY};
+}
+
+// Release contents
+column::contents column::release() noexcept {
+  _size = 0;
+  _null_count = 0;
+  _type = data_type{EMPTY};
+  return column::contents{
+      std::make_unique<rmm::device_buffer>(std::move(_data)),
+      std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
+      std::move(_children)};
 }
 
 // Create immutable view

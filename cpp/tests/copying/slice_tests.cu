@@ -86,12 +86,12 @@ TYPED_TEST(SliceTest, NumericColumnsWithInValids) {
 
     std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
     std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(indices, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(col, indices);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
 
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_columns_equal(expected[index], *(result[index]));
+        cudf::test::expect_columns_equal(expected[index], result[index]);
     }
 }
 
@@ -105,12 +105,12 @@ TEST_F(SliceStringTest, StringWithInvalids) {
     std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
 
     std::vector<cudf::test::strings_column_wrapper> expected = create_expected_string_columns(strings, indices, true);
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(s, indices);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(s, indices);
 
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_column_properties_equal(expected[index], *(result[index]));
+        cudf::test::expect_column_properties_equal(expected[index], result[index]);
     }
 }
 
@@ -120,7 +120,7 @@ TEST_F(SliceCornerCases, EmptyColumn) {
     cudf::column col {};
     std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(col.view(), indices);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col.view(), indices);
 
     unsigned long expected = 0;
 
@@ -135,7 +135,7 @@ TEST_F(SliceCornerCases, EmptyIndices) {
     cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
     std::vector<cudf::size_type> indices{};
 
-    std::vector<std::unique_ptr<cudf::column_view>> result = cudf::experimental::slice(col, indices);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
     
     unsigned long expected = 0;
 

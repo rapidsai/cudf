@@ -18,12 +18,12 @@
 
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <join/legacy/joining.h>
 #include <table/legacy/device_table.cuh>
 #include "hash/hash_functions.cuh"
 #include <utilities/int_fastdiv.h>
-#include <utilities/nvtx/nvtx_utils.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
 #include <copying/legacy/scatter.hpp>
 #include <cudf/types.hpp>
 

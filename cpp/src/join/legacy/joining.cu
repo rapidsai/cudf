@@ -21,9 +21,9 @@
 #include <rmm/rmm.h>
 #include <cudf/legacy/copying.hpp>
 #include <utilities/column_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/nvtx/nvtx_utils.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/legacy/gather.hpp>

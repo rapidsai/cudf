@@ -394,14 +394,25 @@ def test_parquet_writer(tmpdir, pdf, gdf):
     expect = pa.parquet.read_pandas(pdf_fname)
     got = pa.parquet.read_pandas(gdf_fname)
 
+    def clone_field(table, name, datatype):
+        f = table.schema.field_by_name(name)
+        return pa.field(f.name, datatype, f.nullable, f.metadata)
+
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
     expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    got_idx = got.schema.get_field_index("col_datetime64[ms]")
+    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
     expect = expect.set_column(
-        expect_idx, expect.column(expect_idx).cast(pa.date64())
+        expect_idx,
+        expect_field,
+        expect.column(expect_idx).cast(expect_field.type),
     )
     expect = expect.replace_schema_metadata()
-    got = got.set_column(got_idx, got.column(got_idx).cast(pa.date64()))
+
+    got_idx = got.schema.get_field_index("col_datetime64[ms]")
+    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
+    got = got.set_column(
+        got_idx, got_field, got.column(got_idx).cast(got_field.type)
+    )
     got = got.replace_schema_metadata()
 
     # assert_eq(expect, got)
