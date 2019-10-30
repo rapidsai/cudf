@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "transpose.hpp"
+#include <cudf/transpose.hpp>
+#include <cudf/detail/transpose.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <utilities/nvtx/nvtx_utils.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <copying/copy_detail.hpp>
+#include <cudf/detail/copy.hpp>
 
 namespace cudf {
 

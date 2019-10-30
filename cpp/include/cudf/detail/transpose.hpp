@@ -15,7 +15,8 @@
  */
 #pragma once
 
-#include <cudf/transpose.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 namespace cudf {
 namespace detail {
