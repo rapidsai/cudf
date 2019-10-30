@@ -70,7 +70,8 @@ namespace experimental {
 namespace detail {
 
 void copy_range(mutable_column_view& output, column_view const& input,
-                size_type out_begin, size_type out_end, size_type in_begin) {
+                size_type out_begin, size_type out_end, size_type in_begin,
+                cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(output.type()) == true,
                "In-place copy_range does not support variable-sized types.");
   CUDF_EXPECTS((out_begin >= 0) &&
@@ -89,7 +90,7 @@ void copy_range(mutable_column_view& output, column_view const& input,
     detail::copy_range(
       output,
       column_range_factory{input, in_begin},
-      out_begin, out_end);
+      out_begin, out_end, stream);
   }
 
   return;
@@ -148,7 +149,7 @@ std::unique_ptr<column> copy_range(column_view const& output,
 
 void copy_range(mutable_column_view& output, column_view const& input,
                 size_type out_begin, size_type out_end, size_type in_begin) {
-  return detail::copy_range(output, input, out_begin, out_end, in_begin);
+  return detail::copy_range(output, input, out_begin, out_end, in_begin, 0);
 }
 
 std::unique_ptr<column> copy_range(column_view const& output,

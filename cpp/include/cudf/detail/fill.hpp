@@ -57,10 +57,11 @@ namespace detail {
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
+ * @param stream CUDA stream to run this function
  * @return void
  *---------------------------------------------------------------------------**/
 void fill(mutable_column_view& destination, size_type begin, size_type end,
-          gdf_scalar const& value);
+          gdf_scalar const& value, cudaStream_t stream);
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in a column out-of-place with

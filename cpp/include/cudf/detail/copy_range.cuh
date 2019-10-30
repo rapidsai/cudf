@@ -205,14 +205,15 @@ namespace detail {
  * __device__ bool valid(cudf::size_type index);
  *
  * @tparam InputFunctor the type of the input function object
- * @p output the column to copy into
- * @p input An instance of InputFunctor that provides data and valid mask
- * @p begin The beginning of the output range to write to
- * @p end The index after the last element of the output range to write to
+ * @param output the column to copy into
+ * @param input An instance of InputFunctor that provides data and valid mask
+ * @param begin The beginning of the output range to write to
+ * @param end The index after the last element of the output range to write to
+ * @param stream CUDA stream to run this function
  */
 template <typename InputFunctor>
 void copy_range(mutable_column_view& output, InputFunctor input,
-                size_type begin, size_type end) {
+                size_type begin, size_type end, cudaStream_t stream) {
   CUDF_EXPECTS((begin >= 0) &&
                (begin <= end) &&
                (begin < output.size()) &&
@@ -221,7 +222,7 @@ void copy_range(mutable_column_view& output, InputFunctor input,
 
   type_dispatcher(output.type(),
                   copy_range_dispatch<InputFunctor>{input},
-                  output, begin, end);
+                  output, begin, end, stream);
 }
 
 /**
@@ -256,10 +257,12 @@ void copy_range(mutable_column_view& output, InputFunctor input,
  * @param out_begin The starting index of the output range (inclusive)
  * @param out_end The index of the last element in the output range (exclusive)
  * @param in_begin The starting index of the input range (inclusive)
+ * @param stream CUDA stream to run this function
  * @return void
  */
 void copy_range(mutable_column_view& output, column_view const& input,
-                size_type out_begin, size_type out_end, size_type in_begin);
+                size_type out_begin, size_type out_end, size_type in_begin,
+                cudaStream_t stream);
 
 /**
  * @brief Internal API to copy a range of elements out-of-place from one column

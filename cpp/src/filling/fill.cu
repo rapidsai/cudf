@@ -67,7 +67,8 @@ namespace detail {
 void fill(mutable_column_view& destination,
           size_type begin,
           size_type end,
-          gdf_scalar const& value) {
+          gdf_scalar const& value,
+          cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) &&
@@ -84,7 +85,7 @@ void fill(mutable_column_view& destination,
   if (end != begin) {  // otherwise no-op
     // The code below is speculative on the future copy_range implementation for
     // cudf::column
-    copy_range(destination, scalar_factory{value}, begin, end);
+    copy_range(destination, scalar_factory{value}, begin, end, stream);
   }
 
   return;
@@ -144,7 +145,7 @@ void fill(mutable_column_view& destination,
           size_type begin,
           size_type end,
           gdf_scalar const& value) {
-  return detail::fill(destination, begin, end, value);
+  return detail::fill(destination, begin, end, value, 0);
 }
 
 std::unique_ptr<column> fill(column_view const& input,
