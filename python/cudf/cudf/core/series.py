@@ -1799,6 +1799,10 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.product(dtype=dtype)
 
+    def prod(self, axis=None, skipna=True, dtype=None):
+        """Alias for product"""
+        return self.product(axis=axis, skipna=skipna, dtype=dtype)
+
     def cummin(self, axis=0, skipna=True):
         """Compute the cumulative minimum of the series"""
         assert axis in (None, 0) and skipna is True

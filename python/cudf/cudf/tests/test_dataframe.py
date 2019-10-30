@@ -4031,28 +4031,11 @@ def test_df_constructor_dtype(dtype):
     ],
 )
 @pytest.mark.parametrize(
-    "op",
-    [
-        "max",
-        "min",
-        "sum",
-        "product",
-        "mean",
-        "var",
-        "std",
-        "cumsum",
-        "cumprod",
-    ],
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
 )
 def test_rowwise_ops(data, op):
     gdf = data
     pdf = gdf.to_pandas()
-
-    # pandas errors due to not removing non-numeric columns before these ops
-    # and doesn't perform as expected for scans on bools.
-    # Feels like a bug not a feature
-    if op in ("cumsum", "cumprod"):
-        pdf = pdf.select_dtypes([np.number, np.bool_])
 
     if op in ("var", "std"):
         expected = getattr(pdf, op)(axis=1, ddof=0)
@@ -4061,6 +4044,4 @@ def test_rowwise_ops(data, op):
         expected = getattr(pdf, op)(axis=1)
         got = getattr(gdf, op)(axis=1)
 
-    np.testing.assert_array_almost_equal(
-        expected.values, got.to_pandas().values, 5
-    )
+    assert_eq(expected, got, check_less_precise=7)

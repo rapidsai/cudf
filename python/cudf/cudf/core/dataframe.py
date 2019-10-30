@@ -13,6 +13,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -600,7 +601,7 @@ class DataFrame(object):
 
     def astype(self, dtype, errors="raise", **kwargs):
         return self._apply_support_method(
-            "astype", dtype, errors=errors, **kwargs
+            "astype", dtype=dtype, errors=errors, **kwargs
         )
 
     def get_renderable_dataframe(self):
@@ -3643,26 +3644,13 @@ class DataFrame(object):
     #
     # Stats
     #
-    def _as_common_dtype(self):
-        common_dtype = np.find_common_type(self.dtypes, [])
-        coerced = self._apply_support_method("astype", dtype=common_dtype)
-        return coerced
-
     def _prepare_for_rowwise_op(self):
         """Prepare a DataFrame for CuPy-based row-wise operations.
-
-        Returns
-        -------
-        CuPy.NDArray
         """
-        if not utils.IS_CUPY_AVAILABLE:
-            msg = (
-                "Row-wise operations currently require CuPy. "
-                " Please install CuPy to use these operations."
-            )
-            raise ImportError(msg)
-
-        import cupy as cp
+        warnings.warn(
+            "Row-wise operations currently only support int, float, "
+            "and bool dtypes."
+        )
 
         if any([col.has_null_mask for col in self._columns]):
             msg = (
@@ -3672,61 +3660,30 @@ class DataFrame(object):
             )
             raise ValueError(msg)
 
-        coerced = self._as_common_dtype()
-        arr = cp.asarray(coerced.as_gpu_matrix())
-        return arr
-
-    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
-        """Apply a row-wise reduction or scan operation on a DataFrame.
-        """
-
-        # Currently, we don't support row-wise operations on
-        # datetimes, strings, and categoricals.
-        if numeric_only not in (None, True):
-            msg = (
-                "Row-wise operations currently only support int, float, "
-                "and bool dtypes."
-            )
-            raise TypeError(msg)
-
         filtered = self.select_dtypes(include=[np.number, np.bool])
-        arr = filtered._prepare_for_rowwise_op()
-        result = getattr(arr, op)(axis=1, **kwargs)
-
-        if len(result.shape) == 1:
-            return Series(result, index=self.index)
-        else:
-            result_df = DataFrame.from_gpu_matrix(result).set_index(self.index)
-            result_df.columns = filtered.columns
-            return result_df
+        common_dtype = np.find_common_type(filtered.dtypes, [])
+        coerced = filtered.astype(common_dtype)
+        return coerced
 
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
-    def min(self, axis=0, numeric_only=None, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op("min", numeric_only=numeric_only)
-        return self._apply_support_method("min", **kwargs)
+    def min(self, axis=0, **kwargs):
+        return self._apply_support_method("min", axis=axis, **kwargs)
 
-    def max(self, axis=0, numeric_only=None, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op("max", numeric_only=numeric_only)
-        return self._apply_support_method("max", **kwargs)
+    def max(self, axis=0, **kwargs):
+        return self._apply_support_method("max", axis=axis, **kwargs)
 
-    def sum(self, axis=0, numeric_only=None, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op("sum", numeric_only=numeric_only)
-        return self._apply_support_method("sum", **kwargs)
+    def sum(self, axis=0, **kwargs):
+        return self._apply_support_method("sum", axis=axis, **kwargs)
 
-    def product(self, axis=0, numeric_only=None, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op("prod", numeric_only=numeric_only)
-        return self._apply_support_method("product", **kwargs)
+    def product(self, axis=0, **kwargs):
+        return self._apply_support_method("prod", axis=axis, **kwargs)
 
-    def prod(self, axis=0, numeric_only=None, **kwargs):
+    def prod(self, axis=0, **kwargs):
         """Alias for product.
         """
-        return self.product(axis=axis, numeric_only=numeric_only, **kwargs)
+        return self.product(axis=axis, **kwargs)
 
     def cummin(self, **kwargs):
         return self._apply_support_method("cummin", **kwargs)
@@ -3765,23 +3722,17 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        if axis == 1:
-            return self._apply_rowwise_op("mean", numeric_only=numeric_only)
-        return self._apply_support_method("mean", **kwargs)
+        return self._apply_support_method("mean", axis=axis, **kwargs)
 
-    def std(self, axis=0, numeric_only=None, ddof=1, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op(
-                "std", numeric_only=numeric_only, ddof=ddof
-            )
-        return self._apply_support_method("std", **kwargs)
+    def std(self, axis=0, ddof=1, **kwargs):
+        return self._apply_support_method(
+            "std", axis=axis, ddof=ddof, **kwargs
+        )
 
-    def var(self, axis=0, numeric_only=None, ddof=1, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op(
-                "var", numeric_only=numeric_only, ddof=ddof
-            )
-        return self._apply_support_method("var", **kwargs)
+    def var(self, axis=0, ddof=1, **kwargs):
+        return self._apply_support_method(
+            "var", axis=axis, ddof=ddof, **kwargs
+        )
 
     def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
         if numeric_only not in (None, True):
@@ -3825,20 +3776,38 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(self, method, *args, **kwargs):
-        result = [
-            getattr(self[col], method)(*args, **kwargs)
-            for col in self._cols.keys()
-        ]
-        if isinstance(result[0], Series):
-            support_result = result
-            result = DataFrame()
-            for idx, col in enumerate(self._cols.keys()):
-                result[col] = support_result[idx]
-        else:
-            result = Series(result)
-            result = result.set_index(self._cols.keys())
-        return result
+    def _apply_support_method(self, method, axis=0, *args, **kwargs):
+        assert axis in (0, 1)
+
+        if axis == 0:
+            result = [
+                getattr(self[col], method)(*args, **kwargs)
+                for col in self._cols.keys()
+            ]
+
+            if isinstance(result[0], Series):
+                support_result = result
+                result = DataFrame()
+                for idx, col in enumerate(self._cols.keys()):
+                    result[col] = support_result[idx]
+            else:
+                result = Series(result)
+                result = result.set_index(self._cols.keys())
+            return result
+
+        elif axis == 1:
+            prepared = self._prepare_for_rowwise_op()
+            arr = cp.asarray(prepared.as_gpu_matrix())
+            result = getattr(arr, method)(axis=1, **kwargs)
+
+            if len(result.shape) == 1:
+                return Series(result, index=self.index)
+            else:
+                result_df = DataFrame.from_gpu_matrix(result).set_index(
+                    self.index
+                )
+                result_df.columns = prepared.columns
+                return result_df
 
     def _columns_view(self, columns):
         """
