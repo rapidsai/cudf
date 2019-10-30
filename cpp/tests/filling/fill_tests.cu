@@ -45,7 +45,8 @@ public:
            T value,
            bool value_is_valid = true,
            BitInitializerType source_validity = all_valid) {
-    static_assert(cudf::is_fixed_width<T>() == true);
+    static_assert(cudf::is_fixed_width<T>() == true,
+                  "this code assumes fixed-width types.");
 
     auto size = cudf::size_type{FillTypedTestFixture<T>::column_size};
 

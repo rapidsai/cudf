@@ -139,7 +139,7 @@ struct copy_range_dispatch {
     auto offset = output.offset();
 
 #if 1
-    static_assert(warp_size > 0);
+    static_assert(warp_size > 0, "the code below assumes warp_size > 0");
     auto warp_aligned_begin_lower_bound =
       cudf::size_type{begin - (begin % warp_size)};
     auto warp_aligned_end_upper_bound =

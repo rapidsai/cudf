@@ -39,7 +39,8 @@ public:
             cudf::column_view const& expected,
             cudf::size_type out_begin, cudf::size_type out_end,
             cudf::size_type in_begin) {
-    static_assert(cudf::is_fixed_width<T>());
+    static_assert(cudf::is_fixed_width<T>(),
+                  "this code assumes fixed-width types.");
 
     // test the out-of-place version first
 
