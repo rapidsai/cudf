@@ -22,6 +22,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 #include "./utilities.h"
 
 #include <vector>
@@ -141,33 +142,56 @@ TEST_P(FindParmsTest, Find)
     cudf::size_type position = GetParam();
 
     auto strings_view = cudf::strings_column_view(strings);
-    auto results = cudf::strings::find(strings_view,"e",position);
-
-    std::vector<int32_t> h_expected;
-    for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
-        h_expected.push_back((int32_t)(*itr).find("e",position));
-    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
-
-    cudf::test::expect_columns_equal(*results,expected);
-}
-
-TEST_P(FindParmsTest, RFind)
-{
-    std::vector<std::string> h_strings{ "hello", "", "these", "are stl", "safe" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
-    cudf::size_type position = GetParam();
-
-    auto strings_view = cudf::strings_column_view(strings);
-    auto results = cudf::strings::find(strings_view,"e",0,position+1);
-
-    std::vector<int32_t> h_expected;
-    for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
-        h_expected.push_back((int32_t)(*itr).rfind("e",position));
-    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
-
-    cudf::test::expect_columns_equal(*results,expected);
+    {
+        auto results = cudf::strings::find(strings_view,"e",position);
+        std::vector<int32_t> h_expected;
+        for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
+            h_expected.push_back((int32_t)(*itr).find("e",position));
+        cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::rfind(strings_view,"e",0,position+1);
+        std::vector<int32_t> h_expected;
+        for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
+            h_expected.push_back((int32_t)(*itr).rfind("e",position));
+        cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
 }
 
 INSTANTIATE_TEST_CASE_P(StringFindTest, FindParmsTest,
                         testing::ValuesIn(std::array<int32_t,4>{0,1,2,3}));
 
+
+template <typename T>
+class StringsFindTest_Output : public StringsFindTest {};
+
+using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+TYPED_TEST_CASE(StringsFindTest_Output, IntegerTypes);
+
+TYPED_TEST(StringsFindTest_Output, AllIntegerTypes)
+{
+    std::vector<std::string> h_strings{ "hello", "", "these", "are stl", "safe" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    cudf::size_type position = 2;
+
+    auto strings_view = cudf::strings_column_view(strings);
+    auto output_type = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
+    {
+        auto results = cudf::strings::find(strings_view,"e",position,-1,output_type);
+        std::vector<TypeParam> h_expected;
+        for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
+            h_expected.push_back((TypeParam)(*itr).find("e",position));
+        cudf::test::fixed_width_column_wrapper<TypeParam> expected( h_expected.begin(), h_expected.end() );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::rfind(strings_view,"e",0,position+1,output_type);
+        std::vector<TypeParam> h_expected;
+        for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
+            h_expected.push_back((TypeParam)(*itr).rfind("e",position));
+        cudf::test::fixed_width_column_wrapper<TypeParam> expected( h_expected.begin(), h_expected.end() );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+}
