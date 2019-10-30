@@ -34,7 +34,7 @@ namespace experimental {
  *
  * Indicates how two elements `a` and `b` compare with one and another.
  *
- * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are are
+ * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are
  * EQUIVALENT may not necessarily be *equal*.
  *
  *---------------------------------------------------------------------------**/
