@@ -7,6 +7,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -49,54 +50,32 @@ struct bounds_checker {
 
 
 template <bool ignore_out_of_bounds, typename map_iterator_type>
-__global__ void gather_bitmask_kernel(const bitmask_type *const *source_valid,
-				      size_type num_source_rows,
+__global__ void gather_bitmask_kernel(table_device_view source_table,
 				      map_iterator_type gather_map,
-				      bitmask_type **destination_valid,
-				      size_type num_destination_rows,
-				      size_type *d_count,
-				      size_type num_columns) {
-  for (size_type i = 0; i < num_columns; i++) {
-    const bitmask_type *__restrict__ source_valid_col = source_valid[i];
-    bitmask_type *__restrict__ destination_valid_col = destination_valid[i];
-
-    const bool src_has_nulls = source_valid_col != nullptr;
-    const bool dest_has_nulls = destination_valid_col != nullptr;
+				      mutable_table_device_view destination_table) {
+  for (size_type i = 0; i < source_table.num_columns(); i++) {
 
     const int warp_size = 32;
 
-    if (dest_has_nulls) {
+    column_device_view source_col = source_table.column(i);
+    mutable_column_device_view destination_col = destination_table.column(i);
+
+    if (source_col.has_nulls()) {
       size_type destination_row_base = blockIdx.x * blockDim.x;
 
-      size_type valid_count_accumulate = 0;
-
-      while (destination_row_base < num_destination_rows) {
+      while (destination_row_base < destination_table.num_rows()) {
 	size_type destination_row = destination_row_base + threadIdx.x;
 
-	const bool thread_active = destination_row < num_destination_rows;
+	const bool thread_active = destination_row < destination_col.size();
 	size_type source_row =
 	  thread_active ? gather_map[destination_row] : 0;
 
 	const uint32_t active_threads =
 	  __ballot_sync(0xffffffff, thread_active);
 
-	bool source_bit_is_valid;
-	if (ignore_out_of_bounds) {
-	  if (0 <= source_row && source_row < num_source_rows) {
-	    source_bit_is_valid =
-	      src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
-	      : true;
-	  } else {
-	    // If gather_map does not include this row we should just keep the
-	    // original value,
-	    source_bit_is_valid =
-	      bit_mask::is_valid(destination_valid_col, destination_row);
-	  }
-	} else {
-	  source_bit_is_valid =
-	    src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
-	    : true;
-	}
+	bool source_bit_is_valid = source_col.has_nulls()
+	  ? source_col.is_valid_nocheck(source_row)
+	  : true;
 
 	// Use ballot to find all valid bits in this warp and create the output
 	// bitmask element
@@ -106,16 +85,12 @@ __global__ void gather_bitmask_kernel(const bitmask_type *const *source_valid,
 	const size_type valid_index =
 	  cudf::util::detail::bit_container_index<bitmask_type>(
 	      destination_row);
+
 	// Only one thread writes output
 	if (0 == threadIdx.x % warp_size && thread_active) {
-	  destination_valid_col[valid_index] = valid_warp;
+	  destination_col.set_mask_word(valid_index, valid_warp);
 	}
-	valid_count_accumulate += cudf::detail::single_lane_popc_block_reduce(valid_warp);
-
 	destination_row_base += blockDim.x * gridDim.x;
-      }
-      if (threadIdx.x == 0) {
-	atomicAdd(d_count + i, valid_count_accumulate);
       }
     }
   }
@@ -267,22 +242,7 @@ gather(table_view const& source_table, iterator_type gather_map,
   }
 
 
-  rmm::device_vector<size_type> null_counts(source_n_cols, 0);
-
-  std::vector<bitmask_type const*> source_bitmasks_host(source_n_cols);
-  std::vector<bitmask_type*> destination_bitmasks_host(source_n_cols);
-
-  // loop over each column, check if inplace and allocate buffer if true.
-  for (size_type i = 0; i < source_n_cols; i++) {
-    mutable_column_view dest_col = destination_columns[i]->mutable_view();
-    source_bitmasks_host[i] = source_table.column(i).null_mask();
-    destination_bitmasks_host[i] = dest_col.null_mask();
-  }
-
-  // In the following we allocate the device array thats hold the valid
-  // bits.
-  rmm::device_vector<bitmask_type const*> source_bitmasks(source_bitmasks_host);
-  rmm::device_vector<bitmask_type*> destination_bitmasks(destination_bitmasks_host);
+  std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(destination_columns));
 
   auto bitmask_kernel =
     ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map)> : gather_bitmask_kernel<false, decltype(gather_map)>;
@@ -292,27 +252,25 @@ gather(table_view const& source_table, iterator_type gather_map,
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
 	       &gather_grid_size, &gather_block_size, bitmask_kernel));
 
+
+  auto source_table_view = table_device_view::create(source_table);
+  auto destination_table_view = mutable_table_device_view::create(destination_table->mutable_view());
+
   bitmask_kernel<<<gather_grid_size, gather_block_size>>>(
-      source_bitmasks.data().get(), source_table.num_rows(),
-      gather_map, destination_bitmasks.data().get(), num_destination_rows,
-      null_counts.data().get(), source_n_cols);
+							  *source_table_view,
+							  gather_map,
+							  *destination_table_view);
 
-  std::vector<size_type> h_count(source_n_cols);
-  CUDA_TRY(cudaMemcpy(h_count.data(), null_counts.data().get(),
-		      sizeof(size_type) * source_n_cols, cudaMemcpyDeviceToHost));
 
-  // loop over each column, check if inplace and copy the result from the
-  // buffer back to destination if true.
-  for (size_type i = 0; i < source_table.num_columns(); i++) {
-    mutable_column_view dest_col = destination_columns[i]->mutable_view();
-    if (dest_col.nullable()) {
-      dest_col.set_null_count(dest_col.size() - h_count[i]);
-    } else {
-      dest_col.set_null_count(0);
-    }
+  mutable_table_view dest_view = destination_table->mutable_view();
+
+  // set null_count to UNKNOWN_NULL_COUNT
+  for (size_type i = 0; i < destination_table->num_columns(); i++) {
+    mutable_column_view dest_col_view = dest_view.column(i);
+    dest_col_view.set_null_count(UNKNOWN_NULL_COUNT);
   }
 
-  return std::make_unique<table>(std::move(destination_columns));
+  return destination_table;
 }
 
 
