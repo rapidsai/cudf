@@ -172,39 +172,3 @@ TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableToHost) {
-  auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return TypeParam(i); });
-
-  auto size = this->size();
-
-  std::vector<TypeParam> data(sequence, sequence + size);
-  cudf::test::fixed_width_column_wrapper<TypeParam> col(
-    data.begin(), data.end());
-
-  auto host_data = col.to_host();
-
-  EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
-}
-
-TYPED_TEST(FixedWidthColumnWrapperTest, NullableToHostAllValid) {
-  auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return TypeParam(i); });
-
-  auto all_valid = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return true; });
-
-  auto size = this->size();
-
-  std::vector<TypeParam> data(sequence, sequence + size);
-  cudf::test::fixed_width_column_wrapper<TypeParam> col(
-    data.begin(), data.end(), all_valid);
-
-  auto host_data = col.to_host();
-
-  EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
-
-  auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid+size);
-
-  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
-}
