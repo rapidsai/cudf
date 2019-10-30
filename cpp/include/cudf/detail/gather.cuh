@@ -141,7 +141,6 @@ struct column_gatherer
       thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_begin,
 		     gather_map_end, source_data, destination_data);
     }
-    cudaStreamSynchronize(stream);
     
     return destination_column;
   }
