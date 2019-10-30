@@ -19,6 +19,3 @@ void scatter(table_view source_table, column_view gather_map,
 }  // namespace detail
 }  // namespace exp
 }  // namespace cudf
-
-
-#endif  // GATHER_HPP
