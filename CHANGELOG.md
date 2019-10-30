@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #3011 Added libcudf++ transition guide
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
