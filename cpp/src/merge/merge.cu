@@ -372,9 +372,9 @@ std::unique_ptr<cudf::table> merge(table_view const& left_table,
 std::unique_ptr<cudf::table> merge(table_view const& left_table,
                                    table_view const& right_table,
                                    std::vector<cudf::size_type> const& key_cols,
-                                   std::vector<order_by_type> const& asc_desc,
-                                   bool nulls_are_smallest) {
-  return detail::merge(left_table, right_table, key_cols, asc_desc, nulls_are_smallest);
+                                   std::vector<cudf::order> const& asc_desc,
+                                   std::vector<cudf::null_order> const& null_predences){
+  return detail::merge(left_table, right_table, key_cols, asc_desc, nulls_predences);
 }
 
 }  // namespace experimental
