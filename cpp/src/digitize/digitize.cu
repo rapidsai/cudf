@@ -43,13 +43,17 @@ digitize_impl(column_view const& col, column_view const& bins, range_bound bound
 
   if (bound == range_bound::EXCLUSIVE) {
     thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-      thrust::make_counting_iterator(0), thrust::make_counting_iterator(bins.size()),
-      thrust::make_counting_iterator(0), thrust::make_counting_iterator(col.size()),
+      thrust::make_counting_iterator<experimental::left_index>(0),
+      thrust::make_counting_iterator<experimental::left_index>(bins.size()),
+      thrust::make_counting_iterator<experimental::right_index>(0),
+      thrust::make_counting_iterator<experimental::right_index>(col.size()),
       output_view.begin<int32_t>(), comparator);
   } else {
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-      thrust::make_counting_iterator(0), thrust::make_counting_iterator(bins.size()),
-      thrust::make_counting_iterator(0), thrust::make_counting_iterator(col.size()),
+      thrust::make_counting_iterator<experimental::left_index>(0),
+      thrust::make_counting_iterator<experimental::left_index>(bins.size()),
+      thrust::make_counting_iterator<experimental::right_index>(0),
+      thrust::make_counting_iterator<experimental::right_index>(col.size()),
       output_view.begin<int32_t>(), comparator);
   }
 

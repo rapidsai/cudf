@@ -204,6 +204,28 @@ class element_relational_comparator {
   null_order null_precedence;
 };
 
+enum class index_type {
+  LEFT,
+  RIGHT
+};
+
+template <index_type T>
+struct index_wrapper {
+  size_type index;
+
+  CUDA_HOST_DEVICE_CALLABLE index_wrapper(size_type value): index(value) {}
+  CUDA_HOST_DEVICE_CALLABLE operator size_type() { return index; }
+
+
+  CUDA_HOST_DEVICE_CALLABLE index_wrapper& operator +=(std::ptrdiff_t const& diff) {
+    index += diff;
+    return *this;
+  }
+};
+
+using left_index = index_wrapper<index_type::LEFT>;
+using right_index = index_wrapper<index_type::RIGHT>;
+
 /**---------------------------------------------------------------------------*
  * @brief Performs a relational comparison between two elements in two columns.
  *
@@ -236,10 +258,16 @@ class element_less_comparator {
    * @return `true` if element from the `lhs` column compares less than element
    * in the `rhs` column
    *---------------------------------------------------------------------------**/
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const
+  __device__ bool operator()(left_index lhs_index, right_index rhs_index) const
       noexcept {
     return experimental::type_dispatcher(_dtype, _comparator, lhs_index,
         rhs_index) == weak_ordering::LESS;
+  }
+
+  __device__ bool operator()(right_index rhs_index, left_index lhs_index) const
+      noexcept {
+    return experimental::type_dispatcher(_dtype, _comparator, lhs_index,
+        rhs_index) == weak_ordering::GREATER;
   }
 
  private:
