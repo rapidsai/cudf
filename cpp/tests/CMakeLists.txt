@@ -475,14 +475,14 @@ set(LEGACY_MERGE_TEST_SRC
 ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 
 ###################################################################################################
-# - stream compaction tests -----------------------------------------------------------------------
+# - legacy stream compaction tests -----------------------------------------------------------------------
 
-set(STREAM_COMPACTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
+set(LEGACY_STREAM_COMPACTION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy/apply_boolean_mask_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy/drop_nulls_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy/drop_duplicates_tests.cu")
 
-ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
+ConfigureTest(LEGACY_STREAM_COMPACTION_TEST "${LEGACY_STREAM_COMPACTION_TEST_SRC}")
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
