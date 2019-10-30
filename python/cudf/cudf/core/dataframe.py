@@ -3792,6 +3792,9 @@ class DataFrame(object):
             return result
 
         elif axis == 1:
+            # for dask metadata compatibility
+            kwargs.pop("skipna", None)
+
             prepared = self._prepare_for_rowwise_op()
             arr = cp.asarray(prepared.as_gpu_matrix())
             result = getattr(arr, method)(axis=1, **kwargs)
