@@ -20,7 +20,7 @@
 #ifndef GDF_TESTS_BINARY_OPERATION_INTEGRATION_ASSERT_BINOPS_H
 #define GDF_TESTS_BINARY_OPERATION_INTEGRATION_ASSERT_BINOPS_H
 
-#include <tests/binaryop/util/operation.h>
+#include <tests/binaryop/legacy/util/operation.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 #include <gtest/gtest.h>

@@ -377,13 +377,13 @@ add_library(cudf
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
             src/rolling/jit/util/type.cpp
-            src/binaryop/binaryop.cpp
-            src/binaryop/compiled/binary_ops.cu
-            src/binaryop/jit/code/kernel.cpp
-            src/binaryop/jit/code/operation.cpp
-            src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/util/operator.cpp
-            src/binaryop/jit/util/type.cpp
+            src/binaryop/legacy/binaryop.cpp
+            src/binaryop/legacy/compiled/binary_ops.cu
+            src/binaryop/legacy/jit/code/kernel.cpp
+            src/binaryop/legacy/jit/code/operation.cpp
+            src/binaryop/legacy/jit/code/traits.cpp
+            src/binaryop/legacy/jit/util/operator.cpp
+            src/binaryop/legacy/jit/util/type.cpp
             src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
