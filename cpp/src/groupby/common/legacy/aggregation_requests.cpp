@@ -16,7 +16,7 @@
 #include "aggregation_requests.hpp"
 
 #include <cudf/cudf.h>
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
