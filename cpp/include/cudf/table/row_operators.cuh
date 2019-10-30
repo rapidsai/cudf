@@ -44,6 +44,7 @@ enum class weak_ordering {
   GREATER      ///< Indicates `a` is greater than (ordered after) `b`
 };
 
+namespace detail {
 /**---------------------------------------------------------------------------*
 * @brief Compare the elements ordering with respect to `lhs`.
 *
@@ -53,19 +54,19 @@ enum class weak_ordering {
 * the `lhs` and `rhs` columns.
 *---------------------------------------------------------------------------**/
 template <typename Element>
-__device__ weak_ordering compare_elements(Element const lhs, Element const rhs)
+__device__ weak_ordering compare_elements(Element lhs, Element rhs)
 {
     if(lhs < rhs) {
         return weak_ordering::LESS;
-    } else if(lhs > rhs) {
+    } else if(rhs < lhs) {
         return weak_ordering::GREATER;
     }
     return weak_ordering::EQUIVALENT;
 }
-
+}
 /**---------------------------------------------------------------------------*
-* @brief A specialization for floating-point `Element` type comparison to
-* derive the order of the elements with respect to `lhs`. Specialization is to
+* @brief A specialization for floating-point `Element` type rerlational comparison
+* to derive the order of the elements with respect to `lhs`. Specialization is to
 * handle `nan` in the order shown below.
 * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
 * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
@@ -77,7 +78,7 @@ __device__ weak_ordering compare_elements(Element const lhs, Element const rhs)
 *---------------------------------------------------------------------------**/
 template <typename Element,
             std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering compare(Element const lhs, Element const rhs) {
+__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
 
     if(std::isnan(lhs) and std::isnan(rhs)) {
         return weak_ordering::EQUIVALENT;
@@ -87,12 +88,12 @@ __device__ weak_ordering compare(Element const lhs, Element const rhs) {
         return weak_ordering::GREATER;
     }
 
-    return compare_elements(lhs, rhs);
+    return detail::compare_elements(lhs, rhs);
 }
 
 /**---------------------------------------------------------------------------*
-* @brief A specialization for non-floating-point `Element` type comparison to
-* derive the order of the elements with respect to `lhs`.
+* @brief A specialization for non-floating-point `Element` type relational
+* comparison to derive the order of the elements with respect to `lhs`.
 *
 * @param[in] lhs first element
 * @param[in] rhs second element
@@ -101,8 +102,39 @@ __device__ weak_ordering compare(Element const lhs, Element const rhs) {
 *---------------------------------------------------------------------------**/
 template <typename Element,
             std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering compare(Element const lhs, Element const rhs) {
-    return compare_elements(lhs, rhs);
+__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
+    return detail::compare_elements(lhs, rhs);
+}
+
+/**---------------------------------------------------------------------------*
+* @brief A specialization for floating-point `Element` type to check if
+* `lhs` is equivalent to `rhs`. `nan == nan`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return bool `true` if `lhs` == `rhs` else `false`.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool equality_compare(Element lhs, Element rhs) {
+    if (std::isnan(lhs) and std::isnan(rhs)) {
+        return true;
+    }
+    return lhs == rhs;
+}
+
+/**---------------------------------------------------------------------------*
+* @brief A specialization for non-floating-point `Element` type to check if
+* `lhs` is equivalent to `rhs`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return bool `true` if `lhs` == `rhs` else `false`.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool equality_compare(Element const lhs, Element const rhs) {
+    return lhs == rhs;
 }
 
 /**---------------------------------------------------------------------------*
@@ -148,10 +180,8 @@ class element_equality_comparator {
       }
     }
 
-    return weak_ordering::EQUIVALENT == compare(
-                                        lhs.element<Element>(lhs_element_index),
-                                        rhs.element<Element>(rhs_element_index)
-                                        );
+    return equality_compare(lhs.element<Element>(lhs_element_index),
+                            rhs.element<Element>(rhs_element_index));
   }
 
  private:
@@ -242,7 +272,8 @@ class element_relational_comparator {
       }
     }
 
-    return compare(lhs.element<Element>(lhs_element_index), rhs.element<Element>(rhs_element_index));
+    return relational_compare(lhs.element<Element>(lhs_element_index),
+                              rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
