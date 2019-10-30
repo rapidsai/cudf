@@ -39,32 +39,40 @@ using column = cudf::column;
 using table = cudf::experimental::table;
 using table_view = cudf::table_view;
 
+// Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(
         new cudf::test::TempDirTestEnvironment));
 
-/**
- * @brief Base test fixture for tests
- **/
+// Base test fixture for tests
 struct OrcWriterTest : public cudf::test::BaseFixture {};
 
-/**
- * @brief Typed test fixture for type-parameterized tests
- **/
+// Typed test fixture for numeric type tests
 template <typename T>
-struct OrcWriterTypedParamTest : public OrcWriterTest {
-  auto data_type() {
+struct OrcWriterNumericTypeTest : public OrcWriterTest {
+  auto type() {
     return cudf::data_type{cudf::experimental::type_to_id<T>()};
   }
 };
 
-TYPED_TEST_CASE(OrcWriterTypedParamTest, cudf::test::NumericTypes);
+// Typed test fixture for timestamp type tests
+template <typename T>
+struct OrcWriterTimestampTypeTest : public OrcWriterTest {
+  auto type() {
+    return cudf::data_type{cudf::experimental::type_to_id<T>()};
+  }
+};
+
+// Declare typed test cases
+TYPED_TEST_CASE(OrcWriterNumericTypeTest, cudf::test::NumericTypes);
+using SupportedTimestampTypes = cudf::test::RemoveIf<
+    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D>>,
+    cudf::test::TimestampTypes>;
+TYPED_TEST_CASE(OrcWriterTimestampTypeTest, SupportedTimestampTypes);
 
 namespace {
 
-/**
- * @brief Generates a vector of uniform random values of type T
- **/
+// Generates a vector of uniform random values of type T
 template <typename T>
 inline auto random_values(size_t size) {
   std::vector<T> values(size);
@@ -84,9 +92,7 @@ inline auto random_values(size_t size) {
   return values;
 }
 
-/**
- * @brief Helper function to compare two tables
- **/
+// Helper function to compare two tables
 void expect_tables_equal(cudf::table_view const& lhs,
                          cudf::table_view const& rhs) {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
@@ -99,7 +105,7 @@ void expect_tables_equal(cudf::table_view const& lhs,
 
 }  // namespace
 
-TYPED_TEST(OrcWriterTypedParamTest, SingleColumn) {
+TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
   auto sequence = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(
@@ -125,7 +131,7 @@ TYPED_TEST(OrcWriterTypedParamTest, SingleColumn) {
   expect_tables_equal(expected.view(), result.view());
 }
 
-TYPED_TEST(OrcWriterTypedParamTest, SingleColumnWithNulls) {
+TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
   auto sequence = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(
@@ -151,25 +157,80 @@ TYPED_TEST(OrcWriterTypedParamTest, SingleColumnWithNulls) {
   expect_tables_equal(expected.view(), result.view());
 }
 
+TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(std::rand() / 10); });
+  auto validity = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto expected = table{std::move(cols)};
+  EXPECT_EQ(1, expected.num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcTimestamps.orc");
+  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
+                                   expected.view()};
+  cudf_io::write_orc(out_args);
+
+  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
+  in_args.use_index = false;
+  in_args.timestamp_type = this->type();
+  auto result = cudf_io::read_orc(in_args);
+
+  expect_tables_equal(expected.view(), result.view());
+}
+
+TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(std::rand() / 10); });
+  auto validity = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return (i > 30) && (i < 60); });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto expected = table{std::move(cols)};
+  EXPECT_EQ(1, expected.num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcTimestampsWithNulls.orc");
+  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
+                                   expected.view()};
+  cudf_io::write_orc(out_args);
+
+  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
+  in_args.use_index = false;
+  in_args.timestamp_type = this->type();
+  auto result = cudf_io::read_orc(in_args);
+
+  expect_tables_equal(expected.view(), result.view());
+}
+
 TEST_F(OrcWriterTest, MultiColumn) {
   constexpr auto num_rows = 100;
 
-  auto seq_col0 = random_values<bool>(num_rows);
-  auto seq_col1 = random_values<int8_t>(num_rows);
-  auto seq_col2 = random_values<int16_t>(num_rows);
-  auto seq_col3 = random_values<int32_t>(num_rows);
-  auto seq_col4 = random_values<float>(num_rows);
-  auto seq_col5 = random_values<double>(num_rows);
+  // auto col0_data = random_values<bool>(num_rows);
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<float>(num_rows);
+  auto col5_data = random_values<double>(num_rows);
   auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
 
   // column_wrapper<bool> col0{
-  //    seq_col0.begin(), seq_col0.end(), validity};
-  column_wrapper<int8_t> col1{seq_col1.begin(), seq_col1.end(), validity};
-  column_wrapper<int16_t> col2{seq_col2.begin(), seq_col2.end(), validity};
-  column_wrapper<int32_t> col3{seq_col3.begin(), seq_col3.end(), validity};
-  column_wrapper<float> col4{seq_col4.begin(), seq_col4.end(), validity};
-  column_wrapper<double> col5{seq_col5.begin(), seq_col5.end(), validity};
+  //    col0_data.begin(), col0_data.end(), validity};
+  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
+  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
+  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
+  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
+  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
+
   // column_set_name(col0.get(), "bools");
   // column_set_name(col1.get(), "int8s");
   // column_set_name(col2.get(), "int16s");
@@ -199,33 +260,60 @@ TEST_F(OrcWriterTest, MultiColumn) {
   expect_tables_equal(expected.view(), result.view());
 }
 
-TEST_F(OrcWriterTest, Timestamps) {
+TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   constexpr auto num_rows = 100;
 
-  auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return cudf::timestamp_ms{std::rand() / 10}; });
-  auto validity = cudf::test::make_counting_transform_iterator(
+  // auto col0_data = random_values<bool>(num_rows);
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<float>(num_rows);
+  auto col5_data = random_values<double>(num_rows);
+  // auto col0_mask = cudf::test::make_counting_transform_iterator(
+  //    0, [](auto i) { return (i % 2); });
+  auto col1_mask = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return (i < 10); });
+  auto col2_mask = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
+  auto col3_mask = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return (i == (num_rows - 1)); });
+  auto col4_mask = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return (i >= 40 || i <= 60); });
+  auto col5_mask = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return (i > 80); });
 
-  column_wrapper<cudf::timestamp_ms> col{sequence, sequence + num_rows,
-                                         validity};
+  // column_wrapper<bool> col0{
+  //    col0_data.begin(), col0_data.end(), col0_mask};
+  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), col1_mask};
+  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), col2_mask};
+  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), col3_mask};
+  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
+  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
 
-  // column_set_name(col.get(), "col_timestamp");
+  // column_set_name(col0.get(), "bools");
+  // column_set_name(col1.get(), "int8s");
+  // column_set_name(col2.get(), "int16s");
+  // column_set_name(col3.get(), "int32s");
+  // column_set_name(col4.get(), "floats");
+  // column_set_name(col5.get(), "doubles");
 
   std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col.release());
+  // cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
   auto expected = table{std::move(cols)};
-  EXPECT_EQ(1, expected.num_columns());
+  EXPECT_EQ(5, expected.num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcWriterTimestamps");
+  auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
                                    expected.view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
-  in_args.timestamp_type =
-      cudf::data_type{cudf::experimental::type_to_id<cudf::timestamp_ms>()};
   auto result = cudf_io::read_orc(in_args);
 
   expect_tables_equal(expected.view(), result.view());

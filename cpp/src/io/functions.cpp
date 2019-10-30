@@ -30,14 +30,15 @@ namespace {
 
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& source,
-                                    reader_options const& options) {
+                                    reader_options const& options,
+                                    rmm::mr::device_memory_resource* mr) {
   if (source.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(source.filepath, options);
+    return std::make_unique<reader>(source.filepath, options, mr);
   } else if (source.type == io_type::HOST_BUFFER) {
     return std::make_unique<reader>(source.buffer.first, source.buffer.second,
-                                    options);
+                                    options, mr);
   } else if (source.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
-    return std::make_unique<reader>(source.file, options);
+    return std::make_unique<reader>(source.file, options, mr);
   } else {
     CUDF_FAIL("Unsupported source type");
   }
@@ -45,9 +46,10 @@ std::unique_ptr<reader> make_reader(source_info const& source,
 
 template <typename writer, typename writer_options>
 std::unique_ptr<writer> make_writer(sink_info const& sink,
-                                    writer_options const& options) {
+                                    writer_options const& options,
+                                    rmm::mr::device_memory_resource* mr) {
   if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(sink.filepath, options);
+    return std::make_unique<writer>(sink.filepath, options, mr);
   } else {
     CUDF_FAIL("Unsupported sink type");
   }
@@ -61,7 +63,7 @@ table read_avro(read_avro_args const& args,
   namespace avro = cudf::experimental::io::detail::avro;
 
   avro::reader_options options{args.columns};
-  auto reader = make_reader<avro::reader>(args.source, options);
+  auto reader = make_reader<avro::reader>(args.source, options, mr);
 
   if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
@@ -76,7 +78,7 @@ table read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr) {
 
   orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes,
                               args.timestamp_type};
-  auto reader = make_reader<orc::reader>(args.source, options);
+  auto reader = make_reader<orc::reader>(args.source, options, mr);
 
   if (args.stripe != -1) {
     return reader->read_stripe(args.stripe);
@@ -93,7 +95,7 @@ void write_orc(write_orc_args const& args,
   namespace orc = cudf::experimental::io::detail::orc;
 
   orc::writer_options options{args.compression};
-  auto writer = make_writer<orc::writer>(args.sink, options);
+  auto writer = make_writer<orc::writer>(args.sink, options, mr);
 
   writer->write_all(args.table);
 }
@@ -106,7 +108,7 @@ table read_parquet(read_parquet_args const& args,
   parquet::reader_options options{args.columns, args.strings_to_categorical,
                                   args.use_pandas_metadata,
                                   args.timestamp_type};
-  auto reader = make_reader<parquet::reader>(args.source, options);
+  auto reader = make_reader<parquet::reader>(args.source, options, mr);
 
   if (args.row_group != -1) {
     return reader->read_row_group(args.row_group);
