@@ -3775,7 +3775,7 @@ class DataFrame(object):
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
         assert axis in (None, 0, 1)
 
-        if axis == 0:
+        if axis in (None, 0):
             result = [
                 getattr(self[col], method)(*args, **kwargs)
                 for col in self._cols.keys()
