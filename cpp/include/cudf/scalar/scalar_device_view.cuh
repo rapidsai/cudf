@@ -84,7 +84,7 @@ template <typename T>
 class primitive_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
-  using ValueType = T;
+  using value_type = T;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
@@ -154,7 +154,7 @@ class string_scalar_device_view
 
  private:
   const char* _data{};  ///< Pointer to device memory containing the value
-  size_type _size;      ///< Length of the string
+  size_type _size;      ///< Size of the string in bytes
 };
 
 template <typename T>
