@@ -86,6 +86,7 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 
 
 # cuDF 0.10.0 (16 Oct 2019)
