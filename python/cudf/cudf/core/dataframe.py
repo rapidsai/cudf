@@ -3691,10 +3691,10 @@ class DataFrame(object):
     def cummax(self, **kwargs):
         return self._apply_support_method("cummax", **kwargs)
 
-    def cumsum(self, axis=0, **kwargs):
+    def cumsum(self, **kwargs):
         return self._apply_support_method("cumsum", **kwargs)
 
-    def cumprod(self, axis=0, **kwargs):
+    def cumprod(self, **kwargs):
         return self._apply_support_method("cumprod", **kwargs)
 
     def mean(self, axis=0, numeric_only=None, **kwargs):
