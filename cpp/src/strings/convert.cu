@@ -47,7 +47,7 @@ struct string_to_integer_fn
      * Any other character will end the parse.
      * Overflow of the int64 type is not detected.
      */
-    __device__ int64_t string_to_integer( const cudf::string_view d_str )
+    __device__ int64_t string_to_integer( cudf::string_view d_str )
     {
         int64_t value = 0;
         cudf::size_type bytes = d_str.size_bytes();
