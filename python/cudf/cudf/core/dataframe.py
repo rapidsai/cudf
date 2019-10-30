@@ -3692,13 +3692,9 @@ class DataFrame(object):
         return self._apply_support_method("cummax", **kwargs)
 
     def cumsum(self, axis=0, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op("cumsum", numeric_only=None)
         return self._apply_support_method("cumsum", **kwargs)
 
     def cumprod(self, axis=0, **kwargs):
-        if axis == 1:
-            return self._apply_rowwise_op("cumprod", numeric_only=None)
         return self._apply_support_method("cumprod", **kwargs)
 
     def mean(self, axis=0, numeric_only=None, **kwargs):
