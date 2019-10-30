@@ -18,18 +18,6 @@ cudf_to_np_types = {INT32: np.dtype('int32'),
                     FLOAT64: np.dtype('float64')}
 
 
-cdef Column release_column(unique_ptr[column] c_col):
-    size = c_col.get()[0].size()
-    dtype = cudf_to_np_types[c_col.get()[0].type().id()]
-    cdef column_contents contents = c_col.get()[0].release()
-    data = DeviceBuffer.from_ptr(contents.data.release())
-    if c_col.get()[0].has_nulls():
-        mask = DeviceBuffer.from_ptr(contents.null_mask.release())
-    else:
-        mask = None
-    return Column(data, size=size, dtype=dtype, mask=mask)
-
-
 cdef class Column:
     def __init__(self, data, size, dtype, mask=None):
         self.data = data
@@ -66,6 +54,19 @@ cdef class Column:
             self.size,
             data,
             mask)
+
+    @staticmethod
+    cdef Column from_ptr(unique_ptr[column] c_col):
+        size = c_col.get()[0].size()
+        dtype = cudf_to_np_types[c_col.get()[0].type().id()]
+        cdef column_contents contents = c_col.get()[0].release()
+        data = DeviceBuffer.from_ptr(contents.data.release())
+        if c_col.get()[0].has_nulls():
+            mask = DeviceBuffer.from_ptr(contents.null_mask.release())
+        else:
+            mask = None
+        return Column(data, size=size, dtype=dtype, mask=mask)
+
 
     def to_pandas(self):
         from rmm import device_array_from_ptr

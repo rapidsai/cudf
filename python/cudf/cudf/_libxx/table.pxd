@@ -8,5 +8,5 @@ cdef class Table:
     cdef table_view view(self) except *
     cdef mutable_table_view mutable_view(self) except *
 
-
-cdef Table release_table(unique_ptr[table] c_tbl)
+    @staticmethod
+    cdef Table from_ptr(unique_ptr[table] c_tbl)

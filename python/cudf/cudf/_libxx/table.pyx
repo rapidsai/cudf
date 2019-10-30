@@ -31,11 +31,11 @@ cdef class Table:
         
         return mutable_table_view(column_views)
 
-
-cdef Table release_table(unique_ptr[table] c_tbl):
-    cdef vector[unique_ptr[column]] columns
-    columns = c_tbl.get()[0].release()
-    result = []
-    for i in range(columns.size()):
-        result.append(release_column(move(columns[i])))
-    return Table(result)
+    @staticmethod
+    cdef Table from_ptr(unique_ptr[table] c_tbl):
+        cdef vector[unique_ptr[column]] columns
+        columns = c_tbl.get()[0].release()
+        result = []
+        for i in range(columns.size()):
+            result.append(Column.from_ptr(move(columns[i])))
+        return Table(result)
