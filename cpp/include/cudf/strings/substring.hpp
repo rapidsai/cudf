@@ -43,17 +43,21 @@ namespace strings
  * r2 is now ["lo","ob"]
  * ```
  *
- * @param strings Strings instance for this operation.
+ * @throw cudf::logic_error if start position is not a positive integer or zero.
+ * @throw cudf::logic_error if start is greater than stop.
+ * @throw cudf::logic_error if step value is not a positive integer.
+ *
+ * @param strings Strings column for this operation.
  * @param start First character position to begin the substring.
  * @param stop Last character position (exclusive) to end the substring.
  *             Default of -1 indicates to use the end of each string.
- * @param step Character count to skip when retrieving substring.
+ * @param step Character count to skip when retrieving the substring.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<cudf::column> substring( strings_column_view strings,
-                                         int32_t start, int32_t stop=-1, int32_t step=1,
+std::unique_ptr<cudf::column> substring( const cudf::strings_column_view strings,
+                                         cudf::size_type start, cudf::size_type stop=-1, cudf::size_type step=1,
                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                          cudaStream_t stream = 0 );
 
@@ -72,6 +76,9 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
  *
  * Null string entries will return null output string entries.
  *
+ * The starts and stops column must both be the same integer type and
+ * must be the same size as the strings column.
+ *
  * ```
  * s = ["hello", "goodbye"]
  * starts = [ 1, 2 ]
@@ -80,15 +87,19 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
  * r is now ["ello","od"]
  * ```
  *
- * @param strings Strings instance for this operation.
+ * @throw cudf::logic_error if starts or stops is a different size than the strings column.
+ * @throw cudf::logic_error if starts and stops are not same integer type.
+ * @throw cudf::logic_error if starts or stops contains nulls.
+ *
+ * @param strings Strings column for this operation.
  * @param starts First character positions to begin the substring.
  * @param stops Last character (exclusive) positions to end the substring.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
-                                              column_view starts, column_view stops,
+std::unique_ptr<cudf::column> substring_from( const cudf::strings_column_view strings,
+                                              const column_view starts, const column_view stops,
                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                               cudaStream_t stream = 0 );
 

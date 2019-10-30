@@ -25,11 +25,6 @@
 #include "./utilities.cuh"
 
 
-namespace cudf
-{
-namespace strings
-{
-
 namespace
 {
 
@@ -52,31 +47,31 @@ enum TwoPass
 template <TwoPass Pass=SizeOnly>
 struct substring_fn
 {
-    const column_device_view d_column;
+    const cudf::column_device_view d_column;
     int32_t start, stop, step;
     const int32_t* d_offsets{};
     char* d_chars{};
 
-    __device__ size_type operator()(size_type idx)
+    __device__ cudf::size_type operator()(cudf::size_type idx)
     {
         if( d_column.is_null(idx) )
             return 0; // null string
-        string_view d_str = d_column.template element<string_view>(idx);
+        cudf::string_view d_str = d_column.template element<cudf::string_view>(idx);
         auto length = d_str.length();
         if( start >= length )
             return 0; // empty string
         auto itr = d_str.begin() + start;
         auto end_itr = d_str.begin() + (((stop<0) || (stop>length) ) ? length : stop);
-        size_type bytes = 0;
+        cudf::size_type bytes = 0;
         char* d_buffer = nullptr;
         if( Pass==ExecuteOp )
             d_buffer = d_chars + d_offsets[idx];
         while( itr < end_itr )
         {
             if( Pass==SizeOnly )
-                bytes += detail::bytes_in_char_utf8(*itr);
+                bytes += cudf::strings::detail::bytes_in_char_utf8(*itr);
             else
-                d_buffer += detail::from_char_utf8(*itr,d_buffer);
+                d_buffer += cudf::strings::detail::from_char_utf8(*itr,d_buffer);
             itr += step;
         }
         return bytes;
@@ -85,9 +80,14 @@ struct substring_fn
 
 } // namespace
 
+namespace cudf
+{
+namespace strings
+{
+
 //
-std::unique_ptr<cudf::column> substring( strings_column_view strings,
-                                         int32_t start, int32_t stop, int32_t step,
+std::unique_ptr<cudf::column> substring( const strings_column_view strings,
+                                         size_type start, size_type stop, size_type step,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream )
 {
@@ -101,7 +101,6 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
     if( (stop > 0) && (start > stop) )
         CUDF_FAIL("Invalid start or stop parameter value.");
 
-    auto execpol = rmm::exec_policy(0);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
@@ -110,7 +109,7 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
     cudf::size_type null_count = d_column.null_count();
     if( d_column.nullable() )
         null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(strings_count),
+                                        cudf::bitmask_allocation_size_bytes(strings_count),
                                         stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
@@ -126,42 +125,44 @@ std::unique_ptr<cudf::column> substring( strings_column_view strings,
     auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
-    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
         substring_fn<ExecuteOp>{d_column, start, stop, step, d_new_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
 
+} // namespace strings
+} // namespace cudf
+
 namespace
 {
 
-/**
- * @brief Function logic for substring_from API.
- * This does both calculate and the execute based on template parameter.
- *
- */
 template <typename PositionType, TwoPass Pass=SizeOnly>
 struct substring_from_fn
 {
-    const column_device_view d_column;
+    const cudf::column_device_view d_column;
     const PositionType* starts;
     const PositionType* stops;
     const int32_t* d_offsets{};
     char* d_chars{};
 
-    __device__ size_type operator()(size_type idx)
+    /**
+     * @brief Function logic for substring_from API.
+     * This does both calculate and the execute based on template parameter.
+     */
+    __device__ cudf::size_type operator()(cudf::size_type idx)
     {
         if( d_column.is_null(idx) )
             return 0; // null string
-        string_view d_str = d_column.template element<string_view>(idx);
-        size_type length = d_str.length();
-        size_type start = static_cast<size_type>(starts[idx]);
+        cudf::string_view d_str = d_column.template element<cudf::string_view>(idx);
+        cudf::size_type length = d_str.length();
+        cudf::size_type start = static_cast<cudf::size_type>(starts[idx]);
         if( start >= length )
             return 0; // empty string
-        size_type stop = static_cast<size_type>(stops[idx]);
-        size_type end = (((stop<0) || (stop>length) ) ? length : stop);
-        string_view d_substr = d_str.substr(start,end-start);
+        cudf::size_type stop = static_cast<cudf::size_type>(stops[idx]);
+        cudf::size_type end = (((stop<0) || (stop>length) ) ? length : stop);
+        cudf::string_view d_substr = d_str.substr(start,end-start);
         if( Pass==SizeOnly )
             return d_substr.size_bytes();
         else
@@ -173,23 +174,26 @@ struct substring_from_fn
 };
 
 /**
- * @brief Called by the type-dispatcher for resolving the position columns
+ * Called by the type-dispatcher for resolving the position columns
  * (starts_column and stops_column) to actual types.
  */
 struct dispatch_substring_from_fn
 {
+    /**
+     * @brief Returns strings column with substrings based on the ranges in the
+     * individual starts and stops column position values.
+     */
     template <typename PositionType, std::enable_if_t<std::is_integral<PositionType>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()( strings_column_view& strings,
-                                              column_view& starts_column, column_view& stops_column,
+    std::unique_ptr<cudf::column> operator()( const cudf::strings_column_view& strings,
+                                              const cudf::column_view& starts_column, const cudf::column_view& stops_column,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream ) const noexcept
     {
         const PositionType* starts = starts_column.data<PositionType>();
         const PositionType* stops = stops_column.data<PositionType>();
 
-        size_type strings_count = strings.size();
-        auto execpol = rmm::exec_policy(0);
-        auto strings_column = column_device_view::create(strings.parent(),stream);
+        auto strings_count = strings.size();
+        auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
         auto d_column = *strings_column;
 
         // copy the null mask
@@ -197,23 +201,24 @@ struct dispatch_substring_from_fn
         cudf::size_type null_count = d_column.null_count();
         if( d_column.nullable() )
             null_mask = rmm::device_buffer( d_column.null_mask(),
-                                            gdf_valid_allocation_size(strings_count),
+                                            cudf::bitmask_allocation_size_bytes(strings_count),
                                             stream, mr);
         // build offsets column
         auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<PositionType>(0),
             substring_from_fn<PositionType>{d_column,starts,stops} );
-        auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
-                                                                offsets_transformer_itr+strings_count,
-                                                                mr, stream);
+        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
+                                                                               offsets_transformer_itr+strings_count,
+                                                                               mr, stream);
         auto offsets_view = offsets_column->view();
         auto d_new_offsets = offsets_view.template data<int32_t>();
 
         // build chars column
-        size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-        auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
+        cudf::size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
+        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
         auto chars_view = chars_column->mutable_view();
         auto d_chars = chars_view.template data<char>();
-        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+        thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+            thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             substring_from_fn<PositionType,ExecuteOp>{d_column, starts, stops, d_new_offsets, d_chars});
         //
         return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
@@ -221,19 +226,25 @@ struct dispatch_substring_from_fn
     }
     //
     template <typename PositionType, std::enable_if_t<not std::is_integral<PositionType>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()(strings_column_view&,
-                                             column_view&, column_view&,
+    std::unique_ptr<cudf::column> operator()(const cudf::strings_column_view&,
+                                             const cudf::column_view&, const cudf::column_view&,
                                              rmm::mr::device_memory_resource*,
                                              cudaStream_t ) const
     {
         CUDF_FAIL("Positions values for substring must be an integral type.");
     }
 };
+
 } // namespace
 
+namespace cudf
+{
+namespace strings
+{
+
 //
-std::unique_ptr<cudf::column> substring_from( strings_column_view strings,
-                                              column_view starts_column, column_view stops_column,
+std::unique_ptr<cudf::column> substring_from( const strings_column_view strings,
+                                              const column_view starts_column, const column_view stops_column,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream )
 {
