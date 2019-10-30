@@ -61,9 +61,7 @@ std::unique_ptr<column> make_numeric_column(
 
   // copy null mask
   rmm::device_buffer copy_null_mask;
-  if( null_count == cudf::UNKNOWN_NULL_COUNT )
-      null_count = cudf::count_unset_bits(null_mask,0,size);
-  if( null_count > 0 )
+  if( null_mask != nullptr )
       copy_null_mask = rmm::device_buffer( null_mask,
                                            bitmask_allocation_size_bytes(size),
                                            stream, mr);
@@ -94,9 +92,7 @@ std::unique_ptr<column> make_timestamp_column(
 
   // copy null mask
   rmm::device_buffer copy_null_mask;
-  if( null_count == cudf::UNKNOWN_NULL_COUNT )
-      null_count = cudf::count_unset_bits(null_mask,0,size);
-  if( null_count > 0 )
+  if( null_mask != nullptr )
       copy_null_mask = rmm::device_buffer( null_mask,
                                            bitmask_allocation_size_bytes(size),
                                            stream, mr);
