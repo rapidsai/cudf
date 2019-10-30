@@ -1,7 +1,7 @@
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 

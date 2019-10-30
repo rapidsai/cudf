@@ -16,7 +16,7 @@
 #include "scatter.hpp"
 #include "gather.cuh"
 #include <cudf/legacy/copying.hpp>
-#include <cudf/filling.hpp>
+#include <cudf/legacy/filling.hpp>
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
@@ -32,7 +32,7 @@
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <reductions/legacy/reduction_functions.cuh>
-#include <stream_compaction/copy_if.cuh>
+#include <stream_compaction/legacy/copy_if.cuh>
 
 
 

@@ -17,7 +17,7 @@
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/column.hpp>
 #include <utilities/column_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
 #include <nvstrings/NVCategory.h>

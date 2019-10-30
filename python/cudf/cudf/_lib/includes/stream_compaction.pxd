@@ -9,15 +9,15 @@ from cudf._lib.cudf cimport *
 
 from libcpp.vector cimport vector
 
-cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/stream_compaction.hpp" namespace "cudf" nogil:
 
-    # defined in cpp/include/stream_compaction.hpp
+    # defined in cpp/include/cudf/legacy/stream_compaction.hpp
     ctypedef enum duplicate_keep_option:
         KEEP_FIRST
         KEEP_LAST
         KEEP_NONE
 
-    # defined in cpp/include/stream_compaction.hpp
+    # defined in cpp/include/cudf/legacy/stream_compaction.hpp
     ctypedef enum any_or_all:
         ANY
         ALL

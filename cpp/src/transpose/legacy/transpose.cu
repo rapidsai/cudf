@@ -1,6 +1,6 @@
 /* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
 
-#include <utilities/nvtx/legacy/nvtx_utils.h>
+#include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
@@ -167,7 +167,7 @@ gdf_error gdf_transpose(cudf::size_type ncols, gdf_column** in_cols,
     }
   }
 
-  PUSH_RANGE("CUDF_TRANSPOSE", GDF_GREEN);
+  cudf::nvtx::range_push("CUDF_TRANSPOSE", cudf::nvtx::color::GREEN);
 
   // Copy input columns `data` and `valid` pointers to device
   std::vector<void*> in_columns_data(ncols);
@@ -213,6 +213,6 @@ gdf_error gdf_transpose(cudf::size_type ncols, gdf_column** in_cols,
     out_cols[i]->null_count = out_columns_nullct[i];
   }
   
-  POP_RANGE();
+  cudf::nvtx::range_pop();
   return GDF_SUCCESS;
 }
