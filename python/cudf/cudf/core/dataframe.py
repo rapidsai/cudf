@@ -3773,7 +3773,7 @@ class DataFrame(object):
         return self._apply_support_method("any", **kwargs)
 
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
-        assert axis in (0, 1)
+        assert axis in (None, 0, 1)
 
         if axis == 0:
             result = [
