@@ -101,10 +101,10 @@ struct Options : groupby::Options {
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the table of reduced output values
  *---------------------------------------------------------------------------**/
-std::pair<table, table> groupby(table_view const& keys,
-                                table_view const& values,
-                                std::vector<operators> const& ops,
-                                Options options = Options{});
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(table_view const& keys,
+                                                                  table_view const& values,
+                                                                  std::vector<operators> const& ops,
+                                                                  Options options = Options{});
 
 }  // namespace hash
 
@@ -172,10 +172,10 @@ struct Options : groupby::Options {
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the reduced output values
  *---------------------------------------------------------------------------**/
-std::pair<table, table> groupby(table_view const& keys,
-                                table_view const& values,
-                                std::vector<operation> const& ops,
-                                Options options = Options{});
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(table_view const& keys,
+                                                                  table_view const& values,
+                                                                  std::vector<operation> const& ops,
+                                                                  Options options = Options{});
 }  // namespace sort
 }  // namespace groupby
 }  // namespace experimental
@@ -211,9 +211,9 @@ std::unique_ptr<column> unique_indices(table_view const& input_table);
  *          - A non-nullable column of `INT32` elements containing the indices of
  *            the first occurrences of each unique row.
  */
-std::pair<table, column> gdf_group_by_without_aggregations(table_view const& input_table,
-                                                           std::vector<size_type> const& key_col_indices,
-                                                           null_order null_precedence = null_order::AFTER,
-                                                           bool ignore_null_keys = true,
-                                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>>
+  gdf_group_by_without_aggregations(table_view const& input_table,
+                                    std::vector<size_type> const& key_col_indices,
+                                    null_order null_precedence = null_order::AFTER,
+                                    bool ignore_null_keys = true,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
