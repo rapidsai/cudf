@@ -45,45 +45,64 @@ enum class weak_ordering {
 };
 
 /**---------------------------------------------------------------------------*
-* @brief Evaluates elements `lhs` and `rhs` for nan and expected ordering, and
-* this will be available for only floating point `Element` types.
+* @brief Compare the elements ordering with respect to `lhs`.
 *
 * @param[in] lhs first element
 * @param[in] rhs second element
-* @param[in] expected_ordering expected relation between elements
-* @returns bool true if elements are in order as per `expected_ordering` else false
+* @return weak_ordering Indicates the relationship between the elements in
+* the `lhs` and `rhs` columns.
 *---------------------------------------------------------------------------**/
-template <typename Element,
-            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool evaluate_nan_ordering(Element const lhs, Element const rhs, weak_ordering expected_ordering) {
-
-    bool result = false;
-
-    switch(expected_ordering) {
-        case weak_ordering::EQUIVALENT: result =  std::isnan(lhs) and std::isnan(rhs);
-                                        break;
-        case weak_ordering::LESS: result = std::isnan(rhs) and not std::isnan(lhs);
-                                     break;
-        case weak_ordering::GREATER: result = std::isnan(lhs) and not std::isnan(rhs);
-                                     break;
+template <typename Element>
+__device__ weak_ordering compare_elements(Element const lhs, Element const rhs)
+{
+    if(lhs < rhs) {
+        return weak_ordering::LESS;
+    } else if(lhs > rhs) {
+        return weak_ordering::GREATER;
     }
-
-    return result;
+    return weak_ordering::EQUIVALENT;
 }
 
 /**---------------------------------------------------------------------------*
-* @brief This funtion is to handle non-floating `Element` types and it will
-* always return false.
+* @brief A specialization for floating-point `Element` type comparison to
+* derive the order of the elements with respect to `lhs`. Specialization is to
+* handle `nan` in the order shown below.
+* `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
+* `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
 *
 * @param[in] lhs first element
 * @param[in] rhs second element
-* @param[in] expected_ordering expected relation between elements
-* @returns bool always returns `false`
+* @return weak_ordering Indicates the relationship between the elements in
+* the `lhs` and `rhs` columns.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ weak_ordering compare(Element const lhs, Element const rhs) {
+
+    if(std::isnan(lhs) and std::isnan(rhs)) {
+        return weak_ordering::EQUIVALENT;
+    } else if(std::isnan(rhs)) {
+        return weak_ordering::LESS;
+    } else if(std::isnan(lhs)) {
+        return weak_ordering::GREATER;
+    }
+
+    return compare_elements(lhs, rhs);
+}
+
+/**---------------------------------------------------------------------------*
+* @brief A specialization for non-floating-point `Element` type comparison to
+* derive the order of the elements with respect to `lhs`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return weak_ordering Indicates the relationship between the elements in
+* the `lhs` and `rhs` columns.
 *---------------------------------------------------------------------------**/
 template <typename Element,
             std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool evaluate_nan_ordering(Element lhs, Element rhs, weak_ordering expected_ordering) {
-    return false;
+__device__ weak_ordering compare(Element const lhs, Element const rhs) {
+    return compare_elements(lhs, rhs);
 }
 
 /**---------------------------------------------------------------------------*
@@ -128,15 +147,11 @@ class element_equality_comparator {
         return false;
       }
     }
-    // NaNs are equal
-    Element const lhs_element = lhs.element<Element>(lhs_element_index);
-    Element const rhs_element = rhs.element<Element>(rhs_element_index);
 
-    if(evaluate_nan_ordering(lhs_element, rhs_element, weak_ordering::EQUIVALENT)) {
-        return true;
-    }
-
-    return lhs_element == rhs_element;
+    return weak_ordering::EQUIVALENT == compare(
+                                        lhs.element<Element>(lhs_element_index),
+                                        rhs.element<Element>(rhs_element_index)
+                                        );
   }
 
  private:
@@ -227,18 +242,7 @@ class element_relational_comparator {
       }
     }
 
-    Element const lhs_element = lhs.element<Element>(lhs_element_index);
-    Element const rhs_element = rhs.element<Element>(rhs_element_index);
-
-    if ((lhs_element < rhs_element) or
-         evaluate_nan_ordering(lhs_element, rhs_element, weak_ordering::LESS)) {
-      return weak_ordering::LESS;
-    } else if ((rhs_element < lhs_element) or
-                evaluate_nan_ordering(lhs_element, rhs_element, weak_ordering::GREATER)) {
-      return weak_ordering::GREATER;
-    }
-
-    return weak_ordering::EQUIVALENT;
+    return compare(lhs.element<Element>(lhs_element_index), rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
