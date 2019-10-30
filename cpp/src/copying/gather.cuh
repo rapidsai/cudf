@@ -185,9 +185,9 @@ struct index_converter : public thrust::unary_function<map_type,map_type>
 };
 
 
-template <typename iterator_type>
+template <typename MapIterator>
 std::unique_ptr<table>
-gather(table_view const& source_table, iterator_type gather_map,
+gather(table_view const& source_table, MapIterator gather_map,
        size_type num_destination_rows, bool check_bounds = false,
        bool ignore_out_of_bounds = false,
        bool allow_negative_indices = false,
