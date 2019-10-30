@@ -13,7 +13,7 @@ namespace experimental {
 namespace detail {
 
 /**
- * @brief Gathers the specified rows (including null values) of a set of columns.
+ * @brief Gathers the specified rows of a set of columns according to a gather map.
  *
  * Gathers the rows of the source columns according to `gather_map` such that row "i"
  * in the resulting table's columns will contain row "gather_map[i]" from the source columns.

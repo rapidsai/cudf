@@ -27,15 +27,14 @@ struct dispatch_map_type {
 				    bool allow_negative_indices = false)
   {
     std::unique_ptr<table> destination_table;
-    map_type const * typed_gather_map = gather_map.data<map_type>();
 
     if (check_bounds) {
       cudf::size_type begin = (allow_negative_indices) ? -source_table.num_rows() : 0;
       CUDF_EXPECTS(
 	  num_destination_rows == thrust::count_if(
 	      rmm::exec_policy()->on(0),
-	      typed_gather_map,
-	      typed_gather_map + num_destination_rows,
+	      gather_map.begin<map_type>(),
+	      gather_map.end<map_type>(),
 	      bounds_checker<map_type>{begin, source_table.num_rows()}),
 	  "Index out of bounds.");
     }
@@ -44,7 +43,7 @@ struct dispatch_map_type {
       destination_table =
 	gather(source_table,
 	       thrust::make_transform_iterator(
-					       typed_gather_map,
+					       gather_map.begin<map_type>(),
 					       index_converter<map_type,index_conversion::NEGATIVE_TO_POSITIVE>{source_table.num_rows()}),
 	       num_destination_rows,
 	       check_bounds,
@@ -56,7 +55,7 @@ struct dispatch_map_type {
       destination_table =
 	gather(source_table,
 	       thrust::make_transform_iterator(
-					       typed_gather_map,
+					       gather_map.begin<map_type>(),
 					       index_converter<map_type>{source_table.num_rows()}),
 	       num_destination_rows,
 	       check_bounds,

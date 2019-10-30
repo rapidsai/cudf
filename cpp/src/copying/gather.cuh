@@ -42,7 +42,7 @@ struct bounds_checker {
   __device__ bounds_checker(size_type begin_, size_type end_)
     : begin{begin_}, end{end_} {}
 
-  __device__ __forceinline__ bool operator()(map_type const index) {
+  __device__ bool operator()(map_type const index) {
     return ((index >= begin) && (index < end));
   }
 };
@@ -132,7 +132,7 @@ struct column_gatherer {
    * @brief Type-dispatched function to gather from one column to another based
    * on a `gather_map`.
    *
-   * @tparam column_type Dispatched type for the column being gathered
+   * @tparam Element Dispatched type for the column being gathered
    * @param source_column The column to gather from
    * @param gather_map An iterator over integral values representing the gather map
    * @param destination_column The column to gather into
@@ -140,10 +140,10 @@ struct column_gatherer {
    * out of bounds
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
-  template <typename column_type, typename iterator_type,
-    std::enable_if_t<is_fixed_width<column_type>()>* = nullptr>
+  template <typename Element, typename MapIterator,
+    std::enable_if_t<is_fixed_width<Element>()>* = nullptr>
     std::unique_ptr<column> operator()(column_view const& source_column,
-				       iterator_type gather_map,
+				       MapIterator gather_map,
 				       size_type num_destination_rows,
 				       bool ignore_out_of_bounds,
 				       cudaStream_t stream) {
@@ -152,8 +152,8 @@ struct column_gatherer {
       allocate_like(source_column, num_destination_rows);
 
 
-    column_type const *source_data{source_column.data<column_type>()};
-    column_type *destination_data{destination_column->mutable_view().data<column_type>()};
+    Element const *source_data{source_column.data<Element>()};
+    Element *destination_data{destination_column->mutable_view().data<Element>()};
 
     if (ignore_out_of_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
@@ -170,10 +170,10 @@ struct column_gatherer {
     return destination_column;
   }
 
-  template <typename column_type, typename iterator_type,
-    std::enable_if_t<not is_fixed_width<column_type>()>* = nullptr>
+  template <typename Element, typename MapIterator,
+    std::enable_if_t<not is_fixed_width<Element>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& source_column,
-				     iterator_type gather_map,
+				     MapIterator gather_map,
 				     size_type num_destination_rows,
 				     bool ignore_out_of_bounds,
 				     util::cuda::scoped_stream stream) {
@@ -186,8 +186,8 @@ struct column_gatherer {
  * @brief Specifies the behavior of index_converter
  */
 enum index_conversion {
-    NEGATIVE_TO_POSITIVE = 0,
-    NONE
+		       NEGATIVE_TO_POSITIVE = 0,  ///< Negative values are "wrapped" to positive
+		       NONE                       ///< No transformation
 };
 
 /**---------------------------------------------------------------------------*
@@ -272,20 +272,11 @@ gather(table_view const& source_table, iterator_type gather_map,
   std::vector<bitmask_type const*> source_bitmasks_host(source_n_cols);
   std::vector<bitmask_type*> destination_bitmasks_host(source_n_cols);
 
-  std::vector<rmm::device_vector<bitmask_type>> inplace_buffers(source_n_cols);
-
   // loop over each column, check if inplace and allocate buffer if true.
   for (size_type i = 0; i < source_n_cols; i++) {
     mutable_column_view dest_col = destination_columns[i]->mutable_view();
     source_bitmasks_host[i] = source_table.column(i).null_mask();
-    // Allocate inplace buffer
-    if (dest_col.nullable() &&
-	dest_col.null_mask() == source_table.column(i).null_mask()) {
-      inplace_buffers[i].resize(bitmask_allocation_size_bytes(dest_col.size()));
-      destination_bitmasks_host[i] = inplace_buffers[i].data().get();
-    } else {
-      destination_bitmasks_host[i] = dest_col.null_mask();
-    }
+    destination_bitmasks_host[i] = dest_col.null_mask();
   }
 
   // In the following we allocate the device array thats hold the valid
@@ -315,13 +306,6 @@ gather(table_view const& source_table, iterator_type gather_map,
   for (size_type i = 0; i < source_table.num_columns(); i++) {
     mutable_column_view dest_col = destination_columns[i]->mutable_view();
     if (dest_col.nullable()) {
-      // Copy temp buffer content back to column
-      if (dest_col.null_mask() == source_table.column(i).null_mask()) {
-	size_type num_bitmask_elements =
-	  gdf_num_bitmask_elements(dest_col.size());
-	CUDA_TRY(cudaMemcpy(dest_col.null_mask(), destination_bitmasks_host[i],
-			    num_bitmask_elements, cudaMemcpyDeviceToDevice));
-      }
       dest_col.set_null_count(dest_col.size() - h_count[i]);
     } else {
       dest_col.set_null_count(0);
