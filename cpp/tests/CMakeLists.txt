@@ -328,6 +328,11 @@ ConfigureTest(LEGACY_CSV_TEST "${LEGACY_CSV_TEST_SRC}")
 ConfigureTest(LEGACY_JSON_TEST "${LEGACY_JSON_TEST_SRC}")
 ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 
+set(ORC_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
+
+ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
+
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 

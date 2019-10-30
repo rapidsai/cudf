@@ -21,6 +21,7 @@
 
 #include "types.hpp"
 
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <string>
@@ -48,7 +49,7 @@ struct read_avro_args {
   /// Rows to read; -1 is all
   size_type num_rows = -1;
 
-  explicit read_avro_args(const source_info& src) : source(src) {}
+  explicit read_avro_args(source_info const& src) : source(src) {}
 };
 
 /**
@@ -97,7 +98,7 @@ struct read_orc_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
-  explicit read_orc_args(const source_info& src) : source(src) {}
+  explicit read_orc_args(source_info const& src) : source(src) {}
 };
 
 /**
@@ -122,6 +123,40 @@ table read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr =
                                               rmm::mr::get_default_resource());
 
 /**
+ * @brief Settings to use for `write_orc()`
+ */
+struct write_orc_args {
+  sink_info sink;
+
+  /// Specify the compression format to use
+  compression_type compression = compression_type::AUTO;
+  /// Set of columns to output
+  table_view table;
+
+  explicit write_orc_args(sink_info const& snk, table_view const& table)
+      : sink(snk), table(std::move(table)) {}
+};
+
+/**
+ * @brief Writes a set of columns to ORC format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.orc";
+ *  cudf::write_orc_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  cudf::write_orc(args);
+ * @endcode
+ *
+ * @param args Settings for controlling reading behavior
+ * @param mr Optional resource to use for device memory allocation
+ */
+void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr =
+                                               rmm::mr::get_default_resource());
+
+/**
  * @brief Settings to use for `read_parquet()`
  */
 struct read_parquet_args {
@@ -144,7 +179,7 @@ struct read_parquet_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
-  explicit read_parquet_args(const source_info& src) : source(src) {}
+  explicit read_parquet_args(source_info const& src) : source(src) {}
 };
 
 /**

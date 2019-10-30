@@ -46,7 +46,7 @@ namespace {
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
  **/
-constexpr type_id to_type_id(const avro::schema_entry *col) {
+type_id to_type_id(const avro::schema_entry *col) {
   switch (col->kind) {
     case avro::type_boolean:
       return type_id::BOOL8;
