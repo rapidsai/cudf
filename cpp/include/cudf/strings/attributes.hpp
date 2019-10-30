@@ -24,7 +24,7 @@ namespace strings
 {
 
 /**
- * @brief Returns a numeric column containing the length of each string in
+ * @brief Returns an integer numeric column containing the length of each string in
  * characters.
  *
  * The output column will have the same number of rows as the
@@ -33,12 +33,17 @@ namespace strings
  *
  * Any null string will result in a null entry for that row in the output column.
  *
+ * @throw cudf::logic_error if output_type is not an integer type.
+ *
  * @param strings Strings instance for this operation.
+ * @param output_type The integer type used for creating the output column.
+ *        Default type is INT32.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New column with lengths for each string.
  */
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
+                                                 data_type output_type = data_type{INT32},
                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                                  cudaStream_t stream = 0);
 
@@ -52,12 +57,17 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
  *
  * Any null string will result in a null entry for that row in the output column.
  *
+ * @throw cudf::logic_error if output_type is not an integer type.
+ *
  * @param strings Strings instance for this operation.
+ * @param output_type The integer type used for creating the output column.
+ *        Default type is INT32.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
  * @return New column with the number of bytes for each string.
  */
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
+                                            data_type output_type = data_type{INT32},
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream = 0);
 
@@ -76,7 +86,7 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
  * @param stream Stream to use for any kernels in this function.
- * @return New column with code point integer values for each character.
+ * @return New INT32 column with code point integer values for each character.
  */
 std::unique_ptr<cudf::column> code_points( strings_column_view strings,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
