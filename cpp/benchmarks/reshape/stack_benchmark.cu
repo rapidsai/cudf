@@ -20,8 +20,9 @@
 #include <cudf/reshape.hpp>
 #include <cudf/types.h>
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+#include <random>
 
 template <class T>
 class Reshape : public ::benchmark::Fixture {

@@ -64,7 +64,10 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
+- PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3245 Move binaryop files to legacy
+- PR #3241 Move stream_compaction files to legacy
 
 ## Bug Fixes
 
