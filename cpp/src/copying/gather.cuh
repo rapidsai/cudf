@@ -157,13 +157,6 @@ struct column_gatherer {
 
 };
 
-/**
- * @brief Specifies the behavior of index_converter
- */
-enum index_conversion {
-		       NEGATIVE_TO_POSITIVE = 0,  ///< Negative values are "wrapped" to positive
-		       NONE                       ///< No transformation
-};
 
 /**---------------------------------------------------------------------------*
 * @brief Function object for applying a transformation on the gathermap
@@ -177,12 +170,8 @@ enum index_conversion {
 * to `8` (the second-to-last element) and so on.
 * Positive indices are unchanged by this transformation.
 *---------------------------------------------------------------------------**/
-template <typename map_type, index_conversion ic=index_conversion::NONE>
-struct index_converter : public thrust::unary_function<map_type,map_type>{};
-
-
 template <typename map_type>
-struct index_converter<map_type, index_conversion::NEGATIVE_TO_POSITIVE>
+struct index_converter : public thrust::unary_function<map_type,map_type>
 {
   index_converter(size_type n_rows)
   : n_rows(n_rows) {}
@@ -191,20 +180,6 @@ struct index_converter<map_type, index_conversion::NEGATIVE_TO_POSITIVE>
   map_type operator()(map_type in) const
   {
     return ((in % n_rows) + n_rows) % n_rows;
-  }
-  size_type n_rows;
-};
-
-template <typename map_type>
-struct index_converter<map_type, index_conversion::NONE>
-{
-  index_converter(size_type n_rows)
-  : n_rows(n_rows) {}
-
-  __device__
-  map_type operator()(map_type in) const
-  {
-    return in;
   }
   size_type n_rows;
 };
