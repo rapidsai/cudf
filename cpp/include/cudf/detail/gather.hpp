@@ -41,12 +41,10 @@ namespace detail {
  * @return cudf::table Result of the gather
  */
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
-	     bool check_bounds = false, bool ignore_out_of_bounds = false,
-	     bool allow_negative_indices = false,
-	     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+			      bool check_bounds = false, bool ignore_out_of_bounds = false,
+			      bool allow_negative_indices = false,
+			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+			      cudaStream_t stream = 0);
 }  // namespace detail
 }  // namespace exp
 }  // namespace cudf
-
-
-#endif  // GATHER_HPP

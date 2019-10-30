@@ -102,7 +102,8 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
  * gdf_column. To be used with the cudf::type_dispatcher.
  *
  *---------------------------------------------------------------------------**/
-struct column_gatherer {
+struct column_gatherer
+{
   /**---------------------------------------------------------------------------*
    * @brief Type-dispatched function to gather from one column to another based
    * on a `gather_map`.
@@ -113,7 +114,6 @@ struct column_gatherer {
    * @param destination_column The column to gather into
    * @param ignore_out_of_bounds Ignore values in `gather_map` that are
    * out of bounds
-   * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
   template <typename Element, typename MapIterator,
     std::enable_if_t<is_fixed_width<Element>()>* = nullptr>
@@ -121,12 +121,13 @@ struct column_gatherer {
 				       MapIterator gather_map_begin,
 				       MapIterator gather_map_end,
 				       bool ignore_out_of_bounds,
+				       rmm::mr::device_memory_resource *mr,
 				       cudaStream_t stream) {
 
     auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
     std::unique_ptr<column> destination_column =
-      allocate_like(source_column, num_destination_rows);
-
+      allocate_like(source_column, num_destination_rows,
+		    cudf::experimental::mask_allocation_policy::RETAIN, mr);
 
     Element const *source_data{source_column.data<Element>()};
     Element *destination_data{destination_column->mutable_view().data<Element>()};
@@ -140,8 +141,8 @@ struct column_gatherer {
       thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_begin,
 		     gather_map_end, source_data, destination_data);
     }
-
-    CHECK_STREAM(stream);
+    cudaStreamSynchronize(stream);
+    
     return destination_column;
   }
 
@@ -151,7 +152,8 @@ struct column_gatherer {
 				     MapIterator gather_map_begin,
 				     MapIterator gather_map_end,
 				     bool ignore_out_of_bounds,
-				     util::cuda::scoped_stream stream) {
+				     rmm::mr::device_memory_resource *mr,
+				     cudaStream_t stream) {
     CUDF_FAIL("Column type must be numeric");
   }
 
@@ -191,16 +193,17 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
        MapIterator gather_map_end, bool check_bounds = false,
        bool ignore_out_of_bounds = false,
        bool allow_negative_indices = false,
-       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+       cudaStream_t stream = 0)
 {
   auto source_n_cols = source_table.num_columns();
   auto source_n_rows = source_table.num_rows();
   auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
 
-  std::vector<util::cuda::scoped_stream> v_stream(source_n_cols);
-
   std::vector<std::unique_ptr<column>> destination_columns;
 
+  // TODO: Could be beneficial to use streams internally here
+  
   for (size_type i = 0; i < source_n_cols; i++) {
     column_view src_col = source_table.column(i);
     // The data gather for n columns will be put on the first n streams
@@ -211,11 +214,10 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 								      gather_map_begin,
 								      gather_map_end,
 								      ignore_out_of_bounds,
-								      v_stream[i]));
+								      mr,
+								      stream));
+			
   }
-
-
-
 
   std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(destination_columns));
 
