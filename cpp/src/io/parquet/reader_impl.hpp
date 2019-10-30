@@ -78,9 +78,10 @@ class reader::impl {
    * @param row_group Row group index to select
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return table Object that contains the array of gdf_columns
+   * @return std::unique_ptr<table> The set of columns
    */
-  table read(int skip_rows, int num_rows, int row_group, cudaStream_t stream);
+  std::unique_ptr<table> read(int skip_rows, int num_rows, int row_group,
+                              cudaStream_t stream);
 
  private:
   /**

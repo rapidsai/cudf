@@ -68,13 +68,6 @@ type_id to_type_id(const avro::schema_entry *col) {
   }
 }
 
-/**
- * @brief Function that returns the size aligned to the 4-byte multiple
- **/
-size_t align_size(size_t size_to_align) {
-  return util::round_up_safe(size_to_align, sizeof(uint32_t));
-}
-
 }  // namespace
 
 /**
@@ -182,7 +175,7 @@ rmm::device_buffer reader::impl::decompress_data(
     CUDF_FAIL("Unsupported compression codec\n");
   }
 
-  rmm::device_buffer decomp_block_data(uncompressed_data_size);
+  rmm::device_buffer decomp_block_data(uncompressed_data_size, stream, _mr);
 
   const auto base_offset = _metadata->block_list[0].offset;
   for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
@@ -203,22 +196,23 @@ rmm::device_buffer reader::impl::decompress_data(
 
   for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
     CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(), inflate_in.host_ptr(),
-                             inflate_in.memory_size(), cudaMemcpyHostToDevice));
+                             inflate_in.memory_size(), cudaMemcpyHostToDevice,
+                             stream));
     CUDA_TRY(cudaMemsetAsync(inflate_out.device_ptr(), 0,
-                             inflate_out.memory_size()));
+                             inflate_out.memory_size(), stream));
     if (_metadata->codec == "deflate") {
       CUDA_TRY(gpuinflate(inflate_in.device_ptr(), inflate_out.device_ptr(),
-                          inflate_in.size(), 0));
+                          inflate_in.size(), 0, stream));
     } else if (_metadata->codec == "snappy") {
       CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(),
-                          inflate_in.size()));
+                          inflate_in.size(), stream));
     } else {
       CUDF_FAIL("Unsupported compression codec\n");
     }
     CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(), inflate_out.device_ptr(),
-                             inflate_out.memory_size(),
-                             cudaMemcpyDeviceToHost));
-    CUDA_TRY(cudaStreamSynchronize(0));
+                             inflate_out.memory_size(), cudaMemcpyDeviceToHost,
+                             stream));
+    CUDA_TRY(cudaStreamSynchronize(stream));
 
     // Check if larger output is required, as it's not known ahead of time
     if (_metadata->codec == "deflate" && !loop_cnt) {
@@ -323,14 +317,15 @@ void reader::impl::decode_data(
     if (_metadata->schema[schema_data_idx].kind == type_enum) {
       schema_desc[schema_data_idx].count = dict[i].first;
     }
-    cudaMemsetAsync(out_buffers[i].null_mask(), -1,
-                    bitmask_allocation_size_bytes(num_rows));
+    CUDA_TRY(cudaMemsetAsync(out_buffers[i].null_mask(), -1,
+                             bitmask_allocation_size_bytes(num_rows), stream));
   }
   rmm::device_buffer block_list(
       _metadata->block_list.data(),
-      _metadata->block_list.size() * sizeof(block_desc_s));
+      _metadata->block_list.size() * sizeof(block_desc_s), stream, _mr);
   CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(), schema_desc.host_ptr(),
-                           schema_desc.memory_size(), cudaMemcpyHostToDevice));
+                           schema_desc.memory_size(), cudaMemcpyHostToDevice,
+                           stream));
 
   CUDA_TRY(gpu::DecodeAvroColumnData(
       static_cast<block_desc_s *>(block_list.data()), schema_desc.device_ptr(),
@@ -339,19 +334,20 @@ void reader::impl::decode_data(
       static_cast<uint32_t>(block_list.size()),
       static_cast<uint32_t>(schema_desc.size()),
       static_cast<uint32_t>(total_dictionary_entries), _metadata->num_rows,
-      _metadata->skip_rows, min_row_data_size, 0));
+      _metadata->skip_rows, min_row_data_size, stream));
 
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
     if (valid_alias[i] != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(), valid_alias[i],
                                out_buffers[i].null_mask_size(),
-                               cudaMemcpyHostToDevice));
+                               cudaMemcpyHostToDevice, stream));
     }
   }
   CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(), schema_desc.device_ptr(),
-                           schema_desc.memory_size(), cudaMemcpyDeviceToHost));
-  CUDA_TRY(cudaStreamSynchronize(0));
+                           schema_desc.memory_size(), cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx = selection[i].first;
     const auto schema_null_idx = _metadata->columns[col_idx].schema_null_idx;
@@ -368,7 +364,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-table reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream) {
+std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
+                                          cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
 
   // Select and read partial metadata / schema within the subset of rows
@@ -391,7 +388,8 @@ table reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream) {
     if (_metadata->total_data_size > 0) {
       const auto buffer = _source->get_buffer(_metadata->block_list[0].offset,
                                               _metadata->total_data_size);
-      rmm::device_buffer block_data(buffer->data(), align_size(buffer->size()));
+      rmm::device_buffer block_data(buffer->data(), buffer->size(), stream,
+                                    _mr);
 
       if (_metadata->codec != "" && _metadata->codec != "null") {
         auto decomp_block_data = decompress_data(block_data, stream);
@@ -442,7 +440,7 @@ table reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream) {
         }
         CUDA_TRY(cudaMemcpyAsync(
             global_dictionary.device_ptr(), global_dictionary.host_ptr(),
-            global_dictionary.memory_size(), cudaMemcpyHostToDevice));
+            global_dictionary.memory_size(), cudaMemcpyHostToDevice, stream));
       }
 
       std::vector<column_buffer> out_buffers;
@@ -460,7 +458,7 @@ table reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream) {
     }
   }
 
-  return table(std::move(out_columns));
+  return std::make_unique<table>(std::move(out_columns));
 }
 
 // Forward to implementation
@@ -485,13 +483,14 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-table reader::read_all(cudaStream_t stream) {
+std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, stream);
 }
 
 // Forward to implementation
-table reader::read_rows(size_type skip_rows, size_type num_rows,
-                        cudaStream_t stream) {
+std::unique_ptr<table> reader::read_rows(size_type skip_rows,
+                                         size_type num_rows,
+                                         cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, stream);
 }
 

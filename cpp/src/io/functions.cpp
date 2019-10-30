@@ -58,8 +58,8 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 }  // namespace
 
 // Freeform API wraps the detail reader class API
-table read_avro(read_avro_args const& args,
-                rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<table> read_avro(read_avro_args const& args,
+                                 rmm::mr::device_memory_resource* mr) {
   namespace avro = cudf::experimental::io::detail::avro;
 
   avro::reader_options options{args.columns};
@@ -73,7 +73,8 @@ table read_avro(read_avro_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
-table read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<table> read_orc(read_orc_args const& args,
+                                rmm::mr::device_memory_resource* mr) {
   namespace orc = cudf::experimental::io::detail::orc;
 
   orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes,
@@ -101,8 +102,8 @@ void write_orc(write_orc_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
-table read_parquet(read_parquet_args const& args,
-                   rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<table> read_parquet(read_parquet_args const& args,
+                                    rmm::mr::device_memory_resource* mr) {
   namespace parquet = cudf::experimental::io::detail::parquet;
 
   parquet::reader_options options{args.columns, args.strings_to_categorical,

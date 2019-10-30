@@ -116,19 +116,19 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(1, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcSingleColumn.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
@@ -142,19 +142,19 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(1, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcSingleColumnWithNulls.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
@@ -168,12 +168,12 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(1, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcTimestamps.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
@@ -181,7 +181,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
@@ -195,12 +195,12 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(1, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcTimestampsWithNulls.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
@@ -208,7 +208,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }
 
 TEST_F(OrcWriterTest, MultiColumn) {
@@ -245,19 +245,19 @@ TEST_F(OrcWriterTest, MultiColumn) {
   cols.push_back(col3.release());
   cols.push_back(col4.release());
   cols.push_back(col5.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(5, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(5, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }
 
 TEST_F(OrcWriterTest, MultiColumnWithNulls) {
@@ -304,19 +304,19 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   cols.push_back(col3.release());
   cols.push_back(col4.release());
   cols.push_back(col5.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(5, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(5, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }
 
 TEST_F(OrcWriterTest, Strings) {
@@ -341,17 +341,17 @@ TEST_F(OrcWriterTest, Strings) {
   cols.push_back(col0.release());
   cols.push_back(col1.release());
   cols.push_back(col2.release());
-  auto expected = table{std::move(cols)};
-  EXPECT_EQ(3, expected.num_columns());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(3, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected.view()};
+                                   expected->view()};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected.view(), result.view());
+  expect_tables_equal(expected->view(), result->view());
 }

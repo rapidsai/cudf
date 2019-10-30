@@ -122,9 +122,9 @@ class reader {
    *
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
@@ -133,10 +133,10 @@ class reader {
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_rows(size_type skip_rows, size_type num_rows,
-                  cudaStream_t stream = 0);
+  std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
+                                   cudaStream_t stream = 0);
 };
 
 }  // namespace avro
@@ -249,18 +249,18 @@ class reader {
    *
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads a complete group of rows in the next chunk of data.
    *
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_chunk(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_chunk(cudaStream_t stream = 0);
 
   /**
    * @brief Reads a range of rows.
@@ -270,10 +270,10 @@ class reader {
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_rows(size_type skip_rows, size_type skip_rows_end,
-                  size_type num_rows, cudaStream_t stream = 0);
+  std::unique_ptr<table> read_rows(size_type skip_rows, size_type skip_rows_end,
+                                   size_type num_rows, cudaStream_t stream = 0);
 };
 
 }  // namespace csv
@@ -363,9 +363,9 @@ class reader {
    *
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a specific stripe.
@@ -373,9 +373,9 @@ class reader {
    * @param stripe Index of the stripe
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_stripe(size_type stripe, cudaStream_t stream = 0);
+  std::unique_ptr<table> read_stripe(size_type stripe, cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
@@ -384,10 +384,10 @@ class reader {
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_rows(size_type skip_rows, size_type num_rows,
-                  cudaStream_t stream = 0);
+  std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
+                                   cudaStream_t stream = 0);
 };
 
 }  // namespace orc
@@ -484,9 +484,9 @@ class reader {
    *
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads a specific group of rows.
@@ -494,9 +494,10 @@ class reader {
    * @param row_group Index of the row group
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_row_group(size_type row_group, cudaStream_t stream = 0);
+  std::unique_ptr<table> read_row_group(size_type row_group,
+                                        cudaStream_t stream = 0);
 
   /**
    * @brief Reads a range of rows.
@@ -505,10 +506,10 @@ class reader {
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return `table` The set of columns
+   * @return `std::unique_ptr<table>` The set of columns
    */
-  table read_rows(size_type skip_rows, size_type num_rows,
-                  cudaStream_t stream = 0);
+  std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
+                                   cudaStream_t stream = 0);
 };
 
 }  // namespace parquet

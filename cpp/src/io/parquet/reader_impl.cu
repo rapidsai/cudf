@@ -136,13 +136,6 @@ T required_bits(uint32_t max_level) {
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
-/**
- * @brief Function that returns the size aligned to the 4-byte multiple
- */
-size_t align_size(size_t size_to_align) {
-  return util::round_up_safe(size_to_align, sizeof(uint32_t));
-}
-
 std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
                                                      type_id timestamp_type_id,
                                                      parquet::Type physical,
@@ -407,7 +400,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
   }
 
   // Dispatch batches of pages to decompress for each codec
-  rmm::device_buffer decomp_pages(align_size(total_decomp_size), stream, _mr);
+  rmm::device_buffer decomp_pages(total_decomp_size, stream, _mr);
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages,
                                                       stream);
@@ -566,8 +559,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _strings_to_categorical = options.strings_to_categorical;
 }
 
-table reader::impl::read(int skip_rows, int num_rows, int row_group,
-                         cudaStream_t stream) {
+std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
+                                          int row_group, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
 
   // Select only row groups required
@@ -640,8 +633,7 @@ table reader::impl::read(int skip_rows, int num_rows, int row_group,
                                   : col_meta.data_page_offset;
           auto buffer =
               _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data.emplace_back(buffer->data(), align_size(buffer->size()),
-                                 stream, _mr);
+          page_data.emplace_back(buffer->data(), buffer->size(), stream, _mr);
           d_compdata = static_cast<uint8_t *>(page_data.back().data());
         }
         chunks.insert(gpu::ColumnChunkDesc(
@@ -690,7 +682,7 @@ table reader::impl::read(int skip_rows, int num_rows, int row_group,
     }
   }
 
-  return table{std::move(out_columns)};
+  return std::make_unique<table>(std::move(out_columns));
 }
 
 // Forward to implementation
@@ -718,18 +710,20 @@ reader::~reader() = default;
 std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
-table reader::read_all(cudaStream_t stream) {
+std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, -1, stream);
 }
 
 // Forward to implementation
-table reader::read_row_group(size_type row_group, cudaStream_t stream) {
+std::unique_ptr<table> reader::read_row_group(size_type row_group,
+                                              cudaStream_t stream) {
   return _impl->read(0, -1, row_group, stream);
 }
 
 // Forward to implementation
-table reader::read_rows(size_type skip_rows, size_type num_rows,
-                        cudaStream_t stream) {
+std::unique_ptr<table> reader::read_rows(size_type skip_rows,
+                                         size_type num_rows,
+                                         cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
 }
 

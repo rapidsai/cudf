@@ -135,13 +135,6 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
   }
 }
 
-/**
- * @brief Function that returns the size aligned to the 4-byte multiple
- **/
-size_t align_size(size_t size_to_align) {
-  return util::round_up_safe(size_to_align, sizeof(uint32_t));
-}
-
 }  // namespace
 
 /**
@@ -446,7 +439,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
-  rmm::device_buffer decomp_data(align_size(total_decomp_size), stream, _mr);
+  rmm::device_buffer decomp_data(total_decomp_size, stream, _mr);
   rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks +
                                                      num_uncompressed_blocks);
   rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
@@ -606,8 +599,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _use_np_dtypes = options.use_np_dtypes;
 }
 
-table reader::impl::read(int skip_rows, int num_rows, int stripe,
-                         cudaStream_t stream) {
+std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
+                                          int stripe, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
 
   // Select only stripes required (aka row groups)
@@ -667,7 +660,7 @@ table reader::impl::read(int skip_rows, int num_rows, int stripe,
                              &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
-      stripe_data.emplace_back(align_size(total_data_size));
+      stripe_data.emplace_back(total_data_size, stream, _mr);
       auto dst_base = static_cast<uint8_t *>(stripe_data.back().data());
 
       // Coalesce consecutive streams into one read
@@ -764,7 +757,7 @@ table reader::impl::read(int skip_rows, int num_rows, int stripe,
     }
   }
 
-  return table(std::move(out_columns));
+  return std::make_unique<table>(std::move(out_columns));
 }
 
 // Forward to implementation
@@ -789,18 +782,20 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-table reader::read_all(cudaStream_t stream) {
+std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, -1, stream);
 }
 
 // Forward to implementation
-table reader::read_stripe(size_type stripe, cudaStream_t stream) {
+std::unique_ptr<table> reader::read_stripe(size_type stripe,
+                                           cudaStream_t stream) {
   return _impl->read(0, -1, stripe, stream);
 }
 
 // Forward to implementation
-table reader::read_rows(size_type skip_rows, size_type num_rows,
-                        cudaStream_t stream) {
+std::unique_ptr<table> reader::read_rows(size_type skip_rows,
+                                         size_type num_rows,
+                                         cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
 }
 

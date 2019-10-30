@@ -24,6 +24,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -68,9 +69,9 @@ struct read_avro_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `table` The set of columns
+ * @return `std::unique_ptr<table>` The set of columns
  */
-table read_avro(
+std::unique_ptr<table> read_avro(
     read_avro_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -117,10 +118,11 @@ struct read_orc_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `table` The set of columns
+ * @return `std::unique_ptr<table>` The set of columns
  */
-table read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr =
-                                              rmm::mr::get_default_resource());
+std::unique_ptr<table> read_orc(
+    read_orc_args const& args,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Settings to use for `write_orc()`
@@ -198,9 +200,9 @@ struct read_parquet_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `table` The set of columns
+ * @return `std::unique_ptr<table>` The set of columns
  */
-table read_parquet(
+std::unique_ptr<table> read_parquet(
     read_parquet_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
