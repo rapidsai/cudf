@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/stream_compaction.hpp>
+#include <cudf/legacy/stream_compaction.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <fixture/benchmark_fixture.hpp>
