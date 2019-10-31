@@ -101,7 +101,7 @@ table read_csv(csv_read_arg const &args) {
 
 table read_json(json_read_arg const &args) {
   namespace json = cudf::io::json;
-  CUDF_EXPECTS(args.lines == true, "Only JSON Lines are currently supported");
+  CUDF_EXPECTS(args.lines, "Only JSON Lines are currently supported");
 
   auto reader = [&]() {
     json::reader_options options{args.lines, args.compression, args.dtype};
