@@ -90,13 +90,11 @@ void BM_scatter(benchmark::State& state){
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
-using namespace cudf;
-
 #define SBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
-BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {        \
+BENCHMARK_DEFINE_F(Scatter, name)(::benchmark::State& state) {        \
   BM_scatter<type, coalesce>(state);                                    \
 }                                                                       \
-BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
+BENCHMARK_REGISTER_F(Scatter, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
 
 SBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
 SBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);
