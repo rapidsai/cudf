@@ -69,6 +69,7 @@
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
+- PR #3166 Move reductions to legacy
 
 ## Bug Fixes
 
