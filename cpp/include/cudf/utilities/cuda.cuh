@@ -17,6 +17,7 @@
 #pragma once
 
 #include <type_traits>
+#include <cudf/types.hpp>
 
 #ifndef CUDA_HOST_DEVICE_CALLABLE
 #ifdef __CUDACC__
@@ -38,6 +39,10 @@ static constexpr size_type warp_size{32};
 /**
  * @brief Performs a sum reduction of values from the same lane across all
  * warps in a thread block and returns the result on thread 0 of the block.
+ *
+ * All threads in a block must call this function, but only values from the
+ * threads indicated by `leader_lane` will contribute to the result. Similarly,
+ * the returned result is only defined on `threadIdx.x==0`.
  *
  * @tparam block_size The number of threads in the thread block (must be less
  * than or equal to 1024)
