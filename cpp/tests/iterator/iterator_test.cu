@@ -15,7 +15,7 @@
  */
 
 
-#include <iterator/iterator.cuh>    // include iterator header
+#include <iterator/legacy/iterator.cuh>    // include iterator header
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -36,7 +36,7 @@
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
 #include <thrust/device_vector.h>
-#include <cudf/reduction.hpp>
+#include <cudf/legacy/reduction.hpp>
 
 // ---------------------------------------------------------------------------
 
