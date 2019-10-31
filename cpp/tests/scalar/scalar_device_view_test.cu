@@ -46,7 +46,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value) {
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
-  test_value<<<1, 1>>>(scalar_device_view, value, result.get());
+  test_value<<<1, 1>>>(scalar_device_view, value, result.data());
   CUDA_CHECK_LAST();
 
   EXPECT_TRUE(result.value());
@@ -63,7 +63,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
-  test_null<<<1, 1>>>(scalar_device_view, result.get());
+  test_null<<<1, 1>>>(scalar_device_view, result.data());
   CUDA_CHECK_LAST();
 
   EXPECT_FALSE(result.value());
@@ -73,7 +73,7 @@ template <typename T,
   typename ScalarDeviceViewType>
 __global__ void test_setvalue(ScalarDeviceViewType s, T value) {
   s.set_value(value);
-  s.set_valid();
+  s.set_valid(true);
 }
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetValue) {
@@ -90,13 +90,13 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetValue) {
 
 template <typename ScalarDeviceViewType>
 __global__ void test_setnull(ScalarDeviceViewType s) {
-  s.set_null();
+  s.set_valid(false);
 }
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
   cudf::experimental::scalar_type_t<TypeParam> s;
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  s.set_valid();
+  s.set_valid(true);
   EXPECT_TRUE(s.is_valid());
 
   test_setnull<<<1, 1>>>(scalar_device_view);
@@ -125,7 +125,7 @@ TEST_F(StringScalarDeviceViewTest, Value) {
   rmm::device_vector<char> value_v(value.begin(), value.end());
 
   test_string_value<<<1, 1>>>(scalar_device_view, value_v.data().get(),
-                              value.size(), result.get());
+                              value.size(), result.data());
   CUDA_CHECK_LAST();
 
   EXPECT_TRUE(result.value());  

@@ -22,56 +22,41 @@ namespace cudf {
 
 namespace detail {
 
-/**---------------------------------------------------------------------------*
- * @brief An immutable, non-owning view of scalar from device that is trivially 
- * copyable and usable in CUDA device code.
- *---------------------------------------------------------------------------**/
+/**
+ * @brief A non-owning view of scalar from device that is trivially copyable
+ * and usable in CUDA device code.
+ */
 class scalar_device_view_base {
  public:
   scalar_device_view_base() = default;
   ~scalar_device_view_base() = default;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the element type
-   *---------------------------------------------------------------------------**/
+  /**
+   * @brief Returns the value type
+   */
   __host__ __device__ data_type type() const noexcept { return _type; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns whether the scalar holds a valid value (i.e., not null).
    *
    * @return true The element is valid
    * @return false The element is null
-   *---------------------------------------------------------------------------**/
+   */
   __device__ bool is_valid() const noexcept {
     return *_is_valid;
   }
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns whether the value is null.
-   *
-   * @return true The element is null
-   * @return false The element is valid
-   *---------------------------------------------------------------------------**/
-  __device__ bool is_null() const noexcept {
-    return not is_valid();
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Updates the null mask to indicate that the value is valid
-   *---------------------------------------------------------------------------**/
-  __device__ void set_valid() noexcept {
-    *_is_valid = true;
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Updates the null mask to indicate that the value is null
-   *---------------------------------------------------------------------------**/
-  __device__ void set_null() noexcept {
-    *_is_valid = false;
+  /**
+   * @brief Updates the validity of the value
+   * 
+   * @param is_valid true: set the value to valid. false: set it to null
+   */
+  __device__ void set_valid(bool is_valid) noexcept {
+    *_is_valid = is_valid;
   }
 
  protected:
-  data_type _type{EMPTY};   ///< Element type
+  data_type _type{EMPTY};   ///< Value data type
   bool * _is_valid{};       ///< Pointer to device memory containing
                             ///< boolean representing validity of the value.
 
@@ -80,38 +65,60 @@ class scalar_device_view_base {
   {}
 };
 
+/**
+ * @brief A type of scalar_device_view where the value is a fixed width type
+ */
 template <typename T>
 class primitive_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
-  using ValueType = T;
+  using value_type = T;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns reference to element at the specified index.
-   *---------------------------------------------------------------------------**/
+  /**
+   * @brief Returns reference to stored value.
+   */
   __device__ T& value() noexcept {
-    return *get();
+    return *data();
   }
 
+  /**
+   * @brief Returns const reference to stored value.
+   */
   __device__ T const& value() const noexcept {
-    return *get();
+    return *data();
   }
 
   __device__ void set_value(T value) {
     *_data = value;
   }
 
-  __device__ T* get() noexcept {
+  /**
+   * @brief Returns a raw pointer to the value in device memory
+   */
+  __device__ T* data() noexcept {
     return static_cast<T*>(_data);
   }
-
-  __device__ T const* get() const noexcept {
+  /**
+   * @brief Returns a const raw pointer to the value in device memory
+   */
+  __device__ T const* data() const noexcept {
     return static_cast<T const*>(_data);
   }
 
  protected:
   T * _data{};      ///< Pointer to device memory containing the value
 
+  /**
+   * @brief Construct a new primitive scalar device view object
+   * 
+   * This constructor should not be used directly. get_scalar_device_view
+   * should be used to get the view of an existing scalar
+   * 
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
   primitive_scalar_device_view(data_type type, T* data, bool* is_valid)
    : detail::scalar_device_view_base(type, is_valid)
    , _data(data)
@@ -120,7 +127,9 @@ class primitive_scalar_device_view
 
 }  // namespace detail
 
-
+/**
+ * @brief A type of scalar_device_view that stores a pointer to a numerical value
+ */
 template <typename T>
 class numeric_scalar_device_view
     : public detail::primitive_scalar_device_view<T>
@@ -131,6 +140,9 @@ class numeric_scalar_device_view
   {}
 };
 
+/**
+ * @brief A type of scalar_device_view that stores a pointer to a string value
+ */
 class string_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
@@ -141,22 +153,28 @@ class string_scalar_device_view
     : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
   {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns string_view of the value of this scalar.
-   *---------------------------------------------------------------------------**/
+   */
   __device__ string_view value() const noexcept {
-    return string_view(this->get(), _size);
+    return string_view(this->data(), _size);
   }
 
-  __device__ char const* get() const noexcept {
+  /**
+   * @brief Returns a raw pointer to the value in device memory
+   */
+  __device__ char const* data() const noexcept {
     return static_cast<char const*>(_data);
   }
 
  private:
   const char* _data{};  ///< Pointer to device memory containing the value
-  size_type _size;      ///< Length of the string
+  size_type _size;      ///< Size of the string in bytes
 };
 
+/**
+ * @brief A type of scalar_device_view that stores a pointer to a string value
+ */
 template <typename T>
 class timestamp_scalar_device_view
     : public detail::primitive_scalar_device_view<T>
@@ -167,18 +185,27 @@ class timestamp_scalar_device_view
   {}
 };
 
+/**
+ * @brief Get the device view of a numeric_scalar
+ */
 template <typename T>
 auto get_scalar_device_view(numeric_scalar<T>& s) {
-  return numeric_scalar_device_view<T>(s.type(), s.data(), s.valid_mask());
+  return numeric_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
+/**
+ * @brief Get the device view of a string_scalar
+ */
 auto get_scalar_device_view(string_scalar& s) {
-  return string_scalar_device_view(s.type(), s.data(), s.valid_mask(), s.size());
+  return string_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size());
 }
 
+/**
+ * @brief Get the device view of a timestamp_scalar
+ */
 template <typename T>
 auto get_scalar_device_view(timestamp_scalar<T>& s) {
-  return timestamp_scalar_device_view<T>(s.type(), s.data(), s.valid_mask());
+  return timestamp_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
 }  // namespace cudf
