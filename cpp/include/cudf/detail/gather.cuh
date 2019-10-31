@@ -203,7 +203,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   // TODO: Could be beneficial to use streams internally here
   
-  for (size_type i = 0; i < source_n_cols; i++) {
+for(auto const& source_column : source_table)
     column_view src_col = source_table.column(i);
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
