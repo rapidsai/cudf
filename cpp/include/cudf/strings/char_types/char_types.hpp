@@ -25,7 +25,7 @@ namespace strings
 
 /**
  * @brief Character type values.
- * These types can be or'd to check for combination of types
+ * These types can be or'd to check for any combination of types.
  */
 enum string_character_types {
     DECIMAL  =  1,
@@ -39,23 +39,23 @@ enum string_character_types {
 };
 
 /**
- * @brief Returns a boolean column containing identifying strings entry in which all
- * the characters for that string are of the type specified. The output row entry
- * will be set to false if the corresponding string element is empty or has at
- * least one character not of the specified type. If all characters fit the type
- * then true is set in that output row entry.
+ * @brief Returns a boolean column identifying strings entries in which all
+ * characters are of the type specified.
  *
- * Any null entries are reflected directly in the output column.
+ * The output row entry will be set to false if the corresponding string element
+ * is empty or has at least one character not of the specified type. If all
+ * characters fit the type then true is set in that output row entry.
+ *
+ * Any null string results in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
  * @param types The character types to check in each string.
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings,
-                                                     string_character_types types,
-                                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+                                                      string_character_types types,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf

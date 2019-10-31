@@ -53,7 +53,7 @@ TEST_P(StringsCharsTypesTest, AllTypes)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    auto results = cudf::strings::is_characters_of_type(strings_view,is_parm);
+    auto results = cudf::strings::all_characters_of_type(strings_view,is_parm);
 
     int x = static_cast<int>(is_parm);
     int index = 0;
@@ -66,7 +66,7 @@ TEST_P(StringsCharsTypesTest, AllTypes)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
-INSTANTIATE_TEST_CASE_P(CharsTypes, StringsCharsTypesTest,
+INSTANTIATE_TEST_CASE_P(StringsAllCharsTypes, StringsCharsTypesTest,
     testing::ValuesIn(std::array<cudf::strings::string_character_types,7>
     { cudf::strings::string_character_types::DECIMAL,
       cudf::strings::string_character_types::NUMERIC,
@@ -87,7 +87,7 @@ TEST_F(StringsCharsTest, Alphanumeric)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    auto results = cudf::strings::is_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
+    auto results = cudf::strings::all_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
 
     std::vector<int8_t> h_expected{ 1,1,0,1,0,0,0,0,0,1,1,1,0,1,1,0 };
     cudf::test::fixed_width_column_wrapper<int8_t> expected( h_expected.begin(), h_expected.end(),
@@ -106,7 +106,7 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
     auto strings_view = cudf::strings_column_view(strings);
 
     auto types = cudf::strings::string_character_types::ALPHANUM | cudf::strings::string_character_types::SPACE;
-    auto results = cudf::strings::is_characters_of_type(strings_view, (cudf::strings::string_character_types)types);
+    auto results = cudf::strings::all_characters_of_type(strings_view, (cudf::strings::string_character_types)types);
 
     std::vector<int8_t> h_expected{ 1,1,0,1,1,0,0,0,0,1,1,1,1,1,1,1 };
     cudf::test::fixed_width_column_wrapper<int8_t> expected( h_expected.begin(), h_expected.end(),
@@ -127,7 +127,7 @@ TEST_F(StringsCharsTest, Numerics)
     auto types = cudf::strings::string_character_types::DIGIT |
                  cudf::strings::string_character_types::DECIMAL |
                  cudf::strings::string_character_types::NUMERIC;
-    auto results = cudf::strings::is_characters_of_type(strings_view, (cudf::strings::string_character_types)types);
+    auto results = cudf::strings::all_characters_of_type(strings_view, (cudf::strings::string_character_types)types);
 
     std::vector<int8_t> h_expected{ 0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0 };
     cudf::test::fixed_width_column_wrapper<int8_t> expected( h_expected.begin(), h_expected.end(),
@@ -139,7 +139,7 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    auto results = cudf::strings::is_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
+    auto results = cudf::strings::all_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
     auto view = results->view();
     EXPECT_EQ(cudf::INT8, view.type().id());
     EXPECT_EQ(0,view.size());
