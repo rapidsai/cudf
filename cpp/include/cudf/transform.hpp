@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef CUDF_TRANSFORM_HPP
-#define CUDF_TRANSFORM_HPP
+#pragma once
 
 #include "cudf.h"
 #include "types.h"
@@ -37,10 +36,8 @@ namespace cudf {
  * @return cudf::column       The column resulting from applying the unary function to
  *                            every element of the input
  **/
-std::unique_ptr<column> transform(column_view input,
+std::unique_ptr<column> transform(column_view const& input,
                                   const std::string &unary_udf,
                                   data_type output_type, bool is_ptx);
 
 }  // namespace cudf
-
-#endif

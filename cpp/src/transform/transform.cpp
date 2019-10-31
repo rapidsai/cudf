@@ -45,16 +45,15 @@ namespace detail {
  * @brief Functor to enable the internal working of `get_data_ptr`
  * @ref get_data_ptr
  */
-template <typename column_view_type>
 struct get_data_ptr_functor {
   template <typename T>
   std::enable_if_t<is_fixed_width<T>(), const void *>
-  operator()(column_view_type& view) {
+  operator()(column_view const& view) {
     return static_cast<const void*>(view.template data<T>());
   }
   template <typename T>
   std::enable_if_t<not is_fixed_width<T>(), const void *>
-  operator()(column_view_type& view) {
+  operator()(column_view const& view) {
     CUDF_FAIL("Invalid data type for transform operation");
   }
 };
@@ -62,10 +61,9 @@ struct get_data_ptr_functor {
 /**
  * @brief Get the raw pointer to data in a (mutable_)column_view
  */
-template <typename column_view_type>
-auto get_data_ptr(column_view_type& view) {
+auto get_data_ptr(column_view const& view) {
   return experimental::type_dispatcher(view.type(),
-                         get_data_ptr_functor<column_view_type>{}, view);
+                         get_data_ptr_functor{}, view);
 }
 
 } // namespace detail
@@ -111,7 +109,7 @@ void unary_operation(mutable_column_view output, column_view input,
 
 }  // namespace transformation
 
-std::unique_ptr<column> transform(column_view input,
+std::unique_ptr<column> transform(column_view const& input,
                                   const std::string &unary_udf,
                                   data_type output_type, bool is_ptx)
 {
@@ -123,9 +121,7 @@ std::unique_ptr<column> transform(column_view input,
     return output;
   }
 
-  CUDF_EXPECTS(input.type().id() != cudf::type_id::STRING &&
-               input.type().id() != cudf::type_id::CATEGORY,
-    "Invalid/Unsupported input datatype");
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
 
   mutable_column_view output_view = *output;
 

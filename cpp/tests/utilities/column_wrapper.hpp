@@ -70,16 +70,6 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 class column_wrapper {
  public:
-  /**
-   * @brief Construct a new column wrapper by taking ownership of a column
-   * 
-   * @param col The column to take ownership of
-   */
-  column_wrapper(std::unique_ptr<cudf::column>&& col)
-   : wrapped(std::move(col)) {}
-
-  column_wrapper() = default;
-  
   /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to `column_view`.
    *
@@ -215,24 +205,6 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
                 "Unexpected non-fixed width type.");
 
  public:
-  /**
-   * @brief Construct a new fixed width column wrapper by taking ownership of a
-   * column
-   * 
-   * To wrap a pre-existing column, it is required to move it to the constructor
-   * so that it is immediately apparent in the calling code that the old column
-   * is no longer valid
-   * Example:
-   * @code
-   * std::unique_ptr<column> col = make_numeric_column(type, size);
-   * auto wrapped = fixed_width_column_wrapper<dtype>{std::move(col)};
-   * @endcode 
-   * 
-   * @param col The column to take ownership of
-   */
-  fixed_width_column_wrapper(std::unique_ptr<cudf::column>&& col)
-   : column_wrapper(std::move(col)) {}
-
   /**---------------------------------------------------------------------------*
    * @brief Construct a non-nullable column of the fixed-width elements in the
    * range `[begin,end)`.
