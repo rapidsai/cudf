@@ -80,10 +80,10 @@ TYPED_TEST(TypedScalarTest, MoveConstructor) {
   TypeParam value = 8;
   cudf::experimental::scalar_type_t<TypeParam> s(value);
   auto data_ptr = s.data();
-  auto mask_ptr = s.valid_mask();
+  auto mask_ptr = s.validity_data();
   decltype(s) s2(std::move(s));
 
-  EXPECT_EQ(mask_ptr, s2.valid_mask());
+  EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.data());
 }
 
@@ -117,9 +117,9 @@ TEST_F(StringScalarTest, MoveConstructor) {
   std::string value = "another test string";
   auto s = cudf::string_scalar(value);
   auto data_ptr = s.data();
-  auto mask_ptr = s.valid_mask();
+  auto mask_ptr = s.validity_data();
   decltype(s) s2(std::move(s));
 
-  EXPECT_EQ(mask_ptr, s2.valid_mask());
+  EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.data());
 }

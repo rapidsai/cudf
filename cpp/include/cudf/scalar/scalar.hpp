@@ -160,8 +160,20 @@ class string_scalar : public scalar {
   string_scalar(string_scalar&& other) = default;
   string_scalar(string_scalar const& other) = default;
 
-  // TODO: stream and memory resource
-  string_scalar(std::string const& string, bool is_valid = true);
+  /**
+   * @brief Construct a new numeric scalar object
+   * 
+   * @param value The value of the string
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  string_scalar(std::string const& string, bool is_valid = true, 
+      cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : scalar(data_type(STRING), is_valid)
+   , _data(string.data(), string.size(), stream, mr)
+  {}
 
   /**
    * @brief Get the value of the scalar in a host std::string

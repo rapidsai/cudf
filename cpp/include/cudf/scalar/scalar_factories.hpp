@@ -19,22 +19,19 @@
 #include <cudf/types.hpp>
 #include "scalar.hpp"
 
-// TODO: make use of stream and memory resource
-// TODO: update documentation
 
 namespace cudf {
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
- * specified numeric `data_type` and a null mask.
+ * specified numeric `data_type` and a validity bool.
  * 
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a numeric type
  *
- * @param[in] type The desired numeric element type
- * @param[in] stream Optional stream on which to issue all memory allocation
- * and device kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the scalar's `data` and `is_valid` bool.
+ * @param type The desired numeric element type
+ * @param stream Optional stream on which to issue all memory allocations
+ * @param mr Optional resource to use for device memory
+ *           allocation of the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_numeric_scalar(
     data_type type,
@@ -42,18 +39,16 @@ std::unique_ptr<scalar> make_numeric_scalar(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Construct scalar with sufficient uninitialized storage
- * to hold `size` elements of the specified timestamp `data_type` with an optional
- * null mask.
+ * @brief Construct scalar with uninitialized storage to hold a value of the
+ * specified timestamp `data_type` and a validity bool.
  * 
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a timestamp type
  *
- * @param[in] type The desired timestamp element type
- * @param[in] stream Optional stream on which to issue all memory allocation 
- * and device kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the scalar's `data` and `is_valid` bool.
+ * @param type The desired timestamp element type
+ * @param stream Optional stream on which to issue all memory allocations
+ * @param mr Optional resource to use for device memory
+ *           allocation of the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_timestamp_scalar(
     data_type type,
@@ -68,10 +63,9 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  * @throws std::bad_alloc if device memory allocation fails
  *
  * @param string The `std::string` to copy to device
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream Optional stream for use with all memory allocations
  * @param mr Optional resource to use for device memory
- *           allocation of the scalar's `is_valid`.
+ *           allocation of the scalar's `data` and `is_valid`.
  */
 std::unique_ptr<scalar> make_string_scalar(
     std::string const& string,
