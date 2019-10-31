@@ -51,7 +51,7 @@ std::unique_ptr<cudf::table> merge(table_view const& left_table,
                                    table_view const& right_table,
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& asc_desc,
-                                   std::vector<cudf::null_order> const& null_predences);
+                                   std::vector<cudf::null_order> const& null_precedence);
 
 }  // namespace experimental
 }  // namespace cudf
