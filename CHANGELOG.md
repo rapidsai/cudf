@@ -94,6 +94,7 @@
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3256 Fix orc writer crash with multiple string columns
 - PR #3211 Fix breaking change caused by rapidsai/rmm#167
+- PR #3265 Fix dangling pointer in `is_sorted`
 
 # cuDF 0.10.0 (16 Oct 2019)
 
