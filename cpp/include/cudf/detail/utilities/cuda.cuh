@@ -16,20 +16,14 @@
 
 #pragma once
 
-#include <type_traits>
 #include <cudf/types.hpp>
 
-#ifndef CUDA_HOST_DEVICE_CALLABLE
-#ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE __device__ inline
-#else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE inline
-#endif
-#endif
+#include <cub/cub.cuh>
+
+#include <type_traits>
 
 namespace cudf {
+namespace experimental {
 namespace detail {
 /**
  * @brief Size of a warp in a CUDA kernel.
@@ -81,4 +75,5 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
 }
 
 }  // namespace detail
+}  // namespace experimental
 }  // namespace cudf
