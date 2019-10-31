@@ -116,7 +116,7 @@ void copy_range(mutable_column_view& output, column_view const& input,
 /**
  * @brief Copies a range of elements out-of-place from one column to another.
  *
- * Creates a new column as-if an in-place copy was performed into @p output;
+ * Creates a new column as if an in-place copy was performed into @p output;
  * i.e. it is as if a copy of @p output was created first and then the elements
  * indicated by the indices [@p out_begin, @p out_end) were overwritten by the
  * elements from the indices [@p in_begin, @p in_begin + N) (where N =
