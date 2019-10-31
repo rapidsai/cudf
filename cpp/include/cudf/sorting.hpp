@@ -39,8 +39,8 @@ namespace experimental {
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> sorted_order(
-    table_view input, std::vector<order> const& column_order = std::vector<order>{},
-    std::vector<null_order> const& null_precedence = std::vector<null_order>{},
+    table_view input, std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf
