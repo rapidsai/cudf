@@ -12,7 +12,6 @@ from numba import cuda
 import cudf
 from cudf.tests.utils import assert_eq
 
-
 basic_dtypes = [
     np.dtype("int8"),
     np.dtype("int16"),
