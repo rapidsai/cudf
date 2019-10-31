@@ -84,19 +84,19 @@ namespace cudf
 {
 namespace strings
 {
+namespace detail
+{
 
 //
-std::unique_ptr<cudf::column> substring( const strings_column_view strings,
-                                         size_type start, size_type stop, size_type step,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream )
+std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& strings,
+                                             cudf::size_type start, cudf::size_type stop=-1, cudf::size_type step=1,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                             cudaStream_t stream = 0 )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr,stream);
+        return make_empty_strings_column(mr,stream);
     CUDF_EXPECTS( start >= 0, "Parameter start must be zero or positive integer.");
-    if( step == 0 )
-        step = 1;
     CUDF_EXPECTS( step > 0, "Parameter step must be positive integer.");
     if( (stop > 0) && (start > stop) )
         CUDF_FAIL("Invalid start or stop parameter value.");
@@ -131,6 +131,18 @@ std::unique_ptr<cudf::column> substring( const strings_column_view strings,
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
+
+} // namespace detail
+
+// external API
+
+std::unique_ptr<cudf::column> slice_strings( strings_column_view const& strings,
+                                             size_type start, size_type stop, size_type step,
+                                             rmm::mr::device_memory_resource* mr )
+{
+    return detail::slice_strings(strings, start, stop, step, mr );
+}
+
 
 } // namespace strings
 } // namespace cudf
@@ -241,16 +253,17 @@ namespace cudf
 {
 namespace strings
 {
-
+namespace detail
+{
 //
-std::unique_ptr<cudf::column> substring_from( const strings_column_view strings,
-                                              const column_view starts_column, const column_view stops_column,
-                                              rmm::mr::device_memory_resource* mr,
-                                              cudaStream_t stream )
+std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& strings,
+                                             column_view const& starts_column, column_view const& stops_column,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                             cudaStream_t stream = 0 )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr,stream);
+        return make_empty_strings_column(mr,stream);
     CUDF_EXPECTS( starts_column.size()==strings_count, "Parameter starts must have the same number of rows as strings.");
     CUDF_EXPECTS( stops_column.size()==strings_count, "Parameter stops must have the same number of rows as strings.");
     CUDF_EXPECTS( starts_column.type()==stops_column.type(), "Parameters starts and stops must be of the same type.");
@@ -261,6 +274,17 @@ std::unique_ptr<cudf::column> substring_from( const strings_column_view strings,
     return cudf::experimental::type_dispatcher(starts_column.type(),
                 dispatch_substring_from_fn{},
                 strings, starts_column, stops_column, mr, stream );
+}
+
+} // namespace detail
+
+// external API
+
+std::unique_ptr<cudf::column> slice_strings( strings_column_view const& strings,
+                                             column_view const& starts_column, column_view const& stops_column,
+                                             rmm::mr::device_memory_resource* mr )
+{
+    return detail::slice_strings( strings, starts_column, stops_column, mr );
 }
 
 } // namespace strings

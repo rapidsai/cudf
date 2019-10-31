@@ -51,15 +51,13 @@ namespace strings
  * @param start First character position to begin the substring.
  * @param stop Last character position (exclusive) to end the substring.
  *             Default of -1 indicates to use the end of each string.
- * @param step Character count to skip when retrieving the substring.
+ * @param step Distance between input characters retrieved.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<cudf::column> substring( const cudf::strings_column_view strings,
-                                         cudf::size_type start, cudf::size_type stop=-1, cudf::size_type step=1,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                         cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& strings,
+                                             cudf::size_type start, cudf::size_type stop=-1, cudf::size_type step=1,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 /**
@@ -95,13 +93,11 @@ std::unique_ptr<cudf::column> substring( const cudf::strings_column_view strings
  * @param starts First character positions to begin the substring.
  * @param stops Last character (exclusive) positions to end the substring.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<cudf::column> substring_from( const cudf::strings_column_view strings,
-                                              const column_view starts, const column_view stops,
-                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                              cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& strings,
+                                             column_view const& starts, column_view const& stops,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf

@@ -41,7 +41,7 @@ TEST_F(StringsSubstringsTest, Substring)
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto strings_column = cudf::strings_column_view(strings);
-    auto results = cudf::strings::substring(strings_column, 2, 5);
+    auto results = cudf::strings::slice_strings(strings_column, 2, 5);
     cudf::test::expect_columns_equal(*results, expected);
 }
 
@@ -55,7 +55,7 @@ TEST_P(SubstringParmsTest, Substring)
 
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
     auto strings_column = cudf::strings_column_view(strings);
-    auto results = cudf::strings::substring(strings_column,start);
+    auto results = cudf::strings::slice_strings(strings_column,start);
 
     std::vector<std::string> h_expected;
     for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
@@ -79,7 +79,7 @@ TEST_P(SubstringParmsTest, Substring_From)
     thrust::sequence( stops.begin(), stops.end(), param_index+2 );
     cudf::test::fixed_width_column_wrapper<int32_t> stops_column( stops.begin(), stops.end() );
 
-    auto results = cudf::strings::substring_from(strings_column, starts_column, stops_column);
+    auto results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
 
     std::vector<std::string> h_expected;
     for( size_t idx = 0; idx < h_strings.size(); ++idx )
@@ -96,7 +96,7 @@ TEST_P(SubstringParmsTest, AllEmpty)
 
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
     auto strings_column = cudf::strings_column_view(strings);
-    auto results = cudf::strings::substring(strings_column,start);
+    auto results = cudf::strings::slice_strings(strings_column,start);
 
     std::vector<std::string> h_expected(h_strings);
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
@@ -107,7 +107,7 @@ TEST_P(SubstringParmsTest, AllEmpty)
     thrust::host_vector<int32_t> stops(h_strings.size(),2);
     cudf::test::fixed_width_column_wrapper<int32_t> stops_column( stops.begin(), stops.end() );
 
-    results = cudf::strings::substring_from(strings_column, starts_column, stops_column);
+    results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
     cudf::test::expect_columns_equal(*results,expected);
 }
 
@@ -119,7 +119,7 @@ TEST_P(SubstringParmsTest, AllNulls)
     cudf::size_type start = GetParam();
 
     auto strings_column = cudf::strings_column_view(strings);
-    auto results = cudf::strings::substring(strings_column,start);
+    auto results = cudf::strings::slice_strings(strings_column,start);
 
     std::vector<const char*> h_expected(h_strings);
     cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end(),
@@ -131,7 +131,7 @@ TEST_P(SubstringParmsTest, AllNulls)
     thrust::host_vector<int32_t> stops(h_strings.size(),2);
     cudf::test::fixed_width_column_wrapper<int32_t> stops_column( stops.begin(), stops.end() );
 
-    results = cudf::strings::substring_from(strings_column, starts_column, stops_column);
+    results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
     cudf::test::expect_columns_equal(*results,expected);
 }
 
@@ -142,11 +142,11 @@ TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_column = cudf::strings_column_view(zero_size_strings_column);
-    auto results = cudf::strings::substring(strings_column,1,2);
+    auto results = cudf::strings::slice_strings(strings_column,1,2);
     cudf::test::expect_strings_empty(results->view());
 
     cudf::column_view starts_column( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
     cudf::column_view stops_column( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-    results = cudf::strings::substring_from(strings_column, starts_column, stops_column);
+    results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
     cudf::test::expect_strings_empty(results->view());
 }
