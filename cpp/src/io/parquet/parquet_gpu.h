@@ -69,7 +69,7 @@ struct ColumnChunkDesc {
       uint32_t num_rows_, int16_t max_definition_level_,
       int16_t max_repetition_level_, uint8_t def_level_bits_,
       uint8_t rep_level_bits_, int8_t codec_, int8_t converted_type_,
-      int32_t ts_clock_rate_)
+      int8_t decimal_scale_, int32_t ts_clock_rate_)
       : compressed_data(compressed_data_),
         compressed_size(compressed_size_),
         num_values(num_values_),
@@ -89,6 +89,7 @@ struct ColumnChunkDesc {
         column_data_base(nullptr),
         codec(codec_),
         converted_type(converted_type_),
+        decimal_scale(decimal_scale_),
         ts_clock_rate(ts_clock_rate_) {}
 
   uint8_t *compressed_data;     // pointer to compressed column chunk data
@@ -112,6 +113,7 @@ struct ColumnChunkDesc {
   void *column_data_base;       // base pointer of column data
   int8_t codec;                 // compressed codec enum
   int8_t converted_type;        // converted type enum
+  int8_t decimal_scale;         // decimal scale pow(10, -decimal_scale)
   int32_t ts_clock_rate;        // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 

@@ -8,9 +8,11 @@
 
 #include "./utils.h"
 
+struct TestModify : public GdfTest{};
+
 std::vector<const char*> hstrs{ "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "" };
 
-TEST(TestModify, SliceReplace)
+TEST_F(TestModify, SliceReplace)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -36,7 +38,7 @@ TEST(TestModify, SliceReplace)
     NVStrings::destroy(strs);
 }
 
-TEST(TestModify, Slice)
+TEST_F(TestModify, Slice)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -68,7 +70,7 @@ TEST(TestModify, Slice)
     NVStrings::destroy(strs);
 }
 
-TEST(TestModify, SliceFrom)
+TEST_F(TestModify, SliceFrom)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
     {
@@ -89,7 +91,7 @@ TEST(TestModify, SliceFrom)
     NVStrings::destroy(strs);
 }
 
-TEST(TestModify, FillNa)
+TEST_F(TestModify, FillNa)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
     {
@@ -110,7 +112,7 @@ TEST(TestModify, FillNa)
     NVStrings::destroy(strs);
 }
 
-TEST(TestModify, Insert)
+TEST_F(TestModify, Insert)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -130,7 +132,7 @@ TEST(TestModify, Insert)
     NVStrings::destroy(strs);
 }
 
-TEST(TestModify, Translate)
+TEST_F(TestModify, Translate)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
 
@@ -146,11 +148,4 @@ TEST(TestModify, Translate)
     }
 
     NVStrings::destroy(strs);
-}
-
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

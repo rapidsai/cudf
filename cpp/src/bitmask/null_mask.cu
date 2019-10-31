@@ -17,7 +17,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.cuh>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/integer_utils.hpp>
 
 #include <thrust/extrema.h>
@@ -168,7 +168,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 
   count_set_bits_kernel<block_size>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-          bitmask, start, stop - 1, non_zero_count.get());
+          bitmask, start, stop - 1, non_zero_count.data());
 
   return non_zero_count.value();
 }

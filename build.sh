@@ -18,7 +18,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n -h"
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n --allgpuarch -h"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
@@ -31,6 +31,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
+   --allgpuarch - build for all supported GPU architectures
    -h           - print this text
 
    default action (no args) is to build and install 'libnvstrings' then
@@ -48,6 +49,7 @@ VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
 BENCHMARKS=OFF
+BUILD_ALL_GPU_ARCH=0
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -84,6 +86,9 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
 fi
+if hasArg --allgpuarch; then
+    BUILD_ALL_GPU_ARCH=1
+fi
 if hasArg benchmarks; then
     BENCHMARKS="ON"
 fi
@@ -102,6 +107,14 @@ if hasArg clean; then
     done
 fi
 
+if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
+    GPU_ARCH="-DGPU_ARCHS="
+    echo "Building for the architecture of the GPU in the system..."
+else
+    GPU_ARCH="-DGPU_ARCHS=ALL"
+    echo "Building for *ALL* supported GPU architectures..."
+fi
+
 ################################################################################
 # Configure, build, and install libnvstrings
 if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
@@ -110,6 +123,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
     cd ${LIBNVSTRINGS_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
+          ${GPU_ARCH} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
@@ -136,6 +150,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     cd ${LIBCUDF_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
+          ${GPU_ARCH} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then

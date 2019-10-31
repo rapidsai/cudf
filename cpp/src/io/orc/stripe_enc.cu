@@ -811,7 +811,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 {
                     uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
                     nrows_out = (nrows_out + flush) >> 3;
-                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out, nrows_out, flush, t) * 8;
+                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, (s->chunk.start_row + present_out) >> 3, nrows_out, flush, t) * 8;
                 }
                 __syncthreads();
                 if (!t)

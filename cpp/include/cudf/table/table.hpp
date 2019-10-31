@@ -100,9 +100,36 @@ class table {
    *---------------------------------------------------------------------------**/
   std::vector<std::unique_ptr<column>> release();
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a table_view with set of specified columns.
+   *
+   * @throws cudf::logic_error
+   * If any element in `column_indices` is outside [0, num_columns())
+   *
+   * @param column_indices Indices of columns in the table
+   * @return A table_view consisting of columns from the original table
+   * specified by the elements of `column_indices`
+   *---------------------------------------------------------------------------**/
+  table_view select(std::vector<cudf::size_type> const& column_indices) const;
+
  private:
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief Elements of `tables_to_concat` are concatenated to return single
+ * table_view
+ *
+ * @throws cudf::logic_error
+ * If number of rows mismatch
+ *
+ * @param tables_to_concat The tables to be concatenated into a single
+ * table_view
+ * @return A single table having all the columns from the elements of
+ * `tables_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+table_view concat(std::vector<table_view> const& tables_to_concat);
+
 }  // namespace experimental
 }  // namespace cudf

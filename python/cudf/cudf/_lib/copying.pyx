@@ -237,27 +237,42 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def scatter_to_frames(source, maps):
+def scatter_to_frames(source, maps, index=None):
     """
     Scatters rows to 'n' dataframes according to maps
 
     Parameters
     ----------
-    source : Column or list of Columns
+    source : list of Columns
     maps : non-null column with values ranging from 0 to n-1 for each row
+    index : list of Columns, or None
 
     Returns
     -------
     list of scattered dataframes
     """
-    from cudf.core.column import column
+    from cudf.core.column import column, CategoricalColumn
+    from cudf.core.series import Series
 
     in_cols = source
+    if index:
+        ind_names = [ind.name for ind in index]
+        ind_names_tmp = [(ind_name or "_tmp_index") for ind_name in ind_names]
+        for i in range(len(index)):
+            index[i].name = ind_names_tmp[i]
+            in_cols.append(index[i])
     col_count=len(in_cols)
     if col_count == 0:
         return []
+
+    cats = {}
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
+        if isinstance(in_cols[i], CategoricalColumn):
+            cats[in_cols[i].name] = (
+                Series(in_cols[i]._categories),
+                in_cols[i]._ordered
+            )
 
     if is_string_dtype(in_cols[0]):
         in_size = in_cols[0].data.size()
@@ -278,7 +293,21 @@ def scatter_to_frames(source, maps):
 
     out_tables = []
     for tab in c_out_tables:
-        out_tables.append(table_to_dataframe(&tab, int_col_names=False))
+        df = table_to_dataframe(&tab, int_col_names=False)
+        for name, cat_info in cats.items():
+            df[name] = Series(
+                CategoricalColumn(
+                    data=df[name].data,
+                    categories=cat_info[0],
+                    ordered=cat_info[1],
+                )
+            )
+
+        if index:
+            df = df.set_index(ind_names_tmp)
+            if len(index) == 1:
+                df.index.name = ind_names[0]
+        out_tables.append(df)
 
     free_table(c_in_table, c_in_cols)
     free_column(c_maps)

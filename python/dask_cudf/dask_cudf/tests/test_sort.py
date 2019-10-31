@@ -47,7 +47,7 @@ def test_sort_values_binned():
 
 
 def test_sort_binned_meta():
-    df = cudf.DataFrame([("a", [0, 1, 2, 3, 4]), ("b", [5, 6, 7, 7, 8])])
+    df = cudf.DataFrame({"a": [0, 1, 2, 3, 4], "b": [5, 6, 7, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2).persist()
 
     ddf.sort_values_binned(by="b")
