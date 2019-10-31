@@ -16,9 +16,9 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/cuda.cuh>
 
 #include <rmm/device_scalar.hpp>
 
@@ -26,8 +26,9 @@ namespace cudf {
 namespace detail {
 
 template <size_type block_size, typename InputIterator, typename Predicate>
-valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
-                Predicate p, size_type* valid_count) {
+__global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
+                                InputIterator end, Predicate p,
+                                size_type* valid_count) {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};
@@ -55,7 +56,7 @@ valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
 }  // namespace detail
 
 /**
- * @brief Generate a new bitmask where every bit is set for which a predicate is
+ * @brief Generate a bitmask where every bit is set for which a predicate is
  * `true` over the elements in `[begin,end)`.
  *
  * Bit `i` in the output mask will be set if `p(*(begin+i)) == true`.
@@ -70,15 +71,20 @@ valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
  */
 template <typename InputIterator, typename Predicate>
 std::pair<rmm::device_buffer, size_type> valid_if(
-    InputIterator begin, InputIterator end, Predicate&& p,
+    InputIterator begin, InputIterator end, Predicate p,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
   auto size = thrust::distance(begin, end);
 
   auto null_mask =
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
-
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
+
+  cudf::grid_1d grid{word_index(size), 256};
+
+  valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+      static_cast<bitmask_type*>(null_mask.data()), begin, end, p,
+      valid_count.data());
 
   return std::make_pair(null_mask, valid_count.value(stream));
 }

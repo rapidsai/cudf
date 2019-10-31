@@ -555,7 +555,8 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/count_bitmask_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/count_bitmask_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_if_tests.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 

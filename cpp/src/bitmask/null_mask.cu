@@ -18,7 +18,7 @@
 #include <cudf/utilities/bit.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <thrust/extrema.h>
 #include <cub/cub.cuh>
