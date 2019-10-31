@@ -93,7 +93,6 @@ void copy_range(mutable_column_view& output, column_view const& input,
       out_begin, out_end, stream);
   }
 
-  return;
 }
 
 std::unique_ptr<column> copy_range(column_view const& output,
