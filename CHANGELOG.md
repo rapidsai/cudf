@@ -2,10 +2,11 @@
 
 ## New Features
 
-- PR #3011 Added libcudf++ transition guide
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
+- PR #2980 Added nvtext is_vowel/is_consonant functions
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3011 Added libcudf++ transition guide
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3022 adds DataFrame.astype for cuDF dataframes
@@ -93,6 +94,7 @@
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3256 Fix orc writer crash with multiple string columns
 - PR #3211 Fix breaking change caused by rapidsai/rmm#167
+- PR #3265 Fix dangling pointer in `is_sorted`
 
 # cuDF 0.10.0 (16 Oct 2019)
 
