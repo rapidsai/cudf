@@ -50,7 +50,7 @@ template<typename T, typename Tout, typename F>
 struct Launcher {
     static
     gdf_error launch(cudf::column_view const& input,
-                     cudf::mutable_column_view output) {
+                     cudf::mutable_column_view& output) {
 
         // Return immediately for empty inputs
         if (input.size() == 0)
@@ -86,7 +86,7 @@ struct Launcher {
     }
 };
 
-inline void handleChecksAndValidity(column_view input, mutable_column_view output) {
+inline void handleChecksAndValidity(column_view const& input, mutable_column_view& output) {
 
     if (not input.nullable()) {
         if (not output.nullable())
