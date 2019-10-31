@@ -232,8 +232,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
        bool ignore_out_of_bounds = false,
        bool allow_negative_indices = false,
        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-       cudaStream_t stream = 0)
-{
+       cudaStream_t stream = 0) {
   auto source_n_cols = source_table.num_columns();
   auto source_n_rows = source_table.num_rows();
   auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
@@ -241,8 +240,8 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   std::vector<std::unique_ptr<column>> destination_columns;
 
   // TODO: Could be beneficial to use streams internally here
-
-  for (auto const& source_column : source_table) {
+  
+  for(auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
                                   cudf::experimental::type_dispatcher(source_column.type(),
