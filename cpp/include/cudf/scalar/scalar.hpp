@@ -89,7 +89,7 @@ class scalar {
   /**
    * @brief Returns a raw pointer to the validity bool in device memory
    */
-  bool* validity_data() { return _is_valid.get(); }
+  bool* validity_data() { return _is_valid.data(); }
 
  protected:
   data_type _type{EMPTY};      ///< Logical type of value in the scalar
@@ -142,7 +142,7 @@ class numeric_scalar : public scalar {
   /**
    * @brief Returns a raw pointer to the value in device memory
    */
-  T* data() { return _data.get(); }
+  T* data() { return _data.data(); }
 
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing numeric value
@@ -242,7 +242,7 @@ class timestamp_scalar : public scalar {
   /**
    * @brief Returns a raw pointer to the value in device memory
    */
-  T* data() { return _data.get(); }
+  T* data() { return _data.data(); }
 
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing timestamp value
