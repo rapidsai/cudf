@@ -43,6 +43,7 @@ struct page_enc_state_s
     uint32_t rle_lit_count;
     uint32_t rle_rpt_count;
     volatile uint32_t rpt_map[4];
+    volatile uint32_t scratch_red[32];
     EncPage page;
     EncColumnChunk ck;
     EncColumnDesc col;
@@ -83,7 +84,7 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
         s->frag.fragment_data_size = 0;
     }
     dtype = s->col.physical_type;
-    dtype_len = (dtype == INT64 || dtype == INT64) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+    dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
     __syncthreads();
     nrows = s->frag.num_rows;
     for (uint32_t i = 0; i < nrows; i += 512)
@@ -149,6 +150,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         uint32_t page_start = 0;
         uint32_t page_offset = 0;
         uint32_t cur_row = ck_g.start_row;
+
         do {
             uint32_t fragment_data_size, max_page_size;
             SYNCWARP();
@@ -452,6 +454,7 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks)
 
     page_enc_state_s * const s = &state_g;
     uint32_t t = threadIdx.x;
+    uint32_t dtype, dtype_len_in, dtype_len_out, dict_bits;
 
     if (t < sizeof(EncPage) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<uint32_t *>(&pages[blockIdx.x])[t];
@@ -470,9 +473,9 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks)
     }
     __syncthreads();
     // Encode NULLs
-    if (s->page.page_type != DICTIONARY_PAGE /*&& s->col.level_bits != 0*/) {
+    if (s->page.page_type != DICTIONARY_PAGE && s->col.level_bits != 0) {
         const uint32_t *valid = s->col.valid_map_base;
-        uint32_t def_lvl_bits = 1;//s->col.level_bits & 0xf;
+        uint32_t def_lvl_bits = s->col.level_bits & 0xf;
         if (def_lvl_bits != 0) {
             if (!t) {
                 s->rle_run = 0;
@@ -492,10 +495,143 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks)
                 RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
                 __syncthreads();
             }
+            if (t < 32) {
+                uint8_t *cur = s->cur;
+                uint8_t *rle_out = s->rle_out;
+                if (t < 4) {
+                    uint32_t rle_bytes = (uint32_t)(rle_out - cur);
+                    cur[t] = rle_bytes >> (t * 8);
+                }
+                SYNCWARP();
+                if (t == 0) {
+                    s->cur = rle_out;
+                }
+            }
         }
     }
+    // Encode data values
+    __syncthreads();
+    dtype = s->col.physical_type;
+    dtype_len_out = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+    if (dtype == INT32) {
+        uint32_t converted_type = s->col.converted_type;
+        dtype_len_in = (converted_type == INT_8) ? 1 : (converted_type == INT_16) ? 2 : 4;
+    }
+    else {
+        dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
+    }
+    dict_bits = (dtype == BOOLEAN) ? 1 : 0;
+    if (t == 0) {
+        uint8_t *dst = s->cur;
+        s->rle_run = 0;
+        s->rle_pos = 0;
+        s->rle_numvals = 0;
+        s->rle_out = dst;
+        if (dict_bits != 0 && dtype != BOOLEAN) {
+            dst[0] = dict_bits;
+            s->rle_out = dst + 1;
+        }
+    }
+    __syncthreads();
+    for (uint32_t cur_row = 0; cur_row < s->page.num_rows; ) {
+        uint32_t nrows = min(s->page.num_rows - cur_row, 128);
+        const uint32_t *valid = s->col.valid_map_base;
+        uint32_t row = s->page.start_row + cur_row + t;
+        uint32_t is_valid = (row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
+        uint32_t warp_valids = BALLOT(is_valid);
+        uint32_t len, pos;
 
+        cur_row += nrows;
+        if (dict_bits != 0) {
+            // Dictionary encoding
+            uint32_t v, rle_numvals;
 
+            pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
+            if (!(t & 0x1f)) {
+                s->scratch_red[t >> 5] = __popc(warp_valids);
+            }
+            __syncthreads();
+            if (t < 32) {
+                s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t);
+            }
+            __syncthreads();
+            pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
+            rle_numvals = s->rle_numvals + s->scratch_red[3];
+            v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]; // NOTE: Assuming boolean for now
+            if (is_valid) {
+                s->vals[(rle_numvals + pos) & (RLE_BFRSZ - 1)] = v;
+            }
+            RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
+            __syncthreads();
+        }
+        else {
+            // Non-dictionary encoding
+            uint8_t *dst = s->cur;
+
+            if (is_valid) {
+                len = dtype_len_out;
+                if (dtype == BYTE_ARRAY) {
+                    len += (uint32_t)reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+                }
+            }
+            else {
+                len = 0;
+            }
+            pos = WarpReducePos32(len, t);
+            if ((t & 0x1f) == 0x1f) {
+                s->scratch_red[t >> 5] = pos;
+            }
+            __syncthreads();
+            if (t < 32) {
+                s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t);
+            }
+            __syncthreads();
+            if (t == 0) {
+                s->cur = dst + s->scratch_red[3];
+            }
+            pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0) - len;
+            if (is_valid) {
+                const uint8_t *src8 = reinterpret_cast<const uint8_t *>(s->col.column_data_base) + row * (size_t)dtype_len_in;
+                switch (dtype) {
+                case INT32:
+                case FLOAT: {
+                        int32_t v;
+                        if (dtype_len_in == 4)
+                            v = *reinterpret_cast<const int32_t *>(src8);
+                        else if (dtype_len_in == 2)
+                            v = *reinterpret_cast<const int16_t *>(src8);
+                        else
+                            v = *reinterpret_cast<const int8_t *>(src8);
+                        dst[pos + 0] = v;
+                        dst[pos + 1] = v >> 8;
+                        dst[pos + 2] = v >> 16;
+                        dst[pos + 3] = v >> 24;
+                    }
+                    break;
+                case INT64:
+                case DOUBLE:
+                    memcpy(dst + pos, src8, 8);
+                    break;
+                case BYTE_ARRAY: {
+                        const char *str_data = reinterpret_cast<const nvstrdesc_s *>(src8)->ptr;
+                        uint32_t v = len - 4; // string length
+                        dst[pos + 0] = v;
+                        dst[pos + 1] = v >> 8;
+                        dst[pos + 2] = v >> 16;
+                        dst[pos + 3] = v >> 24;
+                        if (v != 0)
+                            memcpy(dst + pos + 4, str_data, v);
+                    }
+                    break;
+                }
+            }
+            __syncthreads();
+        }
+    }
+    if (t == 0) {
+        uint32_t actual_data_size = (s->cur - s->page.page_data) - s->page.max_hdr_size;
+        s->page.max_data_size = actual_data_size;
+    }
     __syncthreads();
     if (t < sizeof(EncPage) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&pages[blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&s->page)[t];
