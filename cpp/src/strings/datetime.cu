@@ -68,7 +68,7 @@ enum timestamp_parse_component {
     TP_ARRAYSIZE   = 8
 };
 
-struct format_item
+struct alignas(16) format_item
 {
     bool item_type;    // 1=specifier, 0=literal
     char specifier;    // specifier
