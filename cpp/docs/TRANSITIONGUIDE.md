@@ -216,8 +216,8 @@ This is effectively a convenience wrapper around a `rmm::device_vector<T>` of le
 // and initializes the value to 42
 rmm::device_scalar<int> int_scalar{42, stream, mr}; 
 
-// scalar.get() returns pointer to value in device memory
-kernel<<<...>>>(int_scalar.get(),...);
+// scalar.data() returns pointer to value in device memory
+kernel<<<...>>>(int_scalar.data(),...);
 
 // scalar.value() synchronizes the scalar's stream and copies the 
 // value from device to host and returns the value
