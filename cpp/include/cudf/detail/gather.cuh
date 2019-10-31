@@ -58,7 +58,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
 
   for (size_type i = 0; i < source_table.num_columns(); i++) {
 
-    const int warp_size = 32;
+    constexpr int warp_size = 32;
 
     column_device_view source_col = source_table.column(i);
     mutable_column_device_view destination_col = destination_table.column(i);
@@ -73,9 +73,6 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
         size_type source_row =
           thread_active ? gather_map[destination_row] : 0;
 
-        const uint32_t active_threads =
-          __ballot_sync(0xffffffff, thread_active);
-
         bool source_bit_is_valid = source_col.has_nulls()
           ? source_col.is_valid_nocheck(source_row)
           : true;
@@ -83,14 +80,14 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
         // Use ballot to find all valid bits in this warp and create the output
         // bitmask element
         const uint32_t valid_warp =
-          __ballot_sync(active_threads, source_bit_is_valid);
+          __ballot_sync(0xffffffff, thread_active && source_bit_is_valid);
 
         const size_type valid_index =
           cudf::util::detail::bit_container_index<bitmask_type>(
               destination_row);
 
         // Only one thread writes output
-        if (0 == threadIdx.x % warp_size && thread_active) {
+        if (0 == threadIdx.x % warp_size) {
           destination_col.set_mask_word(valid_index, valid_warp);
         }
         destination_row_base += blockDim.x * gridDim.x;
@@ -102,7 +99,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
 
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased
- * gdf_column. To be used with the cudf::type_dispatcher.
+ * column. To be used with the cudf::type_dispatcher.
  *
  *---------------------------------------------------------------------------**/
 struct column_gatherer
@@ -112,11 +109,13 @@ struct column_gatherer
    * on a `gather_map`.
    *
    * @tparam Element Dispatched type for the column being gathered
-   * @param source_column The column to gather from
-   * @param gather_map An iterator over integral values representing the gather map
-   * @param destination_column The column to gather into
-   * @param ignore_out_of_bounds Ignore values in `gather_map` that are
-   * out of bounds
+   * @tparam MapIterator Iterator type for the gather map
+   * @param source_column View into the column to gather from
+   * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
+   * @param gather_map_end End of iterator range of integral values representing the gather map
+   * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
+   * @param mr Memory resource to use for all allocations
+   * @param stream CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
   template <typename Element, typename MapIterator,
     std::enable_if_t<is_fixed_width<Element>()>* = nullptr>
@@ -189,6 +188,37 @@ struct index_converter : public thrust::unary_function<map_type,map_type>
 };
 
 
+/**
+ * @brief Gathers the specified rows of a set of columns according to a gather map.
+ *
+ * Gathers the rows of the source columns according to `gather_map` such that row "i"
+ * in the resulting table's columns will contain row "gather_map[i]" from the source columns.
+ * The number of rows in the result table will be equal to the number of elements in
+ * `gather_map`.
+ *
+ * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `source_table`.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * tparam MapIterator Iterator type for the gather map
+ * @param[in] source_table View into the table containing the input columns whose rows will be gathered
+ * @param[in] gather_map_begin Beginning of iterator range of integer indices that map the rows in the
+ * source columns to rows in the destination columns 
+ * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
+ * source columns to rows in the destination columns 
+ * @param[in] check_bounds Optionally perform bounds checking on the values of `gather_map` and throw
+ * an error if any of its values are out of bounds.
+ * @param[in] ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds. Currently
+ * incompatible with `allow_negative_indices`, i.e., setting both to `true` is undefined.
+ * @param[in] allow_negative_indices Interpret each negative index `i` in the gathermap as the
+ * positive index `i+num_source_rows`.
+ * @param[in] mr The resource to use for all allocations
+ * @param[in] stream The CUDA stream on which to execute kernels
+ * @return cudf::table Result of the gather
+ */
 template <typename MapIterator>
 std::unique_ptr<table>
 gather(table_view const& source_table, MapIterator gather_map_begin,
