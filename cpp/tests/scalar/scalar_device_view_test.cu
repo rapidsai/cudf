@@ -73,7 +73,7 @@ template <typename T,
   typename ScalarDeviceViewType>
 __global__ void test_setvalue(ScalarDeviceViewType s, T value) {
   s.set_value(value);
-  s.set_valid();
+  s.set_valid(true);
 }
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetValue) {
@@ -90,13 +90,13 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetValue) {
 
 template <typename ScalarDeviceViewType>
 __global__ void test_setnull(ScalarDeviceViewType s) {
-  s.set_null();
+  s.set_valid(false);
 }
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
   cudf::experimental::scalar_type_t<TypeParam> s;
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  s.set_valid();
+  s.set_valid(true);
   EXPECT_TRUE(s.is_valid());
 
   test_setnull<<<1, 1>>>(scalar_device_view);

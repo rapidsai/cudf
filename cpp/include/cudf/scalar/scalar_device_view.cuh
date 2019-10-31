@@ -47,27 +47,12 @@ class scalar_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns whether the value is null.
-   *
-   * @return true The element is null
-   * @return false The element is valid
+   * @brief Updates the validity of the value
+   * 
+   * @param is_valid true: set the value to valid. false: set it to null
    *---------------------------------------------------------------------------**/
-  __device__ bool is_null() const noexcept {
-    return not is_valid();
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Updates the null mask to indicate that the value is valid
-   *---------------------------------------------------------------------------**/
-  __device__ void set_valid() noexcept {
-    *_is_valid = true;
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Updates the null mask to indicate that the value is null
-   *---------------------------------------------------------------------------**/
-  __device__ void set_null() noexcept {
-    *_is_valid = false;
+  __device__ void set_valid(bool is_valid) noexcept {
+    *_is_valid = is_valid;
   }
 
  protected:

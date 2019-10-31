@@ -51,14 +51,11 @@ class scalar {
   data_type type() const noexcept { return _type; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Sets this scalar to null
+   * @brief Updates the validity of the value
+   * 
+   * @param is_valid true: set the value to valid. false: set it to null
    *---------------------------------------------------------------------------**/
-  void set_null() { _is_valid.set_value(false); }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Sets this scalar to valid
-   *---------------------------------------------------------------------------**/
-  void set_valid() { _is_valid.set_value(true); }
+  void set_valid(bool is_valid) { _is_valid.set_value(is_valid); }
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates whether the scalar contains a valid value
@@ -94,7 +91,11 @@ class numeric_scalar : public scalar {
    , _data(value, stream_, mr_)
   {}
 
-  void set_value(T value) { _data.set_value(value); _is_valid.set_value(true); }
+  void set_value(T value) { 
+    _data.set_value(value); 
+    this->set_valid(true); 
+  }
+
   T value() { return _data.value(); }
 
   T* data() { return _data.get(); }
@@ -143,8 +144,8 @@ class timestamp_scalar : public scalar {
   {}
 
   void set_value(T value) { 
-     _data.set_value(value); 
-     _is_valid.set_value(true); 
+    _data.set_value(value); 
+    this->set_valid(true); 
   }
 
   T value() { return _data.value(); }

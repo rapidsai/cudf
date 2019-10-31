@@ -62,7 +62,7 @@ TYPED_TEST(TypedScalarTest, SetNull) {
   TypeParam value = 6;
   cudf::experimental::scalar_type_t<TypeParam> s;
   s.set_value(value);
-  s.set_null();
+  s.set_valid(false);
 
   EXPECT_FALSE(s.is_valid());
 }
