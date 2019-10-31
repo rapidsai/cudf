@@ -203,13 +203,13 @@ void type_dispatcher_benchmark(benchmark::State& state){
 
 }
 
-using namespace cudf;
+class TypeDispatcher : public cudf::benchmark {};
 
 #define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)                  \
-BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {                               \
+BENCHMARK_DEFINE_F(TypeDispatcher, name)(::benchmark::State& state) {                          \
   type_dispatcher_benchmark<TypeParam, functor_type, dispatching_type>(state);                 \
 }                                                                                              \
-BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
+BENCHMARK_REGISTER_F(TypeDispatcher, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
 
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
