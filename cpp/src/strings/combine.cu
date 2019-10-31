@@ -34,13 +34,15 @@ namespace cudf
 {
 namespace strings
 {
+namespace detail
+{
 
 //
 std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
-                                           const std::string separator,
-                                           const char* narep,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream = 0)
+                                           const std::string separator = "",
+                                           const char* narep=nullptr,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                           cudaStream_t stream=0 )
 {
     auto num_columns = strings_columns.size();
     // TODO  Return a copy of the single column instead.
@@ -187,9 +189,9 @@ std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view
 
 //
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const std::string separator,
-                                            const char* narep,
-                                            rmm::mr::device_memory_resource* mr,
+                                            const std::string separator = "",
+                                            const char* narep=nullptr,
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream=0 )
 {
     auto strings_count = strings.size();
@@ -277,6 +279,26 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
 
     return make_strings_column(1, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
+}
+
+} // namespace detail
+
+// APIs
+
+std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
+                                           const std::string separator,
+                                           const char* narep,
+                                           rmm::mr::device_memory_resource* mr)
+{
+    return detail::concatenate(strings_columns, separator, narep, mr);
+}
+
+std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
+                                            const std::string separator,
+                                            const char* narep,
+                                            rmm::mr::device_memory_resource* mr )
+{
+    return detail::join_strings(strings, separator, narep, mr);
 }
 
 } // namespace strings

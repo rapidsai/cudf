@@ -45,23 +45,21 @@ namespace strings
  * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
  * ```
  *
- * @throws cudf::logic_error if input columns are not all the same size.
- * 
+ * @throw cudf::logic_error if input columns are not all the same size.
+ *
  * @param strings_columns List of string columns to concatenate.
- * @param separator Null-terminated CPU string that should appear between each instance.
+ * @param separator String that should inserted between each string from each row.
  *        Default is an empty string.
  * @param narep Null-terminated CPU string that should be used in place of any null strings
  *        found in any column. Default of null means any null entry in any column will
  *        produces a null result for that row.
  * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use any for kernels in this method.
  * @return New column with concatenated results.
  */
 std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
                                            const std::string separator = "",
                                            const char* narep=nullptr,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                           cudaStream_t stream=0 );
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Concatenates all strings in the column into one new string delimited
@@ -77,19 +75,17 @@ std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view
  * ```
  *
  * @param strings Strings for this operation.
- * @param separator Null-terminated CPU string that should appear between each string.
+ * @param separator String that should inserted between each string.
  *        Default is an empty string.
  * @param narep Null-terminated CPU string that should represent any null strings found.
  *        Default of nullptr will ignore any null entries.
  * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use kernels in this method.
  * @return New column containing one string.
  */
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                                             const std::string separator = "",
                                             const char* narep=nullptr,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream=0 );
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
