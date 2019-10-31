@@ -56,7 +56,30 @@ rmm::device_buffer custom_buff(100, &mr); // Allocates 100 bytes from the custom
 
 ## `cudf::scalar`
 
-// TODO
+A `cudf::scalar` is an object that can represent a singular, nullable value of any of the types currently supported by cudf. Each type of value is represented by a separate type of scalar class which are all derived from `cudf::scalar`. e.g. A `numeric_scalar` holds a single numerical value, a `string_scalar` holds a single string. The data for the stored value resides in device memory.
+
+|Value type|Scalar class|Notes|
+|-|-|-|
+|numeric|`numeric_scalar<T>` where `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`||
+|timestamp|`timestamp_scalar<T>` where `T` can be `timestamp_D`, `timestamp_s`...||
+|string|`string_scalar`|This class object is immutable|
+
+### Construction
+`scalar`s can be created using either their respective constructors or using factory functions like `make_numeric_scalar()`, `make_timestamp_scalar()` or `make_string_scalar()`. 
+
+### Casting
+All the factory methods return a `unique_ptr<scalar>` which needs to be statically downcasted to its respective scalar class type before accessing its value. Their validity (nullness) can be accessed without casting.
+Generally, the value would need to be accessed from a function that is aware of the value type e.g. a functor that is dispatched from `type_dispatcher`. To cast to the requisite scalar class type given the value type, use the mapping utility `scalar_type_t` provided in `type_dispatcher.hpp` : 
+```c++
+//unique_ptr<scalar> s = make_numeric_scalar(...);
+
+using ScalarType = cudf::experimental::scalar_type_t<T>;
+// ScalarType is now numeric_scalar<T>
+auto s1 = static_cast<ScalarType *>(s.get());
+```
+
+### Passing to device
+Each scalar type has a corresponding non-owning device view class which allows access to the value and its validity from the device. This can be obtained using the function `get_scalar_device_view(ScalarType s)`. Note that a device view is not provided for a base scalar object, only for the derived typed scalar class objects.
 
 ## `cudf::column`
 
@@ -240,6 +263,8 @@ The preferred style for how inputs are passed in and outputs are returned is the
 		- `column_view const&`
 	- Tables:
 		- `table_view const&`
+    - Scalar:
+        - `scalar const&`
     - Everything else:
        - Trivial or inexpensively copied types
           - Pass by value
@@ -258,6 +283,8 @@ The preferred style for how inputs are passed in and outputs are returned is the
 		- `std::unique_ptr<column>`
 	- Tables:
 		- `std::unique_ptr<table>`
+    - Scalars:
+        - `std::unique_ptr<scalar>`
 
 
 ### Multiple Return Values
