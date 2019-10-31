@@ -77,8 +77,8 @@ struct dispatch_find_fn
      * @return New integer column with character position values.
      */
     template <typename IntegerType, typename FindFunction, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()( const cudf::strings_column_view& strings,
-                                              const std::string& target,
+    std::unique_ptr<cudf::column> operator()( cudf::strings_column_view const& strings,
+                                              std::string const& target,
                                               cudf::size_type start, cudf::size_type stop,
                                               FindFunction& pfn,
                                               rmm::mr::device_memory_resource* mr,
@@ -118,8 +118,8 @@ struct dispatch_find_fn
     }
 
     template <typename IntegerType, typename FindFunction, std::enable_if_t<not std::is_integral<IntegerType>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()( const cudf::strings_column_view& strings,
-                                              const std::string& target,
+    std::unique_ptr<cudf::column> operator()( cudf::strings_column_view const& strings,
+                                              std::string const& target,
                                               cudf::size_type start, cudf::size_type stop,
                                               FindFunction& pfn,
                                               rmm::mr::device_memory_resource* mr,
@@ -135,15 +135,14 @@ namespace cudf
 {
 namespace strings
 {
-
-// APIs
-
-std::unique_ptr<cudf::column> find( const strings_column_view strings,
-                                    const std::string target,
-                                    size_type start, size_type stop,
-                                    cudf::data_type output_type,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream )
+namespace detail
+{
+std::unique_ptr<cudf::column> find( cudf::strings_column_view const& strings,
+                                    std::string const& target,
+                                    cudf::size_type start=0, cudf::size_type stop=-1,
+                                    cudf::data_type output_type = cudf::data_type{INT32},
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream=0 )
 {
     auto pfn = [] __device__ (string_view d_string, string_view d_target,
                               size_type start, size_type stop) {
@@ -156,12 +155,12 @@ std::unique_ptr<cudf::column> find( const strings_column_view strings,
                                                 strings, target, start, stop, pfn, mr, stream);
 }
 
-std::unique_ptr<cudf::column> rfind( const strings_column_view strings,
-                                     const std::string target,
-                                     size_type start, size_type stop,
-                                     cudf::data_type output_type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream )
+std::unique_ptr<cudf::column> rfind( cudf::strings_column_view const& strings,
+                                     std::string const& target,
+                                     cudf::size_type start=0, cudf::size_type stop=-1,
+                                     cudf::data_type output_type = cudf::data_type{INT32},
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                     cudaStream_t stream=0 )
 {
     auto pfn = [] __device__ (string_view d_string, string_view d_target,
                               size_type start, size_type stop) {
@@ -172,6 +171,28 @@ std::unique_ptr<cudf::column> rfind( const strings_column_view strings,
 
     return cudf::experimental::type_dispatcher( output_type, dispatch_find_fn{},
                                                 strings, target, start, stop, pfn, mr, stream);
+}
+
+} // namespace detail
+
+// external APIs
+
+std::unique_ptr<cudf::column> find( strings_column_view const& strings,
+                                    std::string const& target,
+                                    size_type start, size_type stop,
+                                    cudf::data_type output_type,
+                                    rmm::mr::device_memory_resource* mr)
+{
+    return detail::find( strings, target, start, stop, output_type, mr );
+}
+
+std::unique_ptr<cudf::column> rfind( strings_column_view const& strings,
+                                     std::string const& target,
+                                     size_type start, size_type stop,
+                                     cudf::data_type output_type,
+                                     rmm::mr::device_memory_resource* mr)
+{
+    return detail::rfind( strings, target, start, stop, output_type, mr );
 }
 
 namespace
@@ -193,8 +214,8 @@ namespace
  * @return New INT8 column with character position values.
  */
 template <typename BoolFunction>
-std::unique_ptr<cudf::column> contains_fn( const cudf::strings_column_view strings,
-                                           const std::string target,
+std::unique_ptr<cudf::column> contains_fn( cudf::strings_column_view const& strings,
+                                           std::string const& target,
                                            BoolFunction pfn,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream )
@@ -240,12 +261,13 @@ std::unique_ptr<cudf::column> contains_fn( const cudf::strings_column_view strin
 
 } // namespace
 
-// APIs
+namespace detail
+{
 
-std::unique_ptr<cudf::column> contains( const strings_column_view strings,
-                                        const std::string target,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream )
+std::unique_ptr<cudf::column> contains( cudf::strings_column_view const& strings,
+                                        std::string const& target,
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                        cudaStream_t stream=0 )
 {
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
         return d_string.find( d_target )>=0;
@@ -254,10 +276,10 @@ std::unique_ptr<cudf::column> contains( const strings_column_view strings,
     return contains_fn( strings, target, pfn, mr, stream );
 }
 
-std::unique_ptr<cudf::column> starts_with( const strings_column_view strings,
-                                           const std::string target,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream )
+std::unique_ptr<cudf::column> starts_with( cudf::strings_column_view const& strings,
+                                           std::string const& target,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                           cudaStream_t stream=0 )
 {
     auto pfn = [] __device__ (cudf::string_view d_string, cudf::string_view d_target) {
         return d_string.find( d_target )==0;
@@ -265,10 +287,10 @@ std::unique_ptr<cudf::column> starts_with( const strings_column_view strings,
     return contains_fn( strings, target, pfn, mr, stream );
 }
 
-std::unique_ptr<cudf::column> ends_with( const strings_column_view strings,
-                                         const std::string target,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream )
+std::unique_ptr<cudf::column> ends_with( cudf::strings_column_view const& strings,
+                                         std::string const& target,
+                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                         cudaStream_t stream=0 )
 {
 
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
@@ -280,6 +302,31 @@ std::unique_ptr<cudf::column> ends_with( const strings_column_view strings,
     };
 
     return contains_fn( strings, target, pfn, mr, stream );
+}
+
+} // namespace detail
+
+// external APIs
+
+std::unique_ptr<cudf::column> contains( strings_column_view const& strings,
+                                        std::string const& target,
+                                        rmm::mr::device_memory_resource* mr )
+{
+    return detail::contains( strings, target, mr );
+}
+
+std::unique_ptr<cudf::column> starts_with( strings_column_view const& strings,
+                                           std::string const& target,
+                                           rmm::mr::device_memory_resource* mr )
+{
+    return detail::starts_with( strings, target, mr );
+}
+
+std::unique_ptr<cudf::column> ends_with( strings_column_view const& strings,
+                                         std::string const& target,
+                                         rmm::mr::device_memory_resource* mr )
+{
+    return detail::ends_with( strings, target, mr );
 }
 
 } // namespace strings
