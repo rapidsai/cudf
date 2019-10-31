@@ -127,8 +127,9 @@ struct EncColumnDesc
   const void *column_data_base;     //!< base ptr of column data
   uint32_t num_rows;                //!< number of rows in column
   uint8_t physical_type;            //!< physical data type
+  uint8_t converted_type;           //!< logical data type
   uint8_t level_bits;               //!< bits to encode max definition (lower nibble) & repetition (upper nibble) levels
-  uint8_t pad[2];
+  uint8_t pad;
 };
 
 #define MAX_PAGE_FRAGMENT_SIZE  5000    //!< Max number of rows in a page fragment
