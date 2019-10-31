@@ -278,6 +278,7 @@ class column {
   std::vector<std::unique_ptr<column>>
       _children{};  ///< Depending on element type, child
                     ///< columns may contain additional data
+  friend class CreateColumnFromView;
 };
 
 }  // namespace cudf
