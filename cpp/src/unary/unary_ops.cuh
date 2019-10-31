@@ -49,7 +49,7 @@ void gpu_op_kernel(const T *data, cudf::size_type size,
 template<typename T, typename Tout, typename F>
 struct Launcher {
     static
-    gdf_error launch(cudf::column_view input,
+    gdf_error launch(cudf::column_view const& input,
                      cudf::mutable_column_view output) {
 
         // Return immediately for empty inputs
