@@ -14,24 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef COMPILED_BINARY_OPS_H
-#define COMPILED_BINARY_OPS_H
+#include <jni.h>
 
-#include <cudf/types.hpp>
-#include <cudf/binaryop.hpp>
+extern "C" {
 
-namespace cudf {
-namespace binops {
-namespace compiled {
+JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_HostMemoryBuffer_wrapRangeInBuffer(JNIEnv *env,
+                                                          jclass clazz,
+                                                          jlong addr,
+                                                          jlong len) {
+  return env->NewDirectByteBuffer(reinterpret_cast<void *>(addr), len);
+}
 
-gdf_error binary_operation(gdf_column* out,
-                           gdf_column* lhs,
-                           gdf_column* rhs,
-                           gdf_binary_operator ope);
-
-} // namespace compiled
-} // namespace binops
-} // namespace cudf
-
-
-#endif // COMPILED_BINARY_OPS_H
+}
