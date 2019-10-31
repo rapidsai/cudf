@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #3011 Added libcudf++ transition guide
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
@@ -69,6 +70,7 @@
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
+- PR #3166 Move reductions to legacy
 
 ## Bug Fixes
 
@@ -89,7 +91,8 @@
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
-
+- PR #3256 Fix orc writer crash with multiple string columns
+- PR #3211 Fix breaking change caused by rapidsai/rmm#167
 
 # cuDF 0.10.0 (16 Oct 2019)
 
