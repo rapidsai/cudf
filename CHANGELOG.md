@@ -72,6 +72,7 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3270 Move predicates files to legacy
 
 ## Bug Fixes
 
@@ -315,7 +316,6 @@
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
-- PR #3270 Move predicates files to legacy
 
 ## Improvements
 
