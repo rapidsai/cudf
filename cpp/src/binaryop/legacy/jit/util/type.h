@@ -1,6 +1,9 @@
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
+ * Copyright 2018-2019 BlazingDB, Inc.
+ *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,24 +17,20 @@
  * limitations under the License.
  */
 
-#ifndef COMPILED_BINARY_OPS_H
-#define COMPILED_BINARY_OPS_H
+#ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
+#define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
-#include <cudf/types.hpp>
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
+#include <string>
 
 namespace cudf {
 namespace binops {
-namespace compiled {
+namespace jit {
 
-gdf_error binary_operation(gdf_column* out,
-                           gdf_column* lhs,
-                           gdf_column* rhs,
-                           gdf_binary_operator ope);
+    std::string getOperatorName(gdf_binary_operator ope);
 
-} // namespace compiled
-} // namespace binops
-} // namespace cudf
+}
+}
+}
 
-
-#endif // COMPILED_BINARY_OPS_H
+#endif

@@ -123,7 +123,7 @@ void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
     return;
   }
 
-  if (valid_out == nullptr && valid_col == nullptr && valid_scalar == true) {
+  if (valid_out == nullptr && valid_col == nullptr && valid_scalar) {
     // if in col has no mask and scalar is valid, then out col is allowed to
     // have no mask
     out_null_count = 0;
@@ -136,10 +136,10 @@ void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
 
   if (valid_scalar == false) {
     CUDA_TRY(cudaMemset(valid_out, 0x00, num_bitmask_elements));
-  } else if (valid_scalar == true && valid_col != nullptr) {
+  } else if (valid_scalar && valid_col != nullptr) {
     CUDA_TRY(cudaMemcpy(valid_out, valid_col, num_bitmask_elements,
                         cudaMemcpyDeviceToDevice));
-  } else if (valid_scalar == true && valid_col == nullptr) {
+  } else if (valid_scalar && valid_col == nullptr) {
     CUDA_TRY(cudaMemset(valid_out, 0xff, num_bitmask_elements));
   }
 
