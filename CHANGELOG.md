@@ -2,10 +2,11 @@
 
 ## New Features
 
-- PR #3011 Added libcudf++ transition guide
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
+- PR #2980 Added nvtext is_vowel/is_consonant functions
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3011 Added libcudf++ transition guide
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3022 adds DataFrame.astype for cuDF dataframes
