@@ -153,7 +153,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     cudf::test::expect_columns_equal(column->view(), column2->view());
 }
 
-TEST_F(FactoriesTest, CreateScalar)
+TEST_F(StringsFactoriesTest, CreateScalar)
 {
     std::string value = "test string";
     auto s = cudf::make_string_scalar(value);
