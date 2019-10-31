@@ -313,6 +313,7 @@
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
+- PR #3270 Move predicates files to legacy
 
 ## Improvements
 
