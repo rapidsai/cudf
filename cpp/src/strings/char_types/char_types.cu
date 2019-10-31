@@ -28,12 +28,13 @@ namespace cudf
 {
 namespace strings
 {
-
+namespace detail
+{
 //
-std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings,
-                                                     string_character_types types,
-                                                     rmm::mr::device_memory_resource* mr,
-                                                     cudaStream_t stream)
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+                                                      string_character_types types,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                      cudaStream_t stream = 0)
 {
     auto strings_count = strings.size();
     auto execpol = rmm::exec_policy(0);
@@ -77,6 +78,15 @@ std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings
     //
     results->set_null_count(null_count);
     return results;
+}
+
+} // namespace detail
+
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+                                                      string_character_types types,
+                                                      rmm::mr::device_memory_resource* mr)
+{
+    return detail::all_characters_of_type(strings, types, mr);
 }
 
 } // namespace strings

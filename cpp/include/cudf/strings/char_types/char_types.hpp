@@ -39,8 +39,8 @@ enum string_character_types {
 };
 
 /**
- * @brief Returns a boolean column containing identifying strings entry in which all
- * the characters for that string are of the type specified.
+ * @brief Returns a boolean column identifying strings entries in which all
+ * characters are of the type specified.
  *
  * The output row entry will be set to false if the corresponding string element
  * is empty or has at least one character not of the specified type. If all
@@ -51,13 +51,11 @@ enum string_character_types {
  * @param strings Strings instance for this operation.
  * @param types The character types to check in each string.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<cudf::column> is_characters_of_type( strings_column_view strings,
-                                                     string_character_types types,
-                                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                     cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+                                                      string_character_types types,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
