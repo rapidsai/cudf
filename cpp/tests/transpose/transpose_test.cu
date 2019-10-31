@@ -22,8 +22,7 @@
 template <typename T>
 class TransposeTest : public cudf::test::BaseFixture {};
 
-// TODO make fixed width?
-TYPED_TEST_CASE(TransposeTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TransposeTest, NonNull)
 {
@@ -39,6 +38,65 @@ TYPED_TEST(TransposeTest, NonNull)
     cudf::test::fixed_width_column_wrapper<T> out_col3{{3, 7, 11}};
     cudf::test::fixed_width_column_wrapper<T> out_col4{{4, 8, 12}};
     cudf::table_view expected{{out_col1, out_col2, out_col3, out_col4}};
+
+    auto result = transpose(input);
+    auto result_view = result->view();
+    CUDF_EXPECTS(result_view.num_columns() == expected.num_columns(), "Expected same number of columns");
+    for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
+        cudf::test::expect_columns_equal(result_view.column(i), expected.column(i));
+    }
+}
+
+TYPED_TEST(TransposeTest, HasNulls)
+{
+    using T = TypeParam;
+
+    cudf::test::fixed_width_column_wrapper<T> in_col1{{1, 2, 3}, {1, 0, 1}};
+    cudf::test::fixed_width_column_wrapper<T> in_col2{{4, 5, 6}, {0, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<T> in_col3{{7, 8, 9}, {1, 0, 0}};
+    cudf::test::fixed_width_column_wrapper<T> in_col4{{10, 11, 12}, {1, 1, 1}};
+    cudf::table_view input{{in_col1, in_col2, in_col3, in_col4}};
+
+    cudf::test::fixed_width_column_wrapper<T> out_col1{{1, 4, 7, 10}, {1, 0, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<T> out_col2{{2, 5, 8, 11}, {0, 1, 0, 1}};
+    cudf::test::fixed_width_column_wrapper<T> out_col3{{3, 6, 9, 12}, {1, 1, 0, 1}};
+    cudf::table_view expected{{out_col1, out_col2, out_col3}};
+
+    auto result = transpose(input);
+    auto result_view = result->view();
+    CUDF_EXPECTS(result_view.num_columns() == expected.num_columns(), "Expected same number of columns");
+    for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
+        cudf::test::expect_columns_equal(result_view.column(i), expected.column(i));
+    }
+}
+
+TYPED_TEST(TransposeTest, EmptyTable)
+{
+    using T = TypeParam;
+
+    cudf::table_view input{{}};
+
+    cudf::table_view expected{{}};
+
+    auto result = transpose(input);
+    auto result_view = result->view();
+    CUDF_EXPECTS(result_view.num_columns() == expected.num_columns(), "Expected same number of columns");
+    for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
+        cudf::test::expect_columns_equal(result_view.column(i), expected.column(i));
+    }
+}
+
+TYPED_TEST(TransposeTest, EmptyColumns)
+{
+    using T = TypeParam;
+
+    cudf::test::fixed_width_column_wrapper<T> in_col1{};
+    cudf::test::fixed_width_column_wrapper<T> in_col2{};
+    cudf::test::fixed_width_column_wrapper<T> in_col3{};
+    cudf::table_view input{{in_col1, in_col2, in_col3}};
+
+    // Expect to get empty columns of same dimension as input
+    cudf::table_view expected{{in_col1, in_col2, in_col3}};
 
     auto result = transpose(input);
     auto result_view = result->view();
