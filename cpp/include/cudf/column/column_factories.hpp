@@ -60,7 +60,7 @@ std::unique_ptr<column> make_numeric_column(
  *
  * @param[in] type The desired numeric element type
  * @param[in] size The number of elements in the column
- * @param[in] null_mask This may be nullptr if column should have no nulls.
+ * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
  * @param[in] stream Optional stream on which to issue all memory allocation and device
  * kernels
@@ -68,7 +68,8 @@ std::unique_ptr<column> make_numeric_column(
  * allocation of the column's `data` and `null_mask`.
  */
 std::unique_ptr<column> make_numeric_column(
-    data_type type, size_type size, bitmask_type const* null_mask,
+    data_type type, size_type size, 
+    rmm::device_buffer&& null_mask,
     size_type null_count = cudf::UNKNOWN_NULL_COUNT, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -108,7 +109,7 @@ std::unique_ptr<column> make_timestamp_column(
  *
  * @param[in] type The desired timestamp element type
  * @param[in] size The number of elements in the column
- * @param[in] null_mask This may be nullptr if column should have no nulls.
+ * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
  * @param[in] stream Optional stream on which to issue all memory allocation and device
  * kernels
@@ -116,7 +117,8 @@ std::unique_ptr<column> make_timestamp_column(
  * allocation of the column's `data` and `null_mask`.
  */
 std::unique_ptr<column> make_timestamp_column(
-    data_type type, size_type size, bitmask_type const* null_mask,
+    data_type type, size_type size,
+    rmm::device_buffer&& null_mask,
     size_type null_count = cudf::UNKNOWN_NULL_COUNT, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

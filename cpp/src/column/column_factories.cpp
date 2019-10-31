@@ -48,27 +48,20 @@ std::unique_ptr<column> make_numeric_column(
 
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      create_null_mask(size, state, stream, mr), state_null_count(state, size),
-      std::vector<std::unique_ptr<column>>{});
+      create_null_mask(size, state, stream, mr), state_null_count(state, size));
 }
 
 // Create column with existing null mask
 std::unique_ptr<column> make_numeric_column(
     data_type type, size_type size,
-    bitmask_type const* null_mask, size_type null_count,
+    rmm::device_buffer&& null_mask,
+    size_type null_count,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
 
-  // copy null mask
-  rmm::device_buffer copy_null_mask;
-  if( null_mask != nullptr )
-      copy_null_mask = rmm::device_buffer( null_mask,
-                                           bitmask_allocation_size_bytes(size),
-                                           stream, mr);
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      copy_null_mask, null_count,
-      std::vector<std::unique_ptr<column>>{});
+      null_mask, null_count);
 }
 
 // Allocate storage for a specified number of timestamp elements
@@ -86,20 +79,14 @@ std::unique_ptr<column> make_timestamp_column(
 // Create column with existing null mask
 std::unique_ptr<column> make_timestamp_column(
     data_type type, size_type size,
-    bitmask_type const* null_mask, size_type null_count,
+    rmm::device_buffer&& null_mask,
+    size_type null_count,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
 
-  // copy null mask
-  rmm::device_buffer copy_null_mask;
-  if( null_mask != nullptr )
-      copy_null_mask = rmm::device_buffer( null_mask,
-                                           bitmask_allocation_size_bytes(size),
-                                           stream, mr);
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      copy_null_mask, null_count,
-      std::vector<std::unique_ptr<column>>{});
+      null_mask, null_count);
 }
 
 }  // namespace cudf
