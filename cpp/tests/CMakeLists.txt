@@ -243,11 +243,11 @@ ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 ###################################################################################################
 # - reduction tests ---------------------------------------------------------------------------------
 
-set(REDUCTION_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+set(LEGACY_REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/scan_tests.cu")
 
-ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
+ConfigureTest(LEGACY_REDUCTION_TEST "${LEGACY_REDUCTION_TEST_SRC}")
 
 ###################################################################################################
 # - legacy replace tests ---------------------------------------------------------------------------------
@@ -271,15 +271,15 @@ set(LEGACY_UNARY_TEST_SRC
 ConfigureTest(LEGACY_UNARY_TEST "${LEGACY_UNARY_TEST_SRC}")
 
 ###################################################################################################
-# - binary tests ----------------------------------------------------------------------------------
+# - legacy binary tests ----------------------------------------------------------------------------------
 
-set(BINARY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/binop-verify-input-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-operands-null-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-generic-ptx-test.cu")
+set(LEGACY_BINARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/integration/binary-operation-operands-null-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/integration/binary-operation-integration-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/integration/binary-operation-generic-ptx-test.cu")
 
-ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+ConfigureTest(LEGACY_BINARY_TEST "${LEGACY_BINARY_TEST_SRC}")
 
 ###################################################################################################
 # - legacy unary transform tests -------------------------------------------------------------------------
@@ -290,19 +290,19 @@ set(LEGACY_TRANSFORM_TEST_SRC
 ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
-# - jit cache tests -------------------------------------------------------------------------------
+# - legacy jit cache tests -------------------------------------------------------------------------------
 
-set(JITCACHE_TEST_SRC 
+set(LEGACY_JITCACHE_TEST_SRC 
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-test.cu")
 
-ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
+ConfigureTest(LEGACY_JITCACHE_TEST "${LEGACY_JITCACHE_TEST_SRC}")
 
-set(JITCACHE_MULTI_TEST_SRC 
+set(LEGACY_JITCACHE_MULTI_TEST_SRC 
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-multiprocess-test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-multiprocess-test.cpp")
 
-ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
+ConfigureTest(LEGACY_JITCACHE_MULTIPROC_TEST "${LEGACY_JITCACHE_MULTI_TEST_SRC}")
 
 ###################################################################################################
 # - io tests -------------------------------------------------------------------------------------
@@ -483,14 +483,14 @@ set(LEGACY_MERGE_TEST_SRC
 ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 
 ###################################################################################################
-# - stream compaction tests -----------------------------------------------------------------------
+# - legacy stream compaction tests -----------------------------------------------------------------------
 
-set(STREAM_COMPACTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
+set(LEGACY_STREAM_COMPACTION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy/apply_boolean_mask_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy/drop_nulls_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy/drop_duplicates_tests.cu")
 
-ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
+ConfigureTest(LEGACY_STREAM_COMPACTION_TEST "${LEGACY_STREAM_COMPACTION_TEST_SRC}")
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
