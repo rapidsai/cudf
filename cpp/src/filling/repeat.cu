@@ -59,7 +59,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                "count column should be of index type");
   CUDF_EXPECTS(input_table.num_rows() == count.size(),
                "in and count must have equal size");
-  CUDF_EXPECTS(count.has_nulls(), "count cannot contain nulls");
+  CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
 
   if (input_table.num_rows() == 0) {
     return cudf::experimental::empty_like(input_table);
@@ -89,7 +89,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 #if 1  // TODO: placeholder till the scatter/gather PR is merged
   return cudf::experimental::empty_like(input_table);
 #else
-  return detail::gather(input_table, *p_indices, false, stream, mr);
+  return gather(input_table, *p_indices, false, stream, mr);
 #endif
 }
 
@@ -127,7 +127,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 #if 1  // TODO: placeholder till the scatter/gather PR is merged
   return cudf::experimental::empty_like(input_table);
 #else
-  return detail::gather(input_table, indices, false, stream, mr);
+  return gather(input_table, indices, false, stream, mr);
 #endif
 }
 
