@@ -71,7 +71,7 @@ struct dispatch_lengths_fn
     template<typename IntegerType, typename UnaryFunction, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
     std::unique_ptr<cudf::column> operator()( const cudf::strings_column_view& strings, UnaryFunction& ufn,
                                               rmm::mr::device_memory_resource* mr,
-                                              cudaStream_t stream )
+                                              cudaStream_t stream = 0 )
     {
         auto strings_count = strings.size();
         auto execpol = rmm::exec_policy(stream);
@@ -100,7 +100,7 @@ struct dispatch_lengths_fn
     }
 
     template<typename IntegerType, typename UnaryFunction, std::enable_if_t<not std::is_integral<IntegerType>::value>* = nullptr>
-    std::unique_ptr<cudf::column> operator()( const cudf::strings_column_view&, UnaryFunction&, rmm::mr::device_memory_resource*, cudaStream_t )
+    std::unique_ptr<cudf::column> operator()( const cudf::strings_column_view&, UnaryFunction&, rmm::mr::device_memory_resource*, cudaStream_t stream = 0 )
     {
         CUDF_FAIL("Output type must be integral type.");
     }
@@ -112,13 +112,13 @@ namespace cudf
 {
 namespace strings
 {
-
-// APIs
+namespace detail
+{
 
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
-                                                 data_type output_type,
-                                                 rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream)
+                                                 data_type output_type = data_type{INT32},
+                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                 cudaStream_t stream = 0)
 {
     auto ufn = [] __device__ (const cudf::string_view& d_str) { return d_str.length(); };
     return cudf::experimental::type_dispatcher( output_type, dispatch_lengths_fn{},
@@ -126,14 +126,16 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
 }
 
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
-                                            data_type output_type,
-                                            rmm::mr::device_memory_resource* mr,
-                                            cudaStream_t stream )
+                                            data_type output_type = data_type{INT32},
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                            cudaStream_t stream = 0)
 {
     auto ufn = [] __device__ (const cudf::string_view& d_str) { return d_str.size_bytes(); };
     return cudf::experimental::type_dispatcher( output_type, dispatch_lengths_fn{},
                                                 strings, ufn, mr, stream );
 }
+
+} // namespace detail
 
 
 namespace
@@ -165,10 +167,12 @@ struct code_points_fn
 
 } // namespace
 
+namespace detail
+{
 //
 std::unique_ptr<cudf::column> code_points( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream )
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                           cudaStream_t stream = 0)
 {
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
@@ -205,6 +209,29 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
     //
     results->set_null_count(0);
     return results;
+}
+
+} // namespace detail
+
+// APIS
+std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
+                                                 data_type output_type,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+    return detail::characters_counts(strings, output_type, mr);
+}
+
+std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
+                                            data_type output_type,
+                                            rmm::mr::device_memory_resource* mr)
+{
+    return detail::bytes_counts( strings, output_type, mr );
+}
+
+std::unique_ptr<cudf::column> code_points( strings_column_view strings,
+                                           rmm::mr::device_memory_resource* mr )
+{
+    return detail::code_points(strings,mr);
 }
 
 } // namespace strings
