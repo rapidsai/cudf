@@ -153,11 +153,12 @@ std::unique_ptr<cudf::column> convert_case( strings_column_view strings,
 
 } // namespace
 
-// APIS
-//
+namespace detail
+{
+
 std::unique_ptr<cudf::column> to_lower( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream )
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                        cudaStream_t stream = 0)
 {
     detail::character_flags_table_type case_flag = IS_UPPER(0xFF); // convert only uppercase characters
     return convert_case(strings,case_flag,mr,stream);
@@ -165,8 +166,8 @@ std::unique_ptr<cudf::column> to_lower( strings_column_view strings,
 
 //
 std::unique_ptr<cudf::column> to_upper( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream )
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                        cudaStream_t stream = 0)
 {
     detail::character_flags_table_type case_flag = IS_LOWER(0xFF); // convert only lowercase characters
     return convert_case(strings,case_flag,mr,stream);
@@ -174,12 +175,34 @@ std::unique_ptr<cudf::column> to_upper( strings_column_view strings,
 
 //
 std::unique_ptr<cudf::column> swapcase( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream )
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                        cudaStream_t stream = 0)
 {
     // convert only upper or lower case characters
     detail::character_flags_table_type case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);
     return convert_case(strings,case_flag,mr,stream);
+}
+
+} // namespace detail
+
+// APIs
+
+std::unique_ptr<cudf::column> to_lower( strings_column_view strings,
+                                        rmm::mr::device_memory_resource* mr )
+{
+    return detail::to_lower( strings, mr );
+}
+
+std::unique_ptr<cudf::column> to_upper( strings_column_view strings,
+                                        rmm::mr::device_memory_resource* mr )
+{
+    return detail::to_upper( strings, mr);
+}
+
+std::unique_ptr<cudf::column> swapcase( strings_column_view strings,
+                                        rmm::mr::device_memory_resource* mr )
+{
+    return detail::swapcase( strings, mr);
 }
 
 } // namespace strings

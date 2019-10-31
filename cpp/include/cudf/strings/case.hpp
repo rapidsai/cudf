@@ -24,10 +24,9 @@ namespace strings
 {
 
 /**
- * @brief Returns a column of strings converting the strings in the provided
- * column to lowercase characters.
+ * @brief Converts a column of strings to lower case.
  *
- * Only uppercase characters are converted. All other characters are copied.
+ * Only upper case alphabetical characters are converted. All other characters are copied.
  * Case conversion may result in strings that are longer or shorter than the
  * original string in bytes.
  *
@@ -35,18 +34,15 @@ namespace strings
  *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<cudf::column> to_lower( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                        cudaStream_t stream = 0);
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns a column of strings converting the strings in the provided
- * column to uppercase characters.
+ * @brief Converts a column of strings to upper case.
  *
- * Only lowercase characters are converted. All other characters are copied.
+ * Only lower case alphabetical characters are converted. All other characters are copied.
  * Case conversion may result in strings that are longer or shorter than the
  * original string in bytes.
  *
@@ -54,19 +50,16 @@ std::unique_ptr<cudf::column> to_lower( strings_column_view strings,
  *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<cudf::column> to_upper( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                        cudaStream_t stream = 0);
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns a column of strings converting the strings in the provided
- * column to uppercase characters if they are lowercase and lowercase if they
- * are uppercase.
+ * @brief Returns a column of strings converting lower case characters to
+ * upper case and vice versa.
  *
- * Only upper or lower case characters are converted. All other characters are copied.
+ * Only upper or lower case alphabetical characters are converted. All other characters are copied.
  * Case conversion may result in strings that are longer or shorter than the
  * original string in bytes.
  *
@@ -74,12 +67,10 @@ std::unique_ptr<cudf::column> to_upper( strings_column_view strings,
  *
  * @param strings Strings instance for this operation.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<cudf::column> swapcase( strings_column_view strings,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                        cudaStream_t stream = 0);
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
