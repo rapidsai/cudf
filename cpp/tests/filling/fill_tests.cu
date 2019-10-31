@@ -44,17 +44,17 @@ public:
            cudf::size_type end,
            T value,
            bool value_is_valid = true,
-           BitInitializerType source_validity = all_valid) {
+           BitInitializerType destination_validity = all_valid) {
     static_assert(cudf::is_fixed_width<T>() == true,
                   "this code assumes fixed-width types.");
 
     auto size = cudf::size_type{FillTypedTestFixture<T>::column_size};
 
-    auto source = cudf::test::fixed_width_column_wrapper<T>(
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(0) + size,
-                    cudf::test::make_counting_transform_iterator(
-                      0, source_validity));
+    auto destination = cudf::test::fixed_width_column_wrapper<T>(
+                         thrust::make_counting_iterator(0),
+                         thrust::make_counting_iterator(0) + size,
+                         cudf::test::make_counting_transform_iterator(
+                           0, destination_validity));
 
     scalar_wrapper<T> val(value, value_is_valid);
 
@@ -64,23 +64,24 @@ public:
         [begin, end, value](auto i) {
           return (i >= begin && i < end) ? value : static_cast<T>(i);
         });
-    auto expected = cudf::test::fixed_width_column_wrapper<T>(
-                      expected_elements, expected_elements + size,
-                      cudf::test::make_counting_transform_iterator(
-                        0,
-                        [begin, end, value_is_valid, source_validity](auto i) {
-                          return (i >= begin && i < end) ?
-                            value_is_valid : source_validity(i);
-                        }));
+    auto expected =
+      cudf::test::fixed_width_column_wrapper<T>(
+        expected_elements, expected_elements + size,
+        cudf::test::make_counting_transform_iterator(
+        0,
+        [begin, end, value_is_valid, destination_validity](auto i) {
+          return (i >= begin && i < end) ?
+            value_is_valid : destination_validity(i);
+        }));
 
     // test out-of-place version first
 
-    auto ret = cudf::experimental::fill(source, begin, end, *val.get());
+    auto ret = cudf::experimental::fill(destination, begin, end, *val.get());
     cudf::test::expect_columns_equal(*ret, expected);
 
     // test in-place version second
 
-    auto mutable_view = cudf::mutable_column_view{source};
+    auto mutable_view = cudf::mutable_column_view{destination};
     EXPECT_NO_THROW(cudf::experimental::fill(mutable_view, begin, end,
                                              *val.get()));
     cudf::test::expect_columns_equal(mutable_view, expected);
