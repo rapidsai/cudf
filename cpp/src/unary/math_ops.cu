@@ -221,7 +221,7 @@ public:
 } // namespace detail
 
 std::unique_ptr<cudf::column> 
-unary_operation(cudf::column_view input, 
+unary_operation(cudf::column_view const& input, 
                 cudf::unary_op op, 
                 cudaStream_t stream = 0, 
                 rmm::mr::device_memory_resource* mr = 
