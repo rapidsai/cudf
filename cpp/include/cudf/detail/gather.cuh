@@ -51,9 +51,9 @@ struct bounds_checker {
 
 
 
-template <bool ignore_out_of_bounds, typename map_iterator_type>
+template <bool ignore_out_of_bounds, typename MapIterator>
 __global__ void gather_bitmask_kernel(table_device_view source_table,
-                                      map_iterator_type gather_map,
+                                      MapIterator gather_map,
                                       mutable_table_device_view destination_table,
                                       size_type* valid_counts) {
 
