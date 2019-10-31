@@ -71,6 +71,7 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3266 Remove optional checks for CuPy
 
 ## Bug Fixes
 
