@@ -249,6 +249,7 @@ def _is_nep18_active():
     except ValueError:
         return False
 
+
 def _set_rmm_config(
     use_managed_memory=False,
     use_pool_allocator=False,
