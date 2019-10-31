@@ -87,7 +87,8 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * [@p out_begin, @p out_ned) with the elements from @p input indicated by the
  * indices [@p in_begin, @p in_begin + N) (where N =
  * (@p out_end - @p out_begin)). Use the out-of-place copy function returning
- * std::unique_ptr<column> for uses cases requiring memory reallocation.
+ * std::unique_ptr<column> for uses cases requiring memory reallocation. For 
+ * example for strings columns and other variable-width types.
  *
  * If @p input and @p output refer to the same elements and the ranges overlap,
  * the behavior is undefined.
