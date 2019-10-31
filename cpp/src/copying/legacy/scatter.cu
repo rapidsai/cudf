@@ -31,7 +31,7 @@
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
-#include <reductions/reduction_functions.cuh>
+#include <reductions/legacy/reduction_functions.cuh>
 #include <stream_compaction/legacy/copy_if.cuh>
 
 
