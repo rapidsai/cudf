@@ -299,6 +299,14 @@ set(LEGACY_TRANSFORM_TEST_SRC
 ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
+# - unary transform tests -------------------------------------------------------------------------
+
+set(TRANSFORM_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-operation-integration-test.cu")
+
+ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
+
+###################################################################################################
 # - legacy jit cache tests -------------------------------------------------------------------------------
 
 set(LEGACY_JITCACHE_TEST_SRC 
@@ -416,6 +424,7 @@ set(LEGACY_NVSTRING_SCATTER_TEST_SRC
 
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
