@@ -29,7 +29,7 @@ struct managed_allocator {
       
       template <class U> constexpr managed_allocator(const managed_allocator<U>&) noexcept {}
       
-      T* allocate(std::size_t n) const {
+      T* allocate(std::size_t n, cudaStream_t stream = 0) const {
           T* ptr = 0;
           cudaError_t result = cudaMallocManaged( &ptr, n*sizeof(T) );
           if( cudaSuccess != result || nullptr == ptr )
@@ -42,7 +42,7 @@ struct managed_allocator {
           } 
           return ptr;
       }
-      void deallocate(T* p, std::size_t) const {
+      void deallocate(T* p, std::size_t, cudaStream_t stream = 0) const {
         cudaFree(p);
       }
 };

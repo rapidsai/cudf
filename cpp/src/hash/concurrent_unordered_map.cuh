@@ -118,7 +118,6 @@ class concurrent_unordered_map {
    *`unused_key` results in undefined behavior.
    *
    * @param capacity The maximum number of pairs the map may hold
-   * @param stream CUDA stream to use for device opertions
    * @param unused_element The sentinel value to use for an empty value
    * @param unused_key The sentinel value to use for an empty key
    * @param hash_function The hash function to use for hashing keys
@@ -126,14 +125,16 @@ class concurrent_unordered_map {
    * equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
+   * @param stream CUDA stream to use for device opertions.
    *---------------------------------------------------------------------------**/
   static auto create(
-      size_type capacity, cudaStream_t stream = 0, 
+      size_type capacity, 
       const mapped_type unused_element = std::numeric_limits<key_type>::max(),
       const key_type unused_key = std::numeric_limits<key_type>::max(),
       const Hasher& hash_function = hasher(),
       const Equality& equal = key_equal(),
-      const allocator_type& allocator = allocator_type()) {
+      const allocator_type& allocator = allocator_type(), 
+      cudaStream_t stream = 0) {
     using Self =
         concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 

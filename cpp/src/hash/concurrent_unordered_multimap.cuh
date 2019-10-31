@@ -78,19 +78,19 @@ class concurrent_unordered_multimap {
    *`unused_key` results in undefined behavior.
    *
    * @param capacity The maximum number of pairs the map may hold.
-   * @param stream CUDA stream to use for device opertions
    * @param init Indicates if the map should be initialized with the unused
    * key/values
    * @param hash_function The hash function to use for hashing keys
    * @param equal The equality comparison function for comparing if two keys are
    * equal
-   * @param allocator The allocator to use for allocation of the map's storage.
+   * @param allocator The allocator to use for allocation of the map's storage
+   * @param stream CUDA stream to use for device opertions.
    *---------------------------------------------------------------------------**/
-  static auto create(size_type capacity, cudaStream_t stream = 0, 
-                     const bool init = true,
+  static auto create(size_type capacity, const bool init = true,
                      const Hasher& hash_function = hasher(),
                      const Equality& equal = key_equal(),
-                     const allocator_type& allocator = allocator_type()) {
+                     const allocator_type& allocator = allocator_type(),
+                     cudaStream_t stream = 0) {
     using Self =
         concurrent_unordered_multimap<Key, Element, size_type, unused_key,
                                       unused_element, Hasher, Equality,
