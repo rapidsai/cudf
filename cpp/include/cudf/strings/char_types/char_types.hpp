@@ -28,14 +28,14 @@ namespace strings
  * These types can be or'd to check for any combination of types.
  */
 enum string_character_types {
-    DECIMAL  =  1,
-    NUMERIC  =  2,
-    DIGIT    =  4,
-    ALPHA    =  8,
-    ALPHANUM = 15,
-    SPACE    = 16,
-    UPPER    = 32,
-    LOWER    = 64
+    DECIMAL  = 1 << 0,                            // binary 00000001
+    NUMERIC  = 1 << 1,                            // binary 00000010
+    DIGIT    = 1 << 2,                            // binary 00000100
+    ALPHA    = 1 << 3,                            // binary 00001000
+    SPACE    = 1 << 4,                            // binary 00010000
+    UPPER    = 1 << 5,                            // binary 00100000
+    LOWER    = 1 << 6,                            // binary 01000000
+    ALPHANUM = DECIMAL | NUMERIC | DIGIT | ALPHA  // binary 00001111
 };
 
 /**
@@ -53,7 +53,7 @@ enum string_character_types {
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const& strings,
                                                       string_character_types types,
                                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

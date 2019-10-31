@@ -31,13 +31,12 @@ namespace strings
 namespace detail
 {
 //
-std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const& strings,
                                                       string_character_types types,
                                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                                       cudaStream_t stream = 0)
 {
     auto strings_count = strings.size();
-    auto execpol = rmm::exec_policy(0);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
@@ -59,11 +58,13 @@ std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view string
     //
     auto d_flags = detail::get_character_flags_table();
     // set the output values by checking the character types
-    thrust::for_each_n(execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0), strings_count,
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(strings_count),
+        d_results,
         [d_column, d_flags, types, d_results] __device__(size_type idx){
             if( d_column.is_null(idx) )
-                return;
+                return static_cast<int8_t>(0);
             auto d_str = d_column.element<string_view>(idx);
             bool check = !d_str.empty(); // positive result requires at least one character
             for( auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr )
@@ -73,7 +74,7 @@ std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view string
                 auto flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
                 check = (types & flag) > 0;
             }
-            d_results[idx] = static_cast<int8_t>(check);
+            return static_cast<int8_t>(check);
         });
     //
     results->set_null_count(null_count);
@@ -82,7 +83,7 @@ std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view string
 
 } // namespace detail
 
-std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view strings,
+std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const& strings,
                                                       string_character_types types,
                                                       rmm::mr::device_memory_resource* mr)
 {
