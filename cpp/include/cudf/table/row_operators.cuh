@@ -80,11 +80,11 @@ template <typename Element,
             std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
 
-    if(std::isnan(lhs) and std::isnan(rhs)) {
+    if(isnan(lhs) and isnan(rhs)) {
         return weak_ordering::EQUIVALENT;
-    } else if(std::isnan(rhs)) {
+    } else if(isnan(rhs)) {
         return weak_ordering::LESS;
-    } else if(std::isnan(lhs)) {
+    } else if(isnan(lhs)) {
         return weak_ordering::GREATER;
     }
 
@@ -117,7 +117,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
 template <typename Element,
             std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element lhs, Element rhs) {
-    if (std::isnan(lhs) and std::isnan(rhs)) {
+    if (isnan(lhs) and isnan(rhs)) {
         return true;
     }
     return lhs == rhs;
