@@ -60,9 +60,9 @@ struct legacy_allocator {
 
       template <class U> constexpr legacy_allocator(const legacy_allocator<U>&) noexcept {}
 
-      T* allocate(std::size_t n) const {
+      T* allocate(std::size_t n, cudaStream_t stream = 0) const {
           T* ptr = 0;
-          rmmError_t result = RMM_ALLOC( (void**)&ptr, n*sizeof(T), 0 ); // TODO non-default stream?
+          rmmError_t result = RMM_ALLOC( (void**)&ptr, n*sizeof(T), stream ); 
           if( RMM_SUCCESS != result || nullptr == ptr ) 
           {
             std::cerr << "ERROR: RMM call in line " << __LINE__ << "of file " 
@@ -74,8 +74,8 @@ struct legacy_allocator {
 
           return ptr;
       }
-      void deallocate(T* p, std::size_t) const {
-          rmmError_t result = RMM_FREE(p, 0); // TODO: non-default stream
+      void deallocate(T* p, std::size_t, cudaStream_t stream = 0) const {
+          rmmError_t result = RMM_FREE(p, stream);
           if ( RMM_SUCCESS != result) throw std::runtime_error("legacy_allocator: RMM Memory Manager Error");
       }
 };

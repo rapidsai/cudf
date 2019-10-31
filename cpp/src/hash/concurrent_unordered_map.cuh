@@ -118,6 +118,7 @@ class concurrent_unordered_map {
    *`unused_key` results in undefined behavior.
    *
    * @param capacity The maximum number of pairs the map may hold
+   * @param stream CUDA stream to use for device opertions
    * @param unused_element The sentinel value to use for an empty value
    * @param unused_key The sentinel value to use for an empty key
    * @param hash_function The hash function to use for hashing keys
@@ -127,7 +128,7 @@ class concurrent_unordered_map {
    * storage
    *---------------------------------------------------------------------------**/
   static auto create(
-      size_type capacity,
+      size_type capacity, cudaStream_t stream = 0, 
       const mapped_type unused_element = std::numeric_limits<key_type>::max(),
       const key_type unused_key = std::numeric_limits<key_type>::max(),
       const Hasher& hash_function = hasher(),
@@ -136,11 +137,11 @@ class concurrent_unordered_map {
     using Self =
         concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
-    auto deleter = [](Self* p) { p->destroy(); };
+    auto deleter = [stream](Self* p) { p->destroy(stream); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
         new Self(capacity, unused_element, unused_key, hash_function, equal,
-                 allocator),
+                 allocator, stream),
         deleter};
   }
 
@@ -316,11 +317,11 @@ class concurrent_unordered_map {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
     } else {
-      m_allocator.deallocate(m_hashtbl_values, m_capacity);
+      m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
       m_capacity = other.m_capacity;
       m_capacity = other.m_capacity;
 
-      m_hashtbl_values = m_allocator.allocate(m_capacity);
+      m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     }
     CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values, other.m_hashtbl_values,
                              m_capacity * sizeof(value_type), cudaMemcpyDefault,
@@ -361,9 +362,11 @@ class concurrent_unordered_map {
    *
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
+   *
+   * @param stream CUDA stream to use for device opertions.
    *---------------------------------------------------------------------------**/
-  void destroy() {
-    m_allocator.deallocate(m_hashtbl_values, m_capacity);
+  void destroy(cudaStream_t stream = 0) {
+    m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
     delete this;
   }
 
@@ -395,18 +398,20 @@ class concurrent_unordered_map {
    *are equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
+   * @param stream CUDA stream to use for device opertions. 
    *---------------------------------------------------------------------------**/
   concurrent_unordered_map(size_type capacity, const mapped_type unused_element,
                            const key_type unused_key,
                            const Hasher& hash_function, const Equality& equal,
-                           const allocator_type& allocator)
+                           const allocator_type& allocator, 
+                           cudaStream_t stream = 0)
       : m_hf(hash_function),
         m_equal(equal),
         m_allocator(allocator),
         m_capacity(capacity),
         m_unused_element(unused_element),
         m_unused_key(unused_key) {
-    m_hashtbl_values = m_allocator.allocate(m_capacity);
+    m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     constexpr int block_size = 128;
     {
       cudaPointerAttributes hashtbl_values_ptr_attributes;
@@ -418,14 +423,14 @@ class concurrent_unordered_map {
         int dev_id = 0;
         CUDA_RT_CALL(cudaGetDevice(&dev_id));
         CUDA_RT_CALL(cudaMemPrefetchAsync(
-            m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, 0));
+            m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
       }
     }
 
-    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size>>>(
+    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream>>>(
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
     CUDA_RT_CALL(cudaGetLastError());
-    CUDA_RT_CALL(cudaStreamSynchronize(0));
+    CUDA_RT_CALL(cudaStreamSynchronize(stream));
   }
 };
 
