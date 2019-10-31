@@ -112,6 +112,10 @@ class table {
    *---------------------------------------------------------------------------**/
   table_view select(std::vector<cudf::size_type> const& column_indices) const;
 
+  column& get_column(cudf::size_type i) { return *(_columns.at(i)); }
+
+  column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
+
  private:
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};

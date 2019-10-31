@@ -7,6 +7,7 @@
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/table_utilities.hpp>
 
 
 template <typename T>
@@ -22,8 +23,7 @@ TYPED_TEST(GatherTest, IdentityTest) {
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{data, data+source_size};
 
-  std::vector<cudf::column_view> source_columns{source_column};
-  cudf::table_view source_table {source_columns};
+  cudf::table_view source_table ({source_column});
 
   std::unique_ptr<cudf::experimental::table> result =
     std::move(cudf::experimental::gather(
@@ -34,6 +34,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
   }
+
+  cudf::test::expect_tables_equal(source_table, result->view());
 }
 
 
@@ -49,8 +51,7 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
     reversed_data,
     reversed_data+source_size};
 
-  std::vector<cudf::column_view> source_columns{source_column};
-  cudf::table_view source_table {source_columns};
+  cudf::table_view source_table ({source_column});
 
   std::unique_ptr<cudf::experimental::table> result =
     std::move(cudf::experimental::gather(
@@ -84,8 +85,7 @@ TYPED_TEST(GatherTest, EveryOtherNullOdds) {
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
     map_data, map_data + (source_size/2)};
 
-  std::vector<cudf::column_view> source_columns{source_column};
-  cudf::table_view source_table {source_columns};
+  cudf::table_view source_table ({source_column});
 
   std::unique_ptr<cudf::experimental::table> result =
     std::move(cudf::experimental::gather(
@@ -122,8 +122,7 @@ TYPED_TEST(GatherTest, EveryOtherNullEvens) {
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
     map_data, map_data + (source_size/2)};
 
-  std::vector<cudf::column_view> source_columns{source_column};
-  cudf::table_view source_table {source_columns};
+  cudf::table_view source_table ({source_column});
 
   std::unique_ptr<cudf::experimental::table> result =
     std::move(cudf::experimental::gather(
@@ -161,8 +160,7 @@ TYPED_TEST(GatherTest, AllNull) {
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{map_data.begin(),
       map_data.end()};
 
-  std::vector<cudf::column_view> source_columns{source_column};
-  cudf::table_view source_table {source_columns};
+  cudf::table_view source_table ({source_column});
 
   std::unique_ptr<cudf::experimental::table> result =
     std::move(cudf::experimental::gather(
@@ -171,9 +169,7 @@ TYPED_TEST(GatherTest, AllNull) {
 					 ));
 
   // Check that the result is also all invalid
-  for (auto i=0; i<source_table.num_columns(); ++i) {
-    cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
-  }
+  cudf::test::expect_tables_equal(source_table, result->view());
 }
 
 
