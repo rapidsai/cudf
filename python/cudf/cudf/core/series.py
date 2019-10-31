@@ -155,10 +155,14 @@ class Series(object):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
-        return cupy.asarray(
-            # Temporary fix for CuPy < 7.0, numba = 0.46
-            numbautils.PatchedNumbaDeviceArray(self.to_gpu_array())
+        vals = (
+            self.fillna(False).data.mem
+            if self.null_count != 0
+            else self.data.mem
         )
+        # numbautils.PatchedNumbaDeviceArray() is a
+        # temporary fix for CuPy < 7.0, numba = 0.46
+        return cupy.asarray(numbautils.PatchedNumbaDeviceArray(vals))
 
     @property
     def values_host(self):
@@ -1419,7 +1423,9 @@ class Series(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+        return cudautils.compact_mask_bytes(self.data.mem)
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
