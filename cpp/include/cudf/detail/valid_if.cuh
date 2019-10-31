@@ -18,39 +18,17 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/cuda.cuh>
 
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
 namespace detail {
-constexpr size_type warp_size{32};
-
-template <std::size_t block_size, std::size_t lane = 0, typename T>
-__device__ T single_lane_block_sum_reduce(T warp_sum) {
-  static_assert(block_size <= 1024, "Invalid block size.");
-  constexpr auto warps_per_block{block_size / warp_size};
-  auto const lane_id{threadIdx.x % warp_size};
-  auto const warp_id{threadIdx.x / warp_size};
-  __shared__ T warp_sums[warp_size];
-
-  if (lane_id == lane) {
-    warp_sums[warp_id] = (warp_id < warps_per_block) ? warp_sum : 0;
-  }
-
-  __syncthreads();
-
-  T result{0};
-  if (warp_id == 0) {
-    __shared__ typename cub::WarpReduce<T>::TempStorage temp;
-    result = cub::WarpReduce<T>(temp).sum(warp_sums[lane_id]);
-  }
-
-  return result;
-}
 
 template <size_type block_size, typename InputIterator, typename Predicate>
 valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
                 Predicate p, size_type* valid_count) {
+  constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};
   auto const tid = threadIdx.x + blockIdx.x * gridDim.x;
@@ -60,7 +38,7 @@ valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
   auto active_mask = __ballot_sync(0xFFFF'FFFF, i < end);
   while (i < end) {
     bitmask_type ballot = __ballot_sync(active_mask, p(*i));
-    if (lane_id == 0) {
+    if (lane_id == leader_lane) {
       auto bit_index = thrust::distance(begin, i);
       output[cudf::detail::word_index(bit_index)] = ballot;
       warp_valid_count += __popc(ballot);
@@ -69,9 +47,10 @@ valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
     active_mask = __ballot_sync(active_mask, i < end);
   }
 
-  if (warp_id == 0) {
-    atomicAdd(valid_count,
-              single_lane_block_sum_reduce<block_size>(warp_valid_count));
+  auto block_count =
+      single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
+  if (threadIdx.x == 0) {
+    atomicAdd(valid_count, block_count);
   }
 }  // namespace detail
 
@@ -86,7 +65,8 @@ valid_if_kernel(bitmask_type* output, InputIterator begin, InputIterator end,
  * @param p The predicate
  * @param stream Stream on which to execute all GPU activity and device memory
  * allocations.
- * @return A `device_buffer` containing the new bitmask and it's null count
+ * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * null count
  */
 template <typename InputIterator, typename Predicate>
 std::pair<rmm::device_buffer, size_type> valid_if(
@@ -99,6 +79,8 @@ std::pair<rmm::device_buffer, size_type> valid_if(
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
+
+  return std::make_pair(null_mask, valid_count.value(stream));
 }
 }  // namespace detail
    // namespace cudf
