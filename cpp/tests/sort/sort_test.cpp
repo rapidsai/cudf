@@ -44,8 +44,10 @@ TYPED_TEST(SortedOrder, WithNullMax)
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{1, 0, 5, 3, 4, 2}};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
+    std::vector<cudf::null_order> null_precedence {cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER};
 
-    auto got = cudf::experimental::sorted_order(input, column_order, cudf::null_order::AFTER);
+
+    auto got = cudf::experimental::sorted_order(input, column_order, null_precedence);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -62,7 +64,25 @@ TYPED_TEST(SortedOrder, WithNullMin)
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
 
-    auto got = cudf::experimental::sorted_order(input, column_order, cudf::null_order::BEFORE);
+    auto got = cudf::experimental::sorted_order(input, column_order);
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(SortedOrder, WithMixedNullOrder)
+{
+    using T = TypeParam;
+
+    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8},    {0, 0, 1, 1, 0}};
+    cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {0, 1, 0, 0, 1});
+    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 0, 1, 0, 1}};
+    cudf::table_view input {{col1, col2, col3}};
+
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 3, 0, 1, 4}};
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence {cudf::null_order::AFTER, cudf::null_order::BEFORE, cudf::null_order::AFTER};
+
+    auto got = cudf::experimental::sorted_order(input, column_order, null_precedence);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -79,12 +99,12 @@ TYPED_TEST(SortedOrder, WithAllValid)
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
 
-    auto got = cudf::experimental::sorted_order(input, column_order, cudf::null_order::AFTER);
+    auto got = cudf::experimental::sorted_order(input, column_order);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(SortedOrder, MisMatchInColumnOrder)
+TYPED_TEST(SortedOrder, MisMatchInColumnOrderSize)
 {
     using T = TypeParam;
 
@@ -95,7 +115,22 @@ TYPED_TEST(SortedOrder, MisMatchInColumnOrder)
 
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING};
 
-    EXPECT_THROW(cudf::experimental::sorted_order(input, column_order, cudf::null_order::AFTER), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::sorted_order(input, column_order), cudf::logic_error);
+}
+
+TYPED_TEST(SortedOrder, MisMatchInNullPrecedenceSize)
+{
+    using T = TypeParam;
+
+    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
+    cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
+    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
+    cudf::table_view input {{col1, col2, col3}};
+
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING, cudf::order::DESCENDING};
+    std::vector<cudf::null_order>  null_precedence {cudf::null_order::AFTER, cudf::null_order::BEFORE};
+
+    EXPECT_THROW(cudf::experimental::sorted_order(input, column_order, null_precedence), cudf::logic_error);
 }
 
 TYPED_TEST(SortedOrder, ZeroSizedColumns)
@@ -108,7 +143,7 @@ TYPED_TEST(SortedOrder, ZeroSizedColumns)
     cudf::test::fixed_width_column_wrapper<int32_t> expected{};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
 
-    auto got = cudf::experimental::sorted_order(input, column_order, cudf::null_order::AFTER);
+    auto got = cudf::experimental::sorted_order(input, column_order);
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
