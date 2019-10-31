@@ -32,6 +32,20 @@ public class ColumnVectorTest extends CudfTestBase {
   public static final double DELTA = 0.0001;
 
   @Test
+  void testDataMovement() {
+    try (ColumnVector vec = ColumnVector.fromBoxedInts(1, 2, 3, 4, null, 6)) {
+      assert vec.hasDeviceData();
+      assert vec.hasHostData();
+      vec.dropHostData();
+      assert !vec.hasHostData();
+      assert vec.hasDeviceData();
+      vec.dropDeviceData();
+      assert vec.hasHostData();
+      assert !vec.hasDeviceData();
+    }
+  }
+
+  @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
     long expectedLeakCount = MemoryCleaner.leakCount.get() + 1;
