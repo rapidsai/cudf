@@ -29,6 +29,7 @@ import java.util.PriorityQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * This provides a pool of pinned memory similar to what RMM does for device memory.
@@ -153,7 +154,11 @@ public final class PinnedMemoryPool implements AutoCloseable {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
-    ExecutorService initService = Executors.newSingleThreadExecutor();
+    ExecutorService initService = Executors.newSingleThreadExecutor(runnable -> {
+      Thread t = new Thread(runnable, "pinned pool init");
+      t.setDaemon(true);
+      return t;
+    });
     initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize));
     initService.shutdown();
   }
