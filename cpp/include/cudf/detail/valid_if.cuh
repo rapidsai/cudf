@@ -28,25 +28,23 @@ namespace experimental {
 namespace detail {
 template <size_type block_size, typename InputIterator, typename Predicate>
 __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
-                                InputIterator end, Predicate p,
+                                size_type size, Predicate p,
                                 size_type* valid_count) {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};
-  auto const tid = threadIdx.x + blockIdx.x * gridDim.x;
-  auto i = begin + tid;
+  auto i = threadIdx.x + blockIdx.x * gridDim.x;
   size_type warp_valid_count{0};
 
-  auto active_mask = __ballot_sync(0xFFFF'FFFF, i < end);
-  while (i < end) {
-    bitmask_type ballot = __ballot_sync(active_mask, p(*i));
+  auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
+  while (i < size) {
+    bitmask_type ballot = __ballot_sync(active_mask, p(*(begin+i)));
     if (lane_id == leader_lane) {
-      auto bit_index = thrust::distance(begin, i);
-      output[cudf::word_index(bit_index)] = ballot;
+      output[cudf::word_index(i)] = ballot;
       warp_valid_count += __popc(ballot);
     }
     i += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, i < end);
+    active_mask = __ballot_sync(active_mask, i < size);
   }
 
   auto block_count =
@@ -84,7 +82,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   grid_1d grid{word_index(size), 256};
 
   valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-      static_cast<bitmask_type*>(null_mask.data()), begin, end, p,
+      static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
       valid_count.data());
 
   return std::make_pair(null_mask, valid_count.value(stream));
@@ -93,3 +91,4 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
+
