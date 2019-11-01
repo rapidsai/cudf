@@ -63,8 +63,6 @@ void gpu_transpose(table_device_view const input, mutable_table_device_view outp
 __global__
 void gpu_transpose_valids(table_device_view const input, mutable_table_device_view output)
 {
-  constexpr cudf::size_type BITS_PER_MASK{sizeof(bitmask_type) * 8};
-
   size_type x = blockIdx.x * blockDim.x + threadIdx.x;
   size_type y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -79,7 +77,7 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
 
       // Only one thread writes output
       if (0 == threadIdx.x % WARP_SIZE) {
-        output.column(j).set_mask_word(i / BITS_PER_MASK, result);
+        output.column(j).set_mask_word(word_index(i), result);
       }
     }
 
