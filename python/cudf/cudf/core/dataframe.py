@@ -1467,6 +1467,9 @@ class DataFrame(object):
         else:
             return series.set_index(self._index)
 
+    def insert(self, loc, column, value, allow_duplicates=False):
+        raise NotImplementedError
+
     def add_column(self, name, data, forceindex=False):
         """Add a column
 
