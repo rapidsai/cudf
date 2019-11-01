@@ -366,3 +366,17 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren) {
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, col.type());
   EXPECT_EQ(0, col.num_children());
 }
+
+TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
+  cudf::column original{this->type(), this->num_elements(), this->data,
+                        this->all_valid_mask};
+  cudf::column_view original_view = original;
+  cudf::column copy{original_view};
+  verify_column_views(copy);
+  cudf::test::expect_columns_equal(original, copy);
+
+  // Verify deep copy
+  cudf::column_view copy_view = copy;
+  EXPECT_NE(original_view.head(), copy_view.head());
+  EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
+}

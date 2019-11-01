@@ -4,7 +4,9 @@
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
+- PR #2980 Added nvtext is_vowel/is_consonant functions
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3011 Added libcudf++ transition guide
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3022 adds DataFrame.astype for cuDF dataframes
@@ -18,6 +20,7 @@
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
 - PR #3087 Add new cudf::experimental bool8 wrapper
+- PR #3219 Construct column from column_view
 
 ## Improvements
 
@@ -69,6 +72,10 @@
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
+- PR #3166 Move reductions to legacy
+- PR #3261 Small cleanup: remove `== true`
+- PR #3239 Adding floating point specialization to comparators for NaNs
+- PR #3270 Move predicates files to legacy
 
 ## Bug Fixes
 
@@ -89,6 +96,14 @@
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
+- PR #3276 Update JNI includes for legacy moves
+- PR #3256 Fix orc writer crash with multiple string columns
+- PR #3211 Fix breaking change caused by rapidsai/rmm#167
+- PR #3265 Fix dangling pointer in `is_sorted`
+- PR #3267 ORC writer: fix incorrect ByteRLE encoding of long literal runs
+- PR #3277 Fix invalid reference to deleted temporary in `is_sorted`.
+- PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
+- PR #3280 Invalid children check in mutable_column_device_view
 
 
 # cuDF 0.10.0 (16 Oct 2019)
