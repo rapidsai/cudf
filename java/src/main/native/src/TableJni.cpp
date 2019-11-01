@@ -24,7 +24,7 @@
 #include "cudf/legacy/groupby.hpp"
 #include "cudf/legacy/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
-#include "cudf/stream_compaction.hpp"
+#include "cudf/legacy/stream_compaction.hpp"
 #include "cudf/types.hpp"
 #include "cudf/legacy/join.hpp"
 
