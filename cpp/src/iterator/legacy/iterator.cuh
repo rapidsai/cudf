@@ -265,7 +265,7 @@ auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = 
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     CUDF_EXPECTS(data != nullptr, "non-null data is required");
-    CUDF_EXPECTS(not ( has_nulls == true && valid == nullptr), 
+    CUDF_EXPECTS(not ( has_nulls && valid == nullptr), 
         "non-null bit mask is required");
 
     return thrust::make_transform_iterator(
@@ -334,7 +334,7 @@ auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *val
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     CUDF_EXPECTS(data != nullptr, "non-null data is required");
-    CUDF_EXPECTS(not ( has_nulls == true && valid == nullptr), 
+    CUDF_EXPECTS(not ( has_nulls && valid == nullptr), 
         "non-null bit mask is required");
 	
     return thrust::make_transform_iterator(
