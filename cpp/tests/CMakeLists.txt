@@ -106,7 +106,16 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
+# - bool8 wrapper tests ---------------------------------------------------------------------------
+
+set(BOOLS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
+
+ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
+
+###################################################################################################
 # - timestamps tests ------------------------------------------------------------------------------
+
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
