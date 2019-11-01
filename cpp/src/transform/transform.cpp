@@ -113,15 +113,17 @@ std::unique_ptr<column> transform(column_view const& input,
                                   const std::string &unary_udf,
                                   data_type output_type, bool is_ptx)
 {
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
+
   std::unique_ptr<column> output =
     make_numeric_column(output_type, input.size(), 
-      (input.nullable()) ? cudf::UNINITIALIZED : cudf::UNALLOCATED);
+                        (input.nullable())
+                          ? cudf::mask_state::UNINITIALIZED
+                          : cudf::mask_state::UNALLOCATED);
 
   if (input.size() == 0) {
     return output;
   }
-
-  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
 
   mutable_column_view output_view = *output;
 
