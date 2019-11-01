@@ -18,7 +18,7 @@ class Buffer:
             ptr, size = _buffer_data_from_array_interface(
                 data.__cuda_array_interface__
             )
-            return Buffer(cls, ptr, size, owner=data)
+            return Buffer(ptr, size, owner=data)
         elif hasattr(data, "__array_interface__"):
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__

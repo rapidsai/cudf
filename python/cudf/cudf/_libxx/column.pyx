@@ -59,9 +59,10 @@ cdef class Column:
     cdef Column from_ptr(unique_ptr[column] c_col):
         size = c_col.get()[0].size()
         dtype = cudf_to_np_types[c_col.get()[0].type().id()]
+        has_nulls = c_col.get()[0].has_nulls()
         cdef column_contents contents = c_col.get()[0].release()
         data = DeviceBuffer.from_ptr(contents.data.release())
-        if c_col.get()[0].has_nulls():
+        if has_nulls:
             mask = DeviceBuffer.from_ptr(contents.null_mask.release())
         else:
             mask = None
@@ -71,6 +72,17 @@ cdef class Column:
     def to_pandas(self):
         from rmm import device_array_from_ptr
         import pandas as pd
+        from cudf.utils import cudautils
 
         arr = device_array_from_ptr(self.data.ptr, self.size, self.dtype)
-        return pd.Series(arr.copy_to_host())
+        sr = pd.Series(arr.copy_to_host())
+
+        if self.mask is not None:
+            mask = cudautils.expand_mask_bits(
+                self.size,
+                device_array_from_ptr(
+                    self.mask.ptr,
+                    self.size,
+                    np.int8)).copy_to_host().astype(np.bool)
+            sr[mask] = None
+        return sr
