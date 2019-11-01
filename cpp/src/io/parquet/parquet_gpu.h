@@ -18,6 +18,7 @@
 #define __IO_PARQUET_GPU_H__
 
 #include <cstdint>
+#include "gpuinflate.h"
 #include "parquet_common.h"
 
 namespace cudf {
@@ -150,6 +151,7 @@ struct PageFragment
 struct EncPage
 {
   uint8_t *page_data;               //!< Ptr to uncompressed page
+  uint8_t *compressed_data;         //!< Ptr to compressed page
   uint16_t num_fragments;           //!< Number of fragments in page
   uint8_t page_type;                //!< Page type (0=data, 2=dictionary)
   uint8_t pad;
@@ -161,6 +163,13 @@ struct EncPage
 };
 
 /**
+ * @brief Return worst-case compressed size of compressed data given the uncompressed size
+ **/
+inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size, uint32_t num_pages = 1) {
+  return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
+}
+
+/**
  * @brief Struct describing an encoder column chunk
  **/
 struct EncColumnChunk
@@ -168,7 +177,9 @@ struct EncColumnChunk
   const EncColumnDesc *col_desc;    //!< Column description
   const PageFragment *fragments;    //!< First fragment in chunk
   uint8_t *uncompressed_bfr;        //!< Uncompressed page data
+  uint8_t *compressed_bfr;          //!< Compressed page data
   uint32_t bfr_size;                //!< Uncompressed buffer size
+  uint32_t compressed_size;         //!< Compressed buffer size
   uint32_t start_row;               //!< First row of chunk
   uint32_t num_rows;                //!< Number of rows in chunk
   uint32_t first_page;              //!< First page of chunk
@@ -262,11 +273,16 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncCo
  * @param[in,out] pages Device array of EncPages (unordered)
  * @param[in] chunks Column chunks
  * @param[in] num_pages Number of pages
+ * @param[in] start_page First page to encode in page array
+ * @param[out] comp_in Optionally initializes compressor input params
+ * @param[out] comp_in Optionally initializes compressor output params
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, uint32_t start_page = 0,
+                        gpu_inflate_input_s *comp_in = nullptr, gpu_inflate_status_s *comp_out = nullptr,
+                        cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu
 } // namespace parquet
