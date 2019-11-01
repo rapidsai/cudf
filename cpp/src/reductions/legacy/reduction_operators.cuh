@@ -21,7 +21,7 @@
 #include <utilities/cudf_utils.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <iterator/iterator.cuh>
+#include <iterator/legacy/iterator.cuh>
 
 #include <utilities/device_operators.cuh>
 
