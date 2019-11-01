@@ -70,8 +70,9 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
   size_type stride_x = blockDim.x * gridDim.x;
   size_type stride_y = blockDim.y * gridDim.y;
 
+  auto active_threads = 0xffffffff;
   for (size_type i = x; i < input.num_columns(); i += stride_x) {
-    auto const active_threads = __ballot_sync(0xffffffff, i < input.num_columns());
+    active_threads = __ballot_sync(active_threads, i < input.num_columns());
 
     for (size_type j = y; j < input.num_rows(); j += stride_y) {
       auto const result = __ballot_sync(active_threads, input.column(i).is_valid(j));
@@ -128,8 +129,7 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
 
   // If there are no rows in the input, return successfully
   if (input_ncols == 0 || input_nrows == 0) {
-    // NOTE this returns a table with the same shape as the input, not transposed
-    return experimental::detail::empty_like(input, stream);
+    return std::make_unique<experimental::table>(std::vector<std::unique_ptr<column>>{});
   }
 
   // Check datatype homogeneity
