@@ -18,7 +18,7 @@
 
 #include "cudf/legacy/binaryop.hpp"
 #include "cudf/legacy/filling.hpp"
-#include "cudf/reduction.hpp"
+#include "cudf/legacy/reduction.hpp"
 #include "cudf/legacy/replace.hpp"
 #include "cudf/legacy/stream_compaction.hpp"
 #include "cudf/legacy/unary.hpp"
