@@ -20,6 +20,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
+#include <cudf/wrappers/bool.hpp>
 
 #include <array>
 #include <tuple>
@@ -72,8 +73,8 @@ constexpr auto types_to_ids() {
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using NumericTypes =
-    cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
+                                       double, cudf::experimental::bool8>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all timestamp types supported in libcudf for use
@@ -148,7 +149,6 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
  *---------------------------------------------------------------------------**/
 static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
     cudf::EMPTY,
-    cudf::BOOL8,
     cudf::TIMESTAMP_DAYS,
     cudf::TIMESTAMP_SECONDS,
     cudf::TIMESTAMP_MILLISECONDS,
