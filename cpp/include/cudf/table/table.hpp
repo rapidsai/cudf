@@ -113,7 +113,7 @@ class table {
   table_view select(std::vector<cudf::size_type> const& column_indices) const;
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns a reference to the view of the specified column
+   * @brief Returns a reference to the specified column
    *
    * @throws std::out_of_range
    * If i is out of the range [0, num_columns)
