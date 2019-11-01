@@ -43,7 +43,7 @@
 #include <cudf/utilities/error.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
-#include <iterator/iterator.cuh>         // include iterator header
+#include <iterator/legacy/iterator.cuh>  // include iterator header
 #include <utilities/device_atomics.cuh>  // need for atomics and device operator
 
 // for reduction tests

@@ -9,7 +9,7 @@
 #include <rmm/rmm.h>
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/error_utils.hpp>
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>
 
 namespace {
