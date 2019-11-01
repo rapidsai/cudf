@@ -55,10 +55,6 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
 			      bool check_bounds = false,
 			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-std::unique_ptr<table> scatter(table_view const& source, column_view const& scatter_map,
-			       table_view target, bool check_bounds = false,
-			       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 			       
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
