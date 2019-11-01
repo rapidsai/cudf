@@ -47,6 +47,8 @@ struct page_enc_state_s
     EncPage page;
     EncColumnChunk ck;
     EncColumnDesc col;
+    gpu_inflate_input_s comp_in;
+    gpu_inflate_status_s comp_out;
     uint16_t vals[RLE_BFRSZ];
 };
 
@@ -149,6 +151,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         uint32_t num_rows = 0;
         uint32_t page_start = 0;
         uint32_t page_offset = 0;
+        uint32_t comp_page_offset = 0;
         uint32_t cur_row = ck_g.start_row;
 
         do {
@@ -176,9 +179,11 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                     page_g.max_hdr_size = 32; // Max size excluding statistics
                     page_g.max_data_size = page_size + def_level_size;
                     page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+                    page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
                     page_g.start_row = cur_row;
                     page_g.num_rows = rows_in_page;
                     page_offset += page_g.max_hdr_size + page_g.max_data_size;
+                    comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
                     cur_row += rows_in_page;
                 }
                 SYNCWARP();
@@ -198,6 +203,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         if (!t) {
             ck_g.num_pages = num_pages;
             ck_g.bfr_size = page_offset;
+            ck_g.compressed_size = comp_page_offset;
         }
     }
     __syncthreads();
@@ -214,7 +220,7 @@ static __device__ __constant__ uint32_t kRleRunMask[16] = {
 };
 
 /**
- * @brief Return the size of a variable-length coded integer
+ * @brief Variable-length encode an integer
  **/
 inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
 {
@@ -262,8 +268,8 @@ inline __device__ void PackLiterals(uint8_t *dst, uint32_t v, uint32_t count, ui
             v |= SHFL_XOR(v, 1) << 12;
             if (t < count && !(t & 1)) {
                 dst[(t >> 1) * 3 + 0] = v;
-                dst[(t >> 1) * 3 + 0] = v >> 8;
-                dst[(t >> 1) * 3 + 0] = v >> 16;
+                dst[(t >> 1) * 3 + 1] = v >> 8;
+                dst[(t >> 1) * 3 + 2] = v >> 16;
             }
         }
         else if (t < count) { // w=16
@@ -364,7 +370,7 @@ static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t
                     dst = VlqEncode(s->rle_out, rle_run);
                     *dst++ = run_val;
                     if (nbits > 8){
-                        *dst++ = run_val;
+                        *dst++ = run_val >> 8;
                     }
                     s->rle_out = dst;
                 }
@@ -427,7 +433,7 @@ static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t
                         uint8_t *dst = VlqEncode(s->rle_out, rle_run);
                         *dst++ = run_val;
                         if (nbits > 8) {
-                            *dst++ = run_val;
+                            *dst++ = run_val >> 8;
                         }
                         s->rle_out = dst;
                     }
@@ -448,7 +454,7 @@ static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t
 
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
-gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks)
+gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, uint32_t start_page)
 {
     __shared__ __align__(8) page_enc_state_s state_g;
 
@@ -457,7 +463,7 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks)
     uint32_t dtype, dtype_len_in, dtype_len_out, dict_bits;
 
     if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<uint32_t *>(&pages[blockIdx.x])[t];
+        reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t];
     }
     __syncthreads();
     if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
@@ -629,12 +635,27 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks)
         }
     }
     if (t == 0) {
-        uint32_t actual_data_size = (s->cur - s->page.page_data) - s->page.max_hdr_size;
+        uint8_t *base = s->page.page_data + s->page.max_hdr_size;
+        uint32_t actual_data_size = static_cast<uint32_t>(s->cur - base);
+        uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(s->page.max_data_size);
         s->page.max_data_size = actual_data_size;
+        s->comp_in.srcDevice = base;
+        s->comp_in.srcSize = actual_data_size;
+        s->comp_in.dstDevice = s->page.compressed_data + s->page.max_hdr_size;
+        s->comp_in.dstSize = compressed_bfr_size;
+        s->comp_out.bytes_written = 0;
+        s->comp_out.status = ~0;
+        s->comp_out.reserved = 0;
     }
     __syncthreads();
     if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(&pages[blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&s->page)[t];
+        reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&s->page)[t];
+    }
+    if (comp_in && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
+        reinterpret_cast<uint32_t *>(&comp_in[blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&s->comp_in)[t];
+    }
+    if (comp_out && t < sizeof(gpu_inflate_status_s) / sizeof(uint32_t)) {
+        reinterpret_cast<uint32_t *>(&comp_out[blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&s->comp_out)[t];
     }
 }
 
@@ -684,13 +705,17 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncCo
  * @param[in,out] pages Device array of EncPages (unordered)
  * @param[in] chunks Column chunks
  * @param[in] num_pages Number of pages
+ * @param[in] start_page First page to encode in page array
+ * @param[out] comp_in Optionally initializes compressor input params
+ * @param[out] comp_in Optionally initializes compressor output params
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, cudaStream_t stream)
+cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, uint32_t start_page,
+                        gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, cudaStream_t stream)
 {
-    gpuEncodePages <<< num_pages, 128, 0, stream >>> (pages, chunks);
+    gpuEncodePages <<< num_pages, 128, 0, stream >>> (pages, chunks, comp_in, comp_out, start_page);
     return cudaSuccess;
 }
 
