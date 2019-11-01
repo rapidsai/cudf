@@ -109,24 +109,9 @@ class fixed_width_scalar : public scalar {
  public:
   using value_type = T;
 
-  fixed_width_scalar() = default;
   ~fixed_width_scalar() = default;
   fixed_width_scalar(fixed_width_scalar&& other) = default;
   fixed_width_scalar(fixed_width_scalar const& other) = default;
-
-  /**
-   * @brief Construct a new fixed width scalar object
-   * 
-   * @param value The initial value of the scalar
-   * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
-   */
-  fixed_width_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
-      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
-   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
-   , _data(value, stream, mr)
-  {}
 
   /**
    * @brief Set the value of the scalar
@@ -154,6 +139,21 @@ class fixed_width_scalar : public scalar {
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing the value
 
+  fixed_width_scalar() = default;
+
+  /**
+   * @brief Construct a new fixed width scalar object
+   * 
+   * @param value The initial value of the scalar
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  fixed_width_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
+   , _data(value, stream, mr)
+  {}
 };
 
 } // namespace detail
