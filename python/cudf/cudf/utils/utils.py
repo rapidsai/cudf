@@ -259,46 +259,13 @@ def _have_cupy():
     return _have_cupy
 
 
-def _set_rmm_config(
-    use_managed_memory=False,
-    use_pool_allocator=False,
+@initfunc
+def set_allocator(
+    allocator="default",
+    pool=False,
     initial_pool_size=None,
     enable_logging=False,
 ):
-    """
-    Parameters
-    ----------
-    use_managed_memory : bool, optional
-        If ``True``, use cudaMallocManaged as underlying allocator.
-        If ``False`` (default), use  cudaMalloc.
-    use_pool_allocator : bool
-        If ``True``, enable pool mode.
-        If ``False`` (default), disable pool mode.
-    initial_pool_size : int, optional
-        If ``use_pool_allocator=True``, sets initial pool size.
-        If ``None``, uses 1/2 of total GPU memory.
-    enable_logging : bool, optional
-        Enable logging (default ``False``).
-        Enabling this option will introduce performance overhead.
-    """
-    if use_pool_allocator:
-        if initial_pool_size is None:
-            initial_pool_size = 0  # 0 means 1/2 GPU memory
-        elif initial_pool_size == 0:
-            initial_pool_size = 1  # Since "0" is semantic value, use 1 byte
-        if not isinstance(initial_pool_size, int):
-            raise TypeError("initial_pool_size must be an integer")
-
-    rmm.reinitialize(
-        pool_allocator=use_pool_allocator,
-        managed_memory=use_managed_memory,
-        initial_pool_size=initial_pool_size,
-        logging=enable_logging,
-    )
-
-
-@initfunc
-def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     """
     Set the GPU memory allocator. This function should be run only once,
     before any cudf objects are created.
@@ -311,9 +278,18 @@ def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     initial_pool_size : int
         Memory pool size in bytes. If ``None`` (default), 1/2 of total
         GPU memory is used. If ``pool=False``, this argument is ignored.
+    enable_logging : bool, optional
+        Enable logging (default ``False``).
+        Enabling this option will introduce performance overhead.
     """
     use_managed_memory = True if allocator == "managed" else False
-    _set_rmm_config(use_managed_memory, pool, initial_pool_size)
+
+    rmm.reinitialize(
+        pool_allocator=pool,
+        managed_memory=use_managed_memory,
+        initial_pool_size=initial_pool_size,
+        logging=enable_logging,
+    )
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
