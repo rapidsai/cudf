@@ -98,6 +98,7 @@
 - PR #3211 Fix breaking change caused by rapidsai/rmm#167
 - PR #3265 Fix dangling pointer in `is_sorted`
 - PR #3267 ORC writer: fix incorrect ByteRLE encoding of long literal runs
+- PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
 
 # cuDF 0.10.0 (16 Oct 2019)
 
