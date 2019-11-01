@@ -73,6 +73,8 @@
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
 - PR #3271 Update rmm API based on `rmm.reinitialize(...)` change
+- PR #3239 Adding floating point specialization to comparators for NaNs
+- PR #3270 Move predicates files to legacy
 
 ## Bug Fixes
 
@@ -95,6 +97,10 @@
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3256 Fix orc writer crash with multiple string columns
 - PR #3211 Fix breaking change caused by rapidsai/rmm#167
+- PR #3265 Fix dangling pointer in `is_sorted`
+- PR #3267 ORC writer: fix incorrect ByteRLE encoding of long literal runs
+- PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 
