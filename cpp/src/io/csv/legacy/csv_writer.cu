@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <io/utilities/wrapper_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>

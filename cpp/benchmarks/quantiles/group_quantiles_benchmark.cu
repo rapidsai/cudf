@@ -17,8 +17,10 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <cudf/quantiles.hpp>
+#include <random>
 
 #include <benchmark/benchmark.h>
+#include <random>
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"

@@ -372,10 +372,10 @@ def test_dataframe_merge_no_common_column():
 
 
 def test_dataframe_empty_merge():
-    gdf1 = DataFrame([("a", []), ("b", [])])
-    gdf2 = DataFrame([("a", []), ("c", [])])
+    gdf1 = DataFrame({"a": [], "b": []})
+    gdf2 = DataFrame({"a": [], "c": []})
 
-    expect = DataFrame([("a", []), ("b", []), ("c", [])])
+    expect = DataFrame({"a": [], "b": [], "c": []})
     got = gdf1.merge(gdf2, how="left", on=["a"])
 
     assert_eq(expect, got)
