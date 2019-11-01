@@ -40,7 +40,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
   // These static fields should only ever be accessed when class-synchronized.
   // Do NOT use singleton_ directly!  Use the getSingleton accessor instead.
   private static volatile PinnedMemoryPool singleton_ = null;
-  private static ExecutorService initService = null;
   private static Future<PinnedMemoryPool> initFuture = null;
 
   private long pinnedPoolBase;
@@ -130,8 +129,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
       synchronized (PinnedMemoryPool.class) {
         if (singleton_ == null) {
-          initService.shutdown();
-          initService = null;
           try {
             singleton_ = initFuture.get();
           } catch (Exception e) {
@@ -156,8 +153,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
-    initService = Executors.newSingleThreadExecutor();
+    ExecutorService initService = Executors.newSingleThreadExecutor();
     initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize));
+    initService.shutdown();
   }
 
   /**
