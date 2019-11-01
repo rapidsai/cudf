@@ -235,15 +235,15 @@ rmm::device_buffer copy_bitmask(
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
   CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");
   rmm::device_buffer dest_mask{};
-  auto length = bitmask_allocation_size_bytes(end_bit - begin_bit);
-  if ((mask == nullptr) || (length == 0)) { return dest_mask; }
+  auto num_bytes = bitmask_allocation_size_bytes(end_bit - begin_bit);
+  if ((mask == nullptr) || (num_bytes == 0)) { return dest_mask; }
   if (begin_bit == 0) {
     dest_mask = rmm::device_buffer{static_cast<void const *>(mask),
-      length, stream, mr};
+      num_bytes, stream, mr};
   } else {
     auto number_of_mask_words = cudf::util::div_rounding_up_safe(
         static_cast<size_t>(end_bit - begin_bit), detail::size_in_bits<bitmask_type>());
-    dest_mask = rmm::device_buffer{length, stream, mr};
+    dest_mask = rmm::device_buffer{num_bytes, stream, mr};
     cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                  stream>>>(
@@ -252,6 +252,20 @@ rmm::device_buffer copy_bitmask(
     CUDA_CHECK_LAST()
   }
   return dest_mask;
+}
+
+// Create a bitmask from a specific range
+rmm::device_buffer copy_bitmask(column_view view, cudaStream_t stream,
+               rmm::mr::device_memory_resource *mr) {
+  rmm::device_buffer null_mask{};
+  if (view.nullable()) {
+    null_mask = copy_bitmask(
+          view.null_mask(),
+          view.offset(),
+          view.offset() + view.size(),
+          stream, mr);
+  }
+  return null_mask;
 }
 
 }  // namespace cudf
