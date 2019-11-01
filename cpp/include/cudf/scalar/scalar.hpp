@@ -41,7 +41,6 @@ namespace cudf {
  */
 class scalar {
  public:
-  scalar() = default;
   ~scalar() = default;
   scalar(scalar&& other) = default;
   scalar(scalar const& other) = default;
@@ -73,18 +72,22 @@ class scalar {
    * @brief Updates the validity of the value
    * 
    * @param is_valid true: set the value to valid. false: set it to null
+   * @param stream The CUDA stream to do the operation in
    */
-  void set_valid(bool is_valid) { _is_valid.set_value(is_valid); }
+  void set_valid(bool is_valid, cudaStream_t stream = 0) {
+    _is_valid.set_value(is_valid, stream);
+  }
 
   /**
    * @brief Indicates whether the scalar contains a valid value
    *
    * @note Using the value when `is_valid() == false` is undefined behaviour
    * 
+   * @param stream The CUDA stream to do the operation in
    * @return true Value is valid
    * @return false Value is invalid/null
    */
-  bool is_valid() const { return _is_valid.value(); }
+  bool is_valid(cudaStream_t stream = 0) const { return _is_valid.value(stream); }
 
   /**
    * @brief Returns a raw pointer to the validity bool in device memory
@@ -94,6 +97,8 @@ class scalar {
  protected:
   data_type _type{EMPTY};      ///< Logical type of value in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
+
+  scalar() = default;
 };
 
 /**
@@ -128,16 +133,21 @@ class numeric_scalar : public scalar {
 
   /**
    * @brief Set the value of the scalar
+   * 
+   * @param value New value of scalar
+   * @param stream The CUDA stream to do the operation in
    */
-  void set_value(T value) { 
-    _data.set_value(value); 
-    this->set_valid(true); 
+  void set_value(T value, cudaStream_t stream = 0) { 
+    _data.set_value(value, stream); 
+    this->set_valid(true, stream); 
   }
 
   /**
    * @brief Get the value of the scalar
+   * 
+   * @param stream The CUDA stream to do the operation in
    */
-  T value() { return _data.value(); }
+  T value(cudaStream_t stream = 0) { return _data.value(stream); }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
@@ -177,8 +187,10 @@ class string_scalar : public scalar {
 
   /**
    * @brief Get the value of the scalar in a host std::string
+   * 
+   * @param stream The CUDA stream to do the operation in
    */
-  std::string value() const;
+  std::string value(cudaStream_t stream = 0) const;
   
   /**
    * @brief Returns the size of the string in bytes
@@ -228,16 +240,21 @@ class timestamp_scalar : public scalar {
 
   /**
    * @brief Set the value of the scalar
+   * 
+   * @param value New value of scalar
+   * @param stream The CUDA stream to do the operation in
    */
-  void set_value(T value) { 
-    _data.set_value(value); 
-    this->set_valid(true); 
+  void set_value(T value, cudaStream_t stream = 0) { 
+    _data.set_value(value, stream); 
+    this->set_valid(true, stream);
   }
 
   /**
    * @brief Get the value of the scalar
+   * 
+   * @param stream The CUDA stream to do the operation in
    */
-  T value() { return _data.value(); }
+  T value(cudaStream_t stream = 0) { return _data.value(stream); }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
