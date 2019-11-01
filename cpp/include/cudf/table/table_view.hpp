@@ -131,7 +131,7 @@ class table_view_base {
   table_view_base& operator=(table_view_base const&) = default;
   table_view_base& operator=(table_view_base&&) = default;
 };
-}  // NAMESPACE detail
+}  // namespace detail
 
 /**---------------------------------------------------------------------------*
  * @brief A set of `column_view`s of the same size.
