@@ -40,15 +40,13 @@ namespace strings
  * @param timestamps Timestamp values to convert.
  * @param output_type The timestamp type used for the values in timestamps.
  * @param format The null-terminated CPU string specifying string output format.
- * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New datetime column.
  */
-std::unique_ptr<cudf::column> to_timestamps( strings_column_view strings,
+std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
                                              data_type timestamp_type,
-                                             std::string format,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                             cudaStream_t stream = 0 );
+                                             std::string const& format,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 /**
@@ -67,14 +65,12 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view strings,
  * @param timestamps Timestamp values to convert.
  * @param format The null-terminated CPU string specifying string output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
- * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New strings column with formatted timestamps.
  */
-std::unique_ptr<cudf::column> from_timestamps( column_view timestamps,
-                                               std::string format = "%Y-%m-%dT%H:%M:%SZ",
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                               cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
+                                               std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
+                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 } // namespace strings
