@@ -28,7 +28,6 @@ namespace detail {
  */
 class scalar_device_view_base {
  public:
-  scalar_device_view_base() = default;
   ~scalar_device_view_base() = default;
 
   /**
@@ -63,6 +62,8 @@ class scalar_device_view_base {
   scalar_device_view_base(data_type type, bool* is_valid)
     : _type(type), _is_valid(is_valid) 
   {}
+
+  scalar_device_view_base() = default;
 };
 
 /**
