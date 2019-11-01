@@ -18,7 +18,7 @@
 #define __IO_PARQUET_GPU_H__
 
 #include <cstdint>
-#include "gpuinflate.h"
+#include <io/comp/gpuinflate.h>
 #include "parquet_common.h"
 
 namespace cudf {
