@@ -19,6 +19,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.cuh>
 
 #include <rmm/device_scalar.hpp>
 
@@ -41,7 +42,7 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
     bitmask_type ballot = __ballot_sync(active_mask, p(*i));
     if (lane_id == leader_lane) {
       auto bit_index = thrust::distance(begin, i);
-      output[cudf::detail::word_index(bit_index)] = ballot;
+      output[cudf::word_index(bit_index)] = ballot;
       warp_valid_count += __popc(ballot);
     }
     i += blockDim.x * gridDim.x;
@@ -80,11 +81,11 @@ std::pair<rmm::device_buffer, size_type> valid_if(
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
-  cudf::grid_1d grid{word_index(size), 256};
+  //cudf::grid_1d grid{word_index(size), 256};
 
-  valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-      static_cast<bitmask_type*>(null_mask.data()), begin, end, p,
-      valid_count.data());
+  //valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+  //    static_cast<bitmask_type*>(null_mask.data()), begin, end, p,
+  //    valid_count.data());
 
   return std::make_pair(null_mask, valid_count.value(stream));
 }
