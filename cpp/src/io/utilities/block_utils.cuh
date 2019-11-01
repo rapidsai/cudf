@@ -66,6 +66,68 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
     return sign * __fma_rn(__ll2double_rn(hi), 4294967296.0 * 4294967296.0, __ull2double_rn(lo));
 }
 
+
+template<unsigned int nthreads, bool sync_before_store>
+inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, uint32_t t)
+{
+    uint8_t *dst = reinterpret_cast<uint8_t *>(dstv);
+    const uint8_t *src = reinterpret_cast<const uint8_t *>(srcv);
+    uint32_t dst_align_bytes, src_align_bytes, src_align_bits;
+    // Align output to 32-bit
+    dst_align_bytes = 3 & -reinterpret_cast<intptr_t>(dst);
+    if (dst_align_bytes != 0) {
+        uint32_t align_len = min(dst_align_bytes, len);
+        uint8_t b;
+        if (t < align_len) {
+            b = src[t];
+        }
+        if (sync_before_store) {
+            SYNCWARP();
+        }
+        if (t < align_len) {
+            dst[t] = b;
+        }
+        src += align_len;
+        dst += align_len;
+        len -= align_len;
+    }
+    src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
+    src_align_bits = src_align_bytes * 8;
+    while (len >= 4) {
+        const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align_bytes);
+        uint32_t copy_cnt = min(len >> 2, nthreads);
+        uint32_t v;
+        if (t < copy_cnt) {
+            v = src32[t];
+            if (src_align_bits != 0) {
+                v = __funnelshift_r(v, src32[t + 1], src_align_bits);
+            }
+        }
+        if (sync_before_store) {
+            __syncthreads();
+        }
+        if (t < copy_cnt) {
+            reinterpret_cast<uint32_t *>(dst)[t] = v;
+        }
+        src += copy_cnt * 4;
+        dst += copy_cnt * 4;
+        len -= copy_cnt * 4;
+    }
+    if (len != 0) {
+        uint8_t b;
+        if (t < len) {
+            b = src[t];
+        }
+        if (sync_before_store) {
+            SYNCWARP();
+        }
+        if (t < len) {
+            dst[t] = b;
+        }
+    }
+}
+
+
 } // namespace io
 } // namespace cudf
 

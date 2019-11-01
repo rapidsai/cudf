@@ -184,6 +184,8 @@ struct EncColumnChunk
   uint32_t num_rows;                //!< Number of rows in chunk
   uint32_t first_page;              //!< First page of chunk
   uint32_t num_pages;               //!< Number of pages in chunk
+  uint8_t is_compressed;            //!< Nonzero if the chunk uses compression
+  uint8_t pad[3];
 };
 
 /**
@@ -275,7 +277,7 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncCo
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_in Optionally initializes compressor output params
+ * @param[out] comp_out Optionally initializes compressor output params
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
@@ -283,6 +285,36 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncCo
 cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, uint32_t start_page = 0,
                         gpu_inflate_input_s *comp_in = nullptr, gpu_inflate_status_s *comp_out = nullptr,
                         cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] pages Device array of EncPages
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] comp_in Compressor input parameters
+ * @param[in] comp_out Compressor status
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks,
+                              const gpu_inflate_input_s *comp_in, const gpu_inflate_status_s *comp_out,
+                              cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel to gather pages to a single contiguous block per chunk
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] pages Device array of EncPages
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] comp_out Compressor status
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t GatherPages(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks, cudaStream_t stream = (cudaStream_t)0);
+
 
 } // namespace gpu
 } // namespace parquet
