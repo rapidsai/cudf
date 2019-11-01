@@ -158,17 +158,16 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                      bitmask_type const *__restrict__ source,
                                      size_type bit_offset,
                                      size_type number_of_mask_words) {
-  size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-  size_type source_word_index = destination_word_index + word_index(bit_offset);
-
-  if (destination_word_index < number_of_mask_words) {
-    bitmask_type curr_word = source[source_word_index];
+  for (size_type dInd = threadIdx.x + blockIdx.x * blockDim.x;
+      dInd < number_of_mask_words; dInd += blockDim.x*gridDim.x) {
+    size_type sInd = dInd + word_index(bit_offset);
+    bitmask_type curr_word = source[sInd];
     bitmask_type next_word = 0;
-    if (destination_word_index + 1 < number_of_mask_words) {
-      next_word = source[source_word_index + 1];
+    if (dInd + 1 < number_of_mask_words) {
+      next_word = source[sInd + 1];
     }
     bitmask_type write_word = __funnelshift_r(curr_word, next_word, bit_offset);
-    destination[destination_word_index] = write_word;
+    destination[dInd] = write_word;
   }
 }
 
@@ -255,7 +254,7 @@ rmm::device_buffer copy_bitmask(
 }
 
 // Create a bitmask from a specific range
-rmm::device_buffer copy_bitmask(column_view view, cudaStream_t stream,
+rmm::device_buffer copy_bitmask(column_view const& view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr) {
   rmm::device_buffer null_mask{};
   if (view.nullable()) {
