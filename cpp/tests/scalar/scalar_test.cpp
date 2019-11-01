@@ -35,7 +35,7 @@ TYPED_TEST_CASE(TypedScalarTest, cudf::test::AllTypes);
 
 TYPED_TEST(TypedScalarTest, DefaultValidity) {
   TypeParam value = 7;
-  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  cudf::experimental::scalar_type_t<TypeParam> s(value);
   
 
   EXPECT_TRUE(s.is_valid());
@@ -44,14 +44,14 @@ TYPED_TEST(TypedScalarTest, DefaultValidity) {
 
 TYPED_TEST(TypedScalarTest, ConstructNull) {
   TypeParam value = 5;
-  cudf::experimental::type_to_scalar_type<TypeParam> s(value, false);
+  cudf::experimental::scalar_type_t<TypeParam> s(value, false);
 
   EXPECT_FALSE(s.is_valid());
 }
 
 TYPED_TEST(TypedScalarTest, SetValue) {
   TypeParam value = 9;
-  cudf::experimental::type_to_scalar_type<TypeParam> s;
+  cudf::experimental::scalar_type_t<TypeParam> s;
   s.set_value(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -60,16 +60,16 @@ TYPED_TEST(TypedScalarTest, SetValue) {
 
 TYPED_TEST(TypedScalarTest, SetNull) {
   TypeParam value = 6;
-  cudf::experimental::type_to_scalar_type<TypeParam> s;
+  cudf::experimental::scalar_type_t<TypeParam> s;
   s.set_value(value);
-  s.set_null();
+  s.set_valid(false);
 
   EXPECT_FALSE(s.is_valid());
 }
 
 TYPED_TEST(TypedScalarTest, CopyConstructor) {
   TypeParam value = 8;
-  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  cudf::experimental::scalar_type_t<TypeParam> s(value);
   auto s2 = s;
 
   EXPECT_TRUE(s2.is_valid());
@@ -78,12 +78,12 @@ TYPED_TEST(TypedScalarTest, CopyConstructor) {
 
 TYPED_TEST(TypedScalarTest, MoveConstructor) {
   TypeParam value = 8;
-  cudf::experimental::type_to_scalar_type<TypeParam> s(value);
+  cudf::experimental::scalar_type_t<TypeParam> s(value);
   auto data_ptr = s.data();
-  auto mask_ptr = s.valid_mask();
+  auto mask_ptr = s.validity_data();
   decltype(s) s2(std::move(s));
 
-  EXPECT_EQ(mask_ptr, s2.valid_mask());
+  EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.data());
 }
 
@@ -117,9 +117,9 @@ TEST_F(StringScalarTest, MoveConstructor) {
   std::string value = "another test string";
   auto s = cudf::string_scalar(value);
   auto data_ptr = s.data();
-  auto mask_ptr = s.valid_mask();
+  auto mask_ptr = s.validity_data();
   decltype(s) s2(std::move(s));
 
-  EXPECT_EQ(mask_ptr, s2.valid_mask());
+  EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.data());
 }

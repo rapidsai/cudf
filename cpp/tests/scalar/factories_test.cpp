@@ -55,7 +55,7 @@ TYPED_TEST(NumericScalarFactory, TypeCast) {
     this->stream(), this->mr());
 
   auto numeric_s = 
-    static_cast< cudf::experimental::type_to_scalar_type<TypeParam>* >(s.get());
+    static_cast< cudf::experimental::scalar_type_t<TypeParam>* >(s.get());
 
   TypeParam value(37);
   numeric_s->set_value(value);
@@ -87,7 +87,7 @@ TYPED_TEST(TimestampScalarFactory, TypeCast) {
     this->stream(), this->mr());
 
   auto numeric_s = 
-    static_cast< cudf::experimental::type_to_scalar_type<TypeParam>* >(s.get());
+    static_cast< cudf::experimental::scalar_type_t<TypeParam>* >(s.get());
 
   TypeParam value(37);
   numeric_s->set_value(value);

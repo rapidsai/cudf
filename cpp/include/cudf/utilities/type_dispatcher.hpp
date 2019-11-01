@@ -140,8 +140,13 @@ MAP_TIMESTAMP_SCALAR(timestamp_ms)
 MAP_TIMESTAMP_SCALAR(timestamp_us)
 MAP_TIMESTAMP_SCALAR(timestamp_ns)
 
+/**
+ * @brief Maps a C++ type to the scalar type required to hold its value
+ * 
+ * @tparam T The concrete C++ type to map
+ */
 template <typename T>
-using type_to_scalar_type = typename type_to_scalar_type_impl<T>::ScalarType;
+using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
