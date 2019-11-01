@@ -38,7 +38,7 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
 
   auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
   while (i < size) {
-    bitmask_type ballot = __ballot_sync(active_mask, p(*(begin+i)));
+    bitmask_type ballot = __ballot_sync(active_mask, p(*(begin + i)));
     if (lane_id == leader_lane) {
       output[cudf::word_index(i)] = ballot;
       warp_valid_count += __popc(ballot);
@@ -79,6 +79,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
+  // TODO `word_index(size)` is wrong. This needs to round UP.
   grid_1d grid{word_index(size), 256};
 
   valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
@@ -91,4 +92,3 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
-
