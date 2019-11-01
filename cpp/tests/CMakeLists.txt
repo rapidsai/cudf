@@ -106,6 +106,7 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
+
 # - scalar tests ----------------------------------------------------------------------------------
 
 set(SCALAR_TEST_SRC
@@ -114,8 +115,17 @@ set(SCALAR_TEST_SRC
 
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
 
+# - bool8 wrapper tests ---------------------------------------------------------------------------
+
+set(BOOLS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
+
+ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
+
+
 ###################################################################################################
 # - timestamps tests ------------------------------------------------------------------------------
+
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
@@ -566,7 +576,7 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/count_bitmask_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_tests.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
