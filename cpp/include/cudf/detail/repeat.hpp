@@ -64,8 +64,9 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count, bool check_count,
-                              cudaStream_t stream,
-                              rmm::mr::device_memory_resource* mr);
+                              cudaStream_t stream = 0,
+                              rmm::mr::device_memory_resource* mr
+                                = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
@@ -90,8 +91,9 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(table_view const& input_table,
                               gdf_scalar const& count,
-                              cudaStream_t stream,
-                              rmm::mr::device_memory_resource* mr);
+                              cudaStream_t stream = 0,
+                              rmm::mr::device_memory_resource* mr =
+                                rmm::mr::get_default_resource());
 
 }  // namespace detail
 }  // namespace experimental

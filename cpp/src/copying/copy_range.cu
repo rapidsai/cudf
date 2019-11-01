@@ -92,7 +92,6 @@ void copy_range(mutable_column_view& output, column_view const& input,
       column_range_factory{input, in_begin},
       out_begin, out_end, stream);
   }
-
 }
 
 std::unique_ptr<column> copy_range(column_view const& output,
@@ -131,12 +130,17 @@ std::unique_ptr<column> copy_range(column_view const& output,
   }
 
   auto ret_view = ret->mutable_view();
+  // copy from output outside the range (note that this function copies
+  // out-of-place
   if (out_begin > 0) {
     copy_range(ret_view, output, 0, out_begin, 0, stream);
   }
+  // copy from input in the specified range
   if (out_end != out_begin) {
     copy_range(ret_view, input, out_begin, out_end, in_begin, stream);
   }
+  // copy from output outside the range (note that this function copies
+  // out-of-place
   if (out_end < output.size()) {
     copy_range(ret_view, output, out_end, output.size(), out_end, stream);
   }

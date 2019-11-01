@@ -83,8 +83,6 @@ void fill(mutable_column_view& destination,
   // CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
   if (end != begin) {  // otherwise no-op
-    // The code below is speculative on the future copy_range implementation for
-    // cudf::column
     copy_range(destination, scalar_factory{value}, begin, end, stream);
   }
 

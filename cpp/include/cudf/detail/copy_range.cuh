@@ -139,7 +139,6 @@ struct copy_range_dispatch {
     auto offset = output.offset();
 
 #if 1
-    static_assert(warp_size > 0, "the code below assumes warp_size > 0");
     auto warp_aligned_begin_lower_bound =
       cudf::size_type{begin - (begin % warp_size)};
     auto warp_aligned_end_upper_bound =
@@ -213,7 +212,7 @@ namespace detail {
  */
 template <typename InputFunctor>
 void copy_range(mutable_column_view& output, InputFunctor input,
-                size_type begin, size_type end, cudaStream_t stream) {
+                size_type begin, size_type end, cudaStream_t stream = 0) {
   CUDF_EXPECTS((begin >= 0) &&
                (begin <= end) &&
                (begin < output.size()) &&
@@ -262,18 +261,18 @@ void copy_range(mutable_column_view& output, InputFunctor input,
  */
 void copy_range(mutable_column_view& output, column_view const& input,
                 size_type out_begin, size_type out_end, size_type in_begin,
-                cudaStream_t stream);
+                cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to copy a range of elements out-of-place from one column
  * to another.
  *
- * Creates a new column as-if an in-place copy was performed into @p output;
- * i.e. it is as if a copy of @p output was created first and then the elements
- * indicated by the indices [@p out_begin, @p out_end) were overwritten by the
- * elements from the indices [@p in_begin, @p in_begin + N) (where N =
- * (@p out_end - out_begin)).
- *
+ * Creates a new column as-if an in-place copy was performed into @p output.
+ * A copy of @p output is created first and then the elements indicated by the
+ * indices [@p out_begin, @p out_end) were copied from the elements indicated
+ * by the indices [@p in_begin, @p in_begin +N) of @p input (where N =
+ * (@p out_end - @p out_begin)). Elements outside the range are copied from
+ * @p output into the returned new column output.
  *
  * If @p input and @p output refer to the same elements and the ranges overlap,
  * the behavior is undefined.
@@ -297,7 +296,7 @@ std::unique_ptr<column> copy_range(
   column_view const& input,
   size_type out_begin, size_type out_end,
   size_type in_begin,
-  cudaStream_t stream,
+  cudaStream_t stream = 0,
   rmm::mr::device_memory_resource* mr =
     rmm::mr::get_default_resource());
 
