@@ -20,6 +20,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/copy.hpp>
+#include <utilities/integer_utils.hpp>
 
 namespace cudf {
 
@@ -70,10 +71,9 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
   size_type stride_x = blockDim.x * gridDim.x;
   size_type stride_y = blockDim.y * gridDim.y;
 
-  auto active_threads = 0xffffffff;
-  for (size_type i = x; i < input.num_columns(); i += stride_x) {
-    active_threads = __ballot_sync(active_threads, i < input.num_columns());
-
+  size_type i = x;
+  auto active_threads = __ballot_sync(0xffffffff, i < input.num_columns());
+  while (i < input.num_columns()) {
     for (size_type j = y; j < input.num_rows(); j += stride_y) {
       auto const result = __ballot_sync(active_threads, input.column(i).is_valid(j));
 
@@ -82,6 +82,10 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
         output.column(j).set_mask_word(i / BITS_PER_MASK, result);
       }
     }
+
+    // Update active threads before branching
+    i += stride_x;
+    active_threads = __ballot_sync(active_threads, i < input.num_columns());
   }
 }
 
@@ -98,8 +102,8 @@ struct launch_kernel {
     auto device_output = mutable_table_device_view::create(output, stream);
 
     dim3 dimBlock(WARP_SIZE, WARP_SIZE);
-    dim3 dimGrid(std::min((input.num_columns() + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
-                 std::min((input.num_rows() + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE));
+    dim3 dimGrid(std::min(util::div_rounding_up_safe(input.num_columns(), WARP_SIZE), MAX_GRID_SIZE),
+                 std::min(util::div_rounding_up_safe(input.num_rows(), WARP_SIZE), MAX_GRID_SIZE));
 
     gpu_transpose<T><<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
 
@@ -111,9 +115,6 @@ struct launch_kernel {
         column.set_null_count(UNKNOWN_NULL_COUNT);
       }
     }
-
-    // Synchronize before return so we don't cut short the lifetime of our device_views
-    CUDA_TRY(cudaStreamSynchronize(stream));
   }
 };
 
@@ -133,10 +134,10 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
   }
 
   // Check datatype homogeneity
-  auto const dtype = input.column(0).type();
-  for (auto const& col : input) {
-    CUDF_EXPECTS(dtype == col.type(), "Column type mismatch");
-  }
+  auto const& first = input.column(0);
+  auto const dtype = first.type();
+  CUDF_EXPECTS(std::all_of(input.begin(), input.end(), [dtype](auto const& col) {
+    return dtype == col.type(); }), "Column type mismatch");
 
   // TODO does this need to support non-fixed-width tables?
   CUDF_EXPECTS(is_fixed_width(dtype), "Invalid, non-fixed-width type.");
@@ -152,12 +153,11 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
   auto const& output_nrows = input_ncols;
 
   // Allocate output table with transposed shape
-  std::vector<std::unique_ptr<column>> out_columns;
-  out_columns.reserve(output_ncols);
-  for (size_type i = 0; i < output_ncols; ++i) {
-    out_columns.push_back(experimental::detail::allocate_like(input.column(0), output_nrows,
-      allocation_policy, mr, stream));
-  }
+  std::vector<std::unique_ptr<column>> out_columns(output_ncols);
+  std::generate(out_columns.begin(), out_columns.end(), [=]() {
+    return experimental::detail::allocate_like(first, output_nrows,
+      allocation_policy, mr, stream);
+  });
   auto output = std::make_unique<experimental::table>(std::move(out_columns));
   auto output_view = output->mutable_view();
 

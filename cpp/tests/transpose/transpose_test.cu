@@ -47,12 +47,12 @@ auto transpose_vectors(std::vector<std::vector<T>> const& input)
   if (input.empty()) {
     return input;
   }
+  size_t ncols = input.size();
   size_t nrows = input.front().size();
 
   std::vector<std::vector<T>> transposed(nrows);
-  for (auto& col : transposed) {
-    col.resize(input.size());
-  }
+  std::for_each(transposed.begin(), transposed.end(),
+    [=](std::vector<T>& col) { col.resize(ncols); });
 
   for (size_t col = 0; col < input.size(); ++col) {
     for (size_t row = 0; row < nrows; ++row) {
@@ -201,4 +201,13 @@ TYPED_TEST(TransposeTest, EmptyTable)
 TYPED_TEST(TransposeTest, EmptyColumns)
 {
   run_test<TypeParam>(10, 0, false);
+}
+
+TYPED_TEST(TransposeTest, MismatchedColumns)
+{
+  fixed_width_column_wrapper<TypeParam> col1{{1, 2, 3}};
+  fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
+  fixed_width_column_wrapper<float> col3{{7, 8, 9}};
+  cudf::table_view input{{col1, col2, col3}};
+  EXPECT_THROW(cudf::transpose(input), cudf::logic_error);
 }
