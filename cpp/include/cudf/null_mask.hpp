@@ -139,7 +139,7 @@ rmm::device_buffer copy_bitmask(
  * @param mr Optional, the memory resource that will be used for allocating
  * the device memory for the new device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bits
- * `[begin_bit, end_bit)` from `view`'s bitmask.
+ * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
  *---------------------------------------------------------------------------**/
 rmm::device_buffer copy_bitmask(column_view const& view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr);

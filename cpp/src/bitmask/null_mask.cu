@@ -158,16 +158,16 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                      bitmask_type const *__restrict__ source,
                                      size_type bit_offset,
                                      size_type number_of_mask_words) {
-  for (size_type dInd = threadIdx.x + blockIdx.x * blockDim.x;
-      dInd < number_of_mask_words; dInd += blockDim.x*gridDim.x) {
-    size_type sInd = dInd + word_index(bit_offset);
-    bitmask_type curr_word = source[sInd];
+  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+      destination_word_index < number_of_mask_words; destination_word_index += blockDim.x*gridDim.x) {
+    size_type source_word_index = destination_word_index + word_index(bit_offset);
+    bitmask_type curr_word = source[source_word_index];
     bitmask_type next_word = 0;
-    if (dInd + 1 < number_of_mask_words) {
-      next_word = source[sInd + 1];
+    if (destination_word_index + 1 < number_of_mask_words) {
+      next_word = source[source_word_index + 1];
     }
     bitmask_type write_word = __funnelshift_r(curr_word, next_word, bit_offset);
-    destination[dInd] = write_word;
+    destination[destination_word_index] = write_word;
   }
 }
 
