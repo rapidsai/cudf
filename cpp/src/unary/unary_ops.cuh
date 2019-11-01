@@ -23,63 +23,32 @@
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 #include <cudf/column/column_view.hpp>
-#include <cudf/column/column_device_view.cuh>
 
 namespace cudf {
 namespace experimental {
 namespace unary {
 
 template<typename T, typename Tout, typename F>
-__global__
-void gpu_op_kernel(const T *data, cudf::size_type size,
-                   Tout *results, F functor) {
-    int tid    = threadIdx.x;
-    int blkid  = blockIdx.x;
-    int blksz  = blockDim.x;
-    int gridsz = gridDim.x;
-
-    int start = tid + blkid * blksz;
-    int step  = blksz * gridsz;
-
-    for (int i = start; i < size; i += step) {
-        results[i] = functor.apply(data[i]);
-    }
-}
-
-template<typename T, typename Tout, typename F>
 struct Launcher {
     static
     gdf_error launch(cudf::column_view const& input,
-                     cudf::mutable_column_view& output) {
+                     cudf::mutable_column_view& output,
+                     cudaStream_t stream = 0) {
 
         // Return immediately for empty inputs
         if (input.size() == 0)
-          return GDF_SUCCESS;
+            return GDF_SUCCESS;
 
         // check for size of the columns
         if (input.size() != output.size())
             return GDF_COLUMN_SIZE_MISMATCH;
 
-        // find optimal blocksize
-        int min_grid_size, block_size;
-        CUDA_TRY(
-            cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size,
-                                               gpu_op_kernel<T, Tout, F>)
-        );
-
-        // find needed gridsize
-        int needed_grid_size = (input.size() + block_size - 1) / block_size;
-        int grid_size        = std::min(needed_grid_size, min_grid_size);
-
-        auto device_input  = cudf::column_device_view::create(input);
-        auto device_output = cudf::mutable_column_device_view::create(output);
-
         F functor;
-        gpu_op_kernel<<<grid_size, block_size>>>(
-            static_cast<const T*>(device_input->head()), device_input->size(),
-            static_cast<Tout*>(device_output->head()),
-            functor
-        );
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          output.begin<Tout>(),
+                          functor);
 
         CUDA_CHECK_LAST();
         return GDF_SUCCESS;

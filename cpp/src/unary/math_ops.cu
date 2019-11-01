@@ -35,7 +35,7 @@ namespace detail {
 struct DeviceSin {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::sin(data);
     }
 };
@@ -43,7 +43,7 @@ struct DeviceSin {
 struct DeviceCos {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::cos(data);
     }
 };
@@ -51,7 +51,7 @@ struct DeviceCos {
 struct DeviceTan {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::tan(data);
     }
 };
@@ -59,7 +59,7 @@ struct DeviceTan {
 struct DeviceArcSin {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::asin(data);
     }
 };
@@ -67,7 +67,7 @@ struct DeviceArcSin {
 struct DeviceArcCos {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::acos(data);
     }
 };
@@ -75,7 +75,7 @@ struct DeviceArcCos {
 struct DeviceArcTan {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::atan(data);
     }
 };
@@ -85,7 +85,7 @@ struct DeviceArcTan {
 struct DeviceExp {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::exp(data);
     }
 };
@@ -93,7 +93,7 @@ struct DeviceExp {
 struct DeviceLog {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::log(data);
     }
 };
@@ -101,7 +101,7 @@ struct DeviceLog {
 struct DeviceSqrt {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::sqrt(data);
     }
 };
@@ -111,7 +111,7 @@ struct DeviceSqrt {
 struct DeviceCeil {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::ceil(data);
     }
 };
@@ -119,7 +119,7 @@ struct DeviceCeil {
 struct DeviceFloor {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::floor(data);
     }
 };
@@ -127,7 +127,7 @@ struct DeviceFloor {
 struct DeviceAbs {
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return std::abs(data);
     }
 };
@@ -138,7 +138,7 @@ struct DeviceInvert {
     // TODO: maybe sfinae overload this for cudf::bool8
     template<typename T>
     __device__
-    T apply(T data) {
+    T operator()(T data) {
         return ~data;
     }
 };
@@ -148,7 +148,7 @@ struct DeviceInvert {
 struct DeviceNot {
     template<typename T>
     __device__
-    cudf::bool8 apply(T data) {
+    cudf::bool8 operator()(T data) {
         return static_cast<cudf::bool8>( !data );
     }
 };
