@@ -102,6 +102,7 @@
 - PR #3267 ORC writer: fix incorrect ByteRLE encoding of long literal runs
 - PR #3277 Fix invalid reference to deleted temporary in `is_sorted`.
 - PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
+- PR #3279 Fix shutdown hang issues with pinned memory pool init executor
 - PR #3280 Invalid children check in mutable_column_device_view
 
 
