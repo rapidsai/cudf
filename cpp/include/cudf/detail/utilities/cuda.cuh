@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cub/cub.cuh>
 
@@ -29,6 +30,35 @@ namespace detail {
  * @brief Size of a warp in a CUDA kernel.
  */
 static constexpr size_type warp_size{32};
+
+/**
+ * @brief A kernel grid configuration construction gadget for simple
+ * one-dimensional, with protection against integer overflow.
+ */
+class grid_1d {
+ public:
+  const int num_threads_per_block;
+  const int num_blocks;
+  /**
+   * @param overall_num_elements The number of elements the kernel needs to
+   * handle/process, in its main, one-dimensional/linear input (e.g. one or more
+   * cuDF columns)
+   * @param num_threads_per_block The grid block size, determined according to
+   * the kernel's specific features (amount of shared memory necessary, SM
+   * functional units use pattern etc.); this can't be determined
+   * generically/automatically (as opposed to the number of blocks)
+   * @param elements_per_thread Typically, a single kernel thread processes more
+   * than a single element; this affects the number of threads the grid must
+   * contain
+   */
+  grid_1d(cudf::size_type overall_num_elements,
+          cudf::size_type num_threads_per_block_,
+          cudf::size_type elements_per_thread = 1)
+      : num_threads_per_block(num_threads_per_block_),
+        num_blocks(util::div_rounding_up_safe(
+            overall_num_elements,
+            elements_per_thread * num_threads_per_block)) {}
+};
 
 /**
  * @brief Performs a sum reduction of values from the same lane across all
@@ -51,7 +81,7 @@ template <std::size_t block_size, std::size_t leader_lane = 0, typename T>
 __device__ T single_lane_block_sum_reduce(T lane_value) {
   static_assert(block_size <= 1024, "Invalid block size.");
   static_assert(std::is_arithmetic<T>::value, "Invalid non-arithmetic type.");
-  constexpr auto warps_per_block{block_size / warp_size};
+  constexpr auto warps_per_block{block_size / experimental::detail::warp_size};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};
   __shared__ T lane_values[warp_size];

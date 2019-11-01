@@ -81,11 +81,11 @@ std::pair<rmm::device_buffer, size_type> valid_if(
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
-  //cudf::grid_1d grid{word_index(size), 256};
+  grid_1d grid{word_index(size), 256};
 
-  //valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-  //    static_cast<bitmask_type*>(null_mask.data()), begin, end, p,
-  //    valid_count.data());
+  valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+      static_cast<bitmask_type*>(null_mask.data()), begin, end, p,
+      valid_count.data());
 
   return std::make_pair(null_mask, valid_count.value(stream));
 }
