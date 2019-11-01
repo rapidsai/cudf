@@ -173,7 +173,7 @@ struct copy_range_dispatch {
 
       auto kernel = copy_range_kernel<T, decltype(input), true>;
       kernel<<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, null_count.get(), offset + begin, offset + end, input);
+        (data, bitmask, null_count.data(), offset + begin, offset + end, input);
 
       output.set_null_count(null_count.value());
     }
