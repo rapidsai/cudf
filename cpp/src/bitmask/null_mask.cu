@@ -20,6 +20,8 @@
 #include <cudf/utilities/error.hpp>
 #include <utilities/integer_utils.hpp>
 
+#include <thrust/device_ptr.h>
+#include <thrust/copy.h>
 #include <thrust/extrema.h>
 #include <cub/cub.cuh>
 #include <rmm/device_buffer.hpp>
@@ -232,18 +234,22 @@ rmm::device_buffer copy_bitmask(
     cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
   CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");
-  rmm::device_buffer dest_mask;
+  rmm::device_buffer dest_mask{};
   auto length = bitmask_allocation_size_bytes(end_bit - begin_bit);
+  if ((mask == nullptr) || (length == 0)) { return dest_mask; }
   if (begin_bit == 0) {
     dest_mask = rmm::device_buffer{static_cast<void const *>(mask),
       length, stream, mr};
   } else {
+    auto number_of_mask_words = cudf::util::div_rounding_up_safe(
+        static_cast<size_t>(end_bit - begin_bit), detail::size_in_bits<bitmask_type>());
     dest_mask = rmm::device_buffer{length, stream, mr};
-    cudf::util::cuda::grid_config_1d config(length/sizeof(bitmask_type), 256);
+    cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                  stream>>>(
     static_cast<bitmask_type *>(dest_mask.data()), mask,
-    begin_bit, length);
+    begin_bit, number_of_mask_words);
+    CUDA_CHECK_LAST()
   }
   return dest_mask;
 }
