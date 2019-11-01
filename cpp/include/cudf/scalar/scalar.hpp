@@ -48,22 +48,6 @@ class scalar {
   scalar& operator=(scalar&& other) = delete;
   
   /**
-   * @brief Construct a new scalar object
-   * 
-   * @note Do not use this constructor directly. Instead, use a factory method
-   * like make_numeric_scalar or make_string_scalar
-   * 
-   * @param type Data type of the scalar
-   * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
-   */
-  scalar(data_type type, bool is_valid = false, cudaStream_t stream = 0,
-      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
-   : _type(type), _is_valid(is_valid, stream, mr)
-  {}
-
-  /**
    * @brief Returns the scalar's logical value type
    */
   data_type type() const noexcept { return _type; }
@@ -99,33 +83,46 @@ class scalar {
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
 
   scalar() = default;
+
+  /**
+   * @brief Construct a new scalar object
+   * 
+   * @note Do not use this constructor directly. Instead, use a factory method
+   * like make_numeric_scalar or make_string_scalar
+   * 
+   * @param type Data type of the scalar
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  scalar(data_type type, bool is_valid = false, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : _type(type), _is_valid(is_valid, stream, mr)
+  {}
 };
 
-/**
- * @brief An owning class to represent a numerical value in device memory
- * 
- * @tparam T the data type of the numerical value
- */
+namespace detail {
+
 template <typename T>
-class numeric_scalar : public scalar {
-   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
+class fixed_width_scalar : public scalar {
+   static_assert(is_fixed_width<T>(), "Unexpected non-fixed-width type.");
  public:
   using value_type = T;
 
-  numeric_scalar() = default;
-  ~numeric_scalar() = default;
-  numeric_scalar(numeric_scalar&& other) = default;
-  numeric_scalar(numeric_scalar const& other) = default;
+  fixed_width_scalar() = default;
+  ~fixed_width_scalar() = default;
+  fixed_width_scalar(fixed_width_scalar&& other) = default;
+  fixed_width_scalar(fixed_width_scalar const& other) = default;
 
   /**
-   * @brief Construct a new numeric scalar object
+   * @brief Construct a new fixed width scalar object
    * 
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
    * @param mr The memory resource to use for allocation
    */
-  numeric_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
+  fixed_width_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
    : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
    , _data(value, stream, mr)
@@ -138,8 +135,8 @@ class numeric_scalar : public scalar {
    * @param stream The CUDA stream to do the operation in
    */
   void set_value(T value, cudaStream_t stream = 0) { 
-    _data.set_value(value, stream); 
-    this->set_valid(true, stream); 
+    _data.set_value(value, stream);
+    this->set_valid(true, stream);
   }
 
   /**
@@ -155,7 +152,39 @@ class numeric_scalar : public scalar {
   T* data() { return _data.data(); }
 
  protected:
-  rmm::device_scalar<T> _data{};  ///< device memory containing numeric value
+  rmm::device_scalar<T> _data{};  ///< device memory containing the value
+
+};
+
+} // namespace detail
+
+
+/**
+ * @brief An owning class to represent a numerical value in device memory
+ * 
+ * @tparam T the data type of the numerical value
+ */
+template <typename T>
+class numeric_scalar : public detail::fixed_width_scalar<T> {
+   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
+ public:
+  numeric_scalar() = default;
+  ~numeric_scalar() = default;
+  numeric_scalar(numeric_scalar&& other) = default;
+  numeric_scalar(numeric_scalar const& other) = default;
+
+  /**
+   * @brief Construct a new numeric scalar object
+   * 
+   * @param value The initial value of the scalar
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  numeric_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  {}
 };
 
 /**
@@ -171,7 +200,7 @@ class string_scalar : public scalar {
   string_scalar(string_scalar const& other) = default;
 
   /**
-   * @brief Construct a new numeric scalar object
+   * @brief Construct a new string scalar object
    * 
    * @param value The value of the string
    * @param is_valid Whether the value held by the scalar is valid
@@ -213,12 +242,9 @@ class string_scalar : public scalar {
  * @see cudf/wrappers/timestamps.hpp for a list of allowed types
  */
 template <typename T>
-class timestamp_scalar : public scalar {
+class timestamp_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
  public:
-
-  using value_type = T;
-
   timestamp_scalar() = default;
   ~timestamp_scalar() = default;
   timestamp_scalar(timestamp_scalar&& other) = default;
@@ -234,35 +260,8 @@ class timestamp_scalar : public scalar {
    */
   timestamp_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
-   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
-   , _data(value, stream, mr)
+   : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {}
-
-  /**
-   * @brief Set the value of the scalar
-   * 
-   * @param value New value of scalar
-   * @param stream The CUDA stream to do the operation in
-   */
-  void set_value(T value, cudaStream_t stream = 0) { 
-    _data.set_value(value, stream); 
-    this->set_valid(true, stream);
-  }
-
-  /**
-   * @brief Get the value of the scalar
-   * 
-   * @param stream The CUDA stream to do the operation in
-   */
-  T value(cudaStream_t stream = 0) { return _data.value(stream); }
-
-  /**
-   * @brief Returns a raw pointer to the value in device memory
-   */
-  T* data() { return _data.data(); }
-
- protected:
-  rmm::device_scalar<T> _data{};  ///< device memory containing timestamp value
 };
 
 }  // namespace cudf

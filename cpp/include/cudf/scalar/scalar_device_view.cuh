@@ -69,7 +69,7 @@ class scalar_device_view_base {
  * @brief A type of scalar_device_view where the value is a fixed width type
  */
 template <typename T>
-class primitive_scalar_device_view
+class fixed_width_scalar_device_view
     : public detail::scalar_device_view_base {
  public:
   using value_type = T;
@@ -109,7 +109,7 @@ class primitive_scalar_device_view
   T * _data{};      ///< Pointer to device memory containing the value
 
   /**
-   * @brief Construct a new primitive scalar device view object
+   * @brief Construct a new fixed width scalar device view object
    * 
    * This constructor should not be used directly. get_scalar_device_view
    * should be used to get the view of an existing scalar
@@ -119,7 +119,7 @@ class primitive_scalar_device_view
    * @param is_valid The pointer to the bool in device memory that indicates the
    * validity of the stored value
    */
-  primitive_scalar_device_view(data_type type, T* data, bool* is_valid)
+  fixed_width_scalar_device_view(data_type type, T* data, bool* is_valid)
    : detail::scalar_device_view_base(type, is_valid)
    , _data(data)
   {}
@@ -132,11 +132,11 @@ class primitive_scalar_device_view
  */
 template <typename T>
 class numeric_scalar_device_view
-    : public detail::primitive_scalar_device_view<T>
+    : public detail::fixed_width_scalar_device_view<T>
 {
  public:
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid) 
-    : detail::primitive_scalar_device_view<T>(type, data, is_valid)
+    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {}
 };
 
@@ -177,11 +177,11 @@ class string_scalar_device_view
  */
 template <typename T>
 class timestamp_scalar_device_view
-    : public detail::primitive_scalar_device_view<T>
+    : public detail::fixed_width_scalar_device_view<T>
 {
  public:
   timestamp_scalar_device_view(data_type type, T* data, bool* is_valid) 
-    : detail::primitive_scalar_device_view<T>(type, data, is_valid)
+    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {}
 };
 
