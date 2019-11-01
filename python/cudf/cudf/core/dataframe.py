@@ -3772,9 +3772,7 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(
-        self, method, axis=0, skipna=None, *args, **kwargs
-    ):
+    def _apply_support_method(self, method, axis=0, *args, **kwargs):
         assert axis in (None, 0, 1)
 
         if axis in (None, 0):
@@ -3794,6 +3792,8 @@ class DataFrame(object):
             return result
 
         elif axis == 1:
+            # for dask metadata compatibility
+            skipna = kwargs.pop("skipna", None)
             if skipna not in (None, True, 1):
                 msg = (
                     "Row-wise operations do not current support skipna=False."
