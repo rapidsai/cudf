@@ -112,8 +112,26 @@ class table {
    *---------------------------------------------------------------------------**/
   table_view select(std::vector<cudf::size_type> const& column_indices) const;
 
-  column& get_column(cudf::size_type i) { return *(_columns.at(i)); }
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a reference to the view of the specified column
+   *
+   * @throws std::out_of_range
+   * If i is out of the range [0, num_columns)
+   *
+   * @param i Index of the desired column
+   * @return A reference to the desired column
+   *---------------------------------------------------------------------------**/
+  column& get_column(cudf::size_type column_index) { return *(_columns.at(column_index)); }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a const reference to the view of the specified column
+   *
+   * @throws std::out_of_range
+   * If i is out of the range [0, num_columns)
+   *
+   * @param i Index of the desired column
+   * @return A const reference to the desired column
+   *---------------------------------------------------------------------------**/
   column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
 
  private:
