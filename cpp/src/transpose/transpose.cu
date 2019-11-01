@@ -29,8 +29,7 @@ constexpr int WARP_SIZE = 32;
 constexpr int MAX_GRID_SIZE = (1<<16)-1;
 
 /**
- * @brief Transposes the values from ncols x nrows input columns to
- *  nrows x ncols output columns
+ * @brief Transposes the values from ncols x nrows input to nrows x ncols output 
  * 
  * @tparam T  Datatype of values pointed to by the views
  * @param input[in]  Device view of input columns' data
@@ -46,51 +45,24 @@ void gpu_transpose(table_device_view const input, mutable_table_device_view outp
   size_type stride_x = blockDim.x * gridDim.x;
   size_type stride_y = blockDim.y * gridDim.y;
 
-  for(size_type i = x; i < input.num_columns(); i += stride_x)
-  {
-    for(size_type j = y; j < input.num_rows(); j += stride_y)
-    {
+  for (size_type i = x; i < input.num_columns(); i += stride_x) {
+    for (size_type j = y; j < input.num_rows(); j += stride_y) {
       output.column(j).element<T>(i) = input.column(i).element<T>(j);
     }
   }
 }
 
 /**
- * @brief Transposes the validity mask
+ * @brief Transposes the null mask from ncols x nrows input to nrows x ncols output
  * 
- * @param[in] in_cols_valid  pointers to the validity mask of the input columns
- * @param[out] out_cols_valid  pointers to the pre-allocated validity mask of
- *  the output columns
- * @param[out] out_cols_null_count  array of per output-row null counts
- * @param[in] ncols  number of columns in input table
- * @param[in] nrows  number of rows in input table
+ * @tparam T  Datatype of values pointed to by the views
+ * @param input[in]  Device view of input columns' data
+ * @param output[out]  Mutable device view of pre-allocated output columns' data
  */
 __global__
 void gpu_transpose_valids(table_device_view const input, mutable_table_device_view output)
-// TODO profile these two implementations
-#if 1
 {
-  size_type x = blockIdx.x * blockDim.x + threadIdx.x;
-  size_type y = blockIdx.y * blockDim.y + threadIdx.y;
-
-  size_type stride_x = blockDim.x * gridDim.x;
-  size_type stride_y = blockDim.y * gridDim.y;
-
-  for(size_type i = x; i < input.num_columns(); i += stride_x)
-  {
-    for(size_type j = y; j < input.num_rows(); j += stride_y)
-    {
-      if (input.column(i).is_valid(j)) {
-        output.column(j).set_valid(i);
-      } else {
-        output.column(j).set_null(i);
-      }
-    }
-  }
-}
-#else
-{
-  constexpr uint32_t BITS_PER_MASK{sizeof(bitmask_type) * 8};
+  constexpr cudf::size_type BITS_PER_MASK{sizeof(bitmask_type) * 8};
 
   size_type x = blockIdx.x * blockDim.x + threadIdx.x;
   size_type y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -98,41 +70,21 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
   size_type stride_x = blockDim.x * gridDim.x;
   size_type stride_y = blockDim.y * gridDim.y;
 
-  size_type i = x;
-  size_type j = y;
-  auto active_threads = __ballot_sync(0xffffffff, i < input.num_columns());
-  while(i < input.num_columns())
-  {
-    j = y;
-    while(j < input.num_rows())
-    {
-      bool const input_is_valid{input.column(i).is_valid(j)};
-      bitmask_type const result_mask{__ballot_sync(active_threads, input_is_valid)};
+  for (size_type i = x; i < input.num_columns(); i += stride_x) {
+    auto const active_threads = __ballot_sync(0xffffffff, i < input.num_columns());
 
-      bitmask_type* const __restrict__ out_mask32 = output.column(j).null_mask();
-
-      // TODO need to update this to make use of _offset
-      cudf::size_type const out_location = i / BITS_PER_MASK;
+    for (size_type j = y; j < input.num_rows(); j += stride_y) {
+      auto const result = __ballot_sync(active_threads, input.column(i).is_valid(j));
 
       // Only one thread writes output
-      if (0 == threadIdx.x % warpSize) {
-        out_mask32[out_location] = result_mask;
-        // TODO we can write the null count to an additional device buffer
-        //int num_nulls = __popc(active_threads) - __popc(result_mask);
-        //atomicAdd(out_cols_null_count + j, num_nulls);
+      if (0 == threadIdx.x % WARP_SIZE) {
+        output.column(j).set_mask_word(i / BITS_PER_MASK, result);
       }
-      
-      j += stride_y;
     }
-    i += stride_x;
-    active_threads = __ballot_sync(active_threads, i < input.num_columns());
   }
 }
-#endif
 
-// TODO: refactor and separate `valids` kernel launch into another function.
-// Should not need to pass `has_null`
-struct launch_kernel{
+struct launch_kernel {
   template <typename T>
   void operator()(
     table_view const& input,
@@ -150,7 +102,7 @@ struct launch_kernel{
 
     gpu_transpose<T><<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
 
-    if (has_null){
+    if (has_null) {
       gpu_transpose_valids<<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
 
       // Force null counts to be recomputed next time they are queried
