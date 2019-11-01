@@ -20,7 +20,7 @@
 #ifndef GDF_BINARY_OPERATION_JIT_UTIL_OPERATOR_H
 #define GDF_BINARY_OPERATION_JIT_UTIL_OPERATOR_H
 
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 
 namespace cudf {
 namespace binops {
