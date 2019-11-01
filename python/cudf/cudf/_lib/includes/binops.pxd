@@ -9,7 +9,7 @@ from cudf._lib.cudf cimport *
 
 from libcpp.string cimport string
 
-cdef extern from "cudf/binaryop.hpp" nogil:
+cdef extern from "cudf/legacy/binaryop.hpp" nogil:
 
     ctypedef enum gdf_binary_operator:
         GDF_ADD,
@@ -34,7 +34,7 @@ cdef extern from "cudf/binaryop.hpp" nogil:
         GDF_LOGICAL_OR,
         GDF_INVALID_BINARY
 
-cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/binaryop.hpp" namespace "cudf" nogil:
 
     cdef void binary_operation(
         gdf_column* out,

@@ -366,7 +366,7 @@ add_library(cudf
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
-            src/predicates/is_sorted.cu
+            src/predicates/legacy/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
@@ -377,13 +377,13 @@ add_library(cudf
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
             src/rolling/jit/util/type.cpp
-            src/binaryop/binaryop.cpp
-            src/binaryop/compiled/binary_ops.cu
-            src/binaryop/jit/code/kernel.cpp
-            src/binaryop/jit/code/operation.cpp
-            src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/util/operator.cpp
-            src/binaryop/jit/util/type.cpp
+            src/binaryop/legacy/binaryop.cpp
+            src/binaryop/legacy/compiled/binary_ops.cu
+            src/binaryop/legacy/jit/code/kernel.cpp
+            src/binaryop/legacy/jit/code/operation.cpp
+            src/binaryop/legacy/jit/code/traits.cpp
+            src/binaryop/legacy/jit/util/operator.cpp
+            src/binaryop/legacy/jit/util/type.cpp
             src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
@@ -392,27 +392,27 @@ add_library(cudf
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/apply_boolean_mask.cu
-            src/stream_compaction/drop_nulls.cu
-            src/stream_compaction/drop_duplicates.cu
+            src/stream_compaction/legacy/apply_boolean_mask.cu
+            src/stream_compaction/legacy/drop_nulls.cu
+            src/stream_compaction/legacy/drop_duplicates.cu
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/reductions/reductions.cu
-            src/reductions/min.cu
-            src/reductions/max.cu
-            src/reductions/any.cu
-            src/reductions/all.cu
-            src/reductions/sum.cu
-            src/reductions/product.cu
-            src/reductions/sum_of_squares.cu
-            src/reductions/mean.cu
-            src/reductions/var.cu
-            src/reductions/std.cu
+            src/reductions/legacy/reductions.cu
+            src/reductions/legacy/min.cu
+            src/reductions/legacy/max.cu
+            src/reductions/legacy/any.cu
+            src/reductions/legacy/all.cu
+            src/reductions/legacy/sum.cu
+            src/reductions/legacy/product.cu
+            src/reductions/legacy/sum_of_squares.cu
+            src/reductions/legacy/mean.cu
+            src/reductions/legacy/var.cu
+            src/reductions/legacy/std.cu
+            src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
-            src/reductions/scan.cu
             src/reshape/stack.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -457,6 +457,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/slice.cpp
+            src/copying/split.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
