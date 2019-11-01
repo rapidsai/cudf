@@ -141,20 +141,6 @@ void column::set_null_count(size_type new_null_count) {
   _null_count = new_null_count;
 }
 
-rmm::device_buffer copy_nullmask(column_view view, cudaStream_t stream,
-               rmm::mr::device_memory_resource *mr) {
-  rmm::device_buffer null_mask{};
-  if (view.nullable()) {
-    null_mask = std::move(
-        copy_bitmask(
-          view.null_mask(),
-          view.offset(),
-          view.offset() + view.size(),
-          stream, mr));
-  }
-  return null_mask;
-}
-
 struct CreateColumnFromView {
   cudf::column_view view;
   cudaStream_t stream;
@@ -182,7 +168,7 @@ struct CreateColumnFromView {
        static_cast<const char*>(view.head()) +
        (view.offset() * cudf::size_of(view.type())),
        view.size() * cudf::size_of(view.type()), stream, mr},
-       copy_nullmask(view, stream, mr),
+       cudf::copy_bitmask(view, stream, mr),
        view.null_count(), std::move(children));
 
    return col;
@@ -192,16 +178,7 @@ struct CreateColumnFromView {
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
-               rmm::mr::device_memory_resource *mr) {
-  auto col = cudf::experimental::type_dispatcher(
-      view.type(),
-      CreateColumnFromView{view, stream, mr});
-  _type = col->_type;
-  _size = col->_size;
-  _data = std::move(col->_data);
-  _null_mask = std::move(col->_null_mask);
-  _null_count = std::move(col->_null_count);
-  _children = std::move(col->_children);
-}
+               rmm::mr::device_memory_resource *mr) :
+column( *cudf::experimental::type_dispatcher(view.type(), CreateColumnFromView{view, stream, mr})) {}
 
 }  // namespace cudf
