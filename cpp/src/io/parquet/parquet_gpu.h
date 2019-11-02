@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define __IO_PARQUET_GPU_H__
 
 #include <cstdint>
+#include <io/comp/gpuinflate.h>
 #include "parquet_common.h"
 
 namespace cudf {
@@ -117,6 +118,76 @@ struct ColumnChunkDesc {
   int32_t ts_clock_rate;        // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
+
+/**
+ * @brief Struct describing an encoder column
+ **/
+struct EncColumnDesc
+{
+  const uint32_t *valid_map_base;   //!< base ptr of column valid map (null if not present)
+  const void *column_data_base;     //!< base ptr of column data
+  uint32_t num_rows;                //!< number of rows in column
+  uint8_t physical_type;            //!< physical data type
+  uint8_t converted_type;           //!< logical data type
+  uint8_t level_bits;               //!< bits to encode max definition (lower nibble) & repetition (upper nibble) levels
+  uint8_t pad;
+};
+
+#define MAX_PAGE_FRAGMENT_SIZE  5000    //!< Max number of rows in a page fragment
+
+/**
+ * @brief Struct describing an encoder page fragment
+ **/
+struct PageFragment
+{
+  uint32_t fragment_data_size;      //!< Size of fragment data in bytes
+  uint16_t num_rows;                //!< Number of rows in fragment
+  uint16_t non_nulls;               //!< Number of non-null values
+};
+
+/**
+ * @brief Struct describing an encoder data page
+ **/
+struct EncPage
+{
+  uint8_t *page_data;               //!< Ptr to uncompressed page
+  uint8_t *compressed_data;         //!< Ptr to compressed page
+  uint16_t num_fragments;           //!< Number of fragments in page
+  uint8_t page_type;                //!< Page type (0=data, 2=dictionary)
+  uint8_t pad;
+  uint32_t chunk_id;                //!< Index in chunk array
+  uint32_t max_hdr_size;            //!< Maximum size of page header
+  uint32_t max_data_size;           //!< Maximum size of coded page data (excluding header)
+  uint32_t start_row;               //!< First row of page
+  uint32_t num_rows;                //!< Rows in page
+};
+
+/**
+ * @brief Return worst-case compressed size of compressed data given the uncompressed size
+ **/
+inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size, uint32_t num_pages = 1) {
+  return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
+}
+
+/**
+ * @brief Struct describing an encoder column chunk
+ **/
+struct EncColumnChunk
+{
+  const EncColumnDesc *col_desc;    //!< Column description
+  const PageFragment *fragments;    //!< First fragment in chunk
+  uint8_t *uncompressed_bfr;        //!< Uncompressed page data
+  uint8_t *compressed_bfr;          //!< Compressed page data
+  uint32_t bfr_size;                //!< Uncompressed buffer size
+  uint32_t compressed_size;         //!< Compressed buffer size
+  uint32_t start_row;               //!< First row of chunk
+  uint32_t num_rows;                //!< Number of rows in chunk
+  uint32_t first_page;              //!< First page of chunk
+  uint32_t num_pages;               //!< Number of pages in chunk
+  uint8_t is_compressed;            //!< Nonzero if the chunk uses compression
+  uint8_t pad[3];
+};
+
 /**
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
@@ -163,6 +234,87 @@ cudaError_t DecodePageData(PageInfo *pages, int32_t num_pages,
                            ColumnChunkDesc *chunks, int32_t num_chunks,
                            size_t num_rows, size_t min_row = 0,
                            cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for initializing encoder page fragments
+ *
+ * @param[out] frag Fragment array [column_id][fragment_id]
+ * @param[in] col_desc Column description array [column_id]
+ * @param[in] num_fragments Number of fragments per column
+ * @param[in] num_columns Number of columns
+ * @param[in] fragment_size Number of rows per fragment
+ * @param[in] num_rows Number of rows per column
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
+                              int32_t num_fragments, int32_t num_columns,
+                              uint32_t fragment_size, uint32_t num_rows,
+                              cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for initializing encoder data pages
+ *
+ * @param[in,out] chunks Column chunks [rowgroup][column]
+ * @param[out] pages Encode page array (null if just counting pages)
+ * @param[in] col_desc Column description array [column_id]
+ * @param[in] num_rowgroups Number of fragments per column
+ * @param[in] num_columns Number of columns
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc,
+                             int32_t num_rowgroups, int32_t num_columns,
+                             cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for packing column data into parquet pages
+ *
+ * @param[in,out] pages Device array of EncPages (unordered)
+ * @param[in] chunks Column chunks
+ * @param[in] num_pages Number of pages
+ * @param[in] start_page First page to encode in page array
+ * @param[out] comp_in Optionally initializes compressor input params
+ * @param[out] comp_out Optionally initializes compressor output params
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages, uint32_t start_page = 0,
+                        gpu_inflate_input_s *comp_in = nullptr, gpu_inflate_status_s *comp_out = nullptr,
+                        cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] pages Device array of EncPages
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] comp_in Compressor input parameters
+ * @param[in] comp_out Compressor status
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks,
+                              const gpu_inflate_input_s *comp_in, const gpu_inflate_status_s *comp_out,
+                              cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel to gather pages to a single contiguous block per chunk
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] pages Device array of EncPages
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] comp_out Compressor status
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t GatherPages(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks, cudaStream_t stream = (cudaStream_t)0);
+
 
 } // namespace gpu
 } // namespace parquet
