@@ -20,9 +20,11 @@
 
 namespace cudf {
 
-enum class hash_func {
-  HASH_MURMUR3=0, ///< Murmur3 hash function
-  HASH_IDENTITY,  ///< Identity hash function that simply returns the key to be hashed
+struct hash_func {
+  enum Type {
+    MURMUR3 = 0, ///< Murmur3 hash function
+    IDENTITY,    ///< Identity hash function that simply returns the key to be hashed
+  };
 };
 
 /** --------------------------------------------------------------------------*
@@ -43,7 +45,7 @@ std::vector<std::unique_ptr<experimental::table>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
-               hash_func hash,
+               hash_func::Type hash,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
@@ -58,7 +60,7 @@ hash_partition(table_view const& input,
  * @returns A column where each row is the hash of a column from the input
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> hash(table_view const& input,
-                             hash_func hash,
+                             hash_func::Type hash,
                              std::vector<size_type> const& initial_hash_values,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
