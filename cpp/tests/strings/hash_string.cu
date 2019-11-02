@@ -19,7 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include "../src/hash/hash_functions.cuh"
+#include "../src/hash/legacy/hash_functions.cuh"
 #include "./utilities.h"
 
 #include <gmock/gmock.h>

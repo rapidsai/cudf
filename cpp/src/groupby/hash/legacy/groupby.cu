@@ -23,7 +23,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <hash/concurrent_unordered_map.cuh>
+#include <hash/legacy/concurrent_unordered_map.cuh>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>

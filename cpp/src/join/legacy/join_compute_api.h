@@ -25,7 +25,7 @@
 #include <rmm/rmm.h>
 #include <cudf/utilities/error.hpp>
 #include "full_join.cuh"
-#include <hash/helper_functions.cuh>
+#include <hash/legacy/helper_functions.cuh>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>

@@ -223,7 +223,7 @@ set(LEGACY_DATETIME_TEST_SRC
 ConfigureTest(LEGACY_DATETIME_TEST "${LEGACY_DATETIME_TEST_SRC}")
 
 ###################################################################################################
-# - hashing tests ---------------------------------------------------------------------------------
+# - legacy hashing tests ---------------------------------------------------------------------------------
 
 set(LEGACY_HASHING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_partition_test.cu"
@@ -232,13 +232,13 @@ set(LEGACY_HASHING_TEST_SRC
 ConfigureTest(LEGACY_HASHING_TEST "${LEGACY_HASHING_TEST_SRC}")
 
 ###################################################################################################
-# - hash_map tests --------------------------------------------------------------------------------
+# - legacy hash_map tests --------------------------------------------------------------------------------
 
-set(HASH_MAP_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/hash_map/map_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/hash_map/multimap_test.cu")
+set(LEGACY_HASH_MAP_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/hash_map/legacy/map_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hash_map/legacy/multimap_test.cu")
 
-ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
+ConfigureTest(LEGACY_HASH_MAP_TEST "${LEGACY_HASH_MAP_TEST_SRC}")
 
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------

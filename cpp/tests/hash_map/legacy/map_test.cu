@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <hash/concurrent_unordered_map.cuh>
+#include <hash/legacy/concurrent_unordered_map.cuh>
 
 #include <gtest/gtest.h>
 #include <rmm/thrust_rmm_allocator.h>

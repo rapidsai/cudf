@@ -24,7 +24,7 @@
 #include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
-#include <hash/concurrent_unordered_map.cuh>
+#include <hash/legacy/concurrent_unordered_map.cuh>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
