@@ -82,7 +82,23 @@ TYPED_TEST(SortedOrder, WithNullMin)
 
     auto got = cudf::experimental::sorted_order(input, column_order);
 
-    cudf::test::expect_columns_equal(expected, got->view());
+    if (!std::is_same<T, cudf::experimental::bool8>::value) {
+        cudf::test::expect_columns_equal(expected, got->view());
+    } else {
+        // for bools only validate that the null element landed at the front, since
+        // the rest of the values are equivalent and yields random sorted order.
+        auto to_host = [](cudf::column_view const& col) {
+            std::vector<int32_t> h_data(col.size());
+            cudaMemcpy(h_data.data(), col.data<int32_t>(),
+                       h_data.size() * sizeof(int32_t),
+                       cudaMemcpyDefault);
+            return h_data;
+        };
+        std::vector<int32_t> h_exp = to_host(expected);
+        std::vector<int32_t> h_got = to_host(got->view());
+        EXPECT_EQ(h_exp.at(0),
+                  h_got.at(0));
+    }
 }
 
 TYPED_TEST(SortedOrder, WithMixedNullOrder)
