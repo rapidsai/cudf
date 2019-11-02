@@ -15,15 +15,10 @@
  */
 #pragma once
 
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
+#include <cudf/hashing.hpp>
 
 namespace cudf {
-
-enum class hash_func {
-  HASH_MURMUR3=0, ///< Murmur3 hash function
-  HASH_IDENTITY,  ///< Identity hash function that simply returns the key to be hashed
-};
+namespace detail {
 
 /** --------------------------------------------------------------------------*
  * @brief Computes the hash values of the rows in the specified columns of the 
@@ -36,6 +31,7 @@ enum class hash_func {
  * @param num_partitions The number of partitions to use
  * @param hash The hash function to use
  * @param mr Optional resource to use for device memory allocation
+ * @param stream Optional stream on which all allocations and copies will be executed
  * 
  * @returns A vector of tables partitioned from the input
  * ----------------------------------------------------------------------------**/
@@ -44,7 +40,8 @@ hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
                hash_func hash,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+               cudaStream_t stream = 0);
 
 /** --------------------------------------------------------------------------*
  * @brief Computes the hash value of each row in the input set of columns.
@@ -54,12 +51,15 @@ hash_partition(table_view const& input,
  * @param initial_hash_values Optional vector of initial hash values for each
  * column. If this vector is empty then each element will be hashed as-is.
  * @param mr Optional resource to use for device memory allocation
+ * @param stream Optional stream on which all allocations and copies will be executed
  *
  * @returns A column where each row is the hash of a column from the input
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> hash(table_view const& input,
                              hash_func hash,
                              std::vector<size_type> const& initial_hash_values,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             cudaStream_t stream = 0);
 
+}  // namespace detail
 }  // namespace cudf
