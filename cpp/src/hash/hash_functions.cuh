@@ -17,6 +17,7 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
+#include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/strings/string_view.cuh>
 
@@ -37,18 +38,14 @@ struct MurmurHash3_32
     using argument_type = Key;
     using result_type = hash_value_type;
     
-    __forceinline__ 
-    __host__ __device__ 
-    MurmurHash3_32() : m_seed( 0 ) {}
+    CUDA_HOST_DEVICE_CALLABLE  MurmurHash3_32() : m_seed( 0 ) {}
     
-    __forceinline__ 
-    __host__ __device__ uint32_t rotl32( uint32_t x, int8_t r ) const
+    CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32( uint32_t x, int8_t r ) const
     {
       return (x << r) | (x >> (32 - r));
     }
     
-    __forceinline__ 
-    __host__ __device__ uint32_t fmix32( uint32_t h ) const
+    CUDA_HOST_DEVICE_CALLABLE uint32_t fmix32( uint32_t h ) const
     {
         h ^= h >> 16;
         h *= 0x85ebca6b;
@@ -71,7 +68,7 @@ struct MurmurHash3_32
      * @returns A hash value that intelligently combines the lhs and rhs hash values
      */
     /* ----------------------------------------------------------------------------*/
-    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs)
+    CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
     {
       result_type combined{lhs};
 
@@ -79,9 +76,80 @@ struct MurmurHash3_32
 
       return combined;
     }
+    
+    template <typename TKey = Key>
+    typename std::enable_if_t<std::is_same<TKey, cudf::bool8>::value, result_type>
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
+    {
+      return this->operator()(static_cast<int8_t>(key));
+    }
 
-    __forceinline__ 
-    __host__ __device__ result_type operator()(const Key& key) const
+    template <typename TKey = Key>
+    typename std::enable_if_t<std::is_same<TKey, cudf::experimental::bool8>::value, result_type>
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
+    {
+      return this->operator()(static_cast<uint8_t>(key));
+    }
+
+    /**
+    * @brief Specialization of MurmurHash3_32 operator for strings.
+    */
+    template <typename TKey = Key>
+    typename std::enable_if_t<std::is_same<TKey, cudf::string_view>::value, result_type>
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
+    {
+        const int len = (int)key.size_bytes();
+        const uint8_t* data = (const uint8_t*)key.data();
+        const int nblocks = len / 4;
+        result_type h1 = m_seed;
+        constexpr uint32_t c1 = 0xcc9e2d51;
+        constexpr uint32_t c2 = 0x1b873593;
+        auto getblock32 = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
+          // Individual byte reads for unaligned accesses (very likely)
+          #ifndef __CUDA_ARCH__
+            CUDF_FAIL("Hashing a string in host code is not supported.");
+          #else
+            auto q = (const uint8_t*)(p + i);
+            return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+          #endif
+        };
+
+        //----------
+        // body
+        const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+        for (int i = -nblocks; i; i++) {
+          uint32_t k1 = getblock32(blocks, i);
+          k1 *= c1;
+          k1 = rotl32(k1, 15);
+          k1 *= c2;
+          h1 ^= k1;
+          h1 = rotl32(h1, 13);
+          h1 = h1 * 5 + 0xe6546b64;
+        }
+        //----------
+        // tail
+        const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+        uint32_t k1 = 0;
+        switch (len & 3) {
+          case 3: k1 ^= tail[2] << 16;
+          case 2: k1 ^= tail[1] << 8;
+          case 1: k1 ^= tail[0];
+            k1 *= c1; k1 = rotl32(k1, 15); k1 *= c2; h1 ^= k1;
+        };
+        //----------
+        // finalization
+        h1 ^= len;
+        h1 = fmix32(h1);
+        return h1;
+    }
+
+    template <typename TKey = Key>
+    typename std::enable_if_t<
+      !std::is_same<TKey, cudf::bool8>::value &&
+      !std::is_same<TKey, cudf::string_view>::value &&
+      !std::is_same<TKey, cudf::experimental::bool8>::value,
+    result_type>
+    CUDA_HOST_DEVICE_CALLABLE operator()(const TKey& key) const
     {
         constexpr int len = sizeof(argument_type);
         const uint8_t * const data = (const uint8_t*)&key;
@@ -148,7 +216,7 @@ struct IdentityHash
      * @returns A hash value that intelligently combines the lhs and rhs hash values
      */
     /* ----------------------------------------------------------------------------*/
-    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const
+    CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
     {
       result_type combined{lhs};
 
@@ -157,8 +225,7 @@ struct IdentityHash
       return combined;
     }
 
-    __forceinline__ 
-    __host__ __device__ result_type operator()(const Key& key) const
+    CUDA_HOST_DEVICE_CALLABLE result_type operator()(const Key& key) const
     {
       return static_cast<result_type>(key);
     }
@@ -172,7 +239,7 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
 {
     using result_type = hash_value_type;
 
-    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const
+    CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
     {
       result_type combined{lhs};
 
@@ -181,8 +248,16 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
       return combined;
     }
 
-    __forceinline__ 
-    __host__ __device__ result_type operator()(cudf::detail::wrapper<T,type_id> const& key) const
+    template <gdf_dtype dtype = type_id>
+    typename std::enable_if_t<(dtype == GDF_BOOL8), result_type>
+    CUDA_HOST_DEVICE_CALLABLE operator()(cudf::detail::wrapper<T, dtype> const& key) const
+    {
+      return static_cast<result_type>(key);
+    }
+
+    template <gdf_dtype dtype = type_id>
+    typename std::enable_if_t<(dtype != GDF_BOOL8), result_type>
+    CUDA_HOST_DEVICE_CALLABLE operator()(cudf::detail::wrapper<T, dtype> const& key) const
     {
       return static_cast<result_type>(key.value);
     }
@@ -190,58 +265,6 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
 
 template <typename Key>
 using default_hash = MurmurHash3_32<Key>;
-
-/**
-* @brief Specialization of MurmurHash3_32 operator for strings.
-*/
-template<>
-__forceinline__ 
-__host__ __device__ hash_value_type MurmurHash3_32<cudf::string_view>::operator()(const cudf::string_view& key) const
-{
-    const int len = (int)key.size_bytes();
-    const uint8_t* data = (const uint8_t*)key.data();
-    const int nblocks = len / 4;
-    result_type h1 = m_seed;
-    constexpr uint32_t c1 = 0xcc9e2d51;
-    constexpr uint32_t c2 = 0x1b873593;
-    auto getblock32 = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
-      // Individual byte reads for unaligned accesses (very likely)
-      #ifndef __CUDA_ARCH__
-        CUDF_FAIL("Hashing a string in host code is not supported.");
-      #else
-        auto q = (const uint8_t*)(p + i);
-        return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-      #endif
-    };
-
-    //----------
-    // body
-    const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
-    for (int i = -nblocks; i; i++) {
-      uint32_t k1 = getblock32(blocks, i);
-      k1 *= c1;
-      k1 = rotl32(k1, 15);
-      k1 *= c2;
-      h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
-    }
-    //----------
-    // tail
-    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
-    uint32_t k1 = 0;
-    switch (len & 3) {
-      case 3: k1 ^= tail[2] << 16;
-      case 2: k1 ^= tail[1] << 8;
-      case 1: k1 ^= tail[0];
-        k1 *= c1; k1 = rotl32(k1, 15); k1 *= c2; h1 ^= k1;
-    };
-    //----------
-    // finalization
-    h1 ^= len;
-    h1 = fmix32(h1);
-    return h1;
-}
 
 
 #endif //HASH_FUNCTIONS_CUH
