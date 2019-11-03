@@ -87,19 +87,28 @@ struct wrapper
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(from_type v)
       : value{static_cast<bool>(v)} {}
 
-  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
+  template <gdf_dtype dtype = type_id,
+            std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const
+  {
     return this->value;
+  }
+
+  template <gdf_dtype dtype = type_id,
+            std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const
+  {
+    return static_cast<value_type>(static_cast<bool>(this->value));
   }
 
   // enable conversion to arithmetic types *only* for the cudf::bool8 wrapper
   // (defined later in this file as wrapper<int8_t, GDF_BOOL8>)
-  template <gdf_dtype the_type = type_id,
-            typename T_out,
-            typename std::enable_if<(the_type == GDF_BOOL8) &&
+  template <typename T_out, gdf_dtype dtype = type_id,
+            typename std::enable_if<(dtype == GDF_BOOL8) &&
                                      std::is_arithmetic<T_out>::value,
-                                     int>::type* = nullptr >
-  CUDA_HOST_DEVICE_CALLABLE
-  explicit operator T_out() const { 
+                                     int>::type* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit operator T_out() const
+  {
     // Casting a cudf::bool8 to arithmetic type should always be the same as
     // casting a bool to arithmetic type, and not the same as casting the
     // underlying type to arithmetic type. Therefore we cast the value to bool
