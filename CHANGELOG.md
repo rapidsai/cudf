@@ -56,7 +56,7 @@
 - PR #3128 Support MultiIndex in DataFrame.join
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3138 Move unary files to legacy
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
@@ -74,6 +74,7 @@
 - PR #3261 Small cleanup: remove `== true`
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
+- PR #3214 Port unary to libcudf++
 
 ## Bug Fixes
 
