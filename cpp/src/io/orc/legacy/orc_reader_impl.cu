@@ -688,8 +688,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
     memset(chunks.host_ptr(), 0, chunks.memory_size());
 
-    const bool use_index =
-        (use_index_ == true) &&
+    const bool use_index = use_index_ &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > md_->get_row_index_stride() &&
