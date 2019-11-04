@@ -16,3 +16,6 @@ cdef class Column:
     cdef size_type null_count(self)
 
     cdef gdf.gdf_column* gdf_column_view(self) except *
+
+    @staticmethod
+    cdef Column from_gdf_column(gdf.gdf_column* c_col)

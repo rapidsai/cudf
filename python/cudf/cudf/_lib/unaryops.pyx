@@ -1,4 +1,3 @@
-
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 # cython: profile=False
@@ -43,14 +42,13 @@ _UNARY_OP = {
 }
 
 
-def apply_unary_op(incol, op):
+def apply_unary_op(Column incol, op):
     """
     Call Unary ops.
     """
+    from cudf.core.column import build_column
 
-    check_gdf_compatibility(incol)
-
-    cdef gdf_column* c_incol = column_view_from_column(incol)
+    cdef gdf_column* c_incol = incol.gdf_column_view()
 
     cdef gdf_column c_out_col
 
@@ -86,7 +84,7 @@ def apply_unary_op(incol, op):
 
     free_column(c_incol)
 
-    return gdf_column_to_column(&c_out_col)
+    return Column.from_gdf_column(&c_out_col)
 
 
 def apply_dt_extract_op(incol, outcol, op):

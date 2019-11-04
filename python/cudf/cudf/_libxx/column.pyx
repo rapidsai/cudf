@@ -1,5 +1,7 @@
 import numpy as np
 
+import rmm
+
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
@@ -32,7 +34,7 @@ cdef class Column:
     @property
     def null_count(self):
         return self.null_count()
-    
+
     cdef size_type null_count(self):
         return self.view().null_count()
 
@@ -69,7 +71,7 @@ cdef class Column:
     @staticmethod
     cdef Column from_ptr(unique_ptr[column] c_col):
         from cudf.core.column import build_column
-        
+
         size = c_col.get()[0].size()
         dtype = cudf_to_np_types[c_col.get()[0].type().id()]
         has_nulls = c_col.get()[0].has_nulls()
@@ -81,7 +83,7 @@ cdef class Column:
             mask = None
         return build_column(data, size=size, dtype=dtype, mask=mask)
 
-    
+
     cdef gdf.gdf_column* gdf_column_view(self) except *:
         cdef gdf.gdf_column* c_col = <gdf.gdf_column*>malloc(sizeof(gdf.gdf_column))
         cdef uintptr_t data_ptr
@@ -125,3 +127,36 @@ cdef class Column:
             )
 
         return c_col
+
+    @staticmethod
+    cdef Column from_gdf_column(gdf.gdf_column* c_col):
+
+        from cudf.core.column import build_column
+        from cudf.utils.utils import mask_bitsize, calc_chunk_size
+
+        gdf_dtype = c_col.dtype
+        data_ptr = int(<uintptr_t>c_col.data)
+
+        if gdf_dtype == gdf.GDF_STRING:
+            raise NotImplementedError
+        elif gdf_dtype == gdf.GDF_STRING_CATEGORY:
+            raise NotImplementedError
+        else:
+            dtype = np.dtype(gdf.gdf_dtypes[gdf_dtype])
+            dbuf = rmm.DeviceBuffer(
+                ptr=data_ptr,
+                size=dtype.itemsize * c_col.size,
+            )
+            data = Buffer.from_array_like(dbuf)
+        mask = None
+        if c_col.valid:
+            mask_ptr = int(<uintptr_t>c_col.valid)
+            mbuf = rmm.DeviceBuffer(
+                ptr=mask_ptr,
+                size=calc_chunk_size(c_col.size, mask_bitsize))
+            mask = Buffer.from_array_like(mbuf)
+
+
+        return build_column(data=data,
+                            dtype=dtype,
+                            mask=mask)

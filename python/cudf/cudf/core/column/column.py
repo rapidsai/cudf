@@ -935,7 +935,7 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
         data = Buffer.empty(row_count * dtype.itemsize)
 
     if masked:
-        mask = Buffer.empty(row_count * mask_bitsize)
+        mask = Buffer.empty(calc_chunk_size(row_count, mask_bitsize))
     else:
         mask = None
 
