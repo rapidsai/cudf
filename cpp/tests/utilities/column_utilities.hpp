@@ -91,40 +91,40 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
  * @brief Copies the data and bitmask of a `column_view` of strings
  * column to the host.
  *
+ * @throw cudf::logic_error if c is not strings column.
+ *
  * @param c the `column_view` of strings to copy from
  * @return std::pair first is `std::vector` of `std::string`
  * and second is the column's bitmask.
  */
 template <>
 inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
-  std::size_t const mask_bytes{bitmask_allocation_size_bytes(c.size())};
   std::vector<std::string> host_data;
   std::vector<bitmask_type> host_bitmask;
 
   auto strings = strings_column_view(c);
-
   auto strings_data = cudf::strings::create_offsets(strings);
-  thrust::host_vector<char> h_chars(strings_data.first);
-  thrust::host_vector<size_type> h_offsets(strings_data.second);
+  thrust::host_vector<char> h_chars(strings_data.first);         // copies vectors to
+  thrust::host_vector<size_type> h_offsets(strings_data.second); // host automatically
 
+  // copy nulls to host bitmask
   if( c.has_nulls() )
   {
-    size_t num_mask_elements =
-      std::ceil(static_cast<float>(mask_bytes) / sizeof(bitmask_type));
-    host_bitmask.resize(num_mask_elements);
+    auto num_bitmasks = num_bitmask_words(c.size());
+    host_bitmask.resize(num_bitmasks);
     CUDA_TRY(cudaMemcpy(host_bitmask.data(), c.null_mask(),
-                         mask_bytes, cudaMemcpyDeviceToHost));
+                        num_bitmasks*sizeof(bitmask_type), cudaMemcpyDeviceToHost));
   }
 
-  for( size_type idx=0; idx < strings.size(); ++idx )
+  // build std::string vector from chars and offsets
+  if( !h_chars.empty() ) // check for all nulls case
   {
-      auto offset = h_offsets[idx];
-      auto length = h_offsets[idx+1] - offset;
-      auto mask_idx = idx / (sizeof(bitmask_type)*8);
-      if( !host_bitmask.empty() && (host_bitmask[mask_idx] & (1 << (idx % (sizeof(bitmask_type)*8))) > 0 ))
-          host_data.push_back( std::string( h_chars.data()+offset, length));
-      else
-          host_data.push_back( "<null>" ); // this string doesn't really matter
+    for( size_type idx=0; idx < strings.size(); ++idx )
+    {
+        auto offset = h_offsets[idx];
+        auto length = h_offsets[idx+1] - offset;
+        host_data.push_back(std::string( h_chars.data()+offset, length));
+    }
   }
 
   return std::make_pair(host_data, host_bitmask);

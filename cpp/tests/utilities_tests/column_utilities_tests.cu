@@ -89,3 +89,12 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
       EXPECT_TRUE((*result_itr)==(*itr));
   }
 }
+
+TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
+{
+  std::vector<const char*> h_strings{ nullptr, nullptr, nullptr };
+  cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+  auto host_data = cudf::test::to_host<std::string>(strings);
+  EXPECT_TRUE( host_data.first.empty() );
+}
