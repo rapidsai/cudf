@@ -45,9 +45,8 @@ std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view
                                            cudaStream_t stream=0 )
 {
     auto num_columns = strings_columns.size();
-    // TODO  Return a copy of the single column instead.
-    //       Use the column(column_view) ctor once available in 3219.
-    CUDF_EXPECTS( num_columns>1, "concatenate requires at least 2 columns");
+    if( num_columns==1 ) // single column returns a copy
+        return std::make_unique<column>(strings_columns[0].parent(),stream,mr);
 
     auto first_column = column_device_view::create(strings_columns[0].parent(),stream);
     auto strings_count = first_column->size();
@@ -232,8 +231,8 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                 bytes += d_separator.size_bytes();
             return bytes;
         },
-        thrust::plus<int32_t>());
-    CUDA_TRY(cudaMemsetAsync(d_output_offsets, 0, sizeof(int32_t), stream));
+        thrust::plus<size_type>());
+    CUDA_TRY(cudaMemsetAsync(d_output_offsets, 0, sizeof(size_type), stream));
     // total size is the last entry
     size_type bytes = output_offsets.back();
 
