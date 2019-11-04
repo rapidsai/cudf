@@ -118,14 +118,14 @@ class Series(object):
         if data is None:
             data = {}
 
-        if not isinstance(data, column.TypedColumnBase):
+        if not isinstance(data, column.ColumnBase):
             data = column.as_column(
                 data, nan_as_null=nan_as_null, dtype=dtype, name=name
             )
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
-        assert isinstance(data, column.TypedColumnBase)
+        assert isinstance(data, column.ColumnBase)
         if name is None:
             name = data.name
         if data.name != name:
@@ -1131,7 +1131,7 @@ class Series(object):
     @property
     def has_null_mask(self):
         """A boolean indicating whether a null-mask is needed"""
-        return self._column.has_null_mask
+        return self._column.mask is not None
 
     def drop_duplicates(self, keep="first", inplace=False):
         """

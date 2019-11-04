@@ -163,27 +163,19 @@ def nans_to_nulls(Column py_col):
     return mask
 
 
-def is_null(col):
-    from cudf.core.column import as_column, Column
-
-    if (not isinstance(col, Column)):
-        col = as_column(col)
-    cdef gdf_column* c_col = column_view_from_column(col)
+def is_null(Column col):
+    cdef gdf_column* c_col = col.gdf_column_view()
 
     cdef gdf_column result = cpp_unaryops.is_null(c_col[0])
     free_column(c_col)
 
-    return gdf_column_to_column(&result)
+    return Column.from_gdf_column(&result)
 
 
-def is_not_null(col):
-    from cudf.core.column import as_column, Column
-
-    if (not isinstance(col, Column)):
-        col = as_column(col)
-    cdef gdf_column* c_col = column_view_from_column(col)
+def is_not_null(Column col):
+    cdef gdf_column* c_col = col.gdf_column_view()
 
     cdef gdf_column result = cpp_unaryops.is_not_null(c_col[0])
     free_column(c_col)
 
-    return gdf_column_to_column(&result)
+    return Column.from_gdf_column(&result)
