@@ -742,7 +742,7 @@ inline __device__ uint8_t *cpw_put_int64(uint8_t *p, int64_t v) {
 }
 
 inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t) {
-    if (f >= cur && f <= cur + 15) {
+    if (f > cur && f <= cur + 15) {
         *p++ = ((f - cur) << 4) | t;
         return p;
     }
