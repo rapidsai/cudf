@@ -22,6 +22,7 @@
 - PR #3223 Java expose underlying buffers
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3291 Add normalize_nans_and_zeros
 
 ## Improvements
 
