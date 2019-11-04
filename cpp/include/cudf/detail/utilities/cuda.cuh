@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/types.hpp>
 
 #include <cub/cub.cuh>
 
@@ -87,10 +87,8 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
   __shared__ T lane_values[warp_size];
 
   // Load each lane's value into a shared memory array
-  // If there are fewer than 32 warps, initialize with the identity of addition,
-  // i.e., a default constructed T
   if (lane_id == leader_lane) {
-    lane_values[warp_id] = (warp_id < warps_per_block) ? lane_value : T{};
+    lane_values[warp_id] = lane_value;
   }
   __syncthreads();
 
@@ -99,7 +97,8 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
   T result{0};
   if (warp_id == 0) {
     __shared__ typename cub::WarpReduce<T>::TempStorage temp;
-    result = cub::WarpReduce<T>(temp).sum(lane_values[lane_id]);
+    lane_value = (lane_id < warps_per_block) ? lane_values[lane_id] : T{0};
+    result = cub::WarpReduce<T>(temp).Sum(lane_value);
   }
   return result;
 }
