@@ -17,8 +17,6 @@
 
 #include <cuda_runtime.h>
 
-//struct Reljunk_Sub;
-
 namespace cudf
 {
 class string_view;
@@ -35,21 +33,21 @@ struct Reinst;
 class dreclass
 {
 public:
-    int builtins;
-    int count;
-    char32_t* chrs;
-    unsigned char* uflags;
+    int32_t builtins{};
+    int32_t count{};
+    char32_t* chrs{};
+    const uint8_t* codepoint_flags{};
 
-    __device__ inline dreclass(unsigned char* uflags);
-    __device__ inline bool is_match(char32_t ch);
+    __device__ inline dreclass(const uint8_t* flags) : codepoint_flags(flags) {}
+    __device__ bool is_match(char32_t ch);
 };
 
 //
 class dreprog
 {
-    int startinst_id, num_capturing_groups;
-    int insts_count, starts_count, classes_count;
-    unsigned char* unicode_flags;
+    int32_t startinst_id, num_capturing_groups;
+    int32_t insts_count, starts_count, classes_count;
+    const uint8_t* codepoint_flags;
     void* relists_mem;
     u_char* stack_mem1;
     u_char* stack_mem2;
@@ -60,26 +58,26 @@ class dreprog
     void free_relists();
 
     //
-    __device__ inline int regexec( string_view const& dstr, Reljunk& jnk, int& begin, int& end, int groupid=0 );
-    __device__ inline int call_regexec( unsigned idx, string_view const& dstr, int& begin, int& end, int groupid=0 );
+    __device__ inline int32_t regexec( string_view const& dstr, Reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
+    __device__ inline int32_t call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
 public:
     //
-    static dreprog* create_from(const char32_t* pattern, unsigned char* uflags);
+    static dreprog* create_from(const char32_t* pattern, const uint8_t* cp_flags);
     static void destroy(dreprog* ptr);
     bool alloc_relists(size_t count);
 
-    int inst_counts();
-    int group_counts();
+    int32_t inst_counts();
+    int32_t group_counts();
 
     __device__ inline void set_stack_mem(u_char* s1, u_char* s2);
 
-    __host__ __device__ inline Reinst* get_inst(int idx);
-    __device__ inline int get_class(int idx, dreclass& cls);
+    __host__ __device__ inline Reinst* get_inst(int32_t idx);
+    __device__ inline int get_class(int32_t idx, dreclass& cls);
     __device__ inline int* get_startinst_ids();
 
-    __device__ inline int find( unsigned int idx, string_view const& dstr, int& begin, int& end );
-    __device__ inline int extract( unsigned int idx, string_view const& dstr, int& begin, int& end, int col );
+    __device__ inline int find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end );
+    __device__ inline int extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col );
 
 };
 
@@ -93,8 +91,13 @@ public:
 #define RX_STACK_MEDIUM 1104
 #define RX_STACK_LARGE  10128
 
+#define RX_SMALL_INSTS  (RX_STACK_SMALL/11)
+#define RX_MEDIUM_INSTS (RX_STACK_MEDIUM/11)
+#define RX_LARGE_INSTS  (RX_STACK_LARGE/11)
+
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf
 
-#include "./regexec.inl"
+#include "./regex.inl"

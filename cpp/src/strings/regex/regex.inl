@@ -14,14 +14,14 @@
 * limitations under the License.
 */
 
+#include <cuda_runtime.h>
 #include <cudf/strings/string_view.cuh>
-
-#include <memory.h>
-#include <rmm/rmm.h>
-
 #include "./regcomp.h"
 #include "../char_types/is_flags.h"
 #include "../utilities.cuh"
+
+#include <memory.h>
+
 
 namespace cudf
 {
@@ -31,22 +31,22 @@ namespace detail
 {
 
 //
-struct Relist
+struct alignas(8) Relist
 {
-    short size, listsize;
-    int pad; // keep struct on 8-byte bounday
-    int2* ranges;      // pair per inst
-    short* inst_ids;   // one per inst
-    u_char* mask;      // bit per inst
+    int16_t size, listsize;
+    int32_t reserved;
+    int2* ranges;        // pair per instruction
+    int16_t* inst_ids;   // one per instruction
+    u_char* mask;        // bit per instruction
 
-    __host__ __device__ inline static int data_size_for(int insts)
+    __host__ __device__ inline static int32_t data_size_for(int32_t insts)
     {
         return ((sizeof(ranges[0])+sizeof(inst_ids[0]))*insts) + ((insts+7)/8);
     }
 
-    __host__ __device__ inline static int alloc_size(int insts)
+    __host__ __device__ inline static int32_t alloc_size(int32_t insts)
     {
-        int size = sizeof(Relist);
+        int32_t size = sizeof(Relist);
         size += data_size_for(insts);
         size = ((size+7)/8)*8;   // align it too
         return size;
@@ -54,7 +54,7 @@ struct Relist
 
     __host__ __device__ inline Relist() {}
 
-    __host__ __device__ inline void set_data(short insts, u_char* data=nullptr)
+    __host__ __device__ inline void set_data(int16_t insts, u_char* data=nullptr)
     {
         listsize = insts;
         u_char* ptr = (u_char*)data;
@@ -74,7 +74,7 @@ struct Relist
         size = 0;
     }
 
-    __device__ inline bool activate(int i, int begin, int end)
+    __device__ inline bool activate(int32_t i, int32_t begin, int32_t end)
     {
         //if ( i >= listsize || i<0 )
         //    printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
@@ -85,20 +85,15 @@ struct Relist
             {
                 writeMask(true, i);
                 inst_ids[size] = (short)i;
-
-                int2 range;
-                range.x = begin;
-                range.y = end;
-                ranges[size] = range;
-
-                size++;
+                ranges[size] = int2{begin,end};
+                ++size;
                 return true;
             }
         }
         return false;
     }
 
-    __device__ inline void writeMask(bool v, int pos)
+    __device__ inline void writeMask(bool v, int32_t pos)
     {
         u_char uc = 1 << (pos & 7);
         if (v)
@@ -107,8 +102,7 @@ struct Relist
             mask[pos >> 3] &= ~uc;
     }
 
-    //if( tid > jnk.list1->minId && tid < jnk.list1->maxId && !readMask(jnk.list1->mask, tid) )
-    __device__ inline bool readMask(int pos)
+    __device__ inline bool readMask(int32_t pos)
     {
         u_char uc = mask[pos >> 3];
         return (bool)((uc >> (pos & 7)) & 1);
@@ -118,19 +112,16 @@ struct Relist
 struct	Reljunk
 {
     Relist *list1, *list2;
-    int	starttype;
+    int32_t	starttype;
     char32_t startchar;
 };
 
 __device__ inline void swaplist(Relist*& l1, Relist*& l2)
 {
-    Relist* t = l1;
+    Relist* tmp = l1;
     l1 = l2;
-    l2 = t;
+    l2 = tmp;
 }
-
-__device__ inline dreclass::dreclass(unsigned char* flags)
-                    : builtins(0), count(0), chrs(0), uflags(flags) {}
 
 __device__ inline bool dreclass::is_match(char32_t ch)
 {
@@ -142,10 +133,10 @@ __device__ inline bool dreclass::is_match(char32_t ch)
     }
     if( !builtins )
         return false;
-    unsigned int uni = cudf::strings::detail::utf8_to_codepoint(ch);
-    if( uni > 0x00FFFF )
+    uint32_t codept = utf8_to_codepoint(ch);
+    if( codept > 0x00FFFF )
         return false;
-    unsigned char fl = uflags[uni];
+    int8_t fl = codepoint_flags[codept];
     if( (builtins & 1) && ((ch=='_') || IS_ALPHANUM(fl)) ) // \w
         return true;
     if( (builtins & 2) && IS_SPACE(fl) ) // \s
@@ -168,57 +159,56 @@ __device__ inline void dreprog::set_stack_mem(u_char* s1, u_char* s2)
     stack_mem2 = s2;
 }
 
-__host__ __device__ inline Reinst* dreprog::get_inst(int idx)
+__host__ __device__ inline Reinst* dreprog::get_inst(int32_t idx)
 {
     if( idx < 0 || idx >= insts_count )
         return 0;
-    u_char* buffer = (u_char*)this;
+    u_char* buffer = reinterpret_cast<u_char*>(this);
     Reinst* insts = (Reinst*)(buffer + sizeof(dreprog));
     return insts + idx;
 }
 
-__device__ inline int dreprog::get_class(int idx, dreclass& cls)
+__device__ inline int32_t dreprog::get_class(int32_t idx, dreclass& cls)
 {
     if( idx < 0 || idx >= classes_count )
         return 0;
-    u_char* buffer = (u_char*)this;
+    u_char* buffer = reinterpret_cast<u_char*>(this);
     buffer += sizeof(dreprog) + (insts_count * sizeof(Reinst)) + (starts_count * sizeof(int));
-    int* offsets = (int*)buffer;
-    buffer += classes_count * sizeof(int);
-    char32_t* classes = (char32_t*)buffer;
-    int offset = offsets[idx];
-    int builtins, len = offset -1;
+    int* offsets = reinterpret_cast<int*>(buffer);
+    buffer += classes_count * sizeof(int32_t);
+    char32_t* classes = reinterpret_cast<char32_t*>(buffer);
+    auto offset = offsets[idx];
+    int32_t builtins, length = offset -1;
     if( idx > 0 )
     {
         offset = offsets[idx-1];
-        len -= offset;
+        length -= offset;
         classes += offset;
     }
-    memcpy( &builtins, classes++, sizeof(int) );
+    memcpy( &builtins, classes++, sizeof(int32_t) );
     cls.builtins = builtins;
-    cls.count = len;
+    cls.count = length;
     cls.chrs = classes;
-    return len;
+    return length;
 }
 
 __device__ inline int* dreprog::get_startinst_ids()
 {
-    u_char* buffer = (u_char*)this;
-    int* ids = (int*)(buffer + sizeof(dreprog) + (insts_count * sizeof(Reinst)));
+    u_char* buffer = reinterpret_cast<u_char*>(this);
+    int32_t* ids = reinterpret_cast<int*>(buffer + sizeof(dreprog) + (insts_count * sizeof(Reinst)));
     return ids;
 }
 
+
 // execute compiled expression for each character in the provided string
-__device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, int& begin, int& end, int groupId)
+__device__ inline int32_t dreprog::regexec(string_view const& dstr, Reljunk &jnk, int32_t& begin, int32_t& end, int32_t groupId)
 {
-    int match = 0;
-    int checkstart = jnk.starttype;
-
-    int txtlen = dstr.length();
-
-    int pos = begin;
-    int eos = end;
-    char32_t c = 0; // lc = 0;
+    int32_t match = 0;
+    auto checkstart = jnk.starttype;
+    auto txtlen = dstr.length();
+    auto pos = begin;
+    auto eos = end;
+    char32_t c = 0;
     string_view::const_iterator itr = string_view::const_iterator(dstr,pos);
 
     jnk.list1->reset();
@@ -231,7 +221,7 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
             {
                 case CHAR:
                 {
-                    int fidx = dstr.find((char_utf8)jnk.startchar,pos);
+                    auto fidx = dstr.find(static_cast<char_utf8>(jnk.startchar),pos);
                     if( fidx < 0 )
                         return match;
                     pos = fidx;
@@ -244,7 +234,7 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
                     if( jnk.startchar != '^' )
                         return match;
                     --pos;
-                    int fidx = dstr.find((char_utf8)'\n',pos);
+                    int fidx = dstr.find(static_cast<char_utf8>('\n'),pos);
                     if( fidx < 0 )
                         return match;  // update begin/end values?
                     pos = fidx + 1;
@@ -257,14 +247,13 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
         if ( ((eos < 0) || (pos < eos)) && match == 0)
         {
             //jnk.list1->activate(startinst_id, pos, 0);
-            int i = 0;
-            int* ids = get_startinst_ids();
+            int32_t i = 0;
+            auto ids = get_startinst_ids();
             while( ids[i] >=0 )
                 jnk.list1->activate(ids[i++], (groupId==0 ? pos:-1), -1);
         }
 
-        //c = (char32_t)(pos >= txtlen ? 0 : dstr->at(pos) );
-        c = (char32_t)(pos >= txtlen ? 0 : *itr); // iterator is many times faster than at()
+        c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
 
         // expand LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
         bool expanded;
@@ -273,14 +262,14 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
             jnk.list2->reset();
             expanded = false;
 
-            for (short i = 0; i < jnk.list1->size; i++)
+            for( int16_t i = 0; i < jnk.list1->size; i++)
             {
-                int inst_id = (int)jnk.list1->inst_ids[i];
-                int2 &range = jnk.list1->ranges[i];
+                int32_t inst_id = static_cast<int32_t>(jnk.list1->inst_ids[i]);
+                int2& range = jnk.list1->ranges[i];
                 const Reinst* inst = get_inst(inst_id);
-                int id_activate = -1;
+                int32_t id_activate = -1;
 
-                switch (inst->type)
+                switch(inst->type)
                 {
                     case CHAR:
                     case ANY:
@@ -291,19 +280,19 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
                         id_activate = inst_id;
                         break;
                     case LBRA:
-                        if (inst->u1.subid == groupId)
+                        if(inst->u1.subid == groupId)
                             range.x = pos;
                         id_activate = inst->u2.next_id;
                         expanded = true;
                         break;
                     case RBRA:
-                        if (inst->u1.subid == groupId)
+                        if(inst->u1.subid == groupId)
                             range.y = pos;
                         id_activate = inst->u2.next_id;
                         expanded = true;
                         break;
                     case BOL:
-                        if( (pos==0) || ((inst->u1.c=='^') && (dstr[pos-1]==(char_utf8)'\n')) )
+                        if( (pos==0) || ((inst->u1.c=='^') && (dstr[pos-1]==static_cast<char_utf8>('\n'))) )
                         {
                             id_activate = inst->u2.next_id;
                             expanded = true;
@@ -318,11 +307,11 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
                         break;
                     case BOW:
                     {
-                        unsigned int uni = utf8_to_codepoint(c);
-                        char32_t lc = (char32_t)(pos ? dstr[pos-1] : 0);
-                        unsigned int luni = utf8_to_codepoint(lc);
-                        bool cur_alphaNumeric = (uni < 0x010000) && IS_ALPHANUM(unicode_flags[uni]);
-                        bool last_alphaNumeric = (luni < 0x010000) && IS_ALPHANUM(unicode_flags[luni]);
+                        auto codept = utf8_to_codepoint(c);
+                        char32_t last_c = static_cast<char32_t>(pos ? dstr[pos-1] : 0);
+                        auto last_codept = utf8_to_codepoint(last_c);
+                        bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(codepoint_flags[codept]);
+                        bool last_alphaNumeric = (last_codept < 0x010000) && IS_ALPHANUM(codepoint_flags[last_codept]);
                         if( cur_alphaNumeric != last_alphaNumeric )
                         {
                             id_activate = inst->u2.next_id;
@@ -332,11 +321,11 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
                     }
                     case NBOW:
                     {
-                        unsigned int uni = utf8_to_codepoint(c);
-                        char32_t lc = (char32_t)(pos ? dstr[pos-1] : 0);
-                        unsigned int luni = utf8_to_codepoint(lc);
-                        bool cur_alphaNumeric = (uni < 0x010000) && IS_ALPHANUM(unicode_flags[uni]);
-                        bool last_alphaNumeric = (luni < 0x010000) && IS_ALPHANUM(unicode_flags[luni]);
+                        auto codept = utf8_to_codepoint(c);
+                        char32_t last_c = static_cast<char32_t>(pos ? dstr[pos-1] : 0);
+                        auto last_codept = utf8_to_codepoint(last_c);
+                        bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(codepoint_flags[codept]);
+                        bool last_alphaNumeric = (last_codept < 0x010000) && IS_ALPHANUM(codepoint_flags[last_codept]);
                         if( cur_alphaNumeric == last_alphaNumeric )
                         {
                             id_activate = inst->u2.next_id;
@@ -358,23 +347,23 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
 
         } while (expanded);
 
-        // execute, only CHAR, ANY, ANYNL, CCLASS, NCCLASS, END left now
+        // execute
         jnk.list2->reset();
-        for (short i = 0; i < jnk.list1->size; i++)
+        for (int16_t i = 0; i < jnk.list1->size; i++)
         {
-            int inst_id = (int)jnk.list1->inst_ids[i];
-            int2 &range = jnk.list1->ranges[i];
+            int32_t inst_id = static_cast<int32_t>(jnk.list1->inst_ids[i]);
+            int2& range = jnk.list1->ranges[i];
             const Reinst* inst = get_inst(inst_id);
-            int id_activate = -1;
+            int32_t id_activate = -1;
 
-            switch (inst->type)
+            switch(inst->type)
             {
             case CHAR:
-                if (inst->u1.c == c)
+                if(inst->u1.c == c)
                     id_activate = inst->u2.next_id;
                 break;
             case ANY:
-                if (c != '\n')
+                if(c != '\n')
                     id_activate = inst->u2.next_id;
                 break;
             case ANYNL:
@@ -382,7 +371,7 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
                 break;
             case CCLASS:
             {
-                dreclass cls(unicode_flags);
+                dreclass cls(codepoint_flags);
                 get_class(inst->u1.cls_id,cls);
                 if( cls.is_match(c) )
                     id_activate = inst->u2.next_id;
@@ -390,7 +379,7 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
             }
             case NCCLASS:
             {
-                dreclass cls(unicode_flags);
+                dreclass cls(codepoint_flags);
                 get_class(inst->u1.cls_id,cls);
                 if( !cls.is_match(c) )
                     id_activate = inst->u2.next_id;
@@ -418,22 +407,22 @@ __device__ inline int dreprog::regexec(string_view const& dstr, Reljunk &jnk, in
 }
 
 
-__device__ inline int dreprog::find( unsigned int idx, string_view const& dstr, int& begin, int& end )
+__device__ inline int32_t dreprog::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
 {
-    int rtn = 0;
+    int32_t rtn = 0;
     rtn = call_regexec(idx,dstr,begin,end);
     if( rtn <=0 )
         begin = end = -1;
     return rtn;
 }
 
-__device__ inline int dreprog::extract( unsigned int idx, string_view const& dstr, int& begin, int& end, int col )
+__device__ inline int32_t dreprog::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col )
 {
     end = begin + 1;
     return call_regexec(idx,dstr,begin,end,col+1);
 }
 
-__device__ inline int dreprog::call_regexec( unsigned idx, string_view const& dstr, int& begin, int& end, int groupid )
+__device__ inline int dreprog::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
 {
     Reljunk jnk;
     jnk.starttype = 0;
@@ -455,13 +444,13 @@ __device__ inline int dreprog::call_regexec( unsigned idx, string_view const& ds
         return regexec(dstr,jnk,begin,end,groupid);
     }
 
-    int relsz = Relist::alloc_size(insts_count);
-    u_char* drel = (u_char*)relists_mem; // beginning of Relist buffer;
-    drel += (idx * relsz * 2);           // two Relist ptrs in Reljunk
-    jnk.list1 = (Relist*)drel;           // first one
-    jnk.list2 = (Relist*)(drel + relsz); // second one
-    jnk.list1->set_data((short)insts_count); // essentially this is
-    jnk.list2->set_data((short)insts_count); // substitute ctor call
+    auto relists_size = Relist::alloc_size(insts_count);
+    u_char* drel = reinterpret_cast<u_char*>(relists_mem);        // beginning of Relist buffer;
+    drel += (idx * relists_size * 2);                             // two Relist ptrs in Reljunk:
+    jnk.list1 = reinterpret_cast<Relist*>(drel);                  // - first one
+    jnk.list2 = reinterpret_cast<Relist*>(drel + relists_size);   // - second one
+    jnk.list1->set_data(static_cast<int16_t>(insts_count));       // essentially this is
+    jnk.list2->set_data(static_cast<int16_t>(insts_count));       // substitute ctor call
     return regexec(dstr,jnk,begin,end,groupid);
 }
 

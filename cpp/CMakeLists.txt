@@ -486,7 +486,8 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/strings/char_types/char_types.cu
             src/strings/regex/regcomp.cpp
-            src/strings/regex/regexec.cpp
+            src/strings/regex/regexec.cu
+            src/strings/contains.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding
