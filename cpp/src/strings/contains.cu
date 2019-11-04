@@ -32,7 +32,7 @@ namespace strings
 {
 namespace detail
 {
-namespace 
+namespace
 {
 
 template<size_t stack_size>
@@ -99,17 +99,17 @@ std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
     //
     auto execpol = rmm::exec_policy(stream);
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
-        thrust::transform(execpol->on(stream), 
+        thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
             d_results, contains_fn<RX_STACK_SMALL>{prog, d_column} );
     else if( regex_insts <= RX_MEDIUM_INSTS )
-        thrust::transform(execpol->on(stream), 
+        thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
             d_results, contains_fn<RX_STACK_MEDIUM>{prog, d_column} );
     else
-        thrust::transform(execpol->on(stream), 
+        thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
             d_results, contains_fn<RX_STACK_LARGE>{prog, d_column} );
@@ -119,6 +119,8 @@ std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
 }
 
 } // namespace detail
+
+// external API
 
 std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
                                            std::string const& pattern,

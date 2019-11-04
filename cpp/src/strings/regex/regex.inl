@@ -406,7 +406,7 @@ __device__ inline int32_t dreprog::regexec(string_view const& dstr, Reljunk &jnk
     return match;
 }
 
-
+//
 __device__ inline int32_t dreprog::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
 {
     int32_t rtn = 0;
