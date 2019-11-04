@@ -17,6 +17,8 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include "column.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -67,11 +69,18 @@ std::unique_ptr<column> make_numeric_column(
  * @param[in] mr Optional resource to use for device memory
  * allocation of the column's `data` and `null_mask`.
  */
+template <typename B>
 std::unique_ptr<column> make_numeric_column(
     data_type type, size_type size, 
-    rmm::device_buffer&& null_mask,
+    B&& null_mask,
     size_type null_count = cudf::UNKNOWN_NULL_COUNT, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
+  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+  return std::make_unique<column>(
+      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      std::forward(null_mask), null_count);
+}
 
 /**
  * @brief Construct column with sufficient uninitialized storage
@@ -116,11 +125,18 @@ std::unique_ptr<column> make_timestamp_column(
  * @param[in] mr Optional resource to use for device memory
  * allocation of the column's `data` and `null_mask`.
  */
+template <typename B>
 std::unique_ptr<column> make_timestamp_column(
     data_type type, size_type size,
-    rmm::device_buffer&& null_mask,
+    B&& null_mask,
     size_type null_count = cudf::UNKNOWN_NULL_COUNT, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
+  CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
+  return std::make_unique<column>(
+      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      std::forward(null_mask), null_count);
+}    
 
 /**
  * @brief Construct STRING type column given a vector of pointer/size pairs.

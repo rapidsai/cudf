@@ -48,20 +48,8 @@ std::unique_ptr<column> make_numeric_column(
 
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      create_null_mask(size, state, stream, mr), state_null_count(state, size));
-}
-
-// Create column with existing null mask
-std::unique_ptr<column> make_numeric_column(
-    data_type type, size_type size,
-    rmm::device_buffer&& null_mask,
-    size_type null_count,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
-  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
-
-  return std::make_unique<column>(
-      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      null_mask, null_count);
+      create_null_mask(size, state, stream, mr), state_null_count(state, size),
+      std::vector<std::unique_ptr<column>>{});
 }
 
 // Allocate storage for a specified number of timestamp elements
@@ -74,19 +62,6 @@ std::unique_ptr<column> make_timestamp_column(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
       create_null_mask(size, state, stream, mr), state_null_count(state, size),
       std::vector<std::unique_ptr<column>>{});
-}
-
-// Create column with existing null mask
-std::unique_ptr<column> make_timestamp_column(
-    data_type type, size_type size,
-    rmm::device_buffer&& null_mask,
-    size_type null_count,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
-  CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
-
-  return std::make_unique<column>(
-      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      null_mask, null_count);
 }
 
 }  // namespace cudf
