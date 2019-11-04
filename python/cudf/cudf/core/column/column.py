@@ -19,7 +19,11 @@ from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
-from cudf.utils.utils import buffers_from_pyarrow
+from cudf.utils.utils import (
+    buffers_from_pyarrow,
+    calc_chunk_size,
+    mask_bitsize,
+)
 
 
 class ColumnBase(Column):
@@ -41,12 +45,6 @@ class ColumnBase(Column):
         self.mask = mask
         self.name = name
         self.children = children or []
-
-        if mask is None:
-            null_count = 0
-        else:
-            # check that mask length is sufficient
-            assert mask.size >= len(self)
 
     def _data_view(self):
         """

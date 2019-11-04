@@ -153,9 +153,9 @@ cdef class Column:
             mask_ptr = int(<uintptr_t>c_col.valid)
             mbuf = rmm.DeviceBuffer(
                 ptr=mask_ptr,
-                size=calc_chunk_size(c_col.size, mask_bitsize))
+                size=calc_chunk_size(c_col.size,mask_bitsize)
+            )
             mask = Buffer.from_array_like(mbuf)
-
 
         return build_column(data=data,
                             dtype=dtype,

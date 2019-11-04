@@ -447,7 +447,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
 def _numeric_column_unaryop(operand, op):
     out = libcudf.unaryops.apply_unary_op(operand, op)
-    return out.view(NumericalColumn, dtype=out.dtype)
+    return out
 
 
 def _numeric_column_compare(lhs, rhs, op):

@@ -154,7 +154,7 @@ def nans_to_nulls(Column py_col):
         result = cpp_unaryops.nans_to_nulls(c_col[0])
 
     mask = None
-    if result.first:
+    if result.second:
         mask_ptr = int(<uintptr_t>result.first)
         mask = Buffer(ptr=mask_ptr, size=len(py_col))
 
