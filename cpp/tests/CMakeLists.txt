@@ -106,12 +106,22 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
+
+# - scalar tests ----------------------------------------------------------------------------------
+
+set(SCALAR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/scalar/scalar_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scalar/scalar_device_view_test.cu")
+
+ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
+
 # - bool8 wrapper tests ---------------------------------------------------------------------------
 
 set(BOOLS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
 
 ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
+
 
 ###################################################################################################
 # - timestamps tests ------------------------------------------------------------------------------
@@ -540,6 +550,7 @@ ConfigureTest(TRAITS_TEST "${TRAITS_TEST_SRC}")
 # - factories test --------------------------------------------------------------------------------
 
 set(FACTORIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/scalar/factories_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/column/factories_test.cpp")
 
 ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
