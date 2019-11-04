@@ -85,7 +85,8 @@ std::pair<rmm::device_buffer, size_type> valid_if(
       static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
       valid_count.data());
 
-  return std::make_pair(null_mask, valid_count.value(stream));
+  auto null_count = size - valid_count.value(stream);
+  return std::make_pair(null_mask, null_count);
 }
 }  // namespace detail
 }  // namespace experimental
