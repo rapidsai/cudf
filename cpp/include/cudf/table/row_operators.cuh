@@ -30,6 +30,114 @@ namespace cudf {
 namespace experimental {
 
 /**---------------------------------------------------------------------------*
+ * @brief Result type of the `element_relational_comparator` function object.
+ *
+ * Indicates how two elements `a` and `b` compare with one and another.
+ *
+ * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are
+ * EQUIVALENT may not necessarily be *equal*.
+ *
+ *---------------------------------------------------------------------------**/
+enum class weak_ordering {
+  LESS,        ///< Indicates `a` is less than (ordered before) `b`
+  EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
+  GREATER      ///< Indicates `a` is greater than (ordered after) `b`
+};
+
+namespace detail {
+/**---------------------------------------------------------------------------*
+* @brief Compare the elements ordering with respect to `lhs`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return weak_ordering Indicates the relationship between the elements in
+* the `lhs` and `rhs` columns.
+*---------------------------------------------------------------------------**/
+template <typename Element>
+__device__ weak_ordering compare_elements(Element lhs, Element rhs)
+{
+    if(lhs < rhs) {
+        return weak_ordering::LESS;
+    } else if(rhs < lhs) {
+        return weak_ordering::GREATER;
+    }
+    return weak_ordering::EQUIVALENT;
+}
+}
+/**---------------------------------------------------------------------------*
+* @brief A specialization for floating-point `Element` type rerlational comparison
+* to derive the order of the elements with respect to `lhs`. Specialization is to
+* handle `nan` in the order shown below.
+* `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
+* `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return weak_ordering Indicates the relationship between the elements in
+* the `lhs` and `rhs` columns.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
+
+    if(isnan(lhs) and isnan(rhs)) {
+        return weak_ordering::EQUIVALENT;
+    } else if(isnan(rhs)) {
+        return weak_ordering::LESS;
+    } else if(isnan(lhs)) {
+        return weak_ordering::GREATER;
+    }
+
+    return detail::compare_elements(lhs, rhs);
+}
+
+/**---------------------------------------------------------------------------*
+* @brief A specialization for non-floating-point `Element` type relational
+* comparison to derive the order of the elements with respect to `lhs`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return weak_ordering Indicates the relationship between the elements in
+* the `lhs` and `rhs` columns.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
+    return detail::compare_elements(lhs, rhs);
+}
+
+/**---------------------------------------------------------------------------*
+* @brief A specialization for floating-point `Element` type to check if
+* `lhs` is equivalent to `rhs`. `nan == nan`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return bool `true` if `lhs` == `rhs` else `false`.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool equality_compare(Element lhs, Element rhs) {
+    if (isnan(lhs) and isnan(rhs)) {
+        return true;
+    }
+    return lhs == rhs;
+}
+
+/**---------------------------------------------------------------------------*
+* @brief A specialization for non-floating-point `Element` type to check if
+* `lhs` is equivalent to `rhs`.
+*
+* @param[in] lhs first element
+* @param[in] rhs second element
+* @return bool `true` if `lhs` == `rhs` else `false`.
+*---------------------------------------------------------------------------**/
+template <typename Element,
+            std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool equality_compare(Element const lhs, Element const rhs) {
+    return lhs == rhs;
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Performs an equality comparison between two elements in two columns.
  *
  * @tparam has_nulls Indicates the potential for null values in either column.
@@ -71,8 +179,9 @@ class element_equality_comparator {
         return false;
       }
     }
-    return lhs.element<Element>(lhs_element_index) ==
-           rhs.element<Element>(rhs_element_index);
+
+    return equality_compare(lhs.element<Element>(lhs_element_index),
+                            rhs.element<Element>(rhs_element_index));
   }
 
  private:
@@ -107,21 +216,6 @@ class row_equality_comparator {
   table_device_view lhs;
   table_device_view rhs;
   bool nulls_are_equal;
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Result type of the `element_relational_comparator` function object.
- *
- * Indicates how two elements `a` and `b` compare with one and another.
- *
- * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are are
- * EQUIVALENT may not necessarily be *equal*.
- *
- *---------------------------------------------------------------------------**/
-enum class weak_ordering {
-  LESS,        ///< Indicates `a` is less than (ordered before) `b`
-  EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
-  GREATER      ///< Indicates `a` is greater than (ordered after) `b`
 };
 
 /**---------------------------------------------------------------------------*
@@ -178,15 +272,8 @@ class element_relational_comparator {
       }
     }
 
-    Element const lhs_element = lhs.element<Element>(lhs_element_index);
-    Element const rhs_element = rhs.element<Element>(rhs_element_index);
-
-    if (lhs_element < rhs_element) {
-      return weak_ordering::LESS;
-    } else if (rhs_element < lhs_element) {
-      return weak_ordering::GREATER;
-    }
-    return weak_ordering::EQUIVALENT;
+    return relational_compare(lhs.element<Element>(lhs_element_index),
+                              rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
@@ -230,19 +317,21 @@ class row_lexicographic_comparator {
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param null_precedence Indicates how null values compare to all other
-   *values.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row
+   * and indicates how null values compare to all other for every column. If
+   * it is nullptr, then null precedence would be `null_order::BEFORE` for all
+   * columns.
    *---------------------------------------------------------------------------**/
   row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               null_order null_precedence = null_order::BEFORE,
-                               order* column_order = nullptr)
+                               order* column_order = nullptr,
+                               null_order* null_precedence = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
-        _null_precedence{null_precedence},
-        _column_order{column_order} {
+        _column_order{column_order},
+        _null_precedence{null_precedence} {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
                  "Mismatched number of columns.");
@@ -264,9 +353,11 @@ class row_lexicographic_comparator {
           (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
       weak_ordering state{weak_ordering::EQUIVALENT};
+      null_order null_precedence = _null_precedence == nullptr ?
+                                     null_order::BEFORE: _null_precedence[i];
 
       auto comparator = element_relational_comparator<has_nulls>{
-          _lhs.column(i), _rhs.column(i), _null_precedence};
+          _lhs.column(i), _rhs.column(i), null_precedence};
 
       state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
                                          lhs_index, rhs_index);
@@ -283,7 +374,7 @@ class row_lexicographic_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  null_order _null_precedence{null_order::BEFORE};
+  null_order const*  _null_precedence{};
   order const* _column_order{};
 };  // class row_lexicographic_comparator
 
