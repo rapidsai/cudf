@@ -122,6 +122,7 @@ MAP_NUMERIC_SCALAR(int32_t)
 MAP_NUMERIC_SCALAR(int64_t)
 MAP_NUMERIC_SCALAR(float)
 MAP_NUMERIC_SCALAR(double)
+MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
 
 template <>
 struct type_to_scalar_type_impl<cudf::string_view> {

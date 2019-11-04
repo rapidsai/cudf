@@ -174,7 +174,7 @@ class string_scalar_device_view
 };
 
 /**
- * @brief A type of scalar_device_view that stores a pointer to a string value
+ * @brief A type of scalar_device_view that stores a pointer to a timestamp value
  */
 template <typename T>
 class timestamp_scalar_device_view

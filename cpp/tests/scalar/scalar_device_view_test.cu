@@ -31,22 +31,38 @@
 template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypes);
 
 
-template <typename T,
-  typename ScalarDeviceViewType>
-__global__ void test_value(ScalarDeviceViewType s, T value, bool* result) {
-  *result = (s.value() == value);
+template <typename ScalarDeviceViewType>
+__global__ void test_set_value(ScalarDeviceViewType s, 
+                               ScalarDeviceViewType s1) {
+  s1.set_value(s.value());
+  s1.set_valid(true);
+}
+
+template <typename ScalarDeviceViewType>
+__global__ void test_value(ScalarDeviceViewType s, 
+                           ScalarDeviceViewType s1, bool *result) {
+  *result = (s.value() == s1.value());
 }
 
 TYPED_TEST(TypedScalarDeviceViewTest, Value) {
   TypeParam value{7};
   cudf::experimental::scalar_type_t<TypeParam> s(value);
+  cudf::experimental::scalar_type_t<TypeParam> s1;
+
   auto scalar_device_view = cudf::get_scalar_device_view(s);
+  auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
   rmm::device_scalar<bool> result;
 
-  test_value<<<1, 1>>>(scalar_device_view, value, result.data());
+  test_set_value<<<1, 1>>>(scalar_device_view, scalar_device_view1);
+  CUDA_CHECK_LAST();
+
+  EXPECT_EQ(s1.value(), value);
+  EXPECT_TRUE(s1.is_valid());
+
+  test_value<<<1, 1>>>(scalar_device_view, scalar_device_view1, result.data());
   CUDA_CHECK_LAST();
 
   EXPECT_TRUE(result.value());
@@ -67,25 +83,6 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
   CUDA_CHECK_LAST();
 
   EXPECT_FALSE(result.value());
-}
-
-template <typename T,
-  typename ScalarDeviceViewType>
-__global__ void test_setvalue(ScalarDeviceViewType s, T value) {
-  s.set_value(value);
-  s.set_valid(true);
-}
-
-TYPED_TEST(TypedScalarDeviceViewTest, SetValue) {
-  TypeParam value = 9;
-  cudf::experimental::scalar_type_t<TypeParam> s;
-  auto scalar_device_view = cudf::get_scalar_device_view(s);
-
-  test_setvalue<<<1, 1>>>(scalar_device_view, value);
-  CUDA_CHECK_LAST();
-
-  EXPECT_TRUE(s.is_valid());
-  EXPECT_EQ(value, s.value());
 }
 
 template <typename ScalarDeviceViewType>
