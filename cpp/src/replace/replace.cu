@@ -19,10 +19,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
-#include <cub/cub.cuh>
 
-#include <cudf/legacy/copying.hpp>
-#include <cudf/legacy/replace.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
@@ -34,73 +31,46 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
-#include <bitmask/legacy/bit_mask.cuh>
 
 namespace {  // anonymous
 
-using namespace cudf;
+using namespace cudf;       
 
-static constexpr int BLOCK_SIZE = 256;
-
+// using a lambda in the forwarder blows up the compiler, so this is unrolling
+// what the compiler would be doing anyway
+template <typename T>
+struct normalize_nans_and_zeros_lambda {
+   column_device_view in;
+   T __device__ operator()(size_type i)
+   {
+      auto e = in.element<T>(i);
+      if (isnan(e)) {
+         return std::numeric_limits<T>::quiet_NaN();
+      }
+      if (T{0.0} == e) {
+         return T{0.0};
+      }
+      return e;
+   }
+};
+   
 /* --------------------------------------------------------------------------*/
 /**
- * @brief Kernel that converts inputs from `in` to `out`  using the following
- *        rule:   Convert  -NaN  -> NaN
- *                Convert  -0.0  -> 0.0
- *
- * @param[in] column_device_view representing input data
- * @param[in] mutable_column_device_view representing output data. can be
- *            the same actual underlying buffer that in points to. 
- *
- * @returns
- */
+* @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
+*        `normalize_nans_and_zeros` with the appropriate data types.
+*/
 /* ----------------------------------------------------------------------------*/
-template <typename T>
-__global__
-void normalize_nans_and_zeros(column_device_view in, 
-                              mutable_column_device_view out)
-{
-   int tid = threadIdx.x;
-   int blkid = blockIdx.x;
-   int blksz = blockDim.x;
-   int gridsz = gridDim.x;
-
-   int start = tid + blkid * blksz;
-   int step = blksz * gridsz;
-
-   // grid-stride
-   for (int i=start; i<in.size(); i+=step) {
-      if(!in.is_valid(i)){
-         continue;
-      }
-
-      T el = in.element<T>(i);
-      if(std::isnan(el)){
-         out.element<T>(i) = std::numeric_limits<T>::quiet_NaN();
-      } else if(el == (T)-0.0){
-         out.element<T>(i) = (T)0.0;
-      } else {
-         out.element<T>(i) = el;
-      }
-   }
-}                        
-
-  /* --------------------------------------------------------------------------*/
-  /**
-   * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
-   *        `normalize_nans_and_zeros` with the appropriate data types.
-   */
-  /* ----------------------------------------------------------------------------*/
 struct normalize_nans_and_zeros_kernel_forwarder {
    // floats and doubles. what we really care about.
    template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
    void operator()(  column_device_view in,
                      mutable_column_device_view out,
                      cudaStream_t stream)
-   {
-      util::cuda::grid_config_1d grid{in.size(), BLOCK_SIZE};
-      normalize_nans_and_zeros<T><<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(in, out);
+   {      
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(in.size()),
+                        out.head<T>(), normalize_nans_and_zeros_lambda<T>{in});      
    }
 
    // if we get in here for anything but a float or double, that's a problem.
