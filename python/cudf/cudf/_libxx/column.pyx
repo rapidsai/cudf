@@ -5,7 +5,7 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 
 from cudf._libxx.lib cimport *
-from cudf._libxx.buffer import Buffer
+from cudf.core.buffer import Buffer
 
 np_to_cudf_types = {np.dtype('int32'): INT32,
                     np.dtype('int64'): INT64,

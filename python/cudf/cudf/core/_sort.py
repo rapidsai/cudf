@@ -10,7 +10,7 @@ import rmm
 
 import cudf._lib as libcudf
 from cudf.core.buffer import Buffer
-from cudf.core.column import Column, column
+from cudf.core.column import ColumnBase, column
 from cudf.utils import cudautils
 
 logging.basicConfig(format="%(levelname)s:%(message)s")

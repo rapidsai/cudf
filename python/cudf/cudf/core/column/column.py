@@ -21,7 +21,7 @@ from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
 
 
-class Column(object):
+class ColumnBase(object):
     """An immutable structure for storing data and mask for a column.
     This should be considered as the physical layer that provides
     container operations on the data and mask.
@@ -31,16 +31,68 @@ class Column(object):
 
     Attributes
     ----------
-    _data : Buffer
+    data : Buffer
         The data buffer
-    _mask : Buffer
+    mask : Buffer
         The validity mask
-    _null_count : int
-        Number of null values in the mask.
-
-    These attributes are exported in the properties (e.g. *data*, *mask*,
-    *null_count*).
+    name : Name of the column
+    children : list of Column
     """
+
+    def __init__(self, data, dtype, mask=None, name=None, children=None):
+        """
+        Parameters
+        ----------
+        data : Buffer
+            The code values
+        dtype : Data type associated with the data Buffer
+        mask : Buffer; optional
+            The validity mask
+        name : Name of the Column
+        children : list of Column
+            Children of this Column
+        """
+        self.data = data
+        self.dtype = np.dtype(dtype)
+        self.mask = mask
+        self.name = name
+        self.children = children or []
+
+        if mask is None:
+            null_count = 0
+        else:
+            # check that mask length is sufficient
+            assert mask.size >= len(self)
+
+    def _data_view(self):
+        """
+        View the data as a device array
+        """
+        nelem = self.data.size // self.dtype.itemsize
+        return rmm.device_array_from_ptr(
+            ptr=self.data.ptr, nelem=nelem, dtype=self.dtype
+        )
+
+    def _mask_view(self):
+        """
+        View the mask as a device array
+        """
+        nelem = self.mask.size // 8
+        return device_array_from_ptr(
+            ptr=self.mask.ptr, nelem=nelem, dtype=np.int8
+        )
+
+    def to_pandas(self):
+        arr = self._data_view()
+        sr = pd.Series(arr.copy_to_host())
+
+        if self.mask is not None:
+            mask = self._mask_view().copy_to_host().astype(np.bool)
+            sr[mask] = None
+        return sr
+
+    def __len__(self):
+        return self.data.size // self.dtype.itemsize
 
     @classmethod
     def _concat(cls, objs, dtype=None):
@@ -172,34 +224,6 @@ class Column(object):
                 null_count=null_count,
             )
 
-    def __init__(self, data, mask=None, null_count=None, name=None):
-        """
-        Parameters
-        ----------
-        data : Buffer
-            The code values
-        mask : Buffer; optional
-            The validity mask
-        null_count : int; optional
-            The number of null values in the mask.
-        """
-        # Forces Column content to be contiguous
-        if not data.is_contiguous():
-            data = data.as_contiguous()
-
-        assert mask is None or mask.is_contiguous()
-        self._data = data
-        self._mask = mask
-        self._name = name
-
-        if mask is None:
-            null_count = 0
-        else:
-            # check that mask length is sufficient
-            assert mask.size * utils.mask_bitsize >= len(self)
-
-        self._update_null_count(null_count)
-
     def equals(self, other):
         if self is other:
             return True
@@ -301,25 +325,6 @@ class Column(object):
             n += self._mask.__sizeof__()
         return n
 
-    def __len__(self):
-        return self._data.size
-
-    @property
-    def dtype(self):
-        return self._data.dtype
-
-    @property
-    def data(self):
-        """Data buffer
-        """
-        return self._data
-
-    @property
-    def mask(self):
-        """Validity mask buffer
-        """
-        return self._mask
-
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
 
@@ -344,18 +349,6 @@ class Column(object):
             msg = "mask must be of byte; but got {}".format(mask.dtype)
             raise ValueError(msg)
         return self.replace(mask=mask, null_count=null_count)
-
-    def allocate_mask(self, all_valid=True):
-        """Return a new Column with a newly allocated mask buffer.
-        If ``all_valid`` is True, the new mask is set to all valid.
-        If ``all_valid`` is False, the new mask is set to all null.
-        """
-        nelem = len(self)
-        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
-        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
-        if nelem > 0:
-            cudautils.fill_value(mask, 0xFF if all_valid else 0)
-        return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -835,7 +828,7 @@ class Column(object):
         return libcudf.filling.repeat([self], repeats)[0]
 
 
-class TypedColumnBase(Column):
+class TypedColumnBase(ColumnBase):
     """Base class for all typed column
     e.g. NumericalColumn, CategoricalColumn
 

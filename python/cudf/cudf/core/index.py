@@ -15,7 +15,7 @@ import cudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
-    Column,
+    ColumnBase,
     DatetimeColumn,
     NumericalColumn,
     StringColumn,

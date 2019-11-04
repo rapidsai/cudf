@@ -3,7 +3,7 @@
 from cudf._lib import dlpack as cpp_dlpack
 from cudf._lib.GDFError import GDFError
 from cudf.core.buffer import Buffer
-from cudf.core.column import Column, column
+from cudf.core.column import ColumnBase, column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index
 from cudf.core.series import Series
