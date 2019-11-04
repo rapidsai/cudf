@@ -3,6 +3,7 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.lib cimport *
 
+cimport cudf._lib.cudf as gdf
 
 cdef class Column:
     cdef dict __dict__    
@@ -13,3 +14,5 @@ cdef class Column:
     cdef Column from_ptr(unique_ptr[column] c_col)
 
     cdef size_type null_count(self)
+
+    cdef gdf.gdf_column* gdf_column_view(self) except *

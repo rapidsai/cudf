@@ -1014,7 +1014,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         ):
             if nan_as_null:
                 mask = libcudf.unaryops.nans_to_nulls(data)
-                data = data.set_mask(mask)
+                data.mask = mask
 
         elif data.dtype.kind == "M":
             null = column_empty_like(data, masked=True, newsize=1)

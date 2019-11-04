@@ -383,3 +383,5 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 #        gdf_column const* get_column(size_type index) const except +
 
 cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid
+
+cdef char* py_to_c_str(object py_str)

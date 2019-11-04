@@ -17,6 +17,7 @@ import rmm
 
 from cudf.utils import cudautils
 
+from cudf._libxx.column cimport Column
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.GDFError import GDFError
@@ -143,12 +144,11 @@ def apply_dt_extract_op(incol, outcol, op):
     check_gdf_error(result)
 
 
-def nans_to_nulls(py_col):
+def nans_to_nulls(Column py_col):
     from cudf.core.column import as_column
+    from cudf.core.buffer import Buffer
 
-    py_col = as_column(py_col)
-
-    cdef gdf_column* c_col = column_view_from_column(py_col)
+    cdef gdf_column* c_col = py_col.gdf_column_view()
 
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
 
@@ -158,12 +158,7 @@ def nans_to_nulls(py_col):
     mask = None
     if result.first:
         mask_ptr = int(<uintptr_t>result.first)
-        mask = rmm.device_array_from_ptr(
-            mask_ptr,
-            nelem=calc_chunk_size(len(py_col), mask_bitsize),
-            dtype=mask_dtype,
-            finalizer=rmm._make_finalizer(mask_ptr, 0)
-        )
+        mask = Buffer(ptr=mask_ptr, size=len(py_col))
 
     free_column(c_col)
 

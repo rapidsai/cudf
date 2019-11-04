@@ -35,7 +35,9 @@ class NumericalColumn(column.ColumnBase):
         name : optional
         """
         size = data.size // dtype.itemsize
-        super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
+        super().__init__(
+            data, size=size, dtype=np.dtype(dtype), mask=mask, name=name
+        )
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
