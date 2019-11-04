@@ -12,6 +12,7 @@
 - PR #3022 adds DataFrame.astype for cuDF dataframes
 - PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
+- PR #3068 Add `scalar` class
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3143 Define and implement new copying APIs `slice` and `split`
