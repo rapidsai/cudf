@@ -22,7 +22,7 @@
 #include <cassert>
 
 /**
- * @file bit.cuh
+ * @file bit.hpp
  * @brief Utilities for bit and bitmask operations.
  *
  */
