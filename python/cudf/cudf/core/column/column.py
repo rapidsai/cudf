@@ -265,7 +265,18 @@ class ColumnBase(Column):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna).to_array()
+        if self.mask:
+            mask_bits = self._mask_view().copy_to_host()
+            mask_bytes = (
+                cudautils.expand_mask_bits(len(self), mask_bits)
+                .copy_to_host()
+                .astype(bool)
+            )
+            data = self._data_view().copy_to_host()
+            data[~mask_bytes] = self.default_na_value()
+            return data
+        else:
+            return self._data_view().copy_to_host()
 
     @property
     def valid_count(self):
@@ -949,20 +960,19 @@ def build_column(data, dtype, mask=None, categories=None, name=None):
 
 def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     """Create a Column from an arbitrary object
+
     Currently support inputs are:
     * ``Column``
-    * ``Buffer``
     * ``Series``
     * ``Index``
-    * numba device array
-    * cuda array interface
-    * numpy array
+    * Objects exposing ``__cuda_array_interface__`` (e.g., numba device arrays)
+    * Objects exposing ``__array_interface__``(e.g., numpy arrays)
     * pyarrow array
-    * pandas.Categorical
-    * Object exposing ``__cuda_array_interface__``
+    * pandas.Categorical objects
+
     Returns
     -------
-    result : subclass of TypedColumnBase
+    result :
         - CategoricalColumn for pandas.Categorical input.
         - DatetimeColumn for datetime input.
         - StringColumn for string input.
@@ -975,7 +985,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     if name is None and hasattr(arbitrary, "name"):
         name = arbitrary.name
 
-    if isinstance(arbitrary, Column):
+    if isinstance(arbitrary, ColumnBase):
         return arbitrary
 
     elif isinstance(arbitrary, Series):
@@ -986,14 +996,18 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
-    elif isinstance(arbitrary, Buffer):
-        data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
-
     elif isinstance(arbitrary, nvstrings.nvstrings):
         data = string.StringColumn(data=arbitrary)
 
+    elif isinstance(arbitrary, Buffer):
+        if dtype is None:
+            raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
+        data = build_column(arbitrary, dtype=dtype)
+
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-        data = as_column(Buffer(arbitrary))
+        data = as_column(
+            Buffer.from_array_like(arbitrary), dtype=arbitrary.dtype
+        )
         if (
             data.dtype in [np.float16, np.float32, np.float64]
             and arbitrary.size > 0
@@ -1003,38 +1017,31 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 data = data.set_mask(mask)
 
         elif data.dtype.kind == "M":
-            null = cudf.core.column.column_empty_like(
-                data, masked=True, newsize=1
-            )
+            null = column_empty_like(data, masked=True, newsize=1)
             col = libcudf.replace.replace(
-                as_column(Buffer(arbitrary)),
                 as_column(
-                    Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype))
+                    Buffer.from_array_like(arbitrary), dtype=arbitrary.dtype
+                ),
+                as_column(
+                    Buffer.from_array_like(
+                        np.array([np.datetime64("NaT")], dtype=data.dtype)
+                    )
                 ),
                 null,
             )
             data = datetime.DatetimeColumn(
-                data=Buffer(arbitrary), mask=col.mask, dtype=data.dtype
+                data=Buffer.from_array_like(arbitrary, dtype=arbitrary.dtype),
+                dtype=data.dtype,
+                mask=col.mask,
+                name=name,
             )
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         data = _data_from_cuda_array_interface_desc(desc)
         mask = _mask_from_cuda_array_interface_desc(desc)
-
-        if mask is not None:
-            nelem = len(data.mem)
-            nnz = libcudf.cudf.count_nonzero_mask(mask.mem, size=nelem)
-            null_count = nelem - nnz
-        else:
-            null_count = 0
-        col = build_column(
-            data, dtype=data.dtype, mask=mask, name=name, null_count=null_count
-        )
-        # Keep a reference to `arbitrary` with the underlying
-        # RMM device array, so that the memory isn't freed out
-        # from under us
-        col.data.mem._obj = arbitrary
+        nelem = arbitrary.__cuda_array_interface__["shape"][0]
+        col = build_column(data, dtype=data.dtype, mask=mask, name=name)
         return col
 
     elif isinstance(arbitrary, np.ndarray):
@@ -1046,13 +1053,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             arbitrary = arbitrary.astype(dtype)
 
         if arbitrary.dtype.kind == "M":
-            data = datetime.DatetimeColumn.from_numpy(arbitrary)
+            raise NotImplementedError
         elif arbitrary.dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary))
+            raise NotImplementedError
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
+        raise NotImplementedError
         if isinstance(arbitrary, pa.StringArray):
             count = len(arbitrary)
             null_count = arbitrary.null_count
@@ -1159,6 +1167,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             )
 
     elif isinstance(arbitrary, pa.ChunkedArray):
+        raise NotImplementedError
         gpu_cols = [
             as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
         ]
@@ -1175,6 +1184,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
+        raise NotImplementedError
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
@@ -1184,11 +1194,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
+        raise NotImplementedError
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
+        raise NotImplementedError
         if hasattr(arbitrary, "dtype"):
             data_type = np_to_pa_dtype(arbitrary.dtype)
             # PyArrow can't construct date64 or date32 arrays from np
@@ -1210,6 +1222,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
         except TypeError:
+            raise NotImplementedError
             pa_type = None
             np_type = None
             try:
@@ -1297,10 +1310,11 @@ def _data_from_cuda_array_interface_desc(desc):
     nelem = desc["shape"][0]
     dtype = np.dtype(desc["typestr"])
 
+    # TODO: this can be done more efficiently
     data = rmm.device_array_from_ptr(
         ptr, nelem=nelem, dtype=dtype, finalizer=None
     )
-    data = Buffer(data)
+    data = Buffer.from_array_like(data)
     return data
 
 
@@ -1323,7 +1337,8 @@ def _mask_from_cuda_array_interface_desc(desc):
                 dtype=mask_dtype,
                 finalizer=None,
             )
-            mask = Buffer(mask)
+            # TODO: this can be done more efficiently
+            mask = Buffer.from_array_like(mask)
         elif typecode == "b":
             dtype = np.dtype(typestr)
             mask = compact_mask_bytes(
@@ -1331,7 +1346,8 @@ def _mask_from_cuda_array_interface_desc(desc):
                     ptr, nelem=nelem, dtype=dtype, finalizer=None
                 )
             )
-            mask = Buffer(mask)
+            # TODO: this can be done more efficiently
+            mask = Buffer.from_array_like(mask)
         else:
             raise NotImplementedError(
                 f"Cannot infer mask from typestr {typestr}"
