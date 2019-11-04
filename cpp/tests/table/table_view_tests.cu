@@ -37,7 +37,7 @@ void row_comparison(cudf::table_view input1, cudf::table_view input2, cudf::muta
     rmm::device_vector<cudf::order> d_column_order(column_order);
 
     auto comparator = cudf::experimental::row_lexicographic_comparator<false>( *device_table_1, *device_table_2,
-                                                           cudf::null_order::AFTER, d_column_order.data().get());
+                                                                               d_column_order.data().get());
 
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                      thrust::make_counting_iterator(0), thrust::make_counting_iterator(input1.num_rows()), thrust::make_counting_iterator(0), output.data<int8_t>(), comparator);
