@@ -11,3 +11,5 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_ptr(unique_ptr[column] c_col)
+
+    cdef size_type null_count(self)

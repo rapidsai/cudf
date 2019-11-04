@@ -7,7 +7,7 @@ from rmm import DeviceBuffer
 
 
 class Buffer:
-    def __init__(self, ptr=None, size=None, owner=None):
+    def __init__(self, ptr, size=None, owner=None):
         self.ptr = ptr
         self.size = size
         self._owner = owner
@@ -31,6 +31,11 @@ class Buffer:
             raise TypeError(
                 f"Cannot construct Buffer from {data.__class__.__name__}"
             )
+
+    @classmethod
+    def empty(cls, size):
+        dbuf = DeviceBuffer(size=size)
+        return Buffer(ptr=dbuf.ptr, size=dbuf.size(), owner=dbuf)
 
 
 def _buffer_data_from_array_interface(array_interface):

@@ -23,22 +23,30 @@ from cudf.utils.dtypes import (
 )
 
 
-class NumericalColumn(column.TypedColumnBase):
-    def __init__(self, **kwargs):
+class NumericalColumn(column.ColumnBase):
+    def __init__(self, data, dtype, mask=None, name=None):
         """
         Parameters
         ----------
         data : Buffer
-            The code values
-        mask : Buffer; optional
-            The validity mask
-        null_count : int; optional
-            The number of null values in the mask.
         dtype : np.dtype
-            Data type
+            The dtype associated with the data Buffer
+        mask : Buffer, optional
+        name : optional
         """
-        super(NumericalColumn, self).__init__(**kwargs)
-        assert self._dtype == self._data.dtype
+        size = data.size // dtype.itemsize
+        super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
+
+    def replace(self, **kwargs):
+        if "data" in kwargs and "dtype" not in kwargs:
+            kwargs["dtype"] = kwargs["data"].dtype
+        return super(NumericalColumn, self).replace(**kwargs)
+
+    def serialize(self):
+        header, frames = super(NumericalColumn, self).serialize()
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
+        return header, frames
 
     def __contains__(self, item):
         """
@@ -54,17 +62,6 @@ class NumericalColumn(column.TypedColumnBase):
         except Exception:
             return False
         return libcudf.search.contains(self, item)
-
-    def replace(self, **kwargs):
-        if "data" in kwargs and "dtype" not in kwargs:
-            kwargs["dtype"] = kwargs["data"].dtype
-        return super(NumericalColumn, self).replace(**kwargs)
-
-    def serialize(self):
-        header, frames = super(NumericalColumn, self).serialize()
-        header["type"] = pickle.dumps(type(self))
-        header["dtype"] = self._dtype.str
-        return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -419,15 +416,15 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     masked = False
     name = None
     if np.isscalar(lhs):
-        masked = rhs.has_null_mask
+        masked = rhs.mask
         row_count = len(rhs)
         name = rhs.name
     elif np.isscalar(rhs):
-        masked = lhs.has_null_mask
+        masked = lhs.mask
         row_count = len(lhs)
         name = lhs.name
     else:
-        masked = lhs.has_null_mask or rhs.has_null_mask
+        masked = lhs.mask or rhs.mask
         row_count = len(lhs)
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]

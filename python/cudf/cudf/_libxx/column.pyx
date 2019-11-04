@@ -25,6 +25,14 @@ cdef class Column:
         self.dtype = dtype
         self.mask = mask
 
+
+    @property
+    def null_count(self):
+        return self.null_count()
+    
+    cdef size_type null_count(self):
+        return self.view().null_count()
+    
     cdef mutable_column_view mutable_view(self) except *:
         cdef type_id tid = np_to_cudf_types[np.dtype(self.dtype)]
         cdef data_type dtype = data_type(tid)
@@ -34,7 +42,7 @@ cdef class Column:
             mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL
-        return mutable_column_view(
+        return mutable_column_views(
             dtype,
             self.size,
             data,
@@ -67,22 +75,3 @@ cdef class Column:
         else:
             mask = None
         return Column(data, size=size, dtype=dtype, mask=mask)
-
-
-    def to_pandas(self):
-        from rmm import device_array_from_ptr
-        import pandas as pd
-        from cudf.utils import cudautils
-
-        arr = device_array_from_ptr(self.data.ptr, self.size, self.dtype)
-        sr = pd.Series(arr.copy_to_host())
-
-        if self.mask is not None:
-            mask = cudautils.expand_mask_bits(
-                self.size,
-                device_array_from_ptr(
-                    self.mask.ptr,
-                    self.size,
-                    np.int8)).copy_to_host().astype(np.bool)
-            sr[mask] = None
-        return sr
