@@ -10,18 +10,15 @@
 #include <utility>
 #include <vector>
 #include <memory>
+#include <type_traits>
 #include <nvstrings/NVCategory.h>
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/legacy/copying.hpp>
-#include <cudf/legacy/table.hpp>
-#include <table/legacy/device_table.cuh>
-#include <table/legacy/device_table_row_operators.cuh>
-#include "bitmask/legacy/bit_mask.cuh"
-#include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include "rmm/thrust_rmm_allocator.h"
-#include "utilities/cuda_utils.hpp"
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <rmm/thrust_rmm_allocator.h>
+#include <utilities/cuda_utils.hpp>
 
 namespace {
 
@@ -29,111 +26,10 @@ namespace {
  * @brief Source table identifier to copy data from.
  */
 enum class side : bool { LEFT, RIGHT };
-
-using bit_mask::bit_mask_t;
+  
 using index_type = thrust::tuple<side, cudf::size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
 
-/**
- * @brief Merges the bits of two validity bitmasks.
- *
- * Merges the bits from two source bitmask into the destination bitmask
- * according to `merged_indices` map such that bit `i` in `destination_mask`
- * will be equal to bit `thrust::get<1>(merged_indices[i])` from `source_left_mask`
- * if `thrust::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
- * from `source_right_mask`.
- *
- * `source_left_mask`, `source_right_mask` and `destination_mask` must not
- * overlap.
- *
- * @tparam left_have_valids Indicates whether source_left_mask is null
- * @tparam right_have_valids Indicates whether source_right_mask is null
- * @param[in] source_left_mask The left mask whose bits will be merged
- * @param[in] source_right_mask The right mask whose bits will be merged
- * @param[out] destination_mask The output mask after merging the left and right masks
- * @param[in] num_destination_rows The number of bits in the destination_mask
- * @param[in] merged_indices The map that indicates from which input mask and which bit
- * will be copied to the output. Length must be equal to `num_destination_rows`
- */
-template <bool left_have_valids, bool right_have_valids>
-__global__ void materialize_merged_bitmask_kernel(
-    bit_mask_t const* const __restrict__ source_left_mask,
-    bit_mask_t const* const __restrict__ source_right_mask,
-    bit_mask_t* const destination_mask,
-    cudf::size_type const num_destination_rows,
-    index_type const* const __restrict__ merged_indices) {
-
-  cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-
-  auto active_threads =
-      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
-
-  while (destination_row < num_destination_rows) {
-    index_type const& merged_idx = merged_indices[destination_row];
-    side const src_side = thrust::get<0>(merged_idx);
-    cudf::size_type const src_row  = thrust::get<1>(merged_idx);
-    bool const from_left{src_side == side::LEFT};
-    bool source_bit_is_valid{true};
-    if (left_have_valids && from_left) {
-      source_bit_is_valid = bit_mask::is_valid(source_left_mask, src_row);//TODO: replace; 
-    }
-    else if (right_have_valids && !from_left) {
-        source_bit_is_valid = bit_mask::is_valid(source_right_mask, src_row);//TODO: replace;
-    }
-    
-    // Use ballot to find all valid bits in this warp and create the output
-    // bitmask element
-    bit_mask_t const result_mask{
-        __ballot_sync(active_threads, source_bit_is_valid)};
-
-    cudf::size_type const output_element = cudf::util::detail::bit_container_index<bit_mask_t, cudf::size_type>(destination_row);
-    
-    // Only one thread writes output
-    if (0 == threadIdx.x % warpSize) {
-      destination_mask[output_element] = result_mask;
-    }
-
-    destination_row += blockDim.x * gridDim.x;
-    active_threads =
-        __ballot_sync(active_threads, destination_row < num_destination_rows);
-  }
-}
-
-void materialize_bitmask(gdf_column const* left_col,
-                        gdf_column const* right_col,
-                        gdf_column* out_col,
-                        index_type const* merged_indices,
-                        cudaStream_t stream) {
-    constexpr cudf::size_type BLOCK_SIZE{256};
-    cudf::util::cuda::grid_config_1d grid_config {out_col->size, BLOCK_SIZE };
-
-    bit_mask_t* left_valid = reinterpret_cast<bit_mask_t*>(left_col->valid);
-    bit_mask_t* right_valid = reinterpret_cast<bit_mask_t*>(right_col->valid);
-    bit_mask_t* out_valid = reinterpret_cast<bit_mask_t*>(out_col->valid);
-    if (left_valid) {
-        if (right_valid) {
-            materialize_merged_bitmask_kernel<true, true>
-            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-            (left_valid, right_valid, out_valid, out_col->size, merged_indices);
-        } else {
-            materialize_merged_bitmask_kernel<true, false>
-            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-            (left_valid, right_valid, out_valid, out_col->size, merged_indices);
-        }
-    } else {
-        if (right_valid) {
-            materialize_merged_bitmask_kernel<false, true>
-            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-            (left_valid, right_valid, out_valid, out_col->size, merged_indices);
-        } else {
-            materialize_merged_bitmask_kernel<false, false>
-            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-            (left_valid, right_valid, out_valid, out_col->size, merged_indices);
-        }
-    }
-
-    CHECK_STREAM(stream);
-}
-
+  /*
 rmm::device_vector<index_type>
 generate_merged_indices(device_table const& left_table,
                         device_table const& right_table,
@@ -159,9 +55,10 @@ generate_merged_indices(device_table const& left_table,
 
     rmm::device_vector<index_type> merged_indices(total_size);
     bool nullable = left_table.has_nulls() || right_table.has_nulls();
+    auto exec_pol = rmm::exec_policy(stream);
     if (nullable){
         auto ineq_op = row_inequality_comparator<true>(right_table, left_table, nulls_are_smallest, asc_desc.data().get()); 
-        thrust::merge(rmm::exec_policy(stream)->on(stream),
+        thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
                     right_begin_zip_iterator,
@@ -173,7 +70,7 @@ generate_merged_indices(device_table const& left_table,
                     });			        
     } else {
         auto ineq_op = row_inequality_comparator<false>(right_table, left_table, nulls_are_smallest, asc_desc.data().get()); 
-        thrust::merge(rmm::exec_policy(stream)->on(stream),
+        thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
                     right_begin_zip_iterator,
@@ -189,6 +86,7 @@ generate_merged_indices(device_table const& left_table,
 
     return merged_indices;
 }
+  */
 
 } // namespace
 
@@ -196,25 +94,45 @@ namespace cudf {
 namespace experimental { 
 namespace detail {
 
-std::unique_ptr<cudf::table> merge(table_view const& left_table,
+struct ColumnMerger
+{
+  ColumnMerger(cudf::size_type const& key_col,
+               cudf::order const& asc_desc,
+               cudf::null_order const& null_p)
+  {
+  }
+  
+  // type_dispatcher() _can_ dispatch host functors:
+  //
+  template<typename Element>//required: column type
+  std::unique_ptr<column>
+  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol)
+  {
+    return nullptr;//for now...
+  }
+  //see `class element_relational_comparator` in `cpp/include/cudf/table/row_operators.cuh` as a model;
+};
+  
+
+std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                    table_view const& right_table,
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& asc_desc,
                                    std::vector<cudf::null_order> const& null_precedence) {
-    CUDF_EXPECTS(left_table.num_columns() == right_table.num_columns(), "Mismatched number of columns");
+    auto n_cols = left_table.num_columns();
+    CUDF_EXPECTS( n_cols == right_table.num_columns(), "Mismatched number of columns");
     if (left_table.num_columns() == 0) {
-        return cudf::empty_like(left_table);
+        return nullptr;
     }
 
     // TODO: replace / drop;
     //no replacement, yet:
     //{
     //proposal for a replacement: bool have_same_types(table_view const& lhs, table_view const& rhs);
-    //(btw, issues like that are the reason for 1st refactoring and then creating a 2nd PR)
     //
-    std::vector<gdf_dtype> left_table_dtypes = cudf::column_dtypes(left_table);
-    std::vector<gdf_dtype> right_table_dtypes = cudf::column_dtypes(right_table);
-    CUDF_EXPECTS(std::equal(left_table_dtypes.cbegin(), left_table_dtypes.cend(), right_table_dtypes.cbegin(), right_table_dtypes.cend()), "Mismatched column dtypes");
+    //std::vector<gdf_dtype> left_table_dtypes = cudf::column_dtypes(left_table);
+    //std::vector<gdf_dtype> right_table_dtypes = cudf::column_dtypes(right_table);
+    //CUDF_EXPECTS(std::equal(left_table_dtypes.cbegin(), left_table_dtypes.cend(), right_table_dtypes.cbegin(), right_table_dtypes.cend()), "Mismatched column dtypes");
     //}
     
     CUDF_EXPECTS(key_cols.size() > 0, "Empty key_cols");
@@ -224,163 +142,42 @@ std::unique_ptr<cudf::table> merge(table_view const& left_table,
     CUDF_EXPECTS(key_cols.size() == asc_desc.size(), "Mismatched size between key_cols and asc_desc");
 
 
-    using column_rep_t = cudf::column_view; // or just column?
+    using column_rep_t = cudf::column; // or column_view?
     using col_ptr_t = typename std::unique_ptr<column_rep_t>;
 
-    //accumulator of unique_ptr that need to escape the loop body scope:
-    //
-    std::vector<col_ptr_t> temp_columns_to_free;
+    std::vector<col_ptr_t> v_merged_cols;
+    v_merged_cols.reserve(n_cols);
 
-    //create vectors of columns out of left/right tables
-    //need the pointers to be actually valid memory chunks,
-    //hence the allocation via begin/end iterators into
-    //table's vector of columns;
-    // + constness stripping, which is just bad design...
-    //
-    std::vector<column_rep_t*> left_cols_sync(const_cast<column_rep_t**>(left_table.begin()), const_cast<column_rep_t**>(left_table.end()));//???
-    std::vector<column_rep_t*> right_cols_sync(const_cast<column_rep_t**>(right_table.begin()), const_cast<column_rep_t**>(right_table.end()));//???
-    //}
-    
-    for (cudf::size_type i = 0; i < left_table.num_columns(); i++) {
-        //old:
-        //
-        //column_rep_t * left_col = const_cast<column_rep_t*>(left_table.get_column(i));
-        //column_rep_t * right_col = const_cast<column_rep_t*>(right_table.get_column(i));
-        //
-        //new:
-        //extract i-th column of each table:
-        //
+    static_assert(std::is_same<decltype(v_merged_cols), std::vector<std::unique_ptr<cudf::column>> >::value, "ERROR: unexpected type.");
+
+    for(auto i=0;i<n_cols;++i)
+      {
         const auto& left_col = left_table.column(i);
         const auto& right_col= right_table.column(i);
 
-        //old:
+        //not clear yet what must be done for STRING:
         //
-        // if (left_col->dtype != GDF_STRING_CATEGORY){
-        //     continue;
-        // }
-        //
-        //new:
-        //skip non-CATEGORY columns
-        //
-        if( left_col.type().id() != STRING )
-          continue;
-        
-        //
-        // If the inputs are nvcategory we need to make the dictionaries comparable
+        //if( left_col.type().id() != STRING )
+        //  continue;//?
 
-        //transfer ownership from local unique_ptr to container that survives this scope
-        //(for both left/right columns):
-        //
-        temp_columns_to_free.push_back(col_ptr_t(new column_rep_t{}));
-        auto* new_left_column_ptr = temp_columns_to_free.back();//why .get(); ???
-        temp_columns_to_free.push_back(col_ptr_t(new column_rep_t{}));
-        auto* new_right_column_ptr = temp_columns_to_free.back();//why .get(); ???
+        ColumnMerger merger{key_cols[i],
+                            asc_desc[i],
+                            null_precedence[i]};
 
-        //
-        *new_left_column_ptr = allocate_like(left_col);
-        if (new_left_column_ptr->valid) {
-          CUDA_TRY( cudaMemcpyAsync(new_left_column_ptr->valid, left_col->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(left_col->size), cudaMemcpyDefault, stream) );//???
-          new_left_column_ptr->null_count = left_col->null_count;//TODO: replace semantics
-        }
-        
-        *new_right_column_ptr = allocate_like(right_col);
-        if (new_right_column_ptr->valid) {
-          CUDA_TRY( cudaMemcpyAsync(new_right_column_ptr->valid, right_col->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(right_col->size), cudaMemcpyDefault, stream) );//???
-          new_right_column_ptr->null_count = right_col->null_count;//TODO: replace semantics
-        }
-
-        column_rep_t * tmp_arr_input[2] = {left_col, right_col};
-        column_rep_t * tmp_arr_output[2] = {new_left_column_ptr, new_right_column_ptr};
-        CUDF_TRY( sync_column_categories(tmp_arr_input, tmp_arr_output, 2) );//???
-
-        left_cols_sync[i] = new_left_column_ptr.get();
-        right_cols_sync[i] = new_right_column_ptr.get();
-    }
+        col_ptr_t merged = cudf::experimental::type_dispatcher(left_col.type(),
+                                                               merger,
+                                                               left_col,
+                                                               right_col);
+        v_merged_cols.emplace_back(std::move(merged));
+      }
+    //cudf::table tbl{std::move(v_merged_cols)};//nope...
     
-    // <-- here
-
-    table left_sync_table(left_cols_sync);
-    table right_sync_table(right_cols_sync);
-
-    std::vector<column_rep_t*> left_key_cols_vect(key_cols.size());
-    std::transform(key_cols.cbegin(), key_cols.cend(), left_key_cols_vect.begin(),
-                  [&] (cudf::size_type const index) { return left_sync_table.get_column(index); });
-    
-    std::vector<column_rep_t*> right_key_cols_vect(key_cols.size());
-    std::transform(key_cols.cbegin(), key_cols.cend(), right_key_cols_vect.begin(),
-                  [&] (cudf::size_type const index) { return right_sync_table.get_column(index); });
-
-    auto left_key_table = device_table::create(left_key_cols_vect.size(), left_key_cols_vect.data());
-    auto right_key_table = device_table::create(right_key_cols_vect.size(), right_key_cols_vect.data());
-    rmm::device_vector<int8_t> asc_desc_d(asc_desc);
-
-    rmm::device_vector<index_type> merged_indices = generate_merged_indices(*left_key_table, *right_key_table, asc_desc_d, nulls_are_smallest, stream);
-
-    // Allocate output table
-    bool nullable = has_nulls(left_sync_table) || has_nulls(right_sync_table);
-    table destination_table(left_sync_table.num_rows() + right_sync_table.num_rows(),
-                            column_dtypes(left_sync_table),
-                            column_dtype_infos(left_sync_table),
-                            nullable, false, stream);
-    for (cudf::size_type i = 0; i < destination_table.num_columns(); i++) {
-        column_rep_t const* left_col = left_sync_table.get_column(i);
-        column_rep_t * out_col = destination_table.get_column(i);
-        
-        if (left_col->dtype != GDF_STRING_CATEGORY){
-            continue;
-        }
-
-        NVCategory * category = static_cast<NVCategory*>(left_col->dtype_info.category);
-        out_col->dtype_info.category = category->copy();
-    }
-    
-    // Materialize
-    auto left_device_table_ptr = device_table::create(left_sync_table, stream);
-    auto right_device_table_ptr = device_table::create(right_sync_table, stream);
-    auto output_device_table_ptr = device_table::create(destination_table, stream);
-    auto& left_device_table = *left_device_table_ptr;
-    auto& right_device_table = *right_device_table_ptr;
-    auto& output_device_table = *output_device_table_ptr;
-
-    auto index_start_it = thrust::make_zip_iterator(thrust::make_tuple(
-                                                    thrust::make_counting_iterator(static_cast<cudf::size_type>(0)), 
-                                                    merged_indices.begin()));
-    auto index_end_it = thrust::make_zip_iterator(thrust::make_tuple(
-                                                thrust::make_counting_iterator(static_cast<cudf::size_type>(merged_indices.size())),
-                                                merged_indices.end()));
-
-    thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                    index_start_it,
-                    index_end_it,
-                    [=] __device__ (auto const & idx_tuple){
-                        cudf::size_type dest_row = thrust::get<0>(idx_tuple);
-                        index_type merged_idx = thrust::get<1>(idx_tuple);
-                        side src_side = thrust::get<0>(merged_idx);
-                        cudf::size_type src_row  = thrust::get<1>(merged_idx);
-                        device_table const & src_device_table = src_side == side::LEFT ? left_device_table : right_device_table;
-                        copy_row<false>(output_device_table, dest_row, src_device_table, src_row);
-                    });
-    
-    CHECK_STREAM(0);
-
-    if (nullable) {
-        for (cudf::size_type i = 0; i < destination_table.num_columns(); i++) {
-            column_rep_t const* left_col = left_sync_table.get_column(i);
-            column_rep_t const* right_col = right_sync_table.get_column(i);
-            column_rep_t* out_col = destination_table.get_column(i);
-            
-            materialize_bitmask(left_col, right_col, out_col, merged_indices.data().get(), stream);
-            
-            out_col->null_count = left_col->null_count + right_col->null_count;
-        }
-    }
-
-    return destination_table;
+    return std::unique_ptr<cudf::experimental::table>{new cudf::experimental::table(std::move(v_merged_cols))};
 }
 
 }  // namespace detail
 
-std::unique_ptr<cudf::table> merge(table_view const& left_table,
+std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                    table_view const& right_table,
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& asc_desc,

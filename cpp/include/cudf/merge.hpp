@@ -47,7 +47,7 @@ namespace experimental {
  *
  * @Returns A table containing sorted data from left_table and right_table
  */
-std::unique_ptr<cudf::table> merge(table_view const& left_table,
+std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                    table_view const& right_table,
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& asc_desc,
