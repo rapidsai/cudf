@@ -4002,10 +4002,7 @@ def test_df_constructor_dtype(dtype):
 @pytest.mark.parametrize('data',
      [
          [5.0, 6.0, 7.0],
-         ['not enough', 'values'],
          'single value',
-
-
      ])
 def test_insert(data):
     pdf = pd.DataFrame.from_dict({'A': [1,2,3], 'B':['a','b','c']})
@@ -4018,7 +4015,16 @@ def test_insert(data):
 
     assert_eq(pdf, gdf)
 
-    pdf.insert(3, 'foo', data, allow_duplicates=True)
-    gdf.insert(3, 'foo', data, allow_duplicates=True)
+    pdf.insert(3, 'bar', data)
+    gdf.insert(3, 'bar', data)
 
     assert_eq(pdf, gdf)
+
+    pdf.insert(1, 'baz', data)
+    gdf.insert(1, 'baz', data)
+
+    assert_eq(pdf, gdf)
+
+    # pandas insert doesnt support negative indexing 
+    pdf.insert(len(pdf.columns) - 1, 'qux', data)
+    gdf.insert(-1, 'qux', data)
