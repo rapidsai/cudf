@@ -77,10 +77,7 @@
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
-<<<<<<< HEAD
-=======
 - PR #3282 Add `num_bitmask_words`
->>>>>>> ab2ea027991d17964b0f98514f7990e25ce768eb
 - PR #3243 Use upstream join code in dask_cudf
 
 ## Bug Fixes
