@@ -18,6 +18,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/detail/copy.hpp>
@@ -252,7 +253,18 @@ template <typename Filter, int block_size>
 struct scatter_functor
 {
   template <typename T>
-  void operator()(cudf::column_view const& input,
+  std::enable_if_t<not cudf::is_fixed_width<T>(), void>
+  operator()(cudf::column_view const& input,
+                  cudf::mutable_column_view & output,
+                  cudf::size_type  *block_offsets,
+                  Filter filter,
+                  cudaStream_t stream = 0) {
+      CUDF_FAIL("Expects only fixed-width type column");
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_width<T>(), void>
+  operator()(cudf::column_view const& input,
                   cudf::mutable_column_view & output,
                   cudf::size_type  *block_offsets,
                   Filter filter,

@@ -35,7 +35,7 @@ namespace detail {
     template <class Duration>
     struct timestamp : time_point<Duration> {
         /// Initialize timestamp to 1/1/1970:00:00:00
-        constexpr timestamp() : time_point<Duration>(Duration(0)) {};
+        constexpr timestamp() : time_point<Duration>(Duration()) {};
         constexpr timestamp(Duration d) : time_point<Duration>(d) {};
         constexpr timestamp(typename Duration::rep t) : time_point<Duration>(Duration(t)) {};
     };
