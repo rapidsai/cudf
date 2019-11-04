@@ -16,8 +16,10 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "types.hpp"
+#include "cudf/cudf.h"
+#include "cudf/types.hpp"
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/default_memory_resource.hpp>
 
 // Forward declaration
 typedef struct CUstream_st* cudaStream_t;
@@ -43,7 +45,7 @@ namespace detail {
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             cudaStream_t stream = 0,
-                                            device_memory_resource* mr = rmm::get_default_resource());
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
   * @brief Replaces all null values in a column with a scalar.
@@ -62,7 +64,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             const gdf_scalar& replacement,
                                             cudaStream_t stream = 0,
-                                            device_memory_resource* mr = rmm::get_default_resource());
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
@@ -79,6 +81,6 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
                                                    cudaStream_t stream = 0,
-                                                   device_memory_resource* mr = rmm::get_default_resource());
+                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
 } // namespace cudf
