@@ -57,45 +57,87 @@ TEST(ReplaceTest, NormalizeNansAndZeros)
    
    // floats
    {
-      float els[] = { 32.5f, -0.0f, 111.0f, -NAN, NAN, 1.0f, 0.0f, 54.3f };   
+      float els[8] = { 32.5f, -0.0f, 111.0f, -NAN, NAN, 1.0f, 0.0f, 54.3f };   
 
       // copy the data to mutable device column
-      auto test_data = cudf::make_numeric_column(cudf::data_type(cudf::FLOAT32), num_els, cudf::ALL_VALID, 0);      
-      auto view = test_data->mutable_view();
-      cudaMemcpy(view.head(), els, sizeof(float) * num_els, cudaMemcpyHostToDevice);
-         
-      cudf::normalize_nans_and_zeros(view);
+      auto test_data = cudf::make_numeric_column(cudf::data_type(cudf::FLOAT32), num_els, cudf::ALL_VALID, 0);
+      auto test_data_mview = test_data->mutable_view();
+      cudaMemcpy(test_data_mview.head(), els, sizeof(float) * num_els, cudaMemcpyHostToDevice);
 
-      // get the data back
-      cudaMemcpy(els, view.head(), sizeof(float) * num_els, cudaMemcpyDeviceToHost);      
-      
-      // can't compare nans and -nans directly since they will always be equal, so we'll compare against
-      // bit patterns.       
-      uint32_t nan = hard_cast_float(NAN);            
-      EXPECT_TRUE(hard_cast_float(els[3]) == nan);
-      EXPECT_TRUE(hard_cast_float(els[4]) == nan);
-      EXPECT_TRUE(els[1] == 0.0f);
+      // mutable overload
+      {                    
+         auto mutable_view = test_data->mutable_view(); 
+         cudf::normalize_nans_and_zeros(mutable_view);
+
+         // get the data back
+         float chk[8] = { 99.0f };
+         cudaMemcpy(chk, mutable_view.head(), sizeof(float) * num_els, cudaMemcpyDeviceToHost);      
+         
+         // can't compare nans and -nans directly since they will always be equal, so we'll compare against
+         // bit patterns.       
+         uint32_t nan = hard_cast_float(NAN);            
+         EXPECT_TRUE(hard_cast_float(chk[3]) == nan);
+         EXPECT_TRUE(hard_cast_float(chk[4]) == nan);
+         EXPECT_TRUE(chk[1] == 0.0f);
+      }
+
+      // returned column overload
+      {
+         auto out = cudf::normalize_nans_and_zeros(test_data->view());
+
+         // get the data back
+         float chk[8] = { 99.0f };
+         cudaMemcpy(chk, out->view().head(), sizeof(float) * num_els, cudaMemcpyDeviceToHost);      
+         
+         // can't compare nans and -nans directly since they will always be equal, so we'll compare against
+         // bit patterns.       
+         uint32_t nan = hard_cast_float(NAN);            
+         EXPECT_TRUE(hard_cast_float(chk[3]) == nan);
+         EXPECT_TRUE(hard_cast_float(chk[4]) == nan);
+         EXPECT_TRUE(chk[1] == 0.0f);
+      }
    }
    
-   // doubles
+    // doubles
    {
-      double dels[] = { 32.5, -0.0, 111.0, -NAN, NAN, 1.0, 0.0, 54.3 };   
+      double els[8] = { 32.5, -0.0, 111.0, -NAN, NAN, 1.0, 0.0, 54.3 }; 
 
       // copy the data to mutable device column
-      auto test_data = cudf::make_numeric_column(cudf::data_type(cudf::FLOAT64), num_els, cudf::ALL_VALID, 0);      
-      auto view = test_data->mutable_view();
-      cudaMemcpy(view.head(), dels, sizeof(double) * num_els, cudaMemcpyHostToDevice);
-         
-      cudf::normalize_nans_and_zeros(view);
+      auto test_data = cudf::make_numeric_column(cudf::data_type(cudf::FLOAT64), num_els, cudf::ALL_VALID, 0);
+      auto test_data_mview = test_data->mutable_view();
+      cudaMemcpy(test_data_mview.head(), els, sizeof(double) * num_els, cudaMemcpyHostToDevice);
 
-      // get the data back
-      cudaMemcpy(dels, view.head(), sizeof(double) * num_els, cudaMemcpyDeviceToHost);      
-      
-      // can't compare nans and -nans directly since they will always be equal, so we'll compare against
-      // bit patterns.       
-      uint64_t nan = hard_cast_double(NAN);            
-      EXPECT_TRUE(hard_cast_double(dels[3]) == nan);
-      EXPECT_TRUE(hard_cast_double(dels[4]) == nan);
-      EXPECT_TRUE(dels[1] == 0.0);
+      // mutable overload
+      {                    
+         auto mutable_view = test_data->mutable_view(); 
+         cudf::normalize_nans_and_zeros(mutable_view);
+
+         // get the data back
+         double chk[8] = { 99.0 };
+         cudaMemcpy(chk, mutable_view.head(), sizeof(double) * num_els, cudaMemcpyDeviceToHost);      
+         
+         // can't compare nans and -nans directly since they will always be equal, so we'll compare against
+         // bit patterns.       
+         uint64_t nan = hard_cast_double(NAN);            
+         EXPECT_TRUE(hard_cast_double(chk[3]) == nan);
+         EXPECT_TRUE(hard_cast_double(chk[4]) == nan);
+         EXPECT_TRUE(chk[1] == 0.0);
+      }
+
+      // returned column overload
+      {
+         auto out = cudf::normalize_nans_and_zeros(test_data->view());
+
+         // get the data back
+         double chk[8] = { 99.0 };
+         cudaMemcpy(chk, out->view().head(), sizeof(double) * num_els, cudaMemcpyDeviceToHost);      
+         
+         // can't compare nans and -nans directly since they will always be equal, so we'll compare against
+         // bit patterns.       
+         uint64_t nan = hard_cast_double(NAN);            
+         EXPECT_TRUE(hard_cast_double(chk[3]) == nan);
+         EXPECT_TRUE(hard_cast_double(chk[4]) == nan);
+         EXPECT_TRUE(chk[1] == 0.0);
+      }
    }
 }

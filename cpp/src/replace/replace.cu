@@ -86,38 +86,10 @@ struct normalize_nans_and_zeros_kernel_forwarder {
 } // end anonymous namespace
 
 namespace cudf {
-namespace detail {
-
-std::unique_ptr<column> normalize_nans_and_zeros( column_view input,                                            
-                                                  cudaStream_t stream,
-                                                  rmm::mr::device_memory_resource *mr)
-{      
-   CUDF_EXPECTS(input.head() != nullptr, "Null input data");
-   if(input.size() == 0 || input.head() == nullptr){
-      return make_numeric_column(input.type(), input.size(), ALL_VALID, stream, mr);
-   }   
-   CUDF_EXPECTS(input.type() == data_type(FLOAT32) || input.type() == data_type(FLOAT64), "Expects float or double input");
-
-    // to device. unique_ptr which gets automatically cleaned up when we leave
-   auto device_in = column_device_view::create(input);
-   
-   // ultimately, the output.
-   auto out = make_numeric_column(input.type(), input.size(), ALL_VALID, stream, mr);
-   // from device. unique_ptr which gets automatically cleaned up when we leave.
-   auto device_out = mutable_column_device_view::create(*out);
-
-   // invoke the actual kernel.  
-  experimental::type_dispatcher(input.type(), 
-                                normalize_nans_and_zeros_kernel_forwarder{},
-                                *device_in,
-                                *device_out,
-                                stream);
-
-   return out;                 
-}                                                 
+namespace detail {                                               
 
 void normalize_nans_and_zeros(mutable_column_view in_out,
-                              cudaStream_t stream)
+                              cudaStream_t stream = 0)
 {   
    CUDF_EXPECTS(in_out.head() != nullptr, "Null input data");
    if(in_out.size() == 0 || in_out.head() == nullptr){
@@ -158,7 +130,14 @@ void normalize_nans_and_zeros(mutable_column_view in_out,
 std::unique_ptr<column> normalize_nans_and_zeros( column_view input,                                                                                                    
                                                   rmm::mr::device_memory_resource *mr)
 {
-   return detail::normalize_nans_and_zeros(input, 0, mr);
+   // output. copies the input
+   std::unique_ptr<column> out = std::make_unique<column>(input, (cudaStream_t)0, mr);   
+   // from device. unique_ptr which gets automatically cleaned up when we leave.
+   auto out_view = out->mutable_view();
+
+   detail::normalize_nans_and_zeros(out_view, 0);
+
+   return out;
 }
 
 /**
@@ -172,7 +151,7 @@ std::unique_ptr<column> normalize_nans_and_zeros( column_view input,
  */
 void normalize_nans_and_zeros(mutable_column_view in_out)
 {
-   return detail::normalize_nans_and_zeros(in_out, 0);
+   detail::normalize_nans_and_zeros(in_out, 0);
 }
 
 }  // namespace cudf
