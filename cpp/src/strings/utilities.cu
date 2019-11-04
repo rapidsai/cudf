@@ -24,6 +24,7 @@
 
 #include <mutex>
 #include <rmm/rmm.h>
+#include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
 #include <thrust/transform_reduce.h>
@@ -163,16 +164,26 @@ struct character_flags_singleton
 private:
 
     character_flags_table_type* d_character_flags_table{};
+    bool b_rmm_allocated{false};
 
     character_flags_singleton()
     {
-        RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
+        rmmOptions_t options;
+        if( rmmIsInitialized(&options) && (options.allocation_mode == PoolAllocation) )
+        {
+            RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
+            b_rmm_allocated = true;
+        }
+        else
+            cudaMalloc(&d_character_flags_table,sizeof(g_character_codepoint_flags));
         CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
     }
     ~character_flags_singleton()
     {
-        // will this be guaranteed to be called before rmmFinalize?
-        RMM_FREE(d_character_flags_table,0);
+        if( b_rmm_allocated )
+            RMM_FREE(d_character_flags_table,0);
+        else
+            cudaFree(d_character_flags_table);
     }
 };
 
