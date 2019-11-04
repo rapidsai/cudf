@@ -83,8 +83,6 @@
 - PR #3287 Move rolling windows files to legacy
 - PR #3243 Use upstream join code in dask_cudf
 
->>>>>>> upstream/branch-0.11
-
 ## Bug Fixes
 
 - PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
