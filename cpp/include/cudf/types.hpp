@@ -63,6 +63,17 @@ class column_view;
 class mutable_column_view;
 class string_view;
 
+class scalar;
+template <typename T> class numeric_scalar;
+class string_scalar;
+template <typename T> class timestamp_scalar;
+
+template <typename T> class numeric_scalar_device_view;
+class string_scalar_device_view;
+template <typename T> class timestamp_scalar_device_view;
+
+
+
 namespace experimental {
 class table;
 }

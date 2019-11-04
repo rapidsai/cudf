@@ -480,11 +480,14 @@ add_library(cudf
             src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
+            src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
-            src/column/legacy/interop.cpp)
+            src/column/legacy/interop.cpp
+            src/scalar/scalar.cpp
+            src/scalar/scalar_factories.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
