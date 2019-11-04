@@ -60,6 +60,10 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
  *
  * Bit `i` in the output mask will be set if `p(*(begin+i)) == true`.
  *
+ * If `distance(begin,end) == 0`, returns an empty `rmm::device_buffer`.
+ *
+ * @throws cudf::logic_error if `(begin > end)`
+ *
  * @param begin The beginning of the sequence
  * @param end The end of the sequence
  * @param p The predicate
@@ -73,21 +77,27 @@ std::pair<rmm::device_buffer, size_type> valid_if(
     InputIterator begin, InputIterator end, Predicate p,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  CUDF_EXPECTS(begin <= end, "Invalid range.");
+
   size_type size = thrust::distance(begin, end);
 
   auto null_mask =
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
-  rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
-  constexpr size_type block_size{256};
-  grid_1d grid{size, block_size};
+  size_type null_count{0};
+  if (size > 0) {
+    rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
-  valid_if_kernel<block_size>
-      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-          static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
-          valid_count.data());
+    constexpr size_type block_size{256};
+    grid_1d grid{size, block_size};
 
-  auto null_count = size - valid_count.value(stream);
+    valid_if_kernel<block_size>
+        <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+            static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
+            valid_count.data());
+
+    null_count = size - valid_count.value(stream);
+  }
   return std::make_pair(null_mask, null_count);
 }
 }  // namespace detail
