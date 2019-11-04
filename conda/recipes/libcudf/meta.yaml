@@ -74,7 +74,7 @@ test:
     - test -f $PREFIX/include/cudf/legacy/predicates.hpp
     - test -f $PREFIX/include/cudf/legacy/reduction.hpp
     - test -f $PREFIX/include/cudf/legacy/replace.hpp
-    - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/legacy/rolling.hpp
     - test -f $PREFIX/include/cudf/legacy/search.hpp
     - test -f $PREFIX/include/cudf/legacy/stream_compaction.hpp
     - test -f $PREFIX/include/cudf/legacy/transform.hpp

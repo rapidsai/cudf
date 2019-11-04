@@ -508,10 +508,10 @@ ConfigureTest(LEGACY_STREAM_COMPACTION_TEST "${LEGACY_STREAM_COMPACTION_TEST_SRC
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
 
-set(ROLLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
+set(LEGACY_ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/legacy/rolling_test.cu")
 
-ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy filling test ---------------------------------------------------------------------------
