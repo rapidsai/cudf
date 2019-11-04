@@ -56,10 +56,18 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
  * @brief Displays a column view as a string
  *
  * @param col The column view
- * @param sep The separator for 
- * @param size_bytes The number of bytes to check for equality
+ * @param delimiter The delimiter to put between strings
  *---------------------------------------------------------------------------**/
-std::string column_view_to_str(cudf::column_view const& col, const char *delimiter);
+std::string to_string(cudf::column_view const& col, const char *delimiter);
+
+/**---------------------------------------------------------------------------*
+ * @brief Print a column view to an ostream
+ *
+ * @param os        The output stream
+ * @param col       The column view
+ * @param delimiter The delimiter to put between strings
+ *---------------------------------------------------------------------------**/
+void print(std::ostream &os, cudf::column_view const& col, const char *delimiter=",");
 
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.

@@ -75,7 +75,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
 }
 
 TYPED_TEST(ColumnUtilitiesTest, PrintColumn) {
-  const char *delimiter = ",";
+  const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
   std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
@@ -83,5 +83,22 @@ TYPED_TEST(ColumnUtilitiesTest, PrintColumn) {
   std::ostringstream tmp;
   std::copy(std_col.begin(), std_col.end(), std::ostream_iterator<TypeParam>(tmp, delimiter));
 
-  EXPECT_EQ(tmp.str(), cudf::test::column_view_to_str(cudf_col, delimiter));
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
+}
+
+TYPED_TEST(ColumnUtilitiesTest, PrintColumnWithInvalids) {
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
+                                                              {1, 0, 1, 0, 1} };
+  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+
+  std::ostringstream tmp;
+  tmp << std_col[0]
+      << delimiter << "@"
+      << delimiter << std_col[2]
+      << delimiter << "@"
+      << delimiter << std_col[4];
+  
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }

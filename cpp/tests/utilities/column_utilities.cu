@@ -52,7 +52,7 @@ public:
   }
 };
 
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
+void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool all) {
   expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
@@ -73,35 +73,37 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
   //  If there are differences, let's display the first one
   //
   if (diff_iter > differences.begin()) {
-    int index = differences[0];
-    int count = diff_iter - differences.begin();
+    if (all) {
+    } else {
+      int index = differences[0];
+      int count = diff_iter - differences.begin();
 
-    cudf::column_view diff_lhs(lhs.type(),
-                               1,
-                               lhs.data<void *>(),
-                               lhs.null_mask(),
-                               0,
-                               index);
+      cudf::column_view diff_lhs(lhs.type(),
+                                 1,
+                                 lhs.data<void *>(),
+                                 lhs.null_mask(),
+                                 0,
+                                 index);
                                
-    cudf::column_view diff_rhs(rhs.type(),
-                               1,
-                               rhs.data<void *>(),
-                               rhs.null_mask(),
-                               0,
-                               index);
+      cudf::column_view diff_rhs(rhs.type(),
+                                 1,
+                                 rhs.data<void *>(),
+                                 rhs.null_mask(),
+                                 0,
+                                 index);
 
-    EXPECT_PRED_FORMAT1(([diff_lhs, diff_rhs, count]
-                         (const char *m_expr, int m) {
-                           return ::testing::AssertionFailure()
-                             << "expect_columns_equal failed with ("
-                             << count
-                             << ") differences: "
-                             << "lhs[" << m << "] = "
-                             << column_view_to_str(diff_lhs, "")
-                             << ", rhs[" << m << "] = "
-                             << column_view_to_str(diff_rhs, "");
-                         }), index);
-  
+      EXPECT_PRED_FORMAT1(([diff_lhs, diff_rhs, count]
+                           (const char *m_expr, int m) {
+                             return ::testing::AssertionFailure()
+                               << "expect_columns_equal failed with ("
+                               << count
+                               << ") differences: "
+                               << "lhs[" << m << "] = "
+                               << to_string(diff_lhs, "")
+                               << ", rhs[" << m << "] = "
+                               << to_string(diff_rhs, "");
+                           }), index);
+    }
   }
 }
 
@@ -122,6 +124,7 @@ struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, const char *delimiter, std::ostream &ostream) {
 
+#if 0
     cudf::size_type num_rows = col.size();
     std::vector<Element> h_data(num_rows);
     CUDA_TRY(cudaMemcpy(h_data.data(), col.data<void *>(),
@@ -134,25 +137,40 @@ struct column_view_printer {
 
       std::vector<bitmask_type> h_null(null_size);
       CUDA_TRY(cudaMemcpy(h_null.data(), col.null_mask(),
-                          cudf::detail::size_in_bits<bitmask_type>() * null_size,
+                          sizeof(bitmask_type) * null_size,
                           cudaMemcpyDeviceToHost));
 
-      thrust::for_each(thrust::host,
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(num_rows),
-                       [&h_data, &h_null,
-                        &delimiter, &ostream](int index) {
-                         if (bit_is_set(h_null.data(), index)) {
-                           ostream << h_data[index];
-                         } else {
-                           ostream << "@";
-                         }
-                       });
+      cudf::size_type index{0};
+      for (Element data : h_data) {
+        ostream << ((index == 0) ? "" : delimiter);
+        if (bit_is_set(h_null.data(), index++)) 
+          ostream << data;
+        else
+          ostream << "@";
+      }
     } else {
-      thrust::copy(h_data.begin(),
-                   h_data.end(),
-                   std::ostream_iterator<Element>(ostream, delimiter));
+      std::copy(h_data.begin(), h_data.end(),
+                std::ostream_iterator<Element>(ostream, delimiter));
     }
+#else
+    //std::pair<std::vector<Element>, std::vector<bitmask_type>> h_data;
+    auto h_data = cudf::test::to_host<Element>(col);
+
+    if (col.nullable()) {
+      cudf::size_type index{0};
+      for (Element data : h_data.first) {
+        ostream << ((index == 0) ? "" : delimiter);
+        if (bit_is_set(h_data.second.data(), index++)) 
+          ostream << data;
+        else
+          ostream << "@";
+      }
+    } else {
+      std::copy(h_data.first.begin(), h_data.first.end(),
+                std::ostream_iterator<Element>(ostream, delimiter));
+    }
+#endif
+    
   }
 
   template <typename Element, typename std::enable_if_t<not is_numeric<Element>()>* = nullptr>
@@ -161,7 +179,7 @@ struct column_view_printer {
   }
 };
 
-std::string column_view_to_str(cudf::column_view const& col, const char *delimiter) {
+std::string to_string(cudf::column_view const& col, const char *delimiter) {
 
   std::ostringstream buffer;
 
@@ -172,6 +190,10 @@ std::string column_view_to_str(cudf::column_view const& col, const char *delimit
                                       buffer);
 
   return buffer.str();
+}
+
+void print(std::ostream &os, cudf::column_view const& col, const char *delimiter) {
+  os << to_string(col, delimiter);
 }
 
 }  // namespace test
