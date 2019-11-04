@@ -13,17 +13,56 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <cudf/detail/valid_if.cuh>
-#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
 
 #include <gmock/gmock.h>
 
-
 struct ValidIfTest : public cudf::test::BaseFixture {};
 
-TEST_F(ValidIfTest, First) {
+struct odds_valid {
+  __host__ __device__ bool operator()(cudf::size_type i) { return i % 2; }
+};
+struct all_valid {
+  __host__ __device__ bool operator()(cudf::size_type i) { return true; }
+};
+struct all_null {
+  __host__ __device__ bool operator()(cudf::size_type i) { return false; }
+};
+
+TEST_F(ValidIfTest, OddsValid) {
+  auto iter = cudf::test::make_counting_transform_iterator(0, odds_valid{});
+  auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
+  auto actual = cudf::experimental::detail::valid_if(
+      thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000),
+      odds_valid{});
+  cudf::test::expect_equal_buffers(expected.data(), actual.first.data(),
+                                   expected.size());
+  EXPECT_EQ(5000, actual.second);
+}
+
+TEST_F(ValidIfTest, AllValid) {
+  auto iter = cudf::test::make_counting_transform_iterator(0, all_valid{});
+  auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
+  auto actual = cudf::experimental::detail::valid_if(
+      thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000),
+      all_valid{});
+  cudf::test::expect_equal_buffers(expected.data(), actual.first.data(),
+                                   expected.size());
+  EXPECT_EQ(0, actual.second);
+}
+
+TEST_F(ValidIfTest, AllNull) {
+  auto iter = cudf::test::make_counting_transform_iterator(0, all_null{});
+  auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
+  auto actual = cudf::experimental::detail::valid_if(
+      thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000),
+      all_null{});
+  cudf::test::expect_equal_buffers(expected.data(), actual.first.data(),
+                                   expected.size());
+  EXPECT_EQ(10000, actual.second);
 }

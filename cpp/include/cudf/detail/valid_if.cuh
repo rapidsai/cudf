@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.cuh>
 
+#include <thrust/distance.h>
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
@@ -32,8 +33,7 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
                                 size_type* valid_count) {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  auto const warp_id{threadIdx.x / warp_size};
-  auto i = threadIdx.x + blockIdx.x * gridDim.x;
+  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
@@ -47,7 +47,7 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
     active_mask = __ballot_sync(active_mask, i < size);
   }
 
-  auto block_count =
+  size_type block_count =
       single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
   if (threadIdx.x == 0) {
     atomicAdd(valid_count, block_count);
@@ -73,17 +73,19 @@ std::pair<rmm::device_buffer, size_type> valid_if(
     InputIterator begin, InputIterator end, Predicate p,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
-  auto size = thrust::distance(begin, end);
+  size_type size = thrust::distance(begin, end);
 
   auto null_mask =
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
-  grid_1d grid{num_bitmask_words(size), 256};
+  constexpr size_type block_size{256};
+  grid_1d grid{size, block_size};
 
-  valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-      static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
-      valid_count.data());
+  valid_if_kernel<block_size>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+          static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
+          valid_count.data());
 
   auto null_count = size - valid_count.value(stream);
   return std::make_pair(null_mask, null_count);
