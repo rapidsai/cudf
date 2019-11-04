@@ -278,7 +278,7 @@ public:
   void putb(const uint8_t *raw, uint32_t len) { for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]); }
   uint32_t put_uint(uint64_t v) { int l = 1; while (v > 0x7f) { putb(static_cast<uint8_t>(v | 0x80)); v >>= 7; l++; } putb(static_cast<uint8_t>(v)); return l; }
   uint32_t put_int(int64_t v) { int64_t s = (v < 0); return put_uint(((v ^ -s) << 1) + s); }
-  void put_fldh(int f, int cur, int t) { if (f >= cur && f < cur + 15) putb(((f - cur) << 4) | t); else { putb(0xf0 | t); put_int(f); } }
+  void put_fldh(int f, int cur, int t) { if (f >= cur && f <= cur + 15) putb(((f - cur) << 4) | t); else { putb(t); put_int(f); } }
 
 public:
 #define DECL_CPW_STRUCT(st) size_t write(const st *)

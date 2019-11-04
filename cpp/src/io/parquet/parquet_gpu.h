@@ -156,6 +156,7 @@ struct EncPage
   uint8_t page_type;                //!< Page type (0=data, 2=dictionary)
   uint8_t pad;
   uint32_t chunk_id;                //!< Index in chunk array
+  uint32_t hdr_size;                //!< Size of page header
   uint32_t max_hdr_size;            //!< Maximum size of page header
   uint32_t max_data_size;           //!< Maximum size of coded page data (excluding header)
   uint32_t start_row;               //!< First row of page
@@ -289,17 +290,31 @@ cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t n
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
- * @param[in,out] chunks Column chunks
+ * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] pages Device array of EncPages
  * @param[in] num_chunks Number of column chunks
- * @param[in] comp_in Compressor input parameters
- * @param[in] comp_out Compressor status
+ * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks,
-                              const gpu_inflate_input_s *comp_in, const gpu_inflate_status_s *comp_out,
+                              const gpu_inflate_status_s *comp_out = nullptr, cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel to encode page headers
+ *
+ * @param[in,out] pages Device array of EncPages
+ * @param[in] chunks Column chunks
+ * @param[in] num_pages Number of pages
+ * @param[in] start_page First page to encode in page array
+ * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages,
+                              uint32_t start_page = 0, const gpu_inflate_status_s *comp_out = nullptr,
                               cudaStream_t stream = (cudaStream_t)0);
 
 /**
@@ -313,7 +328,8 @@ cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t GatherPages(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t GatherPages(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks,
+                        cudaStream_t stream = (cudaStream_t)0);
 
 
 } // namespace gpu
