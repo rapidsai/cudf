@@ -366,7 +366,7 @@ add_library(cudf
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
-            src/predicates/is_sorted.cu
+            src/predicates/legacy/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
@@ -479,13 +479,16 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cu
             src/sort/sort.cu
+            src/column/legacy/interop.cpp
             src/strings/strings_column_factories.cu
+            src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
             src/strings/combine.cu
-            src/column/legacy/interop.cpp)
+            src/scalar/scalar.cpp
+            src/scalar/scalar_factories.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
