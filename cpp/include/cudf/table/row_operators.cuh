@@ -317,19 +317,21 @@ class row_lexicographic_comparator {
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param null_precedence Indicates how null values compare to all other
-   *values.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row
+   * and indicates how null values compare to all other for every column. If
+   * it is nullptr, then null precedence would be `null_order::BEFORE` for all
+   * columns.
    *---------------------------------------------------------------------------**/
   row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               null_order null_precedence = null_order::BEFORE,
-                               order* column_order = nullptr)
+                               order* column_order = nullptr,
+                               null_order* null_precedence = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
-        _null_precedence{null_precedence},
-        _column_order{column_order} {
+        _column_order{column_order},
+        _null_precedence{null_precedence} {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
                  "Mismatched number of columns.");
@@ -351,9 +353,11 @@ class row_lexicographic_comparator {
           (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
       weak_ordering state{weak_ordering::EQUIVALENT};
+      null_order null_precedence = _null_precedence == nullptr ?
+                                     null_order::BEFORE: _null_precedence[i];
 
       auto comparator = element_relational_comparator<has_nulls>{
-          _lhs.column(i), _rhs.column(i), _null_precedence};
+          _lhs.column(i), _rhs.column(i), null_precedence};
 
       state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
                                          lhs_index, rhs_index);
@@ -370,7 +374,7 @@ class row_lexicographic_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  null_order _null_precedence{null_order::BEFORE};
+  null_order const*  _null_precedence{};
   order const* _column_order{};
 };  // class row_lexicographic_comparator
 

@@ -272,7 +272,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param element_list The list of elements
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::initializer_list<Element> elements)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements)} {
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
   }
 
   /**---------------------------------------------------------------------------*
@@ -294,8 +294,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::initializer_list<Element> elements,
                              std::initializer_list<bool> validity)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements),
-                                   std::cbegin(validity)} {}
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
+                                   std::cbegin(validity)) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements and
@@ -317,8 +317,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename ValidityIterator>
   fixed_width_column_wrapper(std::initializer_list<Element> element_list,
                              ValidityIterator v)
-      : fixed_width_column_wrapper{std::cbegin(element_list),
-                                   std::cend(element_list), v} {}
+      : fixed_width_column_wrapper(std::cbegin(element_list),
+                                   std::cend(element_list), v) {}
 };
 
 /**---------------------------------------------------------------------------*
