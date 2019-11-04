@@ -17,7 +17,7 @@
 #include <cstring>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 

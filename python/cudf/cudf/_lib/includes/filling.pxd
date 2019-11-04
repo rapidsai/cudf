@@ -26,3 +26,8 @@ cdef extern from "cudf/legacy/filling.hpp" namespace "cudf" nogil:
         const cudf_table & input,
         const gdf_scalar & count
     ) except +
+
+    cdef cudf_table tile(
+        const cudf_table & input,
+        size_type count
+    ) except +

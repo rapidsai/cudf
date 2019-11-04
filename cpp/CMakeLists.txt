@@ -61,6 +61,21 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     endif(CMAKE_CXX11_ABI)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
+if(CMAKE_CUDA_COMPILER_VERSION)
+  # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${CMAKE_CUDA_COMPILER_VERSION})
+  set(CUDA_VERSION "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}" CACHE STRING "Version of CUDA as computed from nvcc.")
+  mark_as_advanced(CUDA_VERSION)
+endif()
+
+message(STATUS "CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
+message(STATUS "CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
+message(STATUS "CUDA_VERSION: ${CUDA_VERSION}")
+
+# Always set this convenience variable
+set(CUDA_VERSION_STRING "${CUDA_VERSION}")
+
 # Auto-detect available GPU compute architectures
 set(GPU_ARCHS "ALL" CACHE STRING
   "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
@@ -192,7 +207,7 @@ find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include")
 
 find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib")
+             HINTS "$ENV{RMM_ROOT}/lib" "$ENV{RMM_ROOT}/build")
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -351,7 +366,7 @@ add_library(cudf
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
-            src/predicates/is_sorted.cu
+            src/predicates/legacy/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
@@ -362,45 +377,47 @@ add_library(cudf
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
             src/rolling/jit/util/type.cpp
-            src/binaryop/binaryop.cpp
-            src/binaryop/compiled/binary_ops.cu
-            src/binaryop/jit/code/kernel.cpp
-            src/binaryop/jit/code/operation.cpp
-            src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/util/operator.cpp
-            src/binaryop/jit/util/type.cpp
+            src/binaryop/legacy/binaryop.cpp
+            src/binaryop/legacy/compiled/binary_ops.cu
+            src/binaryop/legacy/jit/code/kernel.cpp
+            src/binaryop/legacy/jit/code/operation.cpp
+            src/binaryop/legacy/jit/code/traits.cpp
+            src/binaryop/legacy/jit/util/operator.cpp
+            src/binaryop/legacy/jit/util/type.cpp
             src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
-            src/transform/transform.cpp
+            src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
-            src/transform/nans_to_nulls.cu
+            src/transform/legacy/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/apply_boolean_mask.cu
-            src/stream_compaction/drop_nulls.cu
-            src/stream_compaction/drop_duplicates.cu
+            src/stream_compaction/legacy/apply_boolean_mask.cu
+            src/stream_compaction/legacy/drop_nulls.cu
+            src/stream_compaction/legacy/drop_duplicates.cu
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/reductions/reductions.cu
-            src/reductions/min.cu
-            src/reductions/max.cu
-            src/reductions/any.cu
-            src/reductions/all.cu
-            src/reductions/sum.cu
-            src/reductions/product.cu
-            src/reductions/sum_of_squares.cu
-            src/reductions/mean.cu
-            src/reductions/var.cu
-            src/reductions/std.cu
+            src/reductions/legacy/reductions.cu
+            src/reductions/legacy/min.cu
+            src/reductions/legacy/max.cu
+            src/reductions/legacy/any.cu
+            src/reductions/legacy/all.cu
+            src/reductions/legacy/sum.cu
+            src/reductions/legacy/product.cu
+            src/reductions/legacy/sum_of_squares.cu
+            src/reductions/legacy/mean.cu
+            src/reductions/legacy/var.cu
+            src/reductions/legacy/std.cu
+            src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reductions/scan.cu
+            src/reshape/stack.cu
             src/transpose/legacy/transpose.cu
-            src/merge/merge.cu
+            src/merge/legacy/merge.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
@@ -442,6 +459,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/slice.cpp
+            src/copying/split.cpp
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -451,6 +470,7 @@ add_library(cudf
             src/copying/legacy/copy_range.cu
             src/filling/legacy/fill.cu
             src/filling/legacy/repeat.cu
+            src/filling/legacy/tile.cu
             src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
@@ -462,11 +482,14 @@ add_library(cudf
             src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
+            src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
-            src/column/legacy/interop.cpp)
+            src/column/legacy/interop.cpp
+            src/scalar/scalar.cpp
+            src/scalar/scalar_factories.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
