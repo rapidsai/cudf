@@ -27,6 +27,20 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
+
+/**
+ * @brief Generate a bitmask where every bit is set for which a predicate is
+ * `true` over the elements in `[begin, begin + size)`.
+ *
+ * Bit `i` in the output mask will be set if `p(*(begin+i)) == true`.
+ *
+ * @tparam block_size The number of threads in the block
+ * @param[out] output The output bitmask
+ * @param[in] begin The begining of the sequence of elements
+ * @param[in] size The number of elements
+ * @param[in] p The predicate to apply to each element
+ * @param[out] valid_count The count of set bits in the output bitmask
+ */
 template <size_type block_size, typename InputIterator, typename Predicate>
 __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
                                 size_type size, Predicate p,
