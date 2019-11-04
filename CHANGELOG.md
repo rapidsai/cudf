@@ -12,6 +12,7 @@
 - PR #3022 adds DataFrame.astype for cuDF dataframes
 - PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
+- PR #3068 Add `scalar` class
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3143 Define and implement new copying APIs `slice` and `split`
@@ -75,8 +76,11 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
+- PR #3282 Add `num_bitmask_words`
+
 
 ## Bug Fixes
 
