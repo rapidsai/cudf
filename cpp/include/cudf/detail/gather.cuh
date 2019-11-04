@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include <thrust/functional.h>
+#include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -258,7 +259,6 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(destination_columns));
 
   rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
-  std::vector<cudf::size_type> h_valid_counts(source_table.num_columns());
 
   auto bitmask_kernel =
     ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> : gather_bitmask_kernel<false, decltype(gather_map_begin)>;
@@ -277,8 +277,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
                                                           *destination_table_view,
                                                           valid_counts.data().get());
 
-  CUDA_TRY(cudaMemcpy(h_valid_counts.data(), valid_counts.data().get(),
-                      sizeof(size_type) * source_table.num_columns(), cudaMemcpyDeviceToHost));
+  thrust::host_vector<cudf::size_type> h_valid_counts(valid_counts);
 
   for (auto i=0; i<destination_table->num_columns(); ++i) {
     if (destination_table->get_column(i).nullable()) {

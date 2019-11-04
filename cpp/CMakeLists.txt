@@ -454,7 +454,6 @@ add_library(cudf
             src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
 	    src/copying/gather.cu
-	    src/copying/scatter.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
