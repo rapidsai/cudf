@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
@@ -59,7 +60,7 @@ TEST_F(StringsCombineTest, Concatenate)
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
-        auto results = cudf::strings::concatenate(strings_columns,":");
+        auto results = cudf::strings::concatenate(strings_columns,cudf::string_scalar(":"));
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
@@ -67,7 +68,7 @@ TEST_F(StringsCombineTest, Concatenate)
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
             //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
-        auto results = cudf::strings::concatenate(strings_columns,":","_");
+        auto results = cudf::strings::concatenate(strings_columns,cudf::string_scalar(":"),cudf::string_scalar("_"));
         cudf::test::expect_columns_equal(*results,expected);
     }
 }
@@ -81,15 +82,6 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
     strings_columns.push_back(strings_view);
     auto results = cudf::strings::concatenate(strings_columns);
     cudf::test::expect_strings_empty(results->view());
-}
-
-TEST_F(StringsCombineTest, ConcatInvalidStringsColumns)
-{
-    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    std::vector<cudf::strings_column_view> strings_columns;
-    strings_columns.push_back(strings_view); // not enough columns
-    EXPECT_THROW( cudf::strings::concatenate(strings_columns), cudf::logic_error );
 }
 
 TEST_F(StringsCombineTest, Join)
@@ -106,13 +98,13 @@ TEST_F(StringsCombineTest, Join)
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
-        auto results = cudf::strings::join_strings(view1,"+");
+        auto results = cudf::strings::join_strings(view1,cudf::string_scalar("+"));
 
         cudf::test::strings_column_wrapper expected{"eee+bb+zzzz++aaa+ééé"};
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
-        auto results = cudf::strings::join_strings(view1,"+","___");
+        auto results = cudf::strings::join_strings(view1,cudf::string_scalar("+"),cudf::string_scalar("___"));
 
         cudf::test::strings_column_wrapper expected{"eee+bb+___+zzzz++aaa+ééé"};
         cudf::test::expect_columns_equal(*results,expected);

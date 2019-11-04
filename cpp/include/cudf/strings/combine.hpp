@@ -17,6 +17,7 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf
 {
@@ -50,15 +51,15 @@ namespace strings
  * @param strings_columns List of string columns to concatenate.
  * @param separator String that should inserted between each string from each row.
  *        Default is an empty string.
- * @param narep Null-terminated CPU string that should be used in place of any null strings
- *        found in any column. Default of null means any null entry in any column will
+ * @param narep String that should be used in place of any null strings
+ *        found in any column. Default of invalid-scalar means any null entry in any column will
  *        produces a null result for that row.
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */
-std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
-                                           const std::string separator = "",
-                                           const char* narep=nullptr,
+std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> const& strings_columns,
+                                           string_scalar const& separator = string_scalar(""),
+                                           string_scalar const& narep = string_scalar("",false),
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -77,14 +78,14 @@ std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view
  * @param strings Strings for this operation.
  * @param separator String that should inserted between each string.
  *        Default is an empty string.
- * @param narep Null-terminated CPU string that should represent any null strings found.
- *        Default of nullptr will ignore any null entries.
+ * @param narep String that should represent any null strings found.
+ *        Default of invalid-scalar will ignore any null entries.
  * @param mr Resource for allocating device memory.
  * @return New column containing one string.
  */
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const std::string separator = "",
-                                            const char* narep=nullptr,
+                                            string_scalar const& separator = string_scalar(""),
+                                            string_scalar const& narep = string_scalar("",false),
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings

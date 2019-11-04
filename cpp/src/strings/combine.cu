@@ -15,11 +15,12 @@
  */
 
 #include <bitmask/legacy/valid_if.cuh>
+#include <cudf/null_mask.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/combine.hpp>
 #include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
@@ -38,13 +39,14 @@ namespace detail
 {
 
 //
-std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
-                                           const std::string separator = "",
-                                           const char* narep=nullptr,
+std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> const& strings_columns,
+                                           string_scalar const& separator = string_scalar(""),
+                                           string_scalar const& narep = string_scalar("",false),
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream=0 )
 {
     auto num_columns = strings_columns.size();
+    CUDF_EXPECTS( num_columns > 0, "At least one column must be specified");
     if( num_columns==1 ) // single column returns a copy
         return std::make_unique<column>(strings_columns[0].parent(),stream,mr);
 
@@ -55,16 +57,15 @@ std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view
     {
         CUDF_FAIL( "concatenate requires all columns have an equal number of rows");
     }
+    CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string");
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
-    auto separator_ptr = detail::string_from_host(separator.c_str(), stream);
-    auto d_separator = *separator_ptr;
-    auto narep_ptr = detail::string_from_host(narep, stream);
+    string_view d_separator(separator.data(),separator.size());
     string_view d_narep(nullptr,0);
-    if( narep_ptr )
-        d_narep = *narep_ptr;
+    if( narep.is_valid() ) // narep is allowed to be invalid
+        d_narep = string_view(narep.data(),narep.size());
 
     // Create device views from the strings columns.
     //
@@ -188,8 +189,8 @@ std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view
 
 //
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const std::string separator = "",
-                                            const char* narep=nullptr,
+                                            string_scalar const& separator = string_scalar(""),
+                                            string_scalar const& narep = string_scalar("",false),
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream=0 )
 {
@@ -198,12 +199,10 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         return detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
-    auto separator_ptr = detail::string_from_host(separator.c_str(), stream);
-    auto d_separator = *separator_ptr;
-    auto narep_ptr = detail::string_from_host(narep, stream);
+    string_view d_separator(separator.data(),separator.size());
     string_view d_narep(nullptr,0);
-    if( narep_ptr )
-        d_narep = *narep_ptr;
+    if( narep.is_valid() ) // narep is allowed to be invalid
+        d_narep = string_view(narep.data(),narep.size());
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
@@ -284,17 +283,17 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
 
 // APIs
 
-std::unique_ptr<cudf::column> concatenate( const std::vector<strings_column_view>& strings_columns,
-                                           const std::string separator,
-                                           const char* narep,
+std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> const& strings_columns,
+                                           cudf::string_scalar const& separator,
+                                           cudf::string_scalar const& narep,
                                            rmm::mr::device_memory_resource* mr)
 {
     return detail::concatenate(strings_columns, separator, narep, mr);
 }
 
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
-                                            const std::string separator,
-                                            const char* narep,
+                                            cudf::string_scalar const& separator,
+                                            cudf::string_scalar const& narep,
                                             rmm::mr::device_memory_resource* mr )
 {
     return detail::join_strings(strings, separator, narep, mr);
