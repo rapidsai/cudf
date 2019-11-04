@@ -20,7 +20,9 @@
 #include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
+#include "char_types/char_flags.h"
 
+#include <mutex>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
@@ -140,6 +142,46 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
                                      rmm::device_buffer{0,stream,mr}, 0 ); // nulls
 }
 
+namespace
+{
+
+// guaranteed thread-safe
+struct character_flags_singleton
+{
+    static character_flags_singleton& instance()
+    {
+        static character_flags_singleton _instance;
+        return _instance;
+    }
+    character_flags_singleton( character_flags_singleton const& ) = delete;
+    character_flags_singleton( character_flags_singleton&& ) = delete;
+    character_flags_singleton& operator=(character_flags_singleton const&) = delete;
+    character_flags_singleton& operator=(character_flags_singleton&&) = delete;
+
+    character_flags_table_type* table() { return d_character_flags_table; }
+
+private:
+
+    character_flags_table_type* d_character_flags_table{};
+
+    character_flags_singleton()
+    {
+        RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
+        CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
+    }
+    ~character_flags_singleton()
+    {
+        // will this be guaranteed to be called before rmmFinalize?
+        RMM_FREE(d_character_flags_table,0);
+    }
+};
+
+} // namespace
+
+const character_flags_table_type* get_character_flags_table()
+{
+    return character_flags_singleton::instance().table();
+}
 
 } // namespace detail
 } // namespace strings
