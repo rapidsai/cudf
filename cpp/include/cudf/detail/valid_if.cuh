@@ -79,8 +79,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
       create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
   rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
-  // TODO `word_index(size)` is wrong. This needs to round UP.
-  grid_1d grid{word_index(size), 256};
+  grid_1d grid{num_bitmask_words(size), 256};
 
   valid_if_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
       static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
@@ -88,7 +87,6 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
   return std::make_pair(null_mask, valid_count.value(stream));
 }
-
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
