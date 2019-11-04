@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_scalar.hpp>
@@ -34,17 +35,14 @@
 
 namespace {
 
-// TODO: better define warp_size elsewhere (cuda_utils.hpp?).
-static constexpr cudf::size_type warp_size{32};
-
-template <typename T, typename InputFunctor, bool has_validity>
+template <typename T, typename SourceFunctor, bool has_validity>
 __global__
 void copy_range_kernel(T* __restrict__ const data,
                        cudf::bitmask_type* __restrict__ const bitmask,
                        cudf::size_type* __restrict__ const null_count,
                        cudf::size_type begin,
                        cudf::size_type end,
-                       InputFunctor input) {
+                       SourceFunctor source) {
   const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   constexpr size_t mask_size = warp_size;
 
@@ -61,8 +59,8 @@ void copy_range_kernel(T* __restrict__ const data,
 
   cudf::size_type mask_idx = begin_mask_idx + warp_id;
 
-  cudf::size_type output_offset = begin_mask_idx * mask_size - begin;
-  cudf::size_type input_idx = tid + output_offset;
+  cudf::size_type target_offset = begin_mask_idx * mask_size - begin;
+  cudf::size_type source_idx = tid + target_offset;
 
   // each warp shares its total change in null count to shared memory to ease
   // computing the total change to null_count.
@@ -78,12 +76,12 @@ void copy_range_kernel(T* __restrict__ const data,
     bool in_range = (index >= begin && index < end);
 
     // write data
-    if (in_range) data[index] = input.data(input_idx);
+    if (in_range) data[index] = source.data(source_idx);
 
     if (has_validity) {  // update bitmask
       int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
 
-      bool valid = in_range and input.valid(input_idx);
+      bool valid = in_range and source.valid(source_idx);
       int warp_mask = __ballot_sync(active_mask, valid);
 
       cudf::bitmask_type old_mask = bitmask[mask_idx];
@@ -98,7 +96,7 @@ void copy_range_kernel(T* __restrict__ const data,
       }
     }
 
-    input_idx += blockDim.x * gridDim.x;
+    source_idx += blockDim.x * gridDim.x;
     mask_idx += masks_per_grid;
   }
 
@@ -121,22 +119,22 @@ void copy_range_kernel(T* __restrict__ const data,
   }
 }
 
-template <typename InputFactory>
+template <typename SourceFactory>
 struct copy_range_dispatch {
-  InputFactory factory;
+  SourceFactory factory;
 
   template <typename T>
-  void operator()(cudf::mutable_column_view& output,
+  void operator()(cudf::mutable_column_view& target,
                   cudf::size_type begin, cudf::size_type end,
                   cudaStream_t stream = 0) {
     static_assert(warp_size == cudf::util::size_in_bits<cudf::bitmask_type>(),
       "copy_range_kernel assumes bitmask element size in bits == warp size");
 
-    auto input = factory.template make<T>();
+    auto source = factory.template make<T>();
 
-    T * __restrict__ data = output.head<T>();
-    cudf::bitmask_type * __restrict__ bitmask = output.null_mask();
-    auto offset = output.offset();
+    T * __restrict__ data = target.head<T>();
+    cudf::bitmask_type * __restrict__ bitmask = target.null_mask();
+    auto offset = target.offset();
 
 #if 1
     auto warp_aligned_begin_lower_bound =
@@ -163,24 +161,24 @@ struct copy_range_dispatch {
 
     auto grid = cudf::util::cuda::grid_config_1d{num_items, block_size, 1};
 
-    if (output.nullable() == true) {
+    if (target.nullable() == true) {
       // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
       // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
       // will scan the entire bitmask array, and this can be surprising
       // in performance if the copy range is small and the column size is
       // large).
-      rmm::device_scalar<cudf::size_type> null_count(output.null_count(), stream);
+      rmm::device_scalar<cudf::size_type> null_count(target.null_count(), stream);
 
-      auto kernel = copy_range_kernel<T, decltype(input), true>;
+      auto kernel = copy_range_kernel<T, decltype(source), true>;
       kernel<<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, null_count.data(), offset + begin, offset + end, input);
+        (data, bitmask, null_count.data(), offset + begin, offset + end, source);
 
-      output.set_null_count(null_count.value());
+      target.set_null_count(null_count.value());
     }
     else {
-      auto kernel = copy_range_kernel<T, decltype(input), false>;
+      auto kernel = copy_range_kernel<T, decltype(source), false>;
       kernel<<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, nullptr, offset + begin, offset + end, input);
+        (data, bitmask, nullptr, offset + begin, offset + end, source);
     }
 
     CHECK_STREAM(stream);
@@ -196,106 +194,107 @@ namespace detail {
 /**
  * @brief Internal API to copy a range of values from a functor to a column.
  *
- * Copies N values from @p input to the range [@p begin, @p end)
- * of @p output. @p output is modified in place.
+ * Copies N values from @p source to the range [@p begin, @p end)
+ * of @p target. @p target is modified in place.
  *
- * InputFunctor must have these accessors:
+ * SourceFunctor must have these accessors:
  * __device__ T data(cudf::size_type index);
  * __device__ bool valid(cudf::size_type index);
  *
- * @tparam InputFunctor the type of the input function object
- * @param output the column to copy into
- * @param input An instance of InputFunctor that provides data and valid mask
- * @param begin The beginning of the output range to write to
- * @param end The index after the last element of the output range to write to
+ * @tparam SourceFunctor the type of the source function object
+ * @param target the column to copy into
+ * @param source An instance of SourceFunctor that provides data and valid mask
+ * @param begin The beginning of the target range to write to
+ * @param end The index after the last element of the target range to write to
  * @param stream CUDA stream to run this function
  */
-template <typename InputFunctor>
-void copy_range(mutable_column_view& output, InputFunctor input,
+template <typename SourceFunctor>
+void copy_range(mutable_column_view& target, SourceFunctor source,
                 size_type begin, size_type end, cudaStream_t stream = 0) {
   CUDF_EXPECTS((begin >= 0) &&
                (begin <= end) &&
-               (begin < output.size()) &&
-               (end <= output.size()),
+               (begin < target.size()) &&
+               (end <= target.size()),
                "Range is out of bounds.");
 
-  type_dispatcher(output.type(),
-                  copy_range_dispatch<InputFunctor>{input},
-                  output, begin, end, stream);
+  type_dispatcher(target.type(),
+                  copy_range_dispatch<SourceFunctor>{source},
+                  target, begin, end, stream);
 }
 
 /**
  * @brief Internal API to copy a range of elements in-place from one column to
  * another.
  *
- * Copies N elements of @p input starting at @p in_begin to the N
- * elements of @p output starting at @p out_begin, where
- * N = (@p out_end - @p out_begin).
+ * Overwrites the range of elements in @p target indicated by the indices
+ * [@p target_begin, @p target_end) with the elements from @p source indicated
+ * by the indices [@p source_begin, @p source_begin + N) (where N =
+ * (@p target_end - @p target_begin)). Use the out-of-place copy function
+ * returning std::unique_ptr<column> for uses cases requiring memory
+ * reallocation. For example for strings columns and other variable-width types.
  *
- * Overwrites the range of elements in @p output indicated by the indices
- * [@p out_begin, @p out_ned) with the elements from @p input indicated by the
- * indices [@p in_begin, @p in_begin + N) (where N =
- * (@p out_end - @p out_begin)). Use the out-of-place copy function returning
- * std::unique_ptr<column> for uses cases requiring memory reallocation.
- *
- * If @p input and @p output refer to the same elements and the ranges overlap,
+ * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
- * @throws `cudf::logic_error` for invalid range (if @p out_begin < 0,
- * @p out_begin > @p out_end, @p out_begin >= @p output.size(),
- * @p out_end > @p output.size(), @p in_begin < 0, in_begin >= @p input.size(),
- * or @p in_begin + @p out_end - @p out_begin > @p input.size()).
- * @throws `cudf::logic_error` if @p output and @p input have different types.
- * @throws `cudf::logic_error` if @p input has null values and @p output is not
+ * @throws `cudf::logic_error` for invalid range (if @p target_begin < 0,
+ * @p target_begin > @p target_end, @p target_begin >= @p target.size(),
+ * @p target_end > @p target.size(), @p source_begin < 0,
+ * source_begin >= @p source.size(), or
+ * @p source_begin + @p target_end - @p target_begin > @p source.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ * @throws `cudf::logic_error` if @p source has null values and @p target is not
  * nullable.
  *
- * @param output The preallocated column to copy into
- * @param input The column to copy from
- * @param out_begin The starting index of the output range (inclusive)
- * @param out_end The index of the last element in the output range (exclusive)
- * @param in_begin The starting index of the input range (inclusive)
- * @param stream CUDA stream to run this function
+ * @param target The preallocated column to copy into
+ * @param source The column to copy from
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param target_end The index of the last element in the target range
+ * (exclusive)
+ * @param source_begin The starting index of the source range (inclusive)
  * @return void
  */
-void copy_range(mutable_column_view& output, column_view const& input,
-                size_type out_begin, size_type out_end, size_type in_begin,
+void copy_range(mutable_column_view& target, column_view const& source,
+                size_type target_begin, size_type target_end,
+                size_type source_begin,
                 cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to copy a range of elements out-of-place from one column
  * to another.
  *
- * Creates a new column as-if an in-place copy was performed into @p output.
- * A copy of @p output is created first and then the elements indicated by the
- * indices [@p out_begin, @p out_end) were copied from the elements indicated
- * by the indices [@p in_begin, @p in_begin +N) of @p input (where N =
- * (@p out_end - @p out_begin)). Elements outside the range are copied from
- * @p output into the returned new column output.
+ * Creates a new column as if an in-place copy was performed into @p target.
+ * A copy of @p target is created first and then the elements indicated by the
+ * indices [@p target_begin, @p target_end) were copied from the elements
+ * indicated by the indices [@p source_begin, @p source_begin +N) of @p source
+ * (where N = (@p target_end - @p target_begin)). Elements outside the range are
+ * copied from @p target into the returned new column target.
  *
- * If @p input and @p output refer to the same elements and the ranges overlap,
+ * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws `cudf::logic_error` for invalid range (if @p out_begin < 0,
- * @p out_begin > @p out_end, @p out_begin >= @p output.size(),
- * @p out_end > @p output.size(), @p in_begin < 0, in_begin >= @p input.size(),
- * or @p in_begin + @p out_end - @p out_begin > @p input.size()).
- * @throws `cudf::logic_error` if @p output and @p input have different types.
+ * @throws `cudf::logic_error` for invalid range (if @p target_begin < 0,
+ * @p target_begin > @p target_end, @p target_begin >= @p target.size(),
+ * @p target_end > @p target.size(), @p source_begin < 0,
+ * source_begin >= @p source.size(), or
+ * @p source_begin + @p target_end - @p target_begin > @p source.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
  *
- * @param output The column to copy from outside the range.
- * @param input The column to copy from inside the range.
- * @param out_begin The starting index of the output range (inclusive)
- * @param out_end The index of the last element in the output range (exclusive)
- * @param in_begin The starting index of the input range (inclusive)
- * @param mr Memory resource to allocate the result output column.
- * @return std::unique_ptr<column> The result output column
+ * @param target The column to copy from outside the range.
+ * @param source The column to copy from inside the range.
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param target_end The index of the last element in the target range
+ * (exclusive)
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param mr Memory resource to allocate the result target column.
+ * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(
-  column_view const& output,
-  column_view const& input,
-  size_type out_begin, size_type out_end,
-  size_type in_begin,
+  column_view const& target,
+  column_view const& source,
+  size_type target_begin, size_type target_end,
+  size_type source_begin,
   cudaStream_t stream = 0,
   rmm::mr::device_memory_resource* mr =
     rmm::mr::get_default_resource());

@@ -83,67 +83,73 @@ std::unique_ptr<table> empty_like(table_view input_table);
 /**
  * @brief Copies a range of elements in-place from one column to another.
  *
- * Overwrites the range of elements in @p output indicated by the indices
- * [@p out_begin, @p out_ned) with the elements from @p input indicated by the
- * indices [@p in_begin, @p in_begin + N) (where N =
- * (@p out_end - @p out_begin)). Use the out-of-place copy function returning
- * std::unique_ptr<column> for uses cases requiring memory reallocation. For 
- * example for strings columns and other variable-width types.
+ * Overwrites the range of elements in @p target indicated by the indices
+ * [@p target_begin, @p target_end) with the elements from @p source indicated
+ * by the indices [@p source_begin, @p source_begin + N) (where N =
+ * (@p target_end - @p target_begin)). Use the out-of-place copy function
+ * returning std::unique_ptr<column> for uses cases requiring memory
+ * reallocation. For example for strings columns and other variable-width types.
  *
- * If @p input and @p output refer to the same elements and the ranges overlap,
+ * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
- * @throws `cudf::logic_error` for invalid range (if @p out_begin < 0,
- * @p out_begin > @p out_end, @p out_begin >= @p output.size(),
- * @p out_end > @p output.size(), @p in_begin < 0, in_begin >= @p input.size(),
- * or @p in_begin + @p out_end - @p out_begin > @p input.size()).
- * @throws `cudf::logic_error` if @p output and @p input have different types.
- * @throws `cudf::logic_error` if @p input has null values and @p output is not
+ * @throws `cudf::logic_error` for invalid range (if @p target_begin < 0,
+ * @p target_begin > @p target_end, @p target_begin >= @p target.size(),
+ * @p target_end > @p target.size(), @p source_begin < 0,
+ * source_begin >= @p source.size(), or
+ * @p source_begin + @p target_end - @p target_begin > @p source.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ * @throws `cudf::logic_error` if @p source has null values and @p target is not
  * nullable.
  *
- * @param output The preallocated column to copy into
- * @param input The column to copy from
- * @param out_begin The starting index of the output range (inclusive)
- * @param out_end The index of the last element in the output range (exclusive)
- * @param in_begin The starting index of the input range (inclusive)
+ * @param target The preallocated column to copy into
+ * @param source The column to copy from
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param target_end The index of the last element in the target range
+ * (exclusive)
+ * @param source_begin The starting index of the source range (inclusive)
  * @return void
  */
-void copy_range(mutable_column_view& output, column_view const& input,
-                size_type out_begin, size_type out_end, size_type in_begin);
+void copy_range(mutable_column_view& target,
+                column_view const& source,
+                size_type target_begin, size_type target_end,
+                size_type source_begin);
 
 /**
  * @brief Copies a range of elements out-of-place from one column to another.
  *
- * Creates a new column as if an in-place copy was performed into @p output.
- * A copy of @p output is created first and then the elements indicated by the
- * indices [@p out_begin, @p out_end) were copied from the elements indicated
- * by the indices [@p in_begin, @p in_begin +N) of @p input (where N =
- * (@p out_end - @p out_begin)). Elements outside the range are copied from
- * @p output into the returned new column output.
+ * Creates a new column as if an in-place copy was performed into @p target.
+ * A copy of @p target is created first and then the elements indicated by the
+ * indices [@p target_begin, @p target_end) were copied from the elements
+ * indicated by the indices [@p source_begin, @p source_begin +N) of @p source
+ * (where N = (@p target_end - @p target_begin)). Elements outside the range are
+ * copied from @p target into the returned new column target.
  *
- * If @p input and @p output refer to the same elements and the ranges overlap,
+ * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws `cudf::logic_error` for invalid range (if @p out_begin < 0,
- * @p out_begin > @p out_end, @p out_begin >= @p output.size(),
- * @p out_end > @p output.size(), @p in_begin < 0, in_begin >= @p input.size(),
- * or @p in_begin + @p out_end - @p out_begin > @p input.size()).
- * @throws `cudf::logic_error` if @p output and @p input have different types.
+ * @throws `cudf::logic_error` for invalid range (if @p target_begin < 0,
+ * @p target_begin > @p target_end, @p target_begin >= @p target.size(),
+ * @p target_end > @p target.size(), @p source_begin < 0,
+ * source_begin >= @p source.size(), or
+ * @p source_begin + @p target_end - @p target_begin > @p source.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
  *
- * @param output The column to copy from outside the range.
- * @param input The column to copy from inside the range.
- * @param out_begin The starting index of the output range (inclusive)
- * @param out_end The index of the last element in the output range (exclusive)
- * @param in_begin The starting index of the input range (inclusive)
- * @param mr Memory resource to allocate the result output column.
- * @return std::unique_ptr<column> The result output column
+ * @param target The column to copy from outside the range.
+ * @param source The column to copy from inside the range.
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param target_end The index of the last element in the target range
+ * (exclusive)
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param mr Memory resource to allocate the result target column.
+ * @return std::unique_ptr<column> The result target column
  */
-std::unique_ptr<column> copy_range(column_view const& output,
-                                   column_view const& input,
-                                   size_type out_begin, size_type out_end,
-                                   size_type in_begin,
+std::unique_ptr<column> copy_range(column_view const& target,
+                                   column_view const& source,
+                                   size_type target_begin, size_type target_end,
+                                   size_type source_begin,
                                    rmm::mr::device_memory_resource* mr =
                                        rmm::mr::get_default_resource());
 /**
