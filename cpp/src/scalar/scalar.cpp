@@ -22,10 +22,11 @@
 
 namespace cudf {
 
-std::string string_scalar::value() const {
+std::string string_scalar::value(cudaStream_t stream) const {
   std::string result;
   result.resize(_data.size());
-  CUDA_TRY(cudaMemcpy(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
   return result;
 }
 
