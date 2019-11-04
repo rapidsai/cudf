@@ -15,13 +15,46 @@
  */
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/utilities/error.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
 
 #include <gmock/gmock.h>
 
 #include <thrust/device_vector.h>
+
+struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {};
+
+TEST_F(BitmaskUtilitiesTest, StateNullCount) {
+  EXPECT_EQ(0, cudf::state_null_count(cudf::mask_state::UNALLOCATED, 42));
+  EXPECT_EQ(cudf::UNKNOWN_NULL_COUNT,
+            cudf::state_null_count(cudf::mask_state::UNINITIALIZED, 42));
+  EXPECT_EQ(42, cudf::state_null_count(cudf::mask_state::ALL_NULL, 42));
+  EXPECT_EQ(0, cudf::state_null_count(cudf::mask_state::ALL_VALID, 42));
+}
+
+TEST_F(BitmaskUtilitiesTest, BitmaskAllocationSize) {
+  EXPECT_EQ(0u, cudf::bitmask_allocation_size_bytes(0));
+  EXPECT_EQ(64u, cudf::bitmask_allocation_size_bytes(1));
+  EXPECT_EQ(64u, cudf::bitmask_allocation_size_bytes(512));
+  EXPECT_EQ(128u, cudf::bitmask_allocation_size_bytes(513));
+  EXPECT_EQ(128u, cudf::bitmask_allocation_size_bytes(1023));
+  EXPECT_EQ(128u, cudf::bitmask_allocation_size_bytes(1024));
+  EXPECT_EQ(192u, cudf::bitmask_allocation_size_bytes(1025));
+}
+
+TEST_F(BitmaskUtilitiesTest, NumBitmaskWords) {
+  EXPECT_EQ(0, cudf::num_bitmask_words(0));
+  EXPECT_EQ(1, cudf::num_bitmask_words(1));
+  EXPECT_EQ(1, cudf::num_bitmask_words(31));
+  EXPECT_EQ(1, cudf::num_bitmask_words(32));
+  EXPECT_EQ(2, cudf::num_bitmask_words(33));
+  EXPECT_EQ(2, cudf::num_bitmask_words(63));
+  EXPECT_EQ(2, cudf::num_bitmask_words(64));
+  EXPECT_EQ(3, cudf::num_bitmask_words(65));
+}
 
 struct CountBitmaskTest : public cudf::test::BaseFixture {};
 
@@ -170,4 +203,91 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSubset) {
 TEST_F(CountUnsetBitsTest, MultipleWordsSingleBit) {
   thrust::device_vector<cudf::bitmask_type> mask(10, cudf::bitmask_type{0});
   EXPECT_EQ(1, cudf::count_unset_bits(mask.data().get(), 67, 68));
+}
+
+struct CopyBitmaskTest : public cudf::test::BaseFixture,
+                         cudf::test::UniformRandomGenerator<int> {
+  CopyBitmaskTest() : cudf::test::UniformRandomGenerator<int>{0, 1} {}
+};
+
+void cleanEndWord(rmm::device_buffer &mask, int begin_bit, int end_bit) {
+  thrust::device_ptr<cudf::bitmask_type> ptr(
+      static_cast<cudf::bitmask_type *>(mask.data()));
+  auto number_of_mask_words = cudf::util::div_rounding_up_safe(
+      static_cast<size_t>(end_bit - begin_bit),
+      cudf::detail::size_in_bits<cudf::bitmask_type>());
+  auto number_of_bits = end_bit - begin_bit;
+  if (number_of_bits % 32 != 0) {
+    auto end_mask = ptr[number_of_mask_words - 1];
+    end_mask = end_mask & ((1 << (number_of_bits % 32)) - 1);
+  }
+}
+
+TEST_F(CopyBitmaskTest, NegativeStart) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, 0);
+  EXPECT_THROW(cudf::copy_bitmask(mask.data().get(), -1, 32),
+               cudf::logic_error);
+}
+
+TEST_F(CopyBitmaskTest, StartLargerThanStop) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, 0);
+  EXPECT_THROW(cudf::copy_bitmask(mask.data().get(), 32, 31),
+               cudf::logic_error);
+}
+
+TEST_F(CopyBitmaskTest, EmptyRange) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, 0);
+  auto buff = cudf::copy_bitmask(mask.data().get(), 17, 17);
+  EXPECT_EQ(0, static_cast<int>(buff.size()));
+}
+
+TEST_F(CopyBitmaskTest, NullPtr) {
+  auto buff = cudf::copy_bitmask(nullptr, 17, 17);
+  EXPECT_EQ(0, static_cast<int>(buff.size()));
+}
+
+TEST_F(CopyBitmaskTest, TestZeroOffset) {
+  thrust::host_vector<int> validity_bit(1000);
+  for (auto &m : validity_bit) {
+    m = this->generate();
+  }
+  auto input_mask = cudf::test::detail::make_null_mask(validity_bit.begin(),
+                                                       validity_bit.end());
+
+  int begin_bit = 0;
+  int end_bit = 800;
+  auto gold_splice_mask = cudf::test::detail::make_null_mask(
+      validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit);
+
+  auto splice_mask = cudf::copy_bitmask(
+      static_cast<const cudf::bitmask_type *>(input_mask.data()), begin_bit,
+      end_bit);
+
+  cleanEndWord(splice_mask, begin_bit, end_bit);
+  auto number_of_bits = end_bit - begin_bit;
+  cudf::test::expect_equal_buffers(gold_splice_mask.data(), splice_mask.data(),
+                                   number_of_bits / CHAR_BIT);
+}
+
+TEST_F(CopyBitmaskTest, TestNonZeroOffset) {
+  thrust::host_vector<int> validity_bit(1000);
+  for (auto &m : validity_bit) {
+    m = this->generate();
+  }
+  auto input_mask = cudf::test::detail::make_null_mask(validity_bit.begin(),
+                                                       validity_bit.end());
+
+  int begin_bit = 321;
+  int end_bit = 998;
+  auto gold_splice_mask = cudf::test::detail::make_null_mask(
+      validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit);
+
+  auto splice_mask = cudf::copy_bitmask(
+      static_cast<const cudf::bitmask_type *>(input_mask.data()), begin_bit,
+      end_bit);
+
+  cleanEndWord(splice_mask, begin_bit, end_bit);
+  auto number_of_bits = end_bit - begin_bit;
+  cudf::test::expect_equal_buffers(gold_splice_mask.data(), splice_mask.data(),
+                                   number_of_bits / CHAR_BIT);
 }

@@ -18,6 +18,8 @@
 
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/null_mask.hpp>
 
 namespace cudf {
 namespace test {
@@ -58,6 +60,40 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
  * @param size_bytes The number of bytes to check for equality
  *---------------------------------------------------------------------------**/
 std::string column_view_to_str(cudf::column_view const& col, const char *delimiter);
+
+/**
+ * @brief Copies the data and bitmask of a `column_view` to the host.
+ *
+ * @tparam T The data type of the elements of the `column_view`
+ * @param c the `column_view` to copy from
+ * @return std::pair<std::vector<T>, std::vector<bitmask_type>> first is the
+ *  `column_view`'s data, and second is the column's bitmask.
+ */
+template <typename T>
+std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+  std::vector<T> host_data;
+  std::vector<bitmask_type> host_bitmask;
+
+  auto col = column(c);
+
+  if (col.size() > 0) {
+    host_data.resize(col.size());
+    CUDA_TRY(cudaMemcpy(host_data.data(), col.view().head<T>(),
+                        col.size() * sizeof(T),
+                        cudaMemcpyDeviceToHost));
+  }
+
+  if (col.nullable()) {
+    size_t mask_allocation_bytes = bitmask_allocation_size_bytes(c.size());
+    host_bitmask.resize(mask_allocation_bytes);
+    size_t num_mask_elements = num_bitmask_words(c.size());
+    CUDA_TRY(cudaMemcpy(host_bitmask.data(), col.view().null_mask(),
+                        num_mask_elements * sizeof(bitmask_type),
+                        cudaMemcpyDeviceToHost));
+  }
+
+  return std::make_pair(host_data, host_bitmask);
+}
 
 }  // namespace test
 }  // namespace cudf

@@ -21,11 +21,58 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-struct ColumnUtilitiesTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::NumericTypes);
+struct ColumnUtilitiesTest
+    : public cudf::test::BaseFixture,
+      cudf::test::UniformRandomGenerator<cudf::size_type> {
+  ColumnUtilitiesTest()
+      : cudf::test::UniformRandomGenerator<cudf::size_type>{1000, 5000} {}
 
-TYPED_TEST(ColumnUtilitiesTest, First) { ASSERT_TRUE(true); }
+  auto size() { return this->generate(); }
+
+  auto data_type() {
+    return cudf::data_type{cudf::experimental::type_to_id<T>()};
+  }
+};
+
+TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  auto size = this->size();
+
+  std::vector<TypeParam> data(sequence, sequence + size);
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(
+    data.begin(), data.end());
+
+  auto host_data = cudf::test::to_host<TypeParam>(col);
+
+  EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
+}
+
+TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  auto all_valid = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return true; });
+
+  auto size = this->size();
+
+  std::vector<TypeParam> data(sequence, sequence + size);
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(
+    data.begin(), data.end(), all_valid);
+
+  auto host_data = cudf::test::to_host<TypeParam>(col);
+
+  EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
+
+  auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid+size);
+
+  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+}
 
 TYPED_TEST(ColumnUtilitiesTest, PrintColumn) {
   const char *delimiter = ",";
@@ -38,4 +85,3 @@ TYPED_TEST(ColumnUtilitiesTest, PrintColumn) {
 
   EXPECT_EQ(tmp.str(), cudf::test::column_view_to_str(cudf_col, delimiter));
 }
-

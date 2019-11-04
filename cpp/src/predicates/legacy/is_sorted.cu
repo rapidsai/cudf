@@ -31,9 +31,8 @@ bool is_sorted(cudf::table const& table,
 {
   cudaStream_t stream = 0;
   bool sorted = false;
-  auto ord_vect_size = descending.size();
 
-  if (ord_vect_size != 0)
+  if (not descending.empty())
   {
       CUDF_EXPECTS(static_cast <unsigned int>(table.num_columns()) == descending.size(), "Number of columns in the table doesn't match the vector descending's size .\n");
   }
@@ -43,23 +42,27 @@ bool is_sorted(cudf::table const& table,
       return true;
   }
 
-  auto exec = rmm::exec_policy(stream)->on(stream);
+  auto exec = rmm::exec_policy(stream);
   auto device_input_table = device_table::create(table);
   bool const nullable = cudf::has_nulls(table);
 
   cudf::size_type nrows = table.num_rows();
+
+  rmm::device_vector<int8_t> d_order(descending);
  
   if (nullable)
-  { 
-      auto ineq_op = row_inequality_comparator<true>(*device_input_table, nulls_are_smallest, 
-                                                        (ord_vect_size != 0)? (rmm::device_vector<int8_t> (descending)).data().get() : nullptr);
-      sorted = thrust::is_sorted (exec, thrust::make_counting_iterator(0), thrust::make_counting_iterator(nrows), ineq_op);
+  {
+    auto ineq_op = row_inequality_comparator<true>(
+        *device_input_table, nulls_are_smallest, d_order.data().get());
+    sorted = thrust::is_sorted(exec->on(stream), thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(nrows), ineq_op);
   }
   else
   {
-      auto ineq_op = row_inequality_comparator<false>(*device_input_table, nulls_are_smallest, 
-                                                        (ord_vect_size != 0)? (rmm::device_vector<int8_t> (descending)).data().get() : nullptr);
-      sorted = thrust::is_sorted (exec, thrust::make_counting_iterator(0), thrust::make_counting_iterator(nrows), ineq_op);
+    auto ineq_op = row_inequality_comparator<false>(
+        *device_input_table, nulls_are_smallest, d_order.data().get());
+    sorted = thrust::is_sorted(exec->on(stream), thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(nrows), ineq_op);
   }
 
   return sorted;
