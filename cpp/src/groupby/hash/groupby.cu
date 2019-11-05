@@ -31,10 +31,10 @@ namespace hash {
 namespace detail {
 
 /**
- * @brief List of aggregation types that can be computed with a hash-based
+ * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-static constexpr std::array<aggregation_request::Type, 5> hash_aggregations{
+static constexpr std::array<aggregation_request::Kind, 5> hash_aggregations{
     aggregation_request::SUM, aggregation_request::MIN,
     aggregation_request::MAX, aggregation_request::COUNT,
     aggregation_request::MEAN};
@@ -47,7 +47,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
   return false;
 }
 
-constexpr bool is_hash_aggregation(aggregation_request::Type t) {
+constexpr bool is_hash_aggregation(aggregation_request::Kind t) {
   return array_contains(hash_aggregations, t);
 }
 
