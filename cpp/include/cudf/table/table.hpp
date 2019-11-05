@@ -26,7 +26,7 @@ namespace experimental {
 
 class table {
  public:
-  table() = delete;
+  table() = default;
   ~table() = default;
   table(table&&) = default;
   table& operator=(table const&) = delete;

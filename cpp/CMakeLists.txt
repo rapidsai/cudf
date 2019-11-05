@@ -488,7 +488,8 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/column/legacy/interop.cpp
             src/scalar/scalar.cpp
-            src/scalar/scalar_factories.cpp)
+            src/scalar/scalar_factories.cpp
+            src/groupby/hash/groupby.cu)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
