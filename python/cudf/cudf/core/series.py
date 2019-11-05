@@ -83,7 +83,7 @@ class Series(object):
             The number of null values.
             If None, it is calculated automatically.
         """
-        col = column.as_column(data).set_mask(mask, null_count=null_count)
+        col = column.as_column(data).set_mask(mask)
         return cls(data=col)
 
     def __init__(

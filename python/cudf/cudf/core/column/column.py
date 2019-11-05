@@ -1146,10 +1146,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 arbitrary = pa.array([], type=pa.int8())
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
-                data=padata,
-                mask=pamask,
-                null_count=arbitrary.null_count,
-                dtype=dtype,
+                data=padata, mask=pamask, dtype=dtype,
             )
         else:
             pamask, padata = buffers_from_pyarrow(arbitrary)
@@ -1215,7 +1212,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
         except TypeError:
-            raise NotImplementedError
             pa_type = None
             np_type = None
             try:
