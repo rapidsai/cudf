@@ -64,7 +64,11 @@ struct Options {
  * @brief Supported aggregation operations
  *
  */
-enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
+struct aggregation_request {
+  enum Type { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
+  column_view values;
+  Type aggregation;
+};
 
 namespace hash {
 
@@ -98,8 +102,9 @@ struct Options : groupby::Options {
  * second member contains the table of reduced output values
  */
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(
-    table_view const& keys, table_view const& values,
-    std::vector<operators> const& ops, Options options = Options{},
+    table_view const& keys, 
+    std::vector<std::unique_ptr<aggregation_request>> const& requests,
+    Options options = Options{},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace hash

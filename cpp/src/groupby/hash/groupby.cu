@@ -29,19 +29,48 @@ namespace experimental {
 namespace groupby {
 namespace hash {
 namespace detail {
+
+/**
+ * @brief List of aggregation types that can be computed with a hash-based
+ * implementation.
+ */
+static constexpr std::array<aggregation_request::Type, 5> hash_aggregations{
+    aggregation_request::SUM, aggregation_request::MIN,
+    aggregation_request::MAX, aggregation_request::COUNT,
+    aggregation_request::MEAN};
+
+template <class T, size_t N>
+constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
+  for (auto i = 0u; i < N; ++i) {
+    if (haystack[i] == needle) return true;
+  }
+  return false;
+}
+
+constexpr bool is_hash_aggregation(aggregation_request::Type t) {
+  return array_contains(hash_aggregations, t);
+}
+
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(
-    table_view const& keys, table_view const& values,
-    std::vector<operators> const& ops, Options options, cudaStream_t stream = 0,
+    table_view const& keys,
+    std::vector<std::unique_ptr<aggregation_request>> const& requests,
+    Options options, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
+                           [](auto const& r) {
+                             return is_hash_aggregation(r->aggregation);
+                           }),
+               "Invalid aggregation for hash-based groupby.");
+
   return std::make_pair(std::make_unique<table>(), std::make_unique<table>());
 }
 }  // namespace detail
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(
-    table_view const& keys, table_view const& values,
-    std::vector<operators> const& ops, Options options,
-    rmm::mr::device_memory_resource* mr) {
-  return detail::groupby(keys, values, ops, options, 0, mr);
+    table_view const& keys,
+    std::vector<std::unique_ptr<aggregation_request>> const& requests,
+    Options options, rmm::mr::device_memory_resource* mr) {
+  return detail::groupby(keys, requests, options, 0, mr);
 }
 }  // namespace hash
 }  // namespace groupby
