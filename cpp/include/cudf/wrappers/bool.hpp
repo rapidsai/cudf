@@ -80,55 +80,75 @@ struct bool8 {
 
   // binary operator overloads
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool operator==(from_type const &rhs) const {
     return static_cast<bool>(*this) == static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool operator!=(from_type const &rhs) const {
     return static_cast<bool>(*this) != static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool operator<=(from_type const &rhs) const {
     return static_cast<bool>(*this) <= static_cast<bool>(rhs); 
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool operator>=(from_type const &rhs) const {
     return static_cast<bool>(*this) >= static_cast<bool>(rhs); 
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool operator<(from_type const &rhs) const {
     return static_cast<bool>(*this) < static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool operator>(from_type const &rhs) const {
     return static_cast<bool>(*this) > static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8 operator+(from_type const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) +
                               static_cast<bool>(rhs));
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8 operator-(from_type const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) -
                               static_cast<bool>(rhs));
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8 operator*(from_type const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) &&
                               static_cast<bool>(rhs));
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8 operator/(from_type const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) /
                               static_cast<bool>(rhs));
@@ -136,28 +156,36 @@ struct bool8 {
 
   // unary operator overloads
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator+=(from_type const &rhs) {
     bool8 &lhs = *this;
     lhs = lhs + static_cast<bool>(rhs);
     return lhs;
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator-=(from_type const &rhs) {
     bool8 &lhs = *this;
     lhs = lhs - static_cast<bool>(rhs);
     return lhs;
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator*=(from_type const &rhs) {
     bool8 &lhs = *this;
     lhs = lhs * static_cast<bool>(rhs);
     return lhs;
   }
 
-  template <typename from_type>
+  template <typename from_type,
+            typename std::enable_if_t<std::is_arithmetic<from_type>::value,
+                                      from_type>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE bool8& operator/=(from_type const &rhs) {
     bool8 &lhs = *this;
     lhs = lhs / static_cast<bool>(rhs);
