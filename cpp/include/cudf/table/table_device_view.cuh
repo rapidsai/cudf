@@ -35,15 +35,9 @@ class table_device_view_base {
   table_device_view_base& operator=(table_device_view_base const&) = default;
   table_device_view_base& operator=(table_device_view_base&&) = default;
 
-  __device__ ColumnDeviceView* begin() noexcept { return _columns; }
+  __device__ ColumnDeviceView* begin() const noexcept { return _columns; }
 
-  __device__ ColumnDeviceView const* begin() const noexcept { return _columns; }
-
-  __device__ ColumnDeviceView* end() noexcept {
-    return _columns + _num_columns;
-  }
-
-  __device__ ColumnDeviceView const* end() const noexcept {
+  __device__ ColumnDeviceView* end() const noexcept {
     return _columns + _num_columns;
   }
 
