@@ -81,7 +81,7 @@ cdef class Column:
             mask = DeviceBuffer.from_ptr(contents.null_mask.release())
         else:
             mask = None
-        return build_column(data, size=size, dtype=dtype, mask=mask)
+        return build_column(data, dtype=dtype, mask=mask)
 
 
     cdef gdf.gdf_column* gdf_column_view(self) except *:
@@ -147,7 +147,7 @@ cdef class Column:
                 ptr=data_ptr,
                 size=dtype.itemsize * c_col.size,
             )
-            data = Buffer.from_array_like(dbuf)
+            data = Buffer.from_device_buffer(dbuf)
         mask = None
         if c_col.valid:
             mask_ptr = int(<uintptr_t>c_col.valid)
@@ -155,7 +155,7 @@ cdef class Column:
                 ptr=mask_ptr,
                 size=calc_chunk_size(c_col.size,mask_bitsize)
             )
-            mask = Buffer.from_array_like(mbuf)
+            mask = Buffer.from_device_buffer(mbuf)
 
         return build_column(data=data,
                             dtype=dtype,

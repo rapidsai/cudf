@@ -114,11 +114,7 @@ class ColumnBase(Column):
         """
         mask_bytes = mask.astype("uint8")
         mask_bits = cudautils.compact_mask_bytes(rmm.to_device(mask_bytes))
-        mask = Buffer(
-            ptr=mask_bits.device_ctypes_pointer.value,
-            size=len(self),
-            owner=mask_bits,
-        )
+        mask = Buffer.from_array_like(mask_bits)
         self.mask = mask
 
     @staticmethod
@@ -1028,7 +1024,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 null,
             )
             data = datetime.DatetimeColumn(
-                data=Buffer.from_array_like(arbitrary, dtype=arbitrary.dtype),
+                data=Buffer.from_array_like(arbitrary),
                 dtype=data.dtype,
                 mask=col.mask,
                 name=name,

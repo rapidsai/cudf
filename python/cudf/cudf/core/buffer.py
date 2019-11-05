@@ -24,18 +24,21 @@ class Buffer:
                 data.__array_interface__
             )
             dbuf = DeviceBuffer(ptr, size)
-            return Buffer(dbuf.ptr, dbuf.size(), owner=dbuf)
-        elif isinstance(data, DeviceBuffer):
-            return Buffer(data.ptr, data.size(), owner=data)
+            return Buffer.from_device_buffer(dbuf)
         else:
             raise TypeError(
                 f"Cannot construct Buffer from {data.__class__.__name__}"
             )
 
     @classmethod
+    def from_device_buffer(cls, dbuf):
+        assert isinstance(dbuf, DeviceBuffer)
+        return Buffer(dbuf.ptr, dbuf.size, owner=dbuf)
+
+    @classmethod
     def empty(cls, size):
         dbuf = DeviceBuffer(size=size)
-        return Buffer(ptr=dbuf.ptr, size=dbuf.size(), owner=dbuf)
+        return Buffer.from_device_buffer(dbuf)
 
 
 def _buffer_data_from_array_interface(array_interface):
