@@ -12,6 +12,7 @@
 - PR #3022 adds DataFrame.astype for cuDF dataframes
 - PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
+- PR #3068 Add `scalar` class
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3143 Define and implement new copying APIs `slice` and `split`
@@ -19,6 +20,7 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
 
@@ -79,7 +81,8 @@
 - PR #3270 Move predicates files to legacy
 - PR #3282 Add `num_bitmask_words`
 - PR #3288 Make `bit.cuh` utilities usable from host code.
-
+- PR #3287 Move rolling windows files to legacy
+- PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
 
 ## Bug Fixes
 
