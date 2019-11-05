@@ -146,52 +146,17 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
 namespace
 {
 
-// guaranteed thread-safe
-struct character_flags_singleton
-{
-    static character_flags_singleton& instance()
-    {
-        static character_flags_singleton _instance;
-        return _instance;
-    }
-    character_flags_singleton( character_flags_singleton const& ) = delete;
-    character_flags_singleton( character_flags_singleton&& ) = delete;
-    character_flags_singleton& operator=(character_flags_singleton const&) = delete;
-    character_flags_singleton& operator=(character_flags_singleton&&) = delete;
-
-    character_flags_table_type* table() { return d_character_flags_table; }
-
-private:
-
-    character_flags_table_type* d_character_flags_table{};
-    bool b_rmm_allocated{false};
-
-    character_flags_singleton()
-    {
-        rmmOptions_t options;
-        if( rmmIsInitialized(&options) && (options.allocation_mode == PoolAllocation) )
-        {
-            RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
-            b_rmm_allocated = true;
-        }
-        else
-            cudaMalloc(&d_character_flags_table,sizeof(g_character_codepoint_flags));
-        CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
-    }
-    ~character_flags_singleton()
-    {
-        if( b_rmm_allocated )
-            RMM_FREE(d_character_flags_table,0);
-        else
-            cudaFree(d_character_flags_table);
-    }
-};
+__device__ character_flags_table_type d_character_codepoint_flags[sizeof(g_character_codepoint_flags)];
 
 } // namespace
 
+//
 const character_flags_table_type* get_character_flags_table()
 {
-    return character_flags_singleton::instance().table();
+    CUDA_TRY(cudaMemcpyToSymbol(d_character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
+    character_flags_table_type* ptr = nullptr;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&ptr,d_character_codepoint_flags));
+    return ptr;
 }
 
 } // namespace detail
