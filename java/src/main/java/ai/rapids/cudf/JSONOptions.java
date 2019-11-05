@@ -18,12 +18,21 @@
 
 package ai.rapids.cudf;
 
+/**
+ * Options for reading in JSON encoded data.
+ */
 public final class JSONOptions  extends ColumnFilterOptions {
 
   public static JSONOptions DEFAULT = new JSONOptions(builder());
+  private final int rowGuess;
 
   private JSONOptions(Builder builder) {
     super(builder);
+    rowGuess = builder.rowGuess;
+  }
+
+  int getRowGuess() {
+    return rowGuess;
   }
 
   public static Builder builder() {
@@ -31,6 +40,19 @@ public final class JSONOptions  extends ColumnFilterOptions {
   }
 
   public static final class Builder  extends ColumnFilterOptions.Builder<JSONOptions.Builder> {
+    private int rowGuess = -1;
+
+    /**
+     * A guess of how many rows will be loaded.  This is totally optional and only used for
+     * estimating the memory usage of loading the data.
+     * @param guess the number of rows to be loaded as a guess.
+     * @return this for chaining.
+     */
+    public Builder withRowGuess(int guess) {
+      this.rowGuess = guess;
+      return this;
+    }
+
     public JSONOptions build() {
       return new JSONOptions(this);
     }

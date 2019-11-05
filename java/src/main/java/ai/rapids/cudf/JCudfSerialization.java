@@ -1319,7 +1319,8 @@ public class JCudfSerialization {
     ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
     SerializedTableHeader combined = calcConcatedHeader(providers);
 
-    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+    try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
       try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
         DataWriter writer = writerFrom(hostBuffer);
@@ -1360,7 +1361,8 @@ public class JCudfSerialization {
 
   public static Table readTableFrom(SerializedTableHeader header,
                                     HostMemoryBuffer hostBuffer) {
-    try (DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
+    try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom");
+         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
       if (hostBuffer.length > 0) {
         try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
           devBuffer.copyFromHostBuffer(hostBuffer);

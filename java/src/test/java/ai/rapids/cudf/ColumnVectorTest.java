@@ -132,7 +132,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(); 
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
          ColumnVector result = v.isNotNull()) {
       assertColumnsAreEqual(result, expected);
     }
@@ -459,7 +459,7 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     }
   }
-  
+
   @Test
   void testAppendStrings() {
     try (ColumnVector cv = ColumnVector.build(DType.STRING, 10, 0, (b) -> {

@@ -19,7 +19,6 @@
 package ai.rapids.cudf;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -28,11 +27,13 @@ import java.util.List;
 public class Schema {
   public static final Schema INFERRED = new Schema();
   private final List<String> names;
-  private final List<String> types;
+  private final List<String> typeNames;
+  private final List<DType> types;
 
-  private Schema(List<String> names, List<String> types) {
+  private Schema(List<String> names, List<String> typeNames, List<DType> types) {
     this.names = new ArrayList<>(names);
-    this.types = new ArrayList<>(types);
+    this.typeNames = new ArrayList<>(typeNames);
+    this.types = types;
   }
 
   /**
@@ -40,6 +41,7 @@ public class Schema {
    */
   private Schema() {
     names = null;
+    typeNames = null;
     types = null;
   }
 
@@ -55,24 +57,42 @@ public class Schema {
   }
 
   String[] getTypesAsStrings() {
-    if (types == null) {
+    if (typeNames == null) {
       return null;
     }
-    return types.toArray(new String[types.size()]);
+    return typeNames.toArray(new String[typeNames.size()]);
+  }
+
+  long getRowsSizeGuess() {
+    long total = 0;
+    if (types == null) {
+      total += 1000; // This is really just a hack, who knows
+    } else {
+      for (DType type: types) {
+        if (type == DType.STRING_CATEGORY || type == DType.STRING) {
+          total += 4 + 10; // 10 chars and a single offset
+        } else {
+          total += type.sizeInBytes;
+        }
+      }
+    }
+    return total;
   }
 
   public static class Builder {
-    private List<String> names = new LinkedList<>();
-    private List<String> types = new LinkedList<>();
+    private List<String> names = new ArrayList<>();
+    private List<String> typeNames = new ArrayList<>();
+    private List<DType> types = new ArrayList<>();
 
     public Builder column(DType type, String name) {
-      types.add(type.simpleName);
+      types.add(type);
+      typeNames.add(type.simpleName);
       names.add(name);
       return this;
     }
 
     public Schema build() {
-      return new Schema(names, types);
+      return new Schema(names, typeNames, types);
     }
   }
 }

@@ -22,6 +22,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+/**
+ * Base options class for input formats that can that can filter columns.
+ */
 public abstract class ColumnFilterOptions {
   // Names of the columns to be returned (other columns are skipped)
   // If empty all columns are returned.
