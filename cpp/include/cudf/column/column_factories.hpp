@@ -23,7 +23,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf 
+namespace cudf
 {
 
 /**
@@ -71,7 +71,7 @@ std::unique_ptr<column> make_numeric_column(
  */
 template <typename B>
 std::unique_ptr<column> make_numeric_column(
-    data_type type, size_type size, 
+    data_type type, size_type size,
     B&& null_mask,
     size_type null_count = cudf::UNKNOWN_NULL_COUNT, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
@@ -79,14 +79,14 @@ std::unique_ptr<column> make_numeric_column(
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      std::forward(null_mask), null_count);
+      std::forward<B>(null_mask), null_count);
 }
 
 /**
  * @brief Construct column with sufficient uninitialized storage
  * to hold `size` elements of the specified timestamp `data_type` with an optional
  * null mask.
- * 
+ *
  * @note `null_count()` is determined by the requested null mask `state`
  *
  * @throws std::bad_alloc if device memory allocation fails
@@ -110,7 +110,7 @@ std::unique_ptr<column> make_timestamp_column(
  * @brief Construct column with sufficient uninitialized storage
  * to hold `size` elements of the specified timestamp `data_type` with a
  * null mask.
- * 
+ *
  * @note null_count is optional and will be computed if not provided.
  *
  * @throws std::bad_alloc if device memory allocation fails
@@ -135,8 +135,8 @@ std::unique_ptr<column> make_timestamp_column(
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      std::forward(null_mask), null_count);
-}    
+      std::forward<B>(null_mask), null_count);
+}
 
 /**
  * @brief Construct STRING type column given a vector of pointer/size pairs.
@@ -172,7 +172,7 @@ std::unique_ptr<column> make_strings_column(
  * strings within the char vector, and an optional null bitmask.
  *
  * `offsets.front()` must always be zero.
- * 
+ *
  * The total number of char bytes must not exceed the maximum size of size_type.
  * Use the strings_column_view class to perform strings operations on this type
  * of column.
@@ -189,7 +189,7 @@ std::unique_ptr<column> make_strings_column(
  *                number of bytes in the strings array.
  *                `offsets.front()` must always be 0 to point to the beginning
  *                of `strings`.
- * @param null_mask Device vector containing the null element indicator bitmask. 
+ * @param null_mask Device vector containing the null element indicator bitmask.
  *                  Arrow format for nulls is used for interpeting this bitmask.
  * @param null_count The number of null string entries. If equal to
  * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the first
@@ -213,7 +213,7 @@ std::unique_ptr<column> make_strings_column(
  * strings within the char vector, and an optional null bitmask.
  *
  * `offsets.front()` must always be zero.
- * 
+ *
  * The total number of char bytes must not exceed the maximum size of size_type.
  * Use the strings_column_view class to perform strings operations on this type
  * of column.
@@ -230,7 +230,7 @@ std::unique_ptr<column> make_strings_column(
  *                number of bytes in the strings array.
  *                `offsets.front()` must always be 0 to point to the beginning
  *                of `strings`.
- * @param null_mask Host vector containing the null element indicator bitmask. 
+ * @param null_mask Host vector containing the null element indicator bitmask.
  *                  Arrow format for nulls is used for interpeting this bitmask.
  * @param null_count The number of null string entries. If equal to
  * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the first
