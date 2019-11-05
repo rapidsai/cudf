@@ -33,7 +33,7 @@ namespace detail {
 // Create permuted row indices that would materialize sorted order
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
-                                     null_order null_precedence,
+                                     std::vector<null_order> const& null_precedence,
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr) {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
@@ -44,6 +44,12 @@ std::unique_ptr<column> sorted_order(table_view input,
     CUDF_EXPECTS(
         static_cast<std::size_t>(input.num_columns()) == column_order.size(),
         "Mismatch between number of columns and column order.");
+  }
+
+  if (not null_precedence.empty()) {
+    CUDF_EXPECTS(
+        static_cast<std::size_t>(input.num_columns()) == null_precedence.size(),
+        "Mismatch between number of columns and null_precedence size.");
   }
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
@@ -60,16 +66,18 @@ std::unique_ptr<column> sorted_order(table_view input,
   rmm::device_vector<order> d_column_order(column_order);
 
   if (has_nulls(input)) {
+    rmm::device_vector<null_order> d_null_precedence(null_precedence);
     auto comparator = row_lexicographic_comparator<true>(
-        *device_table, *device_table, null_precedence,
-        d_column_order.data().get());
+        *device_table, *device_table,
+        d_column_order.data().get(),
+        d_null_precedence.data().get());
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                  mutable_indices_view.begin<int32_t>(),
                  mutable_indices_view.end<int32_t>(), comparator);
 
   } else {
     auto comparator = row_lexicographic_comparator<false>(
-        *device_table, *device_table, null_precedence,
+        *device_table, *device_table,
         d_column_order.data().get());
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                  mutable_indices_view.begin<int32_t>(),
@@ -82,7 +90,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
-                                     null_order null_precedence,
+                                     std::vector<null_order> const& null_precedence,
                                      rmm::mr::device_memory_resource* mr) {
   return detail::sorted_order(input, column_order, null_precedence, 0, mr);
 }
