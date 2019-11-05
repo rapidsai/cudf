@@ -17,6 +17,7 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf
 {
@@ -35,7 +36,6 @@ namespace strings
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @throw cudf::logic_error if output_type is not an integer type.
  * @throw cudf::logic_error if start position is greater than stop position.
  *
  * @param strings Strings instance for this operation.
@@ -43,16 +43,13 @@ namespace strings
  * @param start First character position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search to the end of the string.
- * @param output_type Integer type for output column.
- *                    Default is INT32.
  * @param mr Resource for allocating device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<cudf::column> find( cudf::strings_column_view const& strings,
-                                    std::string const& target,
-                                    cudf::size_type start=0, cudf::size_type stop=-1,
-                                    cudf::data_type output_type = cudf::data_type{INT32},
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> find( strings_column_view const& strings,
+                              string_scalar const& target,
+                              size_type start=0, size_type stop=-1,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of character position values where the target
@@ -66,7 +63,6 @@ std::unique_ptr<cudf::column> find( cudf::strings_column_view const& strings,
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @throw cudf::logic_error if output_type is not an integer type.
  * @throw cudf::logic_error if start position is greater than stop position.
  *
  * @param strings Strings instance for this operation.
@@ -74,16 +70,13 @@ std::unique_ptr<cudf::column> find( cudf::strings_column_view const& strings,
  * @param start First position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search starting at the end of the string.
- * @param output_type Integer type for output column.
- *                    Default is INT32.
  * @param mr Resource for allocating device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<cudf::column> rfind( cudf::strings_column_view const& strings,
-                                     std::string const& target,
-                                     cudf::size_type start=0, cudf::size_type stop=-1,
-                                     cudf::data_type output_type = cudf::data_type{INT32},
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> rfind( strings_column_view const& strings,
+                               string_scalar const& target,
+                               size_type start=0, size_type stop=-1,
+                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /**
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found within that string in the provided column.
@@ -95,11 +88,11 @@ std::unique_ptr<cudf::column> rfind( cudf::strings_column_view const& strings,
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New INT8 column.
+ * @return New BOOL8 column.
  */
-std::unique_ptr<cudf::column> contains( cudf::strings_column_view const& strings,
-                                        std::string const& target,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> contains( strings_column_view const& strings,
+                                  string_scalar const& target,
+                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -113,11 +106,11 @@ std::unique_ptr<cudf::column> contains( cudf::strings_column_view const& strings
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New INT8 column.
+ * @return New BOOL8 column.
  */
-std::unique_ptr<cudf::column> starts_with( cudf::strings_column_view const& strings,
-                                           std::string const& target,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> starts_with( strings_column_view const& strings,
+                                     string_scalar const& target,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -131,11 +124,11 @@ std::unique_ptr<cudf::column> starts_with( cudf::strings_column_view const& stri
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New INT8 column.
+ * @return New BOOL8 column.
  */
-std::unique_ptr<cudf::column> ends_with( cudf::strings_column_view const& strings,
-                                         std::string const& target,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> ends_with( strings_column_view const& strings,
+                                   string_scalar const& target,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf

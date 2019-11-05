@@ -18,6 +18,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/wrappers/bool.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -40,27 +42,27 @@ TEST_F(StringsFindTest, Find)
 
     {
         cudf::test::fixed_width_column_wrapper<int32_t> expected( {1,4,-1,-1,1,-1}, {1,1,0,1,1,1} );
-        auto results = cudf::strings::find(strings_view, "é");
+        auto results = cudf::strings::find(strings_view, cudf::string_scalar("é"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         cudf::test::fixed_width_column_wrapper<int32_t> expected( {3,-1,-1,0,-1,-1}, {1,1,0,1,1,1} );
-        auto results = cudf::strings::rfind(strings_view, "l");
+        auto results = cudf::strings::rfind(strings_view, cudf::string_scalar("l"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<int8_t> expected( {0,1,0,1,0,0}, {1,1,0,1,1,1} );
-        auto results = cudf::strings::contains(strings_view, "e");
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,1,0,0}, {1,1,0,1,1,1} );
+        auto results = cudf::strings::contains(strings_view, cudf::string_scalar("e"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<int8_t> expected( {0,1,0,0,1,0}, {1,1,0,1,1,1} );
-        auto results = cudf::strings::starts_with(strings_view, "t");
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,0,1,0}, {1,1,0,1,1,1} );
+        auto results = cudf::strings::starts_with(strings_view, cudf::string_scalar("t"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<int8_t> expected( {0,0,0,1,0,0}, {1,1,0,1,1,1} );
-        auto results = cudf::strings::ends_with(strings_view, "se");
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,0,0,1,0,0}, {1,1,0,1,1,1} );
+        auto results = cudf::strings::ends_with(strings_view, cudf::string_scalar("se"));
         cudf::test::expect_columns_equal(*results, expected);
     }
 }
@@ -69,15 +71,15 @@ TEST_F(StringsFindTest, ZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    auto results = cudf::strings::find(strings_view, "é");
+    auto results = cudf::strings::find(strings_view, cudf::string_scalar("é"));
     EXPECT_EQ(results->size(),0);
-    results = cudf::strings::rfind(strings_view, "é");
+    results = cudf::strings::rfind(strings_view, cudf::string_scalar("é"));
     EXPECT_EQ(results->size(),0);
-    results = cudf::strings::contains(strings_view, "é");
+    results = cudf::strings::contains(strings_view, cudf::string_scalar("é"));
     EXPECT_EQ(results->size(),0);
-    results = cudf::strings::starts_with(strings_view, "é");
+    results = cudf::strings::starts_with(strings_view, cudf::string_scalar("é"));
     EXPECT_EQ(results->size(),0);
-    results = cudf::strings::ends_with(strings_view, "é");
+    results = cudf::strings::ends_with(strings_view, cudf::string_scalar("é"));
     EXPECT_EQ(results->size(),0);
 }
 
@@ -89,19 +91,19 @@ TEST_F(StringsFindTest, AllEmpty)
     std::vector<int32_t> h_expected32(h_strings.size(),-1);
     cudf::test::fixed_width_column_wrapper<int32_t> expected32( h_expected32.begin(), h_expected32.end() );
 
-    std::vector<int8_t> h_expected8(h_strings.size(),0);
-    cudf::test::fixed_width_column_wrapper<int8_t> expected8( h_expected8.begin(), h_expected8.end() );
+    std::vector<cudf::experimental::bool8> h_expected8(h_strings.size(),0);
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected8( h_expected8.begin(), h_expected8.end() );
 
     auto strings_view = cudf::strings_column_view(strings);
-    auto results = cudf::strings::find(strings_view,"e");
+    auto results = cudf::strings::find(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected32);
-    results = cudf::strings::rfind(strings_view,"e");
+    results = cudf::strings::rfind(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected32);
-    results = cudf::strings::contains(strings_view,"e");
+    results = cudf::strings::contains(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected8);
-    results = cudf::strings::starts_with(strings_view,"e");
+    results = cudf::strings::starts_with(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected8);
-    results = cudf::strings::ends_with(strings_view,"e");
+    results = cudf::strings::ends_with(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected8);
 }
 
@@ -115,20 +117,20 @@ TEST_F(StringsFindTest, AllNull)
     cudf::test::fixed_width_column_wrapper<int32_t> expected32( h_expected32.begin(), h_expected32.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
-    std::vector<int8_t> h_expected8(h_strings.size(),-1);
-    cudf::test::fixed_width_column_wrapper<int8_t> expected8( h_expected8.begin(), h_expected8.end(),
+    std::vector<cudf::experimental::bool8> h_expected8(h_strings.size(),-1);
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected8( h_expected8.begin(), h_expected8.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto strings_view = cudf::strings_column_view(strings);
-    auto results = cudf::strings::find(strings_view,"e");
+    auto results = cudf::strings::find(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected32);
-    results = cudf::strings::rfind(strings_view,"e");
+    results = cudf::strings::rfind(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected32);
-    results = cudf::strings::contains(strings_view,"e");
+    results = cudf::strings::contains(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected8);
-    results = cudf::strings::starts_with(strings_view,"e");
+    results = cudf::strings::starts_with(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected8);
-    results = cudf::strings::ends_with(strings_view,"e");
+    results = cudf::strings::ends_with(strings_view,cudf::string_scalar("e"));
     cudf::test::expect_columns_equal(*results,expected8);
 }
 
@@ -143,7 +145,7 @@ TEST_P(FindParmsTest, Find)
 
     auto strings_view = cudf::strings_column_view(strings);
     {
-        auto results = cudf::strings::find(strings_view,"e",position);
+        auto results = cudf::strings::find(strings_view,cudf::string_scalar("e"),position);
         std::vector<int32_t> h_expected;
         for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
             h_expected.push_back((int32_t)(*itr).find("e",position));
@@ -151,7 +153,7 @@ TEST_P(FindParmsTest, Find)
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
-        auto results = cudf::strings::rfind(strings_view,"e",0,position+1);
+        auto results = cudf::strings::rfind(strings_view,cudf::string_scalar("e"),0,position+1);
         std::vector<int32_t> h_expected;
         for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
             h_expected.push_back((int32_t)(*itr).rfind("e",position));
@@ -162,36 +164,3 @@ TEST_P(FindParmsTest, Find)
 
 INSTANTIATE_TEST_CASE_P(StringFindTest, FindParmsTest,
                         testing::ValuesIn(std::array<int32_t,4>{0,1,2,3}));
-
-
-template <typename T>
-class StringsFindTest_Output : public StringsFindTest {};
-
-using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
-TYPED_TEST_CASE(StringsFindTest_Output, IntegerTypes);
-
-TYPED_TEST(StringsFindTest_Output, AllIntegerTypes)
-{
-    std::vector<std::string> h_strings{ "hello", "", "these", "are stl", "safe" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
-    cudf::size_type position = 2;
-
-    auto strings_view = cudf::strings_column_view(strings);
-    auto output_type = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
-    {
-        auto results = cudf::strings::find(strings_view,"e",position,-1,output_type);
-        std::vector<TypeParam> h_expected;
-        for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
-            h_expected.push_back((TypeParam)(*itr).find("e",position));
-        cudf::test::fixed_width_column_wrapper<TypeParam> expected( h_expected.begin(), h_expected.end() );
-        cudf::test::expect_columns_equal(*results,expected);
-    }
-    {
-        auto results = cudf::strings::rfind(strings_view,"e",0,position+1,output_type);
-        std::vector<TypeParam> h_expected;
-        for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
-            h_expected.push_back((TypeParam)(*itr).rfind("e",position));
-        cudf::test::fixed_width_column_wrapper<TypeParam> expected( h_expected.begin(), h_expected.end() );
-        cudf::test::expect_columns_equal(*results,expected);
-    }
-}
