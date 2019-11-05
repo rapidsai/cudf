@@ -30,6 +30,8 @@ class DatetimeColumn(column.ColumnBase):
         ----------
         data : Buffer
             The datetime values
+        dtype : np.dtype
+            The data type
         mask : Buffer; optional
             The validity mask
         name : str

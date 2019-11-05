@@ -17,6 +17,7 @@ import cudf._lib as libcudf
 from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
 from cudf.utils.utils import (
@@ -41,7 +42,7 @@ class ColumnBase(Column):
         super().__init__(data, size=size, dtype=dtype, mask=mask)
         self.data = data
         self.size = size
-        self.dtype = np.dtype(dtype)
+        self.dtype = dtype
         self.mask = mask
         self.name = name
         self.children = children or []
@@ -926,11 +927,14 @@ def build_column(data, dtype, mask=None, categories=None, name=None):
 
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.categorical import CategoricalColumn
 
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if is_categorical_dtype(dtype):
-        raise NotImplementedError
+        return CategoricalColumn(
+            data=data, dtype=dtype, mask=mask, categories=categories, name=name
+        )
     elif dtype.type is np.datetime64:
         return DatetimeColumn(data=data, dtype=dtype, mask=mask, name=name)
     elif dtype.type in (np.object_, np.str_):
@@ -1092,11 +1096,17 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
+            dtype = CategoricalDtype(
+                arbitrary.type.value_type.to_pandas_dtype(),
+                categories=as_column(arbitrary.dictionary),
+            )
             data = categorical.CategoricalColumn(
                 data=padata,
+                dtype=dtype,
                 mask=pamask,
-                null_count=arbitrary.null_count,
-                categories=arbitrary.dictionary,
+                categories=as_column(
+                    arbitrary.dictionary
+                ),  # TODO: do we even need this?
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
@@ -1158,7 +1168,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if is_categorical_dtype(arbitrary):
-            raise NotImplementedError
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this

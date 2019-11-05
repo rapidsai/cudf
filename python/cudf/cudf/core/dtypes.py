@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from pandas.api.extensions import ExtensionDtype
 
@@ -5,11 +6,12 @@ import cudf
 
 
 class CategoricalDtype(ExtensionDtype):
-    def __init__(self, categories=None, ordered=None):
+    def __init__(self, data_dtype, categories=None, ordered=None):
         """
         dtype similar to pd.CategoricalDtype with the categories
         stored on the GPU.
         """
+        self.data_dtype = np.dtype(data_dtype)
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 

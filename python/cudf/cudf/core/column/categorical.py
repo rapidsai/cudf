@@ -36,14 +36,12 @@ class CategoricalAccessor(object):
         from cudf import Series
 
         data = self._parent.data
-        if self._parent.has_null_mask:
-            mask = self._parent.mask
-            null_count = self._parent.null_count
-            return Series.from_masked_array(
-                data=data.mem, mask=mask.mem, null_count=null_count
-            )
-        else:
-            return Series(data, name=self._parent.name)
+        dtype = self._parent.dtype.data_dtype
+        mask = self._parent.mask
+        name = self._parent.name
+        return Series(
+            column.build_column(data=data, dtype=dtype, mask=mask, name=name)
+        )
 
     def as_ordered(self, **kwargs):
         inplace = kwargs.get("inplace", False)
@@ -206,40 +204,36 @@ class CategoricalAccessor(object):
         return self._parent.replace(**kwargs)
 
 
-class CategoricalColumn(column.TypedColumnBase):
+class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, **kwargs):
+    def __init__(
+        self, data, dtype, categories, mask=None, ordered=None, name=None
+    ):
         """
         Parameters
         ----------
         data : Buffer
             The code values
-        mask : Buffer; optional
-            The validity mask
-        null_count : int; optional
-            The number of null values in the mask.
         categories : iterable
             The categories
+        mask : Buffer; optional
+            The validity mask
         ordered : bool
-            whether the categorical has a logical ordering (e.g. less than)
+            Whether the categorical has a logical ordering (e.g. less than)
+        name
+            Name of the Column
         """
-
-        ordered = bool(kwargs.pop("ordered"))
-        categories = kwargs.pop("categories", [])
         # Default to String dtype if len(categories) == 0, like pandas does
         categories = (
             column.as_column(categories)
             if len(categories) > 0
             else column.column_empty(0, np.dtype("object"), masked=False)
         )
+        size = data.size // dtype.data_dtype.itemsize
 
-        dtype = CategoricalDtype(
-            categories=column.as_column(categories), ordered=ordered
-        )
-        kwargs.update({"dtype": dtype})
-        super(CategoricalColumn, self).__init__(**kwargs)
+        super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
         self._categories = categories
         self._ordered = ordered
 
