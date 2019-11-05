@@ -80,87 +80,73 @@ struct bool8 {
 
   // binary operator overloads
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool operator==(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator==(bool8 const &rhs) const {
     return static_cast<bool>(*this) == static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool operator!=(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator!=(bool8 const &rhs) const {
     return static_cast<bool>(*this) != static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool operator<=(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator<=(bool8 const &rhs) const {
     return static_cast<bool>(*this) <= static_cast<bool>(rhs); 
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool operator>=(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator>=(bool8 const &rhs) const {
     return static_cast<bool>(*this) >= static_cast<bool>(rhs); 
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool operator<(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator<(bool8 const &rhs) const {
     return static_cast<bool>(*this) < static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool operator>(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool operator>(bool8 const &rhs) const {
     return static_cast<bool>(*this) > static_cast<bool>(rhs);
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8 operator+(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator+(bool8 const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) +
                               static_cast<bool>(rhs));
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8 operator-(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator-(bool8 const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) -
                               static_cast<bool>(rhs));
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8 operator*(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator*(bool8 const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) &&
                               static_cast<bool>(rhs));
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8 operator/(from_type const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE bool8 operator/(bool8 const &rhs) const {
     return static_cast<bool8>(static_cast<bool>(*this) /
                               static_cast<bool>(rhs));
   }
 
   // unary operator overloads
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8& operator+=(from_type const &rhs) {
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator+=(bool8 const &rhs) {
     bool8 &lhs = *this;
-    lhs = lhs + static_cast<bool>(rhs);
+    lhs = lhs + rhs;
     return lhs;
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8& operator-=(from_type const &rhs) {
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator-=(bool8 const &rhs) {
     bool8 &lhs = *this;
-    lhs = lhs - static_cast<bool>(rhs);
+    lhs = lhs - rhs;
     return lhs;
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8& operator*=(from_type const &rhs) {
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator*=(bool8 const &rhs) {
     bool8 &lhs = *this;
-    lhs = lhs * static_cast<bool>(rhs);
+    lhs = lhs * rhs;
     return lhs;
   }
 
-  template <typename from_type>
-  CUDA_HOST_DEVICE_CALLABLE bool8& operator/=(from_type const &rhs) {
+  CUDA_HOST_DEVICE_CALLABLE bool8& operator/=(bool8 const &rhs) {
     bool8 &lhs = *this;
-    lhs = lhs / static_cast<bool>(rhs);
+    lhs = lhs / rhs;
     return lhs;
   }
 

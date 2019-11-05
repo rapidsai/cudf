@@ -73,8 +73,8 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
         size_type destination_row = destination_row_base + threadIdx.x;
 
         const bool thread_active = destination_row < destination_col.size();
-        size_type source_row = thread_active ?
-          static_cast<size_type>(gather_map[destination_row]) : 0;
+        size_type source_row =
+          thread_active ? gather_map[destination_row] : 0;
 
         bool source_bit_is_valid = source_col.has_nulls()
           ? source_col.is_valid_nocheck(source_row)
