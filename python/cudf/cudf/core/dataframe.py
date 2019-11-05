@@ -180,8 +180,9 @@ class DataFrame(object):
             if isinstance(data, dict):
                 data = data.items()
 
-            for col_name, series in data:
-                self.add_column(col_name, series, forceindex=index is not None)
+            self._forceindex = index is not None
+            for i, (col_name, series) in enumerate(data):
+                self.insert(i, col_name, series)
 
         self._add_empty_columns(columns, index)
         for col in self._cols:
@@ -208,35 +209,35 @@ class DataFrame(object):
         )
 
     def _add_rows(self, data, index, keys):
+        self._forceindex = index is not None
         if keys is None:
             data = {i: element for i, element in enumerate(data)}.items()
         else:
             data = dict(zip(keys, data)).items()
             self._index = as_index(RangeIndex(start=0))
             self._size = len(RangeIndex(start=0))
-        for col_name, series in data:
-            self.add_column(col_name, series, forceindex=index is not None)
+        for i, (col_name, series) in enumerate(data):
+            self.insert(i, col_name, series)
         transposed = self.T
         self._cols = OrderedDict()
         self._size = transposed._size
         self._index = as_index(transposed.index)
-        for col_name in transposed.columns:
-            self.add_column(
-                col_name,
-                transposed._cols[col_name],
-                forceindex=index is not None,
+        for i, col_name in enumerate(transposed.columns):
+            self.insert(
+                i, col_name, transposed._cols[col_name],
             )
 
     def _add_empty_columns(self, columns, index):
+        self._forceindex = index is not None
         if columns is not None:
             for col_name in columns:
                 if col_name not in self._cols:
-                    self.add_column(
+                    self.insert(
+                        len(self._cols),
                         col_name,
                         column.column_empty(
                             self._size, dtype="object", masked=True
                         ),
-                        forceindex=index is not None,
                     )
 
     def serialize(self):
@@ -1492,12 +1493,14 @@ class DataFrame(object):
                 )
             )
         self._cols[column] = self._prepare_series_for_add(
-            value, forceindex=False, name=column
+            value, forceindex=self._forceindex, name=column
         )
         keys = list(self._cols.keys())
         for i, col in enumerate(keys):
             if num_cols > i >= loc:
                 self._cols.move_to_end(col)
+
+        self._ = None
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
