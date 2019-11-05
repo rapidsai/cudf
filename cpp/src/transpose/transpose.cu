@@ -20,13 +20,13 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/copy.hpp>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
 namespace cudf {
 
 namespace {
 
-constexpr int WARP_SIZE = 32;
+using experimental::detail::warp_size;
 constexpr int MAX_GRID_SIZE = (1<<16)-1;
 
 /**
@@ -77,7 +77,7 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
       auto const result = __ballot_sync(active_threads, input.column(i).is_valid(j));
 
       // Only one thread writes output
-      if (0 == threadIdx.x % WARP_SIZE) {
+      if (0 == threadIdx.x % warp_size) {
         output.column(j).set_mask_word(word_index(i), result);
         int num_nulls = __popc(active_threads) - __popc(result);
         atomicAdd(null_count + j, num_nulls);
@@ -106,9 +106,9 @@ struct launch_kernel {
     // better. It would also require transposing via shared memory, which may
     // improve performance anyway because it would enable coalesced loads and
     // stores rather than one or the other.
-    dim3 dimBlock(WARP_SIZE, WARP_SIZE);
-    dim3 dimGrid(std::min(util::div_rounding_up_safe(input.num_columns(), WARP_SIZE), MAX_GRID_SIZE),
-                 std::min(util::div_rounding_up_safe(input.num_rows(), WARP_SIZE), MAX_GRID_SIZE));
+    dim3 dimBlock(warp_size, warp_size);
+    dim3 dimGrid(std::min(util::div_rounding_up_safe(input.num_columns(), warp_size), MAX_GRID_SIZE),
+                 std::min(util::div_rounding_up_safe(input.num_rows(), warp_size), MAX_GRID_SIZE));
 
     gpu_transpose<T><<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
 
