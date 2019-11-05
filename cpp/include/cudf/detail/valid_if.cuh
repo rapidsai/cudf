@@ -19,7 +19,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 
 #include <thrust/distance.h>
 #include <rmm/device_scalar.hpp>
