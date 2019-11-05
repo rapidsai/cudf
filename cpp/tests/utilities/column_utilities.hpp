@@ -63,7 +63,6 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
  */
 template <typename T>
 std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
-  std::size_t const mask_bytes{bitmask_allocation_size_bytes(c.size())};
   std::vector<T> host_data;
   std::vector<bitmask_type> host_bitmask;
 
@@ -77,11 +76,12 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
   }
 
   if (col.nullable()) {
-    size_t num_mask_elements =
-      std::ceil(static_cast<float>(mask_bytes) / sizeof(bitmask_type));
-    host_bitmask.resize(num_mask_elements);
+    size_t mask_allocation_bytes = bitmask_allocation_size_bytes(c.size());
+    host_bitmask.resize(mask_allocation_bytes);
+    size_t num_mask_elements = num_bitmask_words(c.size());
     CUDA_TRY(cudaMemcpy(host_bitmask.data(), col.view().null_mask(),
-                        mask_bytes, cudaMemcpyDeviceToHost));
+                        num_mask_elements * sizeof(bitmask_type),
+                        cudaMemcpyDeviceToHost));
   }
 
   return std::make_pair(host_data, host_bitmask);

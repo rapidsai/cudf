@@ -21,8 +21,13 @@
 
 #include <cassert>
 
-namespace cudf {
+/**
+ * @file bit.hpp
+ * @brief Utilities for bit and bitmask operations.
+ *
+ */
 
+namespace cudf {
 namespace detail {
 template <typename T>
 constexpr inline std::size_t size_in_bits() {
@@ -41,8 +46,7 @@ constexpr inline size_type word_index(size_type bit_index) {
 /**---------------------------------------------------------------------------*
  * @brief Returns the position within a word of the specified bit.
  *---------------------------------------------------------------------------**/
-constexpr inline size_type intra_word_index(
-    size_type bit_index) {
+constexpr inline size_type intra_word_index(size_type bit_index) {
   return bit_index % detail::size_in_bits<bitmask_type>();
 }
 
@@ -56,7 +60,7 @@ constexpr inline size_type intra_word_index(
  * @param bit_index Index of the bit to set
  *---------------------------------------------------------------------------**/
 CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
-                                               size_type bit_index) {
+                                              size_type bit_index) {
   assert(nullptr != bitmask);
   bitmask[word_index(bit_index)] |=
       (bitmask_type{1} << intra_word_index(bit_index));
@@ -72,13 +76,11 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
  * @param bit_index The index of the bit to clear
  *---------------------------------------------------------------------------**/
 CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
-                                                 size_type bit_index) {
+                                                size_type bit_index) {
   assert(nullptr != bitmask);
   bitmask[word_index(bit_index)] |=
       ~(bitmask_type{1} << intra_word_index(bit_index));
 }
-
-#ifdef __CUDACC__
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether the specified bit is set to `1`
@@ -87,12 +89,41 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
  *---------------------------------------------------------------------------**/
-__device__ inline bool bit_is_set(bitmask_type const* bitmask,
-                                  size_type bit_index) {
+CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
+                                                 size_type bit_index) {
   assert(nullptr != bitmask);
   return bitmask[word_index(bit_index)] &
          (bitmask_type{1} << intra_word_index(bit_index));
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Returns a bitmask word with the `n` least significant bits set.
+ *
+ * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`
+ *
+ * @param n The number of least significant bits to set
+ * @return A bitmask word with `n` least significant bits set
+ *---------------------------------------------------------------------------**/
+constexpr inline bitmask_type set_least_significant_bits(size_type n) {
+  assert(0 < n < detail::size_in_bits<bitmask_type>());
+  return ((bitmask_type{1} << n) - 1);
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Returns a bitmask word with the `n` most significant bits set.
+ *
+ * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`
+ *
+ * @param n The number of most significant bits to set
+ * @return A bitmask word with `n` most significant bits set
+ *---------------------------------------------------------------------------**/
+constexpr inline bitmask_type set_most_significant_bits(size_type n) {
+  constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
+  assert(0 < n < word_size);
+  return ~((bitmask_type{1} << (word_size - n)) - 1);
+}
+
+#ifdef __CUDACC__
 
 /**---------------------------------------------------------------------------*
  * @brief Sets the specified bit to `1`
@@ -111,35 +142,6 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
   assert(nullptr != bitmask);
   atomicOr(&bitmask[word_index(bit_index)],
            (bitmask_type{1} << intra_word_index(bit_index)));
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Returns a bitmask word with the `n` least significant bits set.
- *
- * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`
- *
- * @param n The number of least significant bits to set
- * @return A bitmask word with `n` least significant bits set
- *---------------------------------------------------------------------------**/
-__device__ constexpr inline bitmask_type set_least_significant_bits(
-    size_type n) {
-  assert(0 < n < detail::size_in_bits<bitmask_type>());
-  return ((bitmask_type{1} << n) - 1);
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Returns a bitmask word with the `n` most significant bits set.
- *
- * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`
- *
- * @param n The number of most significant bits to set
- * @return A bitmask word with `n` most significant bits set
- *---------------------------------------------------------------------------**/
-__device__ constexpr inline bitmask_type set_most_significant_bits(
-    size_type n) {
-  constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
-  assert(0 < n < word_size);
-  return ~((bitmask_type{1} << (word_size - n)) - 1);
 }
 
 /**---------------------------------------------------------------------------*
