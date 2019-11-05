@@ -70,7 +70,7 @@ struct value_accessor
     : col{_col}, null_replacement{null_val}
   {
     // verify valid is non-null, otherwise, is_valid() will crash
-    CUDF_EXPECTS(_col.null_mask() != nullptr, "non-null bit mask is required");
+    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
 
   CUDA_DEVICE_CALLABLE
