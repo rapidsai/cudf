@@ -118,8 +118,9 @@ struct launch_kernel {
         *device_output, d_null_counts.data().get());
 
       // This memcpy needs to be synchronous as we immediately read the value from host
-      cudaMemcpy(null_counts.data(), d_null_counts.data().get(),
-        null_counts.size() * sizeof(size_type), cudaMemcpyDefault);
+      CUDA_TRY(cudaMemcpyAsync(null_counts.data(), d_null_counts.data().get(),
+        null_counts.size() * sizeof(size_type), cudaMemcpyDefault, stream));
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
   }
 };
