@@ -438,11 +438,9 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            indices = (
-                indices.fillna(False).data.mem
-                if indices.null_count != 0
-                else indices.data.mem
-            )
+            if self.null_count != 0:
+                raise ValueError("Column must have no nulls.")
+            indices = indices.data.mem
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)

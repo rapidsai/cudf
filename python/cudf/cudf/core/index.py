@@ -597,7 +597,7 @@ class RangeIndex(Index):
         return _to_frame(self, index, name)
 
     def to_gpu_array(self):
-        return self.as_column().data.mem
+        return self.as_column().to_gpu_array()
 
     def to_pandas(self):
         return pd.RangeIndex(

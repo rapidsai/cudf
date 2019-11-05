@@ -417,6 +417,9 @@ class DataFrame(object):
         df = self.copy()
         for col in self.columns:
             if col in other.columns:
+                if self.null_count != 0:
+                    raise ValueError("Column must have no nulls.")
+
                 boolbits = cudautils.compact_mask_bytes(other[col].data.mem)
             else:
                 boolbits = cudautils.make_empty_mask(len(self[col]))

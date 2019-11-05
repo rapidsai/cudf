@@ -674,7 +674,8 @@ class Column(object):
         DeviceNDArray
            logical inverted mask
         """
-
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
         gpu_mask = self.data.mem
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
@@ -749,6 +750,10 @@ class Column(object):
         -------
         device array
         """
+
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
         return cudautils.compact_mask_bytes(self.data.mem)
 
     @ioutils.doc_to_dlpack()

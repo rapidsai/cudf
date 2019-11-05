@@ -155,14 +155,12 @@ class Series(object):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
-        vals = (
-            self.fillna(False).data.mem
-            if self.null_count != 0
-            else self.data.mem
-        )
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
         # numbautils.PatchedNumbaDeviceArray() is a
         # temporary fix for CuPy < 7.0, numba = 0.46
-        return cupy.asarray(numbautils.PatchedNumbaDeviceArray(vals))
+        return cupy.asarray(numbautils.PatchedNumbaDeviceArray(self.data.mem))
 
     @property
     def values_host(self):
