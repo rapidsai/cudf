@@ -17,6 +17,7 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf
@@ -46,7 +47,7 @@ namespace strings
  * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
  * ```
  *
- * @throw cudf::logic_error if input columns are not all the same size.
+ * @throw cudf::logic_error if input columns are not all strings columns.
  *
  * @param strings_columns List of string columns to concatenate.
  * @param separator String that should inserted between each string from each row.
@@ -57,7 +58,7 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */
-std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> const& strings_columns,
+std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
                                            string_scalar const& separator = string_scalar(""),
                                            string_scalar const& narep = string_scalar("",false),
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -83,7 +84,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> cons
  * @param mr Resource for allocating device memory.
  * @return New column containing one string.
  */
-std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
+std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
                                             string_scalar const& separator = string_scalar(""),
                                             string_scalar const& narep = string_scalar("",false),
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

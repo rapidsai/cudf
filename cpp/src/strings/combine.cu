@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/combine.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
@@ -29,6 +30,7 @@
 #include <numeric>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
+#include <thrust/transform_reduce.h>
 #include <thrust/logical.h>
 
 namespace cudf
@@ -39,27 +41,24 @@ namespace detail
 {
 
 //
-std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> const& strings_columns,
+std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
                                            string_scalar const& separator = string_scalar(""),
                                            string_scalar const& narep = string_scalar("",false),
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                            cudaStream_t stream=0 )
 {
-    auto num_columns = strings_columns.size();
+    auto num_columns = strings_columns.num_columns();
     CUDF_EXPECTS( num_columns > 0, "At least one column must be specified");
-    if( num_columns==1 ) // single column returns a copy
-        return std::make_unique<column>(strings_columns[0].parent(),stream,mr);
-
-    auto first_column = column_device_view::create(strings_columns[0].parent(),stream);
-    auto strings_count = first_column->size();
-    if( !std::all_of(strings_columns.begin(),strings_columns.end(),
-        [strings_count] (strings_column_view view) { return strings_count==view.size(); }) )
-    {
-        CUDF_FAIL( "concatenate requires all columns have an equal number of rows");
-    }
-    CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string");
+    // check all columns are of type string
+    for( auto itr = strings_columns.begin(); itr != strings_columns.end(); ++itr )
+        CUDF_EXPECTS( itr->type().id()==STRING, "All columns must be of type string");
+    if( num_columns==1 ) // single strings column returns a copy
+        return std::make_unique<column>(*(strings_columns.begin()),stream,mr);
+    auto strings_count = strings_columns.num_rows();
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
+
+    CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string");
 
     auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
@@ -68,58 +67,14 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> cons
         d_narep = string_view(narep.data(),narep.size());
 
     // Create device views from the strings columns.
-    //
-    // First calculate the size of memory needed to hold the
-    // column_device_views. This is done by calling extent()
-    // for each of the column_views of the strings_columns.
-    size_t views_size_bytes =
-        std::accumulate(strings_columns.begin(), strings_columns.end(), 0,
-            [](size_type init, strings_column_view col) {
-                return init + column_device_view::extent(col.parent());
-            });
-    // Allocate the device memory to be used in the device methods.
-    // We need to pass this down when creating the column_device_views
-    // so they can be resolved to point to any child objects.
-    rmm::device_buffer d_columns_memory{views_size_bytes,stream,mr};
-    column_device_view* d_columns = reinterpret_cast<column_device_view*>(d_columns_memory.data());
-    column_device_view* d_column = d_columns; // point to the first one
-    // A buffer of CPU memory is created to hold the column_device_view
-    // objects and then copied to device memory at the d_columns pointer.
-    // But each column_device_view instance may have child objects which
-    // require setting an internal device pointer before being copied from
-    // CPU to device.
-    {
-        std::vector<int8_t> h_buffer(views_size_bytes);
-        column_device_view* h_column = reinterpret_cast<column_device_view*>(h_buffer.data());
-        // The beginning of the memory must be the fixed-sized column_device_view
-        // objects in order for d_columns to be used as array. Therefore, any
-        // child data is assigned to the end of this array.
-        int8_t* h_end = reinterpret_cast<int8_t*>(h_column + num_columns);
-        int8_t* d_end = reinterpret_cast<int8_t*>(d_column + num_columns);
-        // Create the column_device_view from each column within the CPU memory
-        // array. Any column child data should be copied into h_end and any
-        // internal pointers should be set using d_end.
-        for( auto itr = strings_columns.begin(); itr != strings_columns.end(); ++itr )
-        {
-            auto column = itr->parent();
-            // convert the column_view into column_device_view
-            new(h_column) column_device_view(column,reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
-            h_column++; // next element in array
-            // point to the next chunk of memory for use of the children of the next column
-            auto col_child_data_size = (column_device_view::extent(column) - sizeof(column_device_view));
-            h_end += col_child_data_size;
-            d_end += col_child_data_size;
-        }
-        CUDA_TRY(cudaMemcpyAsync(d_columns, h_buffer.data(),
-                                 views_size_bytes, cudaMemcpyDefault, stream));
-        CUDA_TRY(cudaStreamSynchronize(stream)); // h_buffer is about to be destroyed
-    }
+    auto table = table_device_view::create(strings_columns,stream);
+    auto d_table = *table;
 
     // create resulting null mask
     auto valid_mask = detail::make_null_mask(strings_count,
-        [d_columns, num_columns, d_narep] __device__ (size_type idx) {
-            bool null_element = thrust::any_of( thrust::seq, d_columns, d_columns+num_columns,
-                [idx] (column_device_view col) { return col.is_null(idx);});
+        [d_table, d_narep] __device__ (size_type idx) {
+            bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
+                [idx] (auto col) { return col.is_null(idx);});
             return( !null_element || !d_narep.is_null() );
         },
         mr, stream );
@@ -127,29 +82,30 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> cons
     auto null_count = valid_mask.second;
 
     // build offsets column by computing sizes of each string in the output
-    auto offsets_transformer = [d_columns, num_columns, d_separator, d_narep] __device__ (size_type idx) {
-            size_type bytes = 0;
-            for( size_type col_idx=0; col_idx < num_columns; ++col_idx )
-            {
-                auto d_column = d_columns[col_idx];
-                if( d_column.is_null(idx) )
-                {
-                    if( d_narep.is_null() )
-                        return 0; // null entry in result
-                    bytes += d_narep.size_bytes();
-                }
-                else
-                    bytes += d_column.element<string_view>(idx).size_bytes();
-                // separator only in between elements
-                if( col_idx+1 < num_columns )
-                    bytes += d_separator.size_bytes();
-            }
+    auto offsets_transformer = [d_table, num_columns, d_separator, d_narep] __device__ (size_type row_idx) {
+            // for this row (idx), iterate over each column and add up the bytes
+            size_type bytes = thrust::transform_reduce( thrust::seq, d_table.begin(), d_table.end(), 
+                [row_idx, d_separator, d_narep] __device__ (column_device_view d_column) {
+                    size_type bytes = 0;
+                    if( d_column.is_null(row_idx) )
+                    {
+                        if( d_narep.is_null() )
+                            return 0; // null entry in result
+                        bytes += d_narep.size_bytes();
+                    }
+                    else
+                        bytes += d_column.element<string_view>(row_idx).size_bytes();
+                    return bytes + d_separator.size_bytes();
+                }, 0, thrust::plus<size_type>());
+            // separator goes only in between elements
+            if( bytes > 0 )  // if not null
+                bytes -= d_separator.size_bytes(); // remove the last separator
             return bytes;
         };
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer );
     auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
-                                               offsets_transformer_itr+strings_count,
-                                               mr, stream);
+                                                            offsets_transformer_itr+strings_count,
+                                                            mr, stream);
     auto offsets_view = offsets_column->view();
     auto d_results_offsets = offsets_view.data<int32_t>();
 
@@ -160,24 +116,25 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> cons
     auto chars_view = chars_column->mutable_view();
     auto d_results_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        [d_columns, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
-            bool null_element = thrust::any_of( thrust::seq, d_columns, d_columns+num_columns,
+        [d_table, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
+            bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
                     [idx] (column_device_view col) { return col.is_null(idx);});
             if( null_element && d_narep.is_null() )
-                return; // do not write to buffer at all if any element is null
+                return; // do not write to buffer at all if any column element for this row is null
             size_type offset = d_results_offsets[idx];
             char* d_buffer = d_results_chars + offset;
+            // write out each column's entry for this row
             for( size_type col_idx=0; col_idx < num_columns; ++col_idx )
             {
-                auto d_column = d_columns[col_idx];
-                if( d_column.nullable() && d_column.is_null(idx) )
+                auto d_column = d_table.column(col_idx);
+                if( d_column.is_null(idx) )
                     d_buffer = detail::copy_string(d_buffer, d_narep);
                 else
                 {
                     string_view d_str = d_column.element<string_view>(idx);
                     d_buffer = detail::copy_string(d_buffer, d_str);
                 }
-                // separator only in between elements
+                // separator goes only in between elements
                 if( col_idx+1 < num_columns )
                     d_buffer = detail::copy_string(d_buffer, d_separator);
             }
@@ -188,7 +145,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> cons
 }
 
 //
-std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
+std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
                                             string_scalar const& separator = string_scalar(""),
                                             string_scalar const& narep = string_scalar("",false),
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -205,7 +162,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         d_narep = string_view(narep.data(),narep.size());
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
-    auto d_column = *strings_column;
+    auto d_strings = *strings_column;
     auto d_offsets = strings.offsets().data<int32_t>();
 
     // create an offsets array for building the output memory layout
@@ -216,17 +173,17 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
         d_output_offsets + 1,
-        [d_column, d_separator, d_narep] __device__ (size_type idx) {
+        [d_strings, d_separator, d_narep] __device__ (size_type idx) {
             size_type bytes = 0;
-            if( d_column.is_null(idx) )
+            if( d_strings.is_null(idx) )
             {
                 if( d_narep.is_null() )
                     return 0; // skip nulls
                 bytes += d_narep.size_bytes();
             }
             else
-                bytes += d_column.element<string_view>(idx).size_bytes();
-            if( (idx+1) < d_column.size() )
+                bytes += d_strings.element<string_view>(idx).size_bytes();
+            if( (idx+1) < d_strings.size() )
                 bytes += d_separator.size_bytes();
             return bytes;
         },
@@ -257,10 +214,10 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        [d_column, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx){
+        [d_strings, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx){
             size_type offset = d_output_offsets[idx];
             char* d_buffer = d_chars + offset;
-            if( d_column.is_null(idx) )
+            if( d_strings.is_null(idx) )
             {
                 if( d_narep.is_null() )
                     return; // do not write to buffer if element is null (including separator)
@@ -268,10 +225,10 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
             }
             else
             {
-                string_view d_str = d_column.element<string_view>(idx);
+                string_view d_str = d_strings.element<string_view>(idx);
                 d_buffer = detail::copy_string(d_buffer, d_str);
             }
-            if( (idx+1) < d_column.size() )
+            if( (idx+1) < d_strings.size() )
                 d_buffer = detail::copy_string(d_buffer, d_separator);
         });
 
@@ -283,7 +240,7 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
 
 // APIs
 
-std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> const& strings_columns,
+std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
                                            cudf::string_scalar const& separator,
                                            cudf::string_scalar const& narep,
                                            rmm::mr::device_memory_resource* mr)
@@ -291,7 +248,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view> cons
     return detail::concatenate(strings_columns, separator, narep, mr);
 }
 
-std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
+std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
                                             cudf::string_scalar const& separator,
                                             cudf::string_scalar const& narep,
                                             rmm::mr::device_memory_resource* mr )

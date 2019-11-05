@@ -37,7 +37,13 @@ class table_device_view_base {
 
   __device__ ColumnDeviceView* begin() noexcept { return _columns; }
 
+  __device__ ColumnDeviceView const* begin() const noexcept { return _columns; }
+
   __device__ ColumnDeviceView* end() noexcept {
+    return _columns + _num_columns;
+  }
+
+  __device__ ColumnDeviceView const* end() const noexcept {
     return _columns + _num_columns;
   }
 
