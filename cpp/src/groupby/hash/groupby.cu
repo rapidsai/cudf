@@ -27,17 +27,17 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
-namespace hash {
 namespace detail {
+namespace hash {
+namespace {
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-static constexpr std::array<aggregation_request::Kind, 5> hash_aggregations{
-    aggregation_request::SUM, aggregation_request::MIN,
-    aggregation_request::MAX, aggregation_request::COUNT,
-    aggregation_request::MEAN};
+static constexpr std::array<aggregation::Kind, 5> hash_aggregations{
+    aggregation::SUM, aggregation::MIN, aggregation::MAX, aggregation::COUNT,
+    aggregation::MEAN};
 
 template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
@@ -47,32 +47,55 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
   return false;
 }
 
-constexpr bool is_hash_aggregation(aggregation_request::Kind t) {
+/**
+ * @brief Indicates whether the specified aggregation operation can be computed
+ * with a hash-based implementation.
+ *
+ * @param t The aggregation operation to verify
+ * @return true `t` is valid for a hash based groupby
+ * @return false `t` is invalid for a hash based groupby
+ */
+constexpr bool is_hash_aggregation(aggregation::Kind t) {
   return array_contains(hash_aggregations, t);
 }
+}  // namespace
 
-std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(
-    table_view const& keys,
-    std::vector<std::unique_ptr<aggregation_request>> const& requests,
-    Options options, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
-  CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
-                           [](auto const& r) {
-                             return is_hash_aggregation(r->aggregation);
-                           }),
-               "Invalid aggregation for hash-based groupby.");
-
-  return std::make_pair(std::make_unique<table>(), std::make_unique<table>());
+/**
+ * @brief Heuristic that determines if a hash based groupby should be used to
+ * satisfy the set of aggregation requests on `keys` with the specified
+ * `options`.
+ *
+ * @param keys The table of keys
+ * @param requests The set of columns to aggregate and the aggregations to
+ * perform
+ * @param options Controls behavior of the groupby
+ * @return true A hash-based groupby should be used
+ * @return false A hash-based groupby should not be used
+ */
+bool use_hash_groupby(table_view const& keys,
+                      std::vector<aggregation_request> const& requests,
+                      Options options) {
+  // Simple heuristic...
+  // Only use hash groupby if it's possible to satisfy *all* requests with a
+  // hash groupby
+  return std::all_of(
+      requests.begin(), requests.end(), [](aggregation_request const& r) {
+        return std::all_of(
+            r.aggregations.begin(), r.aggregations.end(),
+            [](auto const& a) { return is_hash_aggregation(a->kind); });
+      });
 }
-}  // namespace detail
 
-std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(
-    table_view const& keys,
-    std::vector<std::unique_ptr<aggregation_request>> const& requests,
-    Options options, rmm::mr::device_memory_resource* mr) {
-  return detail::groupby(keys, requests, options, 0, mr);
+// Hash-based groupby
+std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
+    table_view const& keys, std::vector<aggregation_request> const& requests,
+    Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+  // stub
+  return std::make_pair(std::make_unique<table>(),
+                        std::vector<std::unique_ptr<column>>{});
 }
 }  // namespace hash
+}  // namespace detail
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

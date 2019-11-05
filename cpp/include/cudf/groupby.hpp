@@ -25,13 +25,7 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 /**
- * @brief Top-level options for controlling behavior of the groupby operation.
- *
- * This structure defines all of the shared options between the hash and
- * sort-based groupby algorithms. Implementation specific options should be
- * defined by a new structure that inherits from this one inside the appropriate
- * namespace.
- *
+ * @brief Options for controlling behavior of the groupby operation.
  */
 struct Options {
   Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
@@ -61,56 +55,74 @@ struct Options {
 };
 
 /**
- * @brief Encapsulates the request for a particular groupby aggregation
- * operation to be performed on a column.
+ * @brief Base class for specifying the desired aggregation in an
+ * `aggregation_request`.
+ *
+ * Other kinds of aggregations may derive from this class to encapsulate
+ * additional information needed to compute the aggregation.
  */
-struct aggregation_request {
+struct aggregation {
   /**
-   * @brief The supported aggregation operations.
+   * @brief The aggregation operations that may be performed
    */
   enum Kind { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
-  column_view values;  ///< Elements to aggregate
-  Kind aggregation;    ///< The aggregation to perform
+  Kind kind;  ///< The kind of aggregation to perform
 };
 
-namespace hash {
-
 /**
- * @brief  Options unique to the hash-based groupby
+ * @brief Encapsulates the request for groupby aggregation operation(s) to be
+ * performed on a column.
  */
-struct Options : groupby::Options {
-  Options(bool _ignore_null_keys = true)
-      : groupby::Options(_ignore_null_keys) {}
+struct aggregation_request {
+  column_view values;
+  std::vector<std::unique_ptr<aggregation>> aggregations;
 };
 
 /**
- * @brief Performs groupby operation(s) via a hash-based implementation
+ * @brief Groups together equivalent rows in `keys` and performs the requested
+ * aggregation(s) on corresponding values.
  *
- * Given a table of keys and corresponding table of values, equivalent keys will
- * be grouped together and a reduction operation performed across the associated
- * values (i.e., reduce by key). The reduction operation to be performed is
- * specified by a list of operator enums of equal length to the number of value
- * columns.
+ * The values to aggregate and the aggregations to perform are specifed in an
+ * `aggregation_request`. Each request contains a `column_view` of values to
+ * aggregate and a set of `aggregation`s to perform on those elements.
  *
- * The output of the operation is the table of key columns that hold all the
- * unique keys from the input key columns and a table of aggregation columns
- * that hold the specified reduction across associated values among all
- * identical keys.
+ * For each `aggregation` in a request, `values[i]` will be aggregated with all
+ * other `values[j]` where rows `i` and `j` in `keys` are equivalent.
+ *
+ * The `size()` of the request column must equal `keys.num_rows()`.
+ *
+ * Example:
+ * ```
+ * Input:
+ * keys:     {1 2 1 3 1}
+ *           {1 2 1 4 1}
+ * request:
+ *   values: {3 1 4 9 2}
+ *   aggregations: {{SUM}, {MIN}}
+ *
+ * result:
+ *
+ * keys:  {3 1 2}
+ *        {4 1 2}
+ * values:
+ *   SUM: {9 9 1}
+ *   MIN: {9 2 1}
+ * ```
  *
  * @param keys The table of keys
- * @param values The table of values to aggregate
- * @param ops The list of aggregation operations. Size must equal number of
- * columns in `values`
- * @return A tuple whose first member contains the table of output keys, and
- * second member contains the table of reduced output values
+ * @param requests The set of columns to aggregate and the aggregations to
+ * perform
+ * @param options Controls behavior of the groupby 
+ * @param mr Memory resource used to allocate the returned table and columns
+ * @return Pair containing a table of the unique rows from `keys` and a set of
+ * `column`s containing the result(s) of the requested aggregations.
  */
-std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby(
+std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
     table_view const& keys,
-    std::vector<std::unique_ptr<aggregation_request>> const& requests,
+    std::vector<aggregation_request> const& requests,
     Options options = Options{},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace hash
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf
