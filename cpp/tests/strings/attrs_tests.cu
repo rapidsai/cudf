@@ -59,32 +59,26 @@ TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
     cudf::test::expect_columns_equal(results->view(), expected_column);
 }
 
-template <typename T>
-class StringsLengthsTest : public StringsAttributesTest {};
 
-using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
-TYPED_TEST_CASE(StringsLengthsTest, IntegerTypes);
-
-TYPED_TEST(StringsLengthsTest, AllIntegerTypes)
+TEST_F(StringsAttributesTest, StringsLengths)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "ééé", " something a bit longer " };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    auto dtype = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
     {
-        auto results = cudf::strings::characters_counts(strings_view, dtype);
-        std::vector<TypeParam> h_expected{ 3, 2, 0, 0, 2, 3, 24 };
-        cudf::test::fixed_width_column_wrapper<TypeParam> expected( h_expected.begin(), h_expected.end(),
+        auto results = cudf::strings::characters_counts(strings_view);
+        std::vector<int32_t> h_expected{ 3, 2, 0, 0, 2, 3, 24 };
+        cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        auto results = cudf::strings::bytes_counts(strings_view, dtype);
-        std::vector<TypeParam> h_expected{ 3, 2, 0, 0, 2, 6, 24 };
-        cudf::test::fixed_width_column_wrapper<TypeParam> expected( h_expected.begin(), h_expected.end(),
+        auto results = cudf::strings::bytes_counts(strings_view);
+        std::vector<int32_t> h_expected{ 3, 2, 0, 0, 2, 6, 24 };
+        cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
         cudf::test::expect_columns_equal(*results, expected);

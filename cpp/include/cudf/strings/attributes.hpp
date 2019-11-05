@@ -33,16 +33,11 @@ namespace strings
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @throw cudf::logic_error if output_type is not an integer type.
- *
  * @param strings Strings instance for this operation.
- * @param output_type The integer type used for creating the output column.
- *        Default type is INT32.
  * @param mr Resource for allocating device memory.
- * @return New column with lengths for each string.
+ * @return New INT32 column with lengths for each string.
  */
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
-                                                 data_type output_type = data_type{INT32},
                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -55,16 +50,11 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @throw cudf::logic_error if output_type is not an integer type.
- *
  * @param strings Strings instance for this operation.
- * @param output_type The integer type used for creating the output column.
- *        Default type is INT32.
  * @param mr Resource for allocating device memory.
- * @return New column with the number of bytes for each string.
+ * @return New INT32 column with the number of bytes for each string.
  */
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
-                                            data_type output_type = data_type{INT32},
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
