@@ -108,7 +108,6 @@ TEST_F(DropNullsTest, EmptyColumns) {
     cudf::test::fixed_width_column_wrapper<int16_t> col1{};
     cudf::test::fixed_width_column_wrapper<int32_t> col2{};
     cudf::test::fixed_width_column_wrapper<double> col3{};
-    std::cout<<"RGSL : Row size is "<<static_cast<cudf::column_view>(col1).size()<<std::endl;
     cudf::table_view input {{col1, col2, col3}};
     cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{};
     cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{};
@@ -129,28 +128,10 @@ TEST_F(DropNullsTest, MisMatchInKeysAndInputSize) {
     EXPECT_THROW(cudf::experimental::drop_nulls(input, keys), cudf::logic_error);
 }
 
-#if 0
-TEST_F(DropNullsTest, AllNull) {
-    cudf::test::fixed_width_column_wrapper<int16_t> col{{true, false, true, false, true, false}, {1, 1, 1, 1, 1, 1}};
-    cudf::table_view input {{col}};
-    cudf::test::fixed_width_column_wrapper<int16_t> key_col{{true, false, true, false, true, false}, {0, 0, 0, 0, 0, 0}};
-    cudf::table_view keys {{key_col}};
-    cudf::test::fixed_width_column_wrapper<int16_t> expected_col{};
-    cudf::column_view view = expected_col;
-    std::cout<<"RGSL: Num of rows is "<<view.size()<<std::endl;
-    cudf::table_view expected {{expected_col}};
-
-    auto got = cudf::experimental::drop_nulls(input, keys);
-
-    expect_tables_equal(expected, got->view());
-}
-#endif
-
 template <typename T>
 struct DropNullsTestAll : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(DropNullsTestAll, cudf::test::NumericTypes);
-
 
 TYPED_TEST(DropNullsTestAll, AllNull) {
     using T = TypeParam;

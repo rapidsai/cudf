@@ -22,8 +22,44 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-/*
- * Filters a table to remove null elements.
+
+/**
+ * @brief Filters a table to remove null elements.
+ *
+ * Filters the rows of the `input` considering specified columns from
+ * `keys` for validity / null values.
+ *
+ * Given an input table_view, row `i` from the input columns is copied to
+ * the output if the same row `i` of @p keys has at leaast @p keep_threshold
+ * non-null fields.
+ *
+ * This operation is stable: the input order is preserved in the output.
+ *
+ * Any non-nullable column in the input is treated as all non-null.
+ *
+ * @example input   {col1: {1, 2,    3,    null},
+ *                   col2: {4, 5,    null, null},
+ *                   col3: {7, null, null, null}}
+ *          keys = input
+ *          keep_threshold = 2
+ *
+ *          output {col1: {1, 2}
+ *                  col2: {4, 5}
+ *                  col3: {7, null}}
+ *
+ * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
+ * there is no error, and an empty `std::unique_ptr<table>` is returned
+ *
+ * @throws cudf::logic_error if @p keys is non-empty and keys.num_rows() is less
+ * than input.num_rows()
+ *
+ * @param[in] input The input `table_view` to filter.
+ * @param[in] keys The `table_view` to filter `input`.
+ * @param[in] keep_threshold The minimum number of non-null fields in a row
+ *                           required to keep the row.
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
                  table_view const& keys,
