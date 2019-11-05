@@ -35,11 +35,14 @@ namespace detail
 namespace
 {
 
+// This functor handles both contains() and match() to minimize the number
+// of regex calls to find() to be inlined.
 template<size_t stack_size>
 struct contains_fn
 {
     dreprog* prog;
     column_device_view d_strings;
+    bool bmatch{false}; // do not make this a template parameter to keep compile times down
 
     __device__ cudf::experimental::bool8 operator()(size_type idx)
     {
@@ -48,18 +51,18 @@ struct contains_fn
         if( d_strings.is_null(idx) )
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
-        int32_t begin = 0, end = d_str.length();
-        return static_cast<cudf::experimental::bool8>(prog->find(idx,d_str,begin,end));
+        int32_t begin = 0;
+        int32_t end = bmatch ? 1 : d_str.length(); // 1=match only the beginning of the string
+        return static_cast<experimental::bool8>(prog->find(idx,d_str,begin,end));
     }
 };
 
-} // namespace
-
 //
-std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
-                                           std::string const& pattern,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                           cudaStream_t stream = 0)
+std::unique_ptr<column> contains_util( strings_column_view const& strings,
+                                       std::string const& pattern,
+                                       bool beginning_only = false,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                       cudaStream_t stream = 0)
 {
     auto strings_count = strings.size();
     auto strings_column = column_device_view::create(strings.parent(),stream);
@@ -78,7 +81,7 @@ std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
         {
             std::ostringstream message;
             message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
-            message << "contains_re: number of instructions (" << prog->inst_counts() << ") ";
+            message << "number of instructions (" << prog->inst_counts() << ") ";
             message << "and number of strings (" << strings_count << ") ";
             message << "exceeds available memory";
             dreprog::destroy(prog);
@@ -102,31 +105,56 @@ std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
         thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
-            d_results, contains_fn<RX_STACK_SMALL>{prog, d_column} );
+            d_results, contains_fn<RX_STACK_SMALL>{prog, d_column, beginning_only} );
     else if( regex_insts <= RX_MEDIUM_INSTS )
         thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
-            d_results, contains_fn<RX_STACK_MEDIUM>{prog, d_column} );
+            d_results, contains_fn<RX_STACK_MEDIUM>{prog, d_column, beginning_only} );
     else
         thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
-            d_results, contains_fn<RX_STACK_LARGE>{prog, d_column} );
+            d_results, contains_fn<RX_STACK_LARGE>{prog, d_column, beginning_only} );
 
     results->set_null_count(strings.null_count());
     return results;
 }
 
+} // namespace
+
+std::unique_ptr<column> contains_re( strings_column_view const& strings,
+                                     std::string const& pattern,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                     cudaStream_t stream = 0)
+{
+    return contains_util(strings, pattern, false, mr, stream);
+}
+
+std::unique_ptr<column> matches_re( strings_column_view const& strings,
+                                    std::string const& pattern,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream = 0)
+{
+    return contains_util(strings, pattern, true, mr, stream);
+}
+
 } // namespace detail
 
-// external API
+// external APIs
 
-std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
-                                           std::string const& pattern,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> contains_re( strings_column_view const& strings,
+                                     std::string const& pattern,
+                                     rmm::mr::device_memory_resource* mr)
 {
     return detail::contains_re(strings, pattern, mr);
+}
+
+std::unique_ptr<column> matches_re( strings_column_view const& strings,
+                                     std::string const& pattern,
+                                     rmm::mr::device_memory_resource* mr)
+{
+    return detail::matches_re(strings, pattern, mr);
 }
 
 } // namespace strings

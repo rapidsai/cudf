@@ -58,5 +58,35 @@ TEST_F(StringsContainsTests, ContainsTest)
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
+}
 
+TEST_F(StringsContainsTests, MatchesTest)
+{
+    std::vector<const char*> h_strings{
+        "The quick brown @fox jumps", "ovér the", "lazy @dog", "1234", "00:0:00", nullptr, "" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    auto strings_view = cudf::strings_column_view(strings);
+    {
+        auto results = cudf::strings::matches_re(strings_view,"lazy");
+        int8_t h_expected[] = {0,0,1,0,0,0,0};
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+            thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::matches_re(strings_view,"\\d+");
+        int8_t h_expected[] = {0,0,0,1,1,0,0};
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+            thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::matches_re(strings_view,"@\\w+");
+        int8_t h_expected[] = {0,0,0,0,0,0,0};
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+            thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
 }

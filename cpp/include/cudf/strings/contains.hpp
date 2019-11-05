@@ -34,9 +34,25 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<cudf::column> contains_re( strings_column_view const& strings,
-                                           std::string const& pattern,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> contains_re( strings_column_view const& strings,
+                                     std::string const& pattern,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Returns a boolean column identifying strings entries which
+ * contain a character sequence matching the given regex pattern
+ * only at the beginning of each string.
+ *
+ * Any null string results in a null entry for that row in the output column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param pattern Regex pattern to match to each string.
+ * @param mr Resource for allocating device memory.
+ * @return New column of boolean results for each string.
+ */
+std::unique_ptr<column> matches_re( strings_column_view const& strings,
+                                    std::string const& pattern,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
