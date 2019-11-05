@@ -80,7 +80,9 @@
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
 - PR #3282 Add `num_bitmask_words`
+- PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
+- PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
 - PR #3243 Use upstream join code in dask_cudf
 
 ## Bug Fixes
@@ -111,6 +113,7 @@
 - PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
 - PR #3279 Fix shutdown hang issues with pinned memory pool init executor
 - PR #3280 Invalid children check in mutable_column_device_view
+- PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
 
 
 # cuDF 0.10.0 (16 Oct 2019)
