@@ -18,7 +18,7 @@
 #include <gmock/gmock.h>
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
-#include <cudf/predicates.hpp>
+#include <cudf/legacy/predicates.hpp>
 
 #include <cudf/utilities/error.hpp>
 

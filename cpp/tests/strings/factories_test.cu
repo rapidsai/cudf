@@ -15,6 +15,8 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -149,4 +151,13 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     // check host version of the factory too
     auto column2 = cudf::make_strings_column( h_buffer, h_offsets, h_nulls, null_count );
     cudf::test::expect_columns_equal(column->view(), column2->view());
+}
+
+TEST_F(StringsFactoriesTest, CreateScalar)
+{
+    std::string value = "test string";
+    auto s = cudf::make_string_scalar(value);
+    auto string_s = static_cast<cudf::string_scalar*>(s.get());
+
+    EXPECT_EQ(string_s->value(), value);
 }
