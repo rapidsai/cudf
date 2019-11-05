@@ -38,13 +38,11 @@ namespace strings
  * @param strings Strings instance for this operation.
  * @param output_type Type of integer numeric column to return.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New column with integers converted from strings.
  */
-std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
-                                           cudf::data_type output_type,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                           cudaStream_t stream = 0);
+std::unique_ptr<column> to_integers( strings_column_view const& strings,
+                                     data_type output_type,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a new strings column converting the integer values from the
@@ -62,9 +60,8 @@ std::unique_ptr<cudf::column> to_integers( strings_column_view const& strings,
  * @param stream Stream to use for any kernels in this function.
  * @return New strings column with integers as strings.
  */
-std::unique_ptr<cudf::column> from_integers( column_view const& integers,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                             cudaStream_t stream = 0);
+std::unique_ptr<column> from_integers( column_view const& integers,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
