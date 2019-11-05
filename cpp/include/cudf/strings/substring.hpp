@@ -55,9 +55,9 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& strings,
-                                             cudf::size_type start, cudf::size_type stop=-1, cudf::size_type step=1,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> slice_strings( strings_column_view const& strings,
+                                       size_type start, size_type stop=-1, size_type step=1,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 /**
@@ -95,9 +95,9 @@ std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& st
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<cudf::column> slice_strings( cudf::strings_column_view const& strings,
-                                             column_view const& starts, column_view const& stops,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> slice_strings( strings_column_view const& strings,
+                                       column_view const& starts, column_view const& stops,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
