@@ -1481,18 +1481,22 @@ class DataFrame(object):
         num_cols = len(self._cols)
         if column in self._cols:
             raise NameError("duplicated column name {!r}".format(column))
-        
+
         if loc < 0:
             loc = num_cols + loc + 1
 
         if not (0 <= loc <= num_cols):
-            raise ValueError('insert location must be within range {}, {}'.format(-(num_cols+1)*(num_cols > 0), num_cols*(num_cols > 0)))
-        self._cols[column] = self._prepare_series_for_add(    
+            raise ValueError(
+                "insert location must be within range {}, {}".format(
+                    -(num_cols + 1) * (num_cols > 0), num_cols * (num_cols > 0)
+                )
+            )
+        self._cols[column] = self._prepare_series_for_add(
             value, forceindex=False, name=column
         )
         keys = list(self._cols.keys())
         for i, col in enumerate(keys):
-            if (num_cols > i >= loc):
+            if num_cols > i >= loc:
                 self._cols.move_to_end(col)
 
     def add_column(self, name, data, forceindex=False):
