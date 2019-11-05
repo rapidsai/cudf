@@ -11,26 +11,19 @@ from libc.stdlib cimport free
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
+from cudf._libxx.column cimport Column
 from cudf.utils.dtypes import is_scalar
 
 cimport cudf._lib.includes.replace as cpp_replace
 
 
-cpdef replace(input_col, values_to_replace, replacement_values):
+cpdef replace(Column input_col, Column values_to_replace, Column replacement_values):
     """
         Call cudf::find_and_replace_all
     """
-    cdef gdf_column* c_input_col = column_view_from_column(
-        input_col
-    )
-
-    cdef gdf_column* c_values_to_replace = column_view_from_column(
-        values_to_replace
-    )
-
-    cdef gdf_column* c_replacement_values = column_view_from_column(
-        replacement_values
-    )
+    cdef gdf_column* c_input_col = input_col.gdf_column_view()
+    cdef gdf_column* c_values_to_replace = values_to_replace.gdf_column_view()
+    cdef gdf_column* c_replacement_values = replacement_values.gdf_column_view()
 
     cdef gdf_column c_out_col
 
@@ -45,12 +38,12 @@ cpdef replace(input_col, values_to_replace, replacement_values):
     free_column(c_replacement_values)
     free_column(c_input_col)
 
-    return gdf_column_to_column(&c_out_col)
+    return Column.from_gdf_column(&c_out_col)
 
 
-cdef replace_nulls_column(inp, replacement):
-    cdef gdf_column* c_input_col = column_view_from_column(inp)
-    cdef gdf_column* replacement_col = column_view_from_column(replacement)
+cdef replace_nulls_column(Column inp, Column replacement):
+    cdef gdf_column* c_input_col = inp.gdf_column_view()
+    cdef gdf_column* replacement_col = replacement.gdf_column_view()
     cdef gdf_column c_out_col
 
     with nogil:
@@ -62,10 +55,10 @@ cdef replace_nulls_column(inp, replacement):
     free_column(replacement_col)
     free_column(c_input_col)
 
-    return gdf_column_to_column(&c_out_col)
+    return Column.from_gdf_column(&c_out_col)
 
-cdef replace_nulls_scalar(inp, replacement):
-    cdef gdf_column* c_input_col = column_view_from_column(inp)
+cdef replace_nulls_scalar(Column inp, replacement):
+    cdef gdf_column* c_input_col = inp.gdf_column_view()
     cdef gdf_scalar* replacement_scalar = gdf_scalar_from_scalar(replacement)
     cdef gdf_column c_out_col
 
@@ -78,7 +71,7 @@ cdef replace_nulls_scalar(inp, replacement):
     free(replacement_scalar)
     free_column(c_input_col)
 
-    return gdf_column_to_column(&c_out_col)
+    return Column.from_gdf_column(&c_out_col)
 
 
 cpdef replace_nulls(inp, replacement):
