@@ -13,6 +13,8 @@ from cudf._libxx.lib cimport *
 from cudf.core.buffer import Buffer
 from libc.stdlib cimport malloc, free
 
+from cudf.utils.dtypes import is_categorical_dtype
+
 np_to_cudf_types = {np.dtype('int32'): INT32,
                     np.dtype('int64'): INT64,
                     np.dtype('float32'): FLOAT32,
@@ -160,3 +162,27 @@ cdef class Column:
         return build_column(data=data,
                             dtype=dtype,
                             mask=mask)
+
+
+    cdef gdf.gdf_dtype gdf_type(self) except? gdf.GDF_invalid:
+        dtype = self.dtype
+
+        # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
+        if is_categorical_dtype(dtype):
+            if self.data is None:
+                raise NotImplementedError
+            return self.data.gdf_dtype_from_value()
+        # if dtype is np.datetime64, interrogate the dtype's time_unit resolution
+        if dtype.kind == 'M':
+            time_unit, _ = np.datetime_data(dtype)
+            if time_unit in gdf.np_to_gdf_time_unit:
+                # time_unit is valid so must be a GDF_TIMESTAMP
+                return gdf.GDF_TIMESTAMP
+            # else default to GDF_DATE64
+            return gdf.GDF_DATE64
+        # everything else is a 1-1 mapping
+        if dtype.type in gdf.dtypes:
+            return gdf.dtypes[dtype.type]
+        raise TypeError('cannot convert numpy dtype `%s` to gdf_dtype' % (dtype))
+
+

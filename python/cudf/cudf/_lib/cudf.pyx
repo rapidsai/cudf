@@ -281,7 +281,7 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         else:
             data_ptr = 0
 
-    if col._mask is not None:
+    if col.mask is not None:
         valid_ptr = get_column_valid_ptr(col)
     else:
         valid_ptr = 0

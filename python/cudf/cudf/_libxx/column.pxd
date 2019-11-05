@@ -15,7 +15,10 @@ cdef class Column:
 
     cdef size_type null_count(self)
 
+    # legacy Column methods:
     cdef gdf.gdf_column* gdf_column_view(self) except *
 
     @staticmethod
     cdef Column from_gdf_column(gdf.gdf_column* c_col)
+
+    cdef gdf.gdf_dtype gdf_type(self) except? gdf.GDF_invalid
