@@ -84,6 +84,7 @@
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 
 ## Bug Fixes
 
