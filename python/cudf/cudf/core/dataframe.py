@@ -1500,7 +1500,7 @@ class DataFrame(object):
             if num_cols > i >= loc:
                 self._cols.move_to_end(col)
 
-        self._ = None
+        self._forceindex = None
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
