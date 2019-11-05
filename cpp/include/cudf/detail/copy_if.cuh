@@ -128,7 +128,7 @@ __launch_bounds__(block_size, 2048/block_size)
 __global__ void scatter_kernel(T* __restrict__ output_data,
                                cudf::bitmask_type * __restrict__ output_valid,
                                cudf::size_type * output_null_count,
-                               cudf::column_device_view const& input_view,
+                               cudf::column_device_view input_view,
                                cudf::size_type  * __restrict__ block_offsets,
                                cudf::size_type size,
                                cudf::size_type per_thread,
