@@ -32,14 +32,15 @@ namespace experimental {
  * @param column_order The desired sort order for each column. Size must be
  * equal to `input.num_columns()` or empty. If empty, all columns will be sorted
  * in ascending order.
- * @param null_precedence The size of a NULL value in comparison to all other
- * values
+ * @param null_precedence The desired order of null compared to other elements
+ * for each column.  Size must be equal to `input.num_columns()` or empty.
+ * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @return std::unique_ptr<column> A non-nullable column of INT32 elements
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> sorted_order(
-    table_view input, std::vector<order> const& column_order,
-    null_order null_precedence,
+    table_view input, std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf
