@@ -2205,7 +2205,7 @@ class Series(object):
         )
 
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
-        mod_vals = cudautils.modulo(hashed_values.data.mem, stop)
+        mod_vals = hashed_values.binary_operator("mod", stop)
         return Series(mod_vals, index=self.index)
 
     def quantile(
