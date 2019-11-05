@@ -185,7 +185,9 @@ def test_kernel_deep_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
-    add_one[1, len(sr)](sr.data.mem)
+    # column.to_gpu_array calls to_dense_buffer which returns a copy
+    # need to access buffer directly and then call gpu_array
+    add_one[1, len(sr)](sr.data.to_gpu_array())
     assert not gdf.to_string().split() == cdf.to_string().split()
 
 
@@ -196,7 +198,7 @@ def test_kernel_shallow_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
-    add_one[1, len(sr)](sr.data.mem)
+    add_one[1, len(sr)](sr.to_gpu_array())
     assert_eq(gdf, cdf)
 
 
