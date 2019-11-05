@@ -28,7 +28,7 @@ namespace experimental {
  * Merges two sorted tables (including null values) into one sorted table
  * containing data from both tables.
  *
- * Example:
+ * Example 1:
  * input:
  * table 1 => col 1 {0, 1, 2, 3}
  *            col 2 {4, 5, 6, 7}
@@ -38,20 +38,47 @@ namespace experimental {
  * table => col 1 {0, 1, 1, 2, 2, 3}
  *          col 2 {4, 5, 8, 6, 9, 7}
  *
+ * Example 2: 
+ * input:
+ * table 1 => col 0 {1, 0}
+ *            col 1 {'c', 'b'}
+ *            col 2 {RED, GREEN}
+ *
+ *
+ * table 2 => col 0 {1}
+ *            col 1 {'a'}
+ *            col 2 {NULL}
+ *
+ *  with key_cols[] = {0,1}
+ *  and  asc_desc[] = {ASC, ASC};
+ *
+ *  Lex-sorting is on columns {0,1}; hence, lex-sorting of ((L0 x L1) V (R0 x R1)) is:
+ *  (0,'b', GREEN), (1,'a', NULL), (1,'c', RED)
+ *
+ *  (third column, the "color", just "goes along for the ride"; 
+ *   meaning is permutted according to the data movements dictated 
+ *   by lexicographic ordering of columns 0 and 1);
+ *
+ *   with result columns:
+ *
+ *   Res0 = {0,1,1}
+ *   Res1 = {'b', 'a', 'c'}
+ *   Res2 = {GREEN, NULL, RED}
+ *
  * @Param[in] left_table A sorted table to be merged
  * @Param[in] right_table A sorted table to be merged
  * @Param[in] key_cols Indices of left_cols and right_cols to be used
  *                     for comparison criteria
  * @Param[in] asc_desc Sort order types of columns indexed by key_cols
- * @Param[in] nulls_are_smallest Flag indicating is nulls are to be treated as the smallest value
+ * @Param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the indexing columns (key_cols)
  *
  * @Returns A table containing sorted data from left_table and right_table
  */
 std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
-                                   table_view const& right_table,
-                                   std::vector<cudf::size_type> const& key_cols,
-                                   std::vector<cudf::order> const& asc_desc,
-                                   std::vector<cudf::null_order> const& null_precedence);
+                                                 table_view const& right_table,
+                                                 std::vector<cudf::size_type> const& key_cols,
+                                                 std::vector<cudf::order> const& asc_desc,
+                                                 std::vector<cudf::null_order> const& null_precedence);
 
 }  // namespace experimental
 }  // namespace cudf

@@ -94,11 +94,18 @@ namespace cudf {
 namespace experimental { 
 namespace detail {
 
+//nope,
+//a column-wise merge may not make sense,
+//because of key_col, asc_desc
+//(see below...)
+//
+template<typename VectorI>
 struct ColumnMerger
 {
-  ColumnMerger(cudf::size_type const& key_col,
-               cudf::order const& asc_desc,
-               cudf::null_order const& null_p)
+  explicit ColumnMerger(VectorI const& row_order):
+    dv_row_order_(row_order)
+  //dv_row_order_ := (device) container giving
+  //the order of rows induced by lexicographic sorting of columns in key_cols
   {
   }
   
@@ -110,6 +117,9 @@ struct ColumnMerger
   {
     return nullptr;//for now...
   }
+private:
+  VectorI const& dv_row_order_;
+  
   //see `class element_relational_comparator` in `cpp/include/cudf/table/row_operators.cuh` as a model;
 };
   
@@ -170,7 +180,6 @@ std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                                                right_col);
         v_merged_cols.emplace_back(std::move(merged));
       }
-    //cudf::table tbl{std::move(v_merged_cols)};//nope...
     
     return std::unique_ptr<cudf::experimental::table>{new cudf::experimental::table(std::move(v_merged_cols))};
 }
@@ -178,10 +187,10 @@ std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
 }  // namespace detail
 
 std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
-                                   table_view const& right_table,
-                                   std::vector<cudf::size_type> const& key_cols,
-                                   std::vector<cudf::order> const& asc_desc,
-                                   std::vector<cudf::null_order> const& null_precedence){
+                                                 table_view const& right_table,
+                                                 std::vector<cudf::size_type> const& key_cols,
+                                                 std::vector<cudf::order> const& asc_desc,
+                                                 std::vector<cudf::null_order> const& null_precedence){
   return detail::merge(left_table, right_table, key_cols, asc_desc, null_precedence);
 }
 
