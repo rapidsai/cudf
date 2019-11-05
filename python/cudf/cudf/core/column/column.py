@@ -99,10 +99,8 @@ class ColumnBase(Column):
         return n
 
     def set_mask(self, mask):
-        """Create new Column by setting the mask
-
-        This will override the existing mask.  The returned Column will
-        reference the same data buffer as this Column.
+        """
+        Return a Column with the same data but new mask.
 
         Parameters
         ----------
@@ -112,10 +110,8 @@ class ColumnBase(Column):
 
                 (mask[idx // 8] >> (idx % 8)) & 1
         """
-        mask_bytes = mask.astype("uint8")
-        mask_bits = cudautils.compact_mask_bytes(rmm.to_device(mask_bytes))
-        mask = Buffer.from_array_like(mask_bits)
-        self.mask = mask
+        mask = Buffer.from_array_like(mask)
+        return build_column(self.data, self.dtype, mask=mask, name=self.name)
 
     @staticmethod
     def from_mem_views(data_mem, mask_mem=None, null_count=None, name=None):
@@ -319,10 +315,8 @@ class ColumnBase(Column):
         Any omitted keywords will be defaulted to the corresponding
         attributes in ``self``.
         """
-        params = self._replace_defaults()
+        params = type(self)._replace_defaults()
         params.update(kwargs)
-        if "mask" in kwargs and "null_count" not in kwargs:
-            del params["null_count"]
         return type(self)(**params)
 
     def view(self, newcls, **kwargs):
@@ -705,6 +699,19 @@ class ColumnBase(Column):
         assert axis in (None, 0)
         return libcudf.filling.repeat([self], repeats)[0]
 
+    def _mimic_inplace(self, result, inplace=False):
+        """
+        If `inplace=True`, used to mimic an inplace operation
+        by replacing data in ``self`` with data in ``result``.
+
+        Otherwise, returns ``result`` unchanged.
+        """
+        if inplace:
+            self.data = result.data
+            self.mask = result.mask
+        else:
+            return result
+
 
 class TypedColumnBase(ColumnBase):
     """Base class for all typed column
@@ -759,20 +766,6 @@ class TypedColumnBase(ColumnBase):
         params = super(TypedColumnBase, self)._replace_defaults()
         params.update(dict(dtype=self._dtype))
         return params
-
-    def _mimic_inplace(self, result, inplace=False):
-        """
-        If `inplace=True`, used to mimic an inplace operation
-        by replacing data in ``self`` with data in ``result``.
-
-        Otherwise, returns ``result`` unchanged.
-        """
-        if inplace:
-            self._data = result._data
-            self._mask = result._mask
-            self._null_count = result._null_count
-        else:
-            return result
 
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
