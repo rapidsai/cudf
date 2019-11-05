@@ -23,7 +23,9 @@
 namespace cudf {
 
 /**
- * @brief Function that converts inputs from `input` using the following rule
+ * @brief Makes all NaNs and zeroes positive.
+ *
+ * Converts floating point values from @p input using the following rules:
  *        rule:   Convert  -NaN  -> NaN
  *                Convert  -0.0  -> 0.0
  *
