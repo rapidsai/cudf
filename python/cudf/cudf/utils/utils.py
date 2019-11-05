@@ -124,7 +124,7 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         mask_dev_array = make_mask(len(pa_arr))
         arrow_dev_array = rmm.to_device(np.array(buffers[0]).view("int8"))
         copy_array(arrow_dev_array, mask_dev_array)
-        pamask = Buffer(mask_dev_array)
+        pamask = Buffer.from_array_like(mask_dev_array)
     else:
         pamask = None
 
@@ -137,13 +137,13 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
             new_dtype = pa_arr.type.to_pandas_dtype()
 
     if buffers[1]:
-        padata = Buffer(
+        padata = Buffer.from_array_like(
             np.array(buffers[1]).view(new_dtype)[
                 pa_arr.offset : pa_arr.offset + len(pa_arr)
             ]
         )
     else:
-        padata = Buffer(np.empty(0, dtype=new_dtype))
+        padata = Buffer.empty(0)
     return (pamask, padata)
 
 

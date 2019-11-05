@@ -1054,8 +1054,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
-        raise NotImplementedError
         if isinstance(arbitrary, pa.StringArray):
+            raise NotImplementedError
             count = len(arbitrary)
             null_count = arbitrary.null_count
 
@@ -1155,9 +1155,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             pamask, padata = buffers_from_pyarrow(arbitrary)
             data = numerical.NumericalColumn(
                 data=padata,
-                mask=pamask,
-                null_count=arbitrary.null_count,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype()),
+                mask=pamask,
             )
 
     elif isinstance(arbitrary, pa.ChunkedArray):
@@ -1178,8 +1177,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        raise NotImplementedError
         if is_categorical_dtype(arbitrary):
+            raise NotImplementedError
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
