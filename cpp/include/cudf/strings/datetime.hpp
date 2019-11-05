@@ -29,6 +29,7 @@ namespace strings
  *
  * The format must include strptime format specifiers though only the
  * following are supported: %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z
+ * Reference:  http://man7.org/linux/man-pages/man3/strptime.3.html
  *
  * No checking is done for invalid formats or invalid timestamp units.
  *
@@ -55,6 +56,7 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
  *
  * The format must include strftime format specifiers though only the
  * following are supported: %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z
+ * Reference:  http://man7.org/linux/man-pages/man3/strftime.3.html
  *
  * No checking is done for invalid formats or invalid timestamp units.
  *

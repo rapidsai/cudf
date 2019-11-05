@@ -45,7 +45,7 @@ namespace
  * @brief  Units for timestamp conversion.
  * These are defined since there are more than what cudf supports.
  */
-enum timestamp_units {
+enum class timestamp_units {
     years,           ///< precision is years
     months,          ///< precision is months
     days,            ///< precision is days
@@ -71,20 +71,25 @@ enum timestamp_parse_component {
     TP_ARRAYSIZE   = 8
 };
 
-struct alignas(16) format_item
+enum class format_char_type : int8_t
 {
-    bool item_type;    // 1=specifier, 0=literal
-    char specifier;    // specifier
-    int8_t length;     // item length in bytes
-    char literal;      // pass-thru character
+    literal,   // literal char type passed through
+    specifier  // timestamp format specifier
+};
+
+struct alignas(4) format_item
+{
+    format_char_type item_type;    // specifier or literal indicator
+    char value;                    // specifier or literal value
+    int8_t length;                 // item length in bytes
 
     static format_item new_specifier(char format_char, int8_t length)
     {
-        return format_item{true,format_char,length,0};
+        return format_item{format_char_type::specifier,format_char,length};
     }
     static format_item new_delimiter(char literal)
     {
-        return format_item{false,0,1,literal};
+        return format_item{format_char_type::literal,literal,1};
     }
 };
 
@@ -167,8 +172,8 @@ struct format_compiler
 template <typename T>  // timestamp type
 struct parse_datetime
 {
-    const column_device_view d_strings;
-    const format_item* d_format_items;
+    column_device_view const d_strings;
+    format_item const* d_format_items;
     size_type items_count;
     timestamp_units units;
 
@@ -177,7 +182,7 @@ struct parse_datetime
     {
         const char* ptr = str;
         int32_t value = 0;
-        for( unsigned int idx=0; idx < bytes; ++idx )
+        for( size_type idx=0; idx < bytes; ++idx )
         {
             char chr = *ptr++;
             if( chr < '0' || chr > '9' )
@@ -188,9 +193,10 @@ struct parse_datetime
     }
 
     // only supports ascii
-    __device__ int strcmp_ignore_case( const char* str1, const char* str2, size_t length )
+    // return 0 if strings match, otherwise returns difference
+    __device__ int strcmp_ignore_case( const char* str1, const char* str2, int32_t length )
     {
-        for( size_t idx=0; idx < length; ++idx )
+        for( int32_t idx=0; idx < length; ++idx )
         {
             char ch1 = *str1;
             if( ch1 >= 'a' && ch1 <= 'z' )
@@ -214,7 +220,7 @@ struct parse_datetime
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
-            if(item.item_type==false)
+            if(item.item_type==format_char_type::literal)
             {   // static character we'll just skip;
                 // consume item.length bytes from string
                 ptr += item.length;
@@ -225,7 +231,7 @@ struct parse_datetime
                 return 1;
 
             // special logic for each specifier
-            switch(item.specifier)
+            switch(item.value)
             {
                 case 'Y':
                     timeparts[TP_YEAR] = str2int(ptr,item.length);
@@ -629,13 +635,13 @@ struct datetime_formatter
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
-            if(item.item_type==false)
+            if(item.item_type==format_char_type::literal)
             {
-                *ptr++ = item.literal;
+                *ptr++ = item.value;
                 continue;
             }
             // special logic for each specifier
-            switch(item.specifier)
+            switch(item.value)
             {
                 case 'Y': // 4-digit year
                     ptr = int2str(ptr,item.length,timeparts[TP_YEAR]);
