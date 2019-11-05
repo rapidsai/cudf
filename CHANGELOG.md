@@ -81,7 +81,7 @@
 - PR #3270 Move predicates files to legacy
 - PR #3282 Add `num_bitmask_words`
 - PR #3287 Move rolling windows files to legacy
-
+- PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
 
 ## Bug Fixes
 
