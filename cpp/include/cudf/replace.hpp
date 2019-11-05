@@ -45,7 +45,6 @@ std::unique_ptr<column> normalize_nans_and_zeros( column_view input,
  *
  * @param[in, out] mutable_column_view representing input data. data is processed in-place
  *
- * @returns 
  */
 void normalize_nans_and_zeros(mutable_column_view in_out);
 
