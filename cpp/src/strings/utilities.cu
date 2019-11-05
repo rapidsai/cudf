@@ -148,43 +148,57 @@ namespace
 {
 
 // guaranteed thread-safe
-struct character_flags_singleton
+struct character_tables_singleton
 {
-    static character_flags_singleton& instance()
+    static character_tables_singleton& instance()
     {
-        static character_flags_singleton _instance;
+        // initialization of this static variable is guaranteed to be thread-safe
+        static character_tables_singleton _instance;
         return _instance;
     }
-    character_flags_singleton( character_flags_singleton const& ) = delete;
-    character_flags_singleton( character_flags_singleton&& ) = delete;
-    character_flags_singleton& operator=(character_flags_singleton const&) = delete;
-    character_flags_singleton& operator=(character_flags_singleton&&) = delete;
+    character_tables_singleton( character_tables_singleton const& ) = delete;
+    character_tables_singleton( character_tables_singleton&& ) = delete;
+    character_tables_singleton& operator=(character_tables_singleton const&) = delete;
+    character_tables_singleton& operator=(character_tables_singleton&&) = delete;
 
-    character_flags_table_type* table() { return d_character_flags_table; }
+    character_flags_table_type* flags_table() { return d_character_flags_table; }
+    character_cases_table_type* cases_table() { return d_character_case_table; }
 
 private:
 
     character_flags_table_type* d_character_flags_table{};
+    character_cases_table_type* d_character_case_table{};
     bool b_rmm_allocated{false};
 
-    character_flags_singleton()
+    character_tables_singleton()
     {
         rmmOptions_t options;
         if( rmmIsInitialized(&options) && (options.allocation_mode == PoolAllocation) )
         {
             RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
+            RMM_TRY(RMM_ALLOC(&d_character_case_table,sizeof(g_character_case_table),0));
             b_rmm_allocated = true;
         }
         else
+        {
             cudaMalloc(&d_character_flags_table,sizeof(g_character_codepoint_flags));
+            cudaMalloc(&d_character_case_table,sizeof(g_character_case_table));
+        }
         CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
+        CUDA_TRY(cudaMemcpy(d_character_case_table,g_character_case_table,sizeof(g_character_case_table),cudaMemcpyHostToDevice));
     }
-    ~character_flags_singleton()
+    ~character_tables_singleton()
     {
         if( b_rmm_allocated )
+        {
             RMM_FREE(d_character_flags_table,0);
+            RMM_FREE(d_character_case_table,0);
+        }
         else
+        {
             cudaFree(d_character_flags_table);
+            cudaFree(d_character_case_table);
+        }
     }
 };
 
@@ -192,26 +206,12 @@ private:
 
 const character_flags_table_type* get_character_flags_table()
 {
-    return character_flags_singleton::instance().table();
-}
-
-namespace
-{
-
-std::mutex g_case_table_mutex;
-static character_cases_table_type* d_character_case_table = nullptr;
-
+    return character_tables_singleton::instance().flags_table();
 }
 
 const character_cases_table_type* get_character_case_table()
 {
-    std::lock_guard<std::mutex> guard(g_case_table_mutex);
-    if( !d_character_case_table )
-    {
-        RMM_TRY(RMM_ALLOC(&d_character_case_table,sizeof(g_character_case_table),0));
-        CUDA_TRY(cudaMemcpy(d_character_case_table,g_character_case_table,sizeof(g_character_case_table),cudaMemcpyHostToDevice));
-    }
-    return d_character_case_table;
+    return character_tables_singleton::instance().cases_table();
 }
 
 } // namespace detail
