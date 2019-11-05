@@ -15,12 +15,12 @@
  */
 #pragma once
 
-#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <vector>
 
 namespace cudf {
-
 namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -158,7 +158,7 @@ class column_view_base {
 
  protected:
   data_type _type{EMPTY};   ///< Element type
-  cudf::size_type _size{};  ///< Number of elements
+  size_type _size{};  ///< Number of elements
   void const* _data{};      ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
@@ -473,4 +473,45 @@ class mutable_column_view : public detail::column_view_base {
  *---------------------------------------------------------------------------**/
 size_type count_descendants(column_view parent);
 
-}  // namespace cudf
+namespace detail {
+/**---------------------------------------------------------------------------*
+ * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
+ * elements in the range `[begin,end)` in `input`.
+ *
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
+ *
+ * @throws `cudf::logic_error` if `begin < 0`, `end < begin` or
+ * `end > input.size()`.
+ *
+ * @param input View of input column to slice
+ * @param begin Index of the first desired element in the slice (inclusive).
+ * @param end Index of the last desired element in the slice (exclusive).
+ *
+ * @return ColumnView View of the elements `[begin,end)` from `input`.
+ *---------------------------------------------------------------------------**/
+template <typename ColumnView>
+ColumnView slice(ColumnView const& input,
+                  cudf::size_type begin,
+                  cudf::size_type end) {
+   static_assert(std::is_same<ColumnView, cudf::column_view>::value or
+                    std::is_same<ColumnView, cudf::mutable_column_view>::value,
+                "slice can be performed only on column_view and mutable_column_view");
+   CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
+   CUDF_EXPECTS(end >= begin, "Invalid end of range.");
+   CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
+
+   std::vector<ColumnView> children {};
+   children.reserve(input.num_children());
+   for (size_type index = 0; index < input.num_children(); index++) {
+       children.emplace_back(input.child(index));
+   }
+
+   return ColumnView(input.type(), end - begin,
+                     input.head(), input.null_mask(),
+                     cudf::UNKNOWN_NULL_COUNT,
+                     input.offset() + begin, children);
+}
+
+}//namespace detail
+}// namespace cudf

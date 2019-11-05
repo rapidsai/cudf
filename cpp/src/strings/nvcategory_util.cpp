@@ -7,31 +7,20 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
-#include <cudf/binaryop.hpp>
+#include <cudf/utilities/error.hpp>
+#include <utilities/legacy/error_utils.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>
 
 namespace {
   NVCategory * combine_column_categories(const gdf_column* const input_columns[], int num_columns){
-    NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
+    std::vector<NVCategory *> cats;
+    std::transform(input_columns, input_columns + num_columns, std::back_inserter(cats), 
+      [&](const gdf_column* c) {
+        return const_cast<NVCategory *>(static_cast<const NVCategory *>(c->dtype_info.category));
+      });
 
-      for(int column_index = 1; column_index < num_columns; column_index++){
-        NVCategory * temp = combined_category;
-        if(input_columns[column_index]->size > 0){
-          gdf_column* in_col = const_cast<gdf_column*>(input_columns[column_index]);
-          combined_category = combined_category->merge_and_remap(
-              * static_cast<NVCategory *>(
-                  in_col->dtype_info.category));
-          if(column_index > 1){
-            NVCategory::destroy(temp);
-          }
-        }
-      }
-      if(combined_category == static_cast<NVCategory *>(input_columns[0]->dtype_info.category)){
-        return combined_category->copy();
-      }else{
-        return combined_category;
-      }
+    return NVCategory::create_from_categories(cats);
   }
 
 

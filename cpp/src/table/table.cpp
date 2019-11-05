@@ -17,7 +17,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -77,6 +77,26 @@ mutable_table_view table::mutable_view() {
 std::vector<std::unique_ptr<column>> table::release() {
   _num_rows = 0;
   return std::move(_columns);
+}
+
+// Returns a table_view with set of specified columns
+table_view table::select(std::vector<cudf::size_type> const& column_indices) const {
+    CUDF_EXPECTS(column_indices.size() <= _columns.size(), "Requested too many columns.");
+
+    std::vector<column_view> columns;
+    for (auto index : column_indices) {
+      columns.push_back(_columns.at(index)->view());
+    }
+    return table_view(columns);
+}
+
+// Concatenate elements of `tables_to_concat` into a single table_view
+table_view concat(std::vector<table_view> const& tables_to_concat) {
+  std::vector<column_view> concat_cols;
+  for (auto& view : tables_to_concat) {
+    concat_cols.insert(concat_cols.end(), view.begin(), view.end());
+  }
+  return table_view(concat_cols);
 }
 
 }  // namespace experimental

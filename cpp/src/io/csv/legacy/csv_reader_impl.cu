@@ -33,7 +33,7 @@
 #include "datetime_parser.cuh"
 
 #include <cudf/legacy/unary.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <utilities/trie.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/cudf_utils.h> 
@@ -356,7 +356,7 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
     // PANDAS' default behavior of enabling doublequote for two consecutive
     // quotechars in quoted fields results in reduction to a single quotechar
     if (column->dtype == GDF_STRING &&
-        (opts.quotechar != '\0' && opts.doublequote == true)) {
+        (opts.quotechar != '\0' && opts.doublequote)) {
       const std::string quotechar(1, opts.quotechar);
       const std::string dblquotechar(2, opts.quotechar);
       auto str_data = static_cast<NVStrings *>(column->data);

@@ -9,7 +9,7 @@ from cudf._lib.cudf cimport *
 
 from libcpp.string cimport string
 
-cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/rolling.hpp" namespace "cudf" nogil:
     gdf_column* rolling_window(
         const gdf_column &input_col,
         size_type window,
@@ -22,7 +22,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
     ) except +
 
 
-cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/rolling.hpp" namespace "cudf" nogil:
     gdf_column rolling_window(
         const gdf_column &input_col,
         size_type window,

@@ -23,7 +23,7 @@
 
 #include <table/legacy/device_table.cuh>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include "full_join.cuh"
 #include <hash/helper_functions.cuh>
 

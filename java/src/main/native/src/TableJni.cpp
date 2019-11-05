@@ -21,12 +21,12 @@
 
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/legacy/copying.hpp"
-#include "cudf/groupby.hpp"
+#include "cudf/legacy/groupby.hpp"
 #include "cudf/legacy/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
-#include "cudf/stream_compaction.hpp"
+#include "cudf/legacy/stream_compaction.hpp"
 #include "cudf/types.hpp"
-#include "cudf/join.hpp"
+#include "cudf/legacy/join.hpp"
 
 #include "jni_utils.hpp"
 

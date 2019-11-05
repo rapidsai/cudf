@@ -454,6 +454,10 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
         ((volatile uint32_t *)&stripe_g)[t] = ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
     }
     __syncthreads();
+    if (!stripe_g.dict_data)
+    {
+        return;
+    }
     if (t < sizeof(DictionaryChunk) / sizeof(uint32_t))
     {
         ((volatile uint32_t *)&chunk_g)[t] = ((const uint32_t *)&chunks[stripe_g.start_chunk * num_columns + col_id])[t];

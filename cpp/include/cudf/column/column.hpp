@@ -66,13 +66,13 @@ class column {
    *
    * @param other The column whose contents will be moved into the new column
    *---------------------------------------------------------------------------**/
-  column(column&& other);
+  column(column&& other) noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from existing device memory.
    *
    * @note This constructor is primarily intended for use in column factory
-   * functions. 
+   * functions.
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
@@ -189,6 +189,34 @@ class column {
   column const& child(size_type child_index) const noexcept {
     return *_children[child_index];
   };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Wrapper for the contents of a column.
+   *
+   * Returned by `column::release()`.
+   *---------------------------------------------------------------------------**/
+  struct contents {
+    std::unique_ptr<rmm::device_buffer> data;
+    std::unique_ptr<rmm::device_buffer> null_mask;
+    std::vector<std::unique_ptr<column>> children;
+  };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Releases ownership of the column's contents.
+   *
+   * It is the caller's responsibility to query the `size(), null_count(),
+   * type()` before invoking `release()`.
+   *
+   * After calling `release()` on a column it will be empty, i.e.:
+   * - `type() == data_type{EMPTY}`
+   * - `size() == 0`
+   * - `null_count() == 0`
+   * - `num_children() == 0`
+   *
+   * @return A `contents` struct containing the data, null mask, and children of
+   * the column.
+   *---------------------------------------------------------------------------**/
+  contents release() noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Creates an immutable, non-owning view of the column's data and
