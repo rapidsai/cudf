@@ -718,23 +718,23 @@ NVStrings* NVText::normalize_spaces(NVStrings& strs)
 }
 
 //
-NVStrings* NVText::character_tokenize(NVStrings& strs)
+NVStrings* NVText::character_tokenize(NVStrings const& strings)
 {
-    if( strs.size()==0 )
-        return strs.copy();
+    if( strings.size()==0 )
+        return strings.copy();
 
     auto execpol = rmm::exec_policy(0);
     // go get the strings
-    unsigned int count = strs.size();
-    rmm::device_vector<custring_view*> strings(count,nullptr);
-    custring_view** d_strings = strings.data().get();
-    strs.create_custring_index(d_strings);
+    unsigned int count = strings.size();
+    rmm::device_vector<custring_view*> custrings(count,nullptr);
+    custring_view** d_strings = custrings.data().get();
+    strings.create_custring_index(d_strings);
 
     // count the characters
     unsigned int total_characters = 0;
     {
         rmm::device_vector<int> character_counts(count);
-        total_characters = strs.len(character_counts.data().get());
+        total_characters = strings.len(character_counts.data().get());
     }
     if( total_characters==0 )
     {
