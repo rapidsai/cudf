@@ -323,7 +323,7 @@ namespace experimental {
 namespace detail {
 
 /**
- * @brief Filters a table using a Filter function object
+ * @brief Filters `input` using a Filter function object
  * 
  * @p filter must be a functor or lambda with the following signature:
  * __device__ bool operator()(cudf::size_type i);
@@ -331,7 +331,7 @@ namespace detail {
  * false otherwise.
  *
  * @tparam Filter the filter functor type
- * @param[in] input The table to filter
+ * @param[in] input The table_view to filter
  * @param[in] filter A function object that takes an index and returns a bool
  * @return unique_ptr<table> The table generated from filtered `input`.
  */
@@ -343,7 +343,8 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
 
     std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     if (0 == input.num_rows() || 0 == input.num_columns()) {
-        std::transform(input.begin(), input.end(), out_columns.begin(), [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
+        std::transform(input.begin(), input.end(), out_columns.begin(),
+                [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
 
         return std::make_unique<experimental::table>(std::move(out_columns));
     }
@@ -398,7 +399,6 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
    if (output_size == input.num_rows()) {
        return std::make_unique<experimental::table>(input);
    } else if (output_size > 0){ 
-       // Allocate/initialize output columns
 
         for(size_type i = 0; i < input.num_columns(); i++) {
             auto input_col_view = input.column(i);
@@ -412,7 +412,8 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         return std::make_unique<experimental::table>(std::move(out_columns));
 
    } else {
-        std::transform(input.begin(), input.end(), out_columns.begin(), [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
+        std::transform(input.begin(), input.end(), out_columns.begin(),
+                [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
 
         return std::make_unique<experimental::table>(std::move(out_columns));
    }
