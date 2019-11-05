@@ -99,12 +99,12 @@ cudf::size_type get_output_size(cudf::size_type * block_counts,
                               cudaStream_t stream = 0)
 {
   cudf::size_type last_block_count = 0;
-  cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
-                  sizeof(cudf::size_type), cudaMemcpyDefault, stream);
+  CUDA_TRY(cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
+                  sizeof(cudf::size_type), cudaMemcpyDefault, stream));
   cudf::size_type last_block_offset = 0;
   if (num_blocks > 1)
-    cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
-                    sizeof(cudf::size_type), cudaMemcpyDefault, stream);
+    CUDA_TRY(cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
+                    sizeof(cudf::size_type), cudaMemcpyDefault, stream));
   cudaStreamSynchronize(stream);
   return last_block_count + last_block_offset;
 }
@@ -253,22 +253,32 @@ template <typename Filter, int block_size>
 struct scatter_functor
 {
   template <typename T>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), void>
+  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& input,
-                  cudf::mutable_column_view & output,
+             cudf::size_type const& output_size,
                   cudf::size_type  *block_offsets,
                   Filter filter,
+                  rmm::mr::device_memory_resource *mr =
+                      rmm::mr::get_default_resource(),
                   cudaStream_t stream = 0) {
       CUDF_FAIL("Expects only fixed-width type column");
+
+      return std::make_unique<cudf::column>();
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), void>
+  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& input,
-                  cudf::mutable_column_view & output,
-                  cudf::size_type  *block_offsets,
-                  Filter filter,
-                  cudaStream_t stream = 0) {
+             cudf::size_type const& output_size,
+             cudf::size_type  *block_offsets,
+             Filter filter,
+             rmm::mr::device_memory_resource *mr =
+                 rmm::mr::get_default_resource(),
+             cudaStream_t stream = 0) {
+   
+    auto output_column = cudf::experimental::detail::allocate_like(input, output_size, cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
+    auto output = output_column->mutable_view();
+
     bool has_valid = input.nullable();
 
     auto scatter = (has_valid) ?
@@ -282,7 +292,7 @@ struct scatter_functor
 
     cudf::size_type *null_count = nullptr;
     if (has_valid) {
-      RMM_ALLOC(&null_count, sizeof(cudf::size_type), stream);
+      RMM_TRY(RMM_ALLOC(&null_count, sizeof(cudf::size_type), stream));
       CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(cudf::size_type), stream));
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
@@ -301,9 +311,11 @@ struct scatter_functor
       CUDA_TRY(cudaMemcpyAsync(&output_null_count, null_count,
                                sizeof(cudf::size_type), cudaMemcpyDefault, stream));
       output.set_null_count(output_null_count);
-      RMM_FREE(null_count, stream);
+      RMM_TRY(RMM_FREE(null_count, stream));
     }
+    return output_column;
   }
+
 };
 } // namespace
 namespace cudf {
@@ -365,16 +377,16 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
                                       block_counts, block_offsets,
                                       grid.num_blocks, stream);
-        RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream);
+        RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
 
         // Run exclusive prefix sum
         cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
                                      block_counts, block_offsets,
                                      grid.num_blocks, stream);
-        RMM_FREE(d_temp_storage, stream);
+        RMM_TRY(RMM_FREE(d_temp_storage, stream));
     } else {
-        cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(cudf::size_type),
-                    stream);
+        CUDA_TRY(cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(cudf::size_type),
+                    stream));
     }
 
     CHECK_STREAM(stream);
@@ -387,24 +399,17 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
        return std::make_unique<experimental::table>(input);
    } else if (output_size > 0){ 
        // Allocate/initialize output columns
-       // TODO: Have to make it work with string_view
-        std::transform(input.begin(), input.end(), out_columns.begin(), [&output_size, &mr, &stream] (auto col_view){
-                return detail::allocate_like(col_view, output_size, mask_allocation_policy::RETAIN, mr, stream);
-                });
-        std::unique_ptr<experimental::table>output = std::make_unique<experimental::table>(std::move(out_columns));
 
-        auto mutable_output_table = output->mutable_view();
         for(size_type i = 0; i < input.num_columns(); i++) {
-            auto output_col_view = mutable_output_table.column(i);
             auto input_col_view = input.column(i);
 
-            cudf::experimental::type_dispatcher(output_col_view.type(),
+            out_columns[i] = cudf::experimental::type_dispatcher(input_col_view.type(),
                                     scatter_functor<Filter, block_size>{},
-                                    input_col_view, output_col_view, 
-                                    block_offsets, filter, stream);
+                                    input_col_view, output_size, 
+                                    block_offsets, filter, mr, stream);
         }
 
-        return output;
+        return std::make_unique<experimental::table>(std::move(out_columns));
 
    } else {
         std::transform(input.begin(), input.end(), out_columns.begin(), [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
