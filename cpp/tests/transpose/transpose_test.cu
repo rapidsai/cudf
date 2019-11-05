@@ -30,13 +30,13 @@ using cudf::test::fixed_width_column_wrapper;
 template <typename T, typename F>
 auto generate_vectors(size_t ncols, size_t nrows, F generator)
 {
-  std::vector<std::vector<T>> values;
+  std::vector<std::vector<T>> values(ncols);
 
-  values.resize(ncols);
-  for (auto& value_col : values) {
-    value_col.resize(nrows);
-    std::generate(value_col.begin(), value_col.end(), generator);
-  }
+  std::for_each(values.begin(), values.end(),
+    [generator, nrows](std::vector<T>& col) {
+      col.resize(nrows);
+      std::generate(col.begin(), col.end(), generator);
+    });
 
   return values;
 }
@@ -67,6 +67,7 @@ template <typename T>
 auto make_columns(std::vector<std::vector<T>> const& values)
 {
   std::vector<fixed_width_column_wrapper<T>> columns;
+  columns.reserve(values.size());
 
   for (auto const& value_col : values) {
     columns.emplace_back(value_col.begin(), value_col.end());
@@ -80,6 +81,7 @@ auto make_columns(std::vector<std::vector<T>> const& values,
   std::vector<std::vector<cudf::size_type>> const& valids)
 {
   std::vector<fixed_width_column_wrapper<T>> columns;
+  columns.reserve(values.size());
 
   for (size_t col = 0; col < values.size(); ++col) {
     columns.emplace_back(values[col].begin(), values[col].end(), valids[col].begin());
@@ -91,10 +93,12 @@ auto make_columns(std::vector<std::vector<T>> const& values,
 template <typename T>
 auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols)
 {
-  std::vector<cudf::column_view> views;
-  for (auto const& col : cols) {
-    views.push_back(col);
-  }
+  std::vector<cudf::column_view> views(cols.size());
+
+  std::transform(cols.begin(), cols.end(), views.begin(),
+    [](fixed_width_column_wrapper<T> const& col) {
+      return static_cast<cudf::column_view>(col);
+    });
 
   return cudf::table_view(views);
 }
@@ -146,7 +150,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(), "Expected same number of columns");
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
     cudf::test::expect_columns_equal(result_view.column(i), expected_view.column(i));
-      CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i], "Expected correct null count");
+    CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i], "Expected correct null count");
   }
 }
 
