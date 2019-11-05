@@ -438,7 +438,7 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            if self.null_count != 0:
+            if indices.null_count != 0:
                 raise ValueError("Column must have no nulls.")
             indices = indices.data.mem
         elif isinstance(indices, slice):
