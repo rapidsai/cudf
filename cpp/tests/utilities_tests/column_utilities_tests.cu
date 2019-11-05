@@ -35,7 +35,11 @@ struct ColumnUtilitiesTest
   }
 };
 
+template <typename T>
+struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {};
+
 TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   auto sequence = cudf::test::make_counting_transform_iterator(
@@ -74,7 +78,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
 }
 
-TYPED_TEST(ColumnUtilitiesTest, PrintColumn) {
+TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumn) {
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
@@ -86,7 +90,7 @@ TYPED_TEST(ColumnUtilitiesTest, PrintColumn) {
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
 
-TYPED_TEST(ColumnUtilitiesTest, PrintColumnWithInvalids) {
+TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},

@@ -124,35 +124,6 @@ struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, const char *delimiter, std::ostream &ostream) {
 
-#if 0
-    cudf::size_type num_rows = col.size();
-    std::vector<Element> h_data(num_rows);
-    CUDA_TRY(cudaMemcpy(h_data.data(), col.data<void *>(),
-                        num_rows * sizeof(Element),
-                        cudaMemcpyDeviceToHost));
-
-    if (col.nullable()) {
-      cudf::size_type null_size = (num_rows - 1 + cudf::detail::size_in_bits<bitmask_type>()) /
-        cudf::detail::size_in_bits<bitmask_type>();
-
-      std::vector<bitmask_type> h_null(null_size);
-      CUDA_TRY(cudaMemcpy(h_null.data(), col.null_mask(),
-                          sizeof(bitmask_type) * null_size,
-                          cudaMemcpyDeviceToHost));
-
-      cudf::size_type index{0};
-      for (Element data : h_data) {
-        ostream << ((index == 0) ? "" : delimiter);
-        if (bit_is_set(h_null.data(), index++)) 
-          ostream << data;
-        else
-          ostream << "@";
-      }
-    } else {
-      std::copy(h_data.begin(), h_data.end(),
-                std::ostream_iterator<Element>(ostream, delimiter));
-    }
-#else
     //std::pair<std::vector<Element>, std::vector<bitmask_type>> h_data;
     auto h_data = cudf::test::to_host<Element>(col);
 
@@ -169,8 +140,6 @@ struct column_view_printer {
       std::copy(h_data.first.begin(), h_data.first.end(),
                 std::ostream_iterator<Element>(ostream, delimiter));
     }
-#endif
-    
   }
 
   template <typename Element, typename std::enable_if_t<not is_numeric<Element>()>* = nullptr>
