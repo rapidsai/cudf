@@ -1,8 +1,5 @@
 /*
- * Copyright 2018 BlazingDB, Inc.
-
- *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
- *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <thrust/device_ptr.h>
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
@@ -36,8 +34,6 @@ namespace {  // anonymous
 
 using namespace cudf;       
 
-// using a lambda in the forwarder blows up the compiler, so this is unrolling
-// what the compiler would be doing anyway
 template <typename T>
 struct normalize_nans_and_zeros_lambda {
    column_device_view in;
@@ -92,7 +88,7 @@ void normalize_nans_and_zeros(mutable_column_view in_out,
                               cudaStream_t stream = 0)
 {   
    CUDF_EXPECTS(in_out.head() != nullptr, "Null input data");
-   if(in_out.size() == 0 || in_out.head() == nullptr){
+   if(in_out.size() == 0){
       return;
    }
    CUDF_EXPECTS(in_out.type() == data_type(FLOAT32) || in_out.type() == data_type(FLOAT64), "Expects float or double input");
@@ -117,17 +113,20 @@ void normalize_nans_and_zeros(mutable_column_view in_out,
 
 }  // namespace detail
 
-/**
- * @brief Function that converts inputs from `input` using the following rule
- *        rule:   Convert  -NaN  -> NaN
- *                Convert  -0.0  -> 0.0
+/*
+ * @brief Makes all NaNs and zeroes positive.
  *
- * @param[in] column_device_view representing input data
+ * Converts floating point values from @p input using the following rules:
+ *        Convert  -NaN  -> NaN
+ *        Convert  -0.0  -> 0.0
+ *
+ * @throws cudf::logic_error if column does not have floating point data type.
+ * @param[in] column_view representing input data
  * @param[in] device_memory_resource allocator for allocating output data 
  *
- * @returns new column
+ * @returns new column with the modified data
  */
-std::unique_ptr<column> normalize_nans_and_zeros( column_view input,                                                                                                    
+std::unique_ptr<column> normalize_nans_and_zeros( column_view const& input,                                                                                                    
                                                   rmm::mr::device_memory_resource *mr)
 {
    // output. copies the input
@@ -140,14 +139,15 @@ std::unique_ptr<column> normalize_nans_and_zeros( column_view input,
    return out;
 }
 
-/**
- * @brief Function that processes values in-place from `in_out` using the following rule
- *        rule:   Convert  -NaN  -> NaN
- *                Convert  -0.0  -> 0.0
+/*
+ * @brief Makes all Nans and zeroes positive.
+ * 
+ * Converts floating point values from @p in_out using the following rules:
+ *        Convert  -NaN  -> NaN
+ *        Convert  -0.0  -> 0.0
  *
+ * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] mutable_column_view representing input data. data is processed in-place
- *
- * @returns new column
  */
 void normalize_nans_and_zeros(mutable_column_view in_out)
 {

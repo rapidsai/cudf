@@ -26,25 +26,27 @@ namespace cudf {
  * @brief Makes all NaNs and zeroes positive.
  *
  * Converts floating point values from @p input using the following rules:
- *        rule:   Convert  -NaN  -> NaN
- *                Convert  -0.0  -> 0.0
+ *        Convert  -NaN  -> NaN
+ *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in] column_device_view representing input data
+ * @param[in] column_view representing input data
  * @param[in] device_memory_resource allocator for allocating output data 
  *
  * @returns new column with the modified data
  */
-std::unique_ptr<column> normalize_nans_and_zeros( column_view input,                                                                                                    
+std::unique_ptr<column> normalize_nans_and_zeros( column_view const& input,                                                                                                    
                                                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Function that processes values in-place from `in_out` using the following rule
- *        rule:   Convert  -NaN  -> NaN
- *                Convert  -0.0  -> 0.0
+ * @brief Makes all Nans and zeroes positive.
+ * 
+ * Converts floating point values from @p in_out using the following rules:
+ *        Convert  -NaN  -> NaN
+ *        Convert  -0.0  -> 0.0
  *
+ * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] mutable_column_view representing input data. data is processed in-place
- *
  */
 void normalize_nans_and_zeros(mutable_column_view in_out);
 
