@@ -80,6 +80,7 @@
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
+- PR #3281 Add to_host specialization for strings in column test utilities
 - PR #3282 Add `num_bitmask_words`
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy

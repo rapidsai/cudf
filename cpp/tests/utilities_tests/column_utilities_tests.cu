@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/strings/strings_column_view.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -73,3 +74,27 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
 }
 
+struct ColumnUtilitiesStringsTest: public cudf::test::BaseFixture {};
+
+TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
+{
+  std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+  cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+  auto host_data = cudf::test::to_host<std::string>(strings);
+  auto result_itr = host_data.first.begin();
+  for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr, ++result_itr )
+  {
+    if(*itr)
+      EXPECT_TRUE((*result_itr)==(*itr));
+  }
+}
+
+TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
+{
+  std::vector<const char*> h_strings{ nullptr, nullptr, nullptr };
+  cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+  auto host_data = cudf::test::to_host<std::string>(strings);
+  EXPECT_TRUE( host_data.first.empty() );
+}
