@@ -61,7 +61,8 @@ void gpu_transpose(table_device_view const input, mutable_table_device_view outp
  * @param output[out]  Mutable device view of pre-allocated output columns' data
  */
 __global__
-void gpu_transpose_valids(table_device_view const input, mutable_table_device_view output)
+void gpu_transpose_valids(table_device_view const input, mutable_table_device_view output,
+                          size_type *null_count)
 {
   size_type x = blockIdx.x * blockDim.x + threadIdx.x;
   size_type y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -78,6 +79,8 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
       // Only one thread writes output
       if (0 == threadIdx.x % WARP_SIZE) {
         output.column(j).set_mask_word(word_index(i), result);
+        int num_nulls = __popc(active_threads) - __popc(result);
+        atomicAdd(null_count + j, num_nulls);
       }
     }
 
@@ -92,26 +95,31 @@ struct launch_kernel {
   void operator()(
     table_view const& input,
     mutable_table_view& output,
-    bool has_null,
+    std::vector<size_type>& null_counts,
     cudaStream_t stream)
   {
     // Copy input columns `data` and `valid` pointers to device
     auto device_input = table_device_view::create(input, stream);
     auto device_output = mutable_table_device_view::create(output, stream);
 
+    // TODO benchmark, because a smaller block size (e.g. 32x8) may perform
+    // better. It would also require transposing via shared memory, which may
+    // improve performance anyway because it would enable coalesced loads and
+    // stores rather than one or the other.
     dim3 dimBlock(WARP_SIZE, WARP_SIZE);
     dim3 dimGrid(std::min(util::div_rounding_up_safe(input.num_columns(), WARP_SIZE), MAX_GRID_SIZE),
                  std::min(util::div_rounding_up_safe(input.num_rows(), WARP_SIZE), MAX_GRID_SIZE));
 
     gpu_transpose<T><<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
 
-    if (has_null) {
-      gpu_transpose_valids<<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
+    if (not null_counts.empty()) {
+      rmm::device_vector<cudf::size_type> d_null_counts(null_counts.size());
+      gpu_transpose_valids<<<dimGrid, dimBlock, 0, stream>>>(*device_input,
+        *device_output, d_null_counts.data().get());
 
-      // Force null counts to be recomputed next time they are queried
-      for (auto& column : output) {
-        column.set_null_count(UNKNOWN_NULL_COUNT);
-      }
+      // This memcpy needs to be synchronous as we immediately read the value from host
+      cudaMemcpy(null_counts.data(), d_null_counts.data().get(),
+        null_counts.size() * sizeof(size_type), cudaMemcpyDefault);
     }
   }
 };
@@ -128,7 +136,7 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
 
   // If there are no rows in the input, return successfully
   if (input_ncols == 0 || input_nrows == 0) {
-    return std::make_unique<experimental::table>(std::vector<std::unique_ptr<column>>{});
+    return std::make_unique<experimental::table>();
   }
 
   // Check datatype homogeneity
@@ -137,10 +145,9 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
   CUDF_EXPECTS(std::all_of(input.begin(), input.end(), [dtype](auto const& col) {
     return dtype == col.type(); }), "Column type mismatch");
 
-  // TODO does this need to support non-fixed-width tables?
+  // TODO string support may be needed in future
   CUDF_EXPECTS(is_fixed_width(dtype), "Invalid, non-fixed-width type.");
 
-  nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
 
   // Check if there are nulls to be processed
   bool const has_null = has_nulls(input);
@@ -149,6 +156,7 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
 
   auto const& output_ncols = input_nrows;
   auto const& output_nrows = input_ncols;
+  std::vector<size_type> null_counts(has_null ? output_ncols : 0);
 
   // Allocate output table with transposed shape
   std::vector<std::unique_ptr<column>> out_columns(output_ncols);
@@ -159,9 +167,16 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
   auto output = std::make_unique<experimental::table>(std::move(out_columns));
   auto output_view = output->mutable_view();
 
-  experimental::type_dispatcher(dtype, launch_kernel{}, input, output_view, has_null, stream);
-
+  nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
+  experimental::type_dispatcher(dtype, launch_kernel{}, input, output_view, null_counts, stream);
   nvtx::range_pop();
+
+  if (has_null) {
+    for (size_type i = 0; i < output_ncols; ++i) {
+      output->get_column(i).set_null_count(null_counts[i]);
+    }
+  }
+
   return output;
 }
 

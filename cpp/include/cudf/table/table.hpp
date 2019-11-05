@@ -26,7 +26,7 @@ namespace experimental {
 
 class table {
  public:
-  table() = delete;
+  table() = default;
   ~table() = default;
   table(table&&) = default;
   table& operator=(table const&) = delete;
@@ -111,6 +111,28 @@ class table {
    * specified by the elements of `column_indices`
    *---------------------------------------------------------------------------**/
   table_view select(std::vector<cudf::size_type> const& column_indices) const;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a reference to the specified column
+   *
+   * @throws std::out_of_range
+   * If i is out of the range [0, num_columns)
+   *
+   * @param i Index of the desired column
+   * @return A reference to the desired column
+   *---------------------------------------------------------------------------**/
+  column& get_column(cudf::size_type column_index) { return *(_columns.at(column_index)); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a const reference to the specified column
+   *
+   * @throws std::out_of_range
+   * If i is out of the range [0, num_columns)
+   *
+   * @param i Index of the desired column
+   * @return A const reference to the desired column
+   *---------------------------------------------------------------------------**/
+  column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
 
  private:
   std::vector<std::unique_ptr<column>> _columns{};

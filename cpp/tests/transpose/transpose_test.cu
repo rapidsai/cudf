@@ -77,7 +77,7 @@ auto make_columns(std::vector<std::vector<T>> const& values)
 
 template <typename T>
 auto make_columns(std::vector<std::vector<T>> const& values,
-  std::vector<std::vector<bool>> const& valids)
+  std::vector<std::vector<cudf::size_type>> const& valids)
 {
   std::vector<fixed_width_column_wrapper<T>> columns;
 
@@ -112,13 +112,21 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
 
   std::vector<fixed_width_column_wrapper<T>> input_cols;
   std::vector<fixed_width_column_wrapper<T>> expected_cols;
+  std::vector<cudf::size_type> expected_nulls(nrows);
 
   if (add_nulls) {
     // Generate null mask as vector of vectors
-    auto const valids = generate_vectors<bool>(ncols, nrows, [&rng]() {
-      return static_cast<bool>(rng() % 3 > 0);
+    auto const valids = generate_vectors<cudf::size_type>(ncols, nrows, [&rng]() {
+      return static_cast<cudf::size_type>(rng() % 3 > 0 ? 1 : 0);
     });
     auto const validsT = transpose_vectors(valids);
+
+    // Compute the null counts over each transposed column
+    std::transform(validsT.begin(), validsT.end(), expected_nulls.begin(),
+      [ncols](std::vector<cudf::size_type> const& vec) {
+        // num nulls = num elems - num valids
+        return ncols - std::accumulate(vec.begin(), vec.end(), 0);
+      });
 
     // Create column wrappers from vector of vectors
     input_cols = make_columns(values, valids);
@@ -138,6 +146,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(), "Expected same number of columns");
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
     cudf::test::expect_columns_equal(result_view.column(i), expected_view.column(i));
+      CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i], "Expected correct null count");
   }
 }
 
