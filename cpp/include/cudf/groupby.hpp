@@ -137,12 +137,13 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& quantiles, interpolation::type interpolation);
 
 /**
- * @brief Encapsulates the request for groupby aggregation operation(s) to be
- * performed on a column.
+ * @brief Encapsulates the request for groupby aggregation(s) to perform on a
+ * column.
  */
 struct aggregation_request {
-  column_view values;
-  std::vector<std::unique_ptr<aggregation>> aggregations;
+  column_view values;  ///< The elements to aggregate
+  std::vector<std::unique_ptr<aggregation>>
+      aggregations;  ///< Desired aggregations
 };
 
 /**
