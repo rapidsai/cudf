@@ -44,7 +44,7 @@ struct is_relationally_comparable_impl<
     : std::true_type {};
 
 template <typename T>
-using is_timestamp_t = simt::std::disjunction<
+using is_timestamp_t = cuda::std::disjunction<
   std::is_same<cudf::timestamp_D, T>,
   std::is_same<cudf::timestamp_s, T>,
   std::is_same<cudf::timestamp_ms, T>,

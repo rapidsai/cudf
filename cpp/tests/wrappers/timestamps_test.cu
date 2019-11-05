@@ -56,7 +56,7 @@ TYPED_TEST_CASE(TimestampColumnTest, cudf::test::TimestampTypes);
 TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation) {
 
   using namespace cudf::test;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
   using Rep = typename TypeParam::rep;
   using Period = typename TypeParam::period;
 
@@ -127,7 +127,7 @@ struct compare_timestamp_elements {
 TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode) {
 
   using namespace cudf::test;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
   using Rep = typename TypeParam::rep;
   using Period = typename TypeParam::period;
 

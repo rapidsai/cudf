@@ -54,7 +54,7 @@ namespace detail {
 
     CUDA_DEVICE_CALLABLE int16_t operator()(size_type const i) const {
 
-      using namespace simt::std::chrono;
+      using namespace cuda::std::chrono;
 
       auto ts = column.element<Timestamp>(i);
       auto days_since_epoch = floor<days>(ts);

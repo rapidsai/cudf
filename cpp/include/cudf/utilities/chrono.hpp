@@ -16,5 +16,7 @@
 
 #pragma once
 
-#include <simt/chrono>
-#include <simt/../details/iterator>
+#define _LIBCUDACXX_USE_CXX20_CHRONO
+#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
+
+#include <cuda/std/chrono>
