@@ -18,6 +18,7 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3300 Add `DataFrame.insert`
 
 ## Improvements
 
