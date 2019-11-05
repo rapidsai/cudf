@@ -50,13 +50,13 @@ namespace experimental {
  *             { 61 }}
  *   result =  {  3 }
  * 
- * @param t             Table to search
- * @param values        Find insert locations for these values
- * @param column_order  Vector of column sort order
+ * @param t               Table to search
+ * @param values          Find insert locations for these values
+ * @param column_order    Vector of column sort order
  * @param null_precedence The size of a NULL value in comparison to all other
  * values
- * @param mr Device memory resource to use for device memory allocation
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
+ * @param mr              Device memory resource to use for device memory allocation
+ * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> lower_bound(table_view const& t,
@@ -89,13 +89,13 @@ std::unique_ptr<column> lower_bound(table_view const& t,
  *             { .7 },
  *             { 61 }}
  *   result =  {  5  *   * 
- * @param column        Table to search
- * @param values        Find insert locations for these values
- * @param column_order  Vector of column sort order
+ * @param column          Table to search
+ * @param values          Find insert locations for these values
+ * @param column_order    Vector of column sort order
  * @param null_precedence The size of a NULL value in comparison to all other
  * values
- * @param mr Device memory resource to use for device memory allocation
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
+ * @param mr              Device memory resource to use for device memory allocation
+ * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> upper_bound(table_view const& t,
@@ -121,10 +121,13 @@ std::unique_ptr<column> upper_bound(table_view const& t,
  *
  * @param col      A column object
  * @param value    A scalar value to search for in `col`
+ * @param mr       Device memory resource to use for device memory allocation
  *
  * @return bool    If `value` is found in `column` true, else false.
  *---------------------------------------------------------------------------**/
-bool contains(column_view const& col, gdf_scalar const& value);
+bool contains(column_view const& col, scalar const& value,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 } // namespace experimental
 } // namespace cudf
 

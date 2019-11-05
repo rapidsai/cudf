@@ -602,20 +602,16 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
     expect_columns_equal(*result, expect);
 }
 
-#if 0
 TEST_F(SearchTest, contains_true)
 {
     using element_type = int64_t;
-    bool expect = true;
+    bool  expect = true;
     bool  result = false;
 
-    auto column = fixed_width_column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
-    auto value = scalar_wrapper<element_type>{23};
+    fixed_width_column_wrapper<element_type>    column {0, 1, 17, 19, 23, 29, 71};
+    numeric_scalar<element_type>                scalar {23}
 
-    result = cudf::contains(
-        column.get()[0],
-        value.get()[0]
-        );
+    result = cudf::experimental::contains(column, scalar);
 
     ASSERT_EQ(result, expect);
 }
@@ -623,15 +619,13 @@ TEST_F(SearchTest, contains_true)
 TEST_F(SearchTest, contains_false)
 {
     using element_type = int64_t;
-    bool expect = false;
+    bool  expect = false;
     bool  result = false;
 
-    auto column = fixed_width_column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
-    auto value = scalar_wrapper<element_type> {24};
+    fixed_width_column_wrapper<element_type>    column {0, 1, 17, 19, 23, 29, 71};
+    numeric_scalar<element_type>                scalar {24}
 
-    result = cudf::contains(
-        column.get()[0],
-        value.get()[0]);
+    result = cudf::experimental::contains(column, scalar);
 
     ASSERT_EQ(result, expect);
 }
@@ -639,15 +633,13 @@ TEST_F(SearchTest, contains_false)
 TEST_F(SearchTest, contains_empty_value)
 {
     using element_type = int64_t;
-    bool expect = false;
+    bool  expect = false;
     bool  result = false;
 
-    auto column = fixed_width_column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
-    auto value = scalar_wrapper<element_type> (23, false);
+    fixed_width_column_wrapper<element_type>    column {0, 1, 17, 19, 23, 29, 71};
+    numeric_scalar<element_type>                scalar {23, false}
 
-    result = cudf::contains(
-        column.get()[0],
-        value.get()[0]);
+    result = cudf::experimental::contains(column, scalar);
 
     ASSERT_EQ(result, expect);
 }
@@ -655,15 +647,13 @@ TEST_F(SearchTest, contains_empty_value)
 TEST_F(SearchTest, contains_empty_column)
 {
     using element_type = int64_t;
-    bool expect = false;
+    bool  expect = false;
     bool  result = false;
 
-    auto column = fixed_width_column_wrapper<element_type> {};
-    auto value = scalar_wrapper<element_type> {24};
+    fixed_width_column_wrapper<element_type>    column {}
+    numeric_scalar<element_type>                scalar {24}
 
-    result = cudf::contains(
-        column.get()[0],
-        value.get()[0]);
+    result = cudf::experimental::contains(column, scalar);
 
     ASSERT_EQ(result, expect);
 }
@@ -674,17 +664,11 @@ TEST_F(SearchTest, contains_nullable_column_true)
     bool result = false;
     bool expect = true;
 
-    std::vector<element_type>   column_data     { 0, 1, 17, 19, 23, 29, 71};
-    std::vector<gdf_valid_type> column_valids   { 0,  0,  1,  1,  1,  1,  1 };
-    auto value = scalar_wrapper<element_type> {23};
+    fixed_width_column_wrapper<element_type>    column { { 0, 1, 17, 19, 23, 29, 71},
+                                                         { 0,  0,  1,  1,  1,  1,  1 } };
+    numeric_scalar<element_type>                scalar {23}
 
-    auto column = fixed_width_column_wrapper<element_type> ( column_data,
-        [&]( index_type row ) { return column_valids[row]; }
-    );
-
-        result = cudf::contains(
-            column.get()[0],
-            value.get()[0]);
+    result = cudf::experimental::contains(column, scalar);
 
     ASSERT_EQ(result, expect);
 }
@@ -695,18 +679,11 @@ TEST_F(SearchTest, contains_nullable_column_false)
     bool result = false;
     bool expect = false;
 
-    std::vector<element_type>   column_data     { 0, 1, 17, 19, 23, 29, 71};
-    std::vector<gdf_valid_type> column_valids   { 0, 0, 1, 1, 0, 1, 1};
-    auto value = scalar_wrapper<element_type> {23};
+    fixed_width_column_wrapper<element_type>    column { { 0, 1, 17, 19, 23, 29, 71},
+                                                         { 0,  0,  1,  1,  0,  1,  1 } };
+    numeric_scalar<element_type>                scalar {23}
 
-    auto column = fixed_width_column_wrapper<element_type> ( column_data,
-        [&]( index_type row ) { return column_valids[row]; }
-    );
-
-        result = cudf::contains(
-            column.get()[0],
-            value.get()[0]);
+    result = cudf::experimental::contains(column, scalar);
 
     ASSERT_EQ(result, expect);
 }
-#endif
