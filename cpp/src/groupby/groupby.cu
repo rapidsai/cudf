@@ -21,6 +21,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <memory>
 #include <utility>
@@ -33,6 +34,11 @@ namespace detail {
 std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
     Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+  CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
+                           [keys](auto const& request) {
+                             return request.values.size() == keys.num_rows();
+                           }),
+               "Size mismatch between request values and groupby keys.");
   if (hash::use_hash_groupby(keys, requests, options)) {
     return hash::groupby(keys, requests, options, stream, mr);
   } else {
@@ -40,6 +46,38 @@ std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
   }
 }
 }  // namespace detail
+
+/// Factory to create a SUM aggregation
+std::unique_ptr<aggregation> make_sum_aggregation() {
+  return std::make_unique<aggregation>(aggregation::SUM);
+}
+/// Factory to create a MIN aggregation
+std::unique_ptr<aggregation> make_min_aggregation() {
+  return std::make_unique<aggregation>(aggregation::MIN);
+}
+/// Factory to create a MAX aggregation
+std::unique_ptr<aggregation> make_max_aggregation() {
+  return std::make_unique<aggregation>(aggregation::MAX);
+}
+/// Factory to create a COUNT aggregation
+std::unique_ptr<aggregation> make_count_aggregation() {
+  return std::make_unique<aggregation>(aggregation::COUNT);
+}
+/// Factory to create a MEAN aggregation
+std::unique_ptr<aggregation> make_mean_aggregation() {
+  return std::make_unique<aggregation>(aggregation::MEAN);
+}
+/// Factory to create a MEDIAN aggregation
+std::unique_ptr<aggregation> make_median_aggregation() {
+  // TODO I think this should just return a quantile_aggregation?
+  return std::make_unique<aggregation>(aggregation::MEDIAN);
+}
+/// Factory to create a QUANTILE aggregation
+std::unique_ptr<aggregation> make_quantile_aggregation(
+    std::vector<double> const& quantiles, interpolation::type interpolation) {
+  aggregation* a = new quantile_aggregation{quantiles, interpolation};
+  return std::unique_ptr<aggregation>(a);
+}
 
 // Public groupby interface
 std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
