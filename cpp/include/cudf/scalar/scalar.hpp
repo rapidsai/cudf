@@ -109,24 +109,11 @@ class fixed_width_scalar : public scalar {
  public:
   using value_type = T;
 
-  fixed_width_scalar() = default;
   ~fixed_width_scalar() = default;
   fixed_width_scalar(fixed_width_scalar&& other) = default;
   fixed_width_scalar(fixed_width_scalar const& other) = default;
-
-  /**
-   * @brief Construct a new fixed width scalar object
-   * 
-   * @param value The initial value of the scalar
-   * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
-   */
-  fixed_width_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
-      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
-   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
-   , _data(value, stream, mr)
-  {}
+  fixed_width_scalar& operator=(fixed_width_scalar const& other) = delete;
+  fixed_width_scalar& operator=(fixed_width_scalar&& other) = delete;
 
   /**
    * @brief Set the value of the scalar
@@ -154,6 +141,21 @@ class fixed_width_scalar : public scalar {
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing the value
 
+  fixed_width_scalar() = default;
+
+  /**
+   * @brief Construct a new fixed width scalar object
+   * 
+   * @param value The initial value of the scalar
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  fixed_width_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
+   , _data(value, stream, mr)
+  {}
 };
 
 } // namespace detail
@@ -172,6 +174,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   ~numeric_scalar() = default;
   numeric_scalar(numeric_scalar&& other) = default;
   numeric_scalar(numeric_scalar const& other) = default;
+  numeric_scalar& operator=(numeric_scalar const& other) = delete;
+  numeric_scalar& operator=(numeric_scalar&& other) = delete;
 
   /**
    * @brief Construct a new numeric scalar object
@@ -198,6 +202,8 @@ class string_scalar : public scalar {
   ~string_scalar() = default;
   string_scalar(string_scalar&& other) = default;
   string_scalar(string_scalar const& other) = default;
+  string_scalar& operator=(string_scalar const& other) = delete;
+  string_scalar& operator=(string_scalar&& other) = delete;
 
   /**
    * @brief Construct a new string scalar object
@@ -249,6 +255,8 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
   ~timestamp_scalar() = default;
   timestamp_scalar(timestamp_scalar&& other) = default;
   timestamp_scalar(timestamp_scalar const& other) = default;
+  timestamp_scalar& operator=(timestamp_scalar const& other) = delete;
+  timestamp_scalar& operator=(timestamp_scalar&& other) = delete;
 
   /**
    * @brief Construct a new timestamp scalar object

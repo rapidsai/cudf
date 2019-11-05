@@ -14,17 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
-#include <cudf/transform.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include <utilities/column_utils.hpp>
-
-#include <cudf/legacy/column.hpp>
+#include <cudf/null_mask.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
@@ -113,23 +107,16 @@ std::unique_ptr<column> transform(column_view const& input,
                                   const std::string &unary_udf,
                                   data_type output_type, bool is_ptx)
 {
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
+
   std::unique_ptr<column> output =
-    make_numeric_column(output_type, input.size(), 
-      (input.nullable()) ? cudf::UNINITIALIZED : cudf::UNALLOCATED);
+    make_numeric_column(output_type, input.size(), copy_bitmask(input));
 
   if (input.size() == 0) {
     return output;
   }
 
-  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
-
   mutable_column_view output_view = *output;
-
-  if (input.nullable()) {
-    size_t num_bitmask_elements = bitmask_allocation_size_bytes(input.size());
-    CUDA_TRY(cudaMemcpy(output_view.null_mask(), input.null_mask(),
-                        num_bitmask_elements, cudaMemcpyDeviceToDevice));
-  }
 
   // transform
   transformation::jit::unary_operation(output_view, input, unary_udf, output_type, is_ptx);

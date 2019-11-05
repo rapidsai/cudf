@@ -49,9 +49,8 @@ void test_udf(
       data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out = cudf::transform(in, udf, data_type(experimental::type_to_id<dtype>()), is_ptx);
-  
-  auto in_r = in.release();
-  ASSERT_UNARY<dtype, dtype>(out, in_r, op);
+
+  ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32) {

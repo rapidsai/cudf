@@ -30,13 +30,12 @@
 template <typename T>
 struct TypedScalarTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(TypedScalarTest, cudf::test::AllTypes);
+TYPED_TEST_CASE(TypedScalarTest, cudf::test::FixedWidthTypes);
 
 
 TYPED_TEST(TypedScalarTest, DefaultValidity) {
   TypeParam value = 7;
   cudf::experimental::scalar_type_t<TypeParam> s(value);
-  
 
   EXPECT_TRUE(s.is_valid());
   EXPECT_EQ(value, s.value());
