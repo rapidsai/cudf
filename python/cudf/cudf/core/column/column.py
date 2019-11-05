@@ -628,13 +628,6 @@ class ColumnBase(Column):
         return dlpack.to_dlpack(self)
 
     @property
-    def _pointer(self):
-        """
-        Return pointer to a view of the underlying data structure
-        """
-        return libcudf.cudf.column_view_pointer(self)
-
-    @property
     def is_unique(self):
         return self.unique_count() == len(self)
 
@@ -711,6 +704,52 @@ class ColumnBase(Column):
             self.mask = result.mask
         else:
             return result
+
+    def astype(self, dtype, **kwargs):
+        if is_categorical_dtype(dtype):
+            return self.as_categorical_column(dtype, **kwargs)
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
+            return self.as_string_column(dtype, **kwargs)
+
+        elif np.issubdtype(dtype, np.datetime64):
+            return self.as_datetime_column(dtype, **kwargs)
+
+        else:
+            return self.as_numerical_column(dtype, **kwargs)
+
+    def as_categorical_column(self, dtype, **kwargs):
+        if "ordered" in kwargs:
+            ordered = kwargs["ordered"]
+        else:
+            ordered = False
+
+        sr = cudf.Series(self)
+        labels, cats = sr.factorize()
+
+        # string columns include null index in factorization; remove:
+        if (
+            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
+        ) and self.null_count > 0:
+            cats = cats.dropna()
+            labels = labels - 1
+
+        return cudf.core.column.CategoricalColumn(
+            data=labels._column.data,
+            mask=self.mask,
+            null_count=self.null_count,
+            categories=cats._column,
+            ordered=ordered,
+        )
+        raise NotImplementedError
+
+    def as_numerical_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_datetime_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_string_column(self, dtype, **kwargs):
+        raise NotImplementedError
 
 
 class TypedColumnBase(ColumnBase):
@@ -805,52 +844,6 @@ class TypedColumnBase(ColumnBase):
     def searchsorted(self, value, side="left"):
         raise NotImplementedError
 
-    def astype(self, dtype, **kwargs):
-        if is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
-
-        elif np.issubdtype(dtype, np.datetime64):
-            return self.as_datetime_column(dtype, **kwargs)
-
-        else:
-            return self.as_numerical_column(dtype, **kwargs)
-
-    def as_categorical_column(self, dtype, **kwargs):
-        if "ordered" in kwargs:
-            ordered = kwargs["ordered"]
-        else:
-            ordered = False
-
-        sr = cudf.Series(self)
-        labels, cats = sr.factorize()
-
-        # string columns include null index in factorization; remove:
-        if (
-            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
-        ) and self.null_count > 0:
-            cats = cats.dropna()
-            labels = labels - 1
-
-        return cudf.core.column.CategoricalColumn(
-            data=labels._column.data,
-            mask=self.mask,
-            null_count=self.null_count,
-            categories=cats._column,
-            ordered=ordered,
-        )
-        raise NotImplementedError
-
-    def as_numerical_column(self, dtype, **kwargs):
-        raise NotImplementedError
-
-    def as_datetime_column(self, dtype, **kwargs):
-        raise NotImplementedError
-
-    def as_string_column(self, dtype, **kwargs):
-        raise NotImplementedError
-
     @property
     def __cuda_array_interface__(self):
         output = {
@@ -905,7 +898,7 @@ def column_empty_like_same_mask(column, dtype):
     """
     result = column_empty_like(column, dtype)
     if column.mask:
-        result = result.set_mask(column.mask)
+        result.mask = column.mask
     return result
 
 
@@ -932,13 +925,14 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
 def build_column(data, dtype, mask=None, categories=None, name=None):
 
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.datetime import DatetimeColumn
 
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if is_categorical_dtype(dtype):
         raise NotImplementedError
     elif dtype.type is np.datetime64:
-        raise NotImplementedError
+        return DatetimeColumn(data=data, dtype=dtype, mask=mask, name=name)
     elif dtype.type in (np.object_, np.str_):
         raise NotImplementedError
     else:
@@ -1012,7 +1006,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 as_column(
                     Buffer.from_array_like(
                         np.array([np.datetime64("NaT")], dtype=data.dtype)
-                    )
+                    ),
+                    dtype=arbitrary.dtype,
                 ),
                 null,
             )
@@ -1040,7 +1035,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             arbitrary = arbitrary.astype(dtype)
 
         if arbitrary.dtype.kind == "M":
-            raise NotImplementedError
+            data = datetime.DatetimeColumn.from_numpy(arbitrary)
+
         elif arbitrary.dtype.kind in ("O", "U"):
             raise NotImplementedError
         else:
@@ -1107,18 +1103,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = datetime.DatetimeColumn(
-                data=padata,
-                mask=pamask,
-                null_count=arbitrary.null_count,
-                dtype=dtype,
+                data=padata, mask=pamask, dtype=dtype,
             )
         elif isinstance(arbitrary, pa.Date64Array):
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
             data = datetime.DatetimeColumn(
-                data=padata,
-                mask=pamask,
-                null_count=arbitrary.null_count,
-                dtype=np.dtype("M8[ms]"),
+                data=padata, mask=pamask, dtype=np.dtype("M8[ms]"),
             )
         elif isinstance(arbitrary, pa.Date32Array):
             # No equivalent np dtype and not yet supported

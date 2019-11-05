@@ -23,8 +23,8 @@ _numpy_to_pandas_conversion = {
 }
 
 
-class DatetimeColumn(column.TypedColumnBase):
-    def __init__(self, **kwargs):
+class DatetimeColumn(column.ColumnBase):
+    def __init__(self, data, dtype, mask=None, name=None):
         """
         Parameters
         ----------
@@ -32,14 +32,12 @@ class DatetimeColumn(column.TypedColumnBase):
             The datetime values
         mask : Buffer; optional
             The validity mask
-        null_count : int; optional
-            The number of null values in the mask.
-        dtype : np.dtype
-            Data type
         name : str
             The Column name
         """
-        super(DatetimeColumn, self).__init__(**kwargs)
+        dtype = np.dtype(dtype)
+        size = data.size // dtype.itemsize
+        super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
@@ -87,9 +85,12 @@ class DatetimeColumn(column.TypedColumnBase):
             array, masked=True, newsize=1
         )
         col = libcudf.replace.replace(
-            as_column(Buffer(array)),
+            as_column(Buffer.from_array_like(array), dtype=array.dtype),
             as_column(
-                Buffer(np.array([np.datetime64("NaT")], dtype=array.dtype))
+                Buffer.from_array_like(
+                    np.array([np.datetime64("NaT")], dtype=array.dtype)
+                ),
+                dtype=array.dtype,
             ),
             null,
         )
@@ -97,7 +98,11 @@ class DatetimeColumn(column.TypedColumnBase):
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
 
-        return cls(data=Buffer(array), mask=col.mask, dtype=array.dtype)
+        return cls(
+            data=Buffer.from_array_like(array),
+            mask=col.mask,
+            dtype=array.dtype,
+        )
 
     @property
     def time_unit(self):

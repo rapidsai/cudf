@@ -61,7 +61,6 @@ def reduce(reduction_op, Column col, dtype=None, ddof=1):
 
     Returns:
         dtype scalar value of reduction operation on column
-
     """
     # check empty case
     if len(col) <= col.null_count():

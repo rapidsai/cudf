@@ -46,7 +46,7 @@ fields = ["year", "month", "day", "hour", "minute", "second", "weekday"]
 def test_series(data):
     pd_data = pd.Series(data.copy())
     gdf_data = Series(pd_data)
-    np.testing.assert_equal(np.array(pd_data), np.array(gdf_data))
+    assert_eq(pd_data, gdf_data)
 
 
 @pytest.mark.parametrize(

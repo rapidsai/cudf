@@ -87,16 +87,12 @@ def apply_unary_op(Column incol, op):
     return Column.from_gdf_column(&c_out_col)
 
 
-def apply_dt_extract_op(incol, outcol, op):
+def apply_dt_extract_op(Column incol, Column outcol, op):
     """
     Call a datetime extraction op
     """
-
-    check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
-
-    cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef gdf_column* c_outcol = column_view_from_column(outcol)
+    cdef gdf_column* c_incol = incol.gdf_column_view()
+    cdef gdf_column* c_outcol = outcol.gdf_column_view()
 
     cdef gdf_error result = GDF_CUDA_ERROR
     with nogil:
