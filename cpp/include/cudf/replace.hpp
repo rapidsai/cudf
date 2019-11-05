@@ -29,6 +29,7 @@ namespace cudf {
  *        rule:   Convert  -NaN  -> NaN
  *                Convert  -0.0  -> 0.0
  *
+ * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in] column_device_view representing input data
  * @param[in] device_memory_resource allocator for allocating output data 
  *
