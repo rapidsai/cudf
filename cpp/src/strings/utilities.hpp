@@ -139,7 +139,7 @@ using character_cases_table_type = uint16_t;
  *
  * @return Device memory pointer to character flags table.
  */
-const character_cases_table_type* get_character_case_table();
+const character_cases_table_type* get_character_cases_table();
 
 
 } // namespace detail

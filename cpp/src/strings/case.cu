@@ -52,9 +52,9 @@ enum TwoPass
 };
 
 /**
- * @brief Function logic for the substring API.
- * This will perform a substring operation on each string
- * using the provided start, stop, and step parameters.
+ * @brief Per string logic for case conversion functions.
+ *
+ * @tparam Pass Determines if size calculation or output write is begin performed.
  */
 template <TwoPass Pass=SizeOnly>
 struct upper_lower_fn
@@ -121,19 +121,13 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
-    rmm::device_buffer null_mask;
-    size_type null_count = d_column.null_count();
-    if( d_column.nullable() ) // copy null_mask
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        bitmask_allocation_size_bytes(strings_count),
-                                        stream, mr);
-
+    // copy null mask
+    rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
     // get the lookup tables used for case conversion
     auto d_flags = get_character_flags_table();
-    auto d_case_table = get_character_case_table();
+    auto d_case_table = get_character_cases_table();
 
-    // build offsets column
-    // calculate the size of each output string
+    // build offsets column -- calculate the size of each output string
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0),
         upper_lower_fn<SizeOnly>{d_column, case_flag, d_flags, d_case_table} );
     auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
@@ -142,9 +136,9 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
     auto offsets_view = offsets_column->view();
     auto d_new_offsets = offsets_view.data<int32_t>();
 
-    // build the chars column -- convert uppercase characters to lowercase
+    // build the chars column -- convert characters based on case_flag parameter
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream),
@@ -152,7 +146,7 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
         upper_lower_fn<ExecuteOp>{d_column, case_flag, d_flags, d_case_table, d_new_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               null_count, std::move(null_mask), stream, mr);
+                               d_column.null_count(), std::move(null_mask), stream, mr);
 }
 
 } // namespace
@@ -162,7 +156,7 @@ std::unique_ptr<column> to_lower( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                   cudaStream_t stream = 0)
 {
-    character_flags_table_type case_flag = IS_UPPER(0xFF); // convert only uppercase characters
+    character_flags_table_type case_flag = IS_UPPER(0xFF); // convert only upper case characters
     return convert_case(strings,case_flag,mr,stream);
 }
 
@@ -171,7 +165,7 @@ std::unique_ptr<column> to_upper( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                   cudaStream_t stream = 0)
 {
-    character_flags_table_type case_flag = IS_LOWER(0xFF); // convert only lowercase characters
+    character_flags_table_type case_flag = IS_LOWER(0xFF); // convert only lower case characters
     return convert_case(strings,case_flag,mr,stream);
 }
 
