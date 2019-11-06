@@ -4106,10 +4106,16 @@ def from_pandas(obj):
         return Series.from_pandas(obj)
     elif isinstance(obj, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(obj)
+    elif isinstance(obj, pd.RangeIndex):
+        if obj._step and obj._step != 1:
+            raise ValueError("cudf RangIndex requires step == 1")
+        return cudf.core.index.RangeIndex(
+            obj._start, stop=obj._stop, name=obj.name
+        )
     else:
         raise TypeError(
-            "from_pandas only accepts Pandas Dataframes, Series, and "
-            "MultiIndex objects. "
+            "from_pandas only accepts Pandas Dataframes, Series, "
+            "RangeIndex and MultiIndex objects. "
             "Got %s" % type(obj)
         )
 
