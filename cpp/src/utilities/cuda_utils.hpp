@@ -23,7 +23,7 @@
  * function implementations
  */
 
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/types.h>
 
