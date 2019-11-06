@@ -48,8 +48,8 @@ hash_partition(table_view const& input,
  *
  * @param input The table of columns to hash
  * @param hash The hash function to use
- * @param initial_hash_values Optional vector of initial hash values for each
- * column. If this vector is empty then each element will be hashed as-is.
+ * @param initial_hash Optional vector of initial hash values for each column.
+ * If this vector is empty then each element will be hashed as-is.
  * @param mr Optional resource to use for device memory allocation
  * @param stream Optional stream on which all allocations and copies will be executed
  *
@@ -57,7 +57,7 @@ hash_partition(table_view const& input,
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> hash(table_view const& input,
                              hash_func::Type hash,
-                             std::vector<size_type> const& initial_hash_values,
+                             std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0);
 
