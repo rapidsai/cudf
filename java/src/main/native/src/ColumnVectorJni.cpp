@@ -16,7 +16,7 @@
 #include "cudf/legacy/copying.hpp"
 #include "cudf/quantiles.hpp"
 #include "cudf/legacy/replace.hpp"
-#include "cudf/rolling.hpp"
+#include "cudf/legacy/rolling.hpp"
 
 #include "jni_utils.hpp"
 
@@ -572,9 +572,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemoryStringSi
     gdf_dtype dtype = column->dtype;
     if (dtype == GDF_STRING) {
       NVStrings *nvstr = static_cast<NVStrings *>(column->data);
+      if (nvstr == nullptr) {
+        // This can happen on an empty column.
+        return 0;
+      }
       return static_cast<jlong>(nvstr->memsize());
     } else if (dtype == GDF_STRING_CATEGORY) {
       NVCategory *cats = static_cast<NVCategory *>(column->dtype_info.category);
+      if (cats == nullptr) {
+        // This can happen on an empty column.
+        return 0;
+      }
       unsigned long dict_size = cats->keys_size();
       unsigned long dict_size_total = dict_size * GDF_INT32;
       // NOTE: Assumption being made that strings in each row is of 10 chars. So the result would be approximate.
