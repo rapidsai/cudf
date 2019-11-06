@@ -38,7 +38,7 @@ namespace detail {
  * @param[in] replacement A cudf::column whose values will replace null values in input
  * @param[in] stream Optional stream in which to perform allocations
  *
- * @returns Column with nulls replaced
+ * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
  */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
