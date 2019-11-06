@@ -40,7 +40,7 @@
 #include "sort_helper.hpp"
 
 #include <quantiles/group_quantiles.hpp>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace groupby {

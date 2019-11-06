@@ -373,10 +373,10 @@ add_library(cudf
             src/groupby/sort/legacy/groupby.cu
             src/groupby/legacy/groupby_without_aggregation.cu
             src/groupby/common/legacy/aggregation_requests.cpp
-            src/rolling/rolling.cu
-            src/rolling/jit/code/kernel.cpp
-            src/rolling/jit/code/operation.cpp
-            src/rolling/jit/util/type.cpp
+            src/rolling/legacy/rolling.cu
+            src/rolling/legacy/jit/code/kernel.cpp
+            src/rolling/legacy/jit/code/operation.cpp
+            src/rolling/legacy/jit/util/type.cpp
             src/binaryop/legacy/binaryop.cpp
             src/binaryop/legacy/compiled/binary_ops.cu
             src/binaryop/legacy/jit/code/kernel.cpp
@@ -416,6 +416,7 @@ add_library(cudf
             src/reshape/stack.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
