@@ -231,6 +231,8 @@ class CategoricalColumn(column.ColumnBase):
             if len(categories) > 0
             else column.column_empty(0, np.dtype("object"), masked=False)
         )
+        if data.size % dtype.data_dtype.itemsize:
+            raise ValueError("Buffer size must be divisible by element size")
         size = data.size // dtype.data_dtype.itemsize
 
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)

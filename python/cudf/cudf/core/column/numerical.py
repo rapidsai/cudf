@@ -35,6 +35,8 @@ class NumericalColumn(column.ColumnBase):
         name : optional
         """
         dtype = np.dtype(dtype)
+        if data.size % dtype.itemsize:
+            raise ValueError("Buffer size must be divisible by element size")
         size = data.size // dtype.itemsize
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
 

@@ -38,6 +38,8 @@ class DatetimeColumn(column.ColumnBase):
             The Column name
         """
         dtype = np.dtype(dtype)
+        if data.size % dtype.itemsize:
+            raise ValueError("Buffer size must be divisible by element size")
         size = data.size // dtype.itemsize
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
         assert self.dtype.type is np.datetime64
