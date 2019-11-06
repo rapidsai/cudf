@@ -77,7 +77,6 @@ def test_from_pandas_with_index():
 
 
 def test_from_pandas_rangeindex():
-    # Legal RangeIndex
     idx1 = pd.RangeIndex(start=0, stop=4, step=1, name="myindex")
     idx2 = cudf.from_pandas(idx1)
 
@@ -85,7 +84,8 @@ def test_from_pandas_rangeindex():
     np.testing.assert_array_equal(idx1.values, idx2.values)
     assert idx1.name == idx2.name
 
-    # Illegal RangeIndex
+
+def test_from_pandas_rangeindex_step():
     idx1 = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
     with pytest.raises(ValueError):
-        idx2 = cudf.from_pandas(idx1)
+        cudf.from_pandas(idx1)
