@@ -180,9 +180,8 @@ class DataFrame(object):
             if isinstance(data, dict):
                 data = data.items()
 
-            self._forceindex = index is not None
             for i, (col_name, series) in enumerate(data):
-                self.insert(i, col_name, series)
+                self.insert(i, col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
         for col in self._cols:
@@ -209,7 +208,6 @@ class DataFrame(object):
         )
 
     def _add_rows(self, data, index, keys):
-        self._forceindex = index is not None
         if keys is None:
             data = {i: element for i, element in enumerate(data)}.items()
         else:
@@ -217,18 +215,20 @@ class DataFrame(object):
             self._index = as_index(RangeIndex(start=0))
             self._size = len(RangeIndex(start=0))
         for i, (col_name, series) in enumerate(data):
-            self.insert(i, col_name, series)
+            self.insert(i, col_name, series, forceindex=index is not None)
         transposed = self.T
         self._cols = OrderedDict()
         self._size = transposed._size
         self._index = as_index(transposed.index)
         for i, col_name in enumerate(transposed.columns):
             self.insert(
-                i, col_name, transposed._cols[col_name],
+                i,
+                col_name,
+                transposed._cols[col_name],
+                forceindex=index is not None,
             )
 
     def _add_empty_columns(self, columns, index):
-        self._forceindex = index is not None
         if columns is not None:
             for col_name in columns:
                 if col_name not in self._cols:
@@ -238,6 +238,7 @@ class DataFrame(object):
                         column.column_empty(
                             self._size, dtype="object", masked=True
                         ),
+                        forceindex=index is not None,
                     )
 
     def serialize(self):
@@ -1468,7 +1469,7 @@ class DataFrame(object):
         else:
             return series.set_index(self._index)
 
-    def insert(self, loc, column, value):
+    def insert(self, loc, column, value, forceindex=False):
         """ Add a column to DataFrame at the index specified by loc.
 
         Parameters
@@ -1493,14 +1494,12 @@ class DataFrame(object):
                 )
             )
         self._cols[column] = self._prepare_series_for_add(
-            value, forceindex=self._forceindex, name=column
+            value, forceindex=forceindex, name=column
         )
         keys = list(self._cols.keys())
         for i, col in enumerate(keys):
             if num_cols > i >= loc:
                 self._cols.move_to_end(col)
-
-        self._forceindex = None
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
