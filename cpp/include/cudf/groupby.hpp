@@ -43,7 +43,6 @@ struct interpolation {
 };
 
 namespace groupby {
-
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -53,12 +52,12 @@ namespace groupby {
  */
 struct aggregation {
   /**
-   * @brief The aggregation operations that may be performed
+   * @brief Possible aggregation operations
    */
   enum Kind { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
 
   aggregation(aggregation::Kind a) : kind{a} {}
-  Kind kind;  ///< The kind of aggregation to perform
+  Kind kind;  ///< The aggregation to perform
 };
 
 /**

@@ -30,7 +30,6 @@ namespace groupby {
 namespace detail {
 namespace hash {
 namespace {
-
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
