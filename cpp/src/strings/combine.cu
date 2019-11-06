@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -23,6 +22,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 
@@ -41,11 +41,11 @@ namespace detail
 {
 
 //
-std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
-                                           string_scalar const& separator = string_scalar(""),
-                                           string_scalar const& narep = string_scalar("",false),
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                           cudaStream_t stream=0 )
+std::unique_ptr<column> concatenate( table_view const& strings_columns,
+                                     string_scalar const& separator = string_scalar(""),
+                                     string_scalar const& narep = string_scalar("",false),
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                     cudaStream_t stream=0 )
 {
     auto num_columns = strings_columns.num_columns();
     CUDF_EXPECTS( num_columns > 0, "At least one column must be specified");
@@ -55,10 +55,10 @@ std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
     if( num_columns==1 ) // single strings column returns a copy
         return std::make_unique<column>(*(strings_columns.begin()),stream,mr);
     auto strings_count = strings_columns.num_rows();
-    if( strings_count == 0 )
+    if( strings_count == 0 ) // empty begets empty
         return detail::make_empty_strings_column(mr,stream);
 
-    CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string");
+    CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string_scalar");
 
     auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
@@ -71,20 +71,21 @@ std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
     auto d_table = *table;
 
     // create resulting null mask
-    auto valid_mask = detail::make_null_mask(strings_count,
+    auto valid_mask = cudf::experimental::detail::valid_if(
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(strings_count),
         [d_table, d_narep] __device__ (size_type idx) {
             bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
-                [idx] (auto col) { return col.is_null(idx);});
+               [idx] (auto col) { return col.is_null(idx);});
             return( !null_element || !d_narep.is_null() );
-        },
-        mr, stream );
+        }, stream, mr );
     rmm::device_buffer null_mask = valid_mask.first;
     auto null_count = valid_mask.second;
 
     // build offsets column by computing sizes of each string in the output
     auto offsets_transformer = [d_table, num_columns, d_separator, d_narep] __device__ (size_type row_idx) {
             // for this row (idx), iterate over each column and add up the bytes
-            size_type bytes = thrust::transform_reduce( thrust::seq, d_table.begin(), d_table.end(), 
+            size_type bytes = thrust::transform_reduce( thrust::seq, d_table.begin(), d_table.end(),
                 [row_idx, d_separator, d_narep] __device__ (column_device_view d_column) {
                     size_type bytes = 0;
                     if( d_column.is_null(row_idx) )
@@ -145,15 +146,17 @@ std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
 }
 
 //
-std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
-                                            string_scalar const& separator = string_scalar(""),
-                                            string_scalar const& narep = string_scalar("",false),
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream=0 )
+std::unique_ptr<column> join_strings( strings_column_view const& strings,
+                                      string_scalar const& separator = string_scalar(""),
+                                      string_scalar const& narep = string_scalar("",false),
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                      cudaStream_t stream=0 )
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
+
+    CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string_scalar");
 
     auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
@@ -163,7 +166,6 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
-    auto d_offsets = strings.offsets().data<int32_t>();
 
     // create an offsets array for building the output memory layout
     rmm::device_vector<size_type> output_offsets(strings_count+1);
@@ -240,18 +242,18 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
 
 // APIs
 
-std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
-                                           cudf::string_scalar const& separator,
-                                           cudf::string_scalar const& narep,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate( table_view const& strings_columns,
+                                     string_scalar const& separator,
+                                     string_scalar const& narep,
+                                     rmm::mr::device_memory_resource* mr)
 {
     return detail::concatenate(strings_columns, separator, narep, mr);
 }
 
-std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
-                                            cudf::string_scalar const& separator,
-                                            cudf::string_scalar const& narep,
-                                            rmm::mr::device_memory_resource* mr )
+std::unique_ptr<column> join_strings( strings_column_view const& strings,
+                                      string_scalar const& separator,
+                                      string_scalar const& narep,
+                                      rmm::mr::device_memory_resource* mr )
 {
     return detail::join_strings(strings, separator, narep, mr);
 }

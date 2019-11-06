@@ -48,6 +48,7 @@ namespace strings
  * ```
  *
  * @throw cudf::logic_error if input columns are not all strings columns.
+ * @throw cudf::logic_error if separator is not valid.
  *
  * @param strings_columns List of string columns to concatenate.
  * @param separator String that should inserted between each string from each row.
@@ -58,10 +59,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */
-std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
-                                           string_scalar const& separator = string_scalar(""),
-                                           string_scalar const& narep = string_scalar("",false),
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> concatenate( table_view const& strings_columns,
+                                     string_scalar const& separator = string_scalar(""),
+                                     string_scalar const& narep = string_scalar("",false),
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Concatenates all strings in the column into one new string delimited
@@ -76,6 +77,8 @@ std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
  * r is ['aa:_::zz']
  * ```
  *
+ * @throw cudf::logic_error if separator is not valid.
+ *
  * @param strings Strings for this operation.
  * @param separator String that should inserted between each string.
  *        Default is an empty string.
@@ -84,10 +87,10 @@ std::unique_ptr<cudf::column> concatenate( table_view const& strings_columns,
  * @param mr Resource for allocating device memory.
  * @return New column containing one string.
  */
-std::unique_ptr<cudf::column> join_strings( strings_column_view const& strings,
-                                            string_scalar const& separator = string_scalar(""),
-                                            string_scalar const& narep = string_scalar("",false),
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> join_strings( strings_column_view const& strings,
+                                      string_scalar const& separator = string_scalar(""),
+                                      string_scalar const& narep = string_scalar("",false),
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
