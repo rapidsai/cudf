@@ -32,8 +32,8 @@ namespace hash {
  * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
  * perform
- * @return true A hash-based groupby should be used
- * @return false A hash-based groupby should not be used
+ * @return true A hash-based groupby can be used
+ * @return false A hash-based groupby cannot be used
  */
 bool use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests);
