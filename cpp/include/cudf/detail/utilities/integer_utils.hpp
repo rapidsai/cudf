@@ -15,8 +15,7 @@
  * limitations under the License.
  */
 
-#ifndef CUDF_UTILITIES_INTEGER_UTILS_HPP_
-#define CUDF_UTILITIES_INTEGER_UTILS_HPP_
+#pragma once
 
 /**
  * @file Utility code involving integer arithmetic
@@ -113,5 +112,3 @@ is_a_power_of_two(I val) noexcept
 } // namespace util
 
 } // namespace cudf
-
-#endif // CUDF_UTILITIES_INTEGER_UTILS_HPP_
