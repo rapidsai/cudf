@@ -36,7 +36,7 @@ struct row_hasher_initial_values {
                             hash_value_type *initial_hash)
       : _table{table_to_hash}, _initial_hash(initial_hash) {}
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(size_type row_index) const {
     return 0; // TODO
     //return hash_row<true, hash_function>(_table, row_index, _initial_hash);
   }
@@ -49,7 +49,7 @@ template <template <typename> class hash_function>
 struct row_hasher {
   row_hasher(table_device_view const& table_to_hash) : _table{table_to_hash} {}
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(size_type row_index) const {
     return 0; // TODO
     //return hash_row<true, hash_function>(_table, row_index);
   }
@@ -64,16 +64,20 @@ struct row_hasher {
 template <typename hash_value_t>
 struct modulo_partitioner
 {
-  modulo_partitioner(size_type num_partitions) : divisor{num_partitions}{}
+  modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
 
   __host__ __device__
-  size_type operator()(hash_value_t hash_value) const 
-  {
+  size_type operator()(hash_value_t hash_value) const {
     return hash_value % divisor;
   }
 
   const size_type divisor;
 };
+
+template <typename T>
+bool is_power_two(T number) {
+  return (0 == (number & (number - 1)));
+}
 
 /** 
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
@@ -86,14 +90,12 @@ struct modulo_partitioner
 template <typename hash_value_t>
 struct bitwise_partitioner
 {
-  bitwise_partitioner(size_type num_partitions) : divisor{(num_partitions - 1)}
-  {
-    assert( is_power_two(num_partitions) );
+  bitwise_partitioner(size_type num_partitions) : divisor{(num_partitions - 1)} {
+    assert(is_power_two(num_partitions));
   }
 
   __host__ __device__
-  size_type operator()(hash_value_t hash_value) const 
-  {
+  size_type operator()(hash_value_t hash_value) const {
     return hash_value & (divisor);
   }
 
@@ -106,8 +108,7 @@ struct bitwise_partitioner
    Records the size of each partition for each thread block as well as the global
    size of each partition across all thread blocks.
  */
-template <template <typename> class hash_function,
-          typename partitioner_type>
+template <template <typename> class hash_function, typename partitioner_type>
 __global__ 
 void compute_row_partition_numbers(table_device_view the_table, 
                                    const size_type num_rows,
@@ -165,16 +166,59 @@ void compute_row_partition_numbers(table_device_view the_table,
   }
 }
 
+/** 
+ * @brief  Given an array of partition numbers, computes the final output location
+   for each element in the output such that all rows with the same partition are 
+   contiguous in memory.
+ */
+__global__ 
+void compute_row_output_locations(size_type *row_partition_numbers, 
+                                  const size_type num_rows,
+                                  const size_type num_partitions,
+                                  size_type *block_partition_offsets)
+{
+  // Shared array that holds the offset of this blocks partitions in 
+  // global memory
+  extern __shared__ size_type shared_partition_offsets[];
+
+  // Initialize array of this blocks offsets from global array
+  size_type partition_number= threadIdx.x;
+  while (partition_number < num_partitions) {
+    shared_partition_offsets[partition_number] = block_partition_offsets[partition_number * gridDim.x + blockIdx.x];
+    partition_number += blockDim.x;
+  }
+  __syncthreads();
+
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  // Get each row's partition number, and get it's output location by 
+  // incrementing block's offset counter for that partition number
+  // and store the row's output location in-place
+  while (row_number < num_rows) {
+    // Get partition number of this row
+    const size_type partition_number = row_partition_numbers[row_number];
+
+    // Get output location based on partition number by incrementing the corresponding
+    // partition offset for this block
+    const size_type row_output_location = atomicAdd(&(shared_partition_offsets[partition_number]), size_type(1));
+
+    // Store the row's output location in-place
+    row_partition_numbers[row_number] = row_output_location;
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
 template <template <typename> class hash_function>
 std::vector<std::unique_ptr<experimental::table>>
 hash_partition_table(table_view const& input,
                      table_view const &table_to_hash,
-                     const cudf::size_type num_partitions,
+                     const size_type num_partitions,
                      cudaStream_t stream)
 {
-  const cudf::size_type num_rows = table_to_hash.num_rows();
-  constexpr cudf::size_type rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
-  const cudf::size_type grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+  const size_type num_rows = table_to_hash.num_rows();
+  constexpr size_type rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
+  const size_type grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   auto device_input = table_device_view::create(input, stream);
   auto row_partition_numbers = rmm::device_vector<size_type>(num_rows);
@@ -192,7 +236,7 @@ hash_partition_table(table_view const& input,
     // a partitioning operator on the hash value. Also computes the number of
     // rows in each partition both for each thread block as well as across all blocks
     compute_row_partition_numbers<hash_function>
-        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(cudf::size_type), stream>>>(
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>(
             *device_input, num_rows, num_partitions,
             partitioner_type(num_partitions), row_partition_numbers.data().get(),
             block_partition_sizes.data().get(), global_partition_sizes.data().get());
@@ -205,16 +249,50 @@ hash_partition_table(table_view const& input,
     // a partitioning operator on the hash value. Also computes the number of
     // rows in each partition both for each thread block as well as across all blocks
     compute_row_partition_numbers<hash_function>
-        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(cudf::size_type), stream>>>(
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>(
             *device_input, num_rows, num_partitions,
             partitioner_type(num_partitions), row_partition_numbers.data().get(),
             block_partition_sizes.data().get(), global_partition_sizes.data().get());
   }
 
-  // TODO
+  // Compute in-place exclusive scan of all blocks' partition sizes to determine 
+  // the starting point for each blocks portion of each partition in the output
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+                         block_partition_sizes.begin(),
+                         block_partition_sizes.end(),
+                         block_partition_sizes.begin());
 
-  // build output tables from partitioned row indices
+  // Compute in-place exclusive scan of size of each partition to determine
+  // offset location of each partition in final output.
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+                         global_partition_sizes.begin(),
+                         global_partition_sizes.end(),
+                         global_partition_sizes.begin());
+
+  // Copy the result of the exlusive scan to the output offsets array
+  // to indicate the starting point for each partition in the output
+  std::vector<size_type> partition_offsets(num_partitions);
+  CUDA_TRY(cudaMemcpyAsync(partition_offsets.data(),
+                           global_partition_sizes.data().get(),
+                           num_partitions * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+
+  // Compute in-place the output location for each row based on it's 
+  // partition number such that each partition will be contiguous in memory
+  compute_row_output_locations
+    <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>
+    (row_partition_numbers.data().get(), num_rows, num_partitions, block_partition_sizes.data().get());
+
+
+  // TODO build output tables from partitioned row indices
   std::vector<std::unique_ptr<experimental::table>> output(num_partitions);
+
+  // Creates the partitioned output table by scattering the rows of
+  // the input table to rows of the output table based on each rows
+  // output location
+  // TODO need scatter from PR 3296
+  //cudf::detail::scatter(&input_table, row_partition_numbers.data().get(), &partitioned_output);
 
   return output;
 }
