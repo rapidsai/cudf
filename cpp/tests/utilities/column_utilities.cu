@@ -19,7 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>
 

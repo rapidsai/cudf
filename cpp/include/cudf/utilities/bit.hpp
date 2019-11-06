@@ -95,8 +95,6 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
          (bitmask_type{1} << intra_word_index(bit_index));
 }
 
-#ifdef __CUDACC__
-
 /**---------------------------------------------------------------------------*
  * @brief Returns a bitmask word with the `n` least significant bits set.
  *
