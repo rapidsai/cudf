@@ -147,71 +147,38 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
 namespace
 {
 
-// guaranteed thread-safe
-struct character_tables_singleton
-{
-    static character_tables_singleton& instance()
-    {
-        // initialization of this static variable is guaranteed to be thread-safe
-        static character_tables_singleton _instance;
-        return _instance;
-    }
-    character_tables_singleton( character_tables_singleton const& ) = delete;
-    character_tables_singleton( character_tables_singleton&& ) = delete;
-    character_tables_singleton& operator=(character_tables_singleton const&) = delete;
-    character_tables_singleton& operator=(character_tables_singleton&&) = delete;
-
-    character_flags_table_type* flags_table() { return d_character_flags_table; }
-    character_cases_table_type* cases_table() { return d_character_case_table; }
-
-private:
-
-    character_flags_table_type* d_character_flags_table{};
-    character_cases_table_type* d_character_case_table{};
-    bool b_rmm_allocated{false};
-
-    character_tables_singleton()
-    {
-        rmmOptions_t options;
-        if( rmmIsInitialized(&options) && (options.allocation_mode == PoolAllocation) )
-        {
-            RMM_TRY(RMM_ALLOC(&d_character_flags_table,sizeof(g_character_codepoint_flags),0));
-            RMM_TRY(RMM_ALLOC(&d_character_case_table,sizeof(g_character_case_table),0));
-            b_rmm_allocated = true;
-        }
-        else
-        {
-            cudaMalloc(&d_character_flags_table,sizeof(g_character_codepoint_flags));
-            cudaMalloc(&d_character_case_table,sizeof(g_character_case_table));
-        }
-        CUDA_TRY(cudaMemcpy(d_character_flags_table,g_character_codepoint_flags,sizeof(g_character_codepoint_flags),cudaMemcpyHostToDevice));
-        CUDA_TRY(cudaMemcpy(d_character_case_table,g_character_case_table,sizeof(g_character_case_table),cudaMemcpyHostToDevice));
-    }
-    ~character_tables_singleton()
-    {
-        if( b_rmm_allocated )
-        {
-            RMM_FREE(d_character_flags_table,0);
-            RMM_FREE(d_character_case_table,0);
-        }
-        else
-        {
-            cudaFree(d_character_flags_table);
-            cudaFree(d_character_case_table);
-        }
-    }
-};
+// The device variables are created here to avoid using a singleton that may cause issues
+// with RMM initialize/finalize. See PR #3159 for details on this approach.
+__device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
+__device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
+std::mutex g_flags_table_mutex, g_cases_table_mutex;
+character_flags_table_type* d_character_codepoint_flags = nullptr;
+character_cases_table_type* d_character_cases_table = nullptr;
 
 } // namespace
 
+// Return the flags table device pointer
 const character_flags_table_type* get_character_flags_table()
 {
-    return character_tables_singleton::instance().flags_table();
+    std::lock_guard<std::mutex> guard(g_flags_table_mutex);
+    if( !d_character_codepoint_flags )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags,character_codepoint_flags));
+    }
+    return d_character_codepoint_flags;
 }
 
-const character_cases_table_type* get_character_case_table()
+// Return the cases table device pointer
+const character_cases_table_type* get_character_cases_table()
 {
-    return character_tables_singleton::instance().cases_table();
+    std::lock_guard<std::mutex> guard(g_cases_table_mutex);
+    if( !d_character_cases_table )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table,character_cases_table));
+    }
+    return d_character_cases_table;
 }
 
 } // namespace detail
