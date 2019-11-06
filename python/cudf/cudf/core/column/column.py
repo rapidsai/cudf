@@ -1048,7 +1048,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            raise NotImplementedError
             count = len(arbitrary)
             null_count = arbitrary.null_count
 
@@ -1058,18 +1057,20 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 sbuf = np.frombuffer(buffers[2], dtype="int8")
             else:
                 sbuf = np.empty(0, dtype="int8")
+            sbuf = Buffer.from_array_like(sbuf)
+
             # Buffer of offsets values
             obuf = np.frombuffer(buffers[1], dtype="int32")
+            obuf = Buffer.from_array_like(obuf)
+
             # Buffer of null bitmask
             nbuf = None
             if null_count > 0:
                 nbuf = np.frombuffer(buffers[0], dtype="int8")
+                nbuf = Buffer.from_array_like(nbuf)
 
-            data = as_column(
-                nvstrings.from_offsets(
-                    sbuf, obuf, count, nbuf=nbuf, ncount=null_count
-                )
-            )
+            data = string.StringColumn(data=sbuf, offsets=obuf, mask=nbuf)
+
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = pd.api.types.pandas_dtype(dtype)
             if (type(dtype) == str and dtype == "empty") or dtype is None:

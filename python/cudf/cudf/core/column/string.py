@@ -438,42 +438,53 @@ class StringMethods(object):
         return out_df
 
 
-class StringColumn(column.TypedColumnBase):
+class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, data, null_count=None, name=None, **kwargs):
+    def __init__(
+        self,
+        data,
+        offsets,
+        mask=None,
+        name=None,
+        data_dtype=np.byte,
+        offsets_dtype=np.int32,
+    ):
         """
         Parameters
         ----------
-        data : nvstrings.nvstrings
-            The nvstrings object
-        null_count : int; optional
-            The number of null values in the mask.
+        data : Buffer
+            Buffer of character data
+        offsets : Buffer
+            Buffer of offsets
+        mask : Buffer
+            The validity mask
+        name
+            Name of the Column
         """
-        from collections.abc import Sequence
+        data_dtype = np.dtype(data_dtype)
+        offsets_dtype = np.dtype(offsets_dtype)
 
-        if isinstance(data, Sequence):
-            data = nvstrings.to_device(data)
-        assert isinstance(data, nvstrings.nvstrings)
-        self._data = data
-        self._dtype = np.dtype("object")
-        self._name = name
+        children = (
+            column.build_column(data=data, dtype=data_dtype),
+            column.build_column(data=offsets, dtype=offsets_dtype),
+        )
+        data = Buffer.from_device_buffer(rmm.DeviceBuffer(0, 0))
+        dtype = np.dtype("object")
+        mask = mask
+        name = name
 
-        if null_count is None:
-            null_count = data.null_count()
-        self._null_count = null_count
-        self._mask = None
-        if self._null_count > 0:
-            mask_size = utils.calc_chunk_size(
-                len(self.data), utils.mask_bitsize
-            )
-            out_mask_arr = rmm.device_array(mask_size, dtype="int8")
-            out_mask_ptr = libcudf.cudf.get_ctype_ptr(out_mask_arr)
-            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            self._mask = Buffer(out_mask_arr)
+        # one less because the last element of offsets is the number of
+        # bytes in the data buffer
+        size = (offsets.size // offsets_dtype.itemsize) - 1
+
+        super().__init__(
+            data, size, dtype, mask=mask, name=name, children=children,
+        )
+
+        self._nvstrings = None
         self._nvcategory = None
-        self._indices = None
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
@@ -489,30 +500,27 @@ class StringColumn(column.TypedColumnBase):
         return self._data.size()
 
     @property
-    def dtype(self):
-        return self._dtype
-
-    @property
-    def data(self):
-        """ nvstrings object """
-        return self._data
-
-    @property
-    def null_count(self):
-        return self._null_count
-
-    @property
-    def mask(self):
-        """Validity mask buffer
-        """
-        return self._mask
+    def nvstrings(self):
+        if self._nvstrings is None:
+            if self.mask:
+                mask = self.mask.ptr
+            else:
+                mask = None
+            return nvstrings.from_offsets(
+                self.children[0].data.ptr,
+                self.children[1].data.ptr,
+                self.size,
+                mask,
+                bdevmem=True,
+            )
+        return self._nvstrings
 
     @property
     def nvcategory(self):
         if self._nvcategory is None:
             import nvcategory as nvc
 
-            self._nvcategory = nvc.from_strings(self.data)
+            self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
 
     @property
@@ -539,7 +547,7 @@ class StringColumn(column.TypedColumnBase):
             kwargs.update(units=np.datetime_data(mem_dtype)[0])
             mem_dtype = np.dtype(np.int64)
             if "format" not in kwargs:
-                if len(self.data) > 0:
+                if len(self.nvstrings) > 0:
                     # infer on host from the first not na element
                     fmt = pd.core.tools.datetimes._guess_datetime_format(
                         self[self.notna()][0]
@@ -558,11 +566,11 @@ class StringColumn(column.TypedColumnBase):
 
         if self.null_count > 0:
             mask_size = utils.calc_chunk_size(
-                len(self.data), utils.mask_bitsize
+                len(self.nvstrings), utils.mask_bitsize
             )
             out_mask_arr = rmm.device_array(mask_size, dtype="int8")
             out_mask_ptr = libcudf.cudf.get_ctype_ptr(out_mask_arr)
-            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
+            self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
             mask = Buffer(out_mask_arr)
             out_col = out_col.set_mask(mask)
 
@@ -629,7 +637,7 @@ class StringColumn(column.TypedColumnBase):
         obuf = rmm.device_array(len(self._data) + 1, dtype="int32")
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
         nbuf = rmm.device_array(mask_size, dtype="int8")
-        self.data.to_offsets(
+        self.nvstrings.to_offsets(
             libcudf.cudf.get_ctype_ptr(sbuf),
             libcudf.cudf.get_ctype_ptr(obuf),
             nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
@@ -681,7 +689,9 @@ class StringColumn(column.TypedColumnBase):
 
         idx_dev_arr = rmm.device_array(len(self), dtype="int32")
         dev_ptr = libcudf.cudf.get_ctype_ptr(idx_dev_arr)
-        self.data.order(2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr)
+        self.nvstrings.order(
+            2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr
+        )
 
         col_inds = column.build_column(
             Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
@@ -712,7 +722,7 @@ class StringColumn(column.TypedColumnBase):
         if len(to_replace) == 1 and len(replacement) == 1:
             to_replace = to_replace.data.to_host()[0]
             replacement = replacement.data.to_host()[0]
-            result = self.data.replace(to_replace, replacement)
+            result = self.nvstrings.replace(to_replace, replacement)
             return self.replace(data=result)
         else:
             raise NotImplementedError(
@@ -768,7 +778,7 @@ class StringColumn(column.TypedColumnBase):
         """
         import nvcategory as nvc
 
-        return StringColumn(nvc.from_strings(self.data).keys())
+        return StringColumn(nvc.from_strings(self.nvstrings).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):
