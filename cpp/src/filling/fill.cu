@@ -21,12 +21,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/fill.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
-
-// for gdf_scalar, unnecessary once we switch to cudf::scalar
-#include <cudf/types.h>
 
 #include <cuda_runtime.h>
 
@@ -34,11 +32,11 @@
 
 namespace {
 
-struct scalar_factory {
-  gdf_scalar value;
+struct fill_value_factory {
+  cudf::scalar const* p_value = nullptr;
 
   template <typename T>
-  struct scalar {
+  struct fill_value {
     T value;
     bool is_valid;
 
@@ -50,10 +48,29 @@ struct scalar_factory {
   };
 
   template <typename T>
-  scalar<T> make() {
-    T val{}; // Safe type pun, compiler should optimize away the memcpy
-    memcpy(&val, &value.data, sizeof(T));
-    return scalar<T>{val, value.is_valid};
+  std::enable_if_t<cudf::is_fixed_width<T>(), fill_value<T>>
+  make(cudaStream_t stream = 0) {
+    using ScalarType = cudf::experimental::scalar_type_t<T>;
+#if 1
+    // TODO: temporary till the const issue in cudf::scalar's value() is fixed.
+    auto p_scalar =
+      const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_value));
+#else
+    auto p_scalar = static_cast<ScalarType const*>(this->p_value);
+#endif
+    T value = p_scalar->value(stream);
+    bool is_valid = p_scalar->is_valid();
+    return fill_value<T>{value, is_valid};
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::string_view>::value, fill_value<T>>
+  make(cudaStream_t stream = 0) {
+    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    auto p_scalar = static_cast<ScalarType const*>(this->p_value);
+    T value{p_scalar->data(), p_scalar->size()};
+    bool is_valid = p_scalar->is_valid();
+    return fill_value<T>{value, is_valid};
   }
 };
 
@@ -67,7 +84,7 @@ namespace detail {
 void fill(mutable_column_view& destination,
           size_type begin,
           size_type end,
-          gdf_scalar const& value,
+          scalar const& value,
           cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
                "In-place fill does not support variable-sized types.");
@@ -76,14 +93,14 @@ void fill(mutable_column_view& destination,
                (begin < destination.size()) &&
                (end <= destination.size()),
                "Range is out of bounds.");
-  CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid == true),
+  CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid() == true),
                "destination should be nullable or value should be non-null.");
-  // The line below should be enabled once we switch from gdf_scalar to
-  // cudf::scalar.
-  // CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
+  CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
   if (end != begin) {  // otherwise no-op
-    copy_range(destination, scalar_factory{value}, begin, end, stream);
+    copy_range(fill_value_factory{&value},
+               destination,
+               begin, end, stream);
   }
 
   return;
@@ -92,7 +109,7 @@ void fill(mutable_column_view& destination,
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
-                             gdf_scalar const& value,
+                             scalar const& value,
                              cudaStream_t stream,
                              rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(cudf::is_fixed_width(input.type()) == true,
@@ -102,14 +119,10 @@ std::unique_ptr<column> fill(column_view const& input,
                (begin < input.size()) &&
                (end <= input.size()),
                "Range is out of bounds.");
-  // The line below should be enabled once we switch from gdf_scalar to
-  // cudf::scalar.
-  // CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
+  CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
-  auto state = mask_state{UNALLOCATED};
-  if ((input.nullable() == true) || (value.is_valid == false)) {
-    state = UNINITIALIZED;
-  }
+  auto state = ((input.nullable() == true) || (value.is_valid() == false))
+    ? UNINITIALIZED : UNALLOCATED;
 
   auto ret = std::unique_ptr<column>{nullptr};
 
@@ -125,13 +138,13 @@ std::unique_ptr<column> fill(column_view const& input,
 
   auto destination = ret->mutable_view();
   if (begin > 0) {
-    copy_range(destination, input, 0, begin, 0, stream);
+    copy_range(input, destination, 0, begin, 0, stream);
   }
   if (end != begin) {  // otherwise no fill
     fill(destination, begin, end, value, stream);
   }
   if (end < input.size()) {
-    copy_range(destination, input, end, input.size(), end, stream);
+    copy_range(input, destination, end, input.size(), end, stream);
   }
 
   return ret;
@@ -142,14 +155,14 @@ std::unique_ptr<column> fill(column_view const& input,
 void fill(mutable_column_view& destination,
           size_type begin,
           size_type end,
-          gdf_scalar const& value) {
+          scalar const& value) {
   return detail::fill(destination, begin, end, value, 0);
 }
 
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
-                             gdf_scalar const& value,
+                             scalar const& value,
                              rmm::mr::device_memory_resource* mr) {
   return detail::fill(input, begin, end, value, 0, mr);
 }

@@ -20,9 +20,6 @@
 #include <cudf/types.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
-// for gdf_scalar, unnecessary once we switch to cudf::scalar
-#include <cudf/types.h>
-
 #include <cuda_runtime.h>
 
 #include <memory>
@@ -61,7 +58,7 @@ namespace detail {
  * @return void
  *---------------------------------------------------------------------------**/
 void fill(mutable_column_view& destination, size_type begin, size_type end,
-          gdf_scalar const& value, cudaStream_t stream = 0);
+          scalar const& value, cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in a column out-of-place with
@@ -89,7 +86,7 @@ void fill(mutable_column_view& destination, size_type begin, size_type end,
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> fill(
     column_view const& input, size_type begin, size_type end,
-    gdf_scalar const& value, cudaStream_t stream = 0,
+    scalar const& value, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
                             
 }  // namespace detail
