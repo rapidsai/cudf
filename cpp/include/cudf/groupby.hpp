@@ -165,7 +165,7 @@ class groupby {
    * `aggregation_request`. Each request contains a `column_view` of values to
    * aggregate and a set of `aggregation`s to perform on those elements.
    *
-   * For each `aggregation` in a request, `values[i]` will be aggregated with
+   * For each `aggregation` in a request, `values[i]` is aggregated with
    * all other `values[j]` where rows `i` and `j` in `keys` are equivalent.
    *
    * The `size()` of the request column must equal `keys.num_rows()`.
@@ -194,8 +194,8 @@ class groupby {
    * @param requests The set of columns to aggregate and the aggregations to
    * perform
    * @param mr Memory resource used to allocate the returned table and columns
-   * @return Pair containing the table with each groups unique key and
-   * a set of aggregation_results for each request in the same order as was
+   * @return Pair containing the table with each group's unique key and
+   * a vector of aggregation_results for each request in the same order as
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
