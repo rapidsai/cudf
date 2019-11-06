@@ -28,7 +28,7 @@ namespace detail {
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
  *
- * The first column is expected to be a cudf::column. The second column
+ * `input` and `replacement` must be of the same type and size.
  * must be of the same type and same size as the first.
  *
  * The function replaces all nulls of the first column with the
