@@ -24,19 +24,8 @@
 #include <cudf/cudf.h>
 
 // This is the main test fixture
-template <class T>
-struct ReplaceTest : public cudf::test::BaseFixture
-{
-
-  ReplaceTest()
-  {    
-  }
-
-  ~ReplaceTest()
-  {
-  }
-};
-
+struct ReplaceTest : public cudf::test::BaseFixture { };
+  
 template <typename T>
 void normalize_nans_and_zeros_test_internal( cudf::test::fixed_width_column_wrapper<T> const& test_data_in,
                                              cudf::column_view const& test_data_comp)
@@ -65,15 +54,19 @@ void normalize_nans_and_zeros_test_internal( cudf::test::fixed_width_column_wrap
 }
 
 // Test for normalize_nans_and_nulls
-TEST(ReplaceTest, NormalizeNansAndZeros)
-{            
+TEST_F(ReplaceTest, NormalizeNansAndZerosFloat)
+{
    // bad data
    cudf::test::fixed_width_column_wrapper<float> f_test_data{ 32.5f, -0.0f, 111.0f, -NAN, NAN, 1.0f, 0.0f, 54.3f };
    // good data
    cudf::test::fixed_width_column_wrapper<float> f_test_data_comp{ 32.5f, 0.0f, 111.0f, NAN, NAN, 1.0f, 0.0f, 54.3f };
-   // 
+   //
    normalize_nans_and_zeros_test_internal<float>(f_test_data, f_test_data_comp);
+}
 
+// Test for normalize_nans_and_nulls
+TEST_F(ReplaceTest, NormalizeNansAndZerosDouble)
+{   
    // bad data   
    cudf::test::fixed_width_column_wrapper<double> d_test_data{ 32.5, -0.0, 111.0, -NAN, NAN, 1.0, 0.0, 54.3 };
    // good data

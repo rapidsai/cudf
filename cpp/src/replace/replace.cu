@@ -86,8 +86,7 @@ namespace detail {
 
 void normalize_nans_and_zeros(mutable_column_view in_out,
                               cudaStream_t stream = 0)
-{   
-   CUDF_EXPECTS(in_out.head() != nullptr, "Null input data");
+{      
    if(in_out.size() == 0){
       return;
    }
@@ -149,7 +148,7 @@ std::unique_ptr<column> normalize_nans_and_zeros( column_view const& input,
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] mutable_column_view representing input data. data is processed in-place
  */
-void normalize_nans_and_zeros(mutable_column_view in_out)
+void normalize_nans_and_zeros(mutable_column_view& in_out)
 {
    detail::normalize_nans_and_zeros(in_out, 0);
 }
