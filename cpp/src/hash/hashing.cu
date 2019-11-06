@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include <hash/hash_functions.cuh>
 
@@ -25,6 +26,9 @@
 namespace cudf {
 
 namespace {
+
+constexpr int BLOCK_SIZE = 256;
+constexpr int ROWS_PER_THREAD = 1;
 
 template <template <typename> class hash_function>
 struct row_hasher_initial_values {
@@ -53,14 +57,164 @@ struct row_hasher {
   table_device_view const& _table;
 };
 
+/** 
+ * @brief  Functor to map a hash value to a particular 'bin' or partition number
+ * that uses the modulo operation.
+ */
+template <typename hash_value_t>
+struct modulo_partitioner
+{
+  modulo_partitioner(size_type num_partitions) : divisor{num_partitions}{}
+
+  __host__ __device__
+  size_type operator()(hash_value_t hash_value) const 
+  {
+    return hash_value % divisor;
+  }
+
+  const size_type divisor;
+};
+
+/** 
+ * @brief  Functor to map a hash value to a particular 'bin' or partition number
+ * that uses bitshifts. Only works when num_partitions is a power of 2.
+ *
+ * For n % d, if d is a power of two, then it can be computed more efficiently via 
+ * a single bitwise AND as:
+ * n & (d - 1)
+ */
+template <typename hash_value_t>
+struct bitwise_partitioner
+{
+  bitwise_partitioner(size_type num_partitions) : divisor{(num_partitions - 1)}
+  {
+    assert( is_power_two(num_partitions) );
+  }
+
+  __host__ __device__
+  size_type operator()(hash_value_t hash_value) const 
+  {
+    return hash_value & (divisor);
+  }
+
+  const size_type divisor;
+};
+
+/** 
+ * @brief Computes which partition each row of a device_table will belong to based
+   on hashing each row, and applying a partition function to the hash value. 
+   Records the size of each partition for each thread block as well as the global
+   size of each partition across all thread blocks.
+ */
+template <template <typename> class hash_function,
+          typename partitioner_type>
+__global__ 
+void compute_row_partition_numbers(table_device_view the_table, 
+                                   const size_type num_rows,
+                                   const size_type num_partitions,
+                                   const partitioner_type the_partitioner,
+                                   size_type *row_partition_numbers,
+                                   size_type *block_partition_sizes,
+                                   size_type *global_partition_sizes)
+{
+  // Accumulate histogram of the size of each partition in shared memory
+  extern __shared__ size_type shared_partition_sizes[];
+
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  // Initialize local histogram
+  size_type partition_number = threadIdx.x;
+  while (partition_number < num_partitions) {
+    shared_partition_sizes[partition_number] = 0;
+    partition_number += blockDim.x;
+  }
+
+  __syncthreads();
+
+  // Compute the hash value for each row, store it to the array of hash values
+  // and compute the partition to which the hash value belongs and increment
+  // the shared memory counter for that partition
+  while (row_number < num_rows) {
+    const hash_value_type row_hash_value =
+        0; // TODO
+        //hash_row<true, hash_function>(the_table, row_number);
+
+    const size_type partition_number = the_partitioner(row_hash_value);
+
+    row_partition_numbers[row_number] = partition_number;
+
+    atomicAdd(&(shared_partition_sizes[partition_number]), size_type(1));
+
+    row_number += blockDim.x * gridDim.x;
+  }
+
+  __syncthreads();
+
+  // Flush shared memory histogram to global memory
+  partition_number = threadIdx.x;
+  while (partition_number < num_partitions) {
+    const size_type block_partition_size = shared_partition_sizes[partition_number];
+
+    // Update global size of each partition
+    atomicAdd(&global_partition_sizes[partition_number], block_partition_size);
+
+    // Record the size of this partition in this block
+    const size_type write_location = partition_number * gridDim.x + blockIdx.x;
+    block_partition_sizes[write_location] = block_partition_size;
+    partition_number += blockDim.x;
+  }
+}
+
 template <template <typename> class hash_function>
 std::vector<std::unique_ptr<experimental::table>>
 hash_partition_table(table_view const& input,
                      table_view const &table_to_hash,
-                     const cudf::size_type num_partitions) {
-  std::vector<std::unique_ptr<experimental::table>> output(num_partitions);
+                     const cudf::size_type num_partitions,
+                     cudaStream_t stream)
+{
+  const cudf::size_type num_rows = table_to_hash.num_rows();
+  constexpr cudf::size_type rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
+  const cudf::size_type grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+
+  auto device_input = table_device_view::create(input, stream);
+  auto row_partition_numbers = rmm::device_vector<size_type>(num_rows);
+  auto block_partition_sizes = rmm::device_vector<size_type>(grid_size * num_partitions);
+  auto global_partition_sizes = rmm::device_vector<size_type>(num_partitions);
+  CUDA_TRY(cudaMemsetAsync(global_partition_sizes.data().get(), 0, num_partitions * sizeof(size_type), stream));
+
+  // If the number of partitions is a power of two, we can compute the partition 
+  // number of each row more efficiently with bitwise operations
+  if (is_power_two(num_partitions)) {
+    // Determines how the mapping between hash value and partition number is computed
+    using partitioner_type = bitwise_partitioner<hash_value_type>;
+
+    // Computes which partition each row belongs to by hashing the row and performing
+    // a partitioning operator on the hash value. Also computes the number of
+    // rows in each partition both for each thread block as well as across all blocks
+    compute_row_partition_numbers<hash_function>
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(cudf::size_type), stream>>>(
+            *device_input, num_rows, num_partitions,
+            partitioner_type(num_partitions), row_partition_numbers.data().get(),
+            block_partition_sizes.data().get(), global_partition_sizes.data().get());
+
+  } else {
+    // Determines how the mapping between hash value and partition number is computed
+    using partitioner_type = modulo_partitioner<hash_value_type>;
+
+    // Computes which partition each row belongs to by hashing the row and performing
+    // a partitioning operator on the hash value. Also computes the number of
+    // rows in each partition both for each thread block as well as across all blocks
+    compute_row_partition_numbers<hash_function>
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(cudf::size_type), stream>>>(
+            *device_input, num_rows, num_partitions,
+            partitioner_type(num_partitions), row_partition_numbers.data().get(),
+            block_partition_sizes.data().get(), global_partition_sizes.data().get());
+  }
 
   // TODO
+
+  // build output tables from partitioned row indices
+  std::vector<std::unique_ptr<experimental::table>> output(num_partitions);
 
   return output;
 }
@@ -88,11 +242,11 @@ hash_partition(table_view const& input,
   switch (hash) {
     case hash_func::MURMUR3:
       output = hash_partition_table<MurmurHash3_32>(
-          input, table_to_hash, num_partitions);
+          input, table_to_hash, num_partitions, stream);
       break;
     case hash_func::IDENTITY:
       output = hash_partition_table<IdentityHash>(
-          input, table_to_hash, num_partitions);
+          input, table_to_hash, num_partitions, stream);
       break;
     default:
       CUDF_FAIL("Invalid hash function");
