@@ -81,7 +81,8 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   // satisfied with a hash implementation
   if (not _keys_are_sorted and
       detail::hash::use_hash_groupby(_keys, requests)) {
-    return detail::hash::groupby(_keys, requests, stream, mr);
+    return detail::hash::groupby(_keys, requests, _ignore_null_keys, stream,
+                                 mr);
   } else {
     return detail::sort::groupby(_keys, requests, stream, mr);
   }
@@ -97,7 +98,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
                            }),
                "Size mismatch between request values and groupby keys.");
   if (_keys.num_rows() == 0) {
-    // TODO Return appropriately typed empty table/columns.
+    // TODO Return appropriate empty results
   }
   return dispatch_aggregation(requests, 0, mr);
 }

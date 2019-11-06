@@ -61,8 +61,8 @@ constexpr bool is_hash_aggregation(aggregation::Kind t) {
 }  // namespace
 
 /**
- * @brief Indicates if a set of groupby requests can be satisfied with a
- * hash-based implementation.
+ * @brief Indicates if a set of aggregation requests can be satisfied with a
+ * hash-based groupby implementation.
  *
  * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
@@ -83,7 +83,8 @@ bool use_hash_groupby(table_view const& keys,
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+    bool ignore_null_keys, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
   // stub
   return std::make_pair(std::make_unique<table>(),
                         std::vector<aggregation_result>{});
