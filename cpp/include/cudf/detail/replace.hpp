@@ -34,7 +34,7 @@ namespace detail {
  * The function replaces all nulls of the first column with the
  * corresponding elements of the second column
  *
- * @param[in] input A cudf::column containing null values
+ * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
  * @param[in] stream Optional stream in which to perform allocations
  *
