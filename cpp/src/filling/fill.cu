@@ -121,33 +121,17 @@ std::unique_ptr<column> fill(column_view const& input,
                "Range is out of bounds.");
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
-  auto state = ((input.nullable() == true) || (value.is_valid() == false))
-    ? UNINITIALIZED : UNALLOCATED;
-
-  auto ret = std::unique_ptr<column>{nullptr};
-
-  if (cudf::is_numeric(input.type()) == true) {
-    ret = make_numeric_column(input.type(), input.size(), state, stream, mr);
-  }
-  else if (cudf::is_timestamp(input.type()) == true) {
-    ret = make_timestamp_column(input.type(), input.size(), state, stream, mr);
-  }
-  else {
-    CUDF_FAIL("Unimplemented.");
-  }
-
-  auto destination = ret->mutable_view();
-  if (begin > 0) {
-    copy_range(input, destination, 0, begin, 0, stream);
+  auto p_ret = std::make_unique<column>(input, stream, mr);
+  if (!p_ret->nullable() && !value.is_valid()) {
+    p_ret->set_null_mask(
+      create_null_mask(p_ret->size(), ALL_VALID, stream, mr), 0);
   }
   if (end != begin) {  // otherwise no fill
+    auto destination = p_ret->mutable_view();
     fill(destination, begin, end, value, stream);
   }
-  if (end < input.size()) {
-    copy_range(input, destination, end, input.size(), end, stream);
-  }
 
-  return ret;
+  return p_ret;
 }
 
 }  // namespace detail

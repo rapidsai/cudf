@@ -114,40 +114,18 @@ std::unique_ptr<column> copy_range(column_view const& source,
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  auto state = source.has_nulls() ? UNINITIALIZED : UNALLOCATED;
-
-  auto ret = std::unique_ptr<column>{nullptr};
-
-  if (cudf::is_numeric(target.type()) == true) {
-    ret = make_numeric_column(target.type(), target.size(), state, stream, mr);
+  auto p_ret = std::make_unique<column>(target, stream, mr);
+  if ((!p_ret->nullable()) && source.has_nulls()) {
+    p_ret->set_null_mask(
+      create_null_mask(p_ret->size(), ALL_VALID, stream, mr), 0);
   }
-  else if (cudf::is_timestamp(target.type()) == true) {
-    ret = make_timestamp_column(target.type(), target.size(), state,
-                                stream, mr);
-  }
-  else {
-    CUDF_FAIL("Unimplemented.");
-  }
-
-  auto ret_view = ret->mutable_view();
-  auto target_end = target_begin + (source_end - source_begin);
-  // copy from target outside the range (note that this function copies
-  // out-of-place)
-  if (target_begin > 0) {
-    copy_range(target, ret_view, 0, target_begin, 0, stream);
-  }
-  // copy from source in the specified range
-  if (target_end != target_begin) {
+  if (source_end != source_begin) {  // otherwise no-op
+    auto ret_view = p_ret->mutable_view();
     copy_range(source, ret_view, source_begin, source_end, target_begin,
                stream);
   }
-  // copy from target outside the range (note that this function copies
-  // out-of-place)
-  if (target_end < target.size()) {
-    copy_range(target, ret_view, target_end, target.size(), target_end, stream);
-  }
 
-  return ret;
+  return p_ret;
 }
 
 }  // namespace detail
