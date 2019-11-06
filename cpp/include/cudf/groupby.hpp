@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <utility>
@@ -42,42 +43,6 @@ struct interpolation {
 };
 
 namespace groupby {
-/**
- * @brief Options for controlling behavior of the groupby operation.
- */
-struct Options {
-  Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
-  Options() = default;
-
-  /**
-   * Determines whether key rows with null values are ignored.
-   *
-   * If `true`, any row in the `keys` table that contains a NULL value will be
-   * ignored. That is, the row will not be present in the output keys, and
-   * it's associated row in the `values` table will also be ignored.
-   *
-   * If `false`, rows in the `keys` table with NULL values will be treated as
-   * any other row. Furthermore, a NULL value will be considered equal to
-   * another NULL value. For example, two rows `{1, 2, 3, NULL}` and `{1, 2,
-   * 3, NULL}` will be considered equal, and their associated rows in the
-   * `values` table will be aggregated.
-   *
-   * @note The behavior for a Pandas groupby operation is
-   * `ignore_null_keys == true`.
-   * @note The behavior for a SQL groupby operation is
-   * `ignore_null_keys == false`.
-   *
-   */
-  bool const ignore_null_keys{true};
-
-  // TODO
-  // bool keys_are_sorted;  ///< Indicates if the `keys` are sorted
-  // std::vector<order>
-  //     column_order;  ///< If `keys` are sorted, indicates if each column is
-  //                    ///< ascending or descending
-  // std::vector<null_order>
-  //     null_precendence;  ///< If `keys` are sorted, indicates
-};
 
 /**
  * @brief Base class for specifying the desired aggregation in an
@@ -145,52 +110,6 @@ struct aggregation_request {
   std::vector<std::unique_ptr<aggregation>>
       aggregations;  ///< Desired aggregations
 };
-
-/**
- * @brief Groups together equivalent rows in `keys` and performs the requested
- * aggregation(s) on corresponding values.
- *
- * The values to aggregate and the aggregations to perform are specifed in an
- * `aggregation_request`. Each request contains a `column_view` of values to
- * aggregate and a set of `aggregation`s to perform on those elements.
- *
- * For each `aggregation` in a request, `values[i]` will be aggregated with
- * all other `values[j]` where rows `i` and `j` in `keys` are equivalent.
- *
- * The `size()` of the request column must equal `keys.num_rows()`.
- *
- * Example:
- * ```
- * Input:
- * keys:     {1 2 1 3 1}
- *           {1 2 1 4 1}
- * request:
- *   values: {3 1 4 9 2}
- *   aggregations: {{SUM}, {MIN}}
- *
- * result:
- *
- * keys:  {3 1 2}
- *        {4 1 2}
- * values:
- *   SUM: {9 9 1}
- *   MIN: {9 2 1}
- * ```
- *
- * @param keys The table of keys
- * @param requests The set of columns to aggregate and the aggregations to
- * perform
- * @param options Controls behavior of the groupby
- * @param mr Memory resource used to allocate the returned table and columns
- * @return Pair containing a table of the unique rows from `keys` and a set of
- * `column`s containing the result(s) of the requested aggregations.
- */
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
-    table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options = Options{},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-}  // namespace groupby
 
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
@@ -273,10 +192,15 @@ class groupby {
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  private:
-  table_view _keys;
-  bool drop_null_keys{true};
-  bool keys_are_sorted{false};
-};
+  table_view _keys;              ///< Keys that determine grouping
+  bool _ignore_null_keys{true};  ///< Ignore rows in keys with NULLs
+  bool _keys_are_sorted{false};  ///< Whether or not the keys are sorted
+  std::vector<order> _column_order{};
+  std::vector<null_order> _null_precedence{};
 
+
+  
+};
+}  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf
