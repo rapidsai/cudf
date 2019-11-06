@@ -32,6 +32,10 @@
 #include <memory>
 
 namespace cudf {
+
+  //forward declaration for operator column_device_view
+  class column_device_view;
+
 namespace test {
 /**---------------------------------------------------------------------------*
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
@@ -87,6 +91,15 @@ class column_wrapper {
    * `mutable_column_view` parameter.
    *---------------------------------------------------------------------------**/
   operator mutable_column_view() { return wrapped->mutable_view(); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Implicit conversion operator to `column_device_view`.
+   *
+   * Allows passing in a `column_wrapper` (or any class deriving from
+   * `column_wrapper`) to be passed into any API expecting a `column_device_view`
+   * parameter.
+   *---------------------------------------------------------------------------**/
+  operator column_device_view() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Releases internal unique_ptr to wrapped column

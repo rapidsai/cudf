@@ -20,6 +20,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/equal.h>
 
@@ -67,6 +68,10 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
   auto typed_rhs = static_cast<char const*>(rhs);
   EXPECT_TRUE(thrust::equal(thrust::device, typed_lhs, typed_lhs + size_bytes,
                             typed_rhs));
+}
+
+detail::column_wrapper::operator column_device_view() const {
+  return *column_device_view::create(wrapped->view());
 }
 
 }  // namespace test
