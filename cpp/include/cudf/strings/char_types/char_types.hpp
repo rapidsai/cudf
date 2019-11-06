@@ -53,9 +53,9 @@ enum string_character_types {
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const& strings,
-                                                      string_character_types types,
-                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> all_characters_of_type( strings_column_view const& strings,
+                                                string_character_types types,
+                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf

@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/wrappers/bool.hpp>
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
@@ -31,28 +32,21 @@ namespace strings
 namespace detail
 {
 //
-std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const& strings,
-                                                      string_character_types types,
-                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                      cudaStream_t stream = 0)
+std::unique_ptr<column> all_characters_of_type( strings_column_view const& strings,
+                                                string_character_types types,
+                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                cudaStream_t stream = 0)
 {
     auto strings_count = strings.size();
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
     // copy the null mask
-    rmm::device_buffer null_mask;
-    cudf::size_type null_count = d_column.null_count();
-    if( d_column.nullable() ) // copy null_mask
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        bitmask_allocation_size_bytes(strings_count),
-                                        stream, mr);
-
+    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
     // create output column
-    // TODO: use BOOL8 type here when available
-    auto results = std::make_unique<cudf::column>( cudf::data_type{cudf::INT8}, strings_count,
-        rmm::device_buffer(strings_count * sizeof(int8_t), stream, mr),
-        null_mask, null_count);
+    auto results = std::make_unique<cudf::column>( data_type{BOOL8}, strings_count,
+        rmm::device_buffer(strings_count * sizeof(experimental::bool8), stream, mr),
+        null_mask, strings.null_count());
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int8_t>();
     //
@@ -64,7 +58,7 @@ std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const&
         d_results,
         [d_column, d_flags, types, d_results] __device__(size_type idx){
             if( d_column.is_null(idx) )
-                return static_cast<int8_t>(0);
+                return static_cast<experimental::bool8>(0);
             auto d_str = d_column.element<string_view>(idx);
             bool check = !d_str.empty(); // positive result requires at least one character
             for( auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr )
@@ -74,18 +68,18 @@ std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const&
                 auto flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
                 check = (types & flag) > 0;
             }
-            return static_cast<int8_t>(check);
+            return static_cast<experimental::bool8>(check);
         });
     //
-    results->set_null_count(null_count);
+    results->set_null_count(strings.null_count());
     return results;
 }
 
 } // namespace detail
 
-std::unique_ptr<cudf::column> all_characters_of_type( strings_column_view const& strings,
-                                                      string_character_types types,
-                                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> all_characters_of_type( strings_column_view const& strings,
+                                                string_character_types types,
+                                                rmm::mr::device_memory_resource* mr)
 {
     return detail::all_characters_of_type(strings, types, mr);
 }
