@@ -19,6 +19,7 @@
  */
 
 namespace cudf {
+namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
@@ -67,4 +68,5 @@ R"***(
 } // namespace code
 } // namespace jit
 } // namespace binops
+} // namespace experimental
 } // namespace cudf
