@@ -61,22 +61,17 @@ constexpr bool is_hash_aggregation(aggregation::Kind t) {
 }  // namespace
 
 /**
- * @brief Heuristic that determines if a hash based groupby should be used to
- * satisfy the set of aggregation requests on `keys` with the specified
- * `options`.
+ * @brief Indicates if a set of groupby requests can be satisfied with a
+ * hash-based implementation.
  *
  * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
  * perform
- * @param options Controls behavior of the groupby
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
 bool use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests) {
-  // Simple heuristic...
-  // Only use hash groupby if it's possible to satisfy *all* requests with a
-  // hash groupby
   return std::all_of(
       requests.begin(), requests.end(), [](aggregation_request const& r) {
         return std::all_of(
@@ -86,12 +81,12 @@ bool use_hash_groupby(table_view const& keys,
 }
 
 // Hash-based groupby
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   // stub
   return std::make_pair(std::make_unique<table>(),
-                        std::vector<std::unique_ptr<column>>{});
+                        std::vector<aggregation_result>{});
 }
 }  // namespace hash
 }  // namespace detail

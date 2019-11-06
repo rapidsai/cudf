@@ -29,29 +29,6 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
-namespace detail {
-// Dispatch to hash vs. sort groupby
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>>
-dispatch_groupby(table_view const& keys,
-                 std::vector<aggregation_request> const& requests,
-                 cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
-  CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
-                           [keys](auto const& request) {
-                             return request.values.size() == keys.num_rows();
-                           }),
-               "Size mismatch between request values and groupby keys.");
-
-  if (keys.num_rows() == 0) {
-    // TODO Return appropriately typed empty table/columns.
-  }
-
-  if (hash::use_hash_groupby(keys, requests)) {
-    return hash::groupby(keys, requests, stream, mr);
-  } else {
-    return sort::groupby(keys, requests, stream, mr);
-  }
-}
-}  // namespace detail
 
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation() {
@@ -85,6 +62,7 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
   return std::unique_ptr<aggregation>(a);
 }
 
+// Constructor
 groupby::groupby(table_view const& keys, bool ignore_null_keys,
                  bool keys_are_sorted, std::vector<order> const& column_order,
                  std::vector<null_order> const& null_precedence)
@@ -94,11 +72,34 @@ groupby::groupby(table_view const& keys, bool ignore_null_keys,
       _column_order{column_order},
       _null_precedence{null_precedence} {}
 
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>>
+// Select hash vs. sort groupby implementation
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
+groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
+                              cudaStream_t stream,
+                              rmm::mr::device_memory_resource* mr) {
+  // Only use hash groupby if the keys aren't sorted and all requests can be
+  // satisfied with a hash implementation
+  if (not _keys_are_sorted and
+      detail::hash::use_hash_groupby(_keys, requests)) {
+    return detail::hash::groupby(_keys, requests, stream, mr);
+  } else {
+    return detail::sort::groupby(_keys, requests, stream, mr);
+  }
+}
+
+// Compute aggregation requests
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::aggregate(std::vector<aggregation_request> const& requests,
                    rmm::mr::device_memory_resource* mr) {
-
-  return detail::dispatch_groupby(_keys, requests, 0, mr);
+  CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
+                           [this](auto const& request) {
+                             return request.values.size() == _keys.num_rows();
+                           }),
+               "Size mismatch between request values and groupby keys.");
+  if (_keys.num_rows() == 0) {
+    // TODO Return appropriately typed empty table/columns.
+  }
+  return dispatch_aggregation(requests, 0, mr);
 }
 }  // namespace groupby
 }  // namespace experimental

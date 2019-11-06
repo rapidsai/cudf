@@ -102,13 +102,21 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& quantiles, interpolation::type interpolation);
 
 /**
- * @brief Encapsulates the request for groupby aggregation(s) to perform on a
- * column.
+ * @brief Request for groupby aggregation(s) to perform on a column.
  */
 struct aggregation_request {
   column_view values;  ///< The elements to aggregate
   std::vector<std::unique_ptr<aggregation>>
       aggregations;  ///< Desired aggregations
+};
+
+/**
+ * @brief The result(s) of an `aggregation_request`
+ */
+struct aggregation_result {
+  /// Pairs containing columns of aggregation results and the aggregation
+  std::vector<std::pair<std::unique_ptr<column>, std::unique_ptr<aggregation>>>
+      results{};
 };
 
 /**
@@ -183,23 +191,31 @@ class groupby {
    * perform
    * @param mr Memory resource used to allocate the returned table and columns
    * @return Pair containing the table with each groups unique key and
-   * columns containing the results of the requested aggregation for each group
-   * in the same order as was specified in `requests`.
+   * a set of aggregation_results for each request in the same order as was
+   * specified in `requests`.
    */
-  std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>>
-  aggregate(
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  private:
-  table_view _keys;              ///< Keys that determine grouping
-  bool _ignore_null_keys{true};  ///< Ignore rows in keys with NULLs
-  bool _keys_are_sorted{false};  ///< Whether or not the keys are sorted
-  std::vector<order> _column_order{};
-  std::vector<null_order> _null_precedence{};
+  table_view _keys;                    ///< Keys that determine grouping
+  bool _ignore_null_keys{true};        ///< Ignore rows in keys with NULLs
+  bool _keys_are_sorted{false};        ///< Whether or not the keys are sorted
+  std::vector<order> _column_order{};  ///< If keys are sorted, indicates
+                                       ///< the order of each column
+  std::vector<null_order> _null_precedence{};  ///< If keys are sorted,
+                                               ///< indicates null order
+                                               ///< of each column
 
-
-  
+  /**
+   * @brief Dispatches to the appropriate implementation to satisfy the
+   * aggregation requests.
+   */
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
+  dispatch_aggregation(std::vector<aggregation_request> const& requests,
+                       cudaStream_t stream,
+                       rmm::mr::device_memory_resource* mr);
 };
 }  // namespace groupby
 }  // namespace experimental
