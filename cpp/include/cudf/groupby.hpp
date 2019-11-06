@@ -114,7 +114,8 @@ struct aggregation_request {
  * @brief The result(s) of an `aggregation_request`
  */
 struct aggregation_result {
-  /// Pairs containing columns of aggregation results and the aggregation
+  /// Pairs containing columns of aggregation results and their corresponding
+  /// aggregation
   std::vector<std::pair<std::unique_ptr<column>, std::unique_ptr<aggregation>>>
       results{};
 };
