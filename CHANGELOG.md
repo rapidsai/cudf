@@ -23,6 +23,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3297 Define and implement new groupby API.
 
 ## Improvements
 
