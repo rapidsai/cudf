@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef BINARYOP_HPP
-#define BINARYOP_HPP
+#pragma once
 
 #include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <memory>
+
 namespace cudf {
+namespace experimental {
 
 /**
  * @brief Types of binary operations that can be performed on data.
@@ -138,6 +140,5 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          std::string const& ptx,
                                          data_type output_type);
 
+} // namespace experimental
 }  // namespace cudf
-
-#endif  // BINARYOP_HPP

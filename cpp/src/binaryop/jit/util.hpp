@@ -19,6 +19,7 @@
 #include <string>
 
 namespace cudf {
+namespace experimental {
 namespace binops {
 namespace jit {
 
@@ -94,4 +95,5 @@ namespace jit {
 
 } // namespace jit
 } // namespace binops
+} // namespace experimental
 } // namespace cudf

@@ -20,6 +20,7 @@
 #pragma once
 
 namespace cudf {
+namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
@@ -28,6 +29,7 @@ namespace code {
     extern const char* traits;
     extern const char* operation;
 
+}
 }
 }
 }
