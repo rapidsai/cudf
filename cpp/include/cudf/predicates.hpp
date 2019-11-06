@@ -28,7 +28,7 @@ namespace experimental {
  *                              must be equal to `in.num_columns()` or empty. If
  *                              empty, it is expected all columns are in
  *                              ascending order.
- * @param[in] numm_precedence   The desired order of null compared to other
+ * @param[in] null_precedence   The desired order of null compared to other
  *                              elements for each column. Size must be equal to
  *                              `input.num_columns()` or empty. If empty,
  *                              `null_order::BEFORE` is assumed for all columns.
