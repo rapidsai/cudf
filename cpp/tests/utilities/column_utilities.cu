@@ -70,9 +70,5 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
                             typed_rhs));
 }
 
-detail::column_wrapper::operator column_device_view() const {
-  return *column_device_view::create(wrapped->view());
-}
-
 }  // namespace test
 }  // namespace cudf
