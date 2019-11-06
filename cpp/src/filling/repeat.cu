@@ -24,16 +24,12 @@
 #include <cudf/detail/gather.cuh>
 #endif
 #include <cudf/detail/repeat.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/mr/device_memory_resource.hpp>
-
-// for gdf_scalar, unnecessary once we switch to cudf::scalar
-#include <cudf/types.h>
-// for gdf_dtype_of, unnecessary once we switch to cudf::scalar
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -43,7 +39,78 @@
 
 #include <cuda_runtime.h>
 
+#include <limits>
 #include <memory>
+
+namespace {
+
+struct count_accessor {
+  cudf::scalar const* p_scalar = nullptr;
+
+  template <typename T>
+  std::enable_if_t<std::is_integral<T>::value, cudf::size_type>
+  operator()(cudaStream_t stream = 0) {
+    using ScalarType = cudf::experimental::scalar_type_t<T>;
+#if 1
+    // TODO: temporary till cudf::scalar's value() function is marked as const
+    auto p_count =
+      const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_scalar));
+#else
+    auto p_const = static_cast<ScalarType const*>(this->p_scalar);
+#endif
+    auto count = p_count->value();
+    CUDF_EXPECTS(static_cast<int64_t>(count) <
+                   std::numeric_limits<cudf::size_type>::max(),
+                 "count should not exceed size_type's limit.");
+    return static_cast<cudf::size_type>(count);
+  }
+
+  template <typename T>
+  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type>
+  operator()(cudaStream_t stream) {
+    CUDF_FAIL("count value should be a integral type.");
+  }
+};
+
+struct compute_offsets {
+  cudf::column_view const* p_column = nullptr;
+
+  template <typename T>
+  std::enable_if_t<std::is_integral<T>::value,
+    rmm::device_vector<cudf::size_type>>
+  operator()(bool check_count, cudaStream_t stream = 0) {
+    if (check_count &&
+        static_cast<int64_t>(std::numeric_limits<T>::max()) >
+          std::numeric_limits<cudf::size_type>::max()) {
+      auto max = thrust::reduce(p_column->begin<T>(), p_column->end<T>(),
+                                0, thrust::maximum<T>());
+      CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
+                   "count should not have values larger than size_type's limit."
+                  );
+    }
+    rmm::device_vector<cudf::size_type> offsets(p_column->size());
+    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+                           p_column->begin<T>(), p_column->end<T>(),
+                           offsets.begin());
+    if (check_count == true) {
+      CUDF_EXPECTS(thrust::is_sorted(rmm::exec_policy(stream)->on(stream),
+                                     offsets.begin(), offsets.end()) == true,
+                   "count has negative values or the resulting table has more \
+                    rows than size_type's limit.");
+    }
+
+    return offsets;
+  }
+
+  template <typename T>
+  std::enable_if_t<not std::is_integral<T>::value,
+    rmm::device_vector<cudf::size_type>>
+  operator()(bool check_count, cudaStream_t stream) {
+    CUDF_FAIL("count value should be a integral type.");
+  }
+};
+
+}
 
 namespace cudf {
 namespace experimental {
@@ -64,16 +131,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   if (input_table.num_rows() == 0) {
     return cudf::experimental::empty_like(input_table);
   }
-  
-  rmm::device_vector<size_type> offsets(input_table.num_rows());
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-                         count.begin<size_t>(), count.end<size_t>(), offsets.begin());
-  if (check_count == true) {
-    CUDF_EXPECTS(thrust::is_sorted(rmm::exec_policy(stream)->on(stream),
-                                   offsets.begin(), offsets.end()) == true,
-                 "count has negative values or the resulting table has more \
-                  rows than size_type's limit.");
-  }
+ 
+  auto offsets =
+    cudf::experimental::type_dispatcher(count.type(),
+                                        compute_offsets{&count},
+                                        check_count, stream);
 
   auto output_size = size_type{offsets.back()};
   auto p_indices = make_numeric_column(data_type{type_to_id<size_type>()},
@@ -94,14 +156,13 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              gdf_scalar const& count,
+                              scalar const& count,
                               cudaStream_t stream,
                               rmm::mr::device_memory_resource* mr) {
-  // TODO: can't this be of any integral type?
-  CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
-               "count value should be of index type");
-  CUDF_EXPECTS(count.is_valid, "count cannot be null");
-  auto stride = size_type{count.data.si32};
+  CUDF_EXPECTS(count.is_valid(), "count cannot be null");
+  auto stride =
+    cudf::experimental::type_dispatcher(
+      count.type(), count_accessor{&count}, stream);
   CUDF_EXPECTS(stride >= 0, "count value should be non-negative");
   CUDF_EXPECTS(static_cast<int64_t>(input_table.num_rows()) * stride <=
                  std::numeric_limits<size_type>::max(),
@@ -141,7 +202,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              gdf_scalar const& count,
+                              scalar const& count,
                               rmm::mr::device_memory_resource* mr) {
   return detail::repeat(input_table, count, 0, mr);
 }

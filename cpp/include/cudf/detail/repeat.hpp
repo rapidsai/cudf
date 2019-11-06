@@ -20,9 +20,6 @@
 #include <cudf/types.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
-// for gdf_scalar, unnecessary once we switch to cudf::scalar
-#include <cudf/types.h>
-
 #include <cuda_runtime.h>
 
 #include <memory>
@@ -90,7 +87,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * @return std::unique_ptr<table> The result table containing the repetitions
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              gdf_scalar const& count,
+                              scalar const& count,
                               cudaStream_t stream = 0,
                               rmm::mr::device_memory_resource* mr =
                                 rmm::mr::get_default_resource());

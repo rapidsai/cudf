@@ -142,7 +142,7 @@ std::unique_ptr<table> repeat(
  * @return std::unique_ptr<table> The result table containing the repetitions
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(
-    table_view const& input_table, gdf_scalar const& count,
+    table_view const& input_table, scalar const& count,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
