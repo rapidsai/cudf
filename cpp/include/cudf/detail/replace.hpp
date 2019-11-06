@@ -72,7 +72,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
  * @param stream The CUDA stream to use for operations
- * @return The input column with specified values replaced.
+ * @return Copy of `input` with specified values replaced.
  */
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
