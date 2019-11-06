@@ -15,11 +15,14 @@
  */
 
 #include <cudf/null_mask.hpp>
-#include <cudf/utilities/bit.cuh>
-#include <utilities/cuda_utils.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <utilities/cuda_utils.hpp>
 
+
+#include <thrust/copy.h>
+#include <thrust/device_ptr.h>
 #include <thrust/extrema.h>
 #include <cub/cub.cuh>
 #include <rmm/device_buffer.hpp>
@@ -54,6 +57,12 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
       padding_boundary * cudf::util::div_rounding_up_safe<size_type>(
                              necessary_bytes, padding_boundary);
   return padded_bytes;
+}
+
+// Computes number of *actual* bitmask_type elements needed
+size_type num_bitmask_words(size_type number_of_bits) {
+  return cudf::util::div_rounding_up_safe<size_type>(
+      number_of_bits, detail::size_in_bits<bitmask_type>());
 }
 
 // Create a device_buffer for a null mask
@@ -140,6 +149,37 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
     atomicAdd(global_count, block_count);
   }
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Copies the bits starting at the specified offset from a source
+ * bitmask into the destination bitmask.
+ *
+ * Bit `i` in `destination` will be equal to bit `i + offset` from `source`.
+ *
+ * @param destination The mask to copy into
+ * @param source The mask to copy from
+ * @param bit_offset The offset into `source` from which to begin the copy
+ * @param number_of_mask_words The number of words of type bitmask_type to copy
+ *---------------------------------------------------------------------------**/
+__global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
+                                    bitmask_type const *__restrict__ source,
+                                    size_type bit_offset,
+                                    size_type number_of_mask_words) {
+  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+       destination_word_index < number_of_mask_words;
+       destination_word_index += blockDim.x * gridDim.x) {
+    size_type source_word_index =
+        destination_word_index + word_index(bit_offset);
+    bitmask_type curr_word = source[source_word_index];
+    bitmask_type next_word = 0;
+    if (destination_word_index + 1 < number_of_mask_words) {
+      next_word = source[source_word_index + 1];
+    }
+    bitmask_type write_word = __funnelshift_r(curr_word, next_word, bit_offset);
+    destination[destination_word_index] = write_word;
+  }
+}
+
 }  // namespace
 
 namespace detail {
@@ -168,7 +208,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 
   count_set_bits_kernel<block_size>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-          bitmask, start, stop - 1, non_zero_count.get());
+          bitmask, start, stop - 1, non_zero_count.data());
 
   return non_zero_count.value();
 }
@@ -194,6 +234,46 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
                                  size_type stop) {
   return detail::count_unset_bits(bitmask, start, stop);
+}
+
+// Create a bitmask from a specific range
+rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
+                                size_type end_bit, cudaStream_t stream,
+                                rmm::mr::device_memory_resource *mr) {
+  CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
+  CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");
+  rmm::device_buffer dest_mask{};
+  auto num_bytes = bitmask_allocation_size_bytes(end_bit - begin_bit);
+  if ((mask == nullptr) || (num_bytes == 0)) {
+    return dest_mask;
+  }
+  if (begin_bit == 0) {
+    dest_mask = rmm::device_buffer{static_cast<void const *>(mask), num_bytes,
+                                   stream, mr};
+  } else {
+    auto number_of_mask_words = cudf::util::div_rounding_up_safe(
+        static_cast<size_t>(end_bit - begin_bit),
+        detail::size_in_bits<bitmask_type>());
+    dest_mask = rmm::device_buffer{num_bytes, stream, mr};
+    cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
+    copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
+                          stream>>>(
+        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit,
+        number_of_mask_words);
+    CUDA_CHECK_LAST()
+  }
+  return dest_mask;
+}
+
+// Create a bitmask from a specific range
+rmm::device_buffer copy_bitmask(column_view const &view, cudaStream_t stream,
+                                rmm::mr::device_memory_resource *mr) {
+  rmm::device_buffer null_mask{};
+  if (view.nullable()) {
+    null_mask = copy_bitmask(view.null_mask(), view.offset(),
+                             view.offset() + view.size(), stream, mr);
+  }
+  return null_mask;
 }
 
 }  // namespace cudf

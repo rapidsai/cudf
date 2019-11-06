@@ -366,24 +366,24 @@ add_library(cudf
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
-            src/predicates/is_sorted.cu
+            src/predicates/legacy/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
             src/groupby/sort/legacy/groupby.cu
             src/groupby/legacy/groupby_without_aggregation.cu
             src/groupby/common/legacy/aggregation_requests.cpp
-            src/rolling/rolling.cu
-            src/rolling/jit/code/kernel.cpp
-            src/rolling/jit/code/operation.cpp
-            src/rolling/jit/util/type.cpp
-            src/binaryop/binaryop.cpp
-            src/binaryop/compiled/binary_ops.cu
-            src/binaryop/jit/code/kernel.cpp
-            src/binaryop/jit/code/operation.cpp
-            src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/util/operator.cpp
-            src/binaryop/jit/util/type.cpp
+            src/rolling/legacy/rolling.cu
+            src/rolling/legacy/jit/code/kernel.cpp
+            src/rolling/legacy/jit/code/operation.cpp
+            src/rolling/legacy/jit/util/type.cpp
+            src/binaryop/legacy/binaryop.cpp
+            src/binaryop/legacy/compiled/binary_ops.cu
+            src/binaryop/legacy/jit/code/kernel.cpp
+            src/binaryop/legacy/jit/code/operation.cpp
+            src/binaryop/legacy/jit/code/traits.cpp
+            src/binaryop/legacy/jit/util/operator.cpp
+            src/binaryop/legacy/jit/util/type.cpp
             src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
@@ -400,22 +400,23 @@ add_library(cudf
             src/hash/legacy/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/reductions/reductions.cu
-            src/reductions/min.cu
-            src/reductions/max.cu
-            src/reductions/any.cu
-            src/reductions/all.cu
-            src/reductions/sum.cu
-            src/reductions/product.cu
-            src/reductions/sum_of_squares.cu
-            src/reductions/mean.cu
-            src/reductions/var.cu
-            src/reductions/std.cu
+            src/reductions/legacy/reductions.cu
+            src/reductions/legacy/min.cu
+            src/reductions/legacy/max.cu
+            src/reductions/legacy/any.cu
+            src/reductions/legacy/all.cu
+            src/reductions/legacy/sum.cu
+            src/reductions/legacy/product.cu
+            src/reductions/legacy/sum_of_squares.cu
+            src/reductions/legacy/mean.cu
+            src/reductions/legacy/var.cu
+            src/reductions/legacy/std.cu
+            src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
-            src/reductions/scan.cu
             src/reshape/stack.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
@@ -480,11 +481,14 @@ add_library(cudf
             src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
+            src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
-            src/column/legacy/interop.cpp)
+            src/column/legacy/interop.cpp
+            src/scalar/scalar.cpp
+            src/scalar/scalar_factories.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
