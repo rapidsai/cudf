@@ -50,9 +50,12 @@ namespace detail {
  * @brief value accessor of column with null bitmask
  * A unary functor returns scalar value at `id`.
  * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
+ * This functor is only allowed for nullable columns.
  *
  * the return value for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
+ *
+ * @throws `cudf::logic_error` if the column is not nullable.
  *
  * @tparam Element The type of elements in the column
  * -------------------------------------------------------------------------**/
@@ -72,7 +75,6 @@ struct value_accessor
   {
     // verify valid is non-null, otherwise, is_valid() will crash
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
-    CUDF_EXPECTS(_col.head() != nullptr, "non-null data is required");
   }
 
   CUDA_DEVICE_CALLABLE
@@ -89,6 +91,10 @@ struct value_accessor
  *
  * Dereferencing the returned iterator for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
+ * This iterator is only allowed for nullable columns.
+ *
+ * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * @param column The column to iterate
