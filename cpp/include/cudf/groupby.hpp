@@ -118,6 +118,11 @@ struct aggregation_request {
 
 /**
  * @brief The result(s) of an `aggregation_request`
+ *
+ * For every `aggregation_request` given to `groupby::aggregate` an
+ * `aggregation_result` will be returned. The `aggregation_result` holds the
+ * resulting column(s) for each requested aggregation on the `request`s values.
+ *
  */
 struct aggregation_result {
   /// Pairs containing columns of aggregation results and their corresponding
