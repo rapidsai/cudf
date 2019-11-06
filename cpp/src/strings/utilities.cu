@@ -146,17 +146,24 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
 namespace
 {
 
-__device__ character_flags_table_type d_character_codepoint_flags[sizeof(g_character_codepoint_flags)];
+// This device variable is created here to avoid using a singleton that may cause issues
+// with RMM initialize/finalize. See PR #3159 for details on this approach.
+__device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
+std::mutex g_flags_table_mutex;
+character_flags_table_type* d_character_codepoint_flags = nullptr;
 
 } // namespace
 
-//
+// Return the flags table device pointer
 const character_flags_table_type* get_character_flags_table()
 {
-    CUDA_TRY(cudaMemcpyToSymbol(d_character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
-    character_flags_table_type* ptr = nullptr;
-    CUDA_TRY(cudaGetSymbolAddress((void**)&ptr,d_character_codepoint_flags));
-    return ptr;
+    std::lock_guard<std::mutex> guard(g_flags_table_mutex);
+    if( !d_character_codepoint_flags )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags,character_codepoint_flags));
+    }
+    return d_character_codepoint_flags;
 }
 
 } // namespace detail
