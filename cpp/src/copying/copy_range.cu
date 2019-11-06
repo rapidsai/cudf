@@ -53,7 +53,7 @@ struct column_range_factory {
   };
 
   template <typename T>
-  column_range<T> make() {
+  column_range<T> make(cudaStream_t stream = 0) {
     return column_range<T>{
       source.head<T>(),
       source.null_mask(),

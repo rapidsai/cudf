@@ -134,7 +134,7 @@ struct copy_range_dispatch {
     static_assert(warp_size == cudf::util::size_in_bits<cudf::bitmask_type>(),
       "copy_range_kernel assumes bitmask element size in bits == warp size");
 
-    auto source = factory.template make<T>();
+    auto source = factory.template make<T>(stream);
 
     T * __restrict__ data = target.head<T>();
     cudf::bitmask_type * __restrict__ bitmask = target.null_mask();
