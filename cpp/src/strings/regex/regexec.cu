@@ -82,10 +82,10 @@ dreprog* dreprog::create_from(const char32_t* pattern, const uint8_t* codepoint_
     return d_rtn;
 }
 
-void dreprog::destroy(dreprog* prog)
+void dreprog::destroy(dreprog* dprog)
 {
-    prog->free_relists();
-    RMM_TRY(RMM_FREE(prog,0));
+    dprog->free_relists();
+    RMM_TRY(RMM_FREE(dprog,0));
 }
 
 bool dreprog::alloc_relists( size_t count )

@@ -118,6 +118,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
             d_results, contains_fn<RX_STACK_LARGE>{prog, d_column, beginning_only} );
 
     results->set_null_count(strings.null_count());
+    dreprog::destroy(prog);
     return results;
 }
 
@@ -155,6 +156,26 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
     return detail::matches_re(strings, pattern, mr);
+}
+
+namespace detail
+{
+
+std::unique_ptr<column> count_re( strings_column_view const& strings,
+                                  std::string const& pattern,
+                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                  cudaStream_t stream = 0)
+{
+    return nullptr;
+}
+
+} // namespace detail
+
+std::unique_ptr<column> count_re( strings_column_view const& strings,
+                                  std::string const& pattern,
+                                  rmm::mr::device_memory_resource* mr)
+{
+    return detail::count_re(strings, pattern, mr);
 }
 
 } // namespace strings

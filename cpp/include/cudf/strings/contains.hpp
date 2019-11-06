@@ -54,5 +54,20 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
                                     std::string const& pattern,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Returns the number of times the given regex pattern
+ * matches in each string.
+ *
+ * Any null string results in a null entry for that row in the output column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param pattern Regex pattern to match within each string.
+ * @param mr Resource for allocating device memory.
+ * @return New INT32 column with counts for each string.
+ */
+std::unique_ptr<column> count_re( strings_column_view const& strings,
+                                  std::string const& pattern,
+                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 } // namespace strings
 } // namespace cudf

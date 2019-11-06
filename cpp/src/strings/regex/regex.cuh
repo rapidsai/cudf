@@ -47,13 +47,13 @@ class dreprog
 {
     int32_t startinst_id, num_capturing_groups;
     int32_t insts_count, starts_count, classes_count;
-    const uint8_t* codepoint_flags;
-    void* relists_mem;
-    u_char* stack_mem1;
-    u_char* stack_mem2;
-
-    dreprog() {}
-    ~dreprog() {}
+    const uint8_t* codepoint_flags{};
+    int32_t* startinst_ids{};
+    Reinst* insts{};
+    char32_t* classes{};
+    void* relists_mem{};
+    u_char* stack_mem1{};
+    u_char* stack_mem2{};
 
     void free_relists();
 
@@ -62,9 +62,20 @@ class dreprog
     __device__ inline int32_t call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
 public:
+    dreprog() = delete;
+    ~dreprog() = default;
+    dreprog(const dreprog&) = default;
+    dreprog(dreprog&&) = default;
+    dreprog& operator=(const dreprog&) = default;
+    dreprog& operator=(dreprog&&) = default;
+
     //
     static dreprog* create_from(const char32_t* pattern, const uint8_t* cp_flags);
-    static void destroy(dreprog* ptr);
+    static void destroy(dreprog*);
+
+    //static std::unique_ptr<dreprog, std::function<void(dreprog*)>> create(const char32_t* pattern, const uint8_t* cp_flags);
+    //void destroy();
+
     bool alloc_relists(size_t count);
 
     int32_t inst_counts();
