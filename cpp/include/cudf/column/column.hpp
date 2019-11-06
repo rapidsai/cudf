@@ -131,6 +131,23 @@ class column {
   size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
+   * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
+   *
+   * @param new_null_mask New null value indicator bitmask to set the column's
+   * null value indicator mask. May be empty if `new_null_count` is 0 or
+   * `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown,
+   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
+   * computed on the first invocation of `null_count()`.
+   *---------------------------------------------------------------------------**/
+  template <typename B = rmm::device_buffer>
+  void set_null_mask(
+      B&& new_null_mask, size_type new_null_count = UNKNOWN_NULL_COUNT) {
+    _null_mask = new_null_mask;
+    _null_count = new_null_count;
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Updates the count of null elements.
    *
    * @note `UNKNOWN_NULL_COUNT` can be specified as `new_null_count` to force
