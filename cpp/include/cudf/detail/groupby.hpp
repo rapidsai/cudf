@@ -26,14 +26,12 @@ namespace groupby {
 namespace detail {
 namespace hash {
 /**
- * @brief Heuristic that determines if a hash based groupby should be used to
- * satisfy the set of aggregation requests on `keys` with the specified
- * `options`.
+ * @brief Indicates if a set of aggregation requests can be satisfied with a
+ * hash-based groupby implementation.
  *
  * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
  * perform
- * @param options Controls behavior of the groupby
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
