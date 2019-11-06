@@ -59,8 +59,8 @@ class StringMethods(object):
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
 
-        if hasattr(self._parent._data, attr):
-            passed_attr = getattr(self._parent._data, attr)
+        if hasattr(self._parent.nvstrings, attr):
+            passed_attr = getattr(self._parent.nvstrings, attr)
             if callable(passed_attr):
 
                 @functools.wraps(passed_attr)
@@ -82,7 +82,7 @@ class StringMethods(object):
 
     def __dir__(self):
         keys = dir(type(self))
-        return set(keys + dir(self._parent._data))
+        return set(keys + dir(self._parent.nvstrings))
 
     def len(self):
         """
@@ -97,7 +97,7 @@ class StringMethods(object):
 
         out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.data.len(ptr)
+        self._parent.nvstrings.len(ptr)
 
         mask = None
         if self._parent.null_count > 0:
@@ -223,7 +223,7 @@ class StringMethods(object):
             others = others.data
 
         out = Series(
-            self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
+            self._parent.nvstrings.cat(others=others, sep=sep, na_rep=na_rep),
             index=self._index,
             name=self._parent.name,
         )
@@ -273,7 +273,7 @@ class StringMethods(object):
 
         from cudf.core import DataFrame, Series
 
-        out = self._parent.data.extract(pat)
+        out = self._parent.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
             return Series(out[0], index=self._index, name=self._parent.name)
         else:
@@ -322,7 +322,7 @@ class StringMethods(object):
 
         out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.data.contains(pat, regex=regex, devptr=ptr)
+        self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
         if self._parent.null_count > 0:
@@ -375,7 +375,7 @@ class StringMethods(object):
         from cudf.core import Series
 
         return Series(
-            self._parent.data.replace(pat, repl, n=n, regex=regex),
+            self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
             index=self._index,
             name=self._parent.name,
         )
@@ -392,7 +392,7 @@ class StringMethods(object):
         from cudf.core import Series
 
         return Series(
-            self._parent.data.lower(),
+            self._parent.nvstrings.lower(),
             index=self._index,
             name=self._parent.name,
         )
@@ -432,7 +432,7 @@ class StringMethods(object):
         from cudf.core import DataFrame
 
         out_df = DataFrame(index=self._index)
-        out = self._parent.data.split(delimiter=pat, n=n)
+        out = self._parent.nvstrings.split(delimiter=pat, n=n)
         for idx, val in enumerate(out):
             out_df[idx] = val
         return out_df
@@ -485,6 +485,15 @@ class StringColumn(column.ColumnBase):
 
         self._nvstrings = None
         self._nvcategory = None
+        self._indices = None
+
+    def _replace_defaults(self):
+        return {
+            "data": self.children[0].data,
+            "offsets": self.children[1].data,
+            "mask": self.mask,
+            "name": self.name,
+        }
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
@@ -497,7 +506,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index)
 
     def __len__(self):
-        return self._data.size()
+        return self.nvstrings.size()
 
     @property
     def nvstrings(self):
@@ -583,10 +592,12 @@ class StringColumn(column.ColumnBase):
         return self
 
     def to_arrow(self):
-        sbuf = np.empty(self._data.byte_count(), dtype="int8")
-        obuf = np.empty(len(self._data) + 1, dtype="int32")
+        sbuf = np.empty(self.nvstrings.byte_count(), dtype="int8")
+        obuf = np.empty(len(self.nvstrings) + 1, dtype="int32")
 
-        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
+        mask_size = utils.calc_chunk_size(
+            len(self.nvstrings), utils.mask_bitsize
+        )
         nbuf = np.empty(mask_size, dtype="int8")
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
@@ -599,7 +610,11 @@ class StringColumn(column.ColumnBase):
             )
         else:
             return pa.StringArray.from_buffers(
-                len(self._data), obuf, sbuf, nbuf, self._data.null_count()
+                len(self.nvstrings),
+                obuf,
+                sbuf,
+                nbuf,
+                self.nvstrings.null_count(),
             )
 
     def to_pandas(self, index=None):
@@ -633,9 +648,11 @@ class StringColumn(column.ColumnBase):
         frames = []
         sub_headers = []
 
-        sbuf = rmm.device_array(self._data.byte_count(), dtype="int8")
-        obuf = rmm.device_array(len(self._data) + 1, dtype="int32")
-        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
+        sbuf = rmm.device_array(self.nvstrings.byte_count(), dtype="int8")
+        obuf = rmm.device_array(len(self.nvstrings) + 1, dtype="int32")
+        mask_size = utils.calc_chunk_size(
+            len(self.nvstrings), utils.mask_bitsize
+        )
         nbuf = rmm.device_array(mask_size, dtype="int8")
         self.nvstrings.to_offsets(
             libcudf.cudf.get_ctype_ptr(sbuf),
@@ -649,7 +666,7 @@ class StringColumn(column.ColumnBase):
             sub_headers.append(sheader)
             frames.append(item)
 
-        header["nvstrings"] = len(self._data)
+        header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
         header["frame_count"] = len(frames)
         return header, frames
@@ -754,7 +771,7 @@ class StringColumn(column.ColumnBase):
 
             fill_value = fill_value[: len(self)]._column._data
 
-        filled_data = self._data.fillna(fill_value)
+        filled_data = self.nvstrings.fillna(fill_value)
         result = StringColumn(filled_data)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)

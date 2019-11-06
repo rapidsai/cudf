@@ -133,7 +133,7 @@ class ColumnBase(Column):
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
             if dtype.type in (np.object_, np.str_):
-                return StringColumn(data=nvstrings.to_device([]), null_count=0)
+                return as_column([], dtype="object")
             elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
                     data=as_column(Buffer.null(np.dtype("int8"))),
@@ -141,7 +141,7 @@ class ColumnBase(Column):
                     ordered=False,
                 )
             else:
-                return as_column(Buffer.null(dtype))
+                return as_column(Buffer.empty(0), dtype=dtype)
 
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
@@ -174,7 +174,7 @@ class ColumnBase(Column):
 
         for i, obj in enumerate(objs):
             # Check that all columns are the same type:
-            if not objs[i].is_type_equivalent(head):
+            if not objs[i].dtype == head.dtype:
                 # if all null, cast to appropriate dtype
                 if len(obj) == obj.null_count:
                     from cudf.core.column import column_empty_like
@@ -196,27 +196,32 @@ class ColumnBase(Column):
 
         head = objs[0]
         for obj in objs:
-            if not (obj.is_type_equivalent(head)):
+            if not (obj.dtype == head.dtype):
                 raise ValueError("All series must be of same type")
 
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
-            objs = [o._data for o in objs]
-            return StringColumn(data=nvstrings.from_strings(*objs))
+            objs = [o.nvstrings for o in objs]
+            return as_column(nvstrings.from_strings(*objs))
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = sum(o.null_count for o in objs)
+        nulls = any(col.mask for col in objs)
         newsize = sum(map(len, objs))
-        mem = rmm.device_array(shape=newsize, dtype=head.data.dtype)
-        data = Buffer.from_empty(mem, size=newsize)
+
+        if is_categorical_dtype(head):
+            data_dtype = head.dtype.data_dtype
+        else:
+            data_dtype = head.dtype
+        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
+        data = Buffer.from_array_like(mem)
 
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = Buffer(utils.make_mask(newsize))
+            mask = Buffer.from_array_like(utils.make_mask(newsize))
 
-        col = head.replace(data=data, mask=mask, null_count=nulls)
+        col = head.replace(data=data, mask=mask)
 
         # Performance the actual concatenation
         if newsize > 0:
@@ -238,7 +243,7 @@ class ColumnBase(Column):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna).to_gpu_array()
+        return self.to_dense_buffer(fillna=fillna)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -283,15 +288,6 @@ class ColumnBase(Column):
         else:
             raise ValueError("Column has no null mask")
 
-    def _replace_defaults(self):
-        params = {
-            "data": self.data,
-            "mask": self.mask,
-            "name": self.name,
-            "null_count": self.null_count,
-        }
-        return params
-
     def copy_data(self):
         """Copy the column with a new allocation of the data but not the mask,
         which is shared by the new column.
@@ -316,7 +312,7 @@ class ColumnBase(Column):
         Any omitted keywords will be defaulted to the corresponding
         attributes in ``self``.
         """
-        params = type(self)._replace_defaults()
+        params = type(self)._replace_defaults(self)
         params.update(kwargs)
         return type(self)(**params)
 
@@ -534,7 +530,7 @@ class ColumnBase(Column):
         else:
             # return a reference for performance reasons, should refactor code
             # to explicitly use mem in the future
-            return self.data
+            return self._data_view()
 
     def _invert(self):
         """Internal convenience function for inverting masked array
@@ -775,38 +771,6 @@ class TypedColumnBase(ColumnBase):
     def dtype(self):
         return self._dtype
 
-    def is_type_equivalent(self, other):
-        """Is the logical type of the column equal to the other column.
-        """
-        mine = self._replace_defaults()
-        theirs = other._replace_defaults()
-
-        def remove_base(dct):
-            # removes base attributes in the phyiscal layer.
-            basekeys = Column._replace_defaults(self).keys()
-            for k in basekeys:
-                del dct[k]
-
-        remove_base(mine)
-        remove_base(theirs)
-
-        # Check categories via Column.equals(). Pop them off the
-        # dicts so the == below doesn't try to invoke `__eq__()`
-        if ("categories" in mine) or ("categories" in theirs):
-            if "categories" not in mine:
-                return False
-            if "categories" not in theirs:
-                return False
-            if not mine.pop("categories").equals(theirs.pop("categories")):
-                return False
-
-        return type(self) == type(other) and mine == theirs
-
-    def _replace_defaults(self):
-        params = super(TypedColumnBase, self)._replace_defaults()
-        params.update(dict(dtype=self._dtype))
-        return params
-
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
         return inds
@@ -907,11 +871,14 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
+    offsets = None
 
     if is_categorical_dtype(dtype):
         raise NotImplementedError
     elif dtype.kind in "OU":
-        raise NotImplementedError
+        data = Buffer.empty(row_count)
+        offsets = Buffer.empty(row_count * np.dtype("int32").itemsize)
+
     else:
         data = Buffer.empty(row_count * dtype.itemsize)
 
@@ -920,14 +887,19 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     else:
         mask = None
 
-    return build_column(data, dtype, mask, categories=categories, name=name)
+    return build_column(
+        data, dtype, mask, categories=categories, offsets=offsets, name=name
+    )
 
 
-def build_column(data, dtype, mask=None, categories=None, name=None):
+def build_column(
+    data, dtype, mask=None, categories=None, offsets=None, name=None
+):
 
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.categorical import CategoricalColumn
+    from cudf.core.column.string import StringColumn
 
     dtype = pd.api.types.pandas_dtype(dtype)
 
@@ -938,7 +910,7 @@ def build_column(data, dtype, mask=None, categories=None, name=None):
     elif dtype.type is np.datetime64:
         return DatetimeColumn(data=data, dtype=dtype, mask=mask, name=name)
     elif dtype.type in (np.object_, np.str_):
-        raise NotImplementedError
+        return StringColumn(data=data, offsets=offsets, mask=mask, name=name)
     else:
         return NumericalColumn(data=data, dtype=dtype, mask=mask, name=name)
 
@@ -982,7 +954,20 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         if dtype is not None:
             data = data.astype(dtype)
     elif isinstance(arbitrary, nvstrings.nvstrings):
-        data = string.StringColumn(data=arbitrary)
+        sbuf = Buffer.empty(arbitrary.byte_count())
+        obuf = Buffer.empty(
+            (arbitrary.size() + 1) * np.dtype("int32").itemsize
+        )
+
+        nbuf = None
+        nbuf_ptr = None
+        if arbitrary.null_count() > 0:
+            mask_size = calc_chunk_size(arbitrary.size(), mask_bitsize)
+            nbuf = Buffer.empty(mask_size)
+            nbuf_ptr = nbuf.ptr
+
+        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, nbuf_ptr, bdevmem=True)
+        return string.StringColumn(data=sbuf, offsets=obuf, mask=nbuf)
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:

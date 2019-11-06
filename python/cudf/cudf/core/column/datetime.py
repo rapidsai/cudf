@@ -45,6 +45,14 @@ class DatetimeColumn(column.ColumnBase):
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
+    def _replace_defaults(self):
+        return {
+            "data": self.data,
+            "dtype": self.dtype,
+            "mask": self.mask,
+            "name": self.name,
+        }
+
     def __contains__(self, item):
         # Handles improper item types
         try:

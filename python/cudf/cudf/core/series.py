@@ -1115,7 +1115,7 @@ class Series(object):
             [name] = names
         else:
             name = None
-        col = Column._concat([o._column for o in objs])
+        col = ColumnBase._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
 
     @property

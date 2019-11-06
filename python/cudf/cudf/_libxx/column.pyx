@@ -15,7 +15,8 @@ from libc.stdlib cimport malloc, free
 
 from cudf.utils.dtypes import is_categorical_dtype
 
-np_to_cudf_types = {np.dtype('int16'): INT32,
+np_to_cudf_types = {np.dtype('int8'): INT8,
+                    np.dtype('int16'): INT16,
                     np.dtype('int32'): INT32,
                     np.dtype('int64'): INT64,
                     np.dtype('float32'): FLOAT32,
@@ -25,9 +26,11 @@ np_to_cudf_types = {np.dtype('int16'): INT32,
                     np.dtype("datetime64[ms]"): TIMESTAMP_MILLISECONDS,
                     np.dtype("datetime64[us]"): TIMESTAMP_MICROSECONDS,
                     np.dtype("datetime64[ns]"): TIMESTAMP_NANOSECONDS,
+                    np.dtype("object"): STRING,
 }
 
-cudf_to_np_types = {INT16: np.dtype('int16'),
+cudf_to_np_types = {INT8: np.dtype('int8'),
+                    INT16: np.dtype('int16'),
                     INT32: np.dtype('int32'),
                     INT64: np.dtype('int64'),
                     FLOAT32: np.dtype('float32'),
@@ -37,6 +40,7 @@ cudf_to_np_types = {INT16: np.dtype('int16'),
                     TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
                     TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
                     TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
+                    STRING: np.dtype("object")
 }
 
 cdef class Column:
@@ -107,9 +111,14 @@ cdef class Column:
         cdef gdf.gdf_dtype c_dtype = gdf.dtypes[self.dtype.type]
 
         if c_dtype == gdf.GDF_STRING_CATEGORY:
-            raise NotImplementedError
+            category = self.nvcategory.get_cpointer()
+            if len(self) > 0:
+                data_ptr = gdf.get_ctype_ptr(self.indices.mem)
+            else:
+                data_ptr = 0
         else:
             category = 0
+            
             if len(self) > 0:
                 data_ptr = self.data.ptr
             else:

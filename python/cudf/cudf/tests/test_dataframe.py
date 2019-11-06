@@ -41,62 +41,6 @@ def test_init_via_list_of_empty_tuples(rows):
     assert_eq(pdf, gdf, check_like=True)
 
 
-def test_buffer_basic():
-    n = 10
-    buf = Buffer(np.arange(n, dtype=np.float64))
-    assert buf.size == n
-    assert buf.capacity == n
-    np.testing.assert_equal(
-        buf.mem.copy_to_host(), np.arange(n, dtype=np.float64)
-    )
-
-
-def test_buffer_append():
-    n = 10
-    expected = np.arange(n, dtype=np.float64)
-    buf = Buffer(expected, size=n - 4, capacity=n)
-    assert buf.size == n - 4
-    assert buf.capacity == n
-    np.testing.assert_equal(buf.mem.copy_to_host(), expected)
-    np.testing.assert_equal(buf.to_array(), np.arange(n - 4, dtype=np.float64))
-
-    # Buffer.append
-    buf.append(1.23)
-    expected[n - 4] = 1.23
-    np.testing.assert_equal(buf.mem.copy_to_host(), expected)
-    assert buf.size == n - 3
-    assert buf.capacity == n
-
-    # Buffer.extend
-    buf.extend(np.asarray([2, 3]))
-    expected[n - 3] = 2
-    expected[n - 2] = 3
-    np.testing.assert_equal(buf.mem.copy_to_host(), expected)
-    assert buf.size == n - 1
-    assert buf.capacity == n
-
-    # Test out-of-bound
-    with pytest.raises(MemoryError):
-        buf.extend(np.asarray([2, 3]))
-    np.testing.assert_equal(buf.mem.copy_to_host(), expected)
-    assert buf.size == n - 1
-    assert buf.capacity == n
-
-    # Append to last slot
-    buf.append(10.125)
-    expected[n - 1] = 10.125
-    np.testing.assert_equal(buf.mem.copy_to_host(), expected)
-    assert buf.size == n
-    assert buf.capacity == n
-
-    with pytest.raises(MemoryError):
-        buf.append(987654)
-
-    np.testing.assert_equal(buf.to_array(), expected)
-    assert buf.size == n
-    assert buf.capacity == n
-
-
 def test_series_basic():
     # Make series from buffer
     a1 = np.arange(10, dtype=np.float64)
@@ -122,13 +66,13 @@ def test_append_index(a, b):
     actual = gdf.a.append(gdf.b)
 
     assert len(expected) == len(actual)
-    assert list(expected.index.values) == list(actual.index.values)
+    assert_eq(expected.index, actual.index)
 
     expected = df.a.append(df.b, ignore_index=True)
     actual = gdf.a.append(gdf.b, ignore_index=True)
 
     assert len(expected) == len(actual)
-    assert list(expected.index.values) == list(actual.index.values)
+    assert_eq(expected.index, actual.index)
 
 
 def test_series_append():

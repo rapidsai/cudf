@@ -239,6 +239,16 @@ class CategoricalColumn(column.ColumnBase):
         self._categories = categories
         self._ordered = ordered
 
+    def _replace_defaults(self):
+        return {
+            "data": self.data,
+            "dtype": self.dtype,
+            "categories": self._categories,
+            "mask": self.mask,
+            "name": self.name,
+            "ordered": self._ordered,
+        }
+
     def __contains__(self, item):
         return self._encode(item) in self.as_numerical
 
@@ -308,7 +318,7 @@ class CategoricalColumn(column.ColumnBase):
         raise TypeError(msg)
 
     def unordered_compare(self, cmpop, rhs):
-        if not self.is_type_equivalent(rhs):
+        if self.dtype != rhs.dtype:
             raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.unordered_compare(cmpop, rhs.as_numerical)
 
@@ -316,7 +326,7 @@ class CategoricalColumn(column.ColumnBase):
         if not (self._ordered and rhs._ordered):
             msg = "Unordered Categoricals can only compare equality or not"
             raise TypeError(msg)
-        if not self.is_type_equivalent(rhs):
+        if self.dtype != rhs.dtype:
             raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
@@ -451,7 +461,7 @@ class CategoricalColumn(column.ColumnBase):
             raise ValueError("Requires ordered categories")
 
         value_col = column.as_column(value)
-        if not self.is_type_equivalent(value_col):
+        if self.dtype != value_col.dtype:
             raise TypeError("Categoricals can only compare with the same type")
 
         return libcudf.search.search_sorted(self, value_col, side)

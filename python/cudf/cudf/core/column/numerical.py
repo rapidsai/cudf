@@ -40,10 +40,13 @@ class NumericalColumn(column.ColumnBase):
         size = data.size // dtype.itemsize
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
 
-    def replace(self, **kwargs):
-        if "data" in kwargs and "dtype" not in kwargs:
-            kwargs["dtype"] = kwargs["data"].dtype
-        return super(NumericalColumn, self).replace(**kwargs)
+    def _replace_defaults(self):
+        return {
+            "data": self.data,
+            "dtype": self.dtype,
+            "mask": self.mask,
+            "name": self.name,
+        }
 
     def serialize(self):
         header, frames = super(NumericalColumn, self).serialize()

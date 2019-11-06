@@ -151,7 +151,7 @@ class Index(object):
 
     @classmethod
     def _concat(cls, objs):
-        data = Column._concat([o.as_column() for o in objs])
+        data = ColumnBase._concat([o.as_column() for o in objs])
         return as_index(data)
 
     def _apply_op(self, fn, other=None):
@@ -589,7 +589,7 @@ class RangeIndex(Index):
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
         return NumericalColumn(
-            data=Buffer(vals), dtype=vals.dtype, name=self.name
+            data=Buffer.from_array_like(vals), dtype=vals.dtype, name=self.name
         )
 
     @copy_docstring(_to_frame)
@@ -667,7 +667,7 @@ class GenericIndex(Index):
         # normalize the input
         if isinstance(values, Series):
             values = values._column
-        elif isinstance(values, column.TypedColumnBase):
+        elif isinstance(values, column.ColumnBase):
             values = values
         else:
             if isinstance(values, (list, tuple)):
@@ -681,7 +681,7 @@ class GenericIndex(Index):
         self._values = values
         self.name = kwargs.get("name")
 
-        assert isinstance(values, column.TypedColumnBase), type(values)
+        assert isinstance(values, column.ColumnBase), type(values)
 
     def copy(self, deep=True):
         if deep:

@@ -60,7 +60,8 @@ class CategoricalDtype(ExtensionDtype):
             return True
         else:
             return (
-                self._categories.dtype == other._categories.dtype
+                self.data_dtype == other.data_dtype
+                and self._categories.dtype == other._categories.dtype
                 and self._categories.equals(other._categories)
             )
 
