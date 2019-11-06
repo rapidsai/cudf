@@ -37,8 +37,8 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with lengths for each string.
  */
-std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> characters_count( strings_column_view const& strings,
+                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a numeric column containing the length of each string in
@@ -54,8 +54,8 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with the number of bytes for each string.
  */
-std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> bytes_count( strings_column_view const& strings,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a numeric column with code point values (integers) for each
@@ -73,8 +73,8 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with code point integer values for each character.
  */
-std::unique_ptr<cudf::column> code_points( strings_column_view strings,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> code_points( strings_column_view const& strings,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
