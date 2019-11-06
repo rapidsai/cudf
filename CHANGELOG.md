@@ -12,6 +12,7 @@
 - PR #3022 adds DataFrame.astype for cuDF dataframes
 - PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
+- PR #3068 Add `scalar` class
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3143 Define and implement new copying APIs `slice` and `split`
@@ -19,6 +20,8 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3263 Define and implement new `valid_if`
+- PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
 - PR #3144 Define and implement new hashing APIs `hash` and `hash_partition`
@@ -75,8 +78,15 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
+- PR #3281 Add to_host specialization for strings in column test utilities
+- PR #3282 Add `num_bitmask_words`
+- PR #3288 Make `bit.cuh` utilities usable from host code.
+- PR #3287 Move rolling windows files to legacy
+- PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 
 ## Bug Fixes
 
@@ -106,6 +116,9 @@
 - PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
 - PR #3279 Fix shutdown hang issues with pinned memory pool init executor
 - PR #3280 Invalid children check in mutable_column_device_view
+- PR #3289 fix java memory usage API for empty columns
+- PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
+- PR #3295 Fix storing storing invalid RMM exec policies.
 
 
 # cuDF 0.10.0 (16 Oct 2019)
