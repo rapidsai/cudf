@@ -479,6 +479,7 @@ add_library(cudf
             src/table/table_device_view.cu
             src/table/table.cpp
             src/bitmask/null_mask.cu
+            src/rolling/rolling.cu
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_scalar_factories.cpp
