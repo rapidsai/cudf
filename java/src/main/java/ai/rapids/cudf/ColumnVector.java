@@ -1956,13 +1956,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
      * @return number of device bytes allocated for this column
      */
     public long getDeviceMemoryLength(DType type) {
-      long length;
-      length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
-
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
-      } else {
-        length += deviceData.data != null ? deviceData.data.getLength() : 0;
+      long length = 0;
+      if (deviceData != null) {
+        length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
+        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+          length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
+        } else {
+          length += deviceData.data != null ? deviceData.data.getLength() : 0;
+        }
       }
       return length;
     }

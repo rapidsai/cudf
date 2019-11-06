@@ -284,6 +284,14 @@ ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
+set(UNARY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cu")
+
+ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
+
+###################################################################################################
+# - legacy unary tests -----------------------------------------------------------------------------------
+
 set(LEGACY_UNARY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
 
@@ -516,10 +524,10 @@ ConfigureTest(LEGACY_STREAM_COMPACTION_TEST "${LEGACY_STREAM_COMPACTION_TEST_SRC
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
 
-set(ROLLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
+set(LEGACY_ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/legacy/rolling_test.cu")
 
-ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy filling test ---------------------------------------------------------------------------
@@ -585,7 +593,9 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_if_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_tests.cu")
+
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 

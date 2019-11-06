@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/cuda.cuh>
 #include <cudf/utilities/error.hpp>
 #include <utilities/release_assert.cuh>
 #include <cudf/wrappers/bool.hpp>
