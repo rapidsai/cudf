@@ -33,7 +33,7 @@ namespace sort {
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   // stub
   return std::make_pair(std::make_unique<table>(),
                         std::vector<std::unique_ptr<column>>{});

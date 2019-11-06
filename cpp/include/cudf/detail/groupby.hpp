@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/types.hpp>
 
 #include <memory>
 #include <utility>
@@ -38,27 +38,20 @@ namespace hash {
  * @return false A hash-based groupby should not be used
  */
 bool use_hash_groupby(table_view const& keys,
-                      std::vector<aggregation_request> const& requests,
-                      Options options);
+                      std::vector<aggregation_request> const& requests);
 
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr);
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 
 namespace sort {
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr);
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }  // namespace sort
-
-// Dispatch to hash vs. sort groupby
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
-    table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
 }  // namespace groupby
 }  // namespace experimental

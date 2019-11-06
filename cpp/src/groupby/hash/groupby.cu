@@ -73,8 +73,7 @@ constexpr bool is_hash_aggregation(aggregation::Kind t) {
  * @return false A hash-based groupby should not be used
  */
 bool use_hash_groupby(table_view const& keys,
-                      std::vector<aggregation_request> const& requests,
-                      Options options) {
+                      std::vector<aggregation_request> const& requests) {
   // Simple heuristic...
   // Only use hash groupby if it's possible to satisfy *all* requests with a
   // hash groupby
@@ -89,7 +88,7 @@ bool use_hash_groupby(table_view const& keys,
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   // stub
   return std::make_pair(std::make_unique<table>(),
                         std::vector<std::unique_ptr<column>>{});

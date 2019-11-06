@@ -31,18 +31,24 @@ namespace experimental {
 namespace groupby {
 namespace detail {
 // Dispatch to hash vs. sort groupby
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
-    table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>>
+dispatch_groupby(table_view const& keys,
+                 std::vector<aggregation_request> const& requests,
+                 cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
                            [keys](auto const& request) {
                              return request.values.size() == keys.num_rows();
                            }),
                "Size mismatch between request values and groupby keys.");
-  if (hash::use_hash_groupby(keys, requests, options)) {
-    return hash::groupby(keys, requests, options, stream, mr);
+
+  if (keys.num_rows() == 0) {
+    // TODO Return appropriately typed empty table/columns.
+  }
+
+  if (hash::use_hash_groupby(keys, requests)) {
+    return hash::groupby(keys, requests, stream, mr);
   } else {
-    return sort::groupby(keys, requests, options, stream, mr);
+    return sort::groupby(keys, requests, stream, mr);
   }
 }
 }  // namespace detail
@@ -79,11 +85,20 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
   return std::unique_ptr<aggregation>(a);
 }
 
-// Public groupby interface
-std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>> groupby(
-    table_view const& keys, std::vector<aggregation_request> const& requests,
-    Options options, rmm::mr::device_memory_resource* mr) {
-  return detail::groupby(keys, requests, options, 0, mr);
+groupby::groupby(table_view const& keys, bool ignore_null_keys,
+                 bool keys_are_sorted, std::vector<order> const& column_order,
+                 std::vector<null_order> const& null_precedence)
+    : _keys{keys},
+      _ignore_null_keys{ignore_null_keys},
+      _keys_are_sorted{keys_are_sorted},
+      _column_order{column_order},
+      _null_precedence{null_precedence} {}
+
+std::pair<std::unique_ptr<table>, std::vector<std::unique_ptr<column>>>
+groupby::aggregate(std::vector<aggregation_request> const& requests,
+                   rmm::mr::device_memory_resource* mr) {
+
+  return detail::dispatch_groupby(_keys, requests, 0, mr);
 }
 }  // namespace groupby
 }  // namespace experimental
