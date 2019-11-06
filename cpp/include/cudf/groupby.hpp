@@ -104,8 +104,11 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
  * @brief Request for groupby aggregation(s) to perform on a column.
  *
  * The group membership of each `value[i]` is determined by the corresponding
- * row `i` in the original order of `keys` that was used to construct the
- * `groupby`.
+ * row `i` in the original order of `keys` used to construct the
+ * `groupby`. I.e., for each `aggregation`, `values[i]` is aggregated with all
+ * other `values[j]` where rows `i` and `j` in `keys` are equivalent.
+ *
+ * `values.size()` column must equal `keys.num_rows()`.
  */
 struct aggregation_request {
   column_view values;  ///< The elements to aggregate
@@ -139,7 +142,7 @@ class groupby {
    * @brief Construct a groupby object with the specified `keys`
    *
    * @note This object does *not* maintain the lifetime of `keys`. It is the
-   * users responsibility to ensure the `groupby` object does not outlive
+   * user's responsibility to ensure the `groupby` object does not outlive
    * `keys`.
    *
    * @param keys Table whose rows act as the groupby keys
