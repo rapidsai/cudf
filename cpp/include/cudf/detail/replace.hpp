@@ -56,7 +56,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   * @param[in] replacement Scalar used to replace null values in `input`. 
   * @param[in] stream Optional stream in which to perform allocations
   *
-  * @returns Column with nulls replaced
+  * @returns Copy of `input` with null values replaced by `replacement`.
   */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             const gdf_scalar& replacement,
