@@ -56,9 +56,9 @@ public:
     static NVStrings* unique_tokens(NVStrings& strs, const char* delimiter=nullptr);
 
     /**
-     * @brief Tokenize all input strings into single characters strings.
-     * This will create single character strings in the returned instance.
-     * 
+     * @brief Tokenize all input strings into single-character strings.
+     *
+     * Example
      * ```
      * s = ['apple','pear']
      * r = character_tokenize(s)
