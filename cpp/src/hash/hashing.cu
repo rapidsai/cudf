@@ -18,6 +18,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/table/row_operators.cuh>
 
 #include <hash/hash_functions.cuh>
 
@@ -29,33 +30,6 @@ namespace {
 
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;
-
-template <template <typename> class hash_function>
-struct row_hasher_initial_values {
-  row_hasher_initial_values(table_device_view const& table_to_hash,
-                            hash_value_type *initial_hash)
-      : _table{table_to_hash}, _initial_hash(initial_hash) {}
-
-  __device__ hash_value_type operator()(size_type row_index) const {
-    return 0; // TODO
-    //return hash_row<true, hash_function>(_table, row_index, _initial_hash);
-  }
-
-  table_device_view const& _table;
-  hash_value_type *_initial_hash{nullptr};
-};
-
-template <template <typename> class hash_function>
-struct row_hasher {
-  row_hasher(table_device_view const& table_to_hash) : _table{table_to_hash} {}
-
-  __device__ hash_value_type operator()(size_type row_index) const {
-    return 0; // TODO
-    //return hash_row<true, hash_function>(_table, row_index);
-  }
-
-  table_device_view const& _table;
-};
 
 /** 
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
@@ -108,7 +82,7 @@ struct bitwise_partitioner
    Records the size of each partition for each thread block as well as the global
    size of each partition across all thread blocks.
  */
-template <template <typename> class hash_function, typename partitioner_type>
+template <template <typename> class hash_function, bool has_nulls, typename partitioner_type>
 __global__ 
 void compute_row_partition_numbers(table_device_view the_table, 
                                    const size_type num_rows,
@@ -132,13 +106,13 @@ void compute_row_partition_numbers(table_device_view the_table,
 
   __syncthreads();
 
+  auto hasher = experimental::row_hasher<hash_function, has_nulls>(the_table);
+
   // Compute the hash value for each row, store it to the array of hash values
   // and compute the partition to which the hash value belongs and increment
   // the shared memory counter for that partition
   while (row_number < num_rows) {
-    const hash_value_type row_hash_value =
-        0; // TODO
-        //hash_row<true, hash_function>(the_table, row_number);
+    const hash_value_type row_hash_value = hasher(row_number);
 
     const size_type partition_number = the_partitioner(row_hash_value);
 
@@ -235,7 +209,8 @@ hash_partition_table(table_view const& input,
     // Computes which partition each row belongs to by hashing the row and performing
     // a partitioning operator on the hash value. Also computes the number of
     // rows in each partition both for each thread block as well as across all blocks
-    compute_row_partition_numbers<hash_function>
+    constexpr bool has_nulls = false; // TODO
+    compute_row_partition_numbers<hash_function, has_nulls>
         <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>(
             *device_input, num_rows, num_partitions,
             partitioner_type(num_partitions), row_partition_numbers.data().get(),
@@ -248,7 +223,8 @@ hash_partition_table(table_view const& input,
     // Computes which partition each row belongs to by hashing the row and performing
     // a partitioning operator on the hash value. Also computes the number of
     // rows in each partition both for each thread block as well as across all blocks
-    compute_row_partition_numbers<hash_function>
+    constexpr bool has_nulls = false; // TODO
+    compute_row_partition_numbers<hash_function, has_nulls>
         <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>(
             *device_input, num_rows, num_partitions,
             partitioner_type(num_partitions), row_partition_numbers.data().get(),
@@ -350,6 +326,8 @@ std::unique_ptr<column> hash(table_view const& input,
     return hash_column;
   }
 
+  bool const nullable = has_nulls(input);
+
   auto device_input = table_device_view::create(input, stream);
 
   // Compute the hash value for each row depending on the specified hash function
@@ -360,16 +338,30 @@ std::unique_ptr<column> hash(table_view const& input,
 
     switch (hash) {
       case hash_func::MURMUR3:
-        thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-                         hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
-                         row_hasher_initial_values<MurmurHash3_32>(
-                             *device_input, device_initial_hash.data().get()));
+        if (nullable) {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher_initial_values<MurmurHash3_32, true>(
+                  *device_input, device_initial_hash.data().get()));
+        } else {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher_initial_values<MurmurHash3_32, false>(
+                  *device_input, device_initial_hash.data().get()));
+        }
         break;
       case hash_func::IDENTITY:
-        thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-                         hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
-                         row_hasher_initial_values<IdentityHash>(
-                             *device_input, device_initial_hash.data().get()));
+        if (nullable) {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher_initial_values<IdentityHash, true>(
+                  *device_input, device_initial_hash.data().get()));
+        } else {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher_initial_values<IdentityHash, false>(
+                  *device_input, device_initial_hash.data().get()));
+        }
         break;
       default:
         CUDF_FAIL("Invalid hash function");
@@ -377,14 +369,26 @@ std::unique_ptr<column> hash(table_view const& input,
   } else {
     switch (hash) {
       case hash_func::MURMUR3:
-        thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-                         hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
-                         row_hasher<MurmurHash3_32>(*device_input));
+        if (nullable) {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher<MurmurHash3_32, true>(*device_input));
+        } else {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher<MurmurHash3_32, false>(*device_input));
+        }
         break;
       case hash_func::IDENTITY:
-        thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-                         hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
-                         row_hasher<IdentityHash>(*device_input));
+        if (nullable) {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher<IdentityHash, true>(*device_input));
+        } else {
+          thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+              hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
+              experimental::row_hasher<IdentityHash, false>(*device_input));
+        }
         break;
       default:
         CUDF_FAIL("Invalid hash function");
