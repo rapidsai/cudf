@@ -15,13 +15,14 @@
  */
 
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/scalar_wrapper.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/filling.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -30,9 +31,6 @@
 #include <algorithm>
 #include <numeric>
 #include <random>
-
-template <typename T>
-using scalar_wrapper = cudf::test::scalar_wrapper<T>;
 
 template <typename T>
 T random_int(T min, T max)
@@ -75,8 +73,13 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
                     expected_elements + num_values * repeat_count);
 
   auto input_table = cudf::table_view{{input}};
-  scalar_wrapper<cudf::size_type> count{repeat_count};
-  auto ret = cudf::experimental::repeat(input_table, count);
+
+  auto p_count = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  using T_int = cudf::experimental::id_to_type<cudf::INT32>;
+  using ScalarType = cudf::experimental::scalar_type_t<T_int>;
+  static_cast<ScalarType*>(p_count.get())->set_value(repeat_count);
+
+  auto ret = cudf::experimental::repeat(input_table, *p_count);
 
   EXPECT_EQ(ret->num_columns(), 1);
   cudf::test::expect_columns_equal(ret->view().column(0), expected);
