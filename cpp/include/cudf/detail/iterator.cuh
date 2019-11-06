@@ -104,36 +104,6 @@ auto make_null_replacement_iterator(column_device_view const& column,
       value_accessor<Element>{column, null_replacement});
 }
 
-/**
- * @brief Constructs an iterator over a column's values that replaces null
- * elements with a specified value, with column indices taken from input iterator.
- *
- * Dereferencing the returned iterator for Index `i` will return `column[*i]`
- * if it is valid, or `null_replacement` if it is null.
- *
- * Usage:
- * template parameter for custom indexed iterator
- *     cudf::size_type *indices;
- *     auto it = make_null_replacement_custom_index_iterator<T, T_index*>(column, T{0}, indices);
- *
- * @tparam Element The type of elements in the column
- * @tparam Index The input iterator poiting to index the column elements
- * @param column The column to iterate
- * @param null_replacement The value to return for null elements
- * @return auto Iterator that returns valid column elements, or a null
- * replacement value for null elements.
- */
-template <typename Element,
-          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
-auto make_null_replacement_custom_index_iterator(
-    column_device_view const& column,
-    Element const null_replacement = Element{0},
-    Iterator_Index const it = Iterator_Index{0})
-{
-  return thrust::make_transform_iterator(
-      it, value_accessor<Element>{column, null_replacement});
-}
-
 } //namespace detail
 } //namespace experimental
 } //namespace cudf
