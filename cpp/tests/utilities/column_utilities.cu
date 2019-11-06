@@ -69,14 +69,48 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool all
 
   CUDA_TRY(cudaDeviceSynchronize());
 
-  //
-  //  If there are differences, let's display the first one
-  //
   if (diff_iter > differences.begin()) {
+    int difference_count = diff_iter - differences.begin();
+
     if (all) {
+      //
+      //  If there are differences, display them all
+      //
+      std::ostringstream buffer;
+      buffer << "differences:" << std::endl;
+      
+#ifdef USE_GATHER
+      cudf::table_view source_table ({lhs, rhs});
+
+      std::unique_ptr<cudf::experimental::table> diff_table = cudf::experimental::gather(source_table,
+											 differences);
+
+      //
+      //  Need to pull back the differences
+      //
+      std::vector<std::string> h_left_strings = to_strings(diff_table->column(0));
+      std::vector<std::string> h_right_strings = to_strings(diff_table->column(1));
+
+      for (int i = 0 ; i < differences_count ; ++i) {
+          buffer << "lhs[" << differences[i] << "] = " << h_left_strings[i]
+                 << ", rhs[" << differences[i] << "] = " << h_right_strings[i] << std::endl;
+      }
+#else
+      std::vector<std::string> h_left_strings = to_strings(lhs);
+      std::vector<std::string> h_right_strings = to_strings(rhs);
+
+      std::for_each(differences.begin(), diff_iter, [&buffer, &h_left_strings, &h_right_strings](int idx) {
+          buffer << "lhs[" << idx << "] = " << h_left_strings[idx]
+                 << ", rhs[" << idx << "] = " << h_right_strings[idx] << std::endl;
+        });
+#endif
+
+      EXPECT_EQ(difference_count, 0) << buffer.str();
     } else {
+      //
+      //  If there are differences, just display the first one
+      //
       int index = differences[0];
-      int count = diff_iter - differences.begin();
 
       cudf::column_view diff_lhs(lhs.type(),
                                  1,
@@ -92,17 +126,11 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool all
                                  0,
                                  index);
 
-      EXPECT_PRED_FORMAT1(([diff_lhs, diff_rhs, count]
-                           (const char *m_expr, int m) {
-                             return ::testing::AssertionFailure()
-                               << "expect_columns_equal failed with ("
-                               << count
-                               << ") differences: "
-                               << "lhs[" << m << "] = "
-                               << to_string(diff_lhs, "")
-                               << ", rhs[" << m << "] = "
-                               << to_string(diff_rhs, "");
-                           }), index);
+      EXPECT_EQ(difference_count, 0) << "first difference: "
+                                     << "lhs[" << index << "] = "
+                                     << to_string(diff_lhs, "")
+                                     << ", rhs[" << index << "] = "
+                                     << to_string(diff_rhs, "");
     }
   }
 }
@@ -122,41 +150,47 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, const char *delimiter, std::ostream &ostream) {
-
-    //std::pair<std::vector<Element>, std::vector<bitmask_type>> h_data;
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     auto h_data = cudf::test::to_host<Element>(col);
 
+    out.resize(col.size());
+
     if (col.nullable()) {
-      cudf::size_type index{0};
-      for (Element data : h_data.first) {
-        ostream << ((index == 0) ? "" : delimiter);
-        if (bit_is_set(h_data.second.data(), index++)) 
-          ostream << data;
-        else
-          ostream << "@";
-      }
+      size_type index = 0;
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [&h_data, &index](Element el) {
+          return (bit_is_set(h_data.second.data(), index++)) ? std::to_string(el) : std::string("@");
+        });
     } else {
-      std::copy(h_data.first.begin(), h_data.first.end(),
-                std::ostream_iterator<Element>(ostream, delimiter));
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
+          return std::to_string(el);
+        });
     }
   }
 
   template <typename Element, typename std::enable_if_t<not is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, const char *delimiter, std::ostream &ostream) {
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     CUDF_FAIL("printing not currently enabled for non-numeric arguments");
   }
 };
 
-std::string to_string(cudf::column_view const& col, const char *delimiter) {
-
-  std::ostringstream buffer;
+std::vector<std::string> to_strings(cudf::column_view const& col) {
+  std::vector<std::string> reply;
 
   cudf::experimental::type_dispatcher(col.type(),
                                       column_view_printer{}, 
                                       col,
-                                      delimiter,
-                                      buffer);
+                                      reply);
+
+  return reply;
+}
+
+std::string to_string(cudf::column_view const& col, const char *delimiter) {
+
+  std::ostringstream buffer;
+  std::vector<std::string> h_data = to_strings(col);
+
+  std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter));
+  buffer << h_data.back();
 
   return buffer.str();
 }

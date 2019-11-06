@@ -85,7 +85,13 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumn) {
   std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
 
   std::ostringstream tmp;
-  std::copy(std_col.begin(), std_col.end(), std::ostream_iterator<TypeParam>(tmp, delimiter));
+
+  int index = 0;
+  for (auto x : std_col) {
+    tmp << ((index == 0) ? "" : delimiter);
+    tmp << std::to_string(x);
+    ++index;
+  }
 
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
@@ -98,11 +104,11 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
 
   std::ostringstream tmp;
-  tmp << std_col[0]
+  tmp << std::to_string(std_col[0])
       << delimiter << "@"
-      << delimiter << std_col[2]
+      << delimiter << std::to_string(std_col[2])
       << delimiter << "@"
-      << delimiter << std_col[4];
+      << delimiter << std::to_string(std_col[4]);
   
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }

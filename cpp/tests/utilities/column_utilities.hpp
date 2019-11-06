@@ -62,6 +62,13 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
 std::string to_string(cudf::column_view const& col, const char *delimiter);
 
 /**---------------------------------------------------------------------------*
+ * @brief Convert column values to a host vector of strings
+ *
+ * @param col The column view
+ *---------------------------------------------------------------------------**/
+std::vector<std::string> to_strings(cudf::column_view const& col);
+
+/**---------------------------------------------------------------------------*
  * @brief Print a column view to an ostream
  *
  * @param os        The output stream
