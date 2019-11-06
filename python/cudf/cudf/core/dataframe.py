@@ -1512,6 +1512,11 @@ class DataFrame(object):
             Values to be added.
         """
 
+        warnings.warn(
+            "`add_column` will be removed in the future. Use `.insert`",
+            DeprecationWarning,
+        )
+
         if name in self._cols:
             raise NameError("duplicated column name {!r}".format(name))
 
