@@ -126,6 +126,8 @@ struct EncColumnDesc
 {
   const uint32_t *valid_map_base;   //!< base ptr of column valid map (null if not present)
   const void *column_data_base;     //!< base ptr of column data
+  uint32_t *dict_index;             //!< Dictionary index (row from dictionary index)
+  uint16_t *dict_data;              //!< Dictionary data (dictionary entry of non-null rows)
   uint32_t num_rows;                //!< number of rows in column
   uint8_t physical_type;            //!< physical data type
   uint8_t converted_type;           //!< logical data type
@@ -141,8 +143,11 @@ struct EncColumnDesc
 struct PageFragment
 {
   uint32_t fragment_data_size;      //!< Size of fragment data in bytes
+  uint32_t dict_data_size;          //!< Size of dictionary for this fragment
   uint16_t num_rows;                //!< Number of rows in fragment
   uint16_t non_nulls;               //!< Number of non-null values
+  uint16_t num_dict_vals;           //!< Number of unique dictionary entries
+  uint16_t pad;
 };
 
 /**

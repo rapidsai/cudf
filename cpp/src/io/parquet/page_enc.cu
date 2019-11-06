@@ -21,11 +21,19 @@ namespace io {
 namespace parquet {
 namespace gpu {
 
+#define INIT_HASH_BITS              12
+
 struct frag_init_state_s
 {
     EncColumnDesc col;
     PageFragment frag;
+    uint32_t total_dupes;
     volatile uint32_t scratch_red[32];
+    uint32_t dict[MAX_PAGE_FRAGMENT_SIZE];
+    union {
+        uint16_t u16[1 << (INIT_HASH_BITS)];
+        uint32_t u32[1 << (INIT_HASH_BITS - 1)];
+    } map;
 };
 
 #define LOG2_RLE_BFRSZ  9
@@ -54,6 +62,33 @@ struct page_enc_state_s
 
 
 /**
+ * @brief Return a 12-bit hash from a byte sequence
+ */
+inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+{
+    if (len != 0)
+    {
+        return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+inline __device__ uint32_t uint32_init_hash(uint32_t v)
+{
+    return (v + (v >> 16)) & ((1 << INIT_HASH_BITS) - 1);
+}
+
+inline __device__ uint32_t uint64_init_hash(uint64_t v)
+{
+    return static_cast<uint32_t>(v + (v >> 32)) & ((1 << INIT_HASH_BITS) - 1);
+}
+
+
+
+/**
  * @brief Initializes encoder page fragments
  *
  * @param[in] frag Fragment array [fragment_id][column_id]
@@ -70,11 +105,16 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
 
     frag_init_state_s * const s = &state_g;
     uint32_t t = threadIdx.x;
-    uint32_t start_row, nrows, dtype_len, dtype;
+    uint32_t start_row, nrows, dtype_len, dtype_len_in, dtype;
 
     if (t < sizeof(EncColumnDesc) / sizeof(uint32_t))
     {
         reinterpret_cast<uint32_t *>(&s->col)[t] = reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
+    }
+    for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512)
+    {
+        if (i + t < sizeof(s->map) / sizeof(uint32_t))
+            s->map.u32[i + t] = 0;
     }
     __syncthreads();
     start_row = blockIdx.y * fragment_size;
@@ -83,27 +123,51 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
         s->col.num_rows = min(s->col.num_rows, max_num_rows);
         s->frag.num_rows = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
         s->frag.non_nulls = 0;
+        s->frag.num_dict_vals = 0;
         s->frag.fragment_data_size = 0;
+        s->frag.dict_data_size = 0;
+        s->total_dupes = 0;
     }
     dtype = s->col.physical_type;
     dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+    if (dtype == INT32) {
+        uint32_t converted_type = s->col.converted_type;
+        dtype_len_in = (converted_type == INT_8) ? 1 : (converted_type == INT_16) ? 2 : 4;
+    }
+    else {
+        dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    }
     __syncthreads();
     nrows = s->frag.num_rows;
     for (uint32_t i = 0; i < nrows; i += 512)
     {
         const uint32_t *valid = s->col.valid_map_base;
         uint32_t row = start_row + i + t;
-        uint32_t is_valid = (row < s->col.num_rows) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : (valid) ? 1 : 0;
+        uint32_t is_valid = (i + t < nrows && row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
         uint32_t valid_warp = BALLOT(is_valid);
-        uint32_t len;
+        uint32_t len, nz_pos, hash;
         if (is_valid) {
             len = dtype_len;
-            if (dtype == BYTE_ARRAY) {
-                len += (uint32_t)reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+            if (dtype != BOOLEAN) {
+                if (dtype == BYTE_ARRAY) {
+                    const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+                    uint32_t count = (uint32_t)reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+                    len += count;
+                    hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(ptr), count);
+                }
+                else if (dtype_len_in == 8) {
+                    hash = uint64_init_hash(reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row]);
+                }
+                else {
+                    hash = uint32_init_hash((dtype_len_in == 4) ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row] :
+                                            (dtype_len_in == 2) ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row] :
+                                                                  reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]);
+                }
             }
         } else {
             len = 0;
         }
+        nz_pos = s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
         len = WarpReduceSum32(len);
         if (!(t & 0x1f)) {
             s->scratch_red[(t >> 5) + 0] = __popc(valid_warp);
@@ -111,11 +175,204 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
         }
         __syncthreads();
         if (t < 32) {
-            uint32_t non_nulls = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0);
+            uint32_t warp_pos = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
+            uint32_t non_nulls = SHFL(warp_pos, 0xf);
             len = WarpReduceSum16((t < 16) ? s->scratch_red[t + 16] : 0);
+            if (t < 16) {
+                s->scratch_red[t] = warp_pos;
+            }
             if (!t) {
                 s->frag.non_nulls = s->frag.non_nulls + non_nulls;
                 s->frag.fragment_data_size += len;
+            }
+        }
+        __syncthreads();
+        if (is_valid && dtype != BOOLEAN) {
+            uint32_t *dict_index = s->col.dict_index;
+            if (t >= 32) {
+                nz_pos += s->scratch_red[(t - 32) >> 5];
+            }
+            if (dict_index) {
+                atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
+                dict_index[start_row + nz_pos] = ((i + t) << INIT_HASH_BITS) | hash; // Store the hash along with the index, so we don't have to recompute it
+            }
+        }
+    }
+    __syncthreads();
+    // Reorder the 16-bit local indices according to the hash values
+    if (s->col.dict_index) {
+#if (INIT_HASH_BITS != 12)
+#error "Hardcoded for INIT_HASH_BITS=12"
+#endif
+        // Cumulative sum of hash map counts
+        uint32_t count01 = s->map.u32[t * 4 + 0];
+        uint32_t count23 = s->map.u32[t * 4 + 1];
+        uint32_t count45 = s->map.u32[t * 4 + 2];
+        uint32_t count67 = s->map.u32[t * 4 + 3];
+        uint32_t sum01 = count01 + (count01 << 16);
+        uint32_t sum23 = count23 + (count23 << 16);
+        uint32_t sum45 = count45 + (count45 << 16);
+        uint32_t sum67 = count67 + (count67 << 16);
+        uint32_t sum_w, tmp;
+        sum23 += (sum01 >> 16) * 0x10001;
+        sum45 += (sum23 >> 16) * 0x10001;
+        sum67 += (sum45 >> 16) * 0x10001;
+        sum_w = sum67 >> 16;
+        sum_w = WarpReducePos16(sum_w, t);
+        if ((t & 0xf) == 0xf) {
+            s->scratch_red[t >> 4] = sum_w;
+        }
+        __syncthreads();
+        if (t < 32) {
+            uint32_t sum_b = WarpReducePos32(s->scratch_red[t], t);
+            s->scratch_red[t] = sum_b;
+        }
+        __syncthreads();
+        tmp = (t >= 16) ? s->scratch_red[(t >> 4) - 1] : 0;
+        sum_w = (sum_w - (sum67 >> 16) + tmp) * 0x10001;
+        s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
+        s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
+        s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
+        s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
+        __syncthreads();
+    }
+    // Put the indices back in hash order
+    if (s->col.dict_index) {
+        uint32_t *dict_index = s->col.dict_index + start_row;
+        uint32_t nnz = s->frag.non_nulls;
+        for (uint32_t i = 0; i < nnz; i += 512) {
+            uint32_t pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row, val = 0;
+            bool collision;
+            if (i + t < nnz) {
+                val = dict_index[i + t];
+                hash = val & ((1 << INIT_HASH_BITS) - 1);
+                sh = (hash & 1) ? 16 : 0;
+                pos_old = s->map.u16[hash];
+            }
+            // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic behavior for the
+            // first row in the hash map that will be used for early duplicate detection
+            __syncthreads();
+            if (i + t < nnz) {
+                pos = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
+                s->dict[pos] = val;
+            }
+            __syncthreads();
+            collision = false;
+            if (i + t < nnz) {
+                pos_new = s->map.u16[hash];
+                collision = (pos != pos_old && pos_new > pos_old + 1);
+                if (collision) {
+                    colliding_row = s->dict[pos_old];
+                }
+            }
+            __syncthreads();
+            if (collision) {
+                atomicMin(&s->dict[pos_old], val);
+            }
+            __syncthreads();
+            // Resolve collision
+            if (collision && val == s->dict[pos_old]) {
+                s->dict[pos] = colliding_row;
+            }
+        }
+        __syncthreads();
+        // Now that the values are ordered by hash, compare every entry with the first entry in the hash map,
+        // the position of the first entry can be inferred from the hash map counts
+        uint32_t dupe_data_size = 0;
+        for (uint32_t i = 0; i < nnz; i += 512)
+        {
+            const void *col_data = s->col.column_data_base;
+            uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
+            if (i + t < nnz)
+            {
+                uint32_t dict_val = s->dict[i + t];
+                uint32_t hash = dict_val & ((1 << INIT_HASH_BITS) - 1);
+                ck_row = start_row + (dict_val >> INIT_HASH_BITS);
+                ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> INIT_HASH_BITS);
+                if (ck_row_ref != ck_row) {
+                    if (dtype == BYTE_ARRAY) {
+                        const nvstrdesc_s *ck_data = reinterpret_cast<const nvstrdesc_s *>(col_data);
+                        const char *str1 = ck_data[ck_row].ptr;
+                        uint32_t len1 = (uint32_t)ck_data[ck_row].count;
+                        const char *str2 = ck_data[ck_row_ref].ptr;
+                        uint32_t len2 = (uint32_t)ck_data[ck_row_ref].count;
+                        is_dupe = nvstr_is_equal(str1, len1, str2, len2);
+                        dupe_data_size += (is_dupe) ? 4 + len1 : 0;
+                    }
+                    else {
+                        if (dtype_len_in == 8) {
+                            uint64_t v1 = reinterpret_cast<const uint64_t *>(col_data)[ck_row];
+                            uint64_t v2 = reinterpret_cast<const uint64_t *>(col_data)[ck_row_ref];
+                            is_dupe = (v1 == v2);
+                            dupe_data_size += (is_dupe) ? 8 : 0;
+                        }
+                        else {
+                            uint32_t v1, v2;
+                            if (dtype_len_in == 4) {
+                                v1 = reinterpret_cast<const uint32_t *>(col_data)[ck_row];
+                                v2 = reinterpret_cast<const uint32_t *>(col_data)[ck_row_ref];
+                            }
+                            else if (dtype_len_in == 2) {
+                                v1 = reinterpret_cast<const uint16_t *>(col_data)[ck_row];
+                                v2 = reinterpret_cast<const uint16_t *>(col_data)[ck_row_ref];
+                            }
+                            else {
+                                v1 = reinterpret_cast<const uint8_t *>(col_data)[ck_row];
+                                v2 = reinterpret_cast<const uint8_t *>(col_data)[ck_row_ref];
+                            }
+                            is_dupe = (v1 == v2);
+                            dupe_data_size += (is_dupe) ? 4 : 0;
+                        }
+                    }
+                }
+            }
+            dupe_mask = BALLOT(is_dupe);
+            dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
+            if (!(t & 0x1f))
+            {
+                s->scratch_red[t >> 5] = __popc(dupe_mask);
+            }
+            __syncthreads();
+            if (t < 32)
+            {
+                uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
+                uint32_t warp_pos = WarpReducePos16(warp_dupes, t);
+                if (t == 0xf)
+                {
+                    s->total_dupes += warp_pos;
+                }
+                if (t < 16)
+                {
+                    s->scratch_red[t] = warp_pos - warp_dupes;
+                }
+            }
+            __syncthreads();
+            if (i + t < nnz)
+            {
+                if (!is_dupe)
+                {
+                    dupes_before += s->scratch_red[t >> 5];
+                    s->col.dict_data[start_row + i + t - dupes_before] = ck_row - start_row;
+                }
+                else
+                {
+                    s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
+                }
+            }
+        }
+        __syncthreads();
+        dupe_data_size = WarpReduceSum32(dupe_data_size);
+        if (!(t & 0x1f))
+        {
+            s->scratch_red[t >> 5] = dupe_data_size;
+        }
+        __syncthreads();
+        if (t < 32)
+        {
+            dupe_data_size = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0);
+            if (!t) {
+                s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
+                s->frag.num_dict_vals = s->frag.non_nulls - s->total_dupes;
             }
         }
     }
