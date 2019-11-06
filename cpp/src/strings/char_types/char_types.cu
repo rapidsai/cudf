@@ -41,17 +41,14 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
-    // copy the null mask
-    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
     // create output column
-    auto results = std::make_unique<cudf::column>( data_type{BOOL8}, strings_count,
-        rmm::device_buffer(strings_count * sizeof(experimental::bool8), stream, mr),
-        null_mask, strings.null_count());
+    auto results = make_numeric_column( data_type{BOOL8}, strings_count, 
+        copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
-    auto d_results = results_view.data<int8_t>();
-    //
+    auto d_results = results_view.data<experimental::bool8>();
+    // get the static character types table
     auto d_flags = detail::get_character_flags_table();
-    // set the output values by checking the character types
+    // set the output values by checking the character types for each string
     thrust::transform(rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
@@ -76,6 +73,8 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
 }
 
 } // namespace detail
+
+// external API
 
 std::unique_ptr<column> all_characters_of_type( strings_column_view const& strings,
                                                 string_character_types types,
