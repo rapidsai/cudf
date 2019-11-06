@@ -367,6 +367,7 @@ add_library(cudf
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
+            src/predicates/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu

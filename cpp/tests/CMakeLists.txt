@@ -194,10 +194,15 @@ ConfigureTest(LEGACY_ORDERBY_TEST "${LEGACY_ORDERBY_TEST_SRC}")
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
 
-set(LEGACY_IS_SORTED_TEST_SRC 
+set(IS_SORTED_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/is_sorted_tests.cu")
+
+ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
+
+set(LEGACY_IS_SORTED_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/legacy/is_sorted_tests.cu")
 
-ConfigureTest(IS_SORTED_TEST "${LEGACY_IS_SORTED_TEST_SRC}")
+ConfigureTest(LEGACY_IS_SORTED_TEST "${LEGACY_IS_SORTED_TEST_SRC}")
 
 ###################################################################################################
 # - legacy bitmask tests --------------------------------------------------------------------------
@@ -582,6 +587,8 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
+
+###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
