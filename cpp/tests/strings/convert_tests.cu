@@ -53,6 +53,7 @@ TEST_F(StringsConvertTest, FromInteger)
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto results = cudf::strings::from_integers(integers);
+    //cudf::strings::print(cudf::strings_column_view(*results));
 
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));

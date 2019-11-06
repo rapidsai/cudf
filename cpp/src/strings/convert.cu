@@ -179,8 +179,7 @@ struct integer_to_string_size_fn
         if( value==0 )
             return 1;
         bool is_negative = value < 0;
-        if( is_negative )
-            value = -value;
+        value = abs(value);
         // largest 8-byte unsigned value is 18446744073709551615
         size_type digits = (value < 10 ? 1 :
                            (value < 100 ? 2 :
@@ -231,20 +230,21 @@ struct integer_to_string_fn
             return;
         }
         bool is_negative = value < 0;
-        if( is_negative )
-            value = -value;
+        value = abs(value);
+        char digits[21]; // place-holder for digits
         constexpr IntegerType base = 10;
-        char* ptr = d_buffer;
-        while( value > 0 )
+        int digits_idx = 0;
+        while( (value > 0) && (digits_idx < 21) )
         {
-            *ptr++ = '0' + (value % base);
+            digits[digits_idx++] = '0' + (value % base);
             value = value/base;
         }
+        char* ptr = d_buffer;
         if( is_negative )
             *ptr++ = '-';
-        size_type length = static_cast<size_type>(ptr-d_buffer);
-        // numbers are backwards, reverse the string
-        thrust::reverse( thrust::seq, d_buffer, d_buffer + length);
+        // digits are backwards, reverse the string into the output
+        while( digits_idx-- > 0 )
+            *ptr++ = digits[digits_idx];
     }
 };
 
