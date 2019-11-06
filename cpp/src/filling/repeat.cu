@@ -138,20 +138,17 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                                         check_count, stream);
 
   auto output_size = size_type{offsets.back()};
-  auto p_indices = make_numeric_column(data_type{type_to_id<size_type>()},
-                                       output_size, mask_state{UNALLOCATED},
-                                       stream, mr);
-  auto indices = p_indices->mutable_view();
+  auto indices = rmm::device_vector<size_type>(output_size);
   thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                       offsets.begin(), offsets.end(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
-                      indices.begin<size_type>());
+                      indices.begin());
 
 #if 1  // TODO: placeholder till the scatter/gather PR is merged
   return cudf::experimental::empty_like(input_table);
 #else
-  return gather(input_table, *p_indices, false, stream, mr);
+  return gather(input_table, indices.begin(), indices,end(), false, false, false, stream, mr);
 #endif
 }
 
@@ -173,22 +170,18 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   }
 
   auto output_size = input_table.num_rows() * stride;
-  // TODO: no need to create this intermediate buffer if the gather function
-  // directly takes thrust iterators.
-  auto p_indices = make_numeric_column(data_type{type_to_id<size_type>()},
-                                       output_size, mask_state{UNALLOCATED},
-                                       stream, mr);
-  auto indices = p_indices->mutable_view();
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(output_size),
-                    indices.begin<size_type>(),
-                    [stride] __device__ (auto i) { return i / stride; });
+  auto map_begin =
+    thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [stride] __device__ (auto i) { return i / stride; });
+  auto map_end = map_begin + output_size;
 
 #if 1  // TODO: placeholder till the scatter/gather PR is merged
+  (void)map_end;
   return cudf::experimental::empty_like(input_table);
 #else
-  return gather(input_table, indices, false, stream, mr);
+  return gather(input_table, map_begin, map_end,
+                false, false, false, stream, mr);
 #endif
 }
 
