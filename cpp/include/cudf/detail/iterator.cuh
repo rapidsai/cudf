@@ -72,6 +72,7 @@ struct value_accessor
   {
     // verify valid is non-null, otherwise, is_valid() will crash
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+    CUDF_EXPECTS(_col.head() != nullptr, "non-null data is required");
   }
 
   CUDA_DEVICE_CALLABLE
@@ -99,6 +100,8 @@ template <typename Element>
 auto make_null_replacement_iterator(column_device_view const& column,
                                     Element const null_replacement = Element{0})
 {
+  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == column.type(), "the data type mismatch");
+
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
       value_accessor<Element>{column, null_replacement});
