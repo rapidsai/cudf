@@ -69,54 +69,52 @@ namespace experimental {
 
 namespace detail {
 
-void copy_range(mutable_column_view& target, column_view const& source,
-                size_type target_begin, size_type target_end,
-                size_type source_begin,
+void copy_range(column_view const& source, mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin,
                 cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
                "In-place copy_range does not support variable-sized types.");
-  CUDF_EXPECTS((target_begin >= 0) &&
-               (target_begin <= target_end) &&
-               (target_begin < target.size()) &&
-               (target_end <= target.size()) &&
-               (source_begin >= 0) &&
-               (source_begin < source.size()) &&
-               (source_begin + target_end - target_begin <= source.size()),
+  CUDF_EXPECTS((source_begin <= source_end) &&
+                 (source_begin >= 0) &&
+                 (source_begin < source.size()) &&
+                 (source_end <= source.size()) &&
+                 (target_begin >= 0) &&
+                 (target_begin < target.size()) &&
+                 (target_begin + (source_end - source_begin) <= target.size()),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
   CUDF_EXPECTS((target.nullable() == true) || (source.has_nulls() == false),
                "target should be nullable if source has null values.");
 
-  if (target_end != target_begin) {  // otherwise no-op
+  if (source_end != source_begin) {  // otherwise no-op
+    auto target_end = target_begin + (source_end - source_begin);
     copy_range(
-      target,
       column_range_factory{source, source_begin},
+      target,
       target_begin, target_end, stream);
   }
 }
 
-std::unique_ptr<column> copy_range(column_view const& target,
-                                   column_view const& source,
-                                   size_type target_begin, size_type target_end,
-                                   size_type source_begin,
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
                                    cudaStream_t stream,
                                    rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
                "Variable-sized types are not supported yet.");
-  CUDF_EXPECTS((target_begin >= 0) &&
-               (target_begin <= target_end) &&
-               (target_begin < target.size()) &&
-               (target_end <= target.size()) &&
-               (source_begin >= 0) &&
-               (source_begin < source.size()) &&
-               (source_begin + target_end - target_begin <= source.size()),
+  CUDF_EXPECTS((source_begin >= 0) &&
+                 (source_begin <= source_end) &&
+                 (source_begin < source.size()) &&
+                 (source_end <= source.size()) &&
+                 (target_begin >= 0) &&
+                 (target_begin < target.size()) &&
+                 (target_begin + (source_end - source_begin) <= target.size()),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  auto state = mask_state{UNALLOCATED};
-  if (source.has_nulls() == true) {
-    state = UNINITIALIZED;
-  }
+  auto state = source.has_nulls() ? UNINITIALIZED : UNALLOCATED;
 
   auto ret = std::unique_ptr<column>{nullptr};
 
@@ -132,20 +130,21 @@ std::unique_ptr<column> copy_range(column_view const& target,
   }
 
   auto ret_view = ret->mutable_view();
+  auto target_end = target_begin + (source_end - source_begin);
   // copy from target outside the range (note that this function copies
-  // out-of-place
+  // out-of-place)
   if (target_begin > 0) {
-    copy_range(ret_view, target, 0, target_begin, 0, stream);
+    copy_range(target, ret_view, 0, target_begin, 0, stream);
   }
   // copy from source in the specified range
   if (target_end != target_begin) {
-    copy_range(ret_view, source, target_begin, target_end, source_begin,
+    copy_range(source, ret_view, source_begin, source_end, target_begin,
                stream);
   }
   // copy from target outside the range (note that this function copies
-  // out-of-place
+  // out-of-place)
   if (target_end < target.size()) {
-    copy_range(ret_view, target, target_end, target.size(), target_end, stream);
+    copy_range(target, ret_view, target_end, target.size(), target_end, stream);
   }
 
   return ret;
@@ -153,20 +152,20 @@ std::unique_ptr<column> copy_range(column_view const& target,
 
 }  // namespace detail
 
-void copy_range(mutable_column_view& target, column_view const& source,
-                size_type target_begin, size_type target_end,
-                size_type source_begin) {
-  return detail::copy_range(target, source, target_begin, target_end,
-                            source_begin, 0);
+void copy_range(column_view const& source, mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin) {
+  return detail::copy_range(source, target, source_begin, source_end,
+                            target_begin, 0);
 }
 
-std::unique_ptr<column> copy_range(column_view const& target,
-                                   column_view const& source,
-                                   size_type target_begin, size_type target_end,
-                                   size_type source_begin,
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
                                    rmm::mr::device_memory_resource* mr) {
-  return detail::copy_range(target, source, target_begin, target_end,
-                            source_begin, 0, mr);
+  return detail::copy_range(source, target, source_begin, source_end,
+                            target_begin, 0, mr);
 }
 
 }  // namespace experimental
