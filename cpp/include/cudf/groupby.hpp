@@ -102,6 +102,10 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
+ *
+ * The group membership of each `value[i]` is determined by the corresponding
+ * row `i` in the original order of `keys` that was used to construct the
+ * `groupby`.
  */
 struct aggregation_request {
   column_view values;  ///< The elements to aggregate
