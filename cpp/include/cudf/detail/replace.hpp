@@ -48,7 +48,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 /**
   * @brief Replaces all null values in a column with a scalar.
   *
-  * The column is expected to be a cudf::column. The scalar is expected to be
+  * `input` and `replacement` must have the same type.
   * a gdf_scalar of the same data type as the column.
   *
   * The function will replace all nulls of the column with the scalar value.
