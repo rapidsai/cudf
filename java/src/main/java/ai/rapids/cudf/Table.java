@@ -150,6 +150,9 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
 
+  private static native long gdfBound(long inputTable, long valueTable,
+    boolean[] descFlags, boolean nullsAsLargest, boolean isUpperBound) throws CudfException;
+
   private static native void gdfWriteORC(int compressionType, String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
 
   /**
@@ -755,6 +758,79 @@ public final class Table implements AutoCloseable {
       assert tables[i].getNumberOfColumns() == numColumns : "all tables must have the same schema";
     }
     return new Table(concatenate(tableHandles));
+  }
+
+  /**
+   * Given a sorted inputTable return the lower bound.
+   * Example:
+   *
+   *  Single column:
+   *      idx            0   1   2   3   4
+   *   inputTable  =   { 10, 20, 20, 30, 50 }
+   *   valuesTable =   { 20 }
+   *   result      =   { 1 }
+   *
+   *  Multi Column:
+   *      idx                0    1    2    3    4
+   *   inputTable      = {{  10,  20,  20,  20,  20 },
+   *                      { 5.0,  .5,  .5,  .7,  .7 },
+   *                      {  90,  77,  78,  61,  61 }}
+   *   valuesTable     = {{ 20 },
+   *                      { .7 },
+   *                      { 61 }}
+   *   result          = {  3 }
+   * NaNs in column values do not work especially
+   * if the table has multiple columns.
+   * Strings and String categories do not work for this method. If the input table is
+   * unsorted the results are wrong. Types of columns can be of mixed data types and
+   * the result gives the index of the value pertaining to the matching type column
+   * in the input table.
+   * @param inputTable the sorted table as input for bounds
+   * @param valueTable the table of values that need to be inserted
+   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param nullsAsLargest true if nulls are assumed largest
+   * @return ColumnVector with lower bound indices for all rows in valueTable
+   */
+  public ColumnVector lowerBound(Table inputTable, Table valueTable, boolean[] descFlags,
+                                 boolean nullsAsLargest) {
+    return new ColumnVector(gdfBound(inputTable.nativeHandle, valueTable.nativeHandle,
+            descFlags, nullsAsLargest, false));
+  }
+
+  /**
+   * Given a sorted inputTable return the upper bound.
+   * Example:
+   *
+   *  Single column:
+   *      idx            0   1   2   3   4
+   *   inputTable  =   { 10, 20, 20, 30, 50 }
+   *   valuesTable =   { 20 }
+   *   result      =   { 3 }
+   *
+   *  Multi Column:
+   *      idx                0    1    2    3    4
+   *   inputTable      = {{  10,  20,  20,  20,  20 },
+   *                      { 5.0,  .5,  .5,  .7,  .7 },
+   *                      {  90,  77,  78,  61,  61 }}
+   *   valuesTable     = {{ 20 },
+   *                      { .7 },
+   *                      { 61 }}
+   *   result          = {  5 }
+   * NaNs in column values do not work especially
+   * if the table has multiple columns.
+   * Strings and String categories do not work for this method. If the input table is
+   * unsorted the results are wrong. Types of columns can be mixed and the result gives the index
+   * of the value pertaining to the matching type column in the input table.
+   * @param inputTable the sorted table as input for bounds
+   * @param valueTable the table of values that need to be inserted
+   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param nullsAsLargest true if nulls are assumed largest
+   * @return ColumnVector with upper bound indices for all rows in valueTable
+   */
+  public ColumnVector upperBound(Table inputTable, Table valueTable, boolean[] descFlags,
+    boolean nullsAsLargest) {
+    return new ColumnVector(gdfBound(inputTable.nativeHandle, valueTable.nativeHandle,
+      descFlags, nullsAsLargest, true));
   }
 
   /////////////////////////////////////////////////////////////////////////////
