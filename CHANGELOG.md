@@ -83,6 +83,7 @@
 - PR #3270 Move predicates files to legacy
 - PR #3281 Add to_host specialization for strings in column test utilities
 - PR #3282 Add `num_bitmask_words`
+- PR #3252 Add new factory methods to include passing an existing null mask
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
