@@ -4023,5 +4023,7 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
     # pandas insert doesnt support negative indexing
-    pdf.insert(len(pdf.columns) - 1, "qux", data)
+    pdf.insert(len(pdf.columns), "qux", data)
     gdf.insert(-1, "qux", data)
+
+    assert_eq(pdf, gdf)
