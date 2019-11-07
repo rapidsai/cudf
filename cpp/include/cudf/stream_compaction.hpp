@@ -91,6 +91,27 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const &input,
                  rmm::mr::device_memory_resource *mr =
                      rmm::mr::get_default_resource());
 
+/**
+ * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
+ *
+ * Given an input `table_view` and a mask `column_view`, an element `i` from
+ * each column_view of the `input` is copied to the corresponding output column
+ * if the corresponding element `i` in the mask is non-null and `true`.
+ * This operation is stable: the input order is preserved.
+ *
+ * @note if @p input.num_rows() is zero, there is no error, and an empty table
+ * is returned.
+ *
+ * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
+ * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
+ *
+ * @param[in] input The input tablei_view to filter
+ * @param[in] boolean_mask A column_view of type BOOL8 used as a mask to filter
+ * the `input`.
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @return unique_ptr<table> Table containing copy of all rows of @p input passing
+ * the filter defined by @p boolean_mask.
+ */
 std::unique_ptr<experimental::table>
     apply_boolean_mask(table_view const& input,
                        column_view const& boolean_mask,

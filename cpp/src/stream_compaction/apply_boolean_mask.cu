@@ -32,7 +32,6 @@ namespace {
 // This is the filter functor for apply_boolean_mask
 // Note we use a functor here so we can cast to a bitmask_t __restrict__
 // pointer on the host side, which we can't do with a lambda.
-template <typename T, bool has_nulls>
 struct boolean_mask_filter
 {
   boolean_mask_filter(cudf::column_device_view const& boolean_mask) :
@@ -42,8 +41,8 @@ struct boolean_mask_filter
   __device__ inline
   bool operator()(cudf::size_type i)
   {
-    bool valid = !has_nulls || boolean_mask.is_valid(i);
-    bool is_true = (cudf::experimental::true_v == boolean_mask.data<T>()[i]);
+    bool valid = boolean_mask.is_valid(i);
+    bool is_true = (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
     
     return is_true && valid;
   }
@@ -58,11 +57,6 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-/*
- * Filters a table using a column of boolean values as a mask.
- *
- * calls copy_if() with the `boolean_mask_filter` functor.
- */
 std::unique_ptr<experimental::table> 
     apply_boolean_mask(table_view const& input,
                        column_view const& boolean_mask,
@@ -86,17 +80,9 @@ std::unique_ptr<experimental::table>
 
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
   
-  if(boolean_mask.nullable()){
-    return detail::copy_if(input, 
-                    boolean_mask_filter<cudf::experimental::bool8, true> {
-                                                *device_boolean_mask
-                                             });
-  } else {
-    return detail::copy_if(input, 
-                    boolean_mask_filter<cudf::experimental::bool8, false> {
-                                                *device_boolean_mask
-                                             });
-  }
+  return detail::copy_if(input,
+                         boolean_mask_filter {*device_boolean_mask},
+                         mr, stream);
 }
 
 } // namespace detail
