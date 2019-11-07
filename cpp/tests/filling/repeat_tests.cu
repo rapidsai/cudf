@@ -252,11 +252,11 @@ TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
 
   // negative
   EXPECT_THROW(auto ret =
-                 cudf::experimental::repeat(input_table, count_neg),
+                 cudf::experimental::repeat(input_table, count_neg, true),
                cudf::logic_error);
 
   // overflow
   EXPECT_THROW(auto ret =
-                 cudf::experimental::repeat(input_table, count_overflow),
+                 cudf::experimental::repeat(input_table, count_overflow, true),
                cudf::logic_error);
 }
