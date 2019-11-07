@@ -155,8 +155,7 @@ def groupby_without_aggregations(cols, key_cols):
             c_ctx
         )
 
-    data, mask = gdf_column_to_column_mem(&c_result.second)
-    offsets = Column.from_mem_views(data, mask)
+    offsets = gdf_column_to_column(&c_result.second)
     sorted_cols = columns_from_table(&c_result.first)
 
     for i, inp_col in enumerate(cols):

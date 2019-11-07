@@ -75,8 +75,8 @@ def reduce(reduction_op, Column col, dtype=None, ddof=1):
         col_dtype = np.find_common_type([col_dtype], [np.int64])
     col_dtype = col_dtype if dtype is None else dtype
 
-    cdef gdf_column* c_col = col.gdf_column_view()
-    cdef gdf_dtype c_out_dtype = col.gdf_type()
+    cdef gdf_column* c_col = column_view_from_column(col)
+    cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(col)
     cdef gdf_scalar c_result
     cdef size_type c_ddof = ddof
     cdef cpp_reduce.operators c_op = _REDUCTION_OP[reduction_op]

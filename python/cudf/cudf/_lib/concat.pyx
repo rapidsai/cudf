@@ -15,13 +15,13 @@ from cudf._lib.includes.concat cimport gdf_column_concat
 
 
 def _column_concat(cols_to_concat, Column output_col):
-    cdef gdf_column* c_output_col = output_col.gdf_column_view()
+    cdef gdf_column* c_output_col = column_view_from_column(output_col)
     cdef vector[gdf_column*] c_input_cols
     cdef int num_cols = len(cols_to_concat)
 
     cdef Column col
     for col in cols_to_concat:
-        c_input_cols.push_back(col.gdf_column_view())
+        c_input_cols.push_back(column_view_from_column(col))
 
     with nogil:
         result = gdf_column_concat(

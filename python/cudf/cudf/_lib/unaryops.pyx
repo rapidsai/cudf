@@ -48,7 +48,7 @@ def apply_unary_op(Column incol, op):
     """
     from cudf.core.column import build_column
 
-    cdef gdf_column* c_incol = incol.gdf_column_view()
+    cdef gdf_column* c_incol = column_view_from_column(incol)
 
     cdef gdf_column c_out_col
 
@@ -84,15 +84,15 @@ def apply_unary_op(Column incol, op):
 
     free_column(c_incol)
 
-    return Column.from_gdf_column(&c_out_col)
+    return gdf_column_to_column(&c_out_col)
 
 
 def apply_dt_extract_op(Column incol, Column outcol, op):
     """
     Call a datetime extraction op
     """
-    cdef gdf_column* c_incol = incol.gdf_column_view()
-    cdef gdf_column* c_outcol = outcol.gdf_column_view()
+    cdef gdf_column* c_incol = column_view_from_column(incol)
+    cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
     cdef gdf_error result = GDF_CUDA_ERROR
     with nogil:
@@ -142,7 +142,7 @@ def nans_to_nulls(Column py_col):
     from cudf.core.column import as_column
     from cudf.core.buffer import Buffer
 
-    cdef gdf_column* c_col = py_col.gdf_column_view()
+    cdef gdf_column* c_col = column_view_from_column(py_col)
 
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
 
@@ -160,18 +160,18 @@ def nans_to_nulls(Column py_col):
 
 
 def is_null(Column col):
-    cdef gdf_column* c_col = col.gdf_column_view()
+    cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_column result = cpp_unaryops.is_null(c_col[0])
     free_column(c_col)
 
-    return Column.from_gdf_column(&result)
+    return gdf_column_to_column(&result)
 
 
 def is_not_null(Column col):
-    cdef gdf_column* c_col = col.gdf_column_view()
+    cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_column result = cpp_unaryops.is_not_null(c_col[0])
     free_column(c_col)
 
-    return Column.from_gdf_column(&result)
+    return gdf_column_to_column(&result)

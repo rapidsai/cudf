@@ -119,7 +119,7 @@ class ColumnBase(Column):
         """Create a Column object from a data device array (or nvstrings
            object), and an optional mask device array
         """
-        pass
+        raise NotImplementedError
 
     @classmethod
     def _concat(cls, objs, dtype=None):

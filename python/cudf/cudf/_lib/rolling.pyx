@@ -99,7 +99,7 @@ def rolling(inp, window, min_periods, center, op):
                     c_min_periods_col,
                     c_forward_window_col
                 )
-            data, mask = gdf_column_to_column_mem(&c_out_col)
+            out_col = gdf_column_to_column(&c_out_col)
         else:
             c_op = agg_ops[op]
             with nogil:
@@ -113,7 +113,7 @@ def rolling(inp, window, min_periods, center, op):
                     c_min_periods_col,
                     c_forward_window_col
                 )
-            data, mask = gdf_column_to_column_mem(c_out_ptr)
+            out_col = gdf_column_to_column(c_out_ptr)
 
     out_col = Column.from_mem_views(data, mask, null_count, inp.name)
 

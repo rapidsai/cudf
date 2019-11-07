@@ -25,7 +25,7 @@ def cast(Column incol, dtype=np.float64):
     if pd.api.types.is_dtype_equal(incol.dtype, dtype):
         return incol
 
-    cdef gdf_column* c_incol = incol.gdf_column_view()
+    cdef gdf_column* c_incol = column_view_from_column(incol)
     cdef gdf_dtype c_out_dtype = dtypes[np.dtype(dtype).type]
     cdef uintptr_t c_category
     cdef gdf_dtype_extra_info c_out_info = gdf_dtype_extra_info(
@@ -44,4 +44,4 @@ def cast(Column incol, dtype=np.float64):
 
     free_column(c_incol)
 
-    return Column.from_gdf_column(&c_out_col)
+    return gdf_column_to_column(&c_out_col)
