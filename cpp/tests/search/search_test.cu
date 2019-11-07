@@ -16,7 +16,6 @@
 
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 // TODO:  temporary
 #include <tests/utilities/column_utilities.hpp>
@@ -24,13 +23,12 @@
 #include "cudf/search.hpp"
 
 using cudf::test::fixed_width_column_wrapper;
-using cudf::test::scalar_wrapper;
 // TODO::  temporary
 using cudf::test::expect_columns_equal;
-using cudf::test::column_values_equal;
 using cudf::test::column_view_to_str;
 
 using cudf::column_view;
+using cudf::numeric_scalar;
 
 class SearchTest : public GdfTest {};
 
@@ -47,11 +45,11 @@ TEST_F(SearchTest, empty_table)
     std::unique_ptr<cudf::column> result{};
 
     EXPECT_NO_THROW(
-        result = cudf::experimental::lower_bound(
+                    result = cudf::experimental::lower_bound(
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
                     );
 
     expect_columns_equal(*result, expect);
@@ -72,7 +70,7 @@ TEST_F(SearchTest, empty_values)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
                     );
 
     expect_columns_equal(*result, expect);
@@ -93,7 +91,7 @@ TEST_F(SearchTest, non_null_column__find_first)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
                     );
 
     expect_columns_equal(*result, expect);
@@ -114,7 +112,7 @@ TEST_F(SearchTest, non_null_column__find_last)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
                     );
 
     expect_columns_equal(*result, expect);
@@ -135,7 +133,7 @@ TEST_F(SearchTest, non_null_column_desc__find_first)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::DESCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
     );
 
     expect_columns_equal(*result, expect);
@@ -156,7 +154,7 @@ TEST_F(SearchTest, non_null_column_desc__find_last)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::DESCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
     );
 
     expect_columns_equal(*result, expect);
@@ -180,7 +178,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
                     );
 
     expect_columns_equal(*result, expect);
@@ -204,7 +202,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::BEFORE)
+                                                             {cudf::null_order::BEFORE})
     );
 
     expect_columns_equal(*result, expect);
@@ -227,7 +225,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::AFTER)
+                                                             {cudf::null_order::AFTER})
     );
 
     expect_columns_equal(*result, expect);
@@ -250,7 +248,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
                                                              {cudf::table_view{{column}}},
                                                              {cudf::table_view{{values}}},
                                                              {cudf::order::ASCENDING},
-                                                             cudf::null_order::AFTER)
+                                                             {cudf::null_order::AFTER})
     );
 
     expect_columns_equal(*result, expect);
@@ -281,7 +279,8 @@ TEST_F(SearchTest, table__find_first)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -290,7 +289,7 @@ TEST_F(SearchTest, table__find_first)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::BEFORE)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -322,7 +321,8 @@ TEST_F(SearchTest, table__find_last)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
 
 
     std::unique_ptr<cudf::column> result{};
@@ -332,7 +332,7 @@ TEST_F(SearchTest, table__find_last)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::BEFORE)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -363,7 +363,8 @@ TEST_F(SearchTest, table_partial_desc__find_first)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -372,7 +373,7 @@ TEST_F(SearchTest, table_partial_desc__find_first)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::BEFORE)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -403,7 +404,8 @@ TEST_F(SearchTest, table_partial_desc__find_last)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -412,7 +414,7 @@ TEST_F(SearchTest, table_partial_desc__find_last)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::BEFORE)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -449,7 +451,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -458,7 +461,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::BEFORE)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -495,7 +498,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -504,7 +508,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::BEFORE)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -541,7 +545,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -550,7 +555,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::AFTER)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -587,7 +592,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
     cudf::experimental::table input_table(std::move(columns));
     cudf::experimental::table values_table(std::move(values));
 
-    std::vector<cudf::order> order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER}};
 
     std::unique_ptr<cudf::column> result{};
 
@@ -596,7 +602,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
                                                              input_table,
                                                              values_table,
                                                              order_flags,
-                                                             cudf::null_order::AFTER)
+                                                             null_order_flags)
     );
 
     expect_columns_equal(*result, expect);
@@ -609,7 +615,7 @@ TEST_F(SearchTest, contains_true)
     bool  result = false;
 
     fixed_width_column_wrapper<element_type>    column {0, 1, 17, 19, 23, 29, 71};
-    numeric_scalar<element_type>                scalar {23}
+    numeric_scalar<element_type>                scalar {23};
 
     result = cudf::experimental::contains(column, scalar);
 
@@ -623,7 +629,7 @@ TEST_F(SearchTest, contains_false)
     bool  result = false;
 
     fixed_width_column_wrapper<element_type>    column {0, 1, 17, 19, 23, 29, 71};
-    numeric_scalar<element_type>                scalar {24}
+    numeric_scalar<element_type>                scalar {24};
 
     result = cudf::experimental::contains(column, scalar);
 
@@ -637,7 +643,7 @@ TEST_F(SearchTest, contains_empty_value)
     bool  result = false;
 
     fixed_width_column_wrapper<element_type>    column {0, 1, 17, 19, 23, 29, 71};
-    numeric_scalar<element_type>                scalar {23, false}
+    numeric_scalar<element_type>                scalar {23, false};
 
     result = cudf::experimental::contains(column, scalar);
 
@@ -650,8 +656,8 @@ TEST_F(SearchTest, contains_empty_column)
     bool  expect = false;
     bool  result = false;
 
-    fixed_width_column_wrapper<element_type>    column {}
-    numeric_scalar<element_type>                scalar {24}
+    fixed_width_column_wrapper<element_type>    column {};
+    numeric_scalar<element_type>                scalar {24};
 
     result = cudf::experimental::contains(column, scalar);
 
@@ -666,7 +672,7 @@ TEST_F(SearchTest, contains_nullable_column_true)
 
     fixed_width_column_wrapper<element_type>    column { { 0, 1, 17, 19, 23, 29, 71},
                                                          { 0,  0,  1,  1,  1,  1,  1 } };
-    numeric_scalar<element_type>                scalar {23}
+    numeric_scalar<element_type>                scalar {23};
 
     result = cudf::experimental::contains(column, scalar);
 
@@ -681,7 +687,7 @@ TEST_F(SearchTest, contains_nullable_column_false)
 
     fixed_width_column_wrapper<element_type>    column { { 0, 1, 17, 19, 23, 29, 71},
                                                          { 0,  0,  1,  1,  0,  1,  1 } };
-    numeric_scalar<element_type>                scalar {23}
+    numeric_scalar<element_type>                scalar {23};
 
     result = cudf::experimental::contains(column, scalar);
 

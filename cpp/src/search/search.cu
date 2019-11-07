@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/legacy/copying.hpp>
@@ -67,7 +65,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        table_view const& values,
                                        bool find_first,
                                        std::vector<order> const& column_order,
-                                       null_order null_precedence,
+                                       std::vector<null_order> const& null_precedence,
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource *mr)
 {
@@ -89,24 +87,33 @@ std::unique_ptr<column> search_ordered(table_view const& t,
         "Mismatch between number of columns and column order.");
   }
 
+  if (not null_precedence.empty()) {
+    CUDF_EXPECTS(
+        static_cast<std::size_t>(t.num_columns()) == null_precedence.size(),
+        "Mismatch between number of columns and null precedence.");
+  }
+
   auto d_t      = table_device_view::create(t, stream);
   auto d_values = table_device_view::create(values, stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
 
   //  Need an order*
   rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
+  rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
 
   if (has_nulls(t)) {
+    // TODO:  One of the PRs made null_precedence an array and
+    //    changed the order in the constructor
     auto ineq_op = (find_first)
-                 ? row_lexicographic_comparator<true>(*d_t, *d_values, null_precedence, d_column_order.data().get())
-                 : row_lexicographic_comparator<true>(*d_values, *d_t, null_precedence, d_column_order.data().get());
+      ? row_lexicographic_comparator<true>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
+      : row_lexicographic_comparator<true>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
 
     launch_search(count_it, count_it, t.num_rows(), values.num_rows(),
                   result_view.data<size_type>(), ineq_op, find_first, stream);
   } else {
     auto ineq_op = (find_first)
-                 ? row_lexicographic_comparator<false>(*d_t, *d_values, null_precedence, d_column_order.data().get())
-                 : row_lexicographic_comparator<false>(*d_values, *d_t, null_precedence, d_column_order.data().get());
+      ? row_lexicographic_comparator<false>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
+      : row_lexicographic_comparator<false>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
 
     launch_search(count_it, count_it, t.num_rows(), values.num_rows(),
                   result_view.data<size_type>(), ineq_op, find_first, stream);
@@ -142,7 +149,20 @@ bool contains(column_view const& col,
   }
 
   std::unique_ptr<column> scalar_as_column = make_numeric_column(col.type(), 1, mask_state::UNALLOCATED, stream, mr);
+
+#ifdef USE_FILL
   cudf::experimental::fill(scalar_as_column, size_type{0}, size_type{1}, value, mr);
+#else
+  //
+  // NOTE:  This is an ugly hack that works for the unit tests
+  //        Once fill is implemented this can be replaced by the above logic
+  //
+  CUDA_TRY(cudaMemcpy(scalar_as_column->mutable_view().head<void>(),
+                      ((cudf::detail::fixed_width_scalar<int8_t> *) &value)->data(),
+                      size_of(scalar_as_column->type()),
+                      cudaMemcpyHostToDevice));
+#endif
+  
 
   auto d_t = cudf::table_device_view::create(cudf::table_view{{col}}, stream);
   auto d_value = cudf::table_device_view::create(cudf::table_view{{*scalar_as_column}}, stream);
@@ -168,7 +188,7 @@ bool contains(column_view const& col,
 std::unique_ptr<column> lower_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
-                                    null_order null_precedence,
+                                    std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
   cudaStream_t stream = 0;
@@ -178,14 +198,14 @@ std::unique_ptr<column> lower_bound(table_view const& t,
 std::unique_ptr<column> upper_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
-                                    null_order null_precedence,
+                                    std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
   cudaStream_t stream = 0;
   return detail::search_ordered(t, values, false, column_order, null_precedence, stream, mr);
 }
 
-bool contains(column const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
+bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
 {
   cudaStream_t stream = 0;
   return detail::contains(col, value, stream, mr);

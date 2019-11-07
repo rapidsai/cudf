@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
 
 #include <vector>
@@ -53,7 +54,7 @@ namespace experimental {
  * @param t               Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
- * @param null_precedence The size of a NULL value in comparison to all other
+ * @param null_precedence Vector of null_precedence enums
  * values
  * @param mr              Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
@@ -62,7 +63,7 @@ namespace experimental {
 std::unique_ptr<column> lower_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
-                                    null_order null_precedence,
+                                    std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
@@ -92,7 +93,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
- * @param null_precedence The size of a NULL value in comparison to all other
+ * @param null_precedence Vector of null_precedence enums
  * values
  * @param mr              Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
@@ -101,7 +102,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
 std::unique_ptr<column> upper_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
-                                    null_order null_precedence,
+                                    std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
