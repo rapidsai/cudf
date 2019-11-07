@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef HASH_FUNCTIONS_CUH
-#define HASH_FUNCTIONS_CUH
+#pragma once
 
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
@@ -265,6 +264,3 @@ struct IdentityHash<cudf::detail::wrapper<T,type_id>>
 
 template <typename Key>
 using default_hash = MurmurHash3_32<Key>;
-
-
-#endif //HASH_FUNCTIONS_CUH
