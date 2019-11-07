@@ -64,8 +64,16 @@ namespace detail {
 std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
                  table_view const& keys,
                  cudf::size_type keep_threshold,
-                 rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                 rmm::mr::device_memory_resource *mr =
+                     rmm::mr::get_default_resource(),
                  cudaStream_t stream = 0);
+
+std::unique_ptr<experimental::table>
+    apply_boolean_mask(table_view const& input,
+                       column_view const& boolean_mask,
+                       rmm::mr::device_memory_resource *mr =
+                           rmm::mr::get_default_resource(),
+                       cudaStream_t stream = 0);
 } // namespace detail
 } // namespace experimental
 } // namespace cudf

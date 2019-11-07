@@ -24,18 +24,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
-
-void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs) {
-  EXPECT_EQ(lhs.num_rows(), rhs.num_rows());
-  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-}
-
-void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs) {
-  expect_table_properties_equal(lhs, rhs);
-  for (auto i=0; i<lhs.num_columns(); ++i) {
-    cudf::test::expect_columns_equal(lhs.column(i), rhs.column(i));
-  }
-}
+#include <tests/utilities/table_utilities.hpp>
 
 struct DropNullsTest : public cudf::test::BaseFixture {};
 
@@ -51,7 +40,7 @@ TEST_F(DropNullsTest, WholeRowIsNull) {
    
     auto got = cudf::experimental::drop_nulls(input, input);
 
-    expect_tables_equal(expected, got->view());
+    cudf::test::expect_tables_equal(expected, got->view());
 }
 
 TEST_F(DropNullsTest, NoNull) {
@@ -62,7 +51,7 @@ TEST_F(DropNullsTest, NoNull) {
 
     auto got = cudf::experimental::drop_nulls(input, input);
 
-    expect_tables_equal(input, got->view());
+    cudf::test::expect_tables_equal(input, got->view());
 }
 
 TEST_F(DropNullsTest, MixedSetOfRows) {
@@ -77,7 +66,7 @@ TEST_F(DropNullsTest, MixedSetOfRows) {
 
     auto got = cudf::experimental::drop_nulls(input, input);
 
-    expect_tables_equal(expected, got->view());
+    cudf::test::expect_tables_equal(expected, got->view());
 }
 
 TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold) {
@@ -92,7 +81,7 @@ TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold) {
 
     auto got = cudf::experimental::drop_nulls(input, input, input.num_columns()-1);
 
-    expect_tables_equal(expected, got->view());
+    cudf::test::expect_tables_equal(expected, got->view());
 }
 
 TEST_F(DropNullsTest, EmptyTable) {
@@ -101,7 +90,7 @@ TEST_F(DropNullsTest, EmptyTable) {
 
     auto got = cudf::experimental::drop_nulls(input, input);
 
-    expect_tables_equal(expected, got->view());
+    cudf::test::expect_tables_equal(expected, got->view());
 }
 
 TEST_F(DropNullsTest, EmptyColumns) {
@@ -116,7 +105,7 @@ TEST_F(DropNullsTest, EmptyColumns) {
 
     auto got = cudf::experimental::drop_nulls(input, input);
 
-    expect_tables_equal(expected, got->view());
+    cudf::test::expect_tables_equal(expected, got->view());
 }
 
 TEST_F(DropNullsTest, MisMatchInKeysAndInputSize) {
@@ -145,6 +134,6 @@ TYPED_TEST(DropNullsTestAll, AllNull) {
 
     auto got = cudf::experimental::drop_nulls(input, keys);
 
-    expect_tables_equal(expected, got->view());
+    cudf::test::expect_tables_equal(expected, got->view());
 }
 

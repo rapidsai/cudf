@@ -88,7 +88,14 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
  */
 std::unique_ptr<experimental::table> drop_nulls(table_view const &input,
                  table_view const &keys,
-                 rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                 rmm::mr::device_memory_resource *mr =
+                     rmm::mr::get_default_resource());
+
+std::unique_ptr<experimental::table>
+    apply_boolean_mask(table_view const& input,
+                       column_view const& boolean_mask,
+                       rmm::mr::device_memory_resource *mr =
+                           rmm::mr::get_default_resource());
 
 } // namespace experimental
 } // namespace cudf
