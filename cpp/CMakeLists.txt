@@ -485,13 +485,14 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cu
             src/sort/sort.cu
+            src/column/legacy/interop.cpp
             src/strings/strings_column_factories.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
-            src/column/legacy/interop.cpp
+            src/strings/char_types/char_types.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 

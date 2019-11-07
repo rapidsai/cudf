@@ -1,13 +1,14 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
-#include <utilities/bit_util.cuh>
-#include <utilities/cudf_utils.h>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -19,13 +20,7 @@
 #include <thrust/gather.h>
 #include <thrust/iterator/transform_iterator.h>
 
-
 #include <cub/cub.cuh>
-#include <utilities/column_utils.hpp>
-#include <utilities/cuda_utils.hpp>
-#include <utilities/release_assert.cuh>
-
-#include <bitmask/legacy/valid_if.cuh>
 
 namespace cudf {
 namespace experimental {
@@ -85,15 +80,13 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
         const uint32_t valid_warp =
           __ballot_sync(0xffffffff, thread_active && source_bit_is_valid);
 
-        const size_type valid_index =
-          cudf::util::detail::bit_container_index<bitmask_type>(
-              destination_row);
+        const size_type valid_index = word_index(destination_row);
 
         // Only one thread writes output
         if (0 == threadIdx.x % warp_size) {
           destination_col.set_mask_word(valid_index, valid_warp);
         }
-        valid_count_accumulate += cudf::detail::single_lane_popc_block_reduce(valid_warp);
+        valid_count_accumulate += single_lane_block_popc_reduce(valid_warp);
         destination_row_base += blockDim.x * gridDim.x;
       }
       if (threadIdx.x == 0) {

@@ -106,6 +106,40 @@ std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type st
     return std::make_pair(null_mask,null_count);
 }
 
+/**
+ * @brief Converts a single UTF-8 character into a code-point value that
+ * can be used for lookup in the character flags or the character case tables.
+ *
+ * @param utf8_char Single UTF-8 character to convert.
+ * @return Code-point for the UTF-8 character.
+ */
+__device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
+{
+    uint32_t unchr = 0;
+    if( utf8_char < 0x00000080 ) // single-byte pass thru
+        unchr = utf8_char;
+    else if( utf8_char < 0x0000E000 ) // two bytes
+    {
+        unchr =  (utf8_char & 0x1F00) >> 2; // shift and
+        unchr |= (utf8_char & 0x003F);      // unmask
+    }
+    else if( utf8_char < 0x00F00000 ) // three bytes
+    {
+        unchr =  (utf8_char & 0x0F0000) >> 4;  // get upper 4 bits
+        unchr |= (utf8_char & 0x003F00) >> 2;  // shift and
+        unchr |= (utf8_char & 0x00003F);       // unmask
+    }
+    else if( utf8_char <= (unsigned)0xF8000000 ) // four bytes
+    {
+        unchr =  (utf8_char & 0x03000000) >> 6; // upper 3 bits
+        unchr |= (utf8_char & 0x003F0000) >> 4; // next 6 bits
+        unchr |= (utf8_char & 0x00003F00) >> 2; // next 6 bits
+        unchr |= (utf8_char & 0x0000003F);      // unmask
+    }
+    return unchr;
+}
+
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf
