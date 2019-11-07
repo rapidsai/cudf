@@ -30,17 +30,17 @@ namespace detail {
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
  *
- * The first column is expected to be a cudf::column. The second column
+ * `input` and `replacement` must be of the same type and size.
  * must be of the same type and same size as the first.
  *
  * The function replaces all nulls of the first column with the
  * corresponding elements of the second column
  *
- * @param[in] input A cudf::column containing null values
+ * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
  * @param[in] stream Optional stream in which to perform allocations
  *
- * @returns Column with nulls replaced
+ * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
  */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
@@ -50,16 +50,15 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 /**
   * @brief Replaces all null values in a column with a scalar.
   *
-  * The column is expected to be a cudf::column. The scalar is expected to be
+  * `input` and `replacement` must have the same type.
   * a gdf_scalar of the same data type as the column.
   *
-  * The function will replace all nulls of the column with the scalar value.
   *
-  * @param[in] input A gdf_column containing null values
-  * @param[in] replacement A gdf_scalar whose value will replace null values in input
+  * @param[in] input A column whose null values will be replaced
+  * @param[in] replacement Scalar used to replace null values in `input`. 
   * @param[in] stream Optional stream in which to perform allocations
   *
-  * @returns Column with nulls replaced
+  * @returns Copy of `input` with null values replaced by `replacement`.
   */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::scalar const* replacement,
@@ -69,13 +68,13 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col`
- *        with `new_values[i]` and return a new gdf_column `output`.
+ *        with `new_values[i]`.
  *
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
  * @param stream The CUDA stream to use for operations
- * @return The input column with specified values replaced.
+ * @return Copy of `input` with specified values replaced.
  */
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
