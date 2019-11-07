@@ -143,7 +143,7 @@ class column {
   template <typename B = rmm::device_buffer>
   void set_null_mask(
       B&& new_null_mask, size_type new_null_count = UNKNOWN_NULL_COUNT) {
-    _null_mask = new_null_mask;
+    _null_mask = std::forward<B>(new_null_mask);
     _null_count = new_null_count;
   }
 
