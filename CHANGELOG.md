@@ -24,6 +24,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3291 Add normalize_nans_and_zeros
 
 ## Improvements
 
@@ -59,6 +60,7 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Movey unary files to legacy
@@ -86,6 +88,7 @@
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 
 ## Bug Fixes
@@ -119,6 +122,7 @@
 - PR #3289 fix java memory usage API for empty columns
 - PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
 - PR #3295 Fix storing storing invalid RMM exec policies.
+- PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 
 
 # cuDF 0.10.0 (16 Oct 2019)
