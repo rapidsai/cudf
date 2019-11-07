@@ -125,6 +125,7 @@
 - PR #3295 Fix storing storing invalid RMM exec policies.
 - PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 - PR #3313 Fix public headers including non-public headers
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
 
 
 # cuDF 0.10.0 (16 Oct 2019)
