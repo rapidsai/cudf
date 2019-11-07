@@ -24,6 +24,7 @@
 #include <bitmask/legacy/legacy_bitmask.hpp> //remove
 #include <cudf/legacy/copying.hpp> // remove/replace
 #include <cudf/utilities/error.hpp> // wtf duplicate
+#include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/detail/binaryop.hpp>
@@ -134,18 +135,22 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
                       const std::string& ptx,
-                      const std::string& output_type) {
-  
+                      data_type output_type) {
+
+  std::string const output_type_name = cudf::jit::get_type_name(output_type);
+
   std::string ptx_hash = 
-    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type)); 
-  std::string cuda_source =
-    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type) + code::kernel;
+    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type_name)); 
+  std::string cuda_source = "\n#include <cudf/types.hpp>\n" +
+    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP",
+                                         output_type_name)
+    + code::kernel;
 
   cudf::jit::launcher(
     ptx_hash, cuda_source, headers_name, compiler_flags, headers_code
   ).set_kernel_inst(
     "kernel_v_v", // name of the kernel we are launching
-    { cudf::jit::get_type_name(out.type()), // list of template arguments
+    { output_type_name,                     // list of template arguments
       cudf::jit::get_type_name(lhs.type()),
       cudf::jit::get_type_name(rhs.type()),
       get_operator_name(GENERIC_BINARY, OperatorType::Direct) } 
@@ -231,11 +236,11 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
-  // Check for 0 sized data
-  if ((lhs.size() == 0) && (rhs.size() == 0))
-    return make_numeric_column(output_type, 0);
-
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+
+  // Check for 0 sized data
+  if (lhs.size() == 0) // also rhs.size() == 0
+    return make_numeric_column(output_type, 0);
 
   auto new_mask = bitmask_and(lhs, rhs);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask);
@@ -258,48 +263,36 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
   // gdf_column_free(&rhs_tmp);
 }
 
-  // std::unique_ptr<column> binary_operation(column_view const& lhs,
-  //                                          column_view const& rhs,
-  //                                          std::string const& ptx,
-  //                                          data_type output_type)
-  // {  
-  //   CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                          column_view const& rhs,
+                                          std::string const& ptx,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr,
+                                          cudaStream_t stream)
+{
+  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  //   gdf_column output{};
+  // Check for 0 sized data
+  if (lhs.size() == 0) // also rhs.size() == 0
+    return make_numeric_column(output_type, 0);
 
-  //   if (lhs.valid != nullptr) {
-  //     output = allocate_column(output_type, lhs.size);
-  //   } else if (rhs.valid != nullptr) {
-  //     output = allocate_column(output_type, rhs.size);
-  //   } else {
-  //     output = allocate_column(output_type, lhs.size, false); // don't allocate valid for the output
-  //   }
-    
-  //   // Check for 0 sized data
-  //   if (lhs.size == 0) return output;
-
-  //   // Check for null data pointer
-  //   CUDF_EXPECTS((lhs.data != nullptr) && (rhs.data != nullptr),
-  //                "Column data pointers are null");
-
-  //   // Check for datatype
-  //   CUDF_EXPECTS( lhs.dtype == GDF_FLOAT32 || 
-  //                 lhs.dtype == GDF_FLOAT64 ||
-  //                 lhs.dtype == GDF_INT64   ||
-  //                 lhs.dtype == GDF_INT32   ||
-  //                 lhs.dtype == GDF_INT16,  "Invalid/Unsupported lhs datatype");
-  //   CUDF_EXPECTS( rhs.dtype == GDF_FLOAT32 || 
-  //                 rhs.dtype == GDF_FLOAT64 ||
-  //                 rhs.dtype == GDF_INT64   ||
-  //                 rhs.dtype == GDF_INT32   ||
-  //                 rhs.dtype == GDF_INT16,  "Invalid/Unsupported rhs datatype");
-    
-  //   binops::binary_valid_mask_and(output.null_count, output.valid, lhs.valid,
-  //                                 rhs.valid, rhs.size);
-
-  //   binops::jit::binary_operation(&output, &lhs, &rhs, ptx,
-  //                                 cudf::jit::get_type_name(output_type));
-  // }
+  auto new_mask = bitmask_and(lhs, rhs);
+  auto out = make_numeric_column(output_type, lhs.size(), new_mask);
+  
+  // Check for datatype
+  auto is_type_supported = [] (data_type type) -> bool {
+    return is_numeric(type) and 
+           type.id() != type_id::INT8 and
+           type.id() != type_id::BOOL8;
+  };
+  CUDF_EXPECTS(is_type_supported(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_type_supported(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_type_supported(output_type), "Invalid/Unsupported output datatype");
+  
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, ptx, output_type);
+  return out;
+}
 
 } // namespace detail
 
@@ -311,6 +304,7 @@ std::unique_ptr<column> binary_operation( scalar const& lhs,
 {
   return detail::binary_operation(lhs, rhs, ope, output_type, mr);
 }
+
 std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           scalar const& rhs,
                                           binary_operator ope,
@@ -319,6 +313,7 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
 {
   return detail::binary_operation(lhs, rhs, ope, output_type, mr);
 }
+
 std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           column_view const& rhs,
                                           binary_operator ope,
@@ -326,6 +321,15 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr)
 {
   return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+}
+
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                          column_view const& rhs,
+                                          std::string const& ptx,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr)
+{
+  return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
 }
 
 } // namespace experimental

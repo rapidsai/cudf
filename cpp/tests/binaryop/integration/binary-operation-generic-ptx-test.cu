@@ -18,16 +18,14 @@
  */
 
 #include <tests/binaryop/integration/assert-binops.h>
-#include <tests/utilities/base_fixture.hpp>
+#include <tests/binaryop/integration/binop-fixture.hpp>
 #include <cudf/binaryop.hpp>
 
 namespace cudf {
 namespace test {
 namespace binop {
 
-struct BinaryOperationGenericPTXTest : public cudf::test::BaseFixture {};
-
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
+TEST_F(BinaryOperationIntegrationTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
 
 // c = a*a*a + b
 const char* ptx =
@@ -71,28 +69,22 @@ R"***(
 }
 )***";
 
-    auto CADD = [](float a, float b) {return a*a*a + b;};
+    using TypeOut = float;
+    using TypeLhs = float;
+    using TypeRhs = float;
 
-    auto lhs = cudf::test::column_wrapper<float>(500,
-        [](cudf::size_type row) {return (row % 3 > 0);},
-        [](cudf::size_type row) {return (row % 4 > 0);});
-    auto rhs = cudf::test::column_wrapper<float>(500,
-        [](cudf::size_type row) {return (row % 3 > 0);},
-        [](cudf::size_type row) {return (row % 4 > 0);});
+    auto CADD = [](TypeLhs a, TypeRhs b) {return a*a*a + b;};
+
+    auto lhs = make_random_wrapped_column<TypeLhs>(500);
+    auto rhs = make_random_wrapped_column<TypeRhs>(500);
     
-    gdf_column cpp_output_col;
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_FLOAT32));
-    auto cpp_out = cudf::test::column_wrapper<float>(cpp_output_col);
+    auto out = cudf::experimental::binary_operation(lhs, rhs, ptx, 
+					data_type(experimental::type_to_id<TypeOut>()));
 
-    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
-
-    gdf_column_free(&cpp_output_col);
-
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
-
-  using dtype = int;
+TEST_F(BinaryOperationIntegrationTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
 
 // c = a*a*a + b
 const char* ptx =
@@ -137,26 +129,22 @@ R"***(
 }
 )***";
 
-    auto CADD = [](dtype a,  dtype b) {return a*a*a + b;};
+    using TypeOut = int64_t;
+    using TypeLhs = int32_t;
+    using TypeRhs = int32_t;
 
-    auto lhs = cudf::test::column_wrapper<dtype>(500,
-        [](cudf::size_type row) {return (row % 3 > 0);},
-        [](cudf::size_type row) {return (row % 4 > 0);});
-    auto rhs = cudf::test::column_wrapper<dtype>(500,
-        [](cudf::size_type row) {return (row % 3 > 0);},
-        [](cudf::size_type row) {return (row % 4 > 0);});
+    auto CADD = [](TypeLhs a,  TypeRhs b) {return a*a*a + b;};
 
-    gdf_column cpp_output_col;
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
-    auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
+    auto lhs = make_random_wrapped_column<TypeLhs>(500);
+    auto rhs = make_random_wrapped_column<TypeRhs>(500);
 
-    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
+    auto out = cudf::experimental::binary_operation(lhs, rhs, ptx, 
+					data_type(experimental::type_to_id<TypeOut>()));
 
-    gdf_column_free(&cpp_output_col);
-
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
+TEST_F(BinaryOperationIntegrationTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
 
 // c = a*a*a + b*b
 const char* ptx =
@@ -203,22 +191,19 @@ R"***(
 
 )***";
 
-    auto CADD = [](int32_t a,  int64_t b) {return a*a*a + b*b;};
+    using TypeOut = int64_t;
+    using TypeLhs = int32_t;
+    using TypeRhs = int64_t;
 
-    auto lhs = cudf::test::column_wrapper<int32_t>(500,
-        [](cudf::size_type row) {return (row % 3 > 0);},
-        [](cudf::size_type row) {return (row % 4 > 0);});
-    auto rhs = cudf::test::column_wrapper<int64_t>(500,
-        [](cudf::size_type row) {return (row % 3 > 0);},
-        [](cudf::size_type row) {return (row % 4 > 0);});
+    auto CADD = [](TypeLhs a,  TypeRhs b) {return a*a*a + b*b;};
 
-    gdf_column cpp_output_col;
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
-    auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
+    auto lhs = make_random_wrapped_column<TypeLhs>(500);
+    auto rhs = make_random_wrapped_column<TypeRhs>(500);
 
-    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
+    auto out = cudf::experimental::binary_operation(lhs, rhs, ptx, 
+					data_type(experimental::type_to_id<TypeOut>()));
 
-    gdf_column_free(&cpp_output_col);
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
 
