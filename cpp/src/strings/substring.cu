@@ -30,7 +30,7 @@ namespace
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
- * 
+ *
  * Useful when most of the logic is identical for both passes.
  */
 enum TwoPass
@@ -52,7 +52,7 @@ namespace
 
 /**
  * @brief Function logic for the substring API.
- * 
+ *
  * This will perform a substring operation on each string
  * using the provided start, stop, and step parameters.
  */
@@ -111,12 +111,7 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
     auto d_column = *strings_column;
 
     // copy the null mask
-    rmm::device_buffer null_mask;
-    size_type null_count = d_column.null_count();
-    if( d_column.nullable() )
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        bitmask_allocation_size_bytes(strings_count),
-                                        stream, mr);
+    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
         substring_fn<SizeOnly>{d_column, start, stop, step} );
@@ -128,14 +123,14 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         substring_fn<ExecuteOp>{d_column, start, stop, step, d_new_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               null_count, std::move(null_mask), stream, mr);
+                               strings.null_count(), std::move(null_mask), stream, mr);
 }
 
 } // namespace detail
