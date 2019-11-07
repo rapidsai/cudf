@@ -117,21 +117,21 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32) {
 }
 
 
-    // TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
-    //     using ADD = cudf::library::operation::Add<int32_t, double, int8_t>;
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
+    using TypeOut = int32_t;
+    using TypeLhs = double;
+    using TypeRhs = int8_t;
 
-    //     auto lhs = cudf::test::column_wrapper<double>(100,
-    //         [](cudf::size_type row) {return row * 2.0;},
-    //         [](cudf::size_type row) {return (row % 3 > 0);});
-    //     auto rhs = cudf::test::column_wrapper<int8_t>(100,
-    //         [](cudf::size_type row) {return row * 1;},
-    //         [](cudf::size_type row) {return (row % 4 > 0);});
-    //     auto out = cudf::test::column_wrapper<int32_t>(lhs.get()->size, true);
+    using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
-    //     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    auto lhs = make_random_wrapped_column<TypeLhs>(100);
+    auto rhs = make_random_wrapped_column<TypeRhs>(100);
+    auto out = cudf::experimental::binary_operation(lhs, rhs, 
+                    cudf::experimental::binary_operator::ADD,
+                    data_type(experimental::type_to_id<TypeOut>()));
 
-    //     ASSERT_BINOP(out, lhs, rhs, ADD());
-    // }
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
 
 
     // TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
