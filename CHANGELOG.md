@@ -82,6 +82,7 @@
 - PR #3270 Move predicates files to legacy
 - PR #3281 Add to_host specialization for strings in column test utilities
 - PR #3282 Add `num_bitmask_words`
+- PR #3252 Add new factory methods to include passing an existing null mask
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
@@ -118,6 +119,7 @@
 - PR #3289 fix java memory usage API for empty columns
 - PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
 - PR #3295 Fix storing storing invalid RMM exec policies.
+- PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 
 
 # cuDF 0.10.0 (16 Oct 2019)
