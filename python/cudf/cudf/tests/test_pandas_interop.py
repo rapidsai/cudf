@@ -2,7 +2,9 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
+import cudf
 from cudf.core import DataFrame
 
 
@@ -72,3 +74,18 @@ def test_from_pandas_with_index():
     np.testing.assert_array_equal(df.index.values, pdf.index.values)
     # Check again using pandas testing tool on frames
     pd.util.testing.assert_frame_equal(df.to_pandas(), pdf)
+
+
+def test_from_pandas_rangeindex():
+    idx1 = pd.RangeIndex(start=0, stop=4, step=1, name="myindex")
+    idx2 = cudf.from_pandas(idx1)
+
+    # Check index
+    np.testing.assert_array_equal(idx1.values, idx2.values)
+    assert idx1.name == idx2.name
+
+
+def test_from_pandas_rangeindex_step():
+    idx1 = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
+    with pytest.raises(ValueError):
+        cudf.from_pandas(idx1)
