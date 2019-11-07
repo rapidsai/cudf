@@ -26,6 +26,7 @@
 #include <cudf/utilities/error.hpp> // wtf duplicate
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/binaryop.hpp>
 #include <cudf/binaryop.hpp>
 
 #include <jit/launcher.h>
@@ -42,90 +43,6 @@ namespace cudf {
 namespace experimental {
 
 namespace binops {
-
-  // /**---------------------------------------------------------------------------*
-  //  * @brief Computes bitwise AND of two input valid masks
-  //  *
-  //  * This is just a wrapper on apply_bitmask_to_bitmask that can also handle
-  //  * cases when one or both of the input masks are nullptr, in which case, it
-  //  * copies the mask from the non nullptr input or sets all the output mask to
-  //  * valid respectively
-  //  *
-  //  * @param out_null_coun[out] number of nulls in output
-  //  * @param valid_out preallocated output mask
-  //  * @param valid_left input mask 1
-  //  * @param valid_right input mask 2
-  //  * @param num_values number of values in each input mask valid_left and
-  //  *valid_right
-  //  *---------------------------------------------------------------------------**/
-  // void binary_valid_mask_and(cudf::size_type& out_null_count,
-  //                            cudf::valid_type* valid_out,
-  //                            const cudf::valid_type* valid_left,
-  //                            const cudf::valid_type* valid_right,
-  //                            cudf::size_type num_values) {
-  //   if (num_values == 0) {
-  //     out_null_count = 0;
-  //     return;
-  //   }
-
-  //   if (valid_out == nullptr && valid_left == nullptr && valid_right == nullptr) {
-  //     // if both in cols have no mask, then out col is allowed to have no mask
-  //     out_null_count = 0;
-  //     return;
-  //   }
-
-  //   CUDF_EXPECTS((valid_out != nullptr), "Output valid mask pointer is null");
-
-  //   if (valid_left != nullptr && valid_right != nullptr) {
-  //     cudaStream_t stream;
-  //     CUDA_TRY(cudaStreamCreate(&stream));
-  //     auto error = apply_bitmask_to_bitmask(out_null_count, valid_out, valid_left,
-  //                                           valid_right, stream, num_values);
-  //     CUDA_TRY(cudaStreamSynchronize(stream));
-  //     CUDA_TRY(cudaStreamDestroy(stream));
-  //     CUDF_EXPECTS(error == GDF_SUCCESS, "Unable to combine bitmasks");
-  //   }
-
-  //   cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
-
-  //   if (valid_left == nullptr && valid_right != nullptr) {
-  //     CUDA_TRY(cudaMemcpy(valid_out, valid_right, num_bitmask_elements,
-  //                         cudaMemcpyDeviceToDevice));
-  //   } else if (valid_left != nullptr && valid_right == nullptr) {
-  //     CUDA_TRY(cudaMemcpy(valid_out, valid_left, num_bitmask_elements,
-  //                         cudaMemcpyDeviceToDevice));
-  //   } else if (valid_left == nullptr && valid_right == nullptr) {
-  //     CUDA_TRY(cudaMemset(valid_out, 0xff, num_bitmask_elements));
-  //   }
-
-  //   cudf::size_type non_nulls;
-  //   auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
-  //   CUDF_EXPECTS(error == GDF_SUCCESS, "Unable to count number of valids");
-  //   out_null_count = num_values - non_nulls;
-  // }
-
-/**---------------------------------------------------------------------------*
- * @brief Computes output valid mask for op between a column and a scalar
- *
- * @param out_null_coun[out] number of nulls in output
- * @param valid_out preallocated output mask
- * @param valid_col input mask of column
- * @param valid_scalar bool indicating if scalar is valid
- * @param num_values number of values in input mask valid_col
- *---------------------------------------------------------------------------**/
-auto scalar_col_valid_mask_and(column_view const& col, scalar const& s) {
-  if (col.size() == 0) {
-    return rmm::device_buffer{};
-  }
-
-  if (not s.is_valid()) {
-    return create_null_mask(col.size(), mask_state::ALL_NULL);
-  } else if (s.is_valid() && col.nullable()) {
-    return copy_bitmask(col);
-  } else if (s.is_valid() && not col.nullable()) {
-    return rmm::device_buffer{};
-}
-}
 
 namespace jit {
 
@@ -244,12 +161,41 @@ void binary_operation(mutable_column_view& out,
 }  // namespace jit
 }  // namespace binops
 
-std::unique_ptr<column> binary_operation(scalar const& lhs,
-                                         column_view const& rhs,
-                                         binary_operator ope,
-                                         data_type output_type)
+namespace {
+/**---------------------------------------------------------------------------*
+ * @brief Computes output valid mask for op between a column and a scalar
+ *
+ * @param out_null_coun[out] number of nulls in output
+ * @param valid_out preallocated output mask
+ * @param valid_col input mask of column
+ * @param valid_scalar bool indicating if scalar is valid
+ * @param num_values number of values in input mask valid_col
+ *---------------------------------------------------------------------------**/
+auto scalar_col_valid_mask_and(column_view const& col, scalar const& s) {
+  if (col.size() == 0) {
+    return rmm::device_buffer{};
+  }
+
+  if (not s.is_valid()) {
+    return create_null_mask(col.size(), mask_state::ALL_NULL);
+  } else if (s.is_valid() && col.nullable()) {
+    return copy_bitmask(col);
+  } else if (s.is_valid() && not col.nullable()) {
+    return rmm::device_buffer{};
+  }
+}
+} // namespace
+
+namespace detail {
+
+std::unique_ptr<column> binary_operation( scalar const& lhs,
+                                          column_view const& rhs,
+                                          binary_operator ope,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr,
+                                          cudaStream_t stream)
 {
-  auto new_mask = binops::scalar_col_valid_mask_and(rhs, lhs);
+  auto new_mask = scalar_col_valid_mask_and(rhs, lhs);
   auto out = make_numeric_column(output_type, rhs.size(), new_mask);
 
   if (rhs.size() == 0)
@@ -260,12 +206,14 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   return out;
 }
 
-std::unique_ptr<column> binary_operation(column_view const& lhs,
-                                         scalar const& rhs,
-                                         binary_operator ope,
-                                         data_type output_type)
+std::unique_ptr<column> binary_operation( column_view const& lhs,
+                                          scalar const& rhs,
+                                          binary_operator ope,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr,
+                                          cudaStream_t stream)
 {
-  auto new_mask = binops::scalar_col_valid_mask_and(lhs, rhs);
+  auto new_mask = scalar_col_valid_mask_and(lhs, rhs);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask);
 
   if (lhs.size() == 0)
@@ -280,6 +228,8 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           column_view const& rhs,
                                           binary_operator ope,
                                           data_type output_type,
+                                          rmm::mr::device_memory_resource *mr,
+                                          cudaStream_t stream)
 {
   // Check for 0 sized data
   if ((lhs.size() == 0) && (rhs.size() == 0))
@@ -350,6 +300,33 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
   //   binops::jit::binary_operation(&output, &lhs, &rhs, ptx,
   //                                 cudf::jit::get_type_name(output_type));
   // }
+
+} // namespace detail
+
+std::unique_ptr<column> binary_operation( scalar const& lhs,
+                                          column_view const& rhs,
+                                          binary_operator ope,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr)
+{
+  return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+}
+std::unique_ptr<column> binary_operation( column_view const& lhs,
+                                          scalar const& rhs,
+                                          binary_operator ope,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr)
+{
+  return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+}
+std::unique_ptr<column> binary_operation( column_view const& lhs,
+                                          column_view const& rhs,
+                                          binary_operator ope,
+                                          data_type output_type,
+                                          rmm::mr::device_memory_resource *mr)
+{
+  return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+}
 
 } // namespace experimental
 } // namespace cudf

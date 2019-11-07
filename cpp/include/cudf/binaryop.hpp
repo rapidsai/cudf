@@ -57,6 +57,7 @@ enum binary_operator{
 };
 
 // TODO: All these docs
+// TODO: Stream and memory resource
 /**
  * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
  *
@@ -71,10 +72,12 @@ enum binary_operator{
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-std::unique_ptr<column> binary_operation(scalar const& lhs,
-                                         column_view const& rhs,
-                                         binary_operator ope,
-                                         data_type output_type);
+std::unique_ptr<column> binary_operation(
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator ope,
+  data_type output_type,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
@@ -90,10 +93,12 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
  * @param rhs (gdf_scalar) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-std::unique_ptr<column> binary_operation(column_view const& lhs,
-                                         scalar const& rhs,
-                                         binary_operator ope,
-                                         data_type output_type);
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator ope,
+  data_type output_type,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a binary operation between two gdf_columns.
@@ -108,10 +113,12 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-std::unique_ptr<column> binary_operation(column_view const& lhs,
-                                         column_view const& rhs,
-                                         binary_operator ope,
-                                         data_type output_type);
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator ope,
+  data_type output_type,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a binary operation between two gdf_columns using a
@@ -135,10 +142,12 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
  * `lhs` and `rhs`
  * @param output_type The desired output type
  */
-std::unique_ptr<column> binary_operation(column_view const& lhs,
-                                         column_view const& rhs,
-                                         std::string const& ptx,
-                                         data_type output_type);
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  column_view const& rhs,
+  std::string const& ptx,
+  data_type output_type,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 } // namespace experimental
 }  // namespace cudf
