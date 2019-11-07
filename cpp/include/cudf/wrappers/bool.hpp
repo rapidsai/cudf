@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <utilities/cudf_utils.h>
+#include <cudf/types.hpp>
 
+#include <cuda_runtime.h>
 #include <cub/util_type.cuh>
 
 #include <cstdint>
