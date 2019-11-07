@@ -29,7 +29,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
                                        size_type min_periods,
                                        size_type forward_window,
-                                       rolling_operator op)
+                                       rolling_operator op,
+                                       rmm::mr::device_memory_resource* mr)
 {
   if (input.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -42,7 +43,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& window,
                                        size_type min_periods,
                                        size_type forward_window,
-                                       rolling_operator op)
+                                       rolling_operator op,
+                                       rmm::mr::device_memory_resource* mr)
 {
   if (input.size() == 0 || window.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -59,7 +61,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        size_type forward_window,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
-                                       data_type output_type)
+                                       data_type output_type,
+                                       rmm::mr::device_memory_resource* mr)
 {
   if (input.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -74,7 +77,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        size_type forward_window,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
-                                       data_type output_type)
+                                       data_type output_type,
+                                       rmm::mr::device_memory_resource* mr)
 {
   if (input.size() == 0 || window.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);

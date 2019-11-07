@@ -66,7 +66,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
                                        size_type min_periods,
                                        size_type forward_window,
-                                       rolling_operator op);
+                                       rolling_operator op,
+                                       rmm::mr::device_memory_resource* mr =
+                                        rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
@@ -102,7 +104,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& window,
                                        size_type min_periods,
                                        size_type forward_window,
-                                       rolling_operator op);
+                                       rolling_operator op,
+                                       rmm::mr::device_memory_resource* mr =
+                                        rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a fixed-size user-defined rolling window function to the values in a column.
@@ -144,7 +148,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type forward_window,
                                        std::string const& udf,
                                        rolling_operator op,
-                                       data_type output_type);
+                                       data_type output_type,
+                                       rmm::mr::device_memory_resource* mr =
+                                        rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a variable-size user-defined rolling window function to the values in a column.
@@ -188,7 +194,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type forward_window,
                                        std::string const& udf,
                                        rolling_operator op,
-                                       data_type output_type);
+                                       data_type output_type,
+                                       rmm::mr::device_memory_resource* mr =
+                                        rmm::mr::get_default_resource());
 
 } // namespace experimental 
 } // namespace cudf
