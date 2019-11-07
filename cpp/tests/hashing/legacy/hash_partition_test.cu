@@ -19,7 +19,7 @@
 
 #include <utilities/int_fastdiv.h>
 #include <table/legacy/device_table.cuh>
-#include <hash/hash_functions.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
 
 #include <cudf/cudf.h>
 
