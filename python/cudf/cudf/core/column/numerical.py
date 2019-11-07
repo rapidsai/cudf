@@ -178,10 +178,8 @@ class NumericalColumn(column.ColumnBase):
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = self[sort_inds]
-        col_inds = self.replace(
-            data=sort_inds.data,
-            mask=sort_inds.mask,
-            dtype=sort_inds.data.dtype,
+        col_inds = column.build_column(
+            sort_inds.data, dtype=sort_inds.dtype, mask=sort_inds.mask
         )
         return col_keys, col_inds
 

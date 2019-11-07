@@ -58,17 +58,22 @@ class ColumnBase(Column):
             dtype = self.dtype.data_dtype
         else:
             dtype = self.dtype
-        return rmm.device_array_from_ptr(
+
+        result = rmm.device_array_from_ptr(
             ptr=self.data.ptr, nelem=len(self), dtype=dtype
         )
+        result._obj = self
+        return result
 
     def _mask_view(self):
         """
         View the mask as a device array
         """
-        return rmm.device_array_from_ptr(
+        result = rmm.device_array_from_ptr(
             ptr=self.mask.ptr, nelem=len(self), dtype=np.int8
         )
+        result._obj = self
+        return result
 
     def __len__(self):
         return self.size
@@ -253,7 +258,10 @@ class ColumnBase(Column):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna)
+        if fillna:
+            return self.fillna(self.default_na_value())._data_view()
+        else:
+            return self.dropna()._data_view()
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -378,6 +386,9 @@ class ColumnBase(Column):
             arg = int(arg)
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
+            start, stop, stride = arg.indices(len(self))
+            if start == stop:
+                return column_empty(0, self.dtype, masked=True)
             # compute mask slice
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
@@ -416,7 +427,7 @@ class ColumnBase(Column):
             if len(arg) == 0:
                 arg = column.as_column([], dtype="int32")
             if pd.api.types.is_integer_dtype(arg.dtype):
-                return self.take(arg.data.mem)
+                return self.take(arg)
             if pd.api.types.is_bool_dtype(arg.dtype):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
@@ -525,38 +536,6 @@ class ColumnBase(Column):
         """
         return self.notna()
 
-    def to_dense_buffer(self, fillna=None):
-        """Get dense (no null values) ``Buffer`` of the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        if isinstance(fillna, Number):
-            if self.null_count > 0:
-                return self.fillna(fillna)
-        elif fillna not in {None, "pandas"}:
-            raise ValueError("invalid for fillna")
-
-        if self.null_count > 0:
-            if fillna == "pandas":
-                na_value = self.default_na_value()
-                # fill nan
-                return self.fillna(na_value)
-            else:
-                return self._copy_to_dense_buffer()
-        else:
-            # return a reference for performance reasons, should refactor code
-            # to explicitly use mem in the future
-            return self._data_view()
-
     def _invert(self):
         """Internal convenience function for inverting masked array
 
@@ -569,12 +548,6 @@ class ColumnBase(Column):
         gpu_mask = self.to_gpu_array()
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
-
-    def _copy_to_dense_buffer(self):
-        data = self.data.to_gpu_array()
-        mask = self.mask.to_gpu_array()
-        nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
-        return Buffer(mem, size=nnz, capacity=mem.size)
 
     def find_first_value(self, value):
         """
@@ -696,11 +669,11 @@ class ColumnBase(Column):
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""
         # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
+        densecol = self.dropna()
         # sort the column
         sortcol, _ = densecol.sort_by_values()
         # find segments
-        sortedvals = sortcol.data.mem
+        sortedvals = sortcol._data_view()
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
@@ -1156,7 +1129,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             )
 
     elif isinstance(arbitrary, pa.ChunkedArray):
-        raise NotImplementedError
         gpu_cols = [
             as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
         ]
@@ -1170,7 +1142,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             else:
                 new_dtype = np.dtype(pa_type.to_pandas_dtype())
 
-        data = Column._concat(gpu_cols, dtype=new_dtype)
+        data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if is_categorical_dtype(arbitrary):

@@ -498,7 +498,7 @@ class RangeIndex(Index):
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)
-            index = column.as_column(index).data.mem
+            index = column.as_column(index)
 
         return as_index(self.as_column()[index], name=self.name)
 

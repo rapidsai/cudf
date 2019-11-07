@@ -25,6 +25,7 @@ np_to_cudf_types = {np.dtype('int8'): INT8,
                     np.dtype("datetime64[us]"): TIMESTAMP_MICROSECONDS,
                     np.dtype("datetime64[ns]"): TIMESTAMP_NANOSECONDS,
                     np.dtype("object"): STRING,
+                    np.dtype("bool"): BOOL8
 }
 
 cudf_to_np_types = {INT8: np.dtype('int8'),
@@ -38,7 +39,8 @@ cudf_to_np_types = {INT8: np.dtype('int8'),
                     TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
                     TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
                     TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
-                    STRING: np.dtype("object")
+                    STRING: np.dtype("object"),
+                    BOOL8: np.dtype("bool")
 }
 
 cdef class Column:
