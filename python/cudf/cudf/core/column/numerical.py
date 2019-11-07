@@ -198,9 +198,9 @@ class NumericalColumn(column.ColumnBase):
 
     def to_arrow(self):
         mask = None
-        if self.has_null_mask:
-            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        data = pa.py_buffer(self.data.mem.copy_to_host())
+        if self.mask:
+            mask = pa.py_buffer(self._mask_view().copy_to_host())
+        data = pa.py_buffer(self._data_view().copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,

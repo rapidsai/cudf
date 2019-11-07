@@ -1113,7 +1113,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s1.buffers()[0])[0], gs1.nullmask.to_array()[0]
+        np.array(s1.buffers()[0])[0],
+        gs1._column._mask_view().copy_to_host()[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1123,7 +1124,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s2.buffers()[0])[0], gs2.nullmask.to_array()[0]
+        np.array(s2.buffers()[0])[0],
+        gs2._column._mask_view().copy_to_host()[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1290,6 +1292,9 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     gdf = DataFrame.from_pandas(pdf)
 
+    import pdb
+
+    pdb.set_trace()
     got_function = gdf.transpose()
     got_property = gdf.T
 

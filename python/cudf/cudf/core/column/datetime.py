@@ -175,11 +175,10 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def as_numerical(self):
-        from cudf.core.column import numerical
+        from cudf.core.column import build_column
 
-        data = Buffer(self.data.mem.view(np.int64))
-        return self.view(
-            numerical.NumericalColumn, data=data, dtype=data.dtype
+        return build_column(
+            data=self.data, dtype=np.int64, mask=self.mask, name=self.name
         )
 
     def as_datetime_column(self, dtype, **kwargs):
@@ -232,9 +231,9 @@ class DatetimeColumn(column.ColumnBase):
 
     def to_arrow(self):
         mask = None
-        if self.has_null_mask:
-            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data.mem.copy_to_host())
+        if self.mask:
+            mask = pa.py_buffer(self._mask_view().copy_to_host())
+        data = pa.py_buffer(self.as_numerical._data_view().copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,

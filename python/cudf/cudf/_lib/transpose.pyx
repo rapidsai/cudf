@@ -75,9 +75,6 @@ def transpose(df):
 
     check_gdf_error(result)
 
-    for series in new_col_series:
-        series._column._update_null_count()
-
     for i in range(0, new_ncol):
         out_df[str(i)] = new_col_series[i]
     return out_df

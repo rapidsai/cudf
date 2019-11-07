@@ -129,7 +129,7 @@ class Series(object):
         if name is None:
             name = data.name
         if data.name != name:
-            data = data.replace(name=name)
+            data.name = name
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
