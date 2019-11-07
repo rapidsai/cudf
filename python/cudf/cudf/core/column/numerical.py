@@ -441,12 +441,9 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
     if is_op_comparison:
         out.fillna(op == "ne", inplace=True)
-    else:
-        out = out.replace(null_count=null_count)
 
-    result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     libcudf.nvtx.nvtx_range_pop()
-    return result
+    return out
 
 
 def _numeric_column_unaryop(operand, op):
@@ -482,9 +479,10 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
+    from cudf.core.column import as_column
+
     columns = [column0] + list(other_columns)
-    buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
-    result = NumericalColumn(data=buf, dtype=buf.dtype)
+    result = as_column(rmm.device_array(len(column0), dtype=np.int32))
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
     libcudf.hash.hash_columns(columns, result, initial_hash_values)

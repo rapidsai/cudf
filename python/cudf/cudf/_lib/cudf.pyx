@@ -163,7 +163,12 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     Returns a gdf_scalar* constructed from the numpy scalar ``val``.
     """
     cdef bool is_valid = True
-    dtype = np.dtype(dtype).type or val.dtype.type
+
+    if dtype is None:
+        dtype = val.dtype.type
+    else:
+        dtype = np.dtype(dtype).type
+
     cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     if s is NULL:
         raise MemoryError
