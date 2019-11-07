@@ -27,7 +27,7 @@ namespace experimental {
  * @brief Rolling window aggregation operations
  */
 enum rolling_operator {
-  SUM = 0,   ///< Computes the sum of all values in the window
+  SUM,       ///< Computes the sum of all values in the window
   MIN,       ///< Computes minimum value in the window
   MAX,       ///< Computes maximum value in the window
   AVG,       ///< Computes arithmetic mean of all values in the window
@@ -37,119 +37,153 @@ enum rolling_operator {
   N_OPS,     ///< ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE
 };
 
-/**----------------------------------------------------------------------------*
- * @brief  Computes the rolling window function of the values in a column.
+/**
+ * @brief  Applies a fixed-size rolling window function to the values in a column.
  *
- * This function aggregates values in a window around each element i of the input
- * column, and invalidates the bit mask for element i if there are not enough observations. The
- * window size and the number of observations can be static or dynamic (varying for
- * each element). This matches Pandas' API for DataFrame.rolling with a few notable
- * differences:
- * - instead of the center flag it uses the forward window size to allow for
- *   more flexible windows. The total window size = window + forward_window.
- *   Element i uses elements [i-window+1, i+forward_window] to do the window
- *   computation.
- * - instead of storing NA/NaN for output rows that do not meet the minimum
- *   number of observations this function updates the valid bitmask of the column
- *   to indicate which elements are valid.
- * - support for dynamic rolling windows, i.e. window size or number of
- *   observations can be specified for each element using an additional array.
- * This function is asynchronous with respect to the GPU, i.e. the call will
- * return before the operation is completed on the GPU (unless built in debug).
+ * This function aggregates values in a window around each element i of the input column, and
+ * invalidates the bit mask for element i if there are not enough observations. The window size is
+ * static (the same for each element). This matches Pandas' API for DataFrame.rolling with a few
+ * notable differences:
+ * - instead of the center flag it uses the forward window size to allow for more flexible windows.
+ *   The total window size = window + forward_window. Element i uses elements
+ *   [i-window+1, i+forward_window] to do the window computation.
+ * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
+ *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ *
+ * This function is asynchronous with respect to the GPU, i.e. the call will return before the
+ * operation is completed on the GPU (unless built in debug).
  *
  * @param[in] input_col The input column
- * @param[in] window The static rolling window size. If window_col = NULL, 
- *                output_col[i] accumulates values from input_col[i-window+1] to 
- *                input_col[i] inclusive
- * @param[in] min_periods Minimum number of observations in window required to
- *                have a value, otherwise 0 is stored in the valid bit mask for
- *                element i. If min_periods_col != NULL, then minimum number of
- *                observations for element i is obtained from min_periods_col[i]
- * @param[in] forward_window The static window size in the forward direction. If 
- *                forward_window_col = NULL, output_col[i] accumulates values from
- *                input_col[i] to input_col[i+forward_window] inclusive
+ * @param[in] window The static rolling window size.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise 0 is stored in the valid bit mask for element i.
+ * @param[in] forward_window The static window size in the forward direction.
  * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
- * @param[in] window_col The window size values, window_col[i] specifies window
- *                size for element i. If window_col = NULL, then window is used as 
- *                the static window size for all elements
- * @param[in] min_periods_col The minimum number of observation values,
- *                min_periods_col[i] specifies minimum number of observations for 
- *                element i. If min_periods_col = NULL, then min_periods is used as 
- *                the static value for all elements
- * @param[in] forward_window_col The forward window size values,
- *                forward_window_col[i] specifies forward window size for element i.
- *                If forward_window_col = NULL, then forward_window is used as the
- *                static forward window size for aill elements
- *
  * @returns   gdf_column The output column
  *
- * --------------------------------------------------------------------------*/
+ **/
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
                                        size_type min_periods,
                                        size_type forward_window,
                                        rolling_operator op);
 
-/** ---------------------------------------------------------------------------*
- * @brief  Applies a user defined rolling window function to the values in a column.
+/**
+ * @brief  Applies a variable-size rolling window function to the values in a column.
  *
- * This function aggregates values in a window around each element i of the input
- * column with a user defined aggregator, and invalidates the bit mask for element i
- * if there are not enough observations. The window size and the number of
- * observations can be static or dynamic (varying for each element). This matches Pandas'
- * API for `DataFrame.rolling.apply` with a few notable differences:
- * - instead of the center flag it uses the forward window size to allow for
- *   more flexible windows. The total window size = window + forward_window.
- *   Element i uses elements [i-window+1, i+forward_window] to do the window
- *   computation.
- * - instead of storing NA/NaN for output rows that do not meet the minimum
- *   number of observations this function updates the valid bitmask of the column
- *   to indicate which elements are valid.
- * - support for dynamic rolling windows, i.e. window size or number of
- *   observations can be specified for each element using an additional array.
+ * This function aggregates values in a window around each element i of the input column, and
+ * invalidates the bit mask for element i if there are not enough observations. The window size is
+ * dynamic (varying for each element). This matches Pandas' API for DataFrame.rolling with a few
+ * notable differences:
+ * - instead of the center flag it uses the forward window size to allow for more flexible windows. 
+ *   The total window size = window + forward_window. Element i uses elements
+ *   [i-window+1, i+forward_window] to do the window computation.
+ * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
+ *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ * - support for dynamic rolling windows, i.e. window size can be specified for each element using
+ *   an additional array.
  * 
  * This function is asynchronous with respect to the GPU, i.e. the call will
  * return before the operation is completed on the GPU (unless built in debug).
  * 
- * Currently the handling of the null values is only partially implemented: it acts
- * as if every element of the input column is valid, i.e. the validnesses of the
- * individual elements in the input column are not checked when the number of (valid)
- * observations are counted and the aggregator is applied.
+ * @throws cudf::logic_error if window column type is not INT32
  *
- * @param[in] input The input column
- * @param[in] window The static rolling window size. If window_col = NULL, 
- *                output_col[i] accumulates values from input_col[i-window+1] to 
- *                input_col[i] inclusive
- * @param[in] min_periods Minimum number of observations in window required to
- *                have a value, otherwise 0 is stored in the valid bit mask for
- *                element i. If min_periods_col != NULL, then minimum number of
- *                observations for element i is obtained from min_periods_col[i]
- * @param[in] forward_window The static window size in the forward direction. If 
- *                forward_window_col = NULL, output_col[i] accumulates values from
- *                input_col[i] to input_col[i+forward_window] inclusive
- * @param[in] udf A CUDA string or a PTX string compiled by numba that contains
- *                the implementation of the user defined aggregator function
- * @param[in] op  The user defined rolling window aggregation type: 
- *                NUMBA_UDF (PTX string compiled from `numba`) or CUDA_UDF
- *                (CUDA string)
- * @param[in] output_type Output type of the user defined aggregator
- *                (only used for GDF_NUMBA_GENERIC_AGG_OPS)
- * @param[in] window_col The window size values, window_col[i] specifies window
- *                size for element i. If window_col = NULL, then window is used as 
- *                the static window size for all elements
- * @param[in] min_periods_col The minimum number of observation values,
- *                min_periods_col[i] specifies minimum number of observations for 
- *                element i. If min_periods_col = NULL, then min_periods is used as 
- *                the static value for all elements
- * @param[in] forward_window_col The forward window size values,
- *                forward_window_col[i] specifies forward window size for element i.
- *                If forward_window_col = NULL, then forward_window is used as the
- *                static forward window size for aill elements
+ * @param[in] input_col The input column
+ * @param[in] window A column of INT32 window sizes. window[i] specifies window size for element i.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                otherwise 0 is stored in the valid bit mask for element i.
+ * @param[in] forward_window The static window size in the forward direction.
+ * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
+ *
  * @returns   gdf_column The output column
  *
- * --------------------------------------------------------------------------*/
+ **/
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& window,
+                                       size_type min_periods,
+                                       size_type forward_window,
+                                       rolling_operator op);
+
+/**
+ * @brief  Applies a fixed-size user-defined rolling window function to the values in a column.
+ *
+ * This function aggregates values in a window around each element i of the input column with a user
+ * defined aggregator, and invalidates the bit mask for element i if there are not enough
+ * observations. The window size is  static (the same for each element). This matches Pandas' API
+ * for DataFrame.rolling with a few notable differences:
+ * - instead of the center flag it uses the forward window size to allow for more flexible windows.
+ *   The total window size = window + forward_window. Element i uses elements
+ *   [i-window+1, i+forward_window] to do the window computation.
+ * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
+ *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ *
+ * This function is asynchronous with respect to the GPU, i.e. the call will return before the
+ * operation is completed on the GPU (unless built in debug).
+ * 
+ * Currently the handling of the null values is only partially implemented: it acts as if every
+ * element of the input column is valid, i.e. the validity of the individual elements in the input
+ * column is not checked when the number of (valid) observations are counted and the aggregator is
+ * applied.
+ *
+ * @param[in] input_col The input column
+ * @param[in] window The static rolling window size.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise 0 is stored in the valid bit mask for element i.
+ * @param[in] forward_window The static window size in the forward direction.
+ * @param[in] udf A CUDA string or a PTX string compiled by numba that contains the implementation
+ *                of the user defined aggregator function
+ * @param[in] op The user-defined rolling window aggregation type:  NUMBA_UDF (PTX string compiled
+ *               by numba) or CUDA_UDF (CUDA string)
+ * @param[in] output_type Output type of the user-defined aggregator (only used for NUMBA_UDF)
+ * @returns   gdf_column The output column
+ *
+ **/
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
+                                       size_type min_periods,
+                                       size_type forward_window,
+                                       std::string const& udf,
+                                       rolling_operator op,
+                                       data_type output_type);
+
+/**
+ * @brief  Applies a variable-size user-defined rolling window function to the values in a column.
+ *
+ * This function aggregates values in a window around each element i of the input column with a user
+ * defined aggregator, and invalidates the bit mask for element i if there are not enough
+ * observations. The window size is dynamic (varying for each element). This matches Pandas' API
+ * for DataFrame.rolling with a few notable differences:
+ * - instead of the center flag it uses the forward window size to allow for more flexible windows.
+ *   The total window size = window + forward_window. Element i uses elements
+ *   [i-window+1, i+forward_window] to do the window computation.
+ * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
+ *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ *
+ * This function is asynchronous with respect to the GPU, i.e. the call will return before the
+ * operation is completed on the GPU (unless built in debug).
+ * 
+ * Currently the handling of the null values is only partially implemented: it acts as if every
+ * element of the input column is valid, i.e. the validity of the individual elements in the input
+ * column is not checked when the number of (valid) observations are counted and the aggregator is
+ * applied.
+ *
+ * @throws cudf::logic_error if window column type is not INT32
+ * 
+ * @param[in] input_col The input column
+ * @param[in] window A column of INT32 window sizes. window[i] specifies window size for element i.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise 0 is stored in the valid bit mask for element i.
+ * @param[in] forward_window The static window size in the forward direction.
+ * @param[in] udf A CUDA string or a PTX string compiled by numba that contains the implementation
+ *                of the user defined aggregator function
+ * @param[in] op The user-defined rolling window aggregation type:  NUMBA_UDF (PTX string compiled
+ *               by numba) or CUDA_UDF (CUDA string)
+ * @param[in] output_type Output type of the user-defined aggregator (only used for NUMBA_UDF)
+ * @returns   gdf_column The output column
+ *
+ **/
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& window,
                                        size_type min_periods,
                                        size_type forward_window,
                                        std::string const& udf,

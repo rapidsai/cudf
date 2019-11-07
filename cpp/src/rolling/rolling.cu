@@ -24,12 +24,12 @@
 namespace cudf {
 namespace experimental {
 
-// See include/cudf/rolling.hpp for declaration
-std::unique_ptr<column> rolling_window(column_view const &input,
+// Applies a fixed-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
                                        size_type min_periods,
                                        size_type forward_window,
-                                       rolling_operator agg_type)
+                                       rolling_operator op)
 {
   if (input.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -37,7 +37,22 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   return cudf::make_numeric_column(data_type{INT32}, 0);
 }
 
-// See include/cudf/rolling.hpp for declaration
+// Applies a variable-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& window,
+                                       size_type min_periods,
+                                       size_type forward_window,
+                                       rolling_operator op)
+{
+  if (input.size() == 0 || window.size() == 0)
+    return cudf::make_numeric_column(data_type{INT32}, 0);
+  
+  CUDF_EXPECTS(window.type().id() == INT32, "window must have INT32 type");
+
+  return cudf::make_numeric_column(data_type{INT32}, 0);
+}
+
+// Applies a fixed-size user-defined rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const &input,
                                        size_type window,
                                        size_type min_periods,
@@ -48,6 +63,23 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 {
   if (input.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
+
+  return cudf::make_numeric_column(data_type{INT32}, 0);
+}
+
+// Applies a variable-size user-defined rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const &input,
+                                       column_view const& window,
+                                       size_type min_periods,
+                                       size_type forward_window,
+                                       std::string const& user_defined_aggregator,
+                                       rolling_operator agg_op,
+                                       data_type output_type)
+{
+  if (input.size() == 0 || window.size() == 0)
+    return cudf::make_numeric_column(data_type{INT32}, 0);
+  
+  CUDF_EXPECTS(window.type().id() == INT32, "window must have INT32 type");
 
   return cudf::make_numeric_column(data_type{INT32}, 0);
 }
