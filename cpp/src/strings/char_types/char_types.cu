@@ -42,7 +42,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     auto d_column = *strings_column;
 
     // create output column
-    auto results = make_numeric_column( data_type{BOOL8}, strings_count, 
+    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<experimental::bool8>();
@@ -54,7 +54,6 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
         thrust::make_counting_iterator<size_type>(strings_count),
         d_results,
         [d_column, d_flags, types, d_results] __device__(size_type idx){
-            //auto d_flags = g_character_codepoint_flags;
             if( d_column.is_null(idx) )
                 return false;
             auto d_str = d_column.element<string_view>(idx);
