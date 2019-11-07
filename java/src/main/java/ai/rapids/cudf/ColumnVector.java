@@ -741,7 +741,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isNotNull() {
-    // No prediction possible because built up from other operators.
+    // Prediction handled by validityAsBooleanVector
     return validityAsBooleanVector();
   }
 

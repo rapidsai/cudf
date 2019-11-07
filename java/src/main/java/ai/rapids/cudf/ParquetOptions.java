@@ -27,6 +27,7 @@ public class ParquetOptions extends ColumnFilterOptions {
 
   private final TimeUnit unit;
 
+
   private ParquetOptions(Builder builder) {
     super(builder);
     unit = builder.unit;

@@ -34,21 +34,25 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>endPrediction</li>
  *   <li>deallocation</li>
  * </ol>
- * An allocation indicates that memory was allocated. One or more allocation call should typically
- * happen between a prediction and endPrediction call, but it is not guaranteed. A prediction
+ * An allocation indicates that memory was allocated. One or more allocation calls should typically
+ * happen between a prediction and endPrediction call, but it is not guaranteed. It is guaranteed
+ * that an endPrediction call will happen for each prediction call. A prediction
  * indicates an educated guess as to how much memory an operation is likely to take. In some cases
  * we know exactly what it takes, but in others it is really just a guess and it may guess too much
  * or too little memory. Typically this is used to try and tell if we are getting close to memory
- * limits and try to reduce the amount of memory being used.  In those cases a prediction should be
+ * limits and possibly release cached data on the GPU to reduce the amount of memory being used.
+ * In those cases a prediction should be
  * treated like a memory reservation that is deducted from when an allocation happens until it is
  * used up.
  * <br />
- * Please note that if your code is threaded the MemoryListener will be called from multiple
- * threads and each prediction must be treated in a thread local way.
+ * Please note that if your interactions with cuDF are threaded the MemoryListener will be called
+ * from each of those threads too. In this case each allocation or endPrediction call is associated
+ * with the previous prediction call on the same thread.
  */
 public abstract class MemoryListener {
   /**
-   * A prediction about how much memory is about to be used for an operation.
+   * A prediction about how much memory is about to be used for an operation. Predictions will not
+   * nest but each thread is independent of other threads.
    * @param amount the number of bytes predicted to be used.
    * @param note a string that can be used for debugging to help keep track of what is making the
    *             prediction.
@@ -65,7 +69,7 @@ public abstract class MemoryListener {
 
   /**
    * Indicates that the previous prediction on this thread is no longer in force. Predictions should
-   * never nest.  Only one prediction should ever be in force at a time.
+   * never nest.
    * @param note a string that can be used for debugging.  This should be the same string that was
    *             passed into prediction.
    */
@@ -79,6 +83,12 @@ public abstract class MemoryListener {
    */
   public abstract void deallocation(long amount, long id);
 
+  /**
+   * Holds the set of all listeners. An <code>AtomicReference&lt;HashSet&gt;</code> is used here to
+   * optimize the common read path over the less common write path (add/remove listeners). Other
+   * data structures like a ConcurrentHashMap still involve a lock on the read path where as this
+   * eliminates any locking on reads.
+   */
   private static final AtomicReference<HashSet<MemoryListener>> listeners =
       new AtomicReference<>(new HashSet<>());
 

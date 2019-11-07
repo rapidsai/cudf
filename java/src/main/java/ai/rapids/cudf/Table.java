@@ -37,7 +37,7 @@ public final class Table implements AutoCloseable {
   // This is an estimate of how compressed data is when guessing the output size of data
   // For ORC and Parquet this is relatively conservative. We might want a different
   // one for text based formats.
-  private static final long COMPRESSION_RATION_ESTIMATE = 10;
+  private static final long COMPRESSION_RATIO_ESTIMATE = 10;
 
   /**
    * Table class makes a copy of the array of {@link ColumnVector}s passed to it. The class
@@ -617,7 +617,7 @@ public final class Table implements AutoCloseable {
   public static Table readParquet(ParquetOptions opts, File path) {
     long amount = opts.getSizeGuess();
     if (amount < 0) {
-      amount = path.length() * COMPRESSION_RATION_ESTIMATE;
+      amount = path.length() * COMPRESSION_RATIO_ESTIMATE;
     }
     try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET FILE")) {
       return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
@@ -683,7 +683,7 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     long amount = opts.getSizeGuess();
     if (amount < 0) {
-      amount = len * COMPRESSION_RATION_ESTIMATE;
+      amount = len * COMPRESSION_RATIO_ESTIMATE;
     }
     try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET BUFFER")) {
       return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
@@ -707,7 +707,7 @@ public final class Table implements AutoCloseable {
   public static Table readORC(ORCOptions opts, File path) {
     long amount = opts.getSizeGuess();
     if (amount < 0) {
-      amount = path.length() * COMPRESSION_RATION_ESTIMATE;
+      amount = path.length() * COMPRESSION_RATIO_ESTIMATE;
     }
     try (DevicePrediction prediction = new DevicePrediction(amount, "ORC FILE")) {
       return new Table(gdfReadORC(opts.getIncludeColumnNames(),
@@ -773,7 +773,7 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     long amount = opts.getSizeGuess();
     if (amount < 0) {
-      amount = len * COMPRESSION_RATION_ESTIMATE;
+      amount = len * COMPRESSION_RATIO_ESTIMATE;
     }
     try (DevicePrediction prediction = new DevicePrediction(amount, "ORC BUFFER")) {
       return new Table(gdfReadORC(opts.getIncludeColumnNames(),
@@ -1075,7 +1075,7 @@ public final class Table implements AutoCloseable {
         aggregate = new Table(gdfGroupByAggregate(
             operation.table.nativeHandle,
             operation.indices,
-            // one way of converting List[Integer] to int[
+            // one way of converting List[Integer] to int[]
             aggregateColumnIndices.stream().mapToInt(i -> i).toArray(),
             ops.stream().mapToInt(i -> i).toArray(),
             groupByOptions.getIgnoreNullKeys()));

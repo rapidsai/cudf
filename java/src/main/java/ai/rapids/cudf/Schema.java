@@ -65,7 +65,7 @@ public class Schema {
 
   /**
    * Guess at the size of an output table based off of the number of expected rows.
-   * If there are any strings in the data a default size of 10 bytes is used.
+   * If there are any strings in the data a default size of 10 bytes per string is used.
    * @param numRows the number of rows to use in the estimate.
    * @return the estimated number of bytes needed to read in this schema.
    * @throws IllegalStateException if no type information is available, an INFERRED schema
