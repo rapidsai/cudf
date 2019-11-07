@@ -17,8 +17,6 @@
 #ifndef ROLLING_HPP
 #define ROLLING_HPP
 
-#include "cudf.h"
-
 namespace cudf {
 /* --------------------------------------------------------------------------*
  * @brief  Computes the rolling window function of the values in a column.

@@ -21,7 +21,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/release_assert.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
 
 #include <thrust/equal.h>
 #include <thrust/swap.h>
@@ -317,19 +318,21 @@ class row_lexicographic_comparator {
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param null_precedence Indicates how null values compare to all other
-   *values.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row
+   * and indicates how null values compare to all other for every column. If
+   * it is nullptr, then null precedence would be `null_order::BEFORE` for all
+   * columns.
    *---------------------------------------------------------------------------**/
   row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               null_order null_precedence = null_order::BEFORE,
-                               order* column_order = nullptr)
+                               order* column_order = nullptr,
+                               null_order* null_precedence = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
-        _null_precedence{null_precedence},
-        _column_order{column_order} {
+        _column_order{column_order},
+        _null_precedence{null_precedence} {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
                  "Mismatched number of columns.");
@@ -351,9 +354,11 @@ class row_lexicographic_comparator {
           (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
       weak_ordering state{weak_ordering::EQUIVALENT};
+      null_order null_precedence = _null_precedence == nullptr ?
+                                     null_order::BEFORE: _null_precedence[i];
 
       auto comparator = element_relational_comparator<has_nulls>{
-          _lhs.column(i), _rhs.column(i), _null_precedence};
+          _lhs.column(i), _rhs.column(i), null_precedence};
 
       state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
                                          lhs_index, rhs_index);
@@ -370,9 +375,106 @@ class row_lexicographic_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  null_order _null_precedence{null_order::BEFORE};
+  null_order const*  _null_precedence{};
   order const* _column_order{};
 };  // class row_lexicographic_comparator
+
+/**---------------------------------------------------------------------------*
+ * @brief Computes the hash value of an element in the given column.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam has_nulls Indicates the potential for null values in the column.
+ *---------------------------------------------------------------------------**/
+template <template <typename> class hash_function, bool has_nulls = true>
+class element_hasher {
+ public:
+  template <typename T>
+  __device__ inline hash_value_type operator()(
+      column_device_view col, size_type row_index) {
+    if (has_nulls && col.is_null(row_index)) {
+      return std::numeric_limits<hash_value_type>::max();
+    }
+
+    return hash_function<T>{}(col.element<T>(row_index));
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Computes the hash value of a row in the given table.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam has_nulls Indicates the potential for null values in the table.
+ *---------------------------------------------------------------------------**/
+template <template <typename> class hash_function, bool has_nulls = true>
+class row_hasher {
+ public:
+  row_hasher() = delete;
+  row_hasher(table_device_view t) : _table{t} {}
+
+  __device__ auto operator()(size_type row_index) const {
+    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
+      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+    };
+
+    // Hashes an element in a column
+    auto hasher = [=](size_type column_index) {
+      return cudf::experimental::type_dispatcher(
+          _table.column(column_index).type(),
+          element_hasher<hash_function, has_nulls>{},
+          _table.column(column_index), row_index);
+    };
+
+    // Hash each element and combine all the hash values together
+    return thrust::transform_reduce(
+        thrust::seq, thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(_table.num_columns()), hasher,
+        hash_value_type{0}, hash_combiner);
+  }
+
+ private:
+  table_device_view _table;
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Computes the hash value of a row in the given table, combined with an
+ * initial hash value for each column.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam has_nulls Indicates the potential for null values in the table.
+ *---------------------------------------------------------------------------**/
+template <template <typename> class hash_function, bool has_nulls = true>
+class row_hasher_initial_values {
+ public:
+  row_hasher_initial_values() = delete;
+  row_hasher_initial_values(table_device_view t, hash_value_type *initial_hash)
+      : _table{t}, _initial_hash(initial_hash) {}
+
+  __device__ auto operator()(size_type row_index) const {
+    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
+      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+    };
+
+    // Hashes an element in a column and combines with an initial value
+    auto hasher = [=](size_type column_index) {
+      auto hash_value = cudf::experimental::type_dispatcher(
+          _table.column(column_index).type(),
+          element_hasher<hash_function, has_nulls>{},
+          _table.column(column_index), row_index);
+
+      return hash_combiner(_initial_hash[column_index], hash_value);
+    };
+
+    // Hash each element and combine all the hash values together
+    return thrust::transform_reduce(
+        thrust::seq, thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(_table.num_columns()), hasher,
+        hash_value_type{0}, hash_combiner);
+  }
+
+ private:
+  table_device_view _table;
+  hash_value_type *_initial_hash;
+};
 
 }  // namespace experimental
 }  // namespace cudf

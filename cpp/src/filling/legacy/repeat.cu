@@ -44,16 +44,15 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t 
     return cudf::empty_like(in);
   }
   
-  auto exec_policy = rmm::exec_policy(stream)->on(stream);
   rmm::device_vector<cudf::size_type> offset(count.size);
   auto count_data = static_cast <cudf::size_type*> (count.data);
   
-  thrust::inclusive_scan(exec_policy, count_data, count_data + count.size, offset.begin());
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), count_data, count_data + count.size, offset.begin());
 
   cudf::size_type output_size = offset.back();
 
   rmm::device_vector<cudf::size_type> indices(output_size);
-  thrust::upper_bound(exec_policy,
+  thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                       offset.begin(), offset.end(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
