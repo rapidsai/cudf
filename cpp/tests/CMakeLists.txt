@@ -13,7 +13,8 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/cudf_test_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/nvcategory_utils.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -282,6 +283,14 @@ set(LEGACY_REPLACE_NULLS_TEST_SRC
 ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
 
 ###################################################################################################
+# - replace tests --------------------------------------------------------------------------
+
+set(REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+
+ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+
+#################################################################################f##################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
@@ -400,9 +409,10 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -579,7 +589,8 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------

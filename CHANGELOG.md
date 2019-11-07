@@ -20,10 +20,12 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3291 Add normalize_nans_and_zeros
 
 ## Improvements
 
@@ -59,9 +61,11 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
+- PR #3138 Move unary files to legacy
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
@@ -83,10 +87,15 @@
 - PR #3270 Move predicates files to legacy
 - PR #3281 Add to_host specialization for strings in column test utilities
 - PR #3282 Add `num_bitmask_words`
+- PR #3252 Add new factory methods to include passing an existing null mask
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3314 Drop `cython` from run requirements
+- PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
+- PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3286 Clean up the starter code on README
 
 ## Bug Fixes
 
@@ -119,6 +128,10 @@
 - PR #3289 fix java memory usage API for empty columns
 - PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
 - PR #3295 Fix storing storing invalid RMM exec policies.
+- PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
+- PR #3313 Fix public headers including non-public headers
+- PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
 
 
 # cuDF 0.10.0 (16 Oct 2019)
