@@ -18,7 +18,6 @@
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/predicates.hpp>
 #include <cudf/sorting.hpp>
 
 #include <cudf/column/column_factories.hpp>
