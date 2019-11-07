@@ -44,8 +44,6 @@ struct valid_table_filter
                      cudf::size_type keep_threshold,
                      cudaStream_t stream = 0)
   {
-    //auto keys_device_view = cudf::table_device_view::create(keys, stream);
-
     auto deleter = [stream](valid_table_filter* f) { f->destroy(); };
     std::unique_ptr<valid_table_filter, decltype(deleter)> p {
       new valid_table_filter(keys, keys.num_columns(), keep_threshold),
@@ -63,7 +61,6 @@ struct valid_table_filter
   ~valid_table_filter() = default;
 
 protected:
-
 
   valid_table_filter(cudf::table_device_view const& keys_device_view,
                      cudf::size_type num_columns,

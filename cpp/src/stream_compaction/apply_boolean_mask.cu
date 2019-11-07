@@ -30,8 +30,6 @@ namespace {
 
 // Returns true if the mask is true and valid (non-null) for index i
 // This is the filter functor for apply_boolean_mask
-// Note we use a functor here so we can cast to a bitmask_t __restrict__
-// pointer on the host side, which we can't do with a lambda.
 struct boolean_mask_filter
 {
   boolean_mask_filter(cudf::column_device_view const& boolean_mask) :
@@ -48,6 +46,7 @@ struct boolean_mask_filter
   }
 
 protected:
+
   cudf::column_device_view boolean_mask;
 };
 
@@ -57,6 +56,11 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
+/*
+ * Filters a table_view using a column_view of boolean values as a mask.
+ *
+ * calls copy_if() with the `boolean_mask_filter` functor.
+ */
 std::unique_ptr<experimental::table> 
     apply_boolean_mask(table_view const& input,
                        column_view const& boolean_mask,
@@ -87,6 +91,9 @@ std::unique_ptr<experimental::table>
 
 } // namespace detail
 
+/*
+ * Filters a table_view using a column_view of boolean values as a mask.
+ */
 std::unique_ptr<experimental::table>
     apply_boolean_mask(table_view const& input,
                        column_view const& boolean_mask,

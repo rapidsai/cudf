@@ -31,7 +31,8 @@
 #include <cudf/column/column_device_view.cuh>
 
 #include <utilities/column_utils.hpp>
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
 
 #include <cub/cub.cuh>
 #include <algorithm>
@@ -290,10 +291,8 @@ struct scatter_functor
     cudf::util::cuda::grid_config_1d grid{input.size(),
                                           block_size, per_thread};
 
-    cudf::size_type *null_count = nullptr;
+    rmm::device_scalar<cudf::size_type> null_count{0, stream, mr};
     if (has_valid) {
-      RMM_TRY(RMM_ALLOC(&null_count, sizeof(cudf::size_type), stream));
-      CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(cudf::size_type), stream));
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
       CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()), 0,
@@ -303,15 +302,11 @@ struct scatter_functor
     
     auto input_device_view  = cudf::column_device_view::create(input, stream);
     scatter<<<grid.num_blocks, block_size, 0, stream>>>
-      (output.data<T>(), output.null_mask(), null_count,
+      (output.data<T>(), output.null_mask(), null_count.data(),
        *input_device_view, block_offsets, input.size(), per_thread, filter);
 
     if (has_valid) {
-      cudf::size_type output_null_count = 0;
-      CUDA_TRY(cudaMemcpyAsync(&output_null_count, null_count,
-                               sizeof(cudf::size_type), cudaMemcpyDefault, stream));
-      output.set_null_count(output_null_count);
-      RMM_TRY(RMM_FREE(null_count, stream));
+      output.set_null_count(null_count.value());
     }
     return output_column;
   }
@@ -373,18 +368,16 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
     // 2. Find the offset for each block's output using a scan of block counts
     if (grid.num_blocks > 1) {
         // Determine and allocate temporary device storage
-        void *d_temp_storage = nullptr;
         size_t temp_storage_bytes = 0;
-        cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
+        cub::DeviceScan::ExclusiveSum(nullptr, temp_storage_bytes,
                                       block_counts, block_offsets,
                                       grid.num_blocks, stream);
-        RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
+        rmm::device_buffer d_temp_storage(temp_storage_bytes, stream, mr);
 
         // Run exclusive prefix sum
-        cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
+        cub::DeviceScan::ExclusiveSum(d_temp_storage.data(), temp_storage_bytes,
                                      block_counts, block_offsets,
                                      grid.num_blocks, stream);
-        RMM_TRY(RMM_FREE(d_temp_storage, stream));
     } else {
         CUDA_TRY(cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(cudf::size_type),
                     stream));
@@ -400,23 +393,19 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
        return std::make_unique<experimental::table>(input);
    } else if (output_size > 0){ 
 
-        for(size_type i = 0; i < input.num_columns(); i++) {
-            auto input_col_view = input.column(i);
-
-            out_columns[i] = cudf::experimental::type_dispatcher(input_col_view.type(),
+       std::transform(input.begin(), input.end(), out_columns.begin(),
+               [&] (auto col_view){
+                                    return cudf::experimental::type_dispatcher(col_view.type(),
                                     scatter_functor<Filter, block_size>{},
-                                    input_col_view, output_size, 
-                                    block_offsets, filter, mr, stream);
-        }
-
-        return std::make_unique<experimental::table>(std::move(out_columns));
+                                    col_view, output_size,
+                                    block_offsets, filter, mr, stream);});
 
    } else {
         std::transform(input.begin(), input.end(), out_columns.begin(),
                 [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
-
-        return std::make_unique<experimental::table>(std::move(out_columns));
    }
+
+   return std::make_unique<experimental::table>(std::move(out_columns));
 }
 
 }// namespace detail

@@ -91,7 +91,7 @@
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
-- PR #3303 Define and implement new stream_compaction APIs `copy_if` and `drop_null`
+- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`, and `apply_boolean_mask`.
 
 ## Bug Fixes
 
