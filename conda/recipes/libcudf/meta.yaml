@@ -31,7 +31,7 @@ requirements:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 0.15.1.*
+    - arrow-cpp 0.15.0.*
     - double-conversion
     - rapidjson
     - flatbuffers
@@ -39,7 +39,7 @@ requirements:
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - arrow-cpp 0.15.1.*
+    - arrow-cpp 0.15.0.*
     - dlpack
 
 test:
