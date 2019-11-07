@@ -20,6 +20,7 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
@@ -127,6 +128,8 @@
 - PR #3295 Fix storing storing invalid RMM exec policies.
 - PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 - PR #3313 Fix public headers including non-public headers
+- PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
 
 
 # cuDF 0.10.0 (16 Oct 2019)
