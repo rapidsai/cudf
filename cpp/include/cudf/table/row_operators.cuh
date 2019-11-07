@@ -21,8 +21,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/release_assert.cuh>
-#include <hash/hash_functions.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
 
 #include <thrust/equal.h>
 #include <thrust/swap.h>
