@@ -24,6 +24,7 @@
 #include <array>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace io {
