@@ -122,8 +122,11 @@ class table_view_base {
   size_type num_rows() const noexcept { return _num_rows; }
 
   table_view_base() = delete;
+
   ~table_view_base() = default;
+
   table_view_base(table_view_base const&) = default;
+
   table_view_base(table_view_base&&) = default;
   table_view_base& operator=(table_view_base const&) = default;
   table_view_base& operator=(table_view_base&&) = default;
@@ -149,6 +152,7 @@ class table_view : public detail::table_view_base<column_view> {
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
+public:
   mutable_column_view& column(size_type column_index) const noexcept {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
