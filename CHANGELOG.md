@@ -114,6 +114,7 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3276 Update JNI includes for legacy moves
 - PR #3256 Fix orc writer crash with multiple string columns
