@@ -475,9 +475,12 @@ class StringColumn(column.ColumnBase):
         mask = mask
         name = name
 
-        # one less because the last element of offsets is the number of
-        # bytes in the data buffer
-        size = (offsets.size // offsets_dtype.itemsize) - 1
+        if offsets.size == 0:
+            size = 0
+        else:
+            # one less because the last element of offsets is the number of
+            # bytes in the data buffer
+            size = (offsets.size // offsets_dtype.itemsize) - 1
 
         super().__init__(
             data, size, dtype, mask=mask, name=name, children=children,
@@ -717,11 +720,6 @@ class StringColumn(column.ColumnBase):
         col_keys = self[col_inds.data.mem]
 
         return col_keys, col_inds
-
-    def _replace_defaults(self):
-        import cudf.core.column as c
-
-        return c.Column._replace_defaults(self)
 
     def copy(self, deep=True):
         params = self._replace_defaults()

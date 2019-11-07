@@ -685,10 +685,9 @@ class GenericIndex(Index):
 
     def copy(self, deep=True):
         if deep:
-            result = deepcopy(self)
+            result = as_index(self.as_column().copy(deep=True))
         else:
-            result = copy(self)
-        result._values = self._values.copy(deep)
+            result = as_index(self.as_column().copy())
         result.name = self.name
         return result
 

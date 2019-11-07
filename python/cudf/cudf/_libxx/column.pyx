@@ -12,6 +12,7 @@ from libc.stdlib cimport malloc, free
 
 from cudf.utils.dtypes import is_categorical_dtype
 
+
 np_to_cudf_types = {np.dtype('int8'): INT8,
                     np.dtype('int16'): INT16,
                     np.dtype('int32'): INT32,
@@ -51,11 +52,18 @@ cdef class Column:
     def null_count(self):
         return self.null_count()
 
-    cdef size_type null_count(self):
+    @property
+    def _data_dtype(self):
+        if is_categorical_dtype(self.dtype):
+            return self.dtype.data_dtype
+        else:
+            return self.dtype
+    
+    cdef size_type null_count(self) except? 0:
         return self.view().null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
-        cdef type_id tid = np_to_cudf_types[np.dtype(self.dtype)]
+        cdef type_id tid = np_to_cudf_types[np.dtype(self._data_dtype)]
         cdef data_type dtype = data_type(tid)
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
         cdef bitmask_type* mask
@@ -70,7 +78,7 @@ cdef class Column:
             mask)
 
     cdef column_view view(self) except *:
-        cdef type_id tid = np_to_cudf_types[np.dtype(self.dtype)]
+        cdef type_id tid = np_to_cudf_types[np.dtype(self._data_dtype)]
         cdef data_type dtype = data_type(tid)
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
         cdef bitmask_type* mask

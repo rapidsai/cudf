@@ -49,10 +49,17 @@ class ColumnBase(Column):
 
     def _data_view(self):
         """
-        View the data as a device array
+        View the data as a device array or nvstrings object
         """
+        if self.dtype == "object":
+            return self.nvstrings
+
+        if is_categorical_dtype(self.dtype):
+            dtype = self.dtype.data_dtype
+        else:
+            dtype = self.dtype
         return rmm.device_array_from_ptr(
-            ptr=self.data.ptr, nelem=len(self), dtype=self.dtype
+            ptr=self.data.ptr, nelem=len(self), dtype=dtype
         )
 
     def _mask_view(self):
@@ -318,11 +325,10 @@ class ColumnBase(Column):
 
     def view(self, newcls, **kwargs):
         """View the underlying column data differently using a subclass of
-        *TypedColumnBase*.
 
         Parameters
         ----------
-        newcls : TypedColumnBase
+        newcls : ColumnBase
             The logical view to be used
         **kwargs :
             Additional paramters for instantiating instance of *newcls*.
@@ -348,12 +354,12 @@ class ColumnBase(Column):
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
-        val = self.data[index]  # this can raise IndexError
+        val = self._data_view()[index]  # this can raise IndexError
         if isinstance(val, nvstrings.nvstrings):
             val = val.to_host()[0]
         valid = (
-            cudautils.mask_get.py_func(self.nullmask, index)
-            if self.has_null_mask
+            cudautils.mask_get.py_func(self._mask_view(), index)
+            if self.mask
             else True
         )
         return val if valid else None
@@ -371,21 +377,33 @@ class ColumnBase(Column):
                     raise NotImplementedError(arg)
 
                 # slicing data
-                subdata = self.data[arg]
+                slice_data = self._data_view()[arg]
                 # slicing mask
-                if self.dtype == "object":
-                    data_size = self.data.size()
-                else:
-                    data_size = self.data.size
+                data_size = self.size
                 bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask.to_gpu_array()
+                    data_size, self._mask_view()
                 )
-                submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
-                col = self.replace(data=subdata, mask=submask)
-                return col
+                slice_mask = cudautils.compact_mask_bytes(bytemask[arg])
             else:
-                newbuffer = self.data[arg]
-                return self.replace(data=newbuffer)
+                slice_data = self._data_view()[arg]
+                slice_mask = None
+            if self.dtype == "object":
+                return as_column(slice_data)
+            else:
+                # data Buffer lifetime is tied to self:
+                slice_data = Buffer(
+                    ptr=slice_data.device_ctypes_pointer.value,
+                    size=slice_data.nbytes,
+                    owner=self,
+                )
+
+                # mask Buffer lifetime is not:
+                if slice_mask:
+                    slice_mask = Buffer.from_array_like(slice_mask)
+
+                return build_column(
+                    slice_data, self.dtype, mask=slice_mask, name=self.name
+                )
         else:
             arg = column.as_column(arg)
             if len(arg) == 0:
@@ -904,9 +922,7 @@ def build_column(
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if is_categorical_dtype(dtype):
-        return CategoricalColumn(
-            data=data, dtype=dtype, mask=mask, categories=categories, name=name
-        )
+        return CategoricalColumn(data=data, dtype=dtype, mask=mask, name=name)
     elif dtype.type is np.datetime64:
         return DatetimeColumn(data=data, dtype=dtype, mask=mask, name=name)
     elif dtype.type in (np.object_, np.str_):
@@ -1027,7 +1043,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
 
         elif arbitrary.dtype.kind in ("O", "U"):
-            raise NotImplementedError
+            data = as_column(pa.Array.from_pandas(arbitrary))
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
@@ -1081,18 +1097,15 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         )
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            pamask, padata = buffers_from_pyarrow(arbitrary)
+            pamask, padata = buffers_from_pyarrow(arbitrary.indices)
             dtype = CategoricalDtype(
-                arbitrary.type.value_type.to_pandas_dtype(),
+                arbitrary.type.index_type.to_pandas_dtype(),
                 categories=as_column(arbitrary.dictionary),
             )
             data = categorical.CategoricalColumn(
                 data=padata,
                 dtype=dtype,
                 mask=pamask,
-                categories=as_column(
-                    arbitrary.dictionary
-                ),  # TODO: do we even need this?
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):

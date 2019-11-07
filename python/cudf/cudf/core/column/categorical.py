@@ -208,16 +208,13 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(
-        self, data, dtype, categories, mask=None, ordered=None, name=None
-    ):
+    def __init__(self, data, dtype, mask=None, ordered=None, name=None):
         """
         Parameters
         ----------
         data : Buffer
             The code values
-        categories : iterable
-            The categories
+        dtype : CategoricalDtype
         mask : Buffer; optional
             The validity mask
         ordered : bool
@@ -227,8 +224,8 @@ class CategoricalColumn(column.ColumnBase):
         """
         # Default to String dtype if len(categories) == 0, like pandas does
         categories = (
-            column.as_column(categories)
-            if len(categories) > 0
+            column.as_column(dtype.categories)
+            if len(dtype.categories) > 0
             else column.column_empty(0, np.dtype("object"), masked=False)
         )
         if data.size % dtype.data_dtype.itemsize:
@@ -294,7 +291,12 @@ class CategoricalColumn(column.ColumnBase):
     def as_numerical(self):
         from cudf.core.column import numerical
 
-        return self.view(numerical.NumericalColumn, dtype=self.data.dtype)
+        return column.build_column(
+            data=self.data,
+            dtype=self.dtype.data_dtype,
+            mask=self.mask,
+            name=self.name,
+        )
 
     @property
     def categories(self):

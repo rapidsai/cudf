@@ -3,6 +3,7 @@ import operator
 
 import numpy as np
 
+import nvstrings
 from rmm import DeviceBuffer
 
 
