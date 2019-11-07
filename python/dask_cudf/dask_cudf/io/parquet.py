@@ -71,7 +71,7 @@ class CudfEngine(ArrowEngine):
                     **kwargs.get("read", {}),
                 )
 
-        if index is not None and index[0] in df.columns:
+        if index and index[0] in df.columns:
             df = df.set_index(index[0])
 
         if len(piece.partition_keys) > 0:
