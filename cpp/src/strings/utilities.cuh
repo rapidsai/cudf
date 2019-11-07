@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/column/column_view.hpp>
 
@@ -70,12 +71,74 @@ std::unique_ptr<column> make_offsets_child_column( InputIterator begin, InputIte
     // Exclusive-scan is possible but will not compute that last entry.
     // Rather than manually computing the final offset using values in device memory,
     // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
-    // offset value to zero manually.
+    // offset values to zero manually.
     thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), begin, end,
                            d_offsets+1);
     CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
     return offsets_column;
 }
+
+/**
+ * @brief Utility to create a null mask for a strings column using a custom function.
+ *
+ * @tparam BoolFn Function should return true/false given index for a strings column.
+ * @param strings_count Number of strings for the column.
+ * @param bfn The custom function used for identifying null string entries.
+ * @param mr Memory resource to use.
+ * @param stream Stream to use for any kernel calls.
+ * @return Pair including null mask and null count
+ */
+template <typename BoolFn>
+std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type strings_count,
+    BoolFn bfn,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0)
+{
+    auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
+                                bfn, strings_count, stream );
+    auto null_count = valid_mask.second;
+    rmm::device_buffer null_mask;
+    if( null_count > 0 )
+        null_mask = rmm::device_buffer(valid_mask.first,
+                                       gdf_valid_allocation_size(strings_count),
+                                       stream,mr); // does deep copy
+    RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
+    return std::make_pair(null_mask,null_count);
+}
+
+/**
+ * @brief Converts a single UTF-8 character into a code-point value that
+ * can be used for lookup in the character flags or the character case tables.
+ *
+ * @param utf8_char Single UTF-8 character to convert.
+ * @return Code-point for the UTF-8 character.
+ */
+__device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
+{
+    uint32_t unchr = 0;
+    if( utf8_char < 0x00000080 ) // single-byte pass thru
+        unchr = utf8_char;
+    else if( utf8_char < 0x0000E000 ) // two bytes
+    {
+        unchr =  (utf8_char & 0x1F00) >> 2; // shift and
+        unchr |= (utf8_char & 0x003F);      // unmask
+    }
+    else if( utf8_char < 0x00F00000 ) // three bytes
+    {
+        unchr =  (utf8_char & 0x0F0000) >> 4;  // get upper 4 bits
+        unchr |= (utf8_char & 0x003F00) >> 2;  // shift and
+        unchr |= (utf8_char & 0x00003F);       // unmask
+    }
+    else if( utf8_char <= (unsigned)0xF8000000 ) // four bytes
+    {
+        unchr =  (utf8_char & 0x03000000) >> 6; // upper 3 bits
+        unchr |= (utf8_char & 0x003F0000) >> 4; // next 6 bits
+        unchr |= (utf8_char & 0x00003F00) >> 2; // next 6 bits
+        unchr |= (utf8_char & 0x0000003F);      // unmask
+    }
+    return unchr;
+}
+
 
 } // namespace detail
 } // namespace strings

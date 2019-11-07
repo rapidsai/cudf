@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cuda_runtime.h>
-#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 
@@ -112,33 +111,19 @@ std::unique_ptr<column> make_empty_strings_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+// Type for the character flags table.
+using character_flags_table_type = uint8_t;
+
 /**
- * @brief Utility to create a null mask for a strings column using a custom function.
+ * @brief Returns pointer to device memory that contains the static
+ * characters flags table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
  *
- * @tparam BoolFn Function should return true/false given an index for a strings column.
- * @param strings_count Number of strings for the column.
- * @param bfn The custom function used for identifying null string entries.
- * @param mr Memory resource to use to device allocation.
- * @param stream Stream to use for any kernel calls.
- * @return The null mask and null count returned as std::pair.
+ * @param stream Stream to use for any device memory or kernel calls.
+ * @return Device memory pointer to character flags table.
  */
-template <typename BoolFn>
-std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type strings_count,
-    BoolFn bfn,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0)
-{
-    auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
-                                bfn, strings_count, stream );
-    auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask;
-    if( null_count > 0 )
-        null_mask = rmm::device_buffer(valid_mask.first,
-                                       gdf_valid_allocation_size(strings_count),
-                                       stream,mr); // does deep copy
-    RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
-    return std::make_pair(null_mask,null_count);
-}
+const character_flags_table_type* get_character_flags_table();
+
 
 } // namespace detail
 } // namespace strings

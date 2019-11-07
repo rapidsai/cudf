@@ -14,14 +14,48 @@
  * limitations under the License.
  */
 
-#pragma once 
+#pragma once
 
+#include "cudf.h"
+#include "types.hpp"
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/table.hpp>
+
+#include <memory>
 
 namespace cudf {
 namespace experimental {
 
+/**
+ * @brief Gathers the specified rows (including null values) of a set of columns.
+ *
+ * Gathers the rows of the source columns according to `gather_map` such that row "i"
+ * in the resulting table's columns will contain row "gather_map[i]" from the source columns.
+ * The number of rows in the result table will be equal to the number of elements in
+ * `gather_map`.
+ *
+ * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `source_table`.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param[in] source_table The input columns whose rows will be gathered
+ * @param[in] gather_map View into a non-nullable column of integral indices that maps the
+ * rows in the source columns to rows in the destination columns.
+ * @param[in] check_bounds Optionally perform bounds checking on the values
+ * of `gather_map` and throw an error if any of its values are out of bounds.
+ * @params[in] mr The resource to use for all allocations
+ * @return cudf::table Result of the gather
+ */
+std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
+			      bool check_bounds = false,
+			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+			       
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/

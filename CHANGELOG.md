@@ -20,10 +20,12 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3291 Add normalize_nans_and_zeros
 
 ## Improvements
 
@@ -61,9 +63,11 @@
 - PR #3128 Support MultiIndex in DataFrame.join
 - PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2991 Added strings column functions concatenate and join_strings
+- PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
+- PR #3138 Move unary files to legacy
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
@@ -88,7 +92,11 @@
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3314 Drop `cython` from run requirements
+- PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
+- PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3286 Clean up the starter code on README
 
 ## Bug Fixes
 
@@ -108,6 +116,7 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3276 Update JNI includes for legacy moves
 - PR #3256 Fix orc writer crash with multiple string columns
@@ -121,6 +130,10 @@
 - PR #3289 fix java memory usage API for empty columns
 - PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
 - PR #3295 Fix storing storing invalid RMM exec policies.
+- PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
+- PR #3313 Fix public headers including non-public headers
+- PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
 
 
 # cuDF 0.10.0 (16 Oct 2019)
