@@ -344,8 +344,8 @@ ConfigureTest(LEGACY_BINARY_TEST "${LEGACY_BINARY_TEST_SRC}")
 set(BINARY_TEST_SRC 
     # "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/binop-verify-input-test.cpp"
     # "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-operands-null-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp")
-    # "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-generic-ptx-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-generic-ptx-test.cu")
 
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 
