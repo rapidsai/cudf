@@ -13,7 +13,8 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/cudf_test_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/nvcategory_utils.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -400,9 +401,10 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
