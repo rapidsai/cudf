@@ -24,7 +24,7 @@
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
-
+//
 namespace cudf
 {
 namespace strings
@@ -54,8 +54,9 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
         thrust::make_counting_iterator<size_type>(strings_count),
         d_results,
         [d_column, d_flags, types, d_results] __device__(size_type idx){
+            //auto d_flags = g_character_codepoint_flags;
             if( d_column.is_null(idx) )
-                return static_cast<experimental::bool8>(0);
+                return false;
             auto d_str = d_column.element<string_view>(idx);
             bool check = !d_str.empty(); // positive result requires at least one character
             for( auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr )
@@ -65,7 +66,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
                 auto flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
                 check = (types & flag) > 0;
             }
-            return static_cast<experimental::bool8>(check);
+            return check;
         });
     //
     results->set_null_count(strings.null_count());
