@@ -20,8 +20,10 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/copying.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/equal.h>
 
@@ -81,31 +83,23 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool pri
       std::ostringstream buffer;
       buffer << "differences:" << std::endl;
       
-#ifdef USE_GATHER
       cudf::table_view source_table ({lhs, rhs});
 
-      std::unique_ptr<cudf::experimental::table> diff_table = cudf::experimental::gather(source_table,
-											 differences);
+      fixed_width_column_wrapper<int> diff_column(differences.begin(), diff_iter);
 
+      std::unique_ptr<cudf::experimental::table> diff_table = cudf::experimental::gather(source_table,
+											 diff_column);
+      
       //
       //  Need to pull back the differences
       //
-      std::vector<std::string> h_left_strings = to_strings(diff_table->column(0));
-      std::vector<std::string> h_right_strings = to_strings(diff_table->column(1));
+      std::vector<std::string> h_left_strings = to_strings(diff_table->get_column(0));
+      std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
 
-      for (int i = 0 ; i < differences_count ; ++i) {
+      for (int i = 0 ; i < difference_count ; ++i) {
           buffer << "lhs[" << differences[i] << "] = " << h_left_strings[i]
                  << ", rhs[" << differences[i] << "] = " << h_right_strings[i] << std::endl;
       }
-#else
-      std::vector<std::string> h_left_strings = to_strings(lhs);
-      std::vector<std::string> h_right_strings = to_strings(rhs);
-
-      std::for_each(differences.begin(), diff_iter, [&buffer, &h_left_strings, &h_right_strings](int idx) {
-          buffer << "lhs[" << idx << "] = " << h_left_strings[idx]
-                 << ", rhs[" << idx << "] = " << h_right_strings[idx] << std::endl;
-        });
-#endif
 
       EXPECT_EQ(difference_count, 0) << buffer.str();
     } else {
