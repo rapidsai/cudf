@@ -72,6 +72,7 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3272 Support non-default streams when creating/destroying hash maps
 
 ## Bug Fixes
 
