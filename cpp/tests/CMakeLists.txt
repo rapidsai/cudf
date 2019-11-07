@@ -283,6 +283,14 @@ set(LEGACY_REPLACE_NULLS_TEST_SRC
 ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
 
 ###################################################################################################
+# - replace tests --------------------------------------------------------------------------
+
+set(REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+
+ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+
+#################################################################################f##################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
