@@ -373,7 +373,7 @@ class Series(object):
             If None, it is calculated automatically.
 
         """
-        col = self._column.set_mask(mask, null_count=null_count)
+        col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
 
     def __sizeof__(self):

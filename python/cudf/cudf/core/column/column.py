@@ -236,6 +236,9 @@ class ColumnBase(Column):
 
         return col
 
+    def dropna(self):
+        return cudf.Series(self).dropna()._column
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 
@@ -269,14 +272,18 @@ class ColumnBase(Column):
         output size could be smaller.
         """
         if self.mask:
-            mask_bits = self._mask_view().copy_to_host()
+            if fillna is None:
+                col = self.dropna()
+            else:
+                col = self
+            mask_bits = col._mask_view().copy_to_host()
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(col), mask_bits)
                 .copy_to_host()
                 .astype(bool)
             )
-            data = self._data_view().copy_to_host()
-            data[~mask_bytes] = self.default_na_value()
+            data = col._data_view().copy_to_host()
+            data[~mask_bytes] = col.default_na_value()
             return data
         else:
             return self._data_view().copy_to_host()
@@ -895,13 +902,13 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
         raise NotImplementedError
     elif dtype.kind in "OU":
         data = Buffer.empty(row_count)
-        offsets = Buffer.empty(row_count * np.dtype("int32").itemsize)
+        offsets = Buffer.empty((row_count + 1) * np.dtype("int32").itemsize)
 
     else:
         data = Buffer.empty(row_count * dtype.itemsize)
 
     if masked:
-        mask = Buffer.empty(calc_chunk_size(row_count, mask_bitsize))
+        mask = Buffer.from_array_like(cudautils.make_empty_mask(row_count))
     else:
         mask = None
 
@@ -1181,7 +1188,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
-        raise NotImplementedError
         if hasattr(arbitrary, "dtype"):
             data_type = np_to_pa_dtype(arbitrary.dtype)
             # PyArrow can't construct date64 or date32 arrays from np

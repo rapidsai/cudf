@@ -1364,15 +1364,16 @@ class DataFrame(object):
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
+
             dtype = np.float64
             if self[next(iter(self._cols))].dtype == np.dtype("object"):
-                dtype = np.dtype("object")
-            arr = rmm.device_array(shape=len(ind), dtype=dtype)
-            size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
-            mask = cudautils.zeros(size, dtype=utils.mask_dtype)
-            val = Series.from_masked_array(arr, mask, null_count=len(ind))
+                dtype = "object"
+
+            col = column.column_empty(len(ind), dtype=dtype, masked=True)
+
             for name in self._cols:
-                self._cols[name] = val
+                self._cols[name] = Series(col)
+
             self._index = series.index
             self._size = len(series)
 

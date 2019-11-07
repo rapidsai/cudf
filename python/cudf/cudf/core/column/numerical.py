@@ -142,24 +142,24 @@ class NumericalColumn(column.ColumnBase):
             raise TypeError("cannot broadcast {}".format(type(other)))
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import string
+        from cudf.core.column import string, as_column
 
         if len(self) > 0:
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                dev_array = self.astype("int32", **kwargs).data.mem
+                dev_array = self.astype("int32", **kwargs)._data_view()
             else:
-                dev_array = self.data.mem
+                dev_array = self._data_view()
             dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
             null_ptr = None
             if self.mask is not None:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask.mem)
+                null_ptr = libcudf.cudf.get_ctype_ptr(self._mask_view())
             kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
             ](dev_ptr, **kwargs)
         else:
             data = []
-        return string.StringColumn(data=data)
+        return as_column(data)
 
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.core.column import datetime
