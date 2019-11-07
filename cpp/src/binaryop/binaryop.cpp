@@ -118,14 +118,13 @@ auto scalar_col_valid_mask_and(column_view const& col, scalar const& s) {
     return rmm::device_buffer{};
   }
 
-  // if (valid_scalar == false) {
-  //   return copy_bitmask();
-  // } else if (valid_scalar && valid_col != nullptr) {
-  //   CUDA_TRY(cudaMemcpy(valid_out, valid_col, num_bitmask_elements,
-  //                       cudaMemcpyDeviceToDevice));
-  // } else if (valid_scalar && valid_col == nullptr) {
-  //   CUDA_TRY(cudaMemset(valid_out, 0xff, num_bitmask_elements));
-  // }
+  if (not s.is_valid()) {
+    return create_null_mask(col.size(), mask_state::ALL_NULL);
+  } else if (s.is_valid() && col.nullable()) {
+    return copy_bitmask(col);
+  } else if (s.is_valid() && not col.nullable()) {
+    return rmm::device_buffer{};
+}
 }
 
 namespace jit {
@@ -250,9 +249,9 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator ope,
                                          data_type output_type)
 {
-  binops::scalar_col_valid_mask_and(rhs, lhs);
+  auto new_mask = binops::scalar_col_valid_mask_and(rhs, lhs);
+  auto out = make_numeric_column(output_type, rhs.size(), new_mask);
 
-  auto out = make_numeric_column(output_type, rhs.size());
   if (rhs.size() == 0)
     return out;
 
@@ -261,19 +260,21 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   return out;
 }
 
-  // std::unique_ptr<column> binary_operation(column_view const& lhs,
-  //                                          scalar const& rhs,
-  //                                          binary_operator ope,
-  //                                          data_type output_type)
-  // {
-  //   // Check for 0 sized data
-  //   if (lhs.size() == 0) return;
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         scalar const& rhs,
+                                         binary_operator ope,
+                                         data_type output_type)
+{
+  auto new_mask = binops::scalar_col_valid_mask_and(lhs, rhs);
+  auto out = make_numeric_column(output_type, lhs.size(), new_mask);
 
-  //   // binops::scalar_col_valid_mask_and(out->null_count, out->valid, lhs->valid,
-  //   //                                   rhs->is_valid, lhs->size);
+  if (lhs.size() == 0)
+    return out;
 
-  //   binops::jit::binary_operation(out, lhs, rhs, ope);
-  // }
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, ope);
+  return out;  
+}
 
   // std::unique_ptr<column> binary_operation(column_view const& lhs,
   //                                          column_view const& rhs,
