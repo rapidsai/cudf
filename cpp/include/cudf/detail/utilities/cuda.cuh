@@ -78,7 +78,7 @@ class grid_1d {
  * @return The sum reduction of the values from each lane. Only valid on
  * `threadIdx.x == 0`. The returned value on all other threads is undefined.
  */
-template <std::size_t block_size, std::size_t leader_lane = 0, typename T>
+template <int32_t block_size, int32_t leader_lane = 0, typename T>
 __device__ T single_lane_block_sum_reduce(T lane_value) {
   static_assert(block_size <= 1024, "Invalid block size.");
   static_assert(std::is_arithmetic<T>::value, "Invalid non-arithmetic type.");
@@ -110,13 +110,14 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
  * @param[in] bit_mask The bit_mask to be reduced.
  * @return[out] result of each block is returned in thread 0.
  */
-template <class bit_container, int lane = 0>
-__device__ __inline__ size_type single_lane_popc_block_reduce(bit_container bit_mask) {
-  assert(blockDim.x <= 1024); // Reduction code only works with a block size less or equal to 1024.
+template <class bit_container, int32_t lane = 0>
+__device__ __inline__
+size_type single_lane_block_popc_reduce(bit_container bit_mask) {
+  assert(blockDim.x <= 1024); // Required for reduction
   static __shared__ size_type warp_count[warp_size];
 
-  int lane_id = (threadIdx.x % warp_size);
-  int warp_id = (threadIdx.x / warp_size);
+  int32_t lane_id = (threadIdx.x % warp_size);
+  int32_t warp_id = (threadIdx.x / warp_size);
 
   // Assuming one lane of each warp holds the value that we want to perform
   // reduction
@@ -130,12 +131,11 @@ __device__ __inline__ size_type single_lane_popc_block_reduce(bit_container bit_
   if (warp_id == 0) {
     // Maximum block size is 1024 and 1024 / 32 = 32
     // so one single warp is enough to do the reduction over different warps
-    cudf::size_type count = 
+    size_type count =
       (lane_id < (blockDim.x / warp_size)) ? warp_count[lane_id] : 0;
 
     __shared__ typename cub::WarpReduce<size_type>::TempStorage temp_storage;
     block_count = cub::WarpReduce<size_type>(temp_storage).Sum(count);
-
   }
 
   return block_count;
