@@ -63,18 +63,37 @@ public class Schema {
     return typeNames.toArray(new String[typeNames.size()]);
   }
 
-  long getRowsSizeGuess() {
-    long total = 0;
+  /**
+   * Guess at the size of an output table based off of the number of expected rows.
+   * If there are any strings in the data a default size of 10 bytes is used.
+   * @param numRows the number of rows to use in the estimate.
+   * @return the estimated number of bytes needed to read in this schema.
+   * @throws IllegalStateException if no type information is available, an INFERRED schema
+   */
+  public long guessTableSize(int numRows) {
+    return guessTableSize(numRows, 10);
+  }
+
+  /**
+   * Guess at the size of an output table based off of the number of expected rows.
+   * @param numRows the number of rows to use in the estimate.
+   * @param avgStringSize the estimated average size of a string.
+   * @return the estimated number of bytes needed to read in this schema.
+   */
+  public long guessTableSize(int numRows, int avgStringSize) {
     if (types == null) {
-      total += 1000; // This is really just a hack, who knows
-    } else {
-      for (DType type: types) {
-        if (type == DType.STRING_CATEGORY || type == DType.STRING) {
-          total += 4 + 10; // 10 chars and a single offset
-        } else {
-          total += type.sizeInBytes;
-        }
+      throw new IllegalStateException("No type information is available to guess the output size");
+    }
+    long total = 0;
+    for (DType type: types) {
+      if (type == DType.STRING_CATEGORY || type == DType.STRING) {
+        total += avgStringSize * numRows;
+        total += 4 * (numRows + 1); // Offsets
+      } else {
+        total += type.sizeInBytes * numRows;
       }
+      // Assume that there is validity
+      total += (numRows + 7)/8;
     }
     return total;
   }

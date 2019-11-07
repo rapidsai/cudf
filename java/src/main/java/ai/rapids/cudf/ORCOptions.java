@@ -27,13 +27,11 @@ public class ORCOptions extends ColumnFilterOptions {
 
   private final boolean useNumPyTypes;
   private final TimeUnit unit;
-  private final int rowGuess;
 
   private ORCOptions(Builder builder) {
     super(builder);
     useNumPyTypes = builder.useNumPyTypes;
     unit = builder.unit;
-    rowGuess = builder.rowGuess;
   }
 
   boolean usingNumPyTypes() {
@@ -44,10 +42,6 @@ public class ORCOptions extends ColumnFilterOptions {
     return unit;
   }
 
-  int getRowGuess() {
-    return rowGuess;
-  }
-
   public static Builder builder() {
     return new Builder();
   }
@@ -55,18 +49,6 @@ public class ORCOptions extends ColumnFilterOptions {
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     private boolean useNumPyTypes = true;
     private TimeUnit unit = TimeUnit.NONE;
-    private int rowGuess = -1;
-
-    /**
-     * A guess of how many rows will be loaded. This is totally optional and only used for
-     * estimating the memory usage of loading the data.
-     * @param guess the number of rows to be loaded as a guess.
-     * @return this for chaining.
-     */
-    public Builder withRowGuess(int guess) {
-      this.rowGuess = guess;
-      return this;
-    }
 
     /**
      * Specify whether the parser should implicitly promote DATE32

@@ -26,21 +26,14 @@ public class ParquetOptions extends ColumnFilterOptions {
   public static ParquetOptions DEFAULT = new ParquetOptions(new Builder());
 
   private final TimeUnit unit;
-  private final long sizeGuess;
-
 
   private ParquetOptions(Builder builder) {
     super(builder);
     unit = builder.unit;
-    sizeGuess = builder.sizeGuess;
   }
 
   TimeUnit timeUnit() {
     return unit;
-  }
-
-  long getSizeGuess() {
-    return sizeGuess;
   }
 
   public static Builder builder() {
@@ -49,19 +42,6 @@ public class ParquetOptions extends ColumnFilterOptions {
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     private TimeUnit unit = TimeUnit.NONE;
-    private long sizeGuess = -1;
-
-    /**
-     * Guess how many bytes of memory the resulting data will take. This is totally optional and
-     * only used for estimating the memory usage of loading the data. Most users will not be
-     * able to use this accurately.
-     * @param guess the number of bytes that might be the size of the resulting data.
-     * @return this for chaining.
-     */
-    public Builder withSizeGuess(long guess) {
-      sizeGuess = guess;
-      return this;
-    }
 
     /**
      * Specify the time unit to use when returning timestamps.

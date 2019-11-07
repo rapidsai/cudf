@@ -35,7 +35,6 @@ public class CSVOptions extends ColumnFilterOptions {
   private final String[] nullValues;
   private final String[] trueValues;
   private final String[] falseValues;
-  private final int rowGuess;
 
   private CSVOptions(Builder builder) {
     super(builder);
@@ -49,7 +48,6 @@ public class CSVOptions extends ColumnFilterOptions {
         new String[builder.trueValues.size()]);
     falseValues = builder.falseValues.toArray(
         new String[builder.falseValues.size()]);
-    rowGuess = builder.rowGuess;
   }
 
   String[] getNullValues() {
@@ -80,10 +78,6 @@ public class CSVOptions extends ColumnFilterOptions {
     return comment;
   }
 
-  int getRowGuess() {
-    return rowGuess;
-  }
-
   public static Builder builder() {
     return new Builder();
   }
@@ -97,18 +91,6 @@ public class CSVOptions extends ColumnFilterOptions {
     private int headerRow = NO_HEADER_ROW;
     private byte delim = ',';
     private byte quote = '"';
-    private int rowGuess = -1;
-
-    /**
-     * A guess of how many rows will be loaded. This is totally optional and only used for
-     * estimating the memory usage of loading the data.
-     * @param guess the number of rows to be loaded as a guess.
-     * @return this for chaining.
-     */
-    public Builder withRowGuess(int guess) {
-      this.rowGuess = guess;
-      return this;
-    }
 
     /**
      * Row of the header data (0 based counting).  Negative is no header.

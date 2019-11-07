@@ -29,18 +29,38 @@ public abstract class ColumnFilterOptions {
   // Names of the columns to be returned (other columns are skipped)
   // If empty all columns are returned.
   private final String[] includeColumnNames;
+  private final long sizeGuess;
 
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
         new String[builder.includeColumnNames.size()]);
+    sizeGuess = builder.sizeGuess;
   }
 
   String[] getIncludeColumnNames() {
     return includeColumnNames;
   }
 
+  long getSizeGuess() {
+    return sizeGuess;
+  }
+
   public static class Builder<T extends Builder> {
     final List<String> includeColumnNames = new ArrayList<>();
+    private long sizeGuess = -1;
+
+    /**
+     * Guess how many bytes of memory the resulting data will take. This is totally optional and
+     * only used for estimating the memory usage of loading the data. Most users will not be
+     * able to use this accurately. This is a difficult task, but if you have a rough idea
+     * of a row count and the Schema of the output we can help. by calling Schema.guessTableSize.
+     * @param guess a guess at the number of bytes needed to store the output table.
+     * @return this for chaining.
+     */
+    public T withOutputSizeGuess(long guess) {
+      sizeGuess = guess;
+      return (T) this;
+    }
 
     /**
      * Include one or more specific columns.  Any column not included will not be read.

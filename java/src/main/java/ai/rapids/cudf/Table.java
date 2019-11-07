@@ -34,6 +34,10 @@ public final class Table implements AutoCloseable {
   private final long rows;
   private long nativeHandle;
   private ColumnVector[] columns;
+  // This is an estimate of how compressed data is when guessing the output size of data
+  // For ORC and Parquet this is relatively conservative. We might want a different
+  // one for text based formats.
+  private static final long COMPRESSION_RATION_ESTIMATE = 10;
 
   /**
    * Table class makes a copy of the array of {@link ColumnVector}s passed to it. The class
@@ -249,11 +253,11 @@ public final class Table implements AutoCloseable {
    *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
    *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
    *
-   * @param jsonFilePath local path to the json file
+   * @param path local path to the json file
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(File jsonFilePath) {
-    return readJSON(JSONOptions.DEFAULT, jsonFilePath);
+  public static Table readJSON(File path) {
+    return readJSON(JSONOptions.DEFAULT, path);
   }
 
   /**
@@ -269,33 +273,12 @@ public final class Table implements AutoCloseable {
    *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
    *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
    *
-   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
-   * @param jsonFilePath local path to the json file
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param path local path to the json file
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(JSONOptions options, File jsonFilePath) {
-    return readJSON(Schema.INFERRED, options, jsonFilePath);
-  }
-
-  /**
-   * Read a JSON file
-   * This method interprets each line as a complete json object and accepts json in two formats
-   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
-   *  "[1, 1.2, \"hello\"]\n
-   *   [3, 2.3, \"string\"]\n
-   *   [2, 23.2, \"str\"]\n"
-   *
-   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
-   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
-   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
-   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
-   *
-   * @param schema Schema containing the data types to use for the returned table
-   * @param jsonFilePath local path to the json file
-   * @return the file parsed as a table on the GPU.
-   */
-  public static Table readJSON(Schema schema, File jsonFilePath) {
-    return readJSON(schema, JSONOptions.DEFAULT, jsonFilePath);
+  public static Table readJSON(JSONOptions opts, File path) {
+    return readJSON(Schema.INFERRED, opts, path);
   }
 
   /**
@@ -312,14 +295,38 @@ public final class Table implements AutoCloseable {
    *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
    *
    * @param schema Schema containing the data types to use for the returned table
-   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
-   * @param jsonFilePath local path to the json file
+   * @param path local path to the json file
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(Schema schema, JSONOptions options, File jsonFilePath) {
-    long amount = Math.max(jsonFilePath.length(), options.getRowGuess() * schema.getRowsSizeGuess());
+  public static Table readJSON(Schema schema, File path) {
+    return readJSON(schema, JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param path local path to the json file
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = path.length();
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "JSON FILE")) {
-      return new Table(gdfReadJSON(jsonFilePath.getAbsolutePath(), 0, 0, 0, 0, options.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
+      return new Table(gdfReadJSON(path.getAbsolutePath(), 0, 0, 0, 0, opts.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
     }
   }
 
@@ -377,12 +384,12 @@ public final class Table implements AutoCloseable {
    *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
    *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
    *
-   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
    * @param buffer json data
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(JSONOptions options, byte[] buffer) {
-    return readJSON(Schema.INFERRED, options, buffer);
+  public static Table readJSON(JSONOptions opts, byte[] buffer) {
+    return readJSON(Schema.INFERRED, opts, buffer);
   }
 
   /**
@@ -399,12 +406,12 @@ public final class Table implements AutoCloseable {
    *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
    *
    * @param schema Schema containing the data types to use for the returned table
-   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
    * @param buffer json data
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(Schema schema, JSONOptions options, byte[] buffer) {
-    return readJSON(schema, options, buffer, 0, 0);
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer) {
+    return readJSON(schema, opts, buffer, 0, 0);
   }
 
   /**
@@ -421,13 +428,13 @@ public final class Table implements AutoCloseable {
    *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
    *
    * @param schema Schema containing the data types to use for the returned table
-   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
    * @param buffer json data
    * @param offset start offset to start in buffer
    * @param len size of the buffer to read after offset
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(Schema schema, JSONOptions options, byte[] buffer, long offset, long len) {
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset, long len) {
     if (len == 0) {
       len = buffer.length;
     }
@@ -437,7 +444,7 @@ public final class Table implements AutoCloseable {
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       // using default ranges but keeping the included column names
-      return readJSON(schema, options, newBuf, 0, 0);
+      return readJSON(schema, opts, newBuf, 0, 0);
     }
   }
 
@@ -460,17 +467,19 @@ public final class Table implements AutoCloseable {
    * @param len size of the buffer to read after offset
    * @return the file parsed as a table on the GPU.
    */
-  public static Table readJSON(Schema schema, JSONOptions options, HostMemoryBuffer buffer, long offset, long len) {
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer, long offset, long len) {
     if (len == 0) {
       len = buffer.length;
     }
     assert len > 0 : "Invalid buffer range size";
     assert len <= buffer.length - offset : "Buffer range size greater than buffer";
     assert offset >= 0 && offset < buffer.length : "Buffer offset out of range";
-
-    long amount = Math.max(len, options.getRowGuess() * schema.getRowsSizeGuess());
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = len;
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "JSON BUFFER")) {
-      return new Table(gdfReadJSON(null, buffer.getAddress() + offset, buffer.getLength(), offset, len, options.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
+      return new Table(gdfReadJSON(null, buffer.getAddress() + offset, buffer.getLength(), offset, len, opts.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
     }
   }
 
@@ -492,7 +501,10 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
-    long amount = Math.max(path.length(), opts.getRowGuess() * schema.getRowsSizeGuess());
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = path.length();
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "CSV FILE")) {
       return new Table(
           gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
@@ -569,7 +581,10 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = Math.max(len, opts.getRowGuess() * schema.getRowsSizeGuess());
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = len;
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "CSV BUFFER")) {
       return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
           opts.getIncludeColumnNames(), null,
@@ -600,7 +615,10 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    long amount = Math.max(path.length() * 10, opts.getSizeGuess());
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = path.length() * COMPRESSION_RATION_ESTIMATE;
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET FILE")) {
       return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
           path.getAbsolutePath(), 0, 0, opts.timeUnit().getNativeId()));
@@ -663,7 +681,10 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = Math.max(len * 10, opts.getSizeGuess());
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = len * COMPRESSION_RATION_ESTIMATE;
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET BUFFER")) {
       return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
           null, buffer.getAddress() + offset, len, opts.timeUnit().getNativeId()));
@@ -684,7 +705,10 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readORC(ORCOptions opts, File path) {
-    long amount = Math.max(path.length(), opts.getRowGuess() * 100);
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = path.length() * COMPRESSION_RATION_ESTIMATE;
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "ORC FILE")) {
       return new Table(gdfReadORC(opts.getIncludeColumnNames(),
           path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().getNativeId()));
@@ -747,7 +771,10 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = Math.max(len, opts.getRowGuess() * 100);
+    long amount = opts.getSizeGuess();
+    if (amount < 0) {
+      amount = len * COMPRESSION_RATION_ESTIMATE;
+    }
     try (DevicePrediction prediction = new DevicePrediction(amount, "ORC BUFFER")) {
       return new Table(gdfReadORC(opts.getIncludeColumnNames(),
           null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
