@@ -81,6 +81,7 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3266 Remove optional checks for CuPy
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
