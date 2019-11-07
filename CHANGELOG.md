@@ -20,6 +20,7 @@
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3223 Java expose underlying buffers
+- PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
@@ -63,7 +64,8 @@
 - PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
+- PR #3138 Move unary files to legacy
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
@@ -126,6 +128,7 @@
 - PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 - PR #3313 Fix public headers including non-public headers
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
 
 
 # cuDF 0.10.0 (16 Oct 2019)

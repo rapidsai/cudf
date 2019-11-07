@@ -3998,3 +3998,30 @@ def test_df_constructor_dtype(dtype):
     got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+def test_insert(data):
+    pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    # insertion by index
+
+    pdf.insert(0, "foo", data)
+    gdf.insert(0, "foo", data)
+
+    assert_eq(pdf, gdf)
+
+    pdf.insert(3, "bar", data)
+    gdf.insert(3, "bar", data)
+
+    assert_eq(pdf, gdf)
+
+    pdf.insert(1, "baz", data)
+    gdf.insert(1, "baz", data)
+
+    assert_eq(pdf, gdf)
+
+    # pandas insert doesnt support negative indexing
+    pdf.insert(len(pdf.columns) - 1, "qux", data)
+    gdf.insert(-1, "qux", data)
