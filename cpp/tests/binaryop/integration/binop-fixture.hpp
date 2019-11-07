@@ -22,6 +22,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/scalar_wrapper.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace test {
@@ -56,7 +57,7 @@ struct BinaryOperationIntegrationTest
 
     template <typename T>
     auto make_random_wrapped_scalar() {
-        return cudf::test::fixed_width_scalar_wrapper<T>(this->generate());
+        return cudf::experimental::scalar_type_t<T>(this->generate());
     }
 };
 
