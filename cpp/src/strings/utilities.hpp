@@ -111,6 +111,20 @@ std::unique_ptr<column> make_empty_strings_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+// Type for the character flags table.
+using character_flags_table_type = uint8_t;
+
+/**
+ * @brief Returns pointer to device memory that contains the static
+ * characters flags table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * @param stream Stream to use for any device memory or kernel calls.
+ * @return Device memory pointer to character flags table.
+ */
+const character_flags_table_type* get_character_flags_table();
+
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf

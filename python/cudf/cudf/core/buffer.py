@@ -163,7 +163,7 @@ class Buffer(object):
         self.size += needed
 
     def to_array(self):
-        return self.to_gpu_array().copy_to_host()
+        return self.mem[: self.size].copy_to_host()
 
     def to_gpu_array(self):
         return self.mem[: self.size]
