@@ -39,6 +39,7 @@ namespace
 
 /**
  * @brief Converts strings into an integers.
+ *
  * Used by the dispatch method to convert to different integer types.
  */
 template <typename IntegerType>
@@ -48,12 +49,13 @@ struct string_to_integer_fn
 
     /**
      * @brief Converts a single string into an integer.
+     *
      * The '+' and '-' are allowed but only at the beginning of the string.
      * The string is expected to contain base-10 [0-9] characters only.
      * Any other character will end the parse.
      * Overflow of the int64 type is not detected.
      */
-    __device__ int64_t string_to_integer( string_view d_str )
+    __device__ int64_t string_to_integer( string_view const& d_str )
     {
         int64_t value = 0;
         size_type bytes = d_str.size_bytes();
@@ -131,17 +133,13 @@ std::unique_ptr<column> to_integers( strings_column_view const& strings,
         return make_numeric_column( output_type, 0 );
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_strings = *strings_column;
-    // copy null mask
-    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
-    // create output column
-    auto results = std::make_unique<column>( output_type, strings_count,
-        rmm::device_buffer(strings_count * size_of(output_type), stream, mr),
-        null_mask, strings.null_count());
+    // create integer output column copying the strings null-mask
+    auto results = make_numeric_column( output_type, strings_count,
+        copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     // fill output column with integers
-    experimental::type_dispatcher( output_type,
-                dispatch_to_integers_fn{},
-                d_strings, results_view, stream );
+    experimental::type_dispatcher( output_type, dispatch_to_integers_fn{},
+                                   d_strings, results_view, stream );
     results->set_null_count(strings.null_count());
     return results;
 }
@@ -180,7 +178,7 @@ struct integer_to_string_size_fn
             return 1;
         bool is_negative = value < 0;
         value = abs(value);
-        // largest 8-byte unsigned value is 18446744073709551615
+        // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
         size_type digits = (value < 10 ? 1 :
                            (value < 100 ? 2 :
                            (value < 1000 ? 3 :
@@ -207,6 +205,7 @@ struct integer_to_string_size_fn
 
 /**
  * @brief Convert each integer into a string.
+ *
  * The integer is converted into base-10 using only characters [0-9].
  * No formatting is done for the string other than prepending the '-'
  * character for negative values.
@@ -231,11 +230,13 @@ struct integer_to_string_fn
         }
         bool is_negative = value < 0;
         value = abs(value);
-        char digits[21]; // place-holder for digits
         constexpr IntegerType base = 10;
+        constexpr int MAX_DIGITS = 20; // largest 64-bit integer is 20 digits
+        char digits[MAX_DIGITS]; // place-holder for digit chars
         int digits_idx = 0;
-        while( (value > 0) && (digits_idx < 21) )
+        while( value > 0 )
         {
+            assert( digits_idx <= MAX_DIGITS );
             digits[digits_idx++] = '0' + (value % base);
             value = value/base;
         }
@@ -277,14 +278,14 @@ struct dispatch_from_integers_fn
 
         // build chars column
         size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-        auto chars_column = detail::create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
+        auto chars_column = detail::create_chars_child_column( strings_count, integers.null_count(), bytes, mr, stream );
         auto chars_view = chars_column->mutable_view();
         auto d_chars = chars_view.template data<char>();
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<size_type>(0), strings_count,
             integer_to_string_fn<IntegerType>{d_column, d_new_offsets, d_chars});
         //
         return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                                   d_column.null_count(), std::move(null_mask), stream, mr);
+                                   integers.null_count(), std::move(null_mask), stream, mr);
     }
 
     // non-integral types throw an exception
@@ -312,9 +313,8 @@ std::unique_ptr<column> from_integers( column_view const& integers,
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
 
-    return experimental::type_dispatcher(integers.type(),
-                dispatch_from_integers_fn{},
-                integers, mr, stream );
+    return experimental::type_dispatcher(integers.type(), dispatch_from_integers_fn{},
+                                         integers, mr, stream );
 }
 
 } // namespace detail
