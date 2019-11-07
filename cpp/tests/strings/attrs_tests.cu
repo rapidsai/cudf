@@ -51,9 +51,9 @@ TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
     cudf::column_view expected_column( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
 
-    auto results = cudf::strings::bytes_count(strings_view);
+    auto results = cudf::strings::count_bytes(strings_view);
     cudf::test::expect_columns_equal(results->view(), expected_column);
-    results = cudf::strings::characters_count(strings_view);
+    results = cudf::strings::count_characters(strings_view);
     cudf::test::expect_columns_equal(results->view(), expected_column);
     results = cudf::strings::code_points(strings_view);
     cudf::test::expect_columns_equal(results->view(), expected_column);
@@ -68,7 +68,7 @@ TEST_F(StringsAttributesTest, StringsLengths)
     auto strings_view = cudf::strings_column_view(strings);
 
     {
-        auto results = cudf::strings::characters_count(strings_view);
+        auto results = cudf::strings::count_characters(strings_view);
         std::vector<int32_t> h_expected{ 3, 2, 0, 0, 2, 3, 24 };
         cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
@@ -76,7 +76,7 @@ TEST_F(StringsAttributesTest, StringsLengths)
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        auto results = cudf::strings::bytes_count(strings_view);
+        auto results = cudf::strings::count_bytes(strings_view);
         std::vector<int32_t> h_expected{ 3, 2, 0, 0, 2, 6, 24 };
         cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));

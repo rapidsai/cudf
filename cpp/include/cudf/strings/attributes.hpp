@@ -37,7 +37,7 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with lengths for each string.
  */
-std::unique_ptr<column> characters_count( strings_column_view const& strings,
+std::unique_ptr<column> count_characters( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -54,7 +54,7 @@ std::unique_ptr<column> characters_count( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with the number of bytes for each string.
  */
-std::unique_ptr<column> bytes_count( strings_column_view const& strings,
+std::unique_ptr<column> count_bytes( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**

@@ -83,7 +83,7 @@ std::unique_ptr<column> counts_fn( strings_column_view const& strings,
 
 } // namespace
 
-std::unique_ptr<column> characters_count( strings_column_view const& strings,
+std::unique_ptr<column> count_characters( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                           cudaStream_t stream = 0)
 {
@@ -91,7 +91,7 @@ std::unique_ptr<column> characters_count( strings_column_view const& strings,
     return counts_fn( strings, ufn, mr, stream );
 }
 
-std::unique_ptr<column> bytes_count( strings_column_view const& strings,
+std::unique_ptr<column> count_bytes( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                      cudaStream_t stream = 0)
 {
@@ -180,16 +180,16 @@ std::unique_ptr<column> code_points( strings_column_view const& strings,
 
 // external APIS
 
-std::unique_ptr<column> characters_count( strings_column_view const& strings,
+std::unique_ptr<column> count_characters( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr)
 {
-    return detail::characters_count(strings, mr);
+    return detail::count_characters(strings, mr);
 }
 
-std::unique_ptr<column> bytes_count( strings_column_view const& strings,
+std::unique_ptr<column> count_bytes( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
-    return detail::bytes_count( strings, mr );
+    return detail::count_bytes( strings, mr );
 }
 
 std::unique_ptr<column> code_points( strings_column_view const& strings,
