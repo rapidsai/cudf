@@ -13,7 +13,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
-import cupy as cp
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -504,9 +504,6 @@ class DataFrame(object):
 
     @property
     def values(self):
-        if not utils._have_cupy:
-            raise ModuleNotFoundError("CuPy was not found.")
-        import cupy
 
         return cupy.asarray(self.as_gpu_matrix())
 
@@ -3841,7 +3838,7 @@ class DataFrame(object):
                 raise ValueError(msg)
 
             prepared = self._prepare_for_rowwise_op()
-            arr = cp.asarray(prepared.as_gpu_matrix())
+            arr = cupy.asarray(prepared.as_gpu_matrix())
             result = getattr(arr, method)(axis=1, **kwargs)
 
             if len(result.shape) == 1:
