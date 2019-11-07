@@ -35,7 +35,6 @@ requirements:
     - fastavro >=0.22.0
     - rmm {{ minor_version }}.*
     - nvstrings {{ minor_version }}.*
-    - cython >=0.29,<0.30
     - dlpack
     - fsspec>=0.3.3
 
