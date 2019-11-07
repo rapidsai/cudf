@@ -38,11 +38,11 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
  *
  * Treats null elements as equivalent.
  *
- * @param lhs The first column
- * @param rhs The second column
- * @param all If true display all differences
+ * @param lhs                   The first column
+ * @param rhs                   The second column
+ * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool all = false);
+void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool print_all_differences = false);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.

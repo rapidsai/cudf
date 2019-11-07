@@ -35,7 +35,9 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());
-  EXPECT_EQ(lhs.nullable(), rhs.nullable());
+  if (lhs.size() > 0) {
+     EXPECT_EQ(lhs.nullable(), rhs.nullable());
+  }
   EXPECT_EQ(lhs.has_nulls(), rhs.has_nulls());
   EXPECT_EQ(lhs.num_children(), rhs.num_children());
 }
@@ -52,7 +54,7 @@ public:
   }
 };
 
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool all) {
+void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool print_all_differences) {
   expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
@@ -72,7 +74,7 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool all
   if (diff_iter > differences.begin()) {
     int difference_count = diff_iter - differences.begin();
 
-    if (all) {
+    if (print_all_differences) {
       //
       //  If there are differences, display them all
       //
