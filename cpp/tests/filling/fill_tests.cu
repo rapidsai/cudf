@@ -68,6 +68,7 @@ public:
     }
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     static_cast<ScalarType*>(p_val.get())->set_value(value);
+    static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
 
     auto expected_elements =
       cudf::test::make_counting_transform_iterator(
@@ -87,8 +88,8 @@ public:
 
     // test out-of-place version first
 
-    auto ret = cudf::experimental::fill(destination, begin, end, *p_val);
-    cudf::test::expect_columns_equal(*ret, expected);
+    auto p_ret = cudf::experimental::fill(destination, begin, end, *p_val);
+    cudf::test::expect_columns_equal(*p_ret, expected);
 
     // test in-place version second
 
@@ -178,6 +179,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
   using T_int = cudf::experimental::id_to_type<cudf::INT32>;
   using ScalarType = cudf::experimental::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_val_int.get())->set_value(5);
+  static_cast<ScalarType*>(p_val_int.get())->set_valid(false);
 
   auto destination =
     cudf::test::fixed_width_column_wrapper<int32_t>(
