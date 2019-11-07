@@ -380,7 +380,7 @@ class row_lexicographic_comparator {
 };  // class row_lexicographic_comparator
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the hash value of a row in the given column.
+ * @brief Computes the hash value of an element in the given column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the column.
