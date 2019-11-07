@@ -160,4 +160,9 @@ rmm::device_buffer copy_bitmask(column_view const& view,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+rmm::device_buffer bitmask_and(column_view const& view1,
+    column_view const& view2,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace cudf

@@ -276,33 +276,37 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return out;  
 }
 
-  // std::unique_ptr<column> binary_operation(column_view const& lhs,
-  //                                          column_view const& rhs,
-  //                                          binary_operator ope,
-  //                                          data_type output_type)
-  // {
-  //   // Check for 0 sized data
-  //   if ((lhs.size() == 0) && (rhs.size() == 0)) return;
-  //   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+std::unique_ptr<column> binary_operation( column_view const& lhs,
+                                          column_view const& rhs,
+                                          binary_operator ope,
+                                          data_type output_type,
+{
+  // Check for 0 sized data
+  if ((lhs.size() == 0) && (rhs.size() == 0))
+    return make_numeric_column(output_type, 0);
 
-  //   // binops::binary_valid_mask_and(out->null_count, out->valid, lhs->valid,
-  //   //                               rhs->valid, rhs->size);
+  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  //   // TODO: This whole shebang should be replaced by jitified header of chrono
-  //         gdf_column lhs_tmp{};
-  //         gdf_column rhs_tmp{};
-  //         // If the columns are GDF_DATE64 or timestamps with different time resolutions,
-  //         // cast the least-granular column to the other's resolution before the binop
-  //         std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::cast_to_common_resolution(*lhs, *rhs);
+  auto new_mask = bitmask_and(lhs, rhs);
+  auto out = make_numeric_column(output_type, lhs.size(), new_mask);
 
-  //         if (lhs_tmp.size > 0) { lhs = &lhs_tmp; }
-  //         else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
+  // TODO: This whole shebang should be replaced by jitified header of chrono
+        // gdf_column lhs_tmp{};
+        // gdf_column rhs_tmp{};
+        // // If the columns are GDF_DATE64 or timestamps with different time resolutions,
+        // // cast the least-granular column to the other's resolution before the binop
+        // std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::cast_to_common_resolution(*lhs, *rhs);
 
-  //   binops::jit::binary_operation(out, lhs, rhs, ope);
+        // if (lhs_tmp.size > 0) { lhs = &lhs_tmp; }
+        // else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
 
-  //   gdf_column_free(&lhs_tmp);
-  //   gdf_column_free(&rhs_tmp);
-  // }
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, ope);
+  return out;
+
+  // gdf_column_free(&lhs_tmp);
+  // gdf_column_free(&rhs_tmp);
+}
 
   // std::unique_ptr<column> binary_operation(column_view const& lhs,
   //                                          column_view const& rhs,
