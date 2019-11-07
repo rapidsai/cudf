@@ -24,7 +24,7 @@
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
-
+//
 namespace cudf
 {
 namespace strings
@@ -41,24 +41,21 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
-    // copy the null mask
-    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
     // create output column
-    auto results = std::make_unique<cudf::column>( data_type{BOOL8}, strings_count,
-        rmm::device_buffer(strings_count * sizeof(experimental::bool8), stream, mr),
-        null_mask, strings.null_count());
+    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
+        copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
-    auto d_results = results_view.data<int8_t>();
-    //
+    auto d_results = results_view.data<experimental::bool8>();
+    // get the static character types table
     auto d_flags = detail::get_character_flags_table();
-    // set the output values by checking the character types
+    // set the output values by checking the character types for each string
     thrust::transform(rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
         d_results,
         [d_column, d_flags, types, d_results] __device__(size_type idx){
             if( d_column.is_null(idx) )
-                return static_cast<experimental::bool8>(0);
+                return false;
             auto d_str = d_column.element<string_view>(idx);
             bool check = !d_str.empty(); // positive result requires at least one character
             for( auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr )
@@ -68,7 +65,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
                 auto flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
                 check = (types & flag) > 0;
             }
-            return static_cast<experimental::bool8>(check);
+            return check;
         });
     //
     results->set_null_count(strings.null_count());
@@ -76,6 +73,8 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
 }
 
 } // namespace detail
+
+// external API
 
 std::unique_ptr<column> all_characters_of_type( strings_column_view const& strings,
                                                 string_character_types types,
