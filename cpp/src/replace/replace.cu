@@ -27,7 +27,7 @@
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/cuda_utils.hpp>
@@ -435,7 +435,7 @@ void replace_nulls_column_kernel_forwarder::operator ()<cudf::string_view>(cudf:
 struct replace_nulls_scalar_kernel_forwarder {
   template <typename col_type>
   void operator()(cudf::column_view const& input,
-                  const void* replacement,
+                  cudf::scalar const* replacement,
                   cudf::mutable_column_view& output,
                   cudaStream_t stream = 0,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
@@ -443,22 +443,20 @@ struct replace_nulls_scalar_kernel_forwarder {
     cudf::size_type nrows = input.size();
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
-    auto t_replacement = static_cast<const col_type*>(replacement);
-    col_type* d_replacement = reinterpret_cast<col_type*>(mr->allocate(sizeof(col_type), stream));
-    CUDA_TRY(cudaMemcpyAsync(d_replacement, t_replacement, sizeof(col_type), cudaMemcpyHostToDevice, stream));
+    using ScalarType = cudf::experimental::scalar_type_t<col_type>;
+    auto s1 = static_cast<ScalarType const*>(replacement);
 
     replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
                                                                           input.data<col_type>(),
                                                                           input.null_mask(),
-                                                                          static_cast<const col_type*>(d_replacement),
+                                                                          s1->data(),
                                                                           output.data<col_type>());
-    mr->deallocate(d_replacement, sizeof(col_type), stream);
   }
 };
 
 template<>
 void replace_nulls_scalar_kernel_forwarder::operator ()<cudf::string_view>(cudf::column_view const& input,
-                                                                           const void* replacement,
+                                                                           cudf::scalar const* replacement,
                                                                            cudf::mutable_column_view& output,
                                                                            cudaStream_t stream,
                                                                            rmm::mr::device_memory_resource* mr) {
@@ -510,7 +508,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            const gdf_scalar& replacement,
+                                            cudf::scalar const* replacement,
                                             cudaStream_t stream,
                                             rmm::mr::device_memory_resource* mr)
 {
@@ -524,8 +522,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
     return std::unique_ptr<cudf::column>(new cudf::column(input));
   }
 
-  CUDF_EXPECTS(input.type() == cudf::legacy::gdf_dtype_to_data_type(replacement.dtype), "Data type mismatch");
-  CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
+  CUDF_EXPECTS(input.type() == replacement->type(), "Data type mismatch");
+  CUDF_EXPECTS(true == replacement->is_valid(stream), "Invalid replacement data");
 
   std::unique_ptr<cudf::column> output = make_numeric_column(input.type(),
                                                              input.size(),
@@ -536,7 +534,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   cudf::experimental::type_dispatcher(input.type(),
                                       replace_nulls_scalar_kernel_forwarder{},
                                       input,
-                                      &(replacement.data),
+                                      replacement,
                                       outputView,
                                       stream,
                                       mr);
@@ -556,7 +554,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            const gdf_scalar& replacement,
+                                            cudf::scalar const* replacement,
                                             rmm::mr::device_memory_resource* mr)
 {
   return detail::replace_nulls(input, replacement, 0, mr);
