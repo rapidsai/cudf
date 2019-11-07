@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/cuda.cuh>
 
 #include <cassert>
 
