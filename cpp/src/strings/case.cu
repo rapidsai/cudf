@@ -25,10 +25,6 @@
 #include "./utilities.hpp"
 #include "./utilities.cuh"
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <thrust/transform.h>
-#include <thrust/transform_scan.h>
-
 
 namespace cudf
 {
@@ -117,7 +113,7 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
 
-    auto execpol = rmm::exec_policy(0);
+    auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 

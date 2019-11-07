@@ -137,7 +137,7 @@ using character_cases_table_type = uint16_t;
  * This table is used to map upper and lower case characters with
  * their counterpart.
  *
- * @return Device memory pointer to character flags table.
+ * @return Device memory pointer to character cases table.
  */
 const character_cases_table_type* get_character_cases_table();
 
