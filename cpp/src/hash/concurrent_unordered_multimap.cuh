@@ -25,7 +25,7 @@
 
 #include <thrust/pair.h>
 
-#include "hash_functions.cuh"
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include "managed.cuh"
 #include "managed_allocator.cuh"
 

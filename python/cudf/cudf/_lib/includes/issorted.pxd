@@ -7,7 +7,7 @@
 
 from cudf._lib.cudf cimport *
 
-cdef extern from "cudf/predicates.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/predicates.hpp" namespace "cudf" nogil:
 
     cdef bool is_sorted(
         cudf_table table,
