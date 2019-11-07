@@ -125,7 +125,7 @@ cudf::size_type get_output_size(cudf::size_type * block_counts,
 // Note: `filter` is not run on indices larger than the input column size
 template <typename T, typename Filter,
           int block_size, bool has_validity>
-__launch_bounds__(block_size, 2048/block_size)
+__launch_bounds__(block_size)
 __global__ void scatter_kernel(T* __restrict__ output_data,
                                cudf::bitmask_type * __restrict__ output_valid,
                                cudf::size_type * output_null_count,
