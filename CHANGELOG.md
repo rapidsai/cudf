@@ -87,6 +87,7 @@
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
+- PR #3305 Define and implement new rolling window APIs
 
 ## Bug Fixes
 
