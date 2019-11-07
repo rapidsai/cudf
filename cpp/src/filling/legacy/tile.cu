@@ -42,7 +42,6 @@ cudf::table tile(const cudf::table &in, gdf_size_type count,
     return cudf::empty_like(in);
   }
   
-  auto exec = rmm::exec_policy(stream)->on(stream);
 
   gdf_size_type out_num_rows = count * num_rows;
 
@@ -53,7 +52,7 @@ cudf::table tile(const cudf::table &in, gdf_size_type count,
 
   // make gather map
   rmm::device_vector<gdf_size_type> gather_map(out_num_rows);
-  thrust::copy(exec, tiled_it, tiled_it + out_num_rows, gather_map.begin());
+  thrust::copy(rmm::exec_policy(stream)->on(stream), tiled_it, tiled_it + out_num_rows, gather_map.begin());
 
   // Allocate `output` with out_num_rows elements
   cudf::table output = cudf::allocate_like(in, out_num_rows);
