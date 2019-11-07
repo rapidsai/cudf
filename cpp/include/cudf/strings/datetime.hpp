@@ -31,7 +31,9 @@ namespace strings
  * following are supported: %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z
  * Reference:  http://man7.org/linux/man-pages/man3/strptime.3.html
  *
- * No checking is done for invalid formats or invalid timestamp units.
+ * No checking is done for invalid formats.
+ * Negative timestamp are not currently supported. These would have
+ * dates before 1970-01-01.
  *
  * Any null string entry will result in a null entry in the output column.
  *
@@ -39,15 +41,15 @@ namespace strings
  *
  * @param strings Strings instance for this operation.
  * @param timestamps Timestamp values to convert.
- * @param output_type The timestamp type used for the values in timestamps.
- * @param format The null-terminated CPU string specifying string output format.
+ * @param output_type The timestamp type used for creating the output column.
+ * @param format String specifying the timestamp format in strings.
  * @param mr Resource for allocating device memory.
  * @return New datetime column.
  */
-std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
-                                             data_type timestamp_type,
-                                             std::string const& format,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_timestamps( strings_column_view const& strings,
+                                       data_type timestamp_type,
+                                       std::string const& format,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 /**
@@ -59,20 +61,21 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
  * Reference:  http://man7.org/linux/man-pages/man3/strftime.3.html
  *
  * No checking is done for invalid formats or invalid timestamp units.
+ * Negative timestamp values are not currently supported.
  *
  * Any null input entry will result in a corresponding null entry in the output column.
  *
- * @throw cudf::logic_error if timestamps column is not a timestamp type.
+ * @throw cudf::logic_error if timestamps column parameter is not a timestamp type.
  *
  * @param timestamps Timestamp values to convert.
- * @param format The null-terminated CPU string specifying string output format.
+ * @param format The String specifying output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
  * @param mr Resource for allocating device memory.
  * @return New strings column with formatted timestamps.
  */
-std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
-                                               std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_timestamps( column_view const& timestamps,
+                                         std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
+                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 } // namespace strings
