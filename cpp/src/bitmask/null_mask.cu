@@ -150,17 +150,22 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
   }
 }
 
-// TODO: document
+/**
+ * @brief Convenience function to get offset word from a bitmask
+ * 
+ * @see copy_offset_bitmask
+ * @see offset_bitmask_and
+ */
 __device__ bitmask_type get_mask_offset_word(
   bitmask_type const *__restrict__ source,
-  size_type destination_word_index,
+  size_type _word_index,
   size_type bit_offset,
   size_type number_of_mask_words)
 {
-  size_type source_word_index = destination_word_index + word_index(bit_offset);
+  size_type source_word_index = _word_index + word_index(bit_offset);
   bitmask_type curr_word = source[source_word_index];
   bitmask_type next_word = 0;
-  if (destination_word_index + 1 < number_of_mask_words) {
+  if (_word_index + 1 < number_of_mask_words) {
     next_word = source[source_word_index + 1];
   }
   return __funnelshift_r(curr_word, next_word, bit_offset);
@@ -191,6 +196,16 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
+/**
+ * @brief Computes the bitwise AND of two bitmasks
+ * 
+ * @param destination The bitmask to write result into
+ * @param source1 The first source mask
+ * @param source2 The second source mask
+ * @param bit_offset1 The offset into @p source1 from where to begin
+ * @param bit_offset2 The offset into @p source2 from where to begin
+ * @param number_of_mask_words The number of words of type bitmask_type to copy
+ */
 __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source1,
                                     bitmask_type const *__restrict__ source2,
