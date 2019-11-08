@@ -69,8 +69,9 @@
 - PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3138 Move unary files to legacy
+- PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
