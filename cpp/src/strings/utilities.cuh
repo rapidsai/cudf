@@ -35,14 +35,29 @@ namespace detail
  * the provided buffer.
  *
  * @param buffer Device buffer to copy to.
+ * @param input Data to copy from.
+ * @param bytes Number of bytes to copy.
+ * @return Points to the end of the output buffer after the copy.
+ */
+__device__ inline char* copy_and_incr( char* buffer, const char* input, size_type bytes )
+{
+    memcpy( buffer, input, bytes );
+    return buffer + bytes;
+}
+
+/**
+ * @brief This utility will copy the argument string's data into
+ * the provided buffer.
+ *
+ * @param buffer Device buffer to copy to.
  * @param d_string String to copy.
- * @return Points to the end of the buffer after the copy.
+ * @return Points to the end of the output buffer after the copy.
  */
 __device__ inline char* copy_string( char* buffer, const string_view& d_string )
 {
-    memcpy( buffer, d_string.data(), d_string.size_bytes() );
-    return buffer + d_string.size_bytes();
+    return copy_and_incr( buffer, d_string.data(), d_string.size_bytes() );
 }
+
 
 /**
  * @brief Create an offsets column to be a child of a strings column.
