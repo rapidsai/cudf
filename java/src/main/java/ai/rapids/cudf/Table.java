@@ -779,12 +779,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  3 }
-   * NaNs in column values do not work especially
-   * if the table has multiple columns.
+   * NaNs in column values produce incorrect results.
+   * The input table and the values table need to be non-empty (row count > 0)
+   * The column data types of the tables' have to match in order.
    * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types and
-   * the result gives the index of the value pertaining to the matching type column
-   * in the input table.
+   * unsorted the results are wrong. Types of columns can be of mixed data types.
    * @param areNullsSmallest true if nulls are assumed smallest
    * @param valueTable the table of values that need to be inserted
    * @param descFlags indicates the ordering of the column(s), true if descending
@@ -792,7 +791,7 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector lowerBound(boolean areNullsSmallest,
       Table valueTable, boolean[] descFlags) {
-    assertTableChecks(valueTable);
+    assertForBounds(valueTable);
     return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
       descFlags, areNullsSmallest, false));
   }
@@ -816,11 +815,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  5 }
-   * NaNs in column values do not work especially
-   * if the table has multiple columns.
+   * NaNs in column values produce incorrect results.
+   * The input table and the values table need to be non-empty (row count > 0)
+   * The column data types of the tables' have to match in order.
    * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be mixed and the result gives the index
-   * of the value pertaining to the matching type column in the input table.
+   * unsorted the results are wrong. Types of columns can be of mixed data types.
    * @param areNullsSmallest true if nulls are assumed smallest
    * @param valueTable the table of values that need to be inserted
    * @param descFlags indicates the ordering of the column(s), true if descending
@@ -828,24 +827,26 @@ public final class Table implements AutoCloseable {
    */
   public ColumnVector upperBound(boolean areNullsSmallest,
       Table valueTable, boolean[] descFlags) {
-    assertTableChecks(valueTable);
+    assertForBounds(valueTable);
     return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
       descFlags, areNullsSmallest, true));
   }
 
-  private void assertTableChecks(Table valueTable) {
+  private void assertForBounds(Table valueTable) {
     assert this.getRowCount() != 0 : "Input table cannot be empty";
     assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
-    Set<DType> inputDataTypes = new HashSet<>();
-    Set<DType> valuesDataTypes = new HashSet<>();
-    for (int i = 0; i < this.columns.length; i++) {
-      inputDataTypes.add(this.getColumn(i).getType());
+    for (ColumnVector column : columns) {
+      assert column.getType() != DType.STRING && column.getType() != DType.STRING_CATEGORY :
+        "Strings and String categories are not supported";
     }
-    for (int i = 0; i < valueTable.columns.length; i++) {
-      valuesDataTypes.add(valueTable.getColumn(i).getType());
+    for (ColumnVector column : valueTable.columns) {
+      assert column.getType() != DType.STRING && column.getType() != DType.STRING_CATEGORY :
+          "Strings and String categories are not supported";
     }
-    assert inputDataTypes.containsAll(valuesDataTypes) :
-      "Input and values tables' data types do not match";
+    for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
+      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+          "Input and values tables' data types do not match";
+    }
   }
 
   /////////////////////////////////////////////////////////////////////////////
