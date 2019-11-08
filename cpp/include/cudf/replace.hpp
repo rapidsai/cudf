@@ -35,8 +35,8 @@ namespace experimental {
   * The `input` and `replacement` columns must be of same size and have the same
   * data type.
   *
-  * @param[in] input A gdf_column containing null values
-  * @param[in] replacement A gdf_column whose values will replace null values in input
+  * @param[in] input A cudf::column containing null values
+  * @param[in] replacement A cudf::column whose values will replace null values in input
   *
   * @returns Column with nulls replaced
   */
@@ -52,8 +52,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   *
   * `replacement` must have the same data type as `input`.
   *
-  * @param[in] input A gdf_column containing null values
-  * @param[in] replacement A gdf_scalar whose value will replace null values in input
+  * @param[in] input A cudf::column containing null values
+  * @param[in] replacement A cudf::scalar whose value will replace null values in input
   *
   * @returns Column with nulls replaced
   */
@@ -67,11 +67,11 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
  *        `new_values`, that is, replace all `old_values[i]` present in `col`
  *        with `new_values[i]` and return a new gdf_column `output`.
  *
- * @param[in] col gdf_column with the data to be modified
+ * @param[in] col cudf::column with the data to be modified
  * @param[in] values_to_replace gdf_column with the old values to be replaced
  * @param[in] replacement_values gdf_column with the new replacement values
  *
- * @return Column with the modified data
+ * @returns Copy of the input with the specified values replaced
  *
  */
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
