@@ -98,6 +98,97 @@ def test_unique_tokens():
     assert set(unique_tokens_outcome.to_host()) == expected
 
 
+def test_character_tokenize():
+    strs = nvstrings.to_device(
+        [
+            "the quick fox jumped over the lazy dog",
+            "the siamésé cat jumped under the sofa",
+            None,
+            "",
+        ]
+    )
+    outcome = nvtext.character_tokenize(strs)
+    expected = [
+        "t",
+        "h",
+        "e",
+        " ",
+        "q",
+        "u",
+        "i",
+        "c",
+        "k",
+        " ",
+        "f",
+        "o",
+        "x",
+        " ",
+        "j",
+        "u",
+        "m",
+        "p",
+        "e",
+        "d",
+        " ",
+        "o",
+        "v",
+        "e",
+        "r",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "l",
+        "a",
+        "z",
+        "y",
+        " ",
+        "d",
+        "o",
+        "g",
+        "t",
+        "h",
+        "e",
+        " ",
+        "s",
+        "i",
+        "a",
+        "m",
+        "é",
+        "s",
+        "é",
+        " ",
+        "c",
+        "a",
+        "t",
+        " ",
+        "j",
+        "u",
+        "m",
+        "p",
+        "e",
+        "d",
+        " ",
+        "u",
+        "n",
+        "d",
+        "e",
+        "r",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "s",
+        "o",
+        "f",
+        "a",
+    ]
+
+    assert outcome.to_host() == expected
+
+
 def test_contains_strings():
     strs = nvstrings.to_device(
         ["apples are green", "apples are a fruit", None, ""]
