@@ -13,11 +13,11 @@ For example, the following snippet downloads a CSV, then uses the GPU to parse i
 import cudf, io, requests
 from io import StringIO
 
-url="https://github.com/plotly/datasets/raw/master/tips.csv"
+url = "https://github.com/plotly/datasets/raw/master/tips.csv"
 content = requests.get(url).content.decode('utf-8')
 
 tips_df = cudf.read_csv(StringIO(content))
-tips_df['tip_percentage'] = tips_df['tip']/tips_df['total_bill']*100
+tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 
 # display average tip by dining party size
 print(tips_df.groupby('size').tip_percentage.mean())

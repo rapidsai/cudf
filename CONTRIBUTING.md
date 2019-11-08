@@ -4,17 +4,17 @@ Contributions to cuDF fall into the following three categories.
 
 1. To report a bug, request a new feature, or report a problem with
     documentation, please file an [issue](https://github.com/rapidsai/cudf/issues/new/choose)
-    describing in detail the problem or new feature. The RAPIDS team evaluates 
-    and triages issues, and schedules them for a release. If you believe the 
-    issue needs priority attention, please comment on the issue to notify the 
+    describing in detail the problem or new feature. The RAPIDS team evaluates
+    and triages issues, and schedules them for a release. If you believe the
+    issue needs priority attention, please comment on the issue to notify the
     team.
-2. To propose and implement a new Feature, please file a new feature request 
-    [issue](https://github.com/rapidsai/cudf/issues/new/choose). Describe the 
+2. To propose and implement a new Feature, please file a new feature request
+    [issue](https://github.com/rapidsai/cudf/issues/new/choose). Describe the
     intended feature and discuss the design and implementation with the team and
-    community. Once the team agrees that the plan looks good, go ahead and 
+    community. Once the team agrees that the plan looks good, go ahead and
     implement it, using the [code contributions](#code-contributions) guide below.
-3. To implement a feature or bug-fix for an existing outstanding issue, please 
-    Follow the [code contributions](#code-contributions) guide below. If you 
+3. To implement a feature or bug-fix for an existing outstanding issue, please
+    Follow the [code contributions](#code-contributions) guide below. If you
     need more context on a particular issue, please ask in a comment.
 
 ## Code contributions
@@ -245,7 +245,7 @@ Done! You are ready to develop for the cuDF OSS project.
 
 ### Building Debug mode from source
 
-Follow the [above instructions](#build-from-source) to build from source and add `-DCMAKE_BUILD_TYPE=Debug` to the `cmake` step. 
+Follow the [above instructions](#build-from-source) to build from source and add `-DCMAKE_BUILD_TYPE=Debug` to the `cmake` step.
 
 For example:
 ```bash
@@ -322,7 +322,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.15.1 | Not supported | set pyarrow version |
+| `PYARROW_VERSION` | 0.15.0 | Not supported | set pyarrow version |
 | `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |

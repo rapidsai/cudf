@@ -105,6 +105,20 @@ TEST_F(TestText, TokensCounts)
     NVStrings::destroy(strs);
 }
 
+TEST_F(TestText, CharacterTokenize)
+{
+    NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
+    NVStrings* got = NVText::character_tokenize(*strs);
+
+    const char* expected[] = { "t","h","e"," ","f","o","x"," ","j","u","m","p","e","d"," ","o","v","e","r"," ","t","h","e"," ","d","o","g",
+                               "t","h","e"," ","d","o","g"," ","c","h","a","s","e","d"," ","t","h","e"," ","c","a","t",
+                               "t","h","e"," ","c","a","t"," ","c","h","a","s","e","d"," ","t","h","e"," ","m","o","u","s","e",
+                               "t","h","e"," ","m","o","u","s","e"," ","a","t","e"," ","t","h","e"," ","c","h","e","e","s","e" };
+    EXPECT_TRUE( verify_strings(got,expected));
+    NVStrings::destroy(got);
+    NVStrings::destroy(strs);
+}
+
 TEST_F(TestText, EditDistance)
 {
     std::vector<const char*> hstrs{ "dog", nullptr, "cat", "mouse",
