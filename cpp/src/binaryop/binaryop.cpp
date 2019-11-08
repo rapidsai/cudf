@@ -162,15 +162,9 @@ void binary_operation(mutable_column_view& out,
 }  // namespace binops
 
 namespace {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes output valid mask for op between a column and a scalar
- *
- * @param out_null_coun[out] number of nulls in output
- * @param valid_out preallocated output mask
- * @param valid_col input mask of column
- * @param valid_scalar bool indicating if scalar is valid
- * @param num_values number of values in input mask valid_col
- *---------------------------------------------------------------------------**/
+ */
 auto scalar_col_valid_mask_and(column_view const& col, scalar const& s,
                                cudaStream_t stream,
                                rmm::mr::device_memory_resource *mr)
@@ -246,22 +240,9 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
-  // TODO: This whole shebang should be replaced by jitified header of chrono
-        // gdf_column lhs_tmp{};
-        // gdf_column rhs_tmp{};
-        // // If the columns are GDF_DATE64 or timestamps with different time resolutions,
-        // // cast the least-granular column to the other's resolution before the binop
-        // std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::cast_to_common_resolution(*lhs, *rhs);
-
-        // if (lhs_tmp.size > 0) { lhs = &lhs_tmp; }
-        // else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
-
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
-
-  // gdf_column_free(&lhs_tmp);
-  // gdf_column_free(&rhs_tmp);
 }
 
 std::unique_ptr<column> binary_operation( column_view const& lhs,

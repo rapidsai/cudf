@@ -56,21 +56,21 @@ enum class binary_operator{
   INVALID_BINARY   ///< invalid operation
 };
 
-// TODO: All these docs
-// TODO: Stream and memory resource
 /**
- * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
+ * @brief Performs a binary operation between a scalar and a column.
  *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid mask of rhs gdf_column and is_valid
- * bool of lhs gdf_scalar
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_scalar) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param op (enum) The binary operator to use
+ * The output contains the result of op(lhs, rhs[i]) for all 0 <= i < rhs.size()
+ * The scalar is the left operand and the column elements are the right operand.
+ * This distinction is significant in case of non-commutative binary operations
+ * 
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ * 
+ * @param lhs         The left operand scalar
+ * @param rhs         The right operand column
+ * @param output_type The desired data type of the output column
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -80,18 +80,20 @@ std::unique_ptr<column> binary_operation(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
- *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid mask of lhs gdf_column and is_valid
- * bool of rhs gdf_scalar
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_scalar) Second operand of the operation.
- * @param op (enum) The binary operator to use
+ * @brief Performs a binary operation between a column and a scalar.
+ * 
+ * The output contains the result of op(lhs[i], rhs) for all 0 <= i < lhs.size()
+ * The column elements are the left operand and the scalar is the right operand.
+ * This distinction is significant in case of non-commutative binary operations
+ * 
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ * 
+ * @param lhs         The left operand column
+ * @param rhs         The right operand scalar
+ * @param output_type The desired data type of the output column
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -101,17 +103,20 @@ std::unique_ptr<column> binary_operation(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Performs a binary operation between two gdf_columns.
+ * @brief Performs a binary operation between two columns.
  *
- * The desired output type must be specified in out->dtype.
+ * @note The sizes of @p lhs and @p rhs should be the same
+ * 
+ * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
  *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param op (enum) The binary operator to use
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ * 
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param output_type The desired data type of the output column
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -121,26 +126,24 @@ std::unique_ptr<column> binary_operation(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Performs a binary operation between two gdf_columns using a
+ * @brief Performs a binary operation between two columns using a
  * user-defined PTX function.
  *
- * Accepts a user-defined PTX function to apply between the `lhs` and `rhs`.
+ * @note The sizes of @p lhs and @p rhs should be the same
+ * 
+ * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
  *
- * The desired output type must be specified in output_type. It is assumed that
- * this output type is compatable with the output type in the PTX code.
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
  *
- * The output column will be allocated and it is the user's reponsibility to
- * free the device memory
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
- *
- * @return A gdf_column as the output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param ptx String containing the PTX of a binary function to apply between
- * `lhs` and `rhs`
- * @param output_type The desired output type
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param ptx         String containing the PTX of a binary function
+ * @param output_type The desired data type of the output column. It is assumed
+ *                    that output_type is compatible with the output data type
+ *                    of the function in the PTX code
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
