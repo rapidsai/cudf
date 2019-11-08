@@ -38,50 +38,50 @@ namespace jit {
    * @param type @see OperatorType
    * @return std::string The name of the operator as string
    */
-  std::string get_operator_name(binary_operator op, OperatorType type) {
+  std::string inline get_operator_name(binary_operator op, OperatorType type) {
     std::string operator_name;
     switch (op) {
-      case ADD:
+      case binary_operator::ADD:
         operator_name = "Add"; break;
-      case SUB:
+      case binary_operator::SUB:
         operator_name = "Sub"; break;
-      case MUL:
+      case binary_operator::MUL:
         operator_name = "Mul"; break;
-      case DIV:
+      case binary_operator::DIV:
         operator_name = "Div"; break;
-      case TRUE_DIV:
+      case binary_operator::TRUE_DIV:
         operator_name = "TrueDiv"; break;
-      case FLOOR_DIV:
+      case binary_operator::FLOOR_DIV:
         operator_name = "FloorDiv"; break;
-      case MOD:
+      case binary_operator::MOD:
         operator_name = "Mod"; break;
-      case PYMOD:
+      case binary_operator::PYMOD:
         operator_name = "PyMod"; break;
-      case POW:
+      case binary_operator::POW:
         operator_name = "Pow"; break;
-      case EQUAL:
+      case binary_operator::EQUAL:
         operator_name = "Equal"; break;
-      case NOT_EQUAL:
+      case binary_operator::NOT_EQUAL:
         operator_name = "NotEqual"; break;
-      case LESS:
+      case binary_operator::LESS:
         operator_name = "Less"; break;
-      case GREATER:
+      case binary_operator::GREATER:
         operator_name = "Greater"; break;
-      case LESS_EQUAL:
+      case binary_operator::LESS_EQUAL:
         operator_name = "LessEqual"; break;
-      case GREATER_EQUAL:
+      case binary_operator::GREATER_EQUAL:
         operator_name = "GreaterEqual"; break;
-      case BITWISE_AND:
+      case binary_operator::BITWISE_AND:
         operator_name = "BitwiseAnd"; break;
-      case BITWISE_OR:
+      case binary_operator::BITWISE_OR:
         operator_name = "BitwiseOr"; break;
-      case BITWISE_XOR:
+      case binary_operator::BITWISE_XOR:
         operator_name = "BitwiseXor"; break;
-      case LOGICAL_AND:
+      case binary_operator::LOGICAL_AND:
         operator_name = "LogicalAnd"; break;
-      case LOGICAL_OR:
+      case binary_operator::LOGICAL_OR:
         operator_name = "LogicalOr"; break;
-      case GENERIC_BINARY:
+      case binary_operator::GENERIC_BINARY:
         operator_name = "UserDefinedOp"; break;
       default:
         operator_name = "None"; break;

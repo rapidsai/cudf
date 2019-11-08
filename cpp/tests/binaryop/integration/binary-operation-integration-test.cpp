@@ -319,17 +319,19 @@ TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8) 
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, AND());
 }
 
+// TODO: Enable wrapped types support in a later PR
 // TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_FP32) {
-//     using TypeOut = double;
-//     using TypeLhs = double;
-//     using TypeRhs = double;
+//     using TypeOut = cudf::bool8;
+//     using TypeLhs = int16_t;
+//     using TypeRhs = float;
 
 //     using OR = cudf::library::operation::LogicalOr<cudf::bool8, int16_t, float>;
 
-    // auto lhs = make_random_wrapped_column<TypeLhs>(100);
-    // auto rhs = make_random_wrapped_column<TypeRhs>(100);//         auto out = cudf::experimental::binary_operation(lhs, rhs, 
-                    // cudf::experimental::binary_operator::DF_LOGICAL_OR,
-                    // data_type(experimental::type_to_id<TypeOut>()));
+//     auto lhs = make_random_wrapped_column<TypeLhs>(100);
+//     auto rhs = make_random_wrapped_column<TypeRhs>(100);
+//     auto out = cudf::experimental::binary_operation(lhs, rhs, 
+//                     cudf::experimental::binary_operator::LOGICAL_OR,
+//                     data_type(experimental::type_to_id<TypeOut>()));
 
 //     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
 // }

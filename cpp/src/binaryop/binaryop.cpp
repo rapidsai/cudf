@@ -17,18 +17,11 @@
  * limitations under the License.
  */
 
-#include <bitmask/legacy/bitmask_ops.hpp> // remove
 #include <cudf/utilities/error.hpp>
-#include <utilities/cudf_utils.h> // remove
-#include <cudf/cudf.h> // remove
-#include <bitmask/legacy/legacy_bitmask.hpp> //remove
-#include <cudf/legacy/copying.hpp> // remove/replace
-#include <cudf/utilities/error.hpp> // wtf duplicate
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/detail/binaryop.hpp>
-#include <cudf/binaryop.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
@@ -37,7 +30,6 @@
 #include <binaryop/jit/util.hpp>
 #include <cudf/datetime.hpp> // replace eventually
 
-#include <types.h.jit>
 #include <types.hpp.jit>
 
 namespace cudf {
@@ -51,7 +43,7 @@ namespace jit {
 
   const std::vector<std::string> compiler_flags { "-std=c++14" };
   const std::vector<std::string> headers_name
-        { "operation.h" , "traits.h", cudf_types_h, cudf_types_hpp };
+        { "operation.h" , "traits.h", cudf_types_hpp };
   
   std::istream* headers_code(std::string filename, std::iostream& stream) {
       if (filename == "operation.h") {
@@ -68,7 +60,7 @@ namespace jit {
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,
                       column_view const& rhs,
-                      binary_operator ope,
+                      binary_operator op,
                       cudaStream_t stream) {
   
   cudf::jit::launcher(
@@ -78,7 +70,7 @@ void binary_operation(mutable_column_view& out,
     { cudf::jit::get_type_name(out.type()), // list of template arguments
       cudf::jit::get_type_name(rhs.type()),
       cudf::jit::get_type_name(lhs.type()),
-      get_operator_name(ope, OperatorType::Reverse) } 
+      get_operator_name(op, OperatorType::Reverse) } 
   ).launch(
     out.size(),
     cudf::jit::get_data_ptr(out),
@@ -91,7 +83,7 @@ void binary_operation(mutable_column_view& out,
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       scalar const& rhs,
-                      binary_operator ope,
+                      binary_operator op,
                       cudaStream_t stream) {
   
   cudf::jit::launcher(
@@ -101,7 +93,7 @@ void binary_operation(mutable_column_view& out,
     { cudf::jit::get_type_name(out.type()), // list of template arguments
       cudf::jit::get_type_name(lhs.type()),
       cudf::jit::get_type_name(rhs.type()),
-      get_operator_name(ope, OperatorType::Direct) } 
+      get_operator_name(op, OperatorType::Direct) } 
   ).launch(
     out.size(),
     cudf::jit::get_data_ptr(out),
@@ -114,7 +106,7 @@ void binary_operation(mutable_column_view& out,
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
-                      binary_operator ope,
+                      binary_operator op,
                       cudaStream_t stream) {
 
   cudf::jit::launcher(
@@ -124,7 +116,7 @@ void binary_operation(mutable_column_view& out,
     { cudf::jit::get_type_name(out.type()), // list of template arguments
       cudf::jit::get_type_name(lhs.type()),
       cudf::jit::get_type_name(rhs.type()),
-      get_operator_name(ope, OperatorType::Direct) } 
+      get_operator_name(op, OperatorType::Direct) } 
   ).launch(
     out.size(),
     cudf::jit::get_data_ptr(out),
@@ -156,7 +148,7 @@ void binary_operation(mutable_column_view& out,
     { output_type_name,                     // list of template arguments
       cudf::jit::get_type_name(lhs.type()),
       cudf::jit::get_type_name(rhs.type()),
-      get_operator_name(GENERIC_BINARY, OperatorType::Direct) } 
+      get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct) } 
   ).launch(
     out.size(),
     cudf::jit::get_data_ptr(out),
@@ -201,7 +193,7 @@ namespace detail {
 
 std::unique_ptr<column> binary_operation( scalar const& lhs,
                                           column_view const& rhs,
-                                          binary_operator ope,
+                                          binary_operator op,
                                           data_type output_type,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
@@ -214,13 +206,13 @@ std::unique_ptr<column> binary_operation( scalar const& lhs,
     return out;
 
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ope, stream);
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
 }
 
 std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           scalar const& rhs,
-                                          binary_operator ope,
+                                          binary_operator op,
                                           data_type output_type,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
@@ -233,13 +225,13 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
     return out;
 
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ope, stream);
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   return out;  
 }
 
 std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           column_view const& rhs,
-                                          binary_operator ope,
+                                          binary_operator op,
                                           data_type output_type,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
@@ -265,7 +257,7 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
         // else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
 
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ope, stream);
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
 
   // gdf_column_free(&lhs_tmp);
@@ -308,29 +300,29 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
 
 std::unique_ptr<column> binary_operation( scalar const& lhs,
                                           column_view const& rhs,
-                                          binary_operator ope,
+                                          binary_operator op,
                                           data_type output_type,
                                           rmm::mr::device_memory_resource *mr)
 {
-  return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
 std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           scalar const& rhs,
-                                          binary_operator ope,
+                                          binary_operator op,
                                           data_type output_type,
                                           rmm::mr::device_memory_resource *mr)
 {
-  return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
 std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           column_view const& rhs,
-                                          binary_operator ope,
+                                          binary_operator op,
                                           data_type output_type,
                                           rmm::mr::device_memory_resource *mr)
 {
-  return detail::binary_operation(lhs, rhs, ope, output_type, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,

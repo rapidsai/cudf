@@ -28,7 +28,7 @@ namespace experimental {
 /**
  * @brief Types of binary operations that can be performed on data.
  */
-enum binary_operator{
+enum class binary_operator{
   ADD,        ///< operator +
   SUB,        ///< operator -
   MUL,        ///< operator *
@@ -70,12 +70,12 @@ enum binary_operator{
  * @param out (gdf_column) Output of the operation.
  * @param lhs (gdf_scalar) First operand of the operation.
  * @param rhs (gdf_column) Second operand of the operation.
- * @param ope (enum) The binary operator to use
+ * @param op (enum) The binary operator to use
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
   column_view const& rhs,
-  binary_operator ope,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -91,12 +91,12 @@ std::unique_ptr<column> binary_operation(
  * @param out (gdf_column) Output of the operation.
  * @param lhs (gdf_column) First operand of the operation.
  * @param rhs (gdf_scalar) Second operand of the operation.
- * @param ope (enum) The binary operator to use
+ * @param op (enum) The binary operator to use
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   scalar const& rhs,
-  binary_operator ope,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -111,12 +111,12 @@ std::unique_ptr<column> binary_operation(
  * @param out (gdf_column) Output of the operation.
  * @param lhs (gdf_column) First operand of the operation.
  * @param rhs (gdf_column) Second operand of the operation.
- * @param ope (enum) The binary operator to use
+ * @param op (enum) The binary operator to use
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
-  binary_operator ope,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 

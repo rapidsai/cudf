@@ -177,7 +177,6 @@ __device__ bitmask_type get_mask_offset_word(
  * @param bit_offset The offset into `source` from which to begin the copy
  * @param number_of_mask_words The number of words of type bitmask_type to copy
  *---------------------------------------------------------------------------**/
-// TODO: make a clone of this but accept two bitmasks. and write the ANDed result into destination.
 // TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
