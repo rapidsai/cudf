@@ -48,7 +48,9 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
             if schema is None:
                 schema = o.schema
             elif schema != o.schema:
-                raise ValueError("Incompatible schemas while parsing ORC files")
+                raise ValueError(
+                    "Incompatible schemas while parsing ORC files"
+                )
             nstripes_per_file.append(o.nstripes)
     schema = _get_pyarrow_dtypes(schema, categories=None)
     if columns is not None:
@@ -68,7 +70,14 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
     N = 0
     for path, n in zip(paths, nstripes_per_file):
         for stripe in range(n):
-            dsk[(name, N)] = (_read_orc_stripe, fs, path, stripe, columns, kwargs)
+            dsk[(name, N)] = (
+                _read_orc_stripe,
+                fs,
+                path,
+                stripe,
+                columns,
+                kwargs,
+            )
             N += 1
 
     divisions = [None] * (len(dsk) + 1)
