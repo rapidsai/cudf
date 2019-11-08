@@ -19,11 +19,14 @@
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
+- PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
 
 ## Improvements
@@ -60,10 +63,15 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #2971 Added initial gather and scatter methods for strings_column_view
+- PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
+- PR #2991 Added strings column functions concatenate and join_strings
 - PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3138 Move unary files to legacy
+- PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
@@ -73,6 +81,7 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
+- PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3232 Port NVStrings datetime conversion to cudf strings column
@@ -80,6 +89,7 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3266 Remove optional checks for CuPy
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
@@ -89,9 +99,11 @@
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3286 Clean up the starter code on README
 
 ## Bug Fixes
 
@@ -111,6 +123,7 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3276 Update JNI includes for legacy moves
 - PR #3256 Fix orc writer crash with multiple string columns
@@ -126,6 +139,9 @@
 - PR #3295 Fix storing storing invalid RMM exec policies.
 - PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 - PR #3313 Fix public headers including non-public headers
+- PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
+- PR #3323 Fix `insert` non-assert test case
 
 
 # cuDF 0.10.0 (16 Oct 2019)
@@ -171,7 +187,6 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
-- PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories
