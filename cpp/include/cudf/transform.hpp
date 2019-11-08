@@ -21,6 +21,7 @@
 #include "types.hpp"
 
 namespace cudf {
+namespace experimental {
 
 /**
  * @brief Creates a new column by applying a unary function against every
@@ -32,15 +33,20 @@ namespace cudf {
  * The output null mask is the same is the input null mask so if input[i] is 
  * null then output[i] is also null
  *
- * @param input               An immutable view of the input column to transform
- * @param unary_udf           The PTX/CUDA string of the unary function to apply
- * @param outout_type         The output type that is compatible with the output type in the PTX code
- * @param is_ptx              If true the UDF is treated as a piece of PTX code; if fasle the UDF is treated as a piece of CUDA code
- * @return cudf::column       The column resulting from applying the unary function to
- *                            every element of the input
+ * @param input         An immutable view of the input column to transform
+ * @param unary_udf     The PTX/CUDA string of the unary function to apply
+ * @param outout_type   The output type that is compatible with the output type in the PTX code
+ * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param mr            The memory resource to use for for all device allocations
+ * @return cudf::column The column resulting from applying the unary function to
+ *                      every element of the input
  **/
-std::unique_ptr<column> transform(column_view const& input,
-                                  const std::string &unary_udf,
-                                  data_type output_type, bool is_ptx);
+std::unique_ptr<column> transform(
+  column_view const& input,
+  const std::string &unary_udf,
+  data_type output_type,
+  bool is_ptx,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
+}  // namespace experimental
 }  // namespace cudf

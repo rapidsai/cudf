@@ -15,10 +15,11 @@
  */
 
 #include <cudf/null_mask.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/integer_utils.hpp>
+
 
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>

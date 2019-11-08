@@ -15,6 +15,7 @@
  */
 
 namespace cudf {
+namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
@@ -45,4 +46,5 @@ const char* kernel =
 }  // namespace code
 }  // namespace jit
 }  // namespace transformation
+}  // namespace experimental
 }  // namespace cudf

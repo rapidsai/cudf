@@ -19,6 +19,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/transform.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
@@ -29,12 +30,14 @@
 #include <types.hpp.jit>
 
 namespace cudf {
+namespace experimental {
 namespace transformation {
 
 namespace jit {
 
 void unary_operation(mutable_column_view output, column_view input,
-                     const std::string& udf, data_type output_type, bool is_ptx) {
+                     const std::string& udf, data_type output_type, bool is_ptx,
+                     cudaStream_t stream) {
  
   std::string hash = "prog_transform." 
     + std::to_string(std::hash<std::string>{}(udf));
@@ -56,7 +59,7 @@ void unary_operation(mutable_column_view output, column_view input,
   cudf::jit::launcher(
     hash, cuda_source,
     { cudf_types_h, cudf_types_hpp },
-    { "-std=c++14" }, nullptr
+    { "-std=c++14" }, nullptr, stream
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
     { cudf::jit::get_type_name(output.type()), // list of template arguments
@@ -69,18 +72,23 @@ void unary_operation(mutable_column_view output, column_view input,
 
 }
 
-}  // namespace jit
+} // namespace jit
+} // namespace transformation
 
-}  // namespace transformation
+
+namespace detail {
 
 std::unique_ptr<column> transform(column_view const& input,
                                   const std::string &unary_udf,
-                                  data_type output_type, bool is_ptx)
+                                  data_type output_type, bool is_ptx,
+                                  rmm::mr::device_memory_resource *mr,
+                                  cudaStream_t stream)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
 
   std::unique_ptr<column> output =
-    make_numeric_column(output_type, input.size(), copy_bitmask(input));
+    make_numeric_column(output_type, input.size(), copy_bitmask(input),
+                        cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (input.size() == 0) {
     return output;
@@ -89,9 +97,21 @@ std::unique_ptr<column> transform(column_view const& input,
   mutable_column_view output_view = *output;
 
   // transform
-  transformation::jit::unary_operation(output_view, input, unary_udf, output_type, is_ptx);
+  transformation::jit::unary_operation(output_view, input, unary_udf,
+                                       output_type, is_ptx, stream);
 
   return output;
 }
 
-}  // namespace cudf
+} // namespace detail
+
+std::unique_ptr<column> transform(column_view const& input,
+                                  const std::string &unary_udf,
+                                  data_type output_type, bool is_ptx,
+                                  rmm::mr::device_memory_resource *mr)
+{
+  return detail::transform(input, unary_udf, output_type, is_ptx, mr);
+}
+
+} // namespace experimental
+} // namespace cudf

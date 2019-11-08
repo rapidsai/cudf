@@ -39,7 +39,6 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
   cudf::size_type* result_end;
   cudaStream_t stream;
   cudaStreamCreate(&stream);
-  auto exec = rmm::exec_policy(stream)->on(stream);
 
   // Allocating memory for GDF column
   gdf_column unique_indices{};
@@ -52,13 +51,13 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
   bool nullable = device_input_table.get()->has_nulls();
   if (nullable) {
     auto comp = row_equality_comparator<true>(*device_input_table, true);
-    result_end = thrust::unique_copy(
-        exec, counting_iter, counting_iter + nrows,
+    result_end = thrust::unique_copy(rmm::exec_policy(stream)->on(stream),
+        counting_iter, counting_iter + nrows,
         static_cast<cudf::size_type*>(unique_indices.data), comp);
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
-    result_end = thrust::unique_copy(
-        exec, counting_iter, counting_iter + nrows,
+    result_end = thrust::unique_copy(rmm::exec_policy(stream)->on(stream),
+         counting_iter, counting_iter + nrows,
         static_cast<cudf::size_type*>(unique_indices.data), comp);
   }
 
