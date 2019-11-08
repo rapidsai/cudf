@@ -19,6 +19,7 @@
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
 - PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
@@ -76,12 +77,14 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
+- PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3266 Remove optional checks for CuPy
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
 - PR #3270 Move predicates files to legacy
@@ -91,9 +94,11 @@
 - PR #3288 Make `bit.cuh` utilities usable from host code.
 - PR #3287 Move rolling windows files to legacy
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3286 Clean up the starter code on README
 
 ## Bug Fixes
 
@@ -113,6 +118,7 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
 - PR #3276 Update JNI includes for legacy moves
 - PR #3256 Fix orc writer crash with multiple string columns
@@ -128,6 +134,7 @@
 - PR #3295 Fix storing storing invalid RMM exec policies.
 - PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
 - PR #3313 Fix public headers including non-public headers
+- PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 
 

@@ -13,6 +13,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -419,9 +420,10 @@ class DataFrame(object):
         df = self.copy()
         for col in self.columns:
             if col in other.columns:
-                boolbits = cudautils.compact_mask_bytes(
-                    other[col].to_gpu_array()
-                )
+                if other[col].null_count != 0:
+                    raise ValueError("Column must have no nulls.")
+
+                boolbits = cudautils.compact_mask_bytes(other[col].data.mem)
             else:
                 boolbits = cudautils.make_empty_mask(len(self[col]))
             df[col]._column = df[col]._column.set_mask(boolbits)
@@ -502,9 +504,6 @@ class DataFrame(object):
 
     @property
     def values(self):
-        if not utils._have_cupy:
-            raise ModuleNotFoundError("CuPy was not found.")
-        import cupy
 
         return cupy.asarray(self.as_gpu_matrix())
 
@@ -1195,7 +1194,7 @@ class DataFrame(object):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
+                df = df.take(idx.argsort(True).argsort(True).data.mem)
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
