@@ -692,195 +692,129 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testLowerBound() {
-    ColumnVector columnVector = null;
-    Table table = null;
-    Table values = null;
     boolean[] descFlags = new boolean[3];
-    try {
-      table = new Table.TestBuilder()
-              .column(10,  20,  20,  20,  20)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20)
-              .build();
-      columnVector = table.lowerBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(1, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+
+    try(Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20)
+                .build();
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(1);
+      assertColumnsAreEqual(expected, columnVector);
     }
-    try {
-      table = new Table.TestBuilder()
-              .column(10.0, 20.6,  20.7)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20.6)
-              .build();
-      columnVector = table.lowerBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(1, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+
+    try(Table table = new Table.TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20.6)
+                .build();
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(1);
+      assertColumnsAreEqual(expected, columnVector);
     }
-    try {
-      table = new Table.TestBuilder()
-              .column(10.0, 20.6,  20.7)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20.3, 20.8)
-              .build();
-      columnVector = table.lowerBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(1, columnVector.getInt(0));
-      assertEquals(3, columnVector.getInt(1));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+
+    try(Table table = new Table.TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20.3, 20.8)
+                .build();
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(1, 3);
+      assertColumnsAreEqual(expected, columnVector);
     }
-    try {
-      table = new Table.TestBuilder()
-              .column(10, 20, 20, 20, 20)
-              .column(5.0, .5, .5, .7, .7)
-              .column(90, 77, 78, 61, 61)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20)
-              .column(0.7)
-              .column(61)
-              .build();
-      columnVector = table.lowerBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(3, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+
+    try(Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .column(5.0, .5, .5, .7, .7)
+            .column(90, 77, 78, 61, 61)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20)
+                .column(0.7)
+                .column(61)
+                .build();
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(3);
+      assertColumnsAreEqual(expected, columnVector);
     }
-    try {
-      table = new Table.TestBuilder()
-              .column(null, 20, 20, 20, 30)
-              .build();
-      values = new Table.TestBuilder()
-              .column(15)
-              .build();
-      columnVector = table.lowerBound(table, values, descFlags, false);
-      columnVector.ensureOnHost();
-      assertEquals(1, columnVector.getInt(0));
-      table = new Table.TestBuilder()
-              .column(20, 20, 20, 30, null)
-              .build();
-      values = new Table.TestBuilder()
-              .column(35)
-              .build();
-      columnVector = table.lowerBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(4, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+
+    try(Table table = new Table.TestBuilder()
+            .column(null, 20, 20, 20, 30)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(15)
+                .build();
+        ColumnVector columnVector = table.lowerBound(true, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(1);
+      assertColumnsAreEqual(expected, columnVector);
     }
   }
 
   @Test
   void testUpperBound() {
-    ColumnVector columnVector = null;
-    Table table = null;
-    Table values = null;
     boolean[] descFlags = new boolean[3];
-    try {
-      table = new Table.TestBuilder()
-              .column(10,  20,  20,  20,  20)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20)
-              .build();
-      columnVector = table.upperBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(5, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
-    }
-    try {
-      table = new Table.TestBuilder()
-              .column(10.0, 20.6,  20.7)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20.6)
-              .build();
-      columnVector = table.upperBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(2, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
-    }
-    try {
-      table = new Table.TestBuilder()
-              .column(10.0, 20.6,  20.7)
-              .build();
-      values = new Table.TestBuilder()
-              .column(20.3, 20.8)
-              .build();
-      columnVector = table.upperBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(1, columnVector.getInt(0));
-      assertEquals(3, columnVector.getInt(1));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
-    }
-    try {
-      table = new Table.TestBuilder()
+
+    try(Table table = new Table.TestBuilder()
               .column(10, 20, 20, 20, 20)
-              .column(5.0, .5, .5, .7, .7)
-              .column(90, 77, 78, 61, 61)
               .build();
-      values = new Table.TestBuilder()
+      Table values = new Table.TestBuilder()
               .column(20)
-              .column(0.7)
-              .column(61)
               .build();
-      columnVector = table.upperBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(5, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+      ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(5);
+      assertColumnsAreEqual(expected, columnVector);
     }
-    try {
-      table = new Table.TestBuilder()
-              .column(null, 20, 20, 20, 30)
-              .build();
-      values = new Table.TestBuilder()
-              .column(15)
-              .build();
-      columnVector = table.upperBound(table, values, descFlags, false);
-      columnVector.ensureOnHost();
-      assertEquals(1, columnVector.getInt(0));
-      table = new Table.TestBuilder()
-              .column(20, 20, 20, 30, null)
-              .build();
-      values = new Table.TestBuilder()
-              .column(35)
-              .build();
-      columnVector = table.upperBound(table, values, descFlags, true);
-      columnVector.ensureOnHost();
-      assertEquals(4, columnVector.getInt(0));
-    } finally {
-      table.close();
-      values.close();
-      columnVector.close();
+
+    try(Table table = new Table.TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20.6)
+                .build();
+        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(2);
+      assertColumnsAreEqual(expected, columnVector);
+    }
+
+    try(Table table = new Table.TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20.3, 20.8)
+                .build();
+        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(1, 3);
+      assertColumnsAreEqual(expected, columnVector);
+    }
+
+    try(Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .column(5.0, .5, .5, .7, .7)
+            .column(90, 77, 78, 61, 61)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(20)
+                .column(0.7)
+                .column(61)
+                .build();
+        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(5);
+      assertColumnsAreEqual(expected, columnVector);
+    }
+
+    try(Table table = new Table.TestBuilder()
+            .column(null, 20, 20, 20, 30)
+            .build();
+        Table values = new Table.TestBuilder()
+                .column(15)
+                .build();
+        ColumnVector columnVector = table.upperBound(true, values, descFlags)) {
+      ColumnVector expected = ColumnVector.fromBoxedInts(1);
+      assertColumnsAreEqual(expected, columnVector);
     }
   }
 

@@ -151,7 +151,7 @@ public final class Table implements AutoCloseable {
   private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
 
   private static native long gdfBound(long inputTable, long valueTable,
-    boolean[] descFlags, boolean nullsAsLargest, boolean isUpperBound) throws CudfException;
+    boolean[] descFlags, boolean areNullsSmallest, boolean isUpperBound) throws CudfException;
 
   private static native void gdfWriteORC(int compressionType, String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
 
@@ -761,7 +761,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Given a sorted inputTable return the lower bound.
+   * Given a sorted table return the lower bound.
    * Example:
    *
    *  Single column:
@@ -785,20 +785,20 @@ public final class Table implements AutoCloseable {
    * unsorted the results are wrong. Types of columns can be of mixed data types and
    * the result gives the index of the value pertaining to the matching type column
    * in the input table.
-   * @param inputTable the sorted table as input for bounds
    * @param valueTable the table of values that need to be inserted
    * @param descFlags indicates the ordering of the column(s), true if descending
-   * @param nullsAsLargest true if nulls are assumed largest
+   * @param areNullsSmallest true if nulls are assumed largest
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
-  public ColumnVector lowerBound(Table inputTable, Table valueTable, boolean[] descFlags,
-                                 boolean nullsAsLargest) {
-    return new ColumnVector(gdfBound(inputTable.nativeHandle, valueTable.nativeHandle,
-            descFlags, nullsAsLargest, false));
+  public ColumnVector lowerBound(boolean areNullsSmallest,
+      Table valueTable, boolean[] descFlags) {
+    assertBoundChecks(valueTable);
+    return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
+      descFlags, areNullsSmallest, false));
   }
 
   /**
-   * Given a sorted inputTable return the upper bound.
+   * Given a sorted table return the upper bound.
    * Example:
    *
    *  Single column:
@@ -821,16 +821,31 @@ public final class Table implements AutoCloseable {
    * Strings and String categories do not work for this method. If the input table is
    * unsorted the results are wrong. Types of columns can be mixed and the result gives the index
    * of the value pertaining to the matching type column in the input table.
-   * @param inputTable the sorted table as input for bounds
    * @param valueTable the table of values that need to be inserted
    * @param descFlags indicates the ordering of the column(s), true if descending
-   * @param nullsAsLargest true if nulls are assumed largest
+   * @param areNullsSmallest true if nulls are assumed largest
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
-  public ColumnVector upperBound(Table inputTable, Table valueTable, boolean[] descFlags,
-    boolean nullsAsLargest) {
-    return new ColumnVector(gdfBound(inputTable.nativeHandle, valueTable.nativeHandle,
-      descFlags, nullsAsLargest, true));
+  public ColumnVector upperBound(boolean areNullsSmallest,
+      Table valueTable, boolean[] descFlags) {
+    assertBoundChecks(valueTable);
+    return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
+      descFlags, areNullsSmallest, true));
+  }
+
+  private void assertBoundChecks(Table valueTable) {
+    assert this.getRowCount() != 0 : "Input table cannot be empty";
+    assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
+    Set<DType> inputDataTypes = new HashSet<>();
+    Set<DType> valuesDataTypes = new HashSet<>();
+    for (int i = 0; i < this.columns.length; i++) {
+      inputDataTypes.add(this.getColumn(i).getType());
+    }
+    for (int i = 0; i < valueTable.columns.length; i++) {
+      valuesDataTypes.add(valueTable.getColumn(i).getType());
+    }
+    assert inputDataTypes.containsAll(valuesDataTypes) :
+      "Input and values tables' data types do not match";
   }
 
   /////////////////////////////////////////////////////////////////////////////

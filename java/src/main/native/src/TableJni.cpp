@@ -714,7 +714,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadJSON(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfBound(JNIEnv *env, jclass,
-    jlong input_jtable, jlong values_jtable, jbooleanArray desc_flags, jboolean nulls_as_largest,
+    jlong input_jtable, jlong values_jtable, jbooleanArray desc_flags, jboolean are_nulls_smallest,
     jboolean is_upper_bound) {
   JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
   JNI_NULL_CHECK(env, values_jtable, "values table is null", 0);
@@ -723,11 +723,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfBound(JNIEnv *env, jclass,
     cudf::table *input = reinterpret_cast<cudf::table *>(input_jtable);
     cudf::table *values = reinterpret_cast<cudf::table *>(values_jtable);
     const cudf::jni::native_jbooleanArray n_desc_flags(env, desc_flags);
-    bool are_nulls_largest = static_cast<bool>(nulls_as_largest);
+    bool are_nulls_largest = !static_cast<bool>(are_nulls_smallest);
     std::vector<bool> flags(n_desc_flags.data(), n_desc_flags.data() + n_desc_flags.size());
 
     std::unique_ptr<gdf_column, decltype(free) *> result(
-      static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
+      static_cast<gdf_column *>(calloc(1, sizeof(gdf_column))), free);
     if (result.get() == nullptr) {
       cudf::jni::throw_java_exception(env, "java/lang/OutOfMemoryError",
         "Could not allocate native memory");
