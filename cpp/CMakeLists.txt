@@ -487,6 +487,7 @@ add_library(cudf
             src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
+            src/strings/attributes.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
             src/strings/substring.cu
