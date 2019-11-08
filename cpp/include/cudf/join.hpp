@@ -16,6 +16,11 @@
 
 #pragma once
 
+#include <memory>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 namespace cudf {
 // joins
 
@@ -38,7 +43,8 @@ namespace cudf {
  * Result: { a: {1, 2}, b: {1, 2}, c: {1, 2} }
  *
  * @throws cudf::logic_error 
- * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
+ * if either table is empty or if number of rows in either table exceeds INT_MAX
+ * if number of elements in `right_on` and `left_on` are not equal
  *
  * @param[in] left The left table
  * @param[in] right The right table
@@ -58,7 +64,7 @@ namespace cudf {
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-std::unique_ptr<cudf::table> inner_join(
+std::unique_ptr<cudf::experimental::table> inner_join(
                          cudf::table_view const& left,
                          cudf::table_view const& right,
                          std::vector<cudf::size_type> const& left_on,
@@ -85,7 +91,8 @@ std::unique_ptr<cudf::table> inner_join(
  * Result: { a: {0, 1, 2}, b: {NULL, 1, 2}, c: {NULL, 1, 2} }
  *
  * @throws cudf::logic_error
- * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
+ * if either table is empty or if number of rows in either table exceeds INT_MAX
+ * if number of elements in `right_on` and `left_on` are not equal
  *
  * @param[in] left The left table
  * @param[in] right The right table
@@ -105,7 +112,7 @@ std::unique_ptr<cudf::table> inner_join(
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-std::unique_ptr<cudf::table> left_join(
+std::unique_ptr<cudf::experimental::table> left_join(
                          cudf::table_view const& left,
                          cudf::table_view const& right,
                          std::vector<cudf::size_type> const& left_on,
@@ -133,7 +140,8 @@ std::unique_ptr<cudf::table> left_join(
  * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
  *
  * @throws cudf::logic_error
- * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
+ * if either table is empty or if number of rows in either table exceeds INT_MAX
+ * if number of elements in `right_on` and `left_on` are not equal
  *
  * @param[in] left The left table
  * @param[in] right The right table
@@ -153,7 +161,7 @@ std::unique_ptr<cudf::table> left_join(
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-std::unique_ptr<cudf::table> full_join(
+std::unique_ptr<cudf::experimental::table> full_join(
                          cudf::table_view const& left,
                          cudf::table_view const& right,
                          std::vector<cudf::size_type> const& left_on,
