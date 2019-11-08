@@ -20,9 +20,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
-#if 0  // TODO: enable once the scatter/gather PR is merged
 #include <cudf/detail/gather.cuh>
-#endif
 #include <cudf/detail/repeat.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
@@ -59,8 +57,8 @@ struct count_accessor {
     auto p_const = static_cast<ScalarType const*>(this->p_scalar);
 #endif
     auto count = p_count->value();
-    CUDF_EXPECTS(static_cast<int64_t>(count) <
-                   std::numeric_limits<cudf::size_type>::max(),
+    // static_cast is necessary due to bool8
+    CUDF_EXPECTS(static_cast<int64_t>(count) < std::numeric_limits<cudf::size_type>::max(),
                  "count should not exceed size_type's limit.");
     return static_cast<cudf::size_type>(count);
   }
@@ -79,6 +77,7 @@ struct compute_offsets {
   std::enable_if_t<std::is_integral<T>::value,
     rmm::device_vector<cudf::size_type>>
   operator()(bool check_count, cudaStream_t stream = 0) {
+    // static_cast is necessary due to bool8
     if (check_count &&
         static_cast<int64_t>(std::numeric_limits<T>::max()) >
           std::numeric_limits<cudf::size_type>::max()) {
@@ -121,9 +120,6 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                    column_view const& count, bool check_count,
                    cudaStream_t stream,
                    rmm::mr::device_memory_resource* mr) {
-  // TODO: can't this be of any integral type?
-  CUDF_EXPECTS(count.type().id() == type_to_id<size_type>(),
-               "count column should be of index type");
   CUDF_EXPECTS(input_table.num_rows() == count.size(),
                "in and count must have equal size");
   CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
@@ -145,10 +141,16 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-#if 1  // TODO: placeholder till the scatter/gather PR is merged
-  return cudf::experimental::empty_like(input_table);
+#if 1
+  // TODO: temporary work-around till the gather function is updated to handle
+  // iterators from rmm::device_vector
+  return gather(input_table,
+                indices.data().get(),
+                indices.data().get() + output_size,
+                false, false, false, mr, stream);
 #else
-  return gather(input_table, indices.begin(), indices,end(), false, false, false, stream, mr);
+  return gather(input_table, indices.begin(), indices.end(),
+                false, false, false, mr, stream);
 #endif
 }
 
@@ -176,13 +178,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
       [stride] __device__ (auto i) { return i / stride; });
   auto map_end = map_begin + output_size;
 
-#if 1  // TODO: placeholder till the scatter/gather PR is merged
-  (void)map_end;
-  return cudf::experimental::empty_like(input_table);
-#else
   return gather(input_table, map_begin, map_end,
-                false, false, false, stream, mr);
-#endif
+                false, false, false, mr, stream);
 }
 
 }  // namespace detail
