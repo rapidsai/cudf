@@ -694,12 +694,48 @@ public class TableTest extends CudfTestBase {
   void testLowerBound() {
     boolean[] descFlags = new boolean[3];
 
+    try(ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+            Table table = new Table(cv);
+        Table values = new Table.TestBuilder()
+            .column(20)
+            .build();
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+        fail("Should throw an assertion error for empty table");
+    } catch (AssertionError e) {
+        assertEquals("Input table cannot be empty", e.getMessage());
+    }
+
+    try(ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table(cv);
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+      fail("Should throw an assertion error for empty table");
+    } catch (AssertionError e) {
+      assertEquals("Value table cannot be empty", e.getMessage());
+    }
+
     try(Table table = new Table.TestBuilder()
             .column(10, 20, 20, 20, 20)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20)
-                .build();
+            .column(20.0)
+            .build();
+        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
+      fail("Should throw an assertion error for mismatching data types");
+    } catch (AssertionError e) {
+      assertEquals("Input and values tables' data types do not match", e.getMessage());
+    }
+
+    try(Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table.TestBuilder()
+            .column(20)
+            .build();
         ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(1);
       assertColumnsAreEqual(expected, columnVector);
@@ -709,8 +745,8 @@ public class TableTest extends CudfTestBase {
             .column(10.0, 20.6, 20.7)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20.6)
-                .build();
+            .column(20.6)
+            .build();
         ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(1);
       assertColumnsAreEqual(expected, columnVector);
@@ -720,8 +756,8 @@ public class TableTest extends CudfTestBase {
             .column(10.0, 20.6, 20.7)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20.3, 20.8)
-                .build();
+            .column(20.3, 20.8)
+            .build();
         ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(1, 3);
       assertColumnsAreEqual(expected, columnVector);
@@ -733,10 +769,10 @@ public class TableTest extends CudfTestBase {
             .column(90, 77, 78, 61, 61)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20)
-                .column(0.7)
-                .column(61)
-                .build();
+            .column(20)
+            .column(0.7)
+            .column(61)
+            .build();
         ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(3);
       assertColumnsAreEqual(expected, columnVector);
@@ -746,8 +782,8 @@ public class TableTest extends CudfTestBase {
             .column(null, 20, 20, 20, 30)
             .build();
         Table values = new Table.TestBuilder()
-                .column(15)
-                .build();
+            .column(15)
+            .build();
         ColumnVector columnVector = table.lowerBound(true, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(1);
       assertColumnsAreEqual(expected, columnVector);
@@ -758,12 +794,48 @@ public class TableTest extends CudfTestBase {
   void testUpperBound() {
     boolean[] descFlags = new boolean[3];
 
+    try(ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new Table(cv);
+        Table values = new Table.TestBuilder()
+            .column(20)
+            .build();
+        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      fail("Should throw an assertion error for empty table");
+    } catch (AssertionError e) {
+      assertEquals("Input table cannot be empty", e.getMessage());
+    }
+
+    try(ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table(cv);
+        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      fail("Should throw an assertion error for empty table");
+    } catch (AssertionError e) {
+      assertEquals("Value table cannot be empty", e.getMessage());
+    }
+
     try(Table table = new Table.TestBuilder()
-              .column(10, 20, 20, 20, 20)
-              .build();
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table.TestBuilder()
+            .column(20.0)
+            .build();
+        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
+      fail("Should throw an assertion error for mismatching data types");
+    } catch (AssertionError e) {
+      assertEquals("Input and values tables' data types do not match", e.getMessage());
+    }
+
+    try(Table table = new Table.TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
       Table values = new Table.TestBuilder()
-              .column(20)
-              .build();
+            .column(20)
+            .build();
       ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(5);
       assertColumnsAreEqual(expected, columnVector);
@@ -773,8 +845,8 @@ public class TableTest extends CudfTestBase {
             .column(10.0, 20.6, 20.7)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20.6)
-                .build();
+            .column(20.6)
+            .build();
         ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(2);
       assertColumnsAreEqual(expected, columnVector);
@@ -784,8 +856,8 @@ public class TableTest extends CudfTestBase {
             .column(10.0, 20.6, 20.7)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20.3, 20.8)
-                .build();
+            .column(20.3, 20.8)
+            .build();
         ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(1, 3);
       assertColumnsAreEqual(expected, columnVector);
@@ -797,10 +869,10 @@ public class TableTest extends CudfTestBase {
             .column(90, 77, 78, 61, 61)
             .build();
         Table values = new Table.TestBuilder()
-                .column(20)
-                .column(0.7)
-                .column(61)
-                .build();
+            .column(20)
+            .column(0.7)
+            .column(61)
+            .build();
         ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(5);
       assertColumnsAreEqual(expected, columnVector);
@@ -810,8 +882,8 @@ public class TableTest extends CudfTestBase {
             .column(null, 20, 20, 20, 30)
             .build();
         Table values = new Table.TestBuilder()
-                .column(15)
-                .build();
+            .column(15)
+            .build();
         ColumnVector columnVector = table.upperBound(true, values, descFlags)) {
       ColumnVector expected = ColumnVector.fromBoxedInts(1);
       assertColumnsAreEqual(expected, columnVector);

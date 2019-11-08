@@ -785,14 +785,14 @@ public final class Table implements AutoCloseable {
    * unsorted the results are wrong. Types of columns can be of mixed data types and
    * the result gives the index of the value pertaining to the matching type column
    * in the input table.
+   * @param areNullsSmallest true if nulls are assumed smallest
    * @param valueTable the table of values that need to be inserted
    * @param descFlags indicates the ordering of the column(s), true if descending
-   * @param areNullsSmallest true if nulls are assumed largest
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
   public ColumnVector lowerBound(boolean areNullsSmallest,
       Table valueTable, boolean[] descFlags) {
-    assertBoundChecks(valueTable);
+    assertTableChecks(valueTable);
     return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
       descFlags, areNullsSmallest, false));
   }
@@ -821,19 +821,19 @@ public final class Table implements AutoCloseable {
    * Strings and String categories do not work for this method. If the input table is
    * unsorted the results are wrong. Types of columns can be mixed and the result gives the index
    * of the value pertaining to the matching type column in the input table.
+   * @param areNullsSmallest true if nulls are assumed smallest
    * @param valueTable the table of values that need to be inserted
    * @param descFlags indicates the ordering of the column(s), true if descending
-   * @param areNullsSmallest true if nulls are assumed largest
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
   public ColumnVector upperBound(boolean areNullsSmallest,
       Table valueTable, boolean[] descFlags) {
-    assertBoundChecks(valueTable);
+    assertTableChecks(valueTable);
     return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
       descFlags, areNullsSmallest, true));
   }
 
-  private void assertBoundChecks(Table valueTable) {
+  private void assertTableChecks(Table valueTable) {
     assert this.getRowCount() != 0 : "Input table cannot be empty";
     assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
     Set<DType> inputDataTypes = new HashSet<>();
