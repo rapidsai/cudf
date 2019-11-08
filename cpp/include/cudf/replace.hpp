@@ -80,4 +80,32 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace experimental
+
+/**
+ * @brief Copies from a column of floating-point elements and replaces `-NaN` and `-0.0` with `+NaN` and `+0.0`, respectively.
+ *
+ * Converts floating point values from @p input using the following rules:
+ *        Convert  -NaN  -> NaN
+ *        Convert  -0.0  -> 0.0
+ *
+ * @throws cudf::logic_error if column does not have floating point data type.
+ * @param[in] Column of floating-point elements to copy and normalize
+ * @param[in] device_memory_resource allocator for allocating output data
+ *
+ * @returns new column with the modified data
+ */
+std::unique_ptr<column> normalize_nans_and_zeros( column_view const& input,
+                                                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Modifies a column of floating-point elements to replace all `-NaN` and `-0.0` with `+NaN` and `+0.0`, respectively.
+ *
+ * Converts floating point values from @p in_out using the following rules:
+ *        Convert  -NaN  -> NaN
+ *        Convert  -0.0  -> 0.0
+ *
+ * @throws cudf::logic_error if column does not have floating point data type.
+ * @param[in, out] Column of floating-point elements to normalize
+ */
+void normalize_nans_and_zeros(mutable_column_view& in_out);
 } // namespace cudf
