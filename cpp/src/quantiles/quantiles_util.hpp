@@ -20,8 +20,8 @@
 
 #include <cudf/cudf.h>
 #include <cudf/quantiles.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/release_assert.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/release_assert.cuh>
 
 namespace cudf {
 namespace interpolate {
