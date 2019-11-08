@@ -173,5 +173,26 @@ std::vector<column_view> slice(column_view const& input,
 std::vector<column_view> split(column_view const& input,
                                std::vector<size_type> const& splits);
 
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or 
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
+ *          output[i] = (boolean_mask[i] == true) ? lhs[i] : rhs[i]
+ *         
+ * @throws cudf::logic_error if lhs and rhs are not of the same type
+ * @throws cudf::logic_error if lhs and rhs are not of the same length
+ * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs 
+ * @param[in] column_view representing "left (true) / right (false)" boolean for each element
+ * @param[in] left-hand column_view
+ * @param[in] right-hand column_view
+ * @param[in] mr resource for allocating device memory
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else(column_view const& boolean_mask, column_view const& lhs, column_view const& rhs, 
+                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                                 
 }  // namespace experimental
 }  // namespace cudf

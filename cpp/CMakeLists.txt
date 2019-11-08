@@ -460,6 +460,7 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/legacy/copy.cpp
