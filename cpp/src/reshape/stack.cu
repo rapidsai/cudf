@@ -17,6 +17,7 @@
 #include <copying/legacy/scatter.hpp>
 #include <utilities/column_utils.hpp>
 #include <cudf/legacy/copying.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>

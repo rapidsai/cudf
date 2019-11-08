@@ -19,7 +19,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 
 namespace cudf {
 
