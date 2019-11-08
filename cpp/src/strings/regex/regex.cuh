@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <memory>
+#include <functional>
 
 namespace cudf
 {
@@ -28,29 +30,28 @@ namespace detail
 
 struct Reljunk;
 struct Reinst;
+class Reprog;
 
 //
-class dreclass
+class Reclass_device
 {
 public:
     int32_t builtins{};
     int32_t count{};
     char32_t* chrs{};
-    const uint8_t* codepoint_flags{};
 
-    __device__ inline dreclass(const uint8_t* flags) : codepoint_flags(flags) {}
-    __device__ bool is_match(char32_t ch);
+    __device__ bool is_match(char32_t ch, const uint8_t* flags);
 };
 
 //
-class dreprog
+class Reprog_device
 {
     int32_t startinst_id, num_capturing_groups;
     int32_t insts_count, starts_count, classes_count;
     const uint8_t* codepoint_flags{};
-    int32_t* startinst_ids{};
     Reinst* insts{};
-    char32_t* classes{};
+    int32_t* startinst_ids{};
+    Reclass_device* classes{};
     void* relists_mem{};
     u_char* stack_mem1{};
     u_char* stack_mem2{};
@@ -61,31 +62,30 @@ class dreprog
     __device__ inline int32_t regexec( string_view const& dstr, Reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
     __device__ inline int32_t call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
+    Reprog_device(Reprog*);
+
 public:
-    dreprog() = delete;
-    ~dreprog() = default;
-    dreprog(const dreprog&) = default;
-    dreprog(dreprog&&) = default;
-    dreprog& operator=(const dreprog&) = default;
-    dreprog& operator=(dreprog&&) = default;
+    Reprog_device() = delete;
+    ~Reprog_device() = default;
+    Reprog_device(const Reprog_device&) = default;
+    Reprog_device(Reprog_device&&) = default;
+    Reprog_device& operator=(const Reprog_device&) = default;
+    Reprog_device& operator=(Reprog_device&&) = default;
 
-    //
-    static dreprog* create_from(const char32_t* pattern, const uint8_t* cp_flags);
-    static void destroy(dreprog*);
-
-    //static std::unique_ptr<dreprog, std::function<void(dreprog*)>> create(const char32_t* pattern, const uint8_t* cp_flags);
-    //void destroy();
+    // create instance from regex pattern
+    static std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>> create(const char32_t* pattern, const uint8_t* cp_flags);
+    void destroy();
 
     bool alloc_relists(size_t count);
 
-    int32_t inst_counts();
-    int32_t group_counts();
+    int32_t inst_counts()   { return insts_count; }
+    int32_t group_counts()  { return num_capturing_groups; }
 
     __device__ inline void set_stack_mem(u_char* s1, u_char* s2);
 
     __host__ __device__ inline Reinst* get_inst(int32_t idx);
-    __device__ inline int get_class(int32_t idx, dreclass& cls);
-    __device__ inline int* get_startinst_ids();
+    __device__ inline Reclass_device get_class(int32_t idx);
+    __device__ inline int32_t* get_startinst_ids();
 
     __device__ inline int find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end );
     __device__ inline int extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col );

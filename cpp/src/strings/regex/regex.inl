@@ -109,7 +109,7 @@ struct alignas(8) Relist
     }
 };
 
-struct	Reljunk
+struct Reljunk
 {
     Relist *list1, *list2;
     int32_t	starttype;
@@ -123,7 +123,7 @@ __device__ inline void swaplist(Relist*& l1, Relist*& l2)
     l2 = tmp;
 }
 
-__device__ inline bool dreclass::is_match(char32_t ch)
+__device__ inline bool Reclass_device::is_match(char32_t ch, const uint8_t* codepoint_flags)
 {
     int i=0, len = count;
     for( ; i < len; i += 2 )
@@ -153,55 +153,32 @@ __device__ inline bool dreclass::is_match(char32_t ch)
     return false;
 }
 
-__device__ inline void dreprog::set_stack_mem(u_char* s1, u_char* s2)
+__device__ inline void Reprog_device::set_stack_mem(u_char* s1, u_char* s2)
 {
     stack_mem1 = s1;
     stack_mem2 = s2;
 }
 
-__host__ __device__ inline Reinst* dreprog::get_inst(int32_t idx)
+__host__ __device__ inline Reinst* Reprog_device::get_inst(int32_t idx)
 {
-    if( idx < 0 || idx >= insts_count )
-        return 0;
-    u_char* buffer = reinterpret_cast<u_char*>(this);
-    Reinst* insts = (Reinst*)(buffer + sizeof(dreprog));
+    assert( (idx >= 0) && (idx < insts_count) );
     return insts + idx;
 }
 
-__device__ inline int32_t dreprog::get_class(int32_t idx, dreclass& cls)
+__device__ inline Reclass_device Reprog_device::get_class(int32_t idx)
 {
-    if( idx < 0 || idx >= classes_count )
-        return 0;
-    u_char* buffer = reinterpret_cast<u_char*>(this);
-    buffer += sizeof(dreprog) + (insts_count * sizeof(Reinst)) + (starts_count * sizeof(int));
-    int* offsets = reinterpret_cast<int*>(buffer);
-    buffer += classes_count * sizeof(int32_t);
-    char32_t* classes = reinterpret_cast<char32_t*>(buffer);
-    auto offset = offsets[idx];
-    int32_t builtins, length = offset -1;
-    if( idx > 0 )
-    {
-        offset = offsets[idx-1];
-        length -= offset;
-        classes += offset;
-    }
-    memcpy( &builtins, classes++, sizeof(int32_t) );
-    cls.builtins = builtins;
-    cls.count = length;
-    cls.chrs = classes;
-    return length;
+    assert( (idx >= 0) && (idx < classes_count) );
+    return classes[idx];
 }
 
-__device__ inline int* dreprog::get_startinst_ids()
+__device__ inline int32_t* Reprog_device::get_startinst_ids()
 {
-    u_char* buffer = reinterpret_cast<u_char*>(this);
-    int32_t* ids = reinterpret_cast<int*>(buffer + sizeof(dreprog) + (insts_count * sizeof(Reinst)));
-    return ids;
+    return startinst_ids;
 }
 
 
 // execute compiled expression for each character in the provided string
-__device__ inline int32_t dreprog::regexec(string_view const& dstr, Reljunk &jnk, int32_t& begin, int32_t& end, int32_t groupId)
+__device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljunk &jnk, int32_t& begin, int32_t& end, int32_t groupId)
 {
     int32_t match = 0;
     auto checkstart = jnk.starttype;
@@ -371,21 +348,18 @@ __device__ inline int32_t dreprog::regexec(string_view const& dstr, Reljunk &jnk
                 break;
             case CCLASS:
             {
-                dreclass cls(codepoint_flags);
-                get_class(inst->u1.cls_id,cls);
-                if( cls.is_match(c) )
+                Reclass_device cls = get_class(inst->u1.cls_id);
+                if( cls.is_match(c,codepoint_flags) )
                     id_activate = inst->u2.next_id;
                 break;
             }
             case NCCLASS:
             {
-                dreclass cls(codepoint_flags);
-                get_class(inst->u1.cls_id,cls);
-                if( !cls.is_match(c) )
+                Reclass_device cls = get_class(inst->u1.cls_id);
+                if( !cls.is_match(c,codepoint_flags) )
                     id_activate = inst->u2.next_id;
                 break;
             }
-
             case END:
                 match = 1;
                 begin = range.x;
@@ -407,7 +381,7 @@ __device__ inline int32_t dreprog::regexec(string_view const& dstr, Reljunk &jnk
 }
 
 //
-__device__ inline int32_t dreprog::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
+__device__ inline int32_t Reprog_device::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
 {
     int32_t rtn = 0;
     rtn = call_regexec(idx,dstr,begin,end);
@@ -416,13 +390,13 @@ __device__ inline int32_t dreprog::find( int32_t idx, string_view const& dstr, i
     return rtn;
 }
 
-__device__ inline int32_t dreprog::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col )
+__device__ inline int32_t Reprog_device::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col )
 {
     end = begin + 1;
     return call_regexec(idx,dstr,begin,end,col+1);
 }
 
-__device__ inline int dreprog::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
+__device__ inline int Reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
 {
     Reljunk jnk;
     jnk.starttype = 0;

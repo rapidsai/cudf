@@ -32,24 +32,24 @@ namespace detail
 enum InstType
 {
     CHAR = 0177,
-    RBRA = 0201, /* Right bracket, ) */
-    LBRA = 0202, /* Left bracket, ( */
-    OR = 0204, /* Alternation, | */
-    ANY = 0300, /* Any character except newline, . */
-    ANYNL = 0301, /* Any character including newline, . */
-    BOL = 0303, /* Beginning of line, ^ */
-    EOL = 0304, /* End of line, $ */
-    CCLASS = 0305, /* Character class, [] */
-    NCCLASS = 0306, /* Negated character class, [] */
-    BOW = 0307, /* Boundary of word, /b */
-    NBOW = 0310, /* Not boundary of word, /b */
-    END = 0377 /* Terminate: match found */
+    RBRA = 0201,    // Right bracket, )
+    LBRA = 0202,    // Left bracket, (
+    OR = 0204,      // Alternation, |
+    ANY = 0300,     // Any character except newline, .
+    ANYNL = 0301,   // Any character including newline, .
+    BOL = 0303,     // Beginning of line, ^
+    EOL = 0304,     // End of line, $
+    CCLASS = 0305,  // Character class, []
+    NCCLASS = 0306, // Negated character class, []
+    BOW = 0307,     // Boundary of word, /b
+    NBOW = 0310,    // Not boundary of word, /b
+    END = 0377      // Terminate: match found
 };
 
 // Regex instruction class type for compiler
 struct Reclass
 {
-    int builtins;        // bit mask identifying builtin classes
+    int32_t builtins;    // bit mask identifying builtin classes
     std::u32string chrs; // ranges as pairs of utf-8 characters
     Reclass() : builtins(0) {}
     Reclass(int m) : builtins(m) {}
@@ -58,18 +58,18 @@ struct Reclass
 // Encoded regex instruction
 struct Reinst
 {
-    int	type;
+    int32_t	type;
     union	{
-        int	cls_id;     /* class pointer */
+        int32_t	cls_id;     /* class pointer */
         char32_t c;     /* character */
-        int	subid;      /* sub-expression id for RBRA and LBRA */
-        int	right_id;   /* right child of OR */
+        int32_t	subid;      /* sub-expression id for RBRA and LBRA */
+        int32_t	right_id;   /* right child of OR */
     } u1;
     union {	/* regexp relies on these two being in the same union */
-        int left_id;    /* left child of OR */
-        int next_id;    /* next instruction for CAT & LBRA */
+        int32_t left_id;    /* left child of OR */
+        int32_t next_id;    /* next instruction for CAT & LBRA */
     } u2;
-    int pad4; // extra 4 bytes to make this align on 8-byte boundary
+    int32_t reserved4;
 };
 
 // Regex program handles parsing a pattern in to individual set
@@ -78,33 +78,32 @@ class Reprog
 {
     std::vector<Reinst> insts;
     std::vector<Reclass> classes;
-    int startinst_id;
-    std::vector<int> startinst_ids; // short-cut to speed-up ORs
-    int num_capturing_groups;
+    int32_t startinst_id;
+    std::vector<int32_t> startinst_ids; // short-cut to speed-up ORs
+    int32_t num_capturing_groups;
 
-public:
-
+ public:
     static Reprog* create_from(const char32_t* pattern);
 
-    int add_inst(int type);
-    int add_inst(Reinst inst);
-    int add_class(Reclass cls);
+    int32_t add_inst(int32_t type);
+    int32_t add_inst(Reinst inst);
+    int32_t add_class(Reclass cls);
 
-    void set_groups_count(int groups);
-    int groups_count() const;
+    void set_groups_count(int32_t groups);
+    int32_t groups_count() const;
 
     const Reinst* insts_data() const;
-    int inst_count() const;
-    Reinst& inst_at(int id);
+    int32_t inst_count() const;
+    Reinst& inst_at(int32_t id);
 
-    Reclass& class_at(int id);
-    int classes_count() const;
+    Reclass& class_at(int32_t id);
+    int32_t classes_count() const;
 
-    const int* starts_data() const;
-    int starts_count() const;
+    const int32_t* starts_data() const;
+    int32_t starts_count() const;
 
-    void set_start_inst(int id);
-    int get_start_inst() const;
+    void set_start_inst(int32_t id);
+    int32_t get_start_inst() const;
 
     void optimize1();
     void optimize2();
