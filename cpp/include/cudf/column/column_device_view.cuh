@@ -19,7 +19,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 
 namespace cudf {
 
@@ -161,7 +161,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is null
    *---------------------------------------------------------------------------**/
   __device__ bool is_valid_nocheck(size_type element_index) const noexcept {
-    return bit_is_set(_null_mask, element_index);
+    return bit_is_set(_null_mask, offset()+element_index);
   }
 
   /**---------------------------------------------------------------------------*

@@ -400,18 +400,61 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Return true if the data is on the device, or false if it is not. Note that
+   * if there are no rows there is no data to be on the device, but this will
+   * still return true.
+   */
+  public boolean hasDeviceData() {
+    return offHeap.getDeviceData() != null || rows == 0;
+  }
+
+  /**
+   * Return true if the data is on the host, or false if it is not. Note that
+   * if there are no rows there is no data to be on the host, but this will
+   * still return true.
+   */
+  public boolean hasHostData() {
+    return offHeap.getHostData() != null || rows == 0;
+  }
+
   private void checkHasDeviceData() {
-    if (offHeap.getDeviceData() == null && rows != 0) {
+    if (!hasDeviceData()) {
       if (refCount <= 0) {
         throw new IllegalStateException("Vector was already closed.");
       }
-      throw new IllegalStateException("Vector not on Device");
+      throw new IllegalStateException("Vector not on device");
     }
   }
 
   private void checkHasHostData() {
-    if (offHeap.getHostData() == null && rows != 0) {
-      throw new IllegalStateException("Vector not on Host");
+    if (!hasHostData()) {
+      if (refCount <= 0) {
+        throw new IllegalStateException("Vector was already closed.");
+      }
+      throw new IllegalStateException("Vector not on host");
+    }
+  }
+
+  /**
+   * Drop any data stored on the host, but move it to the device first if necessary.
+   */
+  public final void dropHostData() {
+    ensureOnDevice();
+    if (offHeap.hostData != null) {
+      offHeap.hostData.close();
+      offHeap.hostData = null;
+    }
+  }
+
+  /**
+   * Drop any data stored on the device, but move it to the host first if necessary.
+   */
+  public final void dropDeviceData() {
+    ensureOnHost();
+    if (offHeap.deviceData != null) {
+      offHeap.deviceData.close();
+      offHeap.deviceData = null;
     }
   }
 
@@ -479,17 +522,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           offHeap.getDeviceData().data.copyFromHostBuffer(offHeap.getHostData().data);
         }
       }
-    }
-  }
-
-  /**
-   * Drop any data stored on the host.
-   */
-  public final void dropHostData() {
-    ensureOnDevice();
-    if (offHeap.hostData != null) {
-      offHeap.hostData.close();
-      offHeap.hostData = null;
     }
   }
 
@@ -575,26 +607,79 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return false;
   }
 
-  enum BufferType {
+  public enum BufferType {
     VALIDITY,
     OFFSET,
     DATA
   }
 
-  HostMemoryBuffer getHostBufferFor(BufferType src) {
-    HostMemoryBuffer srcBuffer;
-    switch(src) {
+  /**
+   * Get access to the raw host buffer for this column.  This is intended to be used with a lot
+   * of caution.  The lifetime of the buffer is tied to the lifetime of the column (Do not close
+   * the buffer, as the column will take care of it).  Do not modify the contents of the buffer or
+   * it might negatively impact what happens on the column.  The data must be on the host for this
+   * to work.
+   * @param type the type of buffer to get access to.
+   * @return the underlying buffer or null if no buffer is associated with it for this column.
+   * Please note that if the column is empty there may be no buffers at all associated with the
+   * column.
+   */
+  public HostMemoryBuffer getHostBufferFor(BufferType type) {
+    checkHasHostData();
+    HostMemoryBuffer srcBuffer = null;
+    BufferEncapsulator<HostMemoryBuffer> host = offHeap.getHostData();
+    switch(type) {
       case VALIDITY:
-        srcBuffer = offHeap.getHostData().valid;
+        if (host != null) {
+          srcBuffer = host.valid;
+        }
         break;
       case OFFSET:
-        srcBuffer = offHeap.getHostData().offsets;
+        if (host != null) {
+          srcBuffer = host.offsets;
+        }
         break;
       case DATA:
-        srcBuffer = offHeap.getHostData().data;
+        if (host != null) {
+          srcBuffer = host.data;
+        }
         break;
       default:
-        throw new IllegalArgumentException(src + " is not a supported buffer type.");
+        throw new IllegalArgumentException(type + " is not a supported buffer type.");
+    }
+    return srcBuffer;
+  }
+
+  /**
+   * Get access to the raw device buffer for this column.  This is intended to be used with a lot
+   * of caution.  The lifetime of the buffer is tied to the lifetime of the column (Do not close
+   * the buffer, as the column will take care of it).  Do not modify the contents of the buffer or
+   * it might negatively impact what happens on the column.  The data must be on the device for
+   * this to work. Strings and string categories do not currently work because their underlying
+   * device layout is currently hidden.
+   * @param type the type of buffer to get access to.
+   * @return the underlying buffer or null if no buffer is associated with it for this column.
+   * Please note that if the column is empty there may be no buffers at all associated with the
+   * column.
+   */
+  public DeviceMemoryBuffer getDeviceBufferFor(BufferType type) {
+    assert this.type != DType.STRING && this.type != DType.STRING_CATEGORY;
+    checkHasDeviceData();
+    DeviceMemoryBuffer srcBuffer = null;
+    BufferEncapsulator<DeviceMemoryBuffer> dev = offHeap.getDeviceData();
+    switch(type) {
+      case VALIDITY:
+        if (dev != null) {
+          srcBuffer = dev.valid;
+        }
+        break;
+      case DATA:
+        if (dev != null) {
+          srcBuffer = dev.data;
+        }
+        break;
+      default:
+        throw new IllegalArgumentException(type + " is not a supported buffer type.");
     }
     return srcBuffer;
   }
@@ -1871,13 +1956,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
      * @return number of device bytes allocated for this column
      */
     public long getDeviceMemoryLength(DType type) {
-      long length;
-      length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
-
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
-      } else {
-        length += deviceData.data != null ? deviceData.data.getLength() : 0;
+      long length = 0;
+      if (deviceData != null) {
+        length = deviceData.valid != null ? deviceData.valid.getLength() : 0;
+        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+          length += getDeviceMemoryStringSize(nativeCudfColumnHandle);
+        } else {
+          length += deviceData.data != null ? deviceData.data.getLength() : 0;
+        }
       }
       return length;
     }
