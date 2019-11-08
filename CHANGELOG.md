@@ -76,6 +76,7 @@
 - PR #2878 Use upstream merge code in dask_cudf
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3232 Port NVStrings datetime conversion to cudf strings column
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
@@ -91,6 +92,7 @@
 - PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
+- PR #3310 Add `row_hasher` and `element_hasher` utilities
 
 ## Bug Fixes
 
@@ -124,6 +126,7 @@
 - PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
 - PR #3295 Fix storing storing invalid RMM exec policies.
 - PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
+- PR #3313 Fix public headers including non-public headers
 
 
 # cuDF 0.10.0 (16 Oct 2019)
