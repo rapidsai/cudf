@@ -26,7 +26,6 @@ namespace code {
 
 const char* kernel =
 R"***(
-    #include <cudf/types.h>
     #include <cudf/types.hpp>
     #include "operation.h"
 

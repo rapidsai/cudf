@@ -31,12 +31,12 @@ namespace cudf {
 namespace test {
 namespace binop {
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe,
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOp,
           typename ScalarType = cudf::experimental::scalar_type_t<TypeLhs>>
 void ASSERT_BINOP(column_view const& out,
                   scalar const& lhs,
                   column_view const& rhs,
-                  TypeOpe&& ope) {
+                  TypeOp&& op) {
     auto lhs_h = static_cast<const ScalarType*>(&lhs)->value();
     auto rhs_h = cudf::test::to_host<TypeRhs>(rhs);
     auto rhs_data = rhs_h.first;
@@ -45,7 +45,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (size_t index = 0; index < out_data.size(); ++index) {
-        ASSERT_EQ(out_data[index], (TypeOut)(ope(lhs_h, rhs_data[index])));
+        ASSERT_EQ(out_data[index], (TypeOut)(op(lhs_h, rhs_data[index])));
     }
 
     auto rhs_valid = rhs_h.second;
@@ -59,12 +59,12 @@ void ASSERT_BINOP(column_view const& out,
     }
 }
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe,
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOp,
           typename ScalarType = cudf::experimental::scalar_type_t<TypeRhs>>
 void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   scalar const& rhs,
-                  TypeOpe&& ope) {
+                  TypeOp&& op) {
     auto rhs_h = static_cast<const ScalarType*>(&rhs)->value();
     auto lhs_h = cudf::test::to_host<TypeLhs>(lhs);
     auto lhs_data = lhs_h.first;
@@ -73,7 +73,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_data.size(), lhs_data.size());
     for (size_t index = 0; index < out_data.size(); ++index) {
-        ASSERT_EQ(out_data[index], (TypeOut)(ope(lhs_data[index], rhs_h)));
+        ASSERT_EQ(out_data[index], (TypeOut)(op(lhs_data[index], rhs_h)));
     }
 
     auto lhs_valid = lhs_h.second;
@@ -87,11 +87,11 @@ void ASSERT_BINOP(column_view const& out,
     }
 }
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOp>
 void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   column_view const& rhs,
-                  TypeOpe&& ope) {
+                  TypeOp&& op) {
     auto lhs_h = cudf::test::to_host<TypeLhs>(lhs);
     auto lhs_data = lhs_h.first;
     auto rhs_h = cudf::test::to_host<TypeRhs>(rhs);
@@ -102,7 +102,7 @@ void ASSERT_BINOP(column_view const& out,
     ASSERT_EQ(out_data.size(), lhs_data.size());
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (size_t index = 0; index < out_data.size(); ++index) {
-        ASSERT_EQ(out_data[index], (TypeOut)(ope(lhs_data[index], rhs_data[index])));
+        ASSERT_EQ(out_data[index], (TypeOut)(op(lhs_data[index], rhs_data[index])));
     }
 
     auto lhs_valid = lhs_h.second;
@@ -125,7 +125,7 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   column_view const& rhs,
-                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& ope) {
+                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& op) {
     auto lhs_h = cudf::test::to_host<TypeLhs>(lhs);
     auto lhs_data = lhs_h.first;
     auto rhs_h = cudf::test::to_host<TypeRhs>(rhs);
@@ -137,7 +137,7 @@ void ASSERT_BINOP(column_view const& out,
     ASSERT_EQ(out_data.size(), lhs_data.size());
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (decltype(out_data.size()) index = 0; index < out_data.size(); ++index) {
-        ASSERT_TRUE(abs(out_data[index] - (TypeOut)(ope(lhs_data[index], rhs_data[index]))) < ULP);
+        ASSERT_TRUE(abs(out_data[index] - (TypeOut)(op(lhs_data[index], rhs_data[index]))) < ULP);
     }
 
     auto lhs_valid = lhs_h.second;
