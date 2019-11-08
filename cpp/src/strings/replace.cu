@@ -146,6 +146,95 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                strings.null_count(), std::move(null_mask), stream, mr);
 }
 
+namespace
+{
+/**
+ * @brief Function logic for the substring API.
+ *
+ * This will perform a substring operation on each string
+ * using the provided start, stop, and step parameters.
+ */
+template <TwoPass Pass=SizeOnly>
+struct slice_replace_fn
+{
+    column_device_view d_strings;
+    string_view d_repl;
+    size_type start, stop;
+    const int32_t* d_offsets{};
+    char* d_chars{};
+
+    __device__ size_type operator()(size_type idx)
+    {
+        if( d_strings.is_null(idx) )
+            return 0; // null string
+        string_view d_str = d_strings.element<string_view>(idx);
+        auto length = d_str.length();
+        char* out_ptr = nullptr;
+        if( Pass==ExecuteOp )
+            out_ptr = d_chars + d_offsets[idx];
+        const char* in_ptr = d_str.data();
+        size_type bytes = d_str.size_bytes();
+        size_type begin = (start < length) ? start : length;
+        size_type end = ((stop < 0) || (stop > length) ? length : stop);
+        begin = d_str.byte_offset(begin);
+        end = d_str.byte_offset(end);
+        bytes += d_repl.size_bytes() - (end - begin);
+        if( Pass==ExecuteOp )
+        {
+            out_ptr = copy_and_incr( out_ptr, in_ptr, begin );
+            out_ptr = copy_string( out_ptr, d_repl );
+            out_ptr = copy_and_incr( out_ptr, in_ptr + end, d_str.size_bytes() - end );
+        }
+        return bytes;
+    }
+};
+
+}
+
+std::unique_ptr<column> slice_replace( strings_column_view const& strings,
+                                       string_scalar const& repl,
+                                       size_type start, size_type stop = -1,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                       cudaStream_t stream = 0)
+{
+    size_type strings_count = strings.size();
+    if( strings_count == 0 )
+        return make_empty_strings_column(mr,stream);
+    CUDF_EXPECTS( repl.is_valid(), "Parameter repl must be valid.");
+    CUDF_EXPECTS( repl.size()>0, "Parameter repl must not be empty string.");
+    CUDF_EXPECTS( start>=0, "Parameter start must be 0 or positive integer.");
+    if( stop > 0 )
+        CUDF_EXPECTS( start <= stop, "Parameter start must be less than or equal to stop.");
+
+    string_view d_repl(repl.data(),repl.size());
+
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_strings = *strings_column;
+
+    // copy the null mask
+    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
+    // build offsets column
+    auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
+        slice_replace_fn<SizeOnly>{d_strings, d_repl, start, stop} );
+    auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
+                                       offsets_transformer_itr+strings_count,
+                                       mr, stream);
+    auto offsets_view = offsets_column->view();
+    auto d_offsets = offsets_view.data<int32_t>();
+
+    // build chars column
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto chars_view = chars_column->mutable_view();
+    auto d_chars = chars_view.data<char>();
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
+        slice_replace_fn<ExecuteOp>{d_strings, d_repl, start, stop, d_offsets, d_chars} );
+    //
+    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                               strings.null_count(), std::move(null_mask), stream, mr);
+}
+
+
 } // namespace detail
 
 // external API
@@ -157,6 +246,14 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
     return detail::replace(strings, target, repl, maxrepl, mr );
+}
+
+std::unique_ptr<column> slice_replace( strings_column_view const& strings,
+                                       string_scalar const& repl,
+                                       size_type start, size_type stop,
+                                       rmm::mr::device_memory_resource* mr)
+{
+    return detail::slice_replace(strings, repl, start, stop, mr);
 }
 
 } // namespace strings

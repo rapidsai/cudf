@@ -28,7 +28,7 @@ namespace strings
  * @brief Replaces target string within each string with the specified
  * replacement string.
  *
- * This function searches each string on the column for the target string.
+ * This function searches each string in the column for the target string.
  * If found, the target string is replaced by the repl string within the
  * input string. If not found, the output entry is just a copy of the
  * corresponding input string.
@@ -59,6 +59,31 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  string_scalar const& repl,
                                  int32_t maxrepl = -1,
                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Replaces the characters within a position range with a specified
+ * string.
+ *
+ * This function replaces each string in the column with the provided
+ * repl string within the [start,stop) character position range.
+ *
+ * Null string entries will return null output string entries.
+ *
+ *
+ * @throw cudf::logic_error if repl is an empty string.
+ *
+ * @param strings Strings column for this operation.
+ * @param repl Replacement string for specified positions found.
+ * @param start Start position where repl will be added.
+ * @param stop End position (exclusive) to use for replacement.
+ *        Default of -1 specifies the end of the string.
+ * @param mr Resource for allocating device memory.
+ * @return New strings column.
+ */
+std::unique_ptr<column> slice_replace( strings_column_view const& strings,
+                                       string_scalar const& repl,
+                                       size_type start, size_type stop = -1,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 } // namespace strings
