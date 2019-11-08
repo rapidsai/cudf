@@ -925,8 +925,8 @@ public class TableTest extends CudfTestBase {
             .column(0.7)
             .column(61)
             .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
-      ColumnVector expected = ColumnVector.fromBoxedInts(5);
+        ColumnVector columnVector = table.upperBound(false, values, descFlags);
+        ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
       assertColumnsAreEqual(expected, columnVector);
     }
 
