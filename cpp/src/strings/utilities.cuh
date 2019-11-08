@@ -139,6 +139,41 @@ __device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
     return unchr;
 }
 
+/**
+ * @brief Converts a character code-point value into a UTF-8 character.
+ *
+ * @param unchr Character code-point to convert.
+ * @return Single UTF-8 character.
+ */
+__host__ __device__ inline cudf::char_utf8 codepoint_to_utf8( uint32_t unchr )
+{
+    cudf::char_utf8 utf8 = 0;
+    if( unchr < 0x00000080 ) // single byte utf8
+        utf8 = unchr;
+    else if( unchr < 0x00000800 )  // double byte utf8
+    {
+        utf8 =  (unchr << 2) & 0x1F00;  // shift bits for
+        utf8 |= (unchr & 0x3F);         // utf8 encoding
+        utf8 |= 0x0000C080;
+    }
+    else if( unchr < 0x00010000 )  // triple byte utf8
+    {
+        utf8 =  (unchr << 4) & 0x0F0000;  // upper 4 bits
+        utf8 |= (unchr << 2) & 0x003F00;  // next 6 bits
+        utf8 |= (unchr & 0x3F);           // last 6 bits
+        utf8 |= 0x00E08080;
+    }
+    else if( unchr < 0x00110000 )  // quadruple byte utf8
+    {
+        utf8 =  (unchr << 6) & 0x07000000;  // upper 3 bits
+        utf8 |= (unchr << 4) & 0x003F0000;  // next 6 bits
+        utf8 |= (unchr << 2) & 0x00003F00;  // next 6 bits
+        utf8 |= (unchr & 0x3F);             // last 6 bits
+        utf8 |= (unsigned)0xF0808080;
+    }
+    return utf8;
+}
+
 
 } // namespace detail
 } // namespace strings
