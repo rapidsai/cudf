@@ -36,7 +36,7 @@ namespace jit {
      * @param type The data type
      * @return std::string Name of the data type in string
      */
-    std::string get_type_name(data_type type) {
+    std::string inline get_type_name(data_type type) {
         return experimental::type_dispatcher(type, experimental::type_to_name{});
     }
  
