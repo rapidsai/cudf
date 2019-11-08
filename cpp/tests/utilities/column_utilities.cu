@@ -20,6 +20,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/strings/datetime.hpp>
 #include <cudf/copying.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>
@@ -163,9 +164,34 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, typename std::enable_if_t<not is_numeric<Element>()>* = nullptr>
+  template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
-    CUDF_FAIL("printing not currently enabled for non-numeric arguments");
+    //
+    //  For timestamps, convert timestamp column to column of strings, then
+    //  call string version
+    //
+    auto col_as_strings = cudf::strings::from_timestamps(col);
+
+    this->template operator()<cudf::string_view>(*col_as_strings, out);
+  }
+
+  template <typename Element, typename std::enable_if_t<is_compound<Element>()>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
+    //
+    //  Implementation for strings, call special to_host variant
+    //
+    auto h_data = cudf::test::to_host<std::string>(col);
+
+    out.resize(col.size());
+
+    if (col.nullable()) {
+      size_type index = 0;
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [&h_data, &index](std::string el) {
+          return (bit_is_set(h_data.second.data(), index++)) ? el : std::string("@");
+        });
+    } else {
+      out = std::move(h_data.first);
+    }
   }
 };
 
@@ -180,18 +206,18 @@ std::vector<std::string> to_strings(cudf::column_view const& col) {
   return reply;
 }
 
-std::string to_string(cudf::column_view const& col, const char *delimiter) {
+std::string to_string(cudf::column_view const& col, std::string const& delimiter) {
 
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col);
 
-  std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter));
+  std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
   buffer << h_data.back();
 
   return buffer.str();
 }
 
-void print(std::ostream &os, cudf::column_view const& col, const char *delimiter) {
+void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
   os << to_string(col, delimiter);
 }
 

@@ -60,7 +60,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
  * @param col The column view
  * @param delimiter The delimiter to put between strings
  *---------------------------------------------------------------------------**/
-std::string to_string(cudf::column_view const& col, const char *delimiter);
+std::string to_string(cudf::column_view const& col, std::string const& delimiter);
 
 /**---------------------------------------------------------------------------*
  * @brief Convert column values to a host vector of strings
@@ -76,7 +76,7 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
  * @param col       The column view
  * @param delimiter The delimiter to put between strings
  *---------------------------------------------------------------------------**/
-void print(std::ostream &os, cudf::column_view const& col, const char *delimiter=",");
+void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::string const& delimiter=",");
 
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
