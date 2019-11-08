@@ -2105,6 +2105,7 @@ class DataFrame(object):
         # replace with a RangeIndex. Afterward, reassign.
         temp_columns = self.columns.copy(deep=False)
         self.columns = pd.Index(range(len(self.columns)))
+
         result = libcudf.transpose.transpose(self)
         self.columns = temp_columns
         result = result.rename(dict(zip(result.columns, self.index)))

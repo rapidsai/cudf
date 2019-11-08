@@ -176,7 +176,9 @@ def copy_column(input_col):
     """
         Call cudf::copy
     """
+    print("before: ", input_col.dtype)
     cdef gdf_column* c_input_col = column_view_from_column(input_col)
+    print("after: ", np_dtype_from_gdf_column(c_input_col))
     cdef gdf_column c_out_col
 
     with nogil:

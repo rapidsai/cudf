@@ -1292,9 +1292,6 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     gdf = DataFrame.from_pandas(pdf)
 
-    import pdb
-
-    pdb.set_trace()
     got_function = gdf.transpose()
     got_property = gdf.T
 

@@ -120,7 +120,7 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
 
     buffers = pa_arr.buffers()
 
-    if buffers[0]:
+    if pa_arr.null_count:
         mask_dev_array = make_mask(len(pa_arr))
         arrow_dev_array = rmm.to_device(np.array(buffers[0]).view("int8"))
         copy_array(arrow_dev_array, mask_dev_array)

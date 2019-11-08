@@ -261,7 +261,7 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
     cdef uintptr_t category
-    cdef gdf_dtype c_dtype = dtypes[col.dtype.type]
+    cdef gdf_dtype c_dtype = gdf_dtype_from_value(col)
 
     if col_name is None:
         col_name = col.name
@@ -328,7 +328,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
         to an integer after decoding (default: False).
     """
     from cudf.core.buffer import Buffer
-    from cudf.core.column import build_column
+    from cudf.core.column import build_column, as_column
     from cudf.utils.utils import mask_bitsize, calc_chunk_size
 
     name = None
@@ -341,29 +341,43 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
     data_ptr = int(<uintptr_t>c_col.data)
 
     if gdf_dtype == GDF_STRING:
-        raise NotImplementedError
+        data = nvstrings.bind_cpointer(data_ptr)
+        return as_column(data, name=name)
     elif gdf_dtype == GDF_STRING_CATEGORY:
-        raise NotImplementedError
+        # Need to do this just to make sure it's freed properly
+        garbage = rmm.device_array_from_ptr(
+            data_ptr,
+            nelem=c_col.size,
+            dtype='int32',
+            finalizer=rmm._make_finalizer(data_ptr, 0)
+        )
+        if c_col.size == 0:
+            data = nvstrings.to_device([])
+        else:
+            nvcat_ptr = int(<uintptr_t>c_col.dtype_info.category)
+            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+            data = nvcat_obj.to_strings()
+        return as_column(data, name=name)
     else:
-        dtype = np.dtype(gdf_dtypes[gdf_dtype])
+        dtype = np_dtype_from_gdf_column(c_col)
         dbuf = rmm.DeviceBuffer(
             ptr=data_ptr,
             size=dtype.itemsize * c_col.size,
         )
         data = Buffer.from_device_buffer(dbuf)
-    mask = None
-    if c_col.valid:
-        mask_ptr = int(<uintptr_t>c_col.valid)
-        mbuf = rmm.DeviceBuffer(
-            ptr=mask_ptr,
-            size=calc_chunk_size(c_col.size,mask_bitsize)
-        )
-        mask = Buffer.from_device_buffer(mbuf)
+        mask = None
+        if c_col.valid:
+            mask_ptr = int(<uintptr_t>c_col.valid)
+            mbuf = rmm.DeviceBuffer(
+                ptr=mask_ptr,
+                size=calc_chunk_size(c_col.size,mask_bitsize)
+            )
+            mask = Buffer.from_device_buffer(mbuf)
 
-    return build_column(data=data,
-                        dtype=dtype,
-                        mask=mask,
-                        name=name)
+        return build_column(data=data,
+                            dtype=dtype,
+                            mask=mask,
+                            name=name)
 
 
 cdef update_nvstrings_col(col, uintptr_t category_ptr):

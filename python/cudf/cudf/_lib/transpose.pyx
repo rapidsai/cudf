@@ -77,4 +77,6 @@ def transpose(df):
 
     for i in range(0, new_ncol):
         out_df[str(i)] = new_col_series[i]
+
+
     return out_df

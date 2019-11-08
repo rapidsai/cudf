@@ -1093,10 +1093,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
+
             data = datetime.DatetimeColumn(
                 data=padata, mask=pamask, dtype=dtype,
             )
         elif isinstance(arbitrary, pa.Date64Array):
+            raise NotImplementedError
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
             data = datetime.DatetimeColumn(
                 data=padata, mask=pamask, dtype=np.dtype("M8[ms]"),
