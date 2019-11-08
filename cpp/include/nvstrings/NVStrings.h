@@ -189,7 +189,7 @@ public:
      *               The resulting pointers are always to device memory regardless.
      * @return 0 if successful.
      */
-    int create_custring_index( custring_view** strs, bool devmem=true );
+    int create_custring_index( custring_view** strs, bool devmem=true ) const;
     /**
      * @brief Copy strings into single memory buffer provided.
      *
@@ -237,7 +237,7 @@ public:
      * @brief Create a new instance from this instance.
      * @return New instance as duplicate of this instance.
      */
-    NVStrings* copy();
+    NVStrings* copy() const;
     /**
      * @brief Copy the list of strings into the provided host memory.
      *
@@ -342,7 +342,7 @@ public:
      * @param devmem Indicates whether the indexes parameter points to device memory or CPU memory.
      * @return The total number of characters.
      */
-    unsigned int len(int* lengths, bool devmem=true);
+    unsigned int len(int* lengths, bool devmem=true) const;
     /**
      * @brief Retrieve the number of bytes for each string.
      * @param[in,out] lengths The length in bytes for each string.
