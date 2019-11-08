@@ -41,8 +41,6 @@ TEST_F(HashTest, MultiValueMurmur)
   using cudf::test::strings_column_wrapper;
   using cudf::experimental::bool8;
 
-  std::vector<cudf::column_view> columns;
-
   auto const strings_col = strings_column_wrapper(
     {"",
     "The quick brown fox",
@@ -52,22 +50,19 @@ TEST_F(HashTest, MultiValueMurmur)
     "jumps over the lazy dog.",
     "The quick brown fox",
     ""});
-  columns.push_back(strings_col);
 
   auto const ints_col = fixed_width_column_wrapper<int32_t>(
     {0, 123, -456789, 123456789, 123456789, -456789, 123, 0});
-  columns.push_back(ints_col);
 
   auto const bools_col = fixed_width_column_wrapper<bool8>(
     {0, 1, 10, 255, 255, 1, 1, 0});
-  columns.push_back(bools_col);
 
   auto const secs_col = fixed_width_column_wrapper<cudf::timestamp_s>(
     {0, -123, 456, 123456, 123456, 456, -123, 0});
-  columns.push_back(secs_col);
 
   // Expect output to have symmetrical equality
-  auto const input = cudf::table_view(columns);
+  auto const input = cudf::table_view(
+    {strings_col, ints_col, bools_col, secs_col});
   auto const output = cudf::hash(input);
   expect_symmetry<int32_t>(output->view());
 }
@@ -77,8 +72,6 @@ TEST_F(HashTest, MultiValueNullsMurmur)
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::strings_column_wrapper;
   using cudf::experimental::bool8;
-
-  std::vector<cudf::column_view> columns;
 
   auto const strings_col = strings_column_wrapper(
     {"",
@@ -90,25 +83,22 @@ TEST_F(HashTest, MultiValueNullsMurmur)
     "The quick brown fox",
     ""},
     {0, 1, 1, 0, 0, 1, 1, 0});
-  columns.push_back(strings_col);
 
   auto const ints_col = fixed_width_column_wrapper<int32_t>(
     {0, 123, -456789, 123456789, 123456789, -456789, 123, 0},
     {1, 0, 1, 0, 0, 1, 0, 1});
-  columns.push_back(ints_col);
 
   auto const bools_col = fixed_width_column_wrapper<bool8>(
     {0, 1, 10, 255, 255, 1, 1, 0},
     {1, 1, 1, 0, 0, 1, 1, 1});
-  columns.push_back(bools_col);
 
   auto const secs_col = fixed_width_column_wrapper<cudf::timestamp_s>(
     {0, -123, 456, 123456, 123456, 456, -123, 0},
     {1, 0, 1, 1, 1, 1, 0, 1});
-  columns.push_back(secs_col);
 
   // Expect output to have symmetrical equality
-  auto const input = cudf::table_view(columns);
+  auto const input = cudf::table_view(
+    {strings_col, ints_col, bools_col, secs_col});
   auto const output = cudf::hash(input);
   expect_symmetry<int32_t>(output->view());
 }
