@@ -242,7 +242,10 @@ void copy_range(SourceValueIterator source_value_begin,
  *
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
- * @throws `cudf::logic_error` for invalid range (if * @p source_begin > @p source_end, @p source_begin < 0, * @p source_begin >= @p source.size(), @p source_end > @p source.size(), * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
  * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
  * @throws `cudf::logic_error` if @p target and @p source have different types.
  * @throws `cudf::logic_error` if @p source has null values and @p target is not
