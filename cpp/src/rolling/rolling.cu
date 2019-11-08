@@ -27,8 +27,8 @@ namespace experimental {
 // Applies a fixed-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
-                                       size_type min_periods,
                                        size_type forward_window,
+                                       size_type min_periods,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -41,8 +41,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 // Applies a variable-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& window,
+                                       column_view const& forward_window,
                                        size_type min_periods,
-                                       size_type forward_window,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -57,8 +57,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 // Applies a fixed-size user-defined rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const &input,
                                        size_type window,
-                                       size_type min_periods,
                                        size_type forward_window,
+                                       size_type min_periods,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
                                        data_type output_type,
@@ -73,8 +73,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 // Applies a variable-size user-defined rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const &input,
                                        column_view const& window,
+                                       column_view const& forward_window,
                                        size_type min_periods,
-                                       size_type forward_window,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
                                        data_type output_type,
