@@ -68,7 +68,7 @@ TEST_F(HashTest, MultiValueMurmur)
 
   // Expect output to have symmetrical equality
   auto const input = cudf::table_view(columns);
-  auto const output = cudf::hash(input, cudf::hash_func::MURMUR3, {});
+  auto const output = cudf::hash(input);
   expect_symmetry<int32_t>(output->view());
 }
 
@@ -109,7 +109,7 @@ TEST_F(HashTest, MultiValueNullsMurmur)
 
   // Expect output to have symmetrical equality
   auto const input = cudf::table_view(columns);
-  auto const output = cudf::hash(input, cudf::hash_func::MURMUR3, {});
+  auto const output = cudf::hash(input);
   expect_symmetry<int32_t>(output->view());
 }
 
