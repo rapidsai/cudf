@@ -28,6 +28,7 @@
 - PR #3219 Construct column from column_view
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3187 Ported replace functionality to libcudf++
 
 ## Improvements
 
