@@ -297,10 +297,10 @@ hash_partition(table_view const& input,
       output = hash_partition_table<MurmurHash3_32>(
           input, table_to_hash, num_partitions, stream);
       break;
-    case hash_func::IDENTITY:
+    /*case hash_func::IDENTITY:
       output = hash_partition_table<IdentityHash>(
           input, table_to_hash, num_partitions, stream);
-      break;
+      break;*/
     default:
       CUDF_FAIL("Invalid hash function");
   }
@@ -349,7 +349,7 @@ std::unique_ptr<column> hash(table_view const& input,
                   *device_input, device_initial_hash.data().get()));
         }
         break;
-      case hash_func::IDENTITY:
+      /*case hash_func::IDENTITY:
         if (nullable) {
           thrust::tabulate(rmm::exec_policy(stream)->on(stream),
               hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
@@ -361,7 +361,7 @@ std::unique_ptr<column> hash(table_view const& input,
               experimental::row_hasher_initial_values<IdentityHash, false>(
                   *device_input, device_initial_hash.data().get()));
         }
-        break;
+        break;*/
       default:
         CUDF_FAIL("Invalid hash function");
     }
@@ -378,7 +378,7 @@ std::unique_ptr<column> hash(table_view const& input,
               experimental::row_hasher<MurmurHash3_32, false>(*device_input));
         }
         break;
-      case hash_func::IDENTITY:
+      /*case hash_func::IDENTITY:
         if (nullable) {
           thrust::tabulate(rmm::exec_policy(stream)->on(stream),
               hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
@@ -388,7 +388,7 @@ std::unique_ptr<column> hash(table_view const& input,
               hash_view.begin<int32_t>(), hash_view.end<int32_t>(),
               experimental::row_hasher<IdentityHash, false>(*device_input));
         }
-        break;
+        break;*/
       default:
         CUDF_FAIL("Invalid hash function");
     }
