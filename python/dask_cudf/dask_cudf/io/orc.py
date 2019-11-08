@@ -1,10 +1,9 @@
+import pyarrow.orc as orc
+
 import dask.dataframe as dd
-from dask.dataframe.io.utils import _get_pyarrow_dtypes
 from dask.base import tokenize
 from dask.bytes.core import get_fs_token_paths
-
-import pyarrow.orc as orc
-import pyarrow as pa
+from dask.dataframe.io.utils import _get_pyarrow_dtypes
 
 import cudf
 
