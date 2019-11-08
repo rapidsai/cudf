@@ -119,10 +119,27 @@ using character_flags_table_type = uint8_t;
  * characters flags table. On first call, this will copy the table into
  * device memory and is guaranteed to be thread-safe.
  *
- * @param stream Stream to use for any device memory or kernel calls.
+ * This table is used to check the type of character like
+ * alphanumeric, decimal, etc.
+ *
  * @return Device memory pointer to character flags table.
  */
 const character_flags_table_type* get_character_flags_table();
+
+// Type for the character cases table.
+using character_cases_table_type = uint16_t;
+
+/**
+ * @brief Returns pointer to device memory that contains the static
+ * characters case table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * This table is used to map upper and lower case characters with
+ * their counterpart.
+ *
+ * @return Device memory pointer to character cases table.
+ */
+const character_cases_table_type* get_character_cases_table();
 
 
 } // namespace detail

@@ -491,6 +491,7 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/strings/find.cu
             src/strings/char_types/char_types.cu
+            src/strings/case.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 
