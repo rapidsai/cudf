@@ -18,9 +18,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
-
-#include <hash/hash_functions.cuh>
 
 #include <thrust/tabulate.h>
 
@@ -281,7 +280,7 @@ std::vector<std::unique_ptr<experimental::table>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
-               hash_func::Type hash,
+               hash_func hash,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream)
 {
@@ -312,7 +311,7 @@ hash_partition(table_view const& input,
 }
 
 std::unique_ptr<column> hash(table_view const& input,
-                             hash_func::Type hash,
+                             hash_func hash,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
@@ -404,14 +403,14 @@ std::vector<std::unique_ptr<experimental::table>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
-               hash_func::Type hash,
+               hash_func hash,
                rmm::mr::device_memory_resource* mr)
 {
   return detail::hash_partition(input, columns_to_hash, num_partitions, hash, mr);
 }
 
 std::unique_ptr<column> hash(table_view const& input,
-                             hash_func::Type hash,
+                             hash_func hash,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {

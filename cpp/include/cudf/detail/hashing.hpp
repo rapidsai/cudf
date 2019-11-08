@@ -39,7 +39,7 @@ std::vector<std::unique_ptr<experimental::table>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
-               hash_func::Type hash,
+               hash_func hash,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                cudaStream_t stream = 0);
 
@@ -56,7 +56,7 @@ hash_partition(table_view const& input,
  * @returns A column where each row is the hash of a column from the input
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> hash(table_view const& input,
-                             hash_func::Type hash,
+                             hash_func hash,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0);
