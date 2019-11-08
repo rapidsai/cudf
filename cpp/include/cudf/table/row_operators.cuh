@@ -409,7 +409,7 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher {
  public:
   row_hasher() = delete;
-  row_hasher(table_device_view t) : _table{t} {}
+  __host__ __device__ row_hasher(table_device_view t) : _table{t} {}
 
   __device__ auto operator()(size_type row_index) const {
     auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
@@ -446,6 +446,7 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher_initial_values {
  public:
   row_hasher_initial_values() = delete;
+  __host__ __device__
   row_hasher_initial_values(table_device_view t, hash_value_type *initial_hash)
       : _table{t}, _initial_hash(initial_hash) {}
 

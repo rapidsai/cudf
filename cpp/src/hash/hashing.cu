@@ -331,7 +331,7 @@ std::unique_ptr<column> hash(table_view const& input,
 
   // Compute the hash value for each row depending on the specified hash function
   if (!initial_hash.empty()) {
-    CUDF_EXPECTS(initial_hash.size() == input.num_columns(),
+    CUDF_EXPECTS(initial_hash.size() == size_t(input.num_columns()),
       "Expected same size of initial hash values as number of columns");
     auto device_initial_hash = rmm::device_vector<uint32_t>(initial_hash);
 
