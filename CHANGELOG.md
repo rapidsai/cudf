@@ -64,12 +64,14 @@
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
 - PR #2971 Added initial gather and scatter methods for strings_column_view
+- PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
 - PR #2991 Added strings column functions concatenate and join_strings
 - PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3138 Move unary files to legacy
+- PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
