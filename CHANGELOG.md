@@ -47,6 +47,7 @@
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
+- PR #3325 Define and implement new binary operation APIs
 
 ## Improvements
 
