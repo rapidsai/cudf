@@ -49,7 +49,11 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   if (input.size() == 0 || window.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
   
-  CUDF_EXPECTS(window.type().id() == INT32, "window must have INT32 type");
+  CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
+               "window/forward_window must have INT32 type");
+
+  CUDF_EXPECTS(window.size() != input.size() && forward_window.size() != input.size(),
+               "window/forward_window size must match input size");
 
   return cudf::make_numeric_column(data_type{INT32}, 0);
 }
@@ -80,10 +84,14 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        data_type output_type,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (input.size() == 0 || window.size() == 0)
+  if (input.size() == 0 || window.size() == 0 || forward_window.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
   
-  CUDF_EXPECTS(window.type().id() == INT32, "window must have INT32 type");
+  CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
+               "window/forward_window must have INT32 type");
+
+  CUDF_EXPECTS(window.size() != input.size() && forward_window.size() != input.size(),
+               "window/forward_window size must match input size");
 
   return cudf::make_numeric_column(data_type{INT32}, 0);
 }
