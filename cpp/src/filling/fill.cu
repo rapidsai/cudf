@@ -32,24 +32,14 @@
 
 namespace {
 
-struct fill_value_factory {
+struct inplace_fill_range_dispatch {
   cudf::scalar const* p_value = nullptr;
+  cudf::mutable_column_view& target;
 
   template <typename T>
-  struct fill_value {
-    T value;
-    bool is_valid;
-
-    __device__
-    T data(cudf::size_type index) { return value; }
-
-    __device__
-    bool valid(cudf::size_type index) { return is_valid; }
-  };
-
-  template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), fill_value<T>>
-  make(cudaStream_t stream = 0) {
+  std::enable_if_t<cudf::is_fixed_width<T>(), void>
+  operator()(cudf::size_type source_begin, cudf::size_type source_end,
+             cudf::size_type target_begin, cudaStream_t stream = 0) {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
 #if 1
     // TODO: temporary till the const issue in cudf::scalar's value() is fixed.
@@ -60,17 +50,18 @@ struct fill_value_factory {
 #endif
     T value = p_scalar->value(stream);
     bool is_valid = p_scalar->is_valid();
-    return fill_value<T>{value, is_valid};
+    cudf::experimental::detail::copy_range(
+      thrust::make_constant_iterator(value),
+      thrust::make_constant_iterator(is_valid),
+      target, target_begin, target_begin + (source_end - source_begin),
+      stream);
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::string_view>::value, fill_value<T>>
-  make(cudaStream_t stream = 0) {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
-    auto p_scalar = static_cast<ScalarType const*>(this->p_value);
-    T value{p_scalar->data(), p_scalar->size()};
-    bool is_valid = p_scalar->is_valid();
-    return fill_value<T>{value, is_valid};
+  std::enable_if_t<not cudf::is_fixed_width<T>(), void>
+  operator()(cudf::size_type source_begin, cudf::size_type source_end,
+             cudf::size_type target_begin, cudaStream_t stream = 0) {
+    CUDF_FAIL("in-place fill does not work for variable width types.");
   }
 };
 
@@ -98,9 +89,10 @@ void fill(mutable_column_view& destination,
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
   if (end != begin) {  // otherwise no-op
-    copy_range(fill_value_factory{&value},
-               destination,
-               begin, end, stream);
+    cudf::experimental::type_dispatcher(
+      destination.type(),
+      inplace_fill_range_dispatch{&value, destination},
+      0, end - begin, begin, stream);
   }
 
   return;

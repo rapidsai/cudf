@@ -35,14 +35,16 @@
 
 namespace {
 
-template <typename T, typename SourceFunctor, bool has_validity>
+template <typename SourceValueIterator, typename SourceValidityIterator,
+          typename T, bool has_validity>
 __global__
-void copy_range_kernel(T* __restrict__ const data,
+void copy_range_kernel(SourceValueIterator source_value_begin,
+                       SourceValidityIterator source_validity_begin,
+                       T* __restrict__ const data,
                        cudf::bitmask_type* __restrict__ const bitmask,
                        cudf::size_type* __restrict__ const null_count,
                        cudf::size_type begin,
-                       cudf::size_type end,
-                       SourceFunctor source) {
+                       cudf::size_type end) {
   using cudf::experimental::detail::warp_size;
 
   const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -78,12 +80,12 @@ void copy_range_kernel(T* __restrict__ const data,
     bool in_range = (index >= begin && index < end);
 
     // write data
-    if (in_range) data[index] = source.data(source_idx);
+    if (in_range) data[index] = *(source_value_begin + source_idx);
 
     if (has_validity) {  // update bitmask
       int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
 
-      bool valid = in_range and source.valid(source_idx);
+      bool valid = in_range && *(source_validity_begin + source_idx);
       int warp_mask = __ballot_sync(active_mask, valid);
 
       cudf::bitmask_type old_mask = bitmask[mask_idx];
@@ -121,74 +123,6 @@ void copy_range_kernel(T* __restrict__ const data,
   }
 }
 
-template <typename SourceFactory>
-struct copy_range_dispatch {
-  SourceFactory factory;
-
-  template <typename T>
-  void operator()(cudf::mutable_column_view& target,
-                  cudf::size_type begin, cudf::size_type end,
-                  cudaStream_t stream = 0) {
-    using cudf::experimental::detail::warp_size;
-
-    static_assert(warp_size == cudf::util::size_in_bits<cudf::bitmask_type>(),
-      "copy_range_kernel assumes bitmask element size in bits == warp size");
-
-    auto source = factory.template make<T>(stream);
-
-    T * __restrict__ data = target.head<T>();
-    cudf::bitmask_type * __restrict__ bitmask = target.null_mask();
-    auto offset = target.offset();
-
-#if 1
-    auto warp_aligned_begin_lower_bound =
-      cudf::size_type{begin - (begin % warp_size)};
-    auto warp_aligned_end_upper_bound =
-      cudf::size_type{
-        (end % warp_size) == 0 ? end : end + (warp_size - (end % warp_size))};
-    auto num_items =
-      warp_aligned_end_upper_bound - warp_aligned_begin_lower_bound;
-#else
-    // This one results in a compiler internal error! TODO: file NVIDIA bug
-    // cudf::size_type num_items = cudf::util::round_up_safe(end - begin, warp_size);
-    // number threads to cover range, rounded to nearest warp
-    // this code runs for one additional round if begin is not warp aligned,
-    // and end is block_size + 1
-    auto num_items =
-      cudf::size_type{
-        warp_size * cudf::util::div_rounding_up_safe(end - begin, warp_size)};
-#endif
-
-    constexpr auto block_size = int{256};
-    static_assert(block_size <= 1024,
-      "copy_range kernel assumes block_size is not larger than 1024");
-
-    auto grid = cudf::util::cuda::grid_config_1d{num_items, block_size, 1};
-
-    if (target.nullable() == true) {
-      // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
-      // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
-      // will scan the entire bitmask array, and this can be surprising
-      // in performance if the copy range is small and the column size is
-      // large).
-      rmm::device_scalar<cudf::size_type> null_count(target.null_count(), stream);
-
-      auto kernel = copy_range_kernel<T, decltype(source), true>;
-      kernel<<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, null_count.data(), offset + begin, offset + end, source);
-
-      target.set_null_count(null_count.value());
-    }
-    else {
-      auto kernel = copy_range_kernel<T, decltype(source), false>;
-      kernel<<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, nullptr, offset + begin, offset + end, source);
-    }
-
-    CHECK_STREAM(stream);
-  }
-};
-
 }  // namespace anonymous
 
 namespace cudf {
@@ -212,18 +146,84 @@ namespace detail {
  * @param end The index after the last element of the target range to write to
  * @param stream CUDA stream to run this function
  */
-template <typename SourceFunctor>
-void copy_range(SourceFunctor source, mutable_column_view& target,
-                size_type begin, size_type end, cudaStream_t stream = 0) {
-  CUDF_EXPECTS((begin >= 0) &&
-               (begin <= end) &&
-               (begin < target.size()) &&
-               (end <= target.size()),
+template <typename SourceValueIterator, typename SourceValidityIterator>
+void copy_range(SourceValueIterator source_value_begin,
+                SourceValidityIterator source_validity_begin,
+                mutable_column_view& target,
+                size_type target_begin, size_type target_end,
+                cudaStream_t stream = 0) {
+  CUDF_EXPECTS((target_begin <= target_end) &&
+                 (target_begin >= 0) &&
+                 (target_begin < target.size()) &&
+                 (target_end <= target.size()),
                "Range is out of bounds.");
+  using T = typename std::iterator_traits<SourceValueIterator>::value_type;
 
-  type_dispatcher(target.type(),
-                  copy_range_dispatch<SourceFunctor>{source},
-                  target, begin, end, stream);
+  // this code assumes that source and target have the same type.
+  CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
+
+  static_assert(warp_size == cudf::util::size_in_bits<bitmask_type>(),
+    "copy_range_kernel assumes bitmask element size in bits == warp size");
+
+  T * __restrict__ data = target.head<T>();
+  bitmask_type * __restrict__ bitmask = target.null_mask();
+  auto offset = target.offset();
+
+#if 1
+  auto warp_aligned_begin_lower_bound =
+    size_type{target_begin - (target_begin % warp_size)};
+  auto warp_aligned_end_upper_bound =
+    size_type{
+      (target_end % warp_size) == 0 ? \
+        target_end : target_end + (warp_size - (target_end % warp_size))
+    };
+  auto num_items =
+    warp_aligned_end_upper_bound - warp_aligned_begin_lower_bound;
+#else
+  // This one results in a compiler internal error! TODO: file NVIDIA bug
+  // size_type num_items =
+  //   cudf::util::round_up_safe(target_end - target_begin, warp_size);
+  // number threads to cover range, rounded to nearest warp
+  // this code runs for one additional round if target_begin is not warp
+  // aligned, and target_end is block_size + 1
+  auto num_items =
+    size_type{
+      warp_size *
+        cudf::util::div_rounding_up_safe(target_end - target_begin, warp_size)
+    };
+#endif
+
+  constexpr auto block_size = int{256};
+  static_assert(block_size <= 1024,
+    "copy_range kernel assumes block_size is not larger than 1024");
+
+  auto grid = cudf::util::cuda::grid_config_1d{num_items, block_size, 1};
+
+  if (target.nullable() == true) {
+    // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
+    // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
+    // will scan the entire bitmask array, and this can be surprising
+    // in performance if the copy range is small and the column size is
+    // large).
+    rmm::device_scalar<size_type> null_count(target.null_count(), stream);
+
+    auto kernel =
+      copy_range_kernel<SourceValueIterator, SourceValidityIterator, T, true>;
+    kernel<<<grid.num_blocks, block_size, 0, stream>>>(
+      source_value_begin, source_validity_begin,
+      data, bitmask, null_count.data(), offset + target_begin, offset + target_end);
+
+    target.set_null_count(null_count.value());
+  }
+  else {
+    auto kernel =
+      copy_range_kernel<SourceValueIterator, SourceValidityIterator, T, false>;
+    kernel<<<grid.num_blocks, block_size, 0, stream>>>(
+      source_value_begin, source_validity_begin,
+      data, bitmask, nullptr, offset + target_begin, offset + target_end);
+  }
+
+  CHECK_STREAM(stream);
 }
 
 /**
