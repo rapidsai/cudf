@@ -3991,6 +3991,53 @@ def test_df_constructor_dtype(dtype):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
+        ),
+        pytest.param(
+            gd.DataFrame(),
+            marks=[
+                pytest.mark.xfail(
+                    reason="_apply_support_method fails on empty dataframes."
+                )
+            ],
+        ),
+        pytest.param(
+            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Rowwise ops do not currently support nulls."
+                )
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+def test_rowwise_ops(data, op):
+    gdf = data
+    pdf = gdf.to_pandas()
+
+    if op in ("var", "std"):
+        expected = getattr(pdf, op)(axis=1, ddof=0)
+        got = getattr(gdf, op)(axis=1, ddof=0)
+    else:
+        expected = getattr(pdf, op)(axis=1)
+        got = getattr(gdf, op)(axis=1)
+
+    assert_eq(expected, got, check_less_precise=7)
+
+
 @pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
 def test_insert(data):
     pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
@@ -4014,5 +4061,7 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
     # pandas insert doesnt support negative indexing
-    pdf.insert(len(pdf.columns) - 1, "qux", data)
+    pdf.insert(len(pdf.columns), "qux", data)
     gdf.insert(-1, "qux", data)
+
+    assert_eq(pdf, gdf)
