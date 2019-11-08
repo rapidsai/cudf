@@ -68,10 +68,11 @@ namespace jit {
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,
                       column_view const& rhs,
-                      binary_operator ope) {
+                      binary_operator ope,
+                      cudaStream_t stream) {
   
   cudf::jit::launcher(
-    hash, code::kernel, headers_name, compiler_flags, headers_code
+    hash, code::kernel, headers_name, compiler_flags, headers_code, stream
   ).set_kernel_inst(
     "kernel_v_s", // name of the kernel we are launching
     { cudf::jit::get_type_name(out.type()), // list of template arguments
@@ -90,10 +91,11 @@ void binary_operation(mutable_column_view& out,
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       scalar const& rhs,
-                      binary_operator ope) {
+                      binary_operator ope,
+                      cudaStream_t stream) {
   
   cudf::jit::launcher(
-    hash, code::kernel, headers_name, compiler_flags, headers_code
+    hash, code::kernel, headers_name, compiler_flags, headers_code, stream
   ).set_kernel_inst(
     "kernel_v_s", // name of the kernel we are launching
     { cudf::jit::get_type_name(out.type()), // list of template arguments
@@ -112,10 +114,11 @@ void binary_operation(mutable_column_view& out,
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
-                      binary_operator ope) {
+                      binary_operator ope,
+                      cudaStream_t stream) {
 
   cudf::jit::launcher(
-    hash, code::kernel, headers_name, compiler_flags, headers_code
+    hash, code::kernel, headers_name, compiler_flags, headers_code, stream
   ).set_kernel_inst(
     "kernel_v_v", // name of the kernel we are launching
     { cudf::jit::get_type_name(out.type()), // list of template arguments
@@ -135,9 +138,9 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
                       const std::string& ptx,
-                      data_type output_type) {
+                      cudaStream_t stream) {
 
-  std::string const output_type_name = cudf::jit::get_type_name(output_type);
+  std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
   std::string ptx_hash = 
     hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type_name)); 
@@ -147,7 +150,7 @@ void binary_operation(mutable_column_view& out,
     + code::kernel;
 
   cudf::jit::launcher(
-    ptx_hash, cuda_source, headers_name, compiler_flags, headers_code
+    ptx_hash, cuda_source, headers_name, compiler_flags, headers_code, stream
   ).set_kernel_inst(
     "kernel_v_v", // name of the kernel we are launching
     { output_type_name,                     // list of template arguments
@@ -176,15 +179,18 @@ namespace {
  * @param valid_scalar bool indicating if scalar is valid
  * @param num_values number of values in input mask valid_col
  *---------------------------------------------------------------------------**/
-auto scalar_col_valid_mask_and(column_view const& col, scalar const& s) {
+auto scalar_col_valid_mask_and(column_view const& col, scalar const& s,
+                               cudaStream_t stream,
+                               rmm::mr::device_memory_resource *mr)
+{
   if (col.size() == 0) {
     return rmm::device_buffer{};
   }
 
   if (not s.is_valid()) {
-    return create_null_mask(col.size(), mask_state::ALL_NULL);
+    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
   } else if (s.is_valid() && col.nullable()) {
-    return copy_bitmask(col);
+    return copy_bitmask(col, stream, mr);
   } else if (s.is_valid() && not col.nullable()) {
     return rmm::device_buffer{};
   }
@@ -200,14 +206,15 @@ std::unique_ptr<column> binary_operation( scalar const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
-  auto new_mask = scalar_col_valid_mask_and(rhs, lhs);
-  auto out = make_numeric_column(output_type, rhs.size(), new_mask);
+  auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+  auto out = make_numeric_column(output_type, rhs.size(), new_mask,
+                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (rhs.size() == 0)
     return out;
 
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ope);
+  binops::jit::binary_operation(out_view, lhs, rhs, ope, stream);
   return out;
 }
 
@@ -218,14 +225,15 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
-  auto new_mask = scalar_col_valid_mask_and(lhs, rhs);
-  auto out = make_numeric_column(output_type, lhs.size(), new_mask);
+  auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+  auto out = make_numeric_column(output_type, lhs.size(), new_mask,
+                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (lhs.size() == 0)
     return out;
 
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ope);
+  binops::jit::binary_operation(out_view, lhs, rhs, ope, stream);
   return out;  
 }
 
@@ -242,8 +250,9 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
   if (lhs.size() == 0) // also rhs.size() == 0
     return make_numeric_column(output_type, 0);
 
-  auto new_mask = bitmask_and(lhs, rhs);
-  auto out = make_numeric_column(output_type, lhs.size(), new_mask);
+  auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+  auto out = make_numeric_column(output_type, lhs.size(), new_mask,
+                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // TODO: This whole shebang should be replaced by jitified header of chrono
         // gdf_column lhs_tmp{};
@@ -256,14 +265,14 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
         // else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
 
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ope);
+  binops::jit::binary_operation(out_view, lhs, rhs, ope, stream);
   return out;
 
   // gdf_column_free(&lhs_tmp);
   // gdf_column_free(&rhs_tmp);
 }
 
-std::unique_ptr<column> binary_operation(column_view const& lhs,
+std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           column_view const& rhs,
                                           std::string const& ptx,
                                           data_type output_type,
@@ -276,8 +285,9 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.size() == 0) // also rhs.size() == 0
     return make_numeric_column(output_type, 0);
 
-  auto new_mask = bitmask_and(lhs, rhs);
-  auto out = make_numeric_column(output_type, lhs.size(), new_mask);
+  auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+  auto out = make_numeric_column(output_type, lhs.size(), new_mask,
+                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
   
   // Check for datatype
   auto is_type_supported = [] (data_type type) -> bool {
@@ -290,7 +300,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_type_supported(output_type), "Invalid/Unsupported output datatype");
   
   auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, ptx, output_type);
+  binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
   return out;
 }
 
