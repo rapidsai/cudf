@@ -26,6 +26,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
 
 ## Improvements
@@ -62,6 +63,8 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #2971 Added initial gather and scatter methods for strings_column_view
+- PR #2991 Added strings column functions concatenate and join_strings
 - PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
@@ -136,6 +139,7 @@
 - PR #3313 Fix public headers including non-public headers
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
+- PR #3323 Fix `insert` non-assert test case
 
 
 # cuDF 0.10.0 (16 Oct 2019)
@@ -181,7 +185,6 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
-- PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories
