@@ -19,6 +19,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/transform.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
@@ -29,11 +30,11 @@
 #include <types.hpp.jit>
 
 namespace cudf {
+namespace experimental {
 namespace transformation {
 
 namespace jit {
 
-namespace detail {
 
 /**
  * @brief Functor to enable the internal working of `get_data_ptr`
@@ -59,8 +60,6 @@ auto get_data_ptr(column_view const& view) {
   return experimental::type_dispatcher(view.type(),
                          get_data_ptr_functor{}, view);
 }
-
-} // namespace detail
 
 
 void unary_operation(mutable_column_view output, column_view input,
@@ -93,19 +92,23 @@ void unary_operation(mutable_column_view output, column_view input,
       cudf::jit::get_type_name(input.type()) }
   ).launch(
     output.size(),
-    detail::get_data_ptr(output),
-    detail::get_data_ptr(input)
+    get_data_ptr(output),
+    get_data_ptr(input)
   );
 
 }
 
-}  // namespace jit
+} // namespace jit
+} // namespace transformation
 
-}  // namespace transformation
+
+namespace detail {
 
 std::unique_ptr<column> transform(column_view const& input,
                                   const std::string &unary_udf,
-                                  data_type output_type, bool is_ptx)
+                                  data_type output_type, bool is_ptx,
+                                  rmm::mr::device_memory_resource *mr,
+                                  cudaStream_t stream)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
 
@@ -124,4 +127,15 @@ std::unique_ptr<column> transform(column_view const& input,
   return output;
 }
 
-}  // namespace cudf
+} // namespace detail
+
+std::unique_ptr<column> transform(column_view const& input,
+                                  const std::string &unary_udf,
+                                  data_type output_type, bool is_ptx,
+                                  rmm::mr::device_memory_resource *mr)
+{
+  return detail::transform(input, unary_udf, output_type, is_ptx, mr);
+}
+
+} // namespace experimental
+} // namespace cudf

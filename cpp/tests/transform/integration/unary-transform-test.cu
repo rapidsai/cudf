@@ -48,7 +48,8 @@ void test_udf(
   auto in = cudf::test::fixed_width_column_wrapper<dtype>(
       data_iter, data_iter + size, all_valid);
 
-  std::unique_ptr<cudf::column> out = cudf::transform(in, udf, data_type(experimental::type_to_id<dtype>()), is_ptx);
+  std::unique_ptr<cudf::column> out = cudf::experimental::transform(
+    in, udf, data_type(experimental::type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }

@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "types.h"
-#include "types.hpp"
+#include <cudf/types.hpp>
+#include <memory>
 
 namespace cudf {
 namespace experimental {
+namespace detail {    
 
 /**
  * @brief Creates a new column by applying a unary function against every
@@ -38,6 +38,7 @@ namespace experimental {
  * @param outout_type   The output type that is compatible with the output type in the PTX code
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param mr            The memory resource to use for for all device allocations
+ * @param stream        CUDA stream on which to execute kernels
  * @return cudf::column The column resulting from applying the unary function to
  *                      every element of the input
  **/
@@ -46,7 +47,9 @@ std::unique_ptr<column> transform(
   const std::string &unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream = 0);
 
-}  // namespace experimental
-}  // namespace cudf
+} // namespace detail
+} // namespace experimental
+} // namespace cudf
