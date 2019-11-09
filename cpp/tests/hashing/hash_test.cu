@@ -19,28 +19,41 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-// for expect_columns_not_equal
+// for columns_equal
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 
 namespace {
 
-// TODO maybe refactor expect_columns_equal to return bool instead of assert
-void expect_columns_not_equal(cudf::column_view lhs, cudf::column_view rhs) {
-  // NOTE columns properties SHOULD be equal
-  cudf::test::expect_column_properties_equal(lhs, rhs);
+// TODO move these to column_utilities?
+
+#define RETURN_FALSE_IF_NEQ(a, b) if (not ((a) == (b))) { return false; }
+
+bool column_properties_equal(cudf::column_view lhs, cudf::column_view rhs) {
+  RETURN_FALSE_IF_NEQ(lhs.type(), rhs.type());
+  RETURN_FALSE_IF_NEQ(lhs.size(), rhs.size());
+  RETURN_FALSE_IF_NEQ(lhs.null_count(), rhs.null_count());
+  if (lhs.size() > 0) {
+    RETURN_FALSE_IF_NEQ(lhs.nullable(), rhs.nullable());
+  }
+  RETURN_FALSE_IF_NEQ(lhs.has_nulls(), rhs.has_nulls());
+  RETURN_FALSE_IF_NEQ(lhs.num_children(), rhs.num_children());
+  return true;
+}
+
+bool columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
+  using cudf::experimental::row_equality_comparator;
+
+  if (not column_properties_equal(lhs, rhs))
+    return false;
 
   auto d_lhs = cudf::table_device_view::create(cudf::table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(cudf::table_view{{rhs}});
 
-  EXPECT_FALSE(
-      thrust::equal(thrust::device, thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(lhs.size()),
-                    thrust::make_counting_iterator(0),
-                    cudf::experimental::row_equality_comparator<true>{*d_lhs, *d_rhs}));
-
-  // TODO is this necessary?
-  CUDA_TRY(cudaDeviceSynchronize());
+  return thrust::equal(thrust::device, thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(lhs.size()),
+                       thrust::make_counting_iterator(0),
+                       row_equality_comparator<true>{*d_lhs, *d_rhs});
 }
 
 }
@@ -51,7 +64,6 @@ TEST_F(HashTest, MultiValue)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::strings_column_wrapper;
-  using cudf::test::expect_columns_equal;
   using cudf::experimental::bool8;
 
   auto const strings_col = strings_column_wrapper(
@@ -81,7 +93,7 @@ TEST_F(HashTest, MultiValue)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_equal(output1->view(), output2->view());
+  EXPECT_TRUE(columns_equal(output1->view(), output2->view()));
 }
 
 TEST_F(HashTest, MultiValueNulls)
@@ -138,7 +150,7 @@ TEST_F(HashTest, MultiValueNulls)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_equal(output1->view(), output2->view());
+  EXPECT_TRUE(columns_equal(output1->view(), output2->view()));
 }
 
 TEST_F(HashTest, StringInequality)
@@ -164,7 +176,11 @@ TEST_F(HashTest, StringInequality)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_not_equal(output1->view(), output2->view());
+  auto const output1_view = output1->view();
+  auto const output2_view = output2->view();
+
+  EXPECT_TRUE(column_properties_equal(output1_view, output2_view));
+  EXPECT_FALSE(columns_equal(output1_view, output2_view));
 }
 
 template <typename T>
@@ -185,7 +201,7 @@ TYPED_TEST(HashTestTyped, Equality)
   auto const output1 = cudf::hash(input);
   auto const output2 = cudf::hash(input);
 
-  expect_columns_equal(output1->view(), output2->view());
+  EXPECT_TRUE(columns_equal(output1->view(), output2->view()));
 }
 
 TYPED_TEST(HashTestTyped, EqualityNulls)
@@ -205,7 +221,7 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_equal(output1->view(), output2->view());
+  EXPECT_TRUE(columns_equal(output1->view(), output2->view()));
 }
 
 TYPED_TEST(HashTestTyped, Inequality)
@@ -224,5 +240,9 @@ TYPED_TEST(HashTestTyped, Inequality)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_not_equal(output1->view(), output2->view());
+  auto const output1_view = output1->view();
+  auto const output2_view = output2->view();
+
+  EXPECT_TRUE(column_properties_equal(output1_view, output2_view));
+  EXPECT_FALSE(columns_equal(output1_view, output2_view));
 }
