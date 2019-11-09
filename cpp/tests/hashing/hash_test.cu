@@ -19,26 +19,13 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-namespace {
-
-template <typename T>
-void expect_symmetry(cudf::column_view const& col)
-{
-  std::vector<T> host(col.size());
-  cudaMemcpy(host.data(), col.data<T>(),
-    col.size() * sizeof(T), cudaMemcpyDefault);
-  CUDF_EXPECTS(std::equal(host.begin(), host.begin() + (col.size() / 2),
-    host.rbegin()), "Expected hash to have symmetrical equality");
-}
-
-}
-
 class HashTest : public cudf::test::BaseFixture {};
 
-TEST_F(HashTest, MultiValueMurmur)
+TEST_F(HashTest, MultiValue)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::strings_column_wrapper;
+  using cudf::test::expect_columns_equal;
   using cudf::experimental::bool8;
 
   auto const strings_col = strings_column_wrapper(
@@ -46,61 +33,86 @@ TEST_F(HashTest, MultiValueMurmur)
     "The quick brown fox",
     "jumps over the lazy dog.",
     "All work and no play makes Jack a dull boy",
-    "All work and no play makes Jack a dull boy",
-    "jumps over the lazy dog.",
-    "The quick brown fox",
-    ""});
+    "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
+  using limits = std::numeric_limits<int32_t>;
   auto const ints_col = fixed_width_column_wrapper<int32_t>(
-    {0, 123, -456789, 123456789, 123456789, -456789, 123, 0});
+    {0, 100, -100, limits::min(), limits::max()});
 
-  auto const bools_col = fixed_width_column_wrapper<bool8>(
-    {0, 1, 10, 255, 255, 1, 1, 0});
+  // Different truthy values should be equal
+  auto const bools_col1 = fixed_width_column_wrapper<bool8>({0, 1, 1, 1, 0});
+  auto const bools_col2 = fixed_width_column_wrapper<bool8>({0, 1, 2, 255, 0});
 
-  auto const secs_col = fixed_width_column_wrapper<cudf::timestamp_s>(
-    {0, -123, 456, 123456, 123456, 456, -123, 0});
+  using ts = cudf::timestamp_s;
+  auto const secs_col = fixed_width_column_wrapper<ts>(
+    {ts::duration::zero(), 100, -100, ts::duration::min(), ts::duration::max()});
 
-  // Expect output to have symmetrical equality
-  auto const input = cudf::table_view(
-    {strings_col, ints_col, bools_col, secs_col});
-  auto const output = cudf::hash(input);
-  expect_symmetry<int32_t>(output->view());
+  auto const input1 = cudf::table_view(
+    {strings_col, ints_col, bools_col1, secs_col});
+  auto const input2 = cudf::table_view(
+    {strings_col, ints_col, bools_col2, secs_col});
+
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
+
+  expect_columns_equal(output1->view(), output2->view());
 }
 
-TEST_F(HashTest, MultiValueNullsMurmur)
+TEST_F(HashTest, MultiValueNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::strings_column_wrapper;
+  using cudf::test::expect_columns_equal;
   using cudf::experimental::bool8;
 
-  auto const strings_col = strings_column_wrapper(
+  // Nulls with different values should be equal
+  auto const strings_col1 = strings_column_wrapper(
     {"",
     "The quick brown fox",
     "jumps over the lazy dog.",
     "All work and no play makes Jack a dull boy",
-    "All work and no play makes Jack a dull boy",
-    "jumps over the lazy dog.",
+    "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
+    {0, 1, 1, 0, 1});
+  auto const strings_col2 = strings_column_wrapper(
+    {"different but null",
     "The quick brown fox",
-    ""},
-    {0, 1, 1, 0, 0, 1, 1, 0});
+    "jumps over the lazy dog.",
+    "I am Jack's complete lack of null value",
+    "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
+    {0, 1, 1, 0, 1});
 
-  auto const ints_col = fixed_width_column_wrapper<int32_t>(
-    {0, 123, -456789, 123456789, 123456789, -456789, 123, 0},
-    {1, 0, 1, 0, 0, 1, 0, 1});
+  // Nulls with different values should be equal
+  using limits = std::numeric_limits<int32_t>;
+  auto const ints_col1 = fixed_width_column_wrapper<int32_t>(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
+  auto const ints_col2 = fixed_width_column_wrapper<int32_t>(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
 
-  auto const bools_col = fixed_width_column_wrapper<bool8>(
-    {0, 1, 10, 255, 255, 1, 1, 0},
-    {1, 1, 1, 0, 0, 1, 1, 1});
+  // Nulls with different values should be equal
+  // Different truthy values should be equal
+  auto const bools_col1 = fixed_width_column_wrapper<bool8>(
+    {0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  auto const bools_col2 = fixed_width_column_wrapper<bool8>(
+    {0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
-  auto const secs_col = fixed_width_column_wrapper<cudf::timestamp_s>(
-    {0, -123, 456, 123456, 123456, 456, -123, 0},
-    {1, 0, 1, 1, 1, 1, 0, 1});
+  // Nulls with different values should be equal
+  using ts = cudf::timestamp_s;
+  auto const secs_col1 = fixed_width_column_wrapper<ts>(
+    {ts::duration::zero(), 100, -100, ts::duration::min(), ts::duration::max()},
+    {1, 0, 0, 1, 1});
+  auto const secs_col2 = fixed_width_column_wrapper<ts>(
+    {ts::duration::zero(), -200, 200, ts::duration::min(), ts::duration::max()},
+    {1, 0, 0, 1, 1});
 
-  // Expect output to have symmetrical equality
-  auto const input = cudf::table_view(
-    {strings_col, ints_col, bools_col, secs_col});
-  auto const output = cudf::hash(input);
-  expect_symmetry<int32_t>(output->view());
+  auto const input1 = cudf::table_view(
+    {strings_col1, ints_col1, bools_col1, secs_col1});
+  auto const input2 = cudf::table_view(
+    {strings_col2, ints_col2, bools_col2, secs_col2});
+
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
+
+  expect_columns_equal(output1->view(), output2->view());
 }
 
 /*template <typename T>
