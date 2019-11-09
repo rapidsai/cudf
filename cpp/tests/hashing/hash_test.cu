@@ -167,11 +167,62 @@ TEST_F(HashTest, StringInequality)
   expect_columns_not_equal(output1->view(), output2->view());
 }
 
-/*template <typename T>
+template <typename T>
 class HashTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(HashTestTyped, SingleValue)
+TYPED_TEST(HashTestTyped, Equality)
 {
-}*/
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_columns_equal;
+
+  auto const col = fixed_width_column_wrapper<TypeParam>(
+    {0, 127, 1, 2, 8});
+  auto const input = cudf::table_view({col});
+
+  // Hash of same input should be equal
+  auto const output1 = cudf::hash(input);
+  auto const output2 = cudf::hash(input);
+
+  expect_columns_equal(output1->view(), output2->view());
+}
+
+TYPED_TEST(HashTestTyped, EqualityNulls)
+{
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_columns_equal;
+
+  // Nulls with different values should be equal
+  auto const col1 = fixed_width_column_wrapper<TypeParam>(
+    {0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  auto const col2 = fixed_width_column_wrapper<TypeParam>(
+    {1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
+
+  expect_columns_equal(output1->view(), output2->view());
+}
+
+TYPED_TEST(HashTestTyped, Inequality)
+{
+  using cudf::test::fixed_width_column_wrapper;
+
+  // Different values in last two rows
+  auto const col1 = fixed_width_column_wrapper<TypeParam>(
+    {0, 127, 1, 2, 8}, {1, 1, 1, 1, 1});
+  auto const col2 = fixed_width_column_wrapper<TypeParam>(
+    {1, 127, 1, 2, 8}, {1, 1, 1, 1, 1});
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
+
+  expect_columns_not_equal(output1->view(), output2->view());
+}
