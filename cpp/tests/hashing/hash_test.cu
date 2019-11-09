@@ -19,6 +19,32 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+// for expect_columns_not_equal
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/row_operators.cuh>
+
+namespace {
+
+// TODO maybe refactor expect_columns_equal to return bool instead of assert
+void expect_columns_not_equal(cudf::column_view lhs, cudf::column_view rhs) {
+  // NOTE columns properties SHOULD be equal
+  cudf::test::expect_column_properties_equal(lhs, rhs);
+
+  auto d_lhs = cudf::table_device_view::create(cudf::table_view{{lhs}});
+  auto d_rhs = cudf::table_device_view::create(cudf::table_view{{rhs}});
+
+  EXPECT_FALSE(
+      thrust::equal(thrust::device, thrust::make_counting_iterator(0),
+                    thrust::make_counting_iterator(lhs.size()),
+                    thrust::make_counting_iterator(0),
+                    cudf::experimental::row_equality_comparator<true>{*d_lhs, *d_rhs}));
+
+  // TODO is this necessary?
+  CUDA_TRY(cudaDeviceSynchronize());
+}
+
+}
+
 class HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(HashTest, MultiValue)
@@ -113,6 +139,32 @@ TEST_F(HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2);
 
   expect_columns_equal(output1->view(), output2->view());
+}
+
+TEST_F(HashTest, StringInequality)
+{
+  using cudf::test::strings_column_wrapper;
+
+  auto const strings_col1 = strings_column_wrapper(
+    {"",
+    "The quick brown fox",
+    "jumps over the lazy dog.",
+    "All work and no play makes Jack a dull boy",
+    "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+  auto const strings_col2 = strings_column_wrapper(
+    {" ",
+    "ThE quIck broWn foX",
+    "jumpS over the laZy dog.",
+    "All work anD no play maKes Jack a duLl boy",
+    "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+
+  auto const input1 = cudf::table_view({strings_col1});
+  auto const input2 = cudf::table_view({strings_col2});
+
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
+
+  expect_columns_not_equal(output1->view(), output2->view());
 }
 
 /*template <typename T>
