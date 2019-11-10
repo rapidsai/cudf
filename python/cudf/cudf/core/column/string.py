@@ -329,7 +329,9 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer(out_dev_arr), np.dtype("bool"), mask=mask
+            Buffer.from_array_like(out_dev_arr),
+            dtype=np.dtype("bool"),
+            mask=mask,
         )
 
         return Series(col, index=self._index, name=self._parent.name)
@@ -527,6 +529,10 @@ class StringColumn(column.ColumnBase):
             )
         return self._nvstrings
 
+    @nvstrings.setter
+    def nvstrings(self, nvs):
+        self._nvstrings = nvs
+
     @property
     def nvcategory(self):
         if self._nvcategory is None:
@@ -534,6 +540,10 @@ class StringColumn(column.ColumnBase):
 
             self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
+
+    @nvcategory.setter
+    def nvcategory(self, nvc):
+        self._nvcategory = nvc
 
     @property
     def indices(self):
@@ -543,7 +553,7 @@ class StringColumn(column.ColumnBase):
             )
             ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
             self.nvcategory.values(devptr=ptr)
-            self._indices = Buffer(out_dev_arr)
+            self._indices = out_dev_arr
         return self._indices
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -722,8 +732,7 @@ class StringColumn(column.ColumnBase):
         return col_keys, col_inds
 
     def copy(self, deep=True):
-        params = self._replace_defaults()
-        return type(self)(**params)
+        return column.as_column(self.nvstrings.copy())
 
     def unordered_compare(self, cmpop, rhs):
         return _string_column_binop(self, rhs, op=cmpop)
@@ -770,7 +779,7 @@ class StringColumn(column.ColumnBase):
             fill_value = fill_value[: len(self)]._column._data
 
         filled_data = self.nvstrings.fillna(fill_value)
-        result = StringColumn(filled_data)
+        result = column.as_column(filled_data)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
@@ -793,7 +802,7 @@ class StringColumn(column.ColumnBase):
         """
         import nvcategory as nvc
 
-        return StringColumn(nvc.from_strings(self.nvstrings).keys())
+        return column.as_column(nvc.from_strings(self.nvstrings).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):

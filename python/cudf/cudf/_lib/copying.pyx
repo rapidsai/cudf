@@ -5,6 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+import cudf
 from cudf.core.buffer import Buffer
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -88,10 +89,7 @@ def gather(source, maps, bounds_check=True):
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
 
-    if is_string_dtype(in_cols[0]):
-        in_size = in_cols[0].data.size()
-    else:
-        in_size = in_cols[0].data.size
+    in_size = in_cols[0].size
 
     maps = column.as_column(maps)
 
@@ -110,11 +108,15 @@ def gather(source, maps, bounds_check=True):
 
     for i, in_col in enumerate(in_cols):
         if isinstance(in_col, CategoricalColumn):
-            out_cols[i] = CategoricalColumn(
+            dtype = cudf.CategoricalDtype(
+                data_dtype=out_cols[i].dtype,
+                categories=in_col.cat().categories,
+                ordered=in_col.cat().ordered
+            )
+            out_cols[i] = column.build_column(
                 data=out_cols[i].data,
                 mask=out_cols[i].mask,
-                categories=in_col.cat().categories,
-                ordered=in_col.cat().ordered)
+                dtype=dtype)
 
     free_column(c_maps)
     free_table(c_in_table)
@@ -176,9 +178,7 @@ def copy_column(input_col):
     """
         Call cudf::copy
     """
-    print("before: ", input_col.dtype)
     cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    print("after: ", np_dtype_from_gdf_column(c_input_col))
     cdef gdf_column c_out_col
 
     with nogil:
@@ -276,10 +276,7 @@ def scatter_to_frames(source, maps, index=None):
                 in_cols[i]._ordered
             )
 
-    if is_string_dtype(in_cols[0]):
-        in_size = in_cols[0].data.size()
-    else:
-        in_size = in_cols[0].data.size
+    in_size = in_cols[0].size
 
     maps = column.as_column(maps).astype("int32")
     gather_count = len(maps)
@@ -297,14 +294,16 @@ def scatter_to_frames(source, maps, index=None):
     for tab in c_out_tables:
         df = table_to_dataframe(&tab, int_col_names=False)
         for name, cat_info in cats.items():
+            dtype = cudf.CategoricalDtype(
+                data_dtype=df[name].dtype.data_dtype,
+                categories=cat_info[0],
+                ordered=cat_info[1])
             df[name] = Series(
-                CategoricalColumn(
+                build_column(
                     data=df[name].data,
-                    categories=cat_info[0],
-                    ordered=cat_info[1],
+                    dtype=dtype
                 )
             )
-
         if index:
             df = df.set_index(ind_names_tmp)
             if len(index) == 1:

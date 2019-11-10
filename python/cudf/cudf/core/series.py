@@ -1761,7 +1761,7 @@ class Series(object):
         """
         Returns offset of first value that matches
         """
-        return self._column._first_value(value)
+        return self._column.find_first_value(value)
 
     def find_last_value(self, value):
         """
@@ -2199,7 +2199,7 @@ class Series(object):
         )
 
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
-        mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
+        mod_vals = cudautils.modulo(hashed_values.to_gpu_array(), stop)
         return Series(mod_vals)
 
     def quantile(

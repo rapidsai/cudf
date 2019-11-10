@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 
 
@@ -2350,7 +2351,6 @@ class DataFrame(object):
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
             if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype
-                col_with_categories[name] = col.cat.categories
 
         # Save the order of the original column names for preservation later
         org_names = list(itertools.chain(lhs._cols.keys(), rhs._cols.keys()))
@@ -2403,14 +2403,13 @@ class DataFrame(object):
         # Build a new data frame based on the merged columns from GDF
         df = DataFrame()
         for col, name in result:
-            if isinstance(col, nvstrings.nvstrings):
+            if is_string_dtype(col):
                 df[name] = col
             else:
                 df[name] = column.build_column(
                     col.data,
                     dtype=categorical_dtypes.get(name, col.dtype),
                     mask=col.mask,
-                    categories=col_with_categories.get(name, None),
                 )
 
         # Let's make the "index as column" back into an index
@@ -2592,9 +2591,12 @@ class DataFrame(object):
         )
 
         for name, cats in cat_join:
-            df[name] = CategoricalColumn(
-                data=df[name].data, categories=cats, ordered=False
+            dtype = cudf.CategoricalDtype(
+                data_dtype=df[name].dtype.data_dtype,
+                categories=cats,
+                ordered=False,
             )
+            df[name] = column.build_column(data=df[name].data, dtype=dtype)
 
         if sort and len(df):
             df = df.sort_values(idx_col_names)

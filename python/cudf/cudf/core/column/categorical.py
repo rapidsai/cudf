@@ -189,19 +189,22 @@ class CategoricalAccessor(object):
         df = df.sort_values(by="order").reset_index(True)
 
         ordered = kwargs.get("ordered", self.ordered)
-        kwargs = df["new_codes"]._column._replace_defaults()
-        kwargs.update(categories=new_cats, ordered=ordered, name=None)
+        new_codes = df["new_codes"]._column
+        new_dtype = CategoricalDtype(
+            data_dtype=new_codes.dtype, categories=new_cats, ordered=ordered,
+        )
 
         if kwargs.get("inplace", False):
             self._parent._categories = new_cats
-            self._parent._mask = kwargs["mask"]
-            self._parent._data = kwargs["data"]
-            self._parent._ordered = kwargs["ordered"]
-            self._parent._null_count = kwargs["null_count"]
-            self._parent._dtype = CategoricalDtype(ordered=ordered)
+            self._parent.mask = new_codes.mask
+            self._parent.data = new_codes.data
+            self._parent._ordered = ordered
+            self._parent.dtype = new_dype
             return None
 
-        return self._parent.replace(**kwargs)
+        return column.build_column(
+            data=new_codes.data, dtype=new_dtype, mask=new_codes.mask
+        )
 
 
 class CategoricalColumn(column.ColumnBase):
@@ -281,11 +284,6 @@ class CategoricalColumn(column.ColumnBase):
             categories=categories,
             ordered=header["ordered"],
         )
-
-    def _replace_defaults(self):
-        params = super(CategoricalColumn, self)._replace_defaults()
-        params.update(categories=self._categories, ordered=self._ordered)
-        return params
 
     @property
     def as_numerical(self):
@@ -413,18 +411,18 @@ class CategoricalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if not self.has_null_mask:
+        if not self.mask:
             return self
 
         fill_is_scalar = np.isscalar(fill_value)
 
         if fill_is_scalar:
             if fill_value == self.default_na_value():
-                fill_value = self.data.dtype.type(fill_value)
+                fill_value = self.dtype.data_dtype.type(fill_value)
             else:
                 try:
                     fill_value = self._encode(fill_value)
-                    fill_value = self.data.dtype.type(fill_value)
+                    fill_value = self.dtype.data_dtype.type(fill_value)
                 except (ValueError) as err:
                     err_msg = "fill value must be in categories"
                     raise ValueError(err_msg) from err
@@ -441,10 +439,11 @@ class CategoricalColumn(column.ColumnBase):
         result = libcudf.replace.replace_nulls(self, fill_value)
 
         result = column.build_column(
-            result.data, "category", result.mask, categories=self._categories
+            result.data, dtype=self.dtype, mask=result.mask, name=self.name
         )
 
-        return self._mimic_inplace(result.replace(mask=None), inplace)
+        result.mask = None
+        return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):
         """
@@ -506,34 +505,30 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self._categories is empty; just return codes
             return self.cat().codes._column
-        gather_map = (
-            self.cat().codes.astype("int32").fillna(0)._column.data.mem
-        )
+        gather_map = self.cat().codes.astype("int32").fillna(0)._column
         out = self._categories.take(gather_map)
-        return out.replace(mask=self.mask)
+        out.mask = self.mask
 
     def copy(self, deep=True):
-        """Categorical Columns are immutable, so a deep copy produces a
-        copy of the underlying data, mask, categories and a shallow copy
-        creates a new column and copies the references of the data, mask
-        and categories.
-        """
         if deep:
             copied_col = libcudf.copying.copy_column(self)
-            category_col = libcudf.copying.copy_column(self._categories)
-            return self.replace(
+            return column.build_column(
                 data=copied_col.data,
-                mask=copied_col.mask,
                 dtype=self.dtype,
-                categories=category_col,
-                ordered=self._ordered,
+                mask=copied_col.mask,
+                name=self.name,
             )
         else:
-            params = self._replace_defaults()
-            return type(self)(**params)
+            return column.build_column(
+                data=self.data,
+                dtype=self.dtype,
+                mask=self.mask,
+                name=self.name,
+            )
 
 
 def pandas_categorical_as_column(categorical, codes=None):
+
     """Creates a CategoricalColumn from a pandas.Categorical
 
     If ``codes`` is defined, use it instead of ``categorical.codes``

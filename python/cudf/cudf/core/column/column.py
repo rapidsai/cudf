@@ -128,6 +128,11 @@ class ColumnBase(Column):
         mask = Buffer.from_array_like(mask)
         return build_column(self.data, self.dtype, mask=mask, name=self.name)
 
+    def rename(self, name, copy=True):
+        result = self.copy(deep=copy)
+        result.name = name
+        return result
+
     @staticmethod
     def from_mem_views(data_mem, mask_mem=None, null_count=None, name=None):
         """Create a Column object from a data device array (or nvstrings
@@ -301,7 +306,7 @@ class ColumnBase(Column):
     @property
     def valid_count(self):
         """Number of non-null values"""
-        return len(self) - self._null_count
+        return len(self) - self.null_count
 
     @property
     def nullmask(self):
@@ -500,9 +505,8 @@ class ColumnBase(Column):
                         f"index out of bounds for column of size {len(self)}"
                     )
 
-        self._data = out.data
-        self._mask = out.mask
-        self._update_null_count()
+        self.data = out.data
+        self.mask = out.mask
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -748,6 +752,16 @@ class ColumnBase(Column):
     def as_string_column(self, dtype, **kwargs):
         raise NotImplementedError
 
+    def apply_boolean_mask(self, mask):
+
+        mask = as_column(mask, dtype="bool")
+        data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
+        if not data:
+            return column_empty_like(self, newsize=0)
+        else:
+            result = data[0].rename(self.name, copy=False)
+            return result
+
 
 class TypedColumnBase(ColumnBase):
     """Base class for all typed column
@@ -788,19 +802,6 @@ class TypedColumnBase(ColumnBase):
         else:
             return self.replace(
                 data=dropped_col[0].data, mask=None, null_count=0
-            )
-
-    def apply_boolean_mask(self, mask):
-
-        mask = as_column(mask, dtype="bool")
-        data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
-        if not data:
-            return column_empty_like(self, newsize=0)
-        else:
-            return self.replace(
-                data=data[0].data,
-                mask=data[0].mask,
-                null_count=data[0].null_count,
             )
 
     def fillna(self, fill_value, inplace):
@@ -1009,8 +1010,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         desc = arbitrary.__cuda_array_interface__
         data = _data_from_cuda_array_interface_desc(desc)
         mask = _mask_from_cuda_array_interface_desc(desc)
-        nelem = arbitrary.__cuda_array_interface__["shape"][0]
-        col = build_column(data, dtype=data.dtype, mask=mask, name=name)
+        dtype = np.dtype(desc["typestr"])
+        nelem = desc["shape"][0]
+        col = build_column(data, dtype=dtype, mask=mask, name=name)
         return col
 
     elif isinstance(arbitrary, np.ndarray):

@@ -741,7 +741,7 @@ class GenericIndex(Index):
     def name(self, name):
         if name != self._values.name:
             # ensure we don't modify somebody else's Column name
-            self._values = self._values.replace(name=name)
+            self._values.name = name
 
     @property
     def dtype(self):

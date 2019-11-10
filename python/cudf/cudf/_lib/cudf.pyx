@@ -136,16 +136,12 @@ cdef np_dtype_from_gdf_column(gdf_column* col):
     raise TypeError('cannot convert gdf_dtype `%s` to numpy dtype' % (dtype))
 
 
-cdef gdf_dtype gdf_dtype_from_value(Column col) except? GDF_invalid:
-    dtype = col.dtype
-
+cdef gdf_dtype gdf_dtype_from_dtype(dtype) except? GDF_invalid:
     # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
     if is_categorical_dtype(dtype):
-        if col.data is None:
-            raise NotImplementedError
-        return gdf_dtype_from_value(col.cat.codes._column)
+        return gdf_dtype_from_dtype(dtype.data_dtype)
     # if dtype is np.datetime64, interrogate the dtype's time_unit resolution
-    if dtype.kind == 'M':
+    if pd.api.types.is_datetime64_dtype(dtype):
         time_unit, _ = np.datetime_data(dtype)
         if time_unit in np_to_gdf_time_unit:
             # time_unit is valid so must be a GDF_TIMESTAMP
@@ -153,6 +149,7 @@ cdef gdf_dtype gdf_dtype_from_value(Column col) except? GDF_invalid:
         # else default to GDF_DATE64
         return GDF_DATE64
     # everything else is a 1-1 mapping
+    dtype = np.dtype(dtype)
     if dtype.type in dtypes:
         return dtypes[dtype.type]
     raise TypeError('cannot convert numpy dtype `%s` to gdf_dtype' % (dtype))
@@ -261,7 +258,7 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
     cdef uintptr_t category
-    cdef gdf_dtype c_dtype = gdf_dtype_from_value(col)
+    cdef gdf_dtype c_dtype = gdf_dtype_from_dtype(col.dtype)
 
     if col_name is None:
         col_name = col.name
@@ -269,7 +266,7 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
     if c_dtype == GDF_STRING_CATEGORY:
         category = col.nvcategory.get_cpointer()
         if len(col) > 0:
-            data_ptr = get_ctype_ptr(col.indices.mem)
+            data_ptr = get_ctype_ptr(col.indices)
         else:
             data_ptr = 0
     else:
@@ -388,8 +385,8 @@ cdef update_nvstrings_col(col, uintptr_t category_ptr):
         nvstr_obj = nvcat_obj.to_strings()
     else:
         nvstr_obj = nvstrings.to_device([])
-    col._data = nvstr_obj
-    col._nvcategory = nvcat_obj
+    col.nvstrings = nvstr_obj
+    col.nvcategory = nvcat_obj
 
 
 cdef gdf_column* column_view_from_string_column(

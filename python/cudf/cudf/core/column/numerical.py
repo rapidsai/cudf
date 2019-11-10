@@ -61,8 +61,8 @@ class NumericalColumn(column.ColumnBase):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data.mem.dtype):
-                item = self.data.mem.dtype.type(item)
+            if np.can_cast(item, self._data_view().dtype):
+                item = self._data_view().dtype.type(item)
             else:
                 return False
         except Exception:
@@ -264,7 +264,7 @@ class NumericalColumn(column.ColumnBase):
         if np.issubdtype(self.dtype, np.integer):
             return self
 
-        data = Buffer(cudautils.apply_round(self.data.mem, decimals))
+        data = Buffer(cudautils.apply_round(self._data_view(), decimals))
         return self.replace(data=data)
 
     def applymap(self, udf, out_dtype=None):
@@ -345,20 +345,21 @@ class NumericalColumn(column.ColumnBase):
         result = libcudf.replace.replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
-    def find_first_value(self, value):
+    def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches. For monotonic
-        columns, returns the offset of the first larger value.
+        columns, returns the offset of the first larger value
+        if closest=True.
         """
-        found = cudautils.find_first(self.data.mem, value)
-        if found == -1 and self.is_monotonic:
+        found = cudautils.find_first(self._data_view(), value)
+        if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = 0
             elif value > self.max():
                 found = len(self)
             else:
                 found = cudautils.find_first(
-                    self.data.mem, value, compare="gt"
+                    self._data_view(), value, compare="gt"
                 )
                 if found == -1:
                     raise ValueError("value not found")
@@ -366,19 +367,22 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         """
         Returns offset of last value that matches. For monotonic
-        columns, returns the offset of the last smaller value.
+        columns, returns the offset of the last smaller value
+        if closest=True.
         """
-        found = cudautils.find_last(self.data.mem, value)
-        if found == -1 and self.is_monotonic:
+        found = cudautils.find_last(self._data_view(), value)
+        if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = -1
             elif value > self.max():
                 found = len(self) - 1
             else:
-                found = cudautils.find_last(self.data.mem, value, compare="lt")
+                found = cudautils.find_last(
+                    self._data_view(), value, compare="lt"
+                )
                 if found == -1:
                     raise ValueError("value not found")
         elif found == -1:
@@ -392,7 +396,7 @@ class NumericalColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.has_null_mask:
+            if self.mask:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -403,7 +407,7 @@ class NumericalColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.has_null_mask:
+            if self.mask:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(
@@ -504,6 +508,6 @@ def digitize(column, bins, right=False):
     A device array containing the indices
     """
     assert column.dtype == bins.dtype
-    bins_buf = Buffer(rmm.to_device(bins))
+    bins_buf = Buffer.from_array_like(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return libcudf.sort.digitize(column, bin_col, right)
