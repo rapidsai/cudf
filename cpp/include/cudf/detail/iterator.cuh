@@ -84,6 +84,41 @@ struct value_accessor
   }
 };
 
+/** -------------------------------------------------------------------------*
+ * @brief value accessor of column without null bitmask
+ * A unary functor returns scalar value at `id`.
+ * `operator() (cudf::size_type id)` computes `element`
+ * This functor is only allowed for non-nullable columns.
+ *
+ * the return value for element `i` will return `column[i]`
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ *
+ * @tparam Element The type of elements in the column
+ * -------------------------------------------------------------------------**/
+
+template <typename Element>
+struct no_null_value_accessor
+{
+  column_device_view const col;         ///< column view of column in device
+
+/** -------------------------------------------------------------------------*
+ * @brief constructor
+ * @param[in] _col column device view of cudf column
+ * -------------------------------------------------------------------------**/
+  no_null_value_accessor(column_device_view const& _col)
+    : col{_col}
+  {
+    // verify valid is null
+    CUDF_EXPECTS(!_col.nullable(), "Unexpected nullable column.");
+  }
+
+  CUDA_DEVICE_CALLABLE
+  Element operator()(cudf::size_type i) const {
+    return col.element<Element>(i);
+  }
+};
+
 
 /**
  * @brief Constructs an iterator over a column's values that replaces null
@@ -111,6 +146,30 @@ auto make_null_replacement_iterator(column_device_view const& column,
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
       value_accessor<Element>{column, null_replacement});
+}
+
+
+/**
+ * @brief Constructs an iterator over a column's values
+ *
+ * Dereferencing the returned iterator for element `i` will return `column[i]`
+ * This iterator is only allowed for non-nullable columns.
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * @param column The column to iterate
+ * @return auto Iterator that returns valid column elements
+ */
+template <typename Element>
+auto make_no_null_iterator(column_device_view const& column)
+{
+  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == column.type(), "the data type mismatch");
+
+  return thrust::make_transform_iterator(
+      thrust::counting_iterator<cudf::size_type>{0},
+      no_null_value_accessor<Element>{column});
 }
 
 } //namespace detail

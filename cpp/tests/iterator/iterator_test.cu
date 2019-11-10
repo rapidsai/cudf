@@ -81,9 +81,32 @@ template <typename Element>
 struct iter_factory<false, Element> {
   static auto make_iterator(cudf::column_device_view const& column,
                             Element const null_replacement = Element{0}) {
-    return column.data<Element>();
+    return cudf::experimental::detail::make_no_null_iterator<Element>(column);
+    //return column.data<Element>(); //can't do this for non-fixed types. eg. string_view
   }
 };
+
+auto strings_to_string_views(std::vector<std::string>& input_strings) {
+  auto all_valid =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  std::vector<char> chars;
+  std::vector<int32_t> offsets;
+  std::tie(chars, offsets) = 
+    cudf::test::detail::make_chars_and_offsets(
+      input_strings.begin(), input_strings.end(), all_valid);
+  thrust::device_vector<char> dev_chars(chars);
+  char* c_start = thrust::raw_pointer_cast(dev_chars.data());
+
+ // calculate the expected value by CPU. (but contains device pointers)
+  std::vector<cudf::string_view> replaced_array(input_strings.size());
+  std::transform(thrust::counting_iterator<size_t>(0),
+                 thrust::counting_iterator<size_t>(replaced_array.size()),
+                 replaced_array.begin(), [c_start, offsets](auto i) {
+                   return cudf::string_view(c_start + offsets[i],
+                                            offsets[i + 1] - offsets[i]);
+                 });
+  return std::make_tuple(std::move(dev_chars), replaced_array);
+}
 
 // ---------------------------------------------------------------------------
 
@@ -132,6 +155,17 @@ struct IteratorTest : public GdfTest
         [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); },
         true,
         thrust::logical_and<bool>());
+    #ifndef NDEBUG
+    thrust::device_vector<bool> vec(expected.size(), false);
+    thrust::transform(thrust::device,
+        thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
+        thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
+        vec.begin(),
+        [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); }
+        );
+    thrust::copy(vec.begin(), vec.end(), std::ostream_iterator<bool>(std::cout, " "));
+    std::cout<<std::endl;
+    #endif
 
     EXPECT_TRUE(result) << "thrust test";
   }
@@ -407,8 +441,11 @@ TYPED_TEST(IteratorTest, error_handling) {
   auto d_col_no_null = cudf::column_device_view::create(w_col_no_null);
   auto d_col_null = cudf::column_device_view::create(w_col_null);
 
-  // TODO: expects error: data type mismatch
-  CUDF_EXPECT_NO_THROW((iter_factory<false, double>::make_iterator(*d_col_null, double{0})));
+  // expects error: data type mismatch
+  if (!(std::is_same<T, double>::value)) {
+  CUDF_EXPECT_THROW_MESSAGE((iter_factory<false, double>::make_iterator(*d_col_null, double{0})),
+        "the data type mismatch");
+  }
   // expects error: data type mismatch
   if (!(std::is_same<T, float>::value)) {
     CUDF_EXPECT_THROW_MESSAGE((iter_factory<true, float>::make_iterator(*d_col_null, float{0})),
@@ -418,6 +455,67 @@ TYPED_TEST(IteratorTest, error_handling) {
   CUDF_EXPECT_THROW_MESSAGE((iter_factory<true, T>::make_iterator(*d_col_no_null, T{0})),
       "Unexpected non-nullable column.");
 
-  // expects no error: treat no null iterator with column has nulls
-  CUDF_EXPECT_NO_THROW((iter_factory<false, T>::make_iterator(*d_col_null, T{0})));
+  CUDF_EXPECT_THROW_MESSAGE((iter_factory<false, T>::make_iterator(*d_col_null, T{0})),
+      "Unexpected nullable column.");
+}
+
+
+struct StringIteratorTest :  public IteratorTest<cudf::string_view> { 
+};
+
+TEST_F(StringIteratorTest, string_view_null_iterator ) {
+  using T = cudf::string_view;
+  // T init = T{"", 0};
+  std::string zero("zero");
+  // the char data has to be in GPU
+  thrust::device_vector<char> initmsg(zero.begin(), zero.end());
+  T init = T{initmsg.data().get(), int(initmsg.size())};
+
+  // data and valid arrays
+  std::vector<std::string> hos({"one", "two", "three", "four", "five", "six", "eight", "nine"});
+  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
+
+  // replace nulls in CPU
+  std::vector<std::string> replaced_strings(hos.size());
+  std::transform(hos.begin(), hos.end(), host_bools.begin(),
+                 replaced_strings.begin(),
+                 [zero](auto s, auto b) { return b ? s : zero; });
+
+  thrust::device_vector<char> dev_chars;
+  std::vector<T> replaced_array(hos.size());
+  std::tie(dev_chars, replaced_array) = strings_to_string_views(replaced_strings);
+
+  // create a column with bool vector
+  cudf::test::strings_column_wrapper w_col(hos.begin(), hos.end(),
+                                           host_bools.begin());
+  auto d_col = cudf::column_device_view::create(w_col);
+ 
+  // GPU test
+  auto it_dev = iter_factory<true, T>::make_iterator(*d_col, init);
+  this->iterator_test_thrust(replaced_array, it_dev, hos.size());
+  // this->values_equal_test(replaced_array, *d_col); //string_view{0} is invalid
+}
+
+TEST_F(StringIteratorTest, string_view_no_null_iterator ) {
+  using T = cudf::string_view;
+  // T init = T{"", 0};
+  std::string zero("zero");
+  // the char data has to be in GPU
+  thrust::device_vector<char> initmsg(zero.begin(), zero.end());
+  T init = T{initmsg.data().get(), int(initmsg.size())};
+
+  // data array
+  std::vector<std::string> hos({"one", "two", "three", "four", "five", "six", "eight", "nine"});
+
+  thrust::device_vector<char> dev_chars;
+  std::vector<T> all_array(hos.size());
+  std::tie(dev_chars, all_array) = strings_to_string_views(hos);
+
+  // create a column with bool vector
+  cudf::test::strings_column_wrapper w_col(hos.begin(), hos.end());
+  auto d_col = cudf::column_device_view::create(w_col);
+ 
+  // GPU test
+  auto it_dev = iter_factory<false, T>::make_iterator(*d_col, init);
+  this->iterator_test_thrust(all_array, it_dev, hos.size());
 }
