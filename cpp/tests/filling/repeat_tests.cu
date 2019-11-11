@@ -33,19 +33,15 @@
 #include <random>
 
 template <typename T>
-T random_int(T min, T max)
-{
-  static auto seed = unsigned{13377331};
-  static auto engine = std::mt19937{seed};
-  static_assert(std::is_integral<T>::value,
-                "std::uniform_int_distribution works on integral types.");
-  static auto uniform = std::uniform_int_distribution<T>{min, max};
+class RepeatTypedTestFixture
+    : public cudf::test::BaseFixture,
+      cudf::test::UniformRandomGenerator<cudf::size_type> {
+public:
+  RepeatTypedTestFixture()
+      : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
-  return uniform(engine);
-}
-
-template <typename T>
-class RepeatTypedTestFixture : public cudf::test::BaseFixture {};
+  cudf::size_type repeat_count() { return this->generate(); }
+};
 
 TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 
@@ -92,14 +88,13 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
                 "this code assumes fixed-width types.");
 
   constexpr auto num_values = cudf::size_type{10};
-  constexpr auto max_repeat_count = cudf::size_type{10};
 
   auto inputs = std::vector<T>(num_values);
   std::iota(inputs.begin(), inputs.end(), 0);
 
   auto counts = std::vector<cudf::size_type>(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(),
-    [&](cudf::size_type count) { return random_int(0, max_repeat_count); });
+    [&](cudf::size_type count) { return this->repeat_count(); });
 
   auto expected_values = std::vector<T>();
   for (auto i = size_t{0}; i < counts.size(); i++) {
@@ -131,7 +126,6 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
                 "this code assumes fixed-width types.");
 
   constexpr auto num_values = cudf::size_type{10};
-  constexpr auto max_repeat_count = cudf::size_type{10};
 
   auto input_values = std::vector<T>(num_values);
   std::iota(input_values.begin(), input_values.end(), 0);
@@ -142,7 +136,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
 
   auto counts = std::vector<cudf::size_type>(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(),
-    [&](cudf::size_type count) { return random_int(0, max_repeat_count); });
+    [&](cudf::size_type count) { return this->repeat_count(); });
 
   auto expected_values = std::vector<T>();
   auto expected_valids = std::vector<bool>();
