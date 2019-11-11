@@ -68,6 +68,11 @@ const void* get_data_ptr(scalar const& s) {
 }
 
 std::string get_type_name(data_type type) {
+  // TODO: Remove in JIT type utils PR
+  if (type.id() == type_id::BOOL8) {
+    return CUDF_STRINGIFY(uint8_t);
+  }
+  
   return experimental::type_dispatcher(type, experimental::type_to_name{});
 }
 

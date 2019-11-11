@@ -192,6 +192,11 @@ std::unique_ptr<column> binary_operation( scalar const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
+  // Check for datatype
+  CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
+
   auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
   auto out = make_numeric_column(output_type, rhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
@@ -211,6 +216,11 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
+  // Check for datatype
+  CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
+
   auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
@@ -230,15 +240,20 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
-  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+  // Check for datatype
+  CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
 
-  // Check for 0 sized data
-  if (lhs.size() == 0) // also rhs.size() == 0
-    return make_numeric_column(output_type, 0);
+  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
   auto new_mask = bitmask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+  // Check for 0 sized data
+  if (lhs.size() == 0) // also rhs.size() == 0
+    return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -252,26 +267,25 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
-  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+  // Check for datatype
+  auto is_type_supported_ptx = [] (data_type type) -> bool {
+    return is_numeric(type) and 
+           type.id() != type_id::INT8; // Numba PTX doesn't support int8
+  };
+  CUDF_EXPECTS(is_type_supported_ptx(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_type_supported_ptx(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_type_supported_ptx(output_type), "Invalid/Unsupported output datatype");
 
-  // Check for 0 sized data
-  if (lhs.size() == 0) // also rhs.size() == 0
-    return make_numeric_column(output_type, 0);
+  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
   auto new_mask = bitmask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
-  
-  // Check for datatype
-  auto is_type_supported = [] (data_type type) -> bool {
-    return is_numeric(type) and 
-           type.id() != type_id::INT8 and
-           type.id() != type_id::BOOL8;
-  };
-  CUDF_EXPECTS(is_type_supported(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_type_supported(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_type_supported(output_type), "Invalid/Unsupported output datatype");
-  
+
+  // Check for 0 sized data
+  if (lhs.size() == 0) // also rhs.size() == 0
+    return out;
+
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
   return out;
