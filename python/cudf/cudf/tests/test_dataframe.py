@@ -2777,7 +2777,7 @@ def test_round(arr, decimal):
     expected = pser.round(decimal)
 
     assert_eq(result, expected)
-    np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+    np.array_equal(ser.nullmask.to_array(), result.to_array())
 
 
 @pytest.mark.parametrize(
@@ -3631,7 +3631,7 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got.data.mem.copy_to_host(), expected)
+    assert_eq(got._column._data_view().copy_to_host(), expected)
 
 
 def test_constructor_properties():

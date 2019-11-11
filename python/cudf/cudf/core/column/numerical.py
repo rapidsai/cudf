@@ -157,17 +157,18 @@ class NumericalColumn(column.ColumnBase):
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
             ](dev_ptr, **kwargs)
+            return as_column(data, name=self.name)
         else:
-            data = []
-        return as_column(data)
+            return as_column([], dtype="object", name=self.name)
 
     def as_datetime_column(self, dtype, **kwargs):
-        from cudf.core.column import datetime
+        from cudf.core.column import build_column
 
-        return self.view(
-            datetime.DatetimeColumn,
+        return build_column(
+            data=self.astype("int64").data,
             dtype=dtype,
-            data=libcudf.typecast.cast(self, dtype=np.dtype(dtype)).data,
+            mask=self.mask,
+            name=self.name,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -264,8 +265,12 @@ class NumericalColumn(column.ColumnBase):
         if np.issubdtype(self.dtype, np.integer):
             return self
 
-        data = Buffer(cudautils.apply_round(self._data_view(), decimals))
-        return self.replace(data=data)
+        data = Buffer.from_array_like(
+            cudautils.apply_round(self._data_view(), decimals)
+        )
+        return column.build_column(
+            data=data, dtype=self.dtype, mask=self.mask, name=self.name
+        )
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.

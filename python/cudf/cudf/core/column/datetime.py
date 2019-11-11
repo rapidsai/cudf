@@ -194,11 +194,11 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_array = self.data.mem
+            dev_array = self._data_view()
             dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
             null_ptr = None
             if self.mask is not None:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask.mem)
+                null_ptr = libcudf.cudf.get_ctype_ptr(self._mask_view())
             kwargs.update(
                 {
                     "count": len(self),
@@ -210,11 +210,9 @@ class DatetimeColumn(column.ColumnBase):
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
             ](dev_ptr, **kwargs)
-
+            return as_column(data, name=self.name)
         else:
-            data = []
-
-        return string.StringColumn(data=data)
+            return as_column([], dtype="object", name=self.name)
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs

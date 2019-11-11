@@ -205,7 +205,7 @@ class ColumnBase(Column):
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
             cats = (
-                Series(Column._concat([o.categories for o in objs]))
+                Series(ColumnBase._concat([o.categories for o in objs]))
                 .drop_duplicates()
                 ._column
             )
@@ -249,7 +249,14 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        return cudf.Series(self).dropna()._column
+        dropped_col = libcudf.stream_compaction.drop_nulls([self])
+        if not dropped_col:
+            return column_empty_like(self, newsize=0)
+        else:
+            dropped_col = dropped_col[0]
+            dropped_col.mask = None
+            dropped_col.name = self.name
+            return dropped_col
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -286,22 +293,7 @@ class ColumnBase(Column):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        if self.mask:
-            if fillna is None:
-                col = self.dropna()
-            else:
-                col = self
-            mask_bits = col._mask_view().copy_to_host()
-            mask_bytes = (
-                cudautils.expand_mask_bits(len(col), mask_bits)
-                .copy_to_host()
-                .astype(bool)
-            )
-            data = col._data_view().copy_to_host()
-            data[~mask_bytes] = col.default_na_value()
-            return data
-        else:
-            return self._data_view().copy_to_host()
+        return self.to_gpu_array(fillna=fillna).copy_to_host()
 
     @property
     def valid_count(self):
@@ -312,8 +304,8 @@ class ColumnBase(Column):
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
-        if self.has_null_mask:
-            return self._mask
+        if self.mask:
+            return cudf.Series(self._mask_view())
         else:
             raise ValueError("Column has no null mask")
 
@@ -579,7 +571,7 @@ class ColumnBase(Column):
     def append(self, other):
         from cudf.core.column import as_column
 
-        return Column._concat([self, as_column(other)])
+        return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):
@@ -734,14 +726,15 @@ class ColumnBase(Column):
             cats = cats.dropna()
             labels = labels - 1
 
-        return cudf.core.column.CategoricalColumn(
-            data=labels._column.data,
-            mask=self.mask,
-            null_count=self.null_count,
-            categories=cats._column,
-            ordered=ordered,
+        dtype = CategoricalDtype(
+            data_dtype=labels.dtype, categories=cats, ordered=ordered
         )
-        raise NotImplementedError
+        return build_column(
+            data=labels._column.data,
+            dtype=dtype,
+            mask=self.mask,
+            name=self.name,
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
@@ -761,6 +754,13 @@ class ColumnBase(Column):
         else:
             result = data[0].rename(self.name, copy=False)
             return result
+
+    def argsort(self, ascending):
+        _, inds = self.sort_by_values(ascending=ascending)
+        return inds
+
+    def sort_by_values(self, ascending):
+        raise NotImplementedError
 
 
 class TypedColumnBase(ColumnBase):
@@ -785,24 +785,8 @@ class TypedColumnBase(ColumnBase):
     def dtype(self):
         return self._dtype
 
-    def argsort(self, ascending):
-        _, inds = self.sort_by_values(ascending=ascending)
-        return inds
-
-    def sort_by_values(self, ascending):
-        raise NotImplementedError
-
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
-
-    def dropna(self):
-        dropped_col = libcudf.stream_compaction.drop_nulls([self])
-        if not dropped_col:
-            return column_empty_like(self, newsize=0)
-        else:
-            return self.replace(
-                data=dropped_col[0].data, mask=None, null_count=0
-            )
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
@@ -848,10 +832,7 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
-    if is_categorical_dtype(dtype):
-        categories = column.cat().categories
-        dtype = column.dtype.data_dtype
-    return column_empty(row_count, dtype, masked, categories=categories)
+    return column_empty(row_count, dtype, masked)
 
 
 def column_empty_like_same_mask(column, dtype):
@@ -875,11 +856,10 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     offsets = None
 
     if is_categorical_dtype(dtype):
-        raise NotImplementedError
+        data = Buffer.empty(row_count * dtype.data_dtype.itemsize)
     elif dtype.kind in "OU":
         data = Buffer.empty(row_count)
         offsets = Buffer.empty((row_count + 1) * np.dtype("int32").itemsize)
-
     else:
         data = Buffer.empty(row_count * dtype.itemsize)
 
@@ -888,14 +868,10 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     else:
         mask = None
 
-    return build_column(
-        data, dtype, mask, categories=categories, offsets=offsets, name=name
-    )
+    return build_column(data, dtype, mask, offsets=offsets, name=name)
 
 
-def build_column(
-    data, dtype, mask=None, categories=None, offsets=None, name=None
-):
+def build_column(data, dtype, mask=None, offsets=None, name=None):
 
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
@@ -1085,12 +1061,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             dtype = CategoricalDtype(
                 arbitrary.type.index_type.to_pandas_dtype(),
                 categories=as_column(arbitrary.dictionary),
+                ordered=arbitrary.type.ordered,
             )
             data = categorical.CategoricalColumn(
-                data=padata,
-                dtype=dtype,
-                mask=pamask,
-                ordered=arbitrary.type.ordered,
+                data=padata, dtype=dtype, mask=pamask,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
@@ -1213,7 +1187,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     )
                 else:
                     data = as_column(
-                        np.array(arbitrary, dtype=np_type),
+                        np.array(arbitrary, dtype=np.dtype(dtype)),
                         nan_as_null=nan_as_null,
                     )
     if hasattr(data, "name") and (name is not None):

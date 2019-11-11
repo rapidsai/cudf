@@ -942,9 +942,7 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.build_column(
-                nvstrings.to_device(values), dtype="object"
-            )
+            values = column.as_column(nvstrings.to_device(values))
         super(StringIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
 

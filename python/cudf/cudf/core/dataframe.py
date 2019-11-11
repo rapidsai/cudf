@@ -13,6 +13,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -601,7 +602,7 @@ class DataFrame(object):
 
     def astype(self, dtype, errors="raise", **kwargs):
         return self._apply_support_method(
-            "astype", dtype, errors=errors, **kwargs
+            "astype", dtype=dtype, errors=errors, **kwargs
         )
 
     def get_renderable_dataframe(self):
@@ -4110,10 +4111,16 @@ def from_pandas(obj):
         return Series.from_pandas(obj)
     elif isinstance(obj, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(obj)
+    elif isinstance(obj, pd.RangeIndex):
+        if obj._step and obj._step != 1:
+            raise ValueError("cudf RangeIndex requires step == 1")
+        return cudf.core.index.RangeIndex(
+            obj._start, stop=obj._stop, name=obj.name
+        )
     else:
         raise TypeError(
-            "from_pandas only accepts Pandas Dataframes, Series, and "
-            "MultiIndex objects. "
+            "from_pandas only accepts Pandas Dataframes, Series, "
+            "RangeIndex and MultiIndex objects. "
             "Got %s" % type(obj)
         )
 

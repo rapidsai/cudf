@@ -162,9 +162,7 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     cdef bool is_valid = True
 
     if dtype is None:
-        dtype = val.dtype.type
-    else:
-        dtype = np.dtype(dtype).type
+        dtype = val.dtype
 
     cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     if s is NULL:
@@ -173,9 +171,7 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     set_scalar_value(s, val)
 
     s[0].is_valid = is_valid
-    
-    s[0].dtype = dtypes[dtype]
-
+    s[0].dtype = gdf_dtype_from_dtype(dtype)
     return s
 
 

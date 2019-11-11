@@ -49,7 +49,7 @@ def clone_columns_with_size(in_cols, row_size):
     for col in in_cols:
         o_col = column.column_empty_like(col,
                                          dtype=col.dtype,
-                                         masked=col.has_null_mask,
+                                         masked=col.mask,
                                          newsize=row_size)
         out_cols.append(o_col)
 
@@ -204,16 +204,16 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     if out_begin > out_end:
         return out_col
 
-    if out_col.null_count == 0 and in_col.has_null_mask:
+    if out_col.null_count == 0 and in_col.mask:
         mask = utils.make_mask(len(out_col))
         cudautils.fill_value(mask, 0xff)
-        out_col._mask = Buffer(mask)
+        out_col._mask = Buffer.from_array_like(mask)
         out_col._null_count = 0
 
-    if in_col.null_count == 0 and out_col.has_null_mask:
+    if in_col.null_count == 0 and out_col.mask:
         mask = utils.make_mask(len(in_col))
         cudautils.fill_value(mask, 0xff)
-        in_col._mask = Buffer(mask)
+        in_col._mask = Buffer.from_array_like(mask)
         in_col._null_count = 0
 
     cdef gdf_column* c_out_col = column_view_from_column(out_col)

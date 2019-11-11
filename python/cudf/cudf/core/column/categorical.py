@@ -211,7 +211,7 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, data, dtype, mask=None, ordered=None, name=None):
+    def __init__(self, data, dtype, mask=None, name=None):
         """
         Parameters
         ----------
@@ -220,8 +220,6 @@ class CategoricalColumn(column.ColumnBase):
         dtype : CategoricalDtype
         mask : Buffer; optional
             The validity mask
-        ordered : bool
-            Whether the categorical has a logical ordering (e.g. less than)
         name
             Name of the Column
         """
@@ -237,7 +235,7 @@ class CategoricalColumn(column.ColumnBase):
 
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
         self._categories = categories
-        self._ordered = ordered
+        self._ordered = dtype.ordered
 
     def _replace_defaults(self):
         return {
@@ -367,10 +365,13 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def unique(self, method=None):
-        codes = self.as_numerical.unique(method).data
-        return CategoricalColumn(
-            data=codes, categories=self._categories, ordered=self._ordered
+        codes = self.as_numerical.unique(method)
+        dtype = CategoricalDtype(
+            data_dtype=codes.dtype,
+            categories=self._categories,
+            ordered=self._ordered,
         )
+        return CategoricalColumn(data=codes.data, dtype=dtype)
 
     def _encode(self, value):
         return self._categories.find_first_value(value)
@@ -508,6 +509,7 @@ class CategoricalColumn(column.ColumnBase):
         gather_map = self.cat().codes.astype("int32").fillna(0)._column
         out = self._categories.take(gather_map)
         out.mask = self.mask
+        return out
 
     def copy(self, deep=True):
         if deep:
@@ -539,16 +541,16 @@ def pandas_categorical_as_column(categorical, codes=None):
     #       https://github.com/pandas-dev/pandas/issues/14711
     #       https://github.com/pandas-dev/pandas/pull/16015
     valid_codes = codes != -1
-    buf = Buffer(codes)
-    params = dict(
-        data=buf,
+    buf = Buffer.from_array_like(codes)
+    dtype = CategoricalDtype(
+        data_dtype=codes.dtype,
         categories=categorical.categories,
         ordered=categorical.ordered,
     )
+
+    mask = None
     if not np.all(valid_codes):
         mask = cudautils.compact_mask_bytes(valid_codes)
-        nnz = np.count_nonzero(valid_codes)
-        null_count = codes.size - nnz
-        params.update(dict(mask=Buffer(mask), null_count=null_count))
+        mask = Buffer.from_array_like(mask)
 
-    return CategoricalColumn(**params)
+    return column.build_column(data=buf, dtype=dtype, mask=mask)

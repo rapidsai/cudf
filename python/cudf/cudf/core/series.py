@@ -128,8 +128,6 @@ class Series(object):
         assert isinstance(data, column.ColumnBase)
         if name is None:
             name = data.name
-        if data.name != name:
-            data.name = name
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
@@ -163,11 +161,13 @@ class Series(object):
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
-            return np.array(self.data.to_host(), dtype="object")
+            return np.array(
+                self._column._data_view().to_host(), dtype="object"
+            )
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
-            return self.data.mem.copy_to_host()
+            return self._column._data_view().copy_to_host()
 
     @classmethod
     def from_arrow(cls, s):
@@ -216,7 +216,7 @@ class Series(object):
     @name.setter
     def name(self, name):
         self._name = name
-        self._column.name = name
+        # self._column.name = name
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -1166,14 +1166,8 @@ class Series(object):
         """
         if self.null_count == 0:
             return self
-        result = self.to_frame().dropna()
-        if self.name is None:
-            result = result[0]
-            result.name = None
-        else:
-            result = result[self.name]
-        result._column.name = self._column.name
-        return result
+        result = self._column.dropna()
+        return self._copy_construct(data=result)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1677,11 +1671,12 @@ class Series(object):
         codes = Series(cudautils.arange(len(cats), dtype=dtype))
 
         value = DataFrame({"value": cats, "code": codes})
-        codes = DataFrame({"value": self, "order": order})
+        codes = DataFrame({"value": self.copy(), "order": order})
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
-        cats.name = None  # because it was mutated to "value" above
+        cats.name = None  # because it was mutated above
+
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
@@ -1700,7 +1695,11 @@ class Series(object):
               item corresponds to the (N-1) code.
         """
         cats = self.unique().astype(self.dtype)
+
+        name = self.name  # label_encoding mutates self.name
         labels = self.label_encoding(cats=cats)
+        self.name = name
+
         return labels, cats
 
     # UDF related
@@ -1994,7 +1993,6 @@ class Series(object):
         return cov / lhs_std / rhs_std
 
     def isin(self, test):
-
         from cudf import DataFrame
 
         lhs = self
@@ -2407,7 +2405,7 @@ class Series(object):
         if periods == 0:
             return self
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_shift.forall(output_dary.size)(
             input_dary, output_dary, periods
@@ -2433,7 +2431,7 @@ class Series(object):
                 "Diff currently only supports " "numeric dtypes"
             )
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_diff.forall(output_dary.size)(
             input_dary, output_dary, periods
