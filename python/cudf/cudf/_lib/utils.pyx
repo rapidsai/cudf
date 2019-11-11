@@ -45,7 +45,7 @@ cdef table_to_dataframe(cudf_table* c_table, int_col_names=False):
     for i in range(c_table[0].num_columns()):
         c_col = c_table[0].get_column(i)
         col = gdf_column_to_column(c_col, int_col_names)
-        df.add_column(data=col, name=col.name)
+        df.insert(i, col.name, col)
         free_column(c_col)
     return df
 

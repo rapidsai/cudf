@@ -31,7 +31,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 0.15.1.*
+    - arrow-cpp 0.15.0.*
     - double-conversion
     - rapidjson
     - flatbuffers
