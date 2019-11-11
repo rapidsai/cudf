@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cassert>
 #include <algorithm>
 #include <vector>
 
