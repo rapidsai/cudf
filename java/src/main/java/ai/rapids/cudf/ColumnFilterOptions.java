@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Base options class for input formats that can filter columns.
@@ -29,7 +30,7 @@ public abstract class ColumnFilterOptions {
   // Names of the columns to be returned (other columns are skipped)
   // If empty all columns are returned.
   private final String[] includeColumnNames;
-  private final long sizeGuess;
+  private final Long sizeGuess;
 
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
@@ -41,13 +42,23 @@ public abstract class ColumnFilterOptions {
     return includeColumnNames;
   }
 
-  long getSizeGuess() {
+  long getSizeGuessOrElse(long orElse) {
+    if (sizeGuess == null) {
+      return orElse;
+    }
+    return sizeGuess;
+  }
+
+  long getSizeGuessOrElse(Supplier<Long> orElse) {
+    if (sizeGuess == null) {
+      return orElse.get();
+    }
     return sizeGuess;
   }
 
   public static class Builder<T extends Builder> {
     final List<String> includeColumnNames = new ArrayList<>();
-    private long sizeGuess = -1;
+    private Long sizeGuess = null;
 
     /**
      * Set a guess of how many bytes of memory the resulting data will take. This is totally

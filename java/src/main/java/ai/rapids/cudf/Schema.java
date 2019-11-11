@@ -93,7 +93,7 @@ public class Schema {
         total += type.sizeInBytes * numRows;
       }
       // Assume that there is validity
-      total += (numRows + 7)/8;
+      total += (numRows + 7) / 8;
     }
     return total;
   }

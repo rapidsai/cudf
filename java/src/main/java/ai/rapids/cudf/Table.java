@@ -321,10 +321,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = path.length();
-    }
+    long amount = opts.getSizeGuessOrElse(() -> path.length());
     try (DevicePrediction prediction = new DevicePrediction(amount, "JSON FILE")) {
       return new Table(gdfReadJSON(path.getAbsolutePath(), 0, 0, 0, 0, opts.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
     }
@@ -474,10 +471,7 @@ public final class Table implements AutoCloseable {
     assert len > 0 : "Invalid buffer range size";
     assert len <= buffer.length - offset : "Buffer range size greater than buffer";
     assert offset >= 0 && offset < buffer.length : "Buffer offset out of range";
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = len;
-    }
+    long amount = opts.getSizeGuessOrElse(len);
     try (DevicePrediction prediction = new DevicePrediction(amount, "JSON BUFFER")) {
       return new Table(gdfReadJSON(null, buffer.getAddress() + offset, buffer.getLength(), offset, len, opts.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
     }
@@ -501,10 +495,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = path.length();
-    }
+    long amount = opts.getSizeGuessOrElse(() -> path.length());
     try (DevicePrediction prediction = new DevicePrediction(amount, "CSV FILE")) {
       return new Table(
           gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
@@ -581,10 +572,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = len;
-    }
+    long amount = opts.getSizeGuessOrElse(len);
     try (DevicePrediction prediction = new DevicePrediction(amount, "CSV BUFFER")) {
       return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
           opts.getIncludeColumnNames(), null,
@@ -615,10 +603,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = path.length() * COMPRESSION_RATIO_ESTIMATE;
-    }
+    long amount = opts.getSizeGuessOrElse(() -> path.length() * COMPRESSION_RATIO_ESTIMATE);
     try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET FILE")) {
       return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
           path.getAbsolutePath(), 0, 0, opts.timeUnit().getNativeId()));
@@ -681,10 +666,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = len * COMPRESSION_RATIO_ESTIMATE;
-    }
+    long amount = opts.getSizeGuessOrElse(len * COMPRESSION_RATIO_ESTIMATE);
     try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET BUFFER")) {
       return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
           null, buffer.getAddress() + offset, len, opts.timeUnit().getNativeId()));
@@ -705,10 +687,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readORC(ORCOptions opts, File path) {
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = path.length() * COMPRESSION_RATIO_ESTIMATE;
-    }
+    long amount = opts.getSizeGuessOrElse(() -> path.length() * COMPRESSION_RATIO_ESTIMATE);
     try (DevicePrediction prediction = new DevicePrediction(amount, "ORC FILE")) {
       return new Table(gdfReadORC(opts.getIncludeColumnNames(),
           path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().getNativeId()));
@@ -771,10 +750,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = opts.getSizeGuess();
-    if (amount < 0) {
-      amount = len * COMPRESSION_RATIO_ESTIMATE;
-    }
+    long amount = opts.getSizeGuessOrElse(len * COMPRESSION_RATIO_ESTIMATE);
     try (DevicePrediction prediction = new DevicePrediction(amount, "ORC BUFFER")) {
       return new Table(gdfReadORC(opts.getIncludeColumnNames(),
           null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
@@ -817,7 +793,7 @@ public final class Table implements AutoCloseable {
       tableHandles[i] = tables[i].nativeHandle;
       assert tables[i].getNumberOfColumns() == numColumns : "all tables must have the same schema";
     }
-    try (DevicePrediction prediction = new DevicePrediction(amount,"concat")) {
+    try (DevicePrediction prediction = new DevicePrediction(amount, "concat")) {
       return new Table(concatenate(tableHandles));
     }
   }
