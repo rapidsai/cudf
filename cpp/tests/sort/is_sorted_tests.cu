@@ -14,24 +14,21 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/sorting.hpp>
-
-#include <cudf/column/column_factories.hpp>
-#include <tests/utilities/column_utilities.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
+// #include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/type_list_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 #include <vector>
 
-template<typename T>
-using fixed_width_column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
-
-using strings_column_wrapper = cudf::test::strings_column_wrapper;
+using namespace cudf::test;
 
 using bool8 = cudf::experimental::bool8;
 
@@ -84,33 +81,33 @@ auto descending<bool8>() {
     return fixed_width_column_wrapper<bool8>({ true, false });
 }
 
-// ----- std::string
+// ----- string_view
 
 template<>
-auto ascending<std::string>() {
+auto ascending<cudf::string_view>() {
     return strings_column_wrapper({ "A", "B" });
 }
 
 template<>
-auto descending<std::string>() {
+auto descending<cudf::string_view>() {
     return strings_column_wrapper({ "B", "A" });
 }
 
 template<>
-auto empty<std::string>() {
+auto empty<cudf::string_view>() {
     return strings_column_wrapper({ });
 }
 
 template<>
-auto nulls_after<std::string>() {
+auto nulls_after<cudf::string_view>() {
     return strings_column_wrapper({ "identical", "identical" }, { 1, 0 });
 }
 
 template<>
-auto nulls_before<std::string>() {
+auto nulls_before<cudf::string_view>() {
     return strings_column_wrapper({ "identical", "identical" }, { 0, 1 });
 }
-    
+
 } // namespace testdata
 } // anonymous namespace
 
@@ -118,23 +115,13 @@ auto nulls_before<std::string>() {
 // ---- tests ------------------------------------------------------------------
 
 template <typename T>
-struct IsSortedNumeric : public cudf::test::BaseFixture {};
+struct IsSortedTest : public cudf::test::BaseFixture {};
 
-using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t,
-                                    float, double,
-                                    cudf::experimental::bool8,
-                                    std::string>;
+using test_types = Concat<NumericTypes, Types<cudf::string_view>>;
 
-// compiles and passes tests
-TYPED_TEST_CASE(IsSortedNumeric, cudf::test::NumericTypes);
+TYPED_TEST_CASE(IsSortedTest, test_types);
 
-// compiles and passes tests
-// TYPED_TEST_CASE(IsSortedStrings, ::testing::Types<std::string>);
-
-// // compiles and passes tests if static_asserts for fixed-width types are removed
-// TYPED_TEST_CASE(IsSortedNumeric, test_types); 
-
-TYPED_TEST(IsSortedNumeric, NoColumns)
+TYPED_TEST(IsSortedTest, NoColumns)
 {
     using T = TypeParam;
 
@@ -147,24 +134,33 @@ TYPED_TEST(IsSortedNumeric, NoColumns)
     EXPECT_EQ(true, actual);
 }
 
-// TYPED_TEST(IsSortedNumeric, NoRows)
-// {
-//     using T = TypeParam;
+TYPED_TEST(IsSortedTest, NoRows)
+{
+    using T = TypeParam;
 
-//     auto col1 = testdata::empty<T>();
-//     auto col2 = testdata::empty<T>();
+    if (std::is_same<T, cudf::string_view>::value)
+    {
+        // strings_column_wrapper does not yet support empty columns.
+        return;
+    }
+    else
+    {
+        auto col1 = testdata::empty<T>();
+        auto col2 = testdata::empty<T>();
 
-//     cudf::table_view in{{ col1, col2 }};
-//     std::vector<cudf::order> order{ cudf::order::ASCENDING,
-//                                     cudf::order::DESCENDING };
-//     std::vector<cudf::null_order> null_precedence{ };
+        cudf::table_view in{{ col1, col2 }};
+        std::vector<cudf::order> order{ cudf::order::ASCENDING,
+                                        cudf::order::DESCENDING };
+        std::vector<cudf::null_order> null_precedence{ };
 
-//     auto actual = cudf::experimental::is_sorted(in, order, null_precedence);
+        auto actual = cudf::experimental::is_sorted(in, order, null_precedence);
 
-//     EXPECT_EQ(true, actual);
-// }
+        EXPECT_EQ(true, actual);
+    }
+}
 
-TYPED_TEST(IsSortedNumeric, Ascending)
+
+TYPED_TEST(IsSortedTest, Ascending)
 {
     using T = TypeParam;
 
@@ -178,7 +174,7 @@ TYPED_TEST(IsSortedNumeric, Ascending)
     EXPECT_EQ(true, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, AscendingFalse)
+TYPED_TEST(IsSortedTest, AscendingFalse)
 {
     using T = TypeParam;
 
@@ -192,7 +188,7 @@ TYPED_TEST(IsSortedNumeric, AscendingFalse)
     EXPECT_EQ(false, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, Descending)
+TYPED_TEST(IsSortedTest, Descending)
 {
     using T = TypeParam;
 
@@ -207,10 +203,10 @@ TYPED_TEST(IsSortedNumeric, Descending)
     EXPECT_EQ(true, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, DescendingFalse)
+TYPED_TEST(IsSortedTest, DescendingFalse)
 {
     using T = TypeParam;
-    
+
     auto col1 = testdata::ascending<T>();
 
     cudf::table_view in{{ col1 }};
@@ -222,7 +218,7 @@ TYPED_TEST(IsSortedNumeric, DescendingFalse)
     EXPECT_EQ(false, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, NullsAfter)
+TYPED_TEST(IsSortedTest, NullsAfter)
 {
     using T = TypeParam;
 
@@ -237,7 +233,7 @@ TYPED_TEST(IsSortedNumeric, NullsAfter)
     EXPECT_EQ(true, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, NullsAfterFalse)
+TYPED_TEST(IsSortedTest, NullsAfterFalse)
 {
     using T = TypeParam;
 
@@ -252,7 +248,7 @@ TYPED_TEST(IsSortedNumeric, NullsAfterFalse)
     EXPECT_EQ(false, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, NullsBefore)
+TYPED_TEST(IsSortedTest, NullsBefore)
 {
     using T = TypeParam;
 
@@ -267,7 +263,7 @@ TYPED_TEST(IsSortedNumeric, NullsBefore)
     EXPECT_EQ(true, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, NullsBeforeFalse)
+TYPED_TEST(IsSortedTest, NullsBeforeFalse)
 {
     using T = TypeParam;
 
@@ -282,7 +278,7 @@ TYPED_TEST(IsSortedNumeric, NullsBeforeFalse)
     EXPECT_EQ(false, actual);
 }
 
-TYPED_TEST(IsSortedNumeric, OrderArgsTooFew)
+TYPED_TEST(IsSortedTest, OrderArgsTooFew)
 {
     using T = TypeParam;
 
@@ -297,7 +293,7 @@ TYPED_TEST(IsSortedNumeric, OrderArgsTooFew)
                  cudf::logic_error);
 }
 
-TYPED_TEST(IsSortedNumeric, OrderArgsTooMany)
+TYPED_TEST(IsSortedTest, OrderArgsTooMany)
 {
     using T = TypeParam;
 
@@ -312,7 +308,7 @@ TYPED_TEST(IsSortedNumeric, OrderArgsTooMany)
                  cudf::logic_error);
 }
 
-TYPED_TEST(IsSortedNumeric, NullOrderArgsTooFew)
+TYPED_TEST(IsSortedTest, NullOrderArgsTooFew)
 {
     using T = TypeParam;
 
@@ -327,7 +323,7 @@ TYPED_TEST(IsSortedNumeric, NullOrderArgsTooFew)
                  cudf::logic_error);
 }
 
-TYPED_TEST(IsSortedNumeric, NullOrderArgsTooMany)
+TYPED_TEST(IsSortedTest, NullOrderArgsTooMany)
 {
     using T = TypeParam;
 
@@ -343,34 +339,7 @@ TYPED_TEST(IsSortedNumeric, NullOrderArgsTooMany)
 }
 
 template <typename T>
-struct IsSortedStrings : public cudf::test::BaseFixture {};
+struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(IsSortedStrings, ::testing::Types<std::string>);
+TYPED_TEST_CASE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(IsSortedStrings, Ascending)
-{
-    using T = TypeParam;
-
-    auto col1 = testdata::ascending<T>();
-    cudf::table_view in{{ col1 }};
-    std::vector<cudf::order> order{ cudf::order::ASCENDING };
-    std::vector<cudf::null_order> null_precedence{ };
-
-    auto actual = cudf::experimental::is_sorted(in, order, null_precedence);
-
-    EXPECT_EQ(true, actual);
-}
-
-TYPED_TEST(IsSortedStrings, AscendingFalse)
-{
-    using T = TypeParam;
-
-    auto col1 = testdata::descending<T>();
-    cudf::table_view in{{ col1 }};
-    std::vector<cudf::order> order{ cudf::order::ASCENDING };
-    std::vector<cudf::null_order> null_precedence{ };
-
-    auto actual = cudf::experimental::is_sorted(in, order, { });
-
-    EXPECT_EQ(false, actual);
-}
