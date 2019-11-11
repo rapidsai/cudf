@@ -137,7 +137,69 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
                                strings.null_count(), std::move(null_mask), stream, mr);
 }
 
+std::unique_ptr<column> zfill( strings_column_view const& strings,
+                               size_type width,
+                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                               cudaStream_t stream = 0 )
+{
+    size_type strings_count = strings.size();
+    if( strings_count == 0 )
+        return make_empty_strings_column(mr,stream);
+    char_utf8 d_fill_char = static_cast<char_utf8>('0');
+
+    auto execpol = rmm::exec_policy(stream);
+    auto strings_column = column_device_view::create(strings.parent(), stream);
+    auto d_strings = *strings_column;
+
+    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
+    auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
+        compute_pad_output_length_fn{d_strings,width,1} );
+    auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
+                                       offsets_transformer_itr+strings_count,
+                                       mr, stream);
+    auto offsets_view = offsets_column->view();
+    auto d_offsets = offsets_view.data<int32_t>();
+
+    // build chars column
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto chars_view = chars_column->mutable_view();
+    auto d_chars = chars_view.data<char>();
+
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+        [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
+            if( d_strings.is_null(idx) )
+                return;
+            string_view d_str = d_strings.element<string_view>(idx);
+            auto length = d_str.length();
+            auto bytes = d_str.size_bytes();
+            char* out_ptr = d_chars + d_offsets[idx];
+            if( length >= width )
+                copy_string(out_ptr, d_str);
+            else
+            {
+                const char* in_ptr = d_str.data();
+                char first_char = length==0 ? 0 : *in_ptr;
+                if( first_char=='+' || first_char=='-' )
+                {
+                    *out_ptr++ = first_char;
+                    ++in_ptr;
+                    --bytes;
+                }
+                while( length++ < width )
+                    *out_ptr++ = '0';
+                memcpy( out_ptr, in_ptr, bytes );
+            }
+        });
+    //
+    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                               strings.null_count(), std::move(null_mask), stream, mr);
+}
+
+
 } // namespace detail
+
+// external APIs
 
 std::unique_ptr<column> pad( strings_column_view const& strings,
                              size_type width, pad_side side,
@@ -146,6 +208,13 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
 {
     return detail::pad(strings,width,side,fill_char,mr);
 }                             
+
+std::unique_ptr<column> zfill( strings_column_view const& strings,
+                               size_type width,
+                               rmm::mr::device_memory_resource* mr )
+{
+    return detail::zfill(strings,width,mr);
+}
 
 } // namespace strings
 } // namespace cudf
