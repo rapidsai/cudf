@@ -1,5 +1,18 @@
-
-//
+/*
+* Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 
 #include <cuda_runtime.h>
 #include <rmm/device_buffer.hpp>
@@ -19,33 +32,33 @@ namespace detail
 {
 
 // Copy Reprog primitive values
-Reprog_device::Reprog_device(Reprog* prog)
+Reprog_device::Reprog_device(Reprog& prog)
 {
-    startinst_id = prog->get_start_inst();
-    num_capturing_groups = prog->groups_count();
-    insts_count = prog->inst_count();
-    starts_count = prog->starts_count();
-    classes_count = prog->classes_count();
+    startinst_id = prog.get_start_inst();
+    num_capturing_groups = prog.groups_count();
+    insts_count = prog.inst_count();
+    starts_count = prog.starts_count();
+    classes_count = prog.classes_count();
     relists_mem = nullptr;
     stack_mem1 = nullptr;
     stack_mem2 = nullptr;
 }
 
-// Create instance that can be used inside a device kernel
+// Create instance of the Reprog that can be passed into a device kernel
 std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>> Reprog_device::create(const char32_t* pattern, const uint8_t* codepoint_flags )
 {
     // compile pattern into host object
-    Reprog* h_prog = Reprog::create_from(pattern);
-    std::unique_ptr<Reprog> u_prog(h_prog);
+    Reprog h_prog = Reprog::create_from(pattern);
+    //std::unique_ptr<Reprog> u_prog(h_prog);
     // compute size to hold all the member data
-    auto insts_count = h_prog->inst_count();
-    auto classes_count = h_prog->classes_count();
-    auto starts_count = h_prog->starts_count();
+    auto insts_count = h_prog.inst_count();
+    auto classes_count = h_prog.classes_count();
+    auto starts_count = h_prog.starts_count();
     auto insts_size = insts_count * sizeof(insts[0]);
     auto startids_size = starts_count * sizeof(startinst_ids[0]);
     auto classes_size = classes_count * sizeof(classes[0]);
     for( int32_t idx=0; idx < classes_count; ++idx )
-        classes_size += static_cast<int32_t>((h_prog->class_at(idx).chrs.size())*sizeof(char32_t));
+        classes_size += static_cast<int32_t>((h_prog.class_at(idx).chrs.size())*sizeof(char32_t));
     // allocate memory to store prog data
     size_t memsize = insts_size + startids_size + classes_size;
     std::vector<u_char> h_buffer(memsize);
@@ -57,13 +70,13 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>> Reprog_devic
     Reprog_device* d_prog = new Reprog_device(h_prog);
     // copy the instructions array first (fixed-size structs)
     Reinst* insts = reinterpret_cast<Reinst*>(h_ptr);
-    memcpy( insts, h_prog->insts_data(), insts_size);
+    memcpy( insts, h_prog.insts_data(), insts_size);
     h_ptr += insts_size; // next section
     d_prog->insts = reinterpret_cast<Reinst*>(d_ptr);
     d_ptr += insts_size;
     // copy the startinst_ids next (ints)
     int32_t* startinst_ids = reinterpret_cast<int32_t*>(h_ptr);
-    memcpy( startinst_ids, h_prog->starts_data(), startids_size );
+    memcpy( startinst_ids, h_prog.starts_data(), startids_size );
     h_ptr += startids_size; // next section
     d_prog->startinst_ids = reinterpret_cast<int32_t*>(d_ptr);
     d_ptr += startids_size;
@@ -76,7 +89,7 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>> Reprog_devic
     // place each class and append the variable length data
     for( int32_t idx=0; idx < classes_count; ++idx )
     {
-        Reclass& h_class = h_prog->class_at(idx);
+        Reclass& h_class = h_prog.class_at(idx);
         Reclass_device d_class;
         d_class.builtins = h_class.builtins;
         d_class.count = h_class.chrs.size();
@@ -91,8 +104,6 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>> Reprog_devic
     d_prog->starts_count = starts_count;
     d_prog->classes_count = classes_count;
     d_prog->codepoint_flags = codepoint_flags;
-    // compiled prog copied into flat memory
-    //delete h_prog;
 
     // copy flat prog to device memory
     CUDA_TRY(cudaMemcpy(d_buffer,h_buffer.data(),memsize,cudaMemcpyHostToDevice));

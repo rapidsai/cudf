@@ -62,7 +62,7 @@ class Reprog_device
     __device__ inline int32_t regexec( string_view const& dstr, Reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
     __device__ inline int32_t call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
-    Reprog_device(Reprog*);
+    Reprog_device(Reprog&);
 
 public:
     Reprog_device() = delete;

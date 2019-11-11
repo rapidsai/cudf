@@ -83,7 +83,15 @@ class Reprog
     int32_t num_capturing_groups;
 
  public:
-    static Reprog* create_from(const char32_t* pattern);
+
+    Reprog() = default;
+    Reprog(const Reprog&) = default;
+    Reprog(Reprog&&) = default;
+    ~Reprog() = default;
+    Reprog& operator=(const Reprog&) = default;
+    Reprog& operator=(Reprog&&) = default;
+
+    static Reprog create_from(const char32_t* pattern);
 
     int32_t add_inst(int32_t type);
     int32_t add_inst(Reinst inst);

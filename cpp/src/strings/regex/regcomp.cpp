@@ -946,10 +946,10 @@ public:
     }
 };
 
-Reprog* Reprog::create_from(const char32_t* pattern)
+Reprog Reprog::create_from(const char32_t* pattern)
 {
-    Reprog* rtn = new Reprog;
-    RegCompiler compiler(pattern, ANY, *rtn);
+    Reprog rtn;
+    RegCompiler compiler(pattern, ANY, rtn);
     //rtn->print();
     return rtn;
 }
