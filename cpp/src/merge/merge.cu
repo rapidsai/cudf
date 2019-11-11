@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -21,6 +36,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cuda_utils.hpp>
+#include <cudf/utilities/bit.hpp>
 
 namespace {
 
@@ -31,6 +47,118 @@ enum class side : bool { LEFT, RIGHT };
   
 using index_type = thrust::tuple<side, cudf::size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
 
+using BitMaskT = cudf::bitmask_type;// some confusion around this type (11/11/19)...
+
+/**
+ * @brief Merges the bits of two validity bitmasks.
+ *
+ * Merges the bits from two source bitmask into the destination bitmask
+ * according to `merged_indices` map such that bit `i` in `destination_mask`
+ * will be equal to bit `thrust::get<1>(merged_indices[i])` from `source_left_mask`
+ * if `thrust::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
+ * from `source_right_mask`.
+ *
+ * `source_left_mask`, `source_right_mask` and `destination_mask` must not
+ * overlap.
+ *
+ * @tparam left_have_valids Indicates whether source_left_mask is null
+ * @tparam right_have_valids Indicates whether source_right_mask is null
+ * @param[in] source_left_mask The left mask whose bits will be merged
+ * @param[in] source_right_mask The right mask whose bits will be merged
+ * @param[out] destination_mask The output mask after merging the left and right masks
+ * @param[in] num_destination_rows The number of bits in the destination_mask
+ * @param[in] merged_indices The map that indicates from which input mask and which bit
+ * will be copied to the output. Length must be equal to `num_destination_rows`
+ */
+template <bool left_have_valids, bool right_have_valids>
+__global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_dcol,
+                                                  cudf::column_device_view right_dcol,
+                                                  cudf::mutable_column_device_view out_dcol,
+                                                  cudf::size_type const num_destination_rows,
+                                                  index_type const* const __restrict__ merged_indices) {
+  cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+
+  BitMaskT const* const __restrict__ source_left_mask = left_dcol.null_mask();
+  BitMaskT const* const __restrict__ source_right_mask= right_dcol.null_mask();
+  BitMaskT* const destination_mask = out_dcol.null_mask();
+  
+  auto active_threads =
+    __ballot_sync(0xffffffff, destination_row < num_destination_rows);
+
+  while (destination_row < num_destination_rows) {
+    index_type const& merged_idx = merged_indices[destination_row];
+    side const src_side = thrust::get<0>(merged_idx);
+    cudf::size_type const src_row  = thrust::get<1>(merged_idx);
+    bool const from_left{src_side == side::LEFT};
+    bool source_bit_is_valid{true};
+    if (left_have_valids && from_left) {
+      source_bit_is_valid = left_dcol.is_valid_nocheck(src_row);
+    }
+    else if (right_have_valids && !from_left) {
+      source_bit_is_valid = right_dcol.is_valid_nocheck(src_row);
+    }
+
+    // Use ballot to find all valid bits in this warp and create the output
+    // bitmask element
+    BitMaskT const result_mask{
+      __ballot_sync(active_threads, source_bit_is_valid)};
+
+    cudf::size_type const output_element = cudf::word_index(destination_row);
+
+    // Only one thread writes output
+    if (0 == threadIdx.x % warpSize) {
+      destination_mask[output_element] = result_mask;
+    }
+
+    destination_row += blockDim.x * gridDim.x;
+    active_threads =
+      __ballot_sync(active_threads, destination_row < num_destination_rows);
+  }
+}
+
+void materialize_bitmask(cudf::column_view const& left_col,
+                         cudf::column_view const& right_col,
+                         cudf::mutable_column_view& out_col,
+                         index_type const* merged_indices,
+                         cudaStream_t stream) {
+  constexpr cudf::size_type BLOCK_SIZE{256};
+  cudf::util::cuda::grid_config_1d grid_config {out_col.size(), BLOCK_SIZE };
+
+  auto p_left_dcol  = cudf::column_device_view::create(left_col);
+  auto p_right_dcol = cudf::column_device_view::create(right_col);
+  auto p_out_dcol   = cudf::mutable_column_device_view::create(out_col);
+
+  auto left_valid  = *p_left_dcol;
+  auto right_valid = *p_right_dcol;
+  auto out_valid   = *p_out_dcol;
+  
+  if (p_left_dcol) {
+    if (p_right_dcol) {
+      materialize_merged_bitmask_kernel<true, true>
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+        (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+    } else {
+      materialize_merged_bitmask_kernel<true, false>
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+        (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+    }
+  } else {
+    if (p_right_dcol) {
+      materialize_merged_bitmask_kernel<false, true>
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+        (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+    } else {
+      materialize_merged_bitmask_kernel<false, false>
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+        (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+    }
+  }
+
+  CHECK_STREAM(stream);
+}
+  
+  
+  
 rmm::device_vector<index_type>
 generate_merged_indices(cudf::table_view const& left_table,
                         cudf::table_view const& right_table,
