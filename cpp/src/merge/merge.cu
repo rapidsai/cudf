@@ -279,26 +279,17 @@ private:
         return nullptr;
     }
 
-    // TODO: replace / drop;
-    //no replacement, yet:
-    //{
-    //proposal for a replacement: bool have_same_types(table_view const& lhs, table_view const& rhs);
-    //
-    //std::vector<gdf_dtype> left_table_dtypes = cudf::column_dtypes(left_table);
-    //std::vector<gdf_dtype> right_table_dtypes = cudf::column_dtypes(right_table);
-    //CUDF_EXPECTS(std::equal(left_table_dtypes.cbegin(), left_table_dtypes.cend(), right_table_dtypes.cbegin(), right_table_dtypes.cend()), "Mismatched column dtypes");
-    //}
+    CUDF_EXPECTS(std::equal(left_table.begin(), left_table.end(), right_table.begin(), right_table.end(),
+                            [](cudf::column_view const& lcol, cudf::column_view const& rcol){
+                              return (lcol.type() == rcol.type());
+                            }),
+                 "Mismatched column dtypes");
     
     CUDF_EXPECTS(key_cols.size() > 0, "Empty key_cols");
     CUDF_EXPECTS(key_cols.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
     CUDF_EXPECTS(asc_desc.size() > 0, "Empty asc_desc");
     CUDF_EXPECTS(asc_desc.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in asc_desc");
-    CUDF_EXPECTS(key_cols.size() == asc_desc.size(), "Mismatched size between key_cols and asc_desc");
-
-
-    //using column_rep_t = cudf::column; // or column_view?
-    //using col_ptr_t = typename std::unique_ptr<column_rep_t>;
-    
+    CUDF_EXPECTS(key_cols.size() == asc_desc.size(), "Mismatched size between key_cols and asc_desc");    
 
     //collect index columns for lhs, rhs, resp.
     //
