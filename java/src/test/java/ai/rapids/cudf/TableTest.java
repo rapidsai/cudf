@@ -691,67 +691,27 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testLowerBound() {
-    boundsEmptyInput(false);
-
-    boundsEmptyValues(false);
-
-    boundsStringCategories(false);
-
-    boundsIntsSingleCol(false);
-
-    boundsLongsSingleCol(false);
-
-    boundsLongsMultiVal(false);
-
-    boundsMultiCol(false);
-
-    boundsUnequalCols1(false);
-
-    boundsUnequalCols2(false);
-
-    boundsNulls(false);
-  }
-
-  @Test
-  void testUpperBound() {
-    boundsEmptyInput(true);
-
-    boundsEmptyValues(true);
-
-    boundsStringCategories(true);
-
-    boundsIntsSingleCol(true);
-
-    boundsLongsSingleCol(true);
-
-    boundsLongsMultiVal(true);
-
-    boundsMultiCol(true);
-
-    boundsUnequalCols1(true);
-
-    boundsUnequalCols2(true);
-
-    boundsNulls(true);
-  }
-
-  private void boundsNulls(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
-    try(Table table = new TestBuilder()
+  void testBoundsNulls() {
+    boolean[] descFlags = new boolean[1];
+    try (Table table = new TestBuilder()
             .column(null, 20, 20, 20, 30)
             .build();
         Table values = new TestBuilder()
             .column(15)
             .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
-      assertColumnsAreEqual(expected, columnVector);
+         ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsUnequalCols2(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
+  @Test
+  void testBoundsValuesSizeBigger() {
+    boolean[] descFlags = new boolean[2];
     try(Table table = new TestBuilder()
             .column(90, 100, 120, 130, 135)
             .column(.5, .5, .5, .7, .7)
@@ -761,13 +721,18 @@ public class TableTest extends CudfTestBase {
             .column(.3)
             .column(.7)
             .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
         ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      assertColumnsAreEqual(expected, columnVector);
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsUnequalCols1(boolean isUpperBound) {
+  @Test
+  void testBoundsInputSizeBigger() {
     boolean[] descFlags = new boolean[3];
     try(Table table = new TestBuilder()
             .column(90, 100, 120, 130, 135)
@@ -778,15 +743,20 @@ public class TableTest extends CudfTestBase {
             .column(120)
             .column(.3)
             .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
         ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      assertColumnsAreEqual(expected, columnVector);
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsMultiCol(boolean isUpperBound) {
+  @Test
+  void testBoundsMultiCol() {
     boolean[] descFlags = new boolean[3];
-    try(Table table = new TestBuilder()
+    try (Table table = new TestBuilder()
             .column(10, 20, 20, 20, 20)
             .column(5.0, .5, .5, .7, .7)
             .column(90, 77, 78, 61, 61)
@@ -795,65 +765,124 @@ public class TableTest extends CudfTestBase {
             .column(20)
             .column(0.7)
             .column(61)
-            .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
-        ColumnVector expected = isUpperBound ? ColumnVector.fromBoxedInts(5) :
-            ColumnVector.fromBoxedInts(3)) {
-      assertColumnsAreEqual(expected, columnVector);
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(3)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsLongsMultiVal(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
-    try(Table table = new TestBuilder()
+  @Test
+  void testBoundsFloatsMultiVal() {
+    boolean[] descFlags = new boolean[1];
+    try (Table table = new TestBuilder()
             .column(10.0, 20.6, 20.7)
             .build();
         Table values = new TestBuilder()
             .column(20.3, 20.8)
             .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1, 3)) {
-      assertColumnsAreEqual(expected, columnVector);
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 3)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsLongsSingleCol(boolean isUpperBound) {
+  @Test
+  void testBoundsFloatsSingleCol() {
     boolean[] descFlags = new boolean[3];
     try(Table table = new TestBuilder()
             .column(10.0, 20.6, 20.7)
             .build();
         Table values = new TestBuilder()
             .column(20.6)
-            .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
-        ColumnVector expected = isUpperBound ? ColumnVector.fromBoxedInts(2) :
-            ColumnVector.fromBoxedInts(1)) {
-      assertColumnsAreEqual(expected, columnVector);
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsIntsSingleCol(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
+  @Test
+  void testBoundsFloatsSingleColDesc() {
+    boolean[] descFlags = new boolean[] {true};
+    try(Table table = new TestBuilder()
+        .column(20.7, 20.6, 10.0)
+        .build();
+        Table values = new TestBuilder()
+            .column(20.6)
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsIntsSingleCol() {
+    boolean[] descFlags = new boolean[1];
     try(Table table = new TestBuilder()
             .column(10, 20, 20, 20, 20)
             .build();
         Table values = new TestBuilder()
             .column(20)
-            .build();
-        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
-        ColumnVector expected = isUpperBound ? ColumnVector.fromBoxedInts(5) :
-            ColumnVector.fromBoxedInts(1)) {
-      assertColumnsAreEqual(expected, columnVector);
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
     }
   }
 
-  private void boundsStringCategories(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
-    try(ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, 4, (b) -> {
-        for (int i = 0; i < 4; i++) {
-          b.appendUTF8String(String.valueOf(i).getBytes());
-        }
-      });
+  @Test
+  void testBoundsIntsSingleColDesc() {
+    boolean[] descFlags = new boolean[]{true};
+    try (Table table = new TestBuilder()
+        .column(20, 20, 20, 20, 10)
+        .build();
+         Table values = new TestBuilder()
+             .column(5)
+             .build();
+         ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsStringCategories() {
+    boolean[] descFlags = new boolean[1];
+    try (ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, 4, (b) -> {
+           for (int i = 0; i < 4; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
+        });
         Table table = new Table(cIn);
         ColumnVector cVal = ColumnVector.build(DType.STRING_CATEGORY, 2, (b) -> {
           for (int i = 0; i < 2; i++) {
@@ -862,33 +891,41 @@ public class TableTest extends CudfTestBase {
         });
         Table values = new Table(cVal)) {
       assertThrows(AssertionError.class,
-          () -> getBoundsCv(descFlags, isUpperBound, table, values).close());
+          () -> getBoundsCv(descFlags, true, table, values).close());
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, false, table, values).close());
     }
   }
 
-  private void boundsEmptyValues(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
-    try(ColumnVector cv = new ColumnVector(DType.INT64,
+  @Test
+  void testBoundsEmptyValues() {
+    boolean[] descFlags = new boolean[1];
+    try (ColumnVector cv = new ColumnVector(DType.INT64,
           TimeUnit.NONE, 0, 0, null, null);
         Table table = new TestBuilder()
             .column(10, 20, 20, 20, 20)
             .build();
         Table values = new Table(cv)) {
       assertThrows(AssertionError.class,
-          () -> getBoundsCv(descFlags, isUpperBound, table, values).close());
+          () -> getBoundsCv(descFlags, true, table, values).close());
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, false, table, values).close());
     }
   }
 
-  private void boundsEmptyInput(boolean isUpperBound) {
-    boolean[] descFlags = new boolean[3];
-    try(ColumnVector cv = new ColumnVector(DType.INT64,
+  @Test
+  void testBoundsEmptyInput() {
+    boolean[] descFlags = new boolean[1];
+    try (ColumnVector cv = new ColumnVector(DType.INT64,
           TimeUnit.NONE, 0, 0, null, null);
         Table table = new Table(cv);
         Table values = new TestBuilder()
             .column(20)
             .build()) {
       assertThrows(AssertionError.class,
-          () -> getBoundsCv(descFlags, isUpperBound, table, values).close());
+          () -> getBoundsCv(descFlags, true, table, values).close());
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, false, table, values).close());
     }
   }
 
