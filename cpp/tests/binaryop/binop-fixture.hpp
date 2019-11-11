@@ -20,7 +20,6 @@
 #pragma once
 
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/scalar_wrapper.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
