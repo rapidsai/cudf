@@ -86,8 +86,8 @@ void ASSERT_BINOP(column_view const& out,
     auto out_data = out_h.first;
 
     ASSERT_EQ(out_data.size(), lhs_data.size());
-    for (size_t index = 0; index < out_data.size(); ++index) {
-        ASSERT_EQ(out_data[index], (TypeOut)(op(lhs_data[index], rhs_h))) << i;
+    for (size_t i = 0; i < out_data.size(); ++i) {
+        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_data[i], rhs_h))) << i;
     }
 
     if (lhs.nullable()) {
