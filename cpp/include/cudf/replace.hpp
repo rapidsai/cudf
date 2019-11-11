@@ -63,7 +63,9 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 
 /**
- * @brief Replace elements from `input_col` according to the mapping `old_values` to
+ * @brief Finds and replaces values within a column.
+ * 
+ * Creates a copy of @p input, but replace elements according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col`
  *        with `new_values[i]` and return a new gdf_column `output`.
  *
