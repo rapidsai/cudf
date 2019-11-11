@@ -3201,7 +3201,7 @@ def test_series_astype_null_cases():
     # numerical to other
     assert_eq(
         gd.Series(data, dtype="str"),
-        gd.Series(data).astype("str").fillna("None"),
+        gd.Series(data).astype("str"),
     )
 
     assert_eq(
@@ -3221,7 +3221,7 @@ def test_series_astype_null_cases():
     # categorical to other
     assert_eq(
         gd.Series(data, dtype="str"),
-        gd.Series(data, dtype="category").astype("str").fillna("None"),
+        gd.Series(data, dtype="category").astype("str"),
     )
 
     assert_eq(
