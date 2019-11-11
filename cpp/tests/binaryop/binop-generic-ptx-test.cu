@@ -25,7 +25,9 @@ namespace cudf {
 namespace test {
 namespace binop {
 
-TEST_F(BinaryOperationIntegrationTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
+struct BinaryOperationGenericPTXTest : public BinaryOperationTest {};
+
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
 
 // c = a*a*a + b
 const char* ptx =
@@ -84,7 +86,7 @@ R"***(
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
-TEST_F(BinaryOperationIntegrationTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
 
 // c = a*a*a + b
 const char* ptx =
@@ -144,7 +146,7 @@ R"***(
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
-TEST_F(BinaryOperationIntegrationTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
 
 // c = a*a*a + b*b
 const char* ptx =

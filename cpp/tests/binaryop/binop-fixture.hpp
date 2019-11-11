@@ -27,11 +27,11 @@ namespace cudf {
 namespace test {
 namespace binop {
 
-struct BinaryOperationIntegrationTest
+struct BinaryOperationTest
     : public cudf::test::BaseFixture
     , cudf::test::UniformRandomGenerator<uint8_t>
 {
-    BinaryOperationIntegrationTest()
+    BinaryOperationTest()
      : cudf::test::UniformRandomGenerator<uint8_t>(1, 10)
     {}
 
