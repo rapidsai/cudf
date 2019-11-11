@@ -26,6 +26,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
 
@@ -143,8 +144,10 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
+- PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
+- PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 
 
 # cuDF 0.10.0 (16 Oct 2019)
