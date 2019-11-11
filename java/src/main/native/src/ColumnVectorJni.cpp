@@ -17,7 +17,6 @@
 #include "cudf/quantiles.hpp"
 #include "cudf/legacy/replace.hpp"
 #include "cudf/legacy/rolling.hpp"
-#include "utilities/legacy/error_utils.hpp"
 
 #include "jni_utils.hpp"
 
