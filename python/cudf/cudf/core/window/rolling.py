@@ -199,9 +199,9 @@ class Rolling:
 
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
-        for col_name in df.columns:
+        for i, col_name in enumerate(df.columns):
             result_col = self._apply_agg_series(df[col_name], agg_name)
-            result_df.add_column(name=col_name, data=result_col)
+            result_df.insert(i, col_name, result_col)
         result_df.index = df.index
         return result_df
 

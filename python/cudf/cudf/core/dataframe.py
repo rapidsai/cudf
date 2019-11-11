@@ -13,6 +13,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -180,8 +181,8 @@ class DataFrame(object):
             if isinstance(data, dict):
                 data = data.items()
 
-            for col_name, series in data:
-                self.add_column(col_name, series, forceindex=index is not None)
+            for i, (col_name, series) in enumerate(data):
+                self.insert(i, col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
         for col in self._cols:
@@ -214,14 +215,15 @@ class DataFrame(object):
             data = dict(zip(keys, data)).items()
             self._index = as_index(RangeIndex(start=0))
             self._size = len(RangeIndex(start=0))
-        for col_name, series in data:
-            self.add_column(col_name, series, forceindex=index is not None)
+        for i, (col_name, series) in enumerate(data):
+            self.insert(i, col_name, series, forceindex=index is not None)
         transposed = self.T
         self._cols = OrderedDict()
         self._size = transposed._size
         self._index = as_index(transposed.index)
-        for col_name in transposed.columns:
-            self.add_column(
+        for i, col_name in enumerate(transposed.columns):
+            self.insert(
+                i,
                 col_name,
                 transposed._cols[col_name],
                 forceindex=index is not None,
@@ -231,7 +233,8 @@ class DataFrame(object):
         if columns is not None:
             for col_name in columns:
                 if col_name not in self._cols:
-                    self.add_column(
+                    self.insert(
+                        len(self._cols),
                         col_name,
                         column.column_empty(
                             self._size, dtype="object", masked=True
@@ -417,9 +420,10 @@ class DataFrame(object):
         df = self.copy()
         for col in self.columns:
             if col in other.columns:
-                boolbits = cudautils.compact_mask_bytes(
-                    other[col].to_gpu_array()
-                )
+                if other[col].null_count != 0:
+                    raise ValueError("Column must have no nulls.")
+
+                boolbits = cudautils.compact_mask_bytes(other[col].data.mem)
             else:
                 boolbits = cudautils.make_empty_mask(len(self[col]))
             df[col]._column = df[col]._column.set_mask(boolbits)
@@ -436,7 +440,7 @@ class DataFrame(object):
         elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
         else:
-            self.add_column(name, col)
+            self.insert(len(self._cols), name, col)
 
     def __delitem__(self, name):
         """
@@ -500,9 +504,6 @@ class DataFrame(object):
 
     @property
     def values(self):
-        if not utils._have_cupy:
-            raise ModuleNotFoundError("CuPy was not found.")
-        import cupy
 
         return cupy.asarray(self.as_gpu_matrix())
 
@@ -1193,7 +1194,7 @@ class DataFrame(object):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
+                df = df.take(idx.argsort(True).argsort(True).data.mem)
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
@@ -1467,6 +1468,38 @@ class DataFrame(object):
         else:
             return series.set_index(self._index)
 
+    def insert(self, loc, column, value, forceindex=False):
+        """ Add a column to DataFrame at the index specified by loc.
+
+        Parameters
+        ----------
+        loc : int
+            location to insert by index, cannot be greater then num columns + 1
+        column : number or string
+            name or label of column to be inserted
+        value : Series or array-like
+        """
+        num_cols = len(self._cols)
+        if column in self._cols:
+            raise NameError("duplicated column name {!r}".format(column))
+
+        if loc < 0:
+            loc = num_cols + loc + 1
+
+        if not (0 <= loc <= num_cols):
+            raise ValueError(
+                "insert location must be within range {}, {}".format(
+                    -(num_cols + 1) * (num_cols > 0), num_cols * (num_cols > 0)
+                )
+            )
+        self._cols[column] = self._prepare_series_for_add(
+            value, forceindex=forceindex, name=column
+        )
+        keys = list(self._cols.keys())
+        for i, col in enumerate(keys):
+            if num_cols > i >= loc:
+                self._cols.move_to_end(col)
+
     def add_column(self, name, data, forceindex=False):
         """Add a column
 
@@ -1477,6 +1510,11 @@ class DataFrame(object):
         data : Series, array-like
             Values to be added.
         """
+
+        warnings.warn(
+            "`add_column` will be removed in the future. Use `.insert`",
+            DeprecationWarning,
+        )
 
         if name in self._cols:
             raise NameError("duplicated column name {!r}".format(name))
@@ -1961,7 +1999,7 @@ class DataFrame(object):
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
         for name, col in zip(newnames, newcols):
-            outdf.add_column(name, col)
+            outdf.insert(len(outdf._cols), name, col)
         return outdf
 
     def label_encoding(
@@ -1993,7 +2031,7 @@ class DataFrame(object):
             cats=cats, dtype=dtype, na_sentinel=na_sentinel
         )
         outdf = self.copy()
-        outdf.add_column(newname, newcol)
+        outdf.insert(len(outdf._cols), newname, newcol)
 
         return outdf
 
@@ -3854,7 +3892,7 @@ class DataFrame(object):
         for x in self._cols.values():
             infered_type = cudf_dtype_from_pydata_dtype(x.dtype)
             if infered_type in inclusion:
-                df.add_column(x.name, x)
+                df.insert(len(df._cols), x.name, x)
 
         return df
 

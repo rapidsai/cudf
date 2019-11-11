@@ -3,6 +3,7 @@
 import array as arr
 import operator
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -15,7 +16,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
-from cudf.utils.utils import _have_cupy
 
 
 def test_init_via_list_of_tuples():
@@ -1595,9 +1595,6 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
-    import cupy
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
@@ -3364,10 +3361,6 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
-    import cupy
-
     pds = pd.Series(data)
     gds = Series(data)
     gds_vals = gds.values
@@ -3413,8 +3406,6 @@ def test_series_values_property(data):
     ],
 )
 def test_df_values_property(data):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
     pdf = pd.DataFrame.from_dict(data)
     gdf = DataFrame.from_pandas(pdf)
 
@@ -3998,3 +3989,30 @@ def test_df_constructor_dtype(dtype):
     got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+def test_insert(data):
+    pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    # insertion by index
+
+    pdf.insert(0, "foo", data)
+    gdf.insert(0, "foo", data)
+
+    assert_eq(pdf, gdf)
+
+    pdf.insert(3, "bar", data)
+    gdf.insert(3, "bar", data)
+
+    assert_eq(pdf, gdf)
+
+    pdf.insert(1, "baz", data)
+    gdf.insert(1, "baz", data)
+
+    assert_eq(pdf, gdf)
+
+    # pandas insert doesnt support negative indexing
+    pdf.insert(len(pdf.columns) - 1, "qux", data)
+    gdf.insert(-1, "qux", data)
