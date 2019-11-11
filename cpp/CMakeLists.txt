@@ -490,9 +490,11 @@ add_library(cudf
             src/strings/attributes.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
+            src/strings/substring.cu
             src/strings/combine.cu
             src/strings/char_types/char_types.cu
             src/strings/case.cu
+            src/strings/find.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 
