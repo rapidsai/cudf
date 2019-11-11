@@ -21,7 +21,11 @@ namespace
 {
 using BYTE = uint8_t;
 
-/**---------------------------------------------------------------------------*
+// number of characters in a string computed on-demand
+// the _nchars member is initialized to this value as a place-holder
+static constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
+
+/**
  * @brief Returns the number of bytes used to represent the provided byte.
  * This could be 0 to 4 bytes. 0 is returned for intermediate bytes within a
  * single character. For example, for the two-byte 0xC3A8 single character,
@@ -29,7 +33,7 @@ using BYTE = uint8_t;
  *
  * @param byte Byte from an encoded character.
  * @return Number of bytes.
- *---------------------------------------------------------------------------**/
+ */
 __host__ __device__ inline cudf::size_type bytes_in_utf8_byte(BYTE byte)
 {
     cudf::size_type count = 1;
@@ -40,13 +44,13 @@ __host__ __device__ inline cudf::size_type bytes_in_utf8_byte(BYTE byte)
     return count;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns the number of bytes used in the provided char array by
- * searching for a null-terminator ('\0') byte.
+ * searching for a null-terminator byte.
  *
  * @param str Null-terminated array of chars.
  * @return Number of bytes.
- *---------------------------------------------------------------------------**/
+ */
 __device__ inline cudf::size_type string_length( const char* str )
 {
     if( !str )
@@ -62,12 +66,12 @@ __device__ inline cudf::size_type string_length( const char* str )
 namespace cudf
 {
 
-__host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
-    : _data(data), _bytes(bytes)
+__host__ __device__ inline string_view::string_view()
+    : _data(""), _bytes(0), _nchars(0)
 {}
 
-__device__ inline string_view::string_view(const char* data)
-    : _data{data}, _bytes{string_length(data)}
+__host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
+    : _data(data), _bytes(bytes), _nchars(UNKNOWN_STRING_LENGTH)
 {}
 
 //
@@ -78,7 +82,9 @@ __host__ __device__ inline size_type string_view::size_bytes() const
 
 __device__ inline size_type string_view::length() const
 {
-    return strings::detail::characters_in_string(_data,_bytes);
+    if( _nchars <= UNKNOWN_STRING_LENGTH )
+        _nchars = strings::detail::characters_in_string(_data,_bytes);
+    return _nchars;
 }
 
 __host__ __device__ inline const char* string_view::data() const
