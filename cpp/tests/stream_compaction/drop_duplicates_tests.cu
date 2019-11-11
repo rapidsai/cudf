@@ -152,6 +152,15 @@ TEST_F(UniqueCount, EmptyColumn)
     EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, true, true));
 }
 
+TEST_F(UniqueCount, StringColumnWithNull)
+{
+    cudf::test::strings_column_wrapper input_col{{"", "this", "is", "this", "This", "a", "column", "of", "the", "strings"},
+                                                 { 1,     1,    1,      1,      1,   1,         1,    1,     0,         1}};
+
+    cudf::size_type expected = (std::vector<std::string> {"", "this", "is", "This", "a", "column", "of", "strings"}).size();
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, true, false));
+}
+
 
 
 
