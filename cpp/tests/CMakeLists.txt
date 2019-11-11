@@ -196,7 +196,7 @@ ConfigureTest(LEGACY_ORDERBY_TEST "${LEGACY_ORDERBY_TEST_SRC}")
 # - is_sorted tests -------------------------------------------------------------------------------
 
 set(IS_SORTED_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/is_sorted_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/is_sorted_tests.cu")
 
 ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
 
