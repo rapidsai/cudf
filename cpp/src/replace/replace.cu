@@ -20,11 +20,9 @@
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
 #include <cub/cub.cuh>
-#include <cudf/legacy/interop.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/detail/replace.hpp>
-#include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -35,11 +33,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
-#include <bitmask/legacy/bit_mask.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/column/column_device_view.cuh>
-
-using bit_mask::bit_mask_t;
 
 namespace{ //anonymous
 
@@ -62,12 +57,12 @@ __device__ T sum_warps(T* warp_smem)
 
 // return the new_value for output column at index `idx`
 template<class T, bool replacement_has_nulls>
-__device__ auto get_new_value(gdf_size_type         idx,
+__device__ auto get_new_value(cudf::size_type         idx,
                            const T* __restrict__ input_data,
                            const T* __restrict__ values_to_replace_begin,
                            const T* __restrict__ values_to_replace_end,
                            const T* __restrict__       d_replacement_values,
-                           bit_mask_t const * __restrict__ replacement_valid)
+                           cudf::bitmask_type const * __restrict__ replacement_valid)
    {
      auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
                                       values_to_replace_end, input_data[idx]);
@@ -78,7 +73,7 @@ __device__ auto get_new_value(gdf_size_type         idx,
        auto d = thrust::distance(values_to_replace_begin, found_ptr);
        new_value = d_replacement_values[d];
        if (replacement_has_nulls) {
-         output_is_valid = bit_mask::is_valid(replacement_valid, d);
+         output_is_valid = cudf::bit_is_set(replacement_valid, d);
        }
      } else {
        new_value = input_data[idx];
@@ -117,17 +112,17 @@ __device__ auto get_new_value(gdf_size_type         idx,
             bool input_has_nulls, bool replacement_has_nulls>
   __global__
   void replace_kernel(const T* __restrict__           input_data,
-                      bit_mask_t const * __restrict__ input_valid,
+                      cudf::bitmask_type const * __restrict__ input_valid,
                       T * __restrict__          output_data,
-                      bit_mask_t * __restrict__ output_valid,
-                      gdf_size_type * __restrict__    output_valid_count,
-                      gdf_size_type                   nrows,
+                      cudf::bitmask_type * __restrict__ output_valid,
+                      cudf::size_type * __restrict__    output_valid_count,
+                      cudf::size_type                   nrows,
                       const T* __restrict__ values_to_replace_begin,
                       const T* __restrict__ values_to_replace_end,
                       const T* __restrict__           d_replacement_values,
-                      bit_mask_t const * __restrict__ replacement_valid)
+                      cudf::bitmask_type const * __restrict__ replacement_valid)
   {
-  gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask = __ballot_sync(active_mask, i < nrows);
@@ -144,7 +139,7 @@ __device__ auto get_new_value(gdf_size_type         idx,
     uint32_t bitmask = 0xffffffff;
 
     if (input_has_nulls) {
-      bool const input_is_valid{bit_mask::is_valid(input_valid, i)};
+      bool const input_is_valid{cudf::bit_is_set(input_valid, i)};
       output_is_valid = input_is_valid;
 
       bitmask = __ballot_sync(active_mask, input_is_valid);
@@ -214,8 +209,8 @@ __device__ auto get_new_value(gdf_size_type         idx,
 
       cudf::size_type *valid_count = nullptr;
       if (output.nullable()) {
-        valid_count = reinterpret_cast<gdf_size_type*>(mr->allocate(sizeof(gdf_size_type), stream));
-        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(gdf_size_type), stream));
+        valid_count = reinterpret_cast<cudf::size_type*>(mr->allocate(sizeof(cudf::size_type), stream));
+        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(cudf::size_type), stream));
       }
 
       cudf::util::cuda::grid_config_1d grid{output.size(), BLOCK_SIZE, 1};
@@ -247,6 +242,8 @@ __device__ auto get_new_value(gdf_size_type         idx,
                                              replacement_values.data<col_type>(),
                                              replacement_values.null_mask());
 
+      cudaStreamSynchronize(stream);
+
       if(valid_count != nullptr){
         cudf::size_type valids {0};
         CUDA_TRY(cudaMemcpyAsync(&valids,
@@ -277,16 +274,16 @@ namespace detail {
   std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                      cudf::column_view const& values_to_replace,
                                                      cudf::column_view const& replacement_values,
-                                                     cudaStream_t stream,
-                                                     rmm::mr::device_memory_resource* mr) {
+                                                     rmm::mr::device_memory_resource* mr,
+                                                     cudaStream_t stream) {
     if (0 == input_col.size() )
     {
-      return std::unique_ptr<cudf::column>(new cudf::column(input_col));
+      return std::make_unique<cudf::column>(input_col);
     }
 
     if (0 == values_to_replace.size() || 0 == replacement_values.size())
     {
-      return std::unique_ptr<cudf::column>(new cudf::column(input_col));
+      return std::make_unique<cudf::column>(input_col);
     }
 
     CUDF_EXPECTS(values_to_replace.size() == replacement_values.size(),
@@ -340,20 +337,18 @@ namespace experimental {
                                                      cudf::column_view const& values_to_replace,
                                                      cudf::column_view const& replacement_values,
                                                      rmm::mr::device_memory_resource* mr){
-    return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, 0, mr);
+    return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, mr, 0);
   }
 } //end experimental
 } //end cudf
 
 namespace{ //anonymous
 
-using bit_mask::bit_mask_t;
-
 template <typename Type>
 __global__
-void replace_nulls_with_scalar(gdf_size_type size,
+void replace_nulls_with_scalar(cudf::size_type size,
                                const Type* __restrict__ in_data,
-                               const bit_mask_t* __restrict__ in_valid,
+                               const cudf::bitmask_type* __restrict__ in_valid,
                                const Type* __restrict__ replacement,
                                Type* __restrict__ out_data)
 {
@@ -366,14 +361,14 @@ void replace_nulls_with_scalar(gdf_size_type size,
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    out_data[i] = bit_mask::is_valid(in_valid, i)? in_data[i] : *replacement;
+    out_data[i] = cudf::bit_is_set(in_valid, i)? in_data[i] : *replacement;
   }
 }
 
 
 template <typename Type>
 __global__
-void replace_nulls_with_column(gdf_size_type size,
+void replace_nulls_with_column(cudf::size_type size,
                                Type const* __restrict__ in_data,
                                cudf::bitmask_type const* __restrict__ in_valid,
                                Type const* __restrict__ replacement,
@@ -388,7 +383,7 @@ void replace_nulls_with_column(gdf_size_type size,
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    out_data[i] = bit_mask::is_valid(in_valid, i)? in_data[i] : replacement[i];
+    out_data[i] = cudf::bit_is_set(in_valid, i)? in_data[i] : replacement[i];
   }
 }
 
@@ -473,17 +468,17 @@ namespace detail {
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
-                                            cudaStream_t stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::mr::device_memory_resource* mr,
+                                            cudaStream_t stream)
 {
   if (input.size() == 0) {
-    return std::unique_ptr<cudf::column>(new cudf::column(input));
+    return std::make_unique<cudf::column>(input);
   }
 
   CUDF_EXPECTS(nullptr != input.data<int32_t>(), "Null input data");
 
   if (input.nullable() == false || input.null_count() == 0) {
-    return std::unique_ptr<cudf::column>(new cudf::column(input));
+    return std::make_unique<cudf::column>(input);
   }
 
   CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
@@ -510,8 +505,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::scalar const* replacement,
-                                            cudaStream_t stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::mr::device_memory_resource* mr,
+                                            cudaStream_t stream)
 {
   if (input.size() == 0) {
     return std::unique_ptr<cudf::column>(new cudf::column(input));
@@ -550,7 +545,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::mr::device_memory_resource* mr)
 {
-  return detail::replace_nulls(input, replacement, 0, mr);
+  return detail::replace_nulls(input, replacement, mr, 0);
 }
 
 
@@ -558,7 +553,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::scalar const* replacement,
                                             rmm::mr::device_memory_resource* mr)
 {
-  return detail::replace_nulls(input, replacement, 0, mr);
+  return detail::replace_nulls(input, replacement, mr, 0);
 }
 } //end experimental
 }  // namespace cudf

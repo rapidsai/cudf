@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "cudf/cudf.h"
-#include "cudf/types.hpp"
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/default_memory_resource.hpp>
 
@@ -41,14 +41,14 @@ namespace detail {
  */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
-                                            cudaStream_t stream = 0,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                            cudaStream_t stream = 0);
 
 /**
   * @brief Replaces all null values in a column with a scalar.
   *
   * `input` and `replacement` must have the same type.
-  * a gdf_scalar of the same data type as the column.
+  * a cudf::scalar of the same data type as the column.
   *
   *
   * @param[in] input A column whose null values will be replaced
@@ -59,8 +59,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::scalar const* replacement,
-                                            cudaStream_t stream = 0,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                            cudaStream_t stream = 0);
 
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
@@ -76,7 +76,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
-                                                   cudaStream_t stream = 0,
-                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                   cudaStream_t stream = 0);
 }  // namespace detail
 } // namespace cudf

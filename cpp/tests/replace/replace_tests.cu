@@ -194,12 +194,7 @@ void test_replace(std::vector<T> const &input_column,
 }
 
 
-using Types = cudf::test::Types<int8_t,
-                             int16_t,
-                             int,
-                             int64_t,
-                             float,
-                             double>;
+using Types = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(ReplaceTest, Types);
 

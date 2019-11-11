@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "cudf/cudf.h"
-#include "cudf/types.hpp"
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/default_memory_resource.hpp>
 

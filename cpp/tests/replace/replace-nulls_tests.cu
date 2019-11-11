@@ -27,10 +27,44 @@
 #include <gtest/gtest.h>
 #include <cudf/scalar/scalar.hpp>
 
+struct ReplaceErrorTest : public cudf::test::BaseFixture{};
+
+// Error: old-values and new-values size mismatch
+TEST_F(ReplaceErrorTest, SizeMismatch)
+{
+  std::vector<int32_t> input_column{7, 5, 6, 3, 1, 2, 8, 4};
+  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
+  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{input_column.begin(),
+                                                                   input_column.end(),
+                                                                   input_valid.begin()};
+  cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13}};
+
+  ASSERT_THROW(cudf::experimental::replace_nulls(gdf_input_column,
+                                                 gdf_values_to_replace_column,
+                                                 mr()),
+               cudf::logic_error);
+}
+
+// Error: column type mismatch
+TEST_F(ReplaceErrorTest, TypeMismatch)
+{
+  std::vector<int32_t> input_column{7, 5, 6, 3, 1, 2, 8, 4};
+  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
+  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{input_column.begin(),
+                                                                   input_column.end(),
+                                                                   input_valid.begin()};
+  cudf::test::fixed_width_column_wrapper<float> gdf_values_to_replace_column{{10, 11, 12, 13, 14, 15, 16, 17}};
+
+  EXPECT_THROW(cudf::experimental::replace_nulls(gdf_input_column,
+                                                 gdf_values_to_replace_column,
+                                                 mr()),
+               cudf::logic_error);
+}
+
 template <typename T>
 struct ReplaceNullsTest : public cudf::test::BaseFixture {};
 
-using test_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using test_types = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(ReplaceNullsTest, test_types);
 
@@ -60,14 +94,18 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
   std::vector<cudf::valid_type> inputValid{0,0,0,0,0,1,1,1,1,1};
   std::vector<TypeParam> replacementColumn{0,1,2,3,4,5,6,7,8,9};
 
-
-
   ReplaceNullsColumn<TypeParam>(
     cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
     cudf::test::fixed_width_column_wrapper<TypeParam> {replacementColumn.begin(), replacementColumn.end()},
     cudf::test::fixed_width_column_wrapper<TypeParam> {replacementColumn.begin(), replacementColumn.end()});
 }
 
+TYPED_TEST(ReplaceNullsTest, ReplaceColumn_Empty) {
+  ReplaceNullsColumn<TypeParam>(
+    cudf::test::fixed_width_column_wrapper<TypeParam> {},
+    cudf::test::fixed_width_column_wrapper<TypeParam> {},
+    cudf::test::fixed_width_column_wrapper<TypeParam> {});
+}
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
