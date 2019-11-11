@@ -45,7 +45,7 @@ namespace
  * @brief  Units for timestamp conversion.
  * These are defined since there are more than what cudf supports.
  */
-enum timestamp_units {
+enum class timestamp_units {
     years,           ///< precision is years
     months,          ///< precision is months
     days,            ///< precision is days
@@ -71,20 +71,25 @@ enum timestamp_parse_component {
     TP_ARRAYSIZE   = 8
 };
 
-struct alignas(16) format_item
+enum class format_char_type : int8_t
 {
-    bool item_type;    // 1=specifier, 0=literal
-    char specifier;    // specifier
-    int8_t length;     // item length in bytes
-    char literal;      // pass-thru character
+    literal,   // literal char type passed through
+    specifier  // timestamp format specifier
+};
+
+struct alignas(4) format_item
+{
+    format_char_type item_type;    // specifier or literal indicator
+    char value;                    // specifier or literal value
+    int8_t length;                 // item length in bytes
 
     static format_item new_specifier(char format_char, int8_t length)
     {
-        return format_item{true,format_char,length,0};
+        return format_item{format_char_type::specifier,format_char,length};
     }
     static format_item new_delimiter(char literal)
     {
-        return format_item{false,0,1,literal};
+        return format_item{format_char_type::literal,literal,1};
     }
 };
 
@@ -102,7 +107,7 @@ struct format_compiler
         {'b',0}, {'B',0},
         {'Y',4},{'y',2}, {'m',2}, {'d',2},
         {'H',2},{'I',2},{'M',2},{'S',2},{'f',6},
-        {'p',2},{'z',5},{'Z',3},
+        {'p',2},{'z',5},
         {'j',3},{'U',2},{'W',2}
     };
 
@@ -142,7 +147,7 @@ struct format_compiler
             int8_t spec_length = specifiers[ch];
             if( ch=='f' )
             {
-                // adjust spec_length based on units
+                // adjust spec_length based on units (default is 6 for micro-seconds)
                 if( units==timestamp_units::ms )
                     spec_length = 3;
                 else if( units==timestamp_units::ns )
@@ -167,8 +172,8 @@ struct format_compiler
 template <typename T>  // timestamp type
 struct parse_datetime
 {
-    const column_device_view d_strings;
-    const format_item* d_format_items;
+    column_device_view const d_strings;
+    format_item const* d_format_items;
     size_type items_count;
     timestamp_units units;
 
@@ -177,7 +182,7 @@ struct parse_datetime
     {
         const char* ptr = str;
         int32_t value = 0;
-        for( unsigned int idx=0; idx < bytes; ++idx )
+        for( size_type idx=0; idx < bytes; ++idx )
         {
             char chr = *ptr++;
             if( chr < '0' || chr > '9' )
@@ -187,26 +192,8 @@ struct parse_datetime
         return value;
     }
 
-    // only supports ascii
-    __device__ int strcmp_ignore_case( const char* str1, const char* str2, size_t length )
-    {
-        for( size_t idx=0; idx < length; ++idx )
-        {
-            char ch1 = *str1;
-            if( ch1 >= 'a' && ch1 <= 'z' )
-                ch1 = ch1 - 'a' + 'A';
-            char ch2 = *str2;
-            if( ch2 >= 'a' && ch2 <= 'z' )
-                ch2 = ch2 - 'a' + 'A';
-            if( ch1==ch2 )
-                continue;
-            return static_cast<int>(ch1 - ch2);
-        }
-        return 0;
-    }
-
-    // walk the prog to read the datetime string
-    // returns 0 if all ok
+    // Walk the format_items to read the datetime string.
+    // Returns 0 if all ok.
     __device__ int parse_into_parts( string_view d_string, int32_t* timeparts )
     {
         auto ptr = d_string.data();
@@ -214,7 +201,7 @@ struct parse_datetime
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
-            if(item.item_type==false)
+            if(item.item_type==format_char_type::literal)
             {   // static character we'll just skip;
                 // consume item.length bytes from string
                 ptr += item.length;
@@ -225,7 +212,7 @@ struct parse_datetime
                 return 1;
 
             // special logic for each specifier
-            switch(item.specifier)
+            switch(item.value)
             {
                 case 'Y':
                     timeparts[TP_YEAR] = str2int(ptr,item.length);
@@ -254,9 +241,13 @@ struct parse_datetime
                     timeparts[TP_SUBSECOND] = str2int(ptr,item.length);
                     break;
                 case 'p':
-                    if( timeparts[TP_HOUR] <= 12 && strcmp_ignore_case(ptr,"PM",2)==0 ) // strncasecmp
+                {
+                    string_view am_pm(ptr,2);
+                    if( (timeparts[TP_HOUR] <= 12) &&
+                        ((am_pm.compare("PM",2)==0) || (am_pm.compare("pm",2)==0)) )
                         timeparts[TP_HOUR] += 12;
                     break;
+                }
                 case 'z':
                 {
                     int sign = *ptr=='-' ? -1:1;
@@ -267,10 +258,6 @@ struct parse_datetime
                     timeparts[TP_TZ_MINUTES] = sign * ((hh*60)+mm);
                     break;
                 }
-                case 'Z':
-                    //if( strcmp_ignore_case(ptr,"UTC",3)!=0 )
-                    //    return 2;
-                    break;
                 default:
                     return 3;
             }
@@ -414,23 +401,14 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_column = *strings_column;
 
-    // copy null mask
-    rmm::device_buffer null_mask;
-    cudf::size_type null_count = d_column.null_count();
-    if( d_column.nullable() )
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        bitmask_allocation_size_bytes(strings_count),
-                                        stream, mr);
-    // create output column
-    auto results = std::make_unique<cudf::column>( timestamp_type, strings_count,
-        rmm::device_buffer(strings_count * size_of(timestamp_type), stream, mr),
-        null_mask, null_count);
+    auto results = make_timestamp_column( timestamp_type, strings_count,
+        copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     cudf::experimental::type_dispatcher( timestamp_type, dispatch_to_timestamps_fn(),
                                          d_column, format, units,
                                          results_view,
                                          stream );
-    results->set_null_count(null_count);
+    results->set_null_count(strings.null_count());
     return results;
 }
 
@@ -604,8 +582,8 @@ struct datetime_formatter
         timeparts[TP_SUBSECOND] = static_cast<int32_t>(timestamp % 1000000000);
     }
 
-    // utility to create 0-padded integers (up to 9 bytes)
-    __device__ char* int2str( char* str, int len, int val )
+    // utility to create 0-padded integers (up to 9 chars)
+    __device__ char* int2str( char* str, int bytes, int val )
     {
         char tmpl[9] = {'0','0','0','0','0','0','0','0','0'};
         char* ptr = tmpl;
@@ -615,12 +593,9 @@ struct datetime_formatter
             *ptr++ = '0' + digit;
             val = val / 10;
         }
-        ptr = tmpl + len-1;
-        while( len > 0 )
-        {
+        ptr = tmpl + bytes-1;
+        while( bytes-- > 0 )
             *str++ = *ptr--;
-            --len;
-        }
         return str;
     }
 
@@ -629,13 +604,13 @@ struct datetime_formatter
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
-            if(item.item_type==false)
+            if(item.item_type==format_char_type::literal)
             {
-                *ptr++ = item.literal;
+                *ptr++ = item.value;
                 continue;
             }
             // special logic for each specifier
-            switch(item.specifier)
+            switch(item.value)
             {
                 case 'Y': // 4-digit year
                     ptr = int2str(ptr,item.length,timeparts[TP_YEAR]);
@@ -725,10 +700,10 @@ struct dispatch_from_timestamps_fn
 
 
 //
-std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
-                                               std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                               cudaStream_t stream = 0 )
+std::unique_ptr<column> from_timestamps( column_view const& timestamps,
+                                         std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
+                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                         cudaStream_t stream = 0 )
 {
     size_type strings_count = timestamps.size();
     if( strings_count == 0 )
@@ -744,12 +719,7 @@ std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
     auto d_column = *column;
 
     // copy null mask
-    rmm::device_buffer null_mask;
-    cudf::size_type null_count = d_column.null_count();
-    if( d_column.nullable() )
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        bitmask_allocation_size_bytes(strings_count),
-                                        stream, mr);
+    rmm::device_buffer null_mask = copy_bitmask( timestamps, stream, mr);
     // Each string will be the same number of bytes which can be determined
     // directly from the format string.
     auto d_str_bytes = compiler.template_bytes(); // size in bytes of each string
@@ -764,7 +734,7 @@ std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column = detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
+    auto chars_column = detail::create_chars_child_column( strings_count, timestamps.null_count(), bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.template data<char>();
     // fill in chars column with timestamps
@@ -775,16 +745,16 @@ std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
                                          stream );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               null_count, std::move(null_mask), stream, mr);
+                               timestamps.null_count(), std::move(null_mask), stream, mr);
 }
 
 } // namespace detail
 
 // external API
 
-std::unique_ptr<cudf::column> from_timestamps( column_view const& timestamps,
-                                               std::string const& format,
-                                               rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> from_timestamps( column_view const& timestamps,
+                                         std::string const& format,
+                                         rmm::mr::device_memory_resource* mr)
 {
     return detail::from_timestamps(timestamps, format, mr );
 }
