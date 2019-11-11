@@ -192,9 +192,6 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
                             rmm::mr::device_memory_resource* mr,
                             cudaStream_t stream)
 {
-  CUDF_EXPECTS( input.num_rows() == keys.num_rows(), "number of \
-rows in input table should be equal to number of rows in key colums table");
-
   if (0 == input.num_rows() || 
       0 == input.num_columns() ||
       0 == keys.num_columns()
@@ -207,6 +204,9 @@ rows in input table should be equal to number of rows in key colums table");
 
     return std::make_unique<experimental::table>(std::move(out_columns));
   }
+  
+  CUDF_EXPECTS( input.num_rows() == keys.num_rows(), "number of \
+rows in input table should be equal to number of rows in key colums table");
 
   // The values will be filled into this column
   auto unique_indices = 
@@ -218,7 +218,7 @@ rows in input table should be equal to number of rows in key colums table");
       detail::get_unique_ordered_indices(keys, 
                                          *unique_indices,
                                          keep, nulls_are_equal);
-  
+ 
   // run gather operation to establish new order
   return detail::gather(input, unique_indices_view, false, false, true, mr, stream);
 }

@@ -101,7 +101,7 @@ std::unique_ptr<experimental::table>
     drop_duplicates(table_view const& input,
                             table_view const& keys,
                             duplicate_keep_option const& keep,
-                            bool const& nulls_are_equal,
+                            bool const& nulls_are_equal=true,
                             rmm::mr::device_memory_resource *mr =
                                rmm::mr::get_default_resource(),
                             cudaStream_t stream = 0);
