@@ -118,5 +118,28 @@ std::unique_ptr<experimental::table>
                        rmm::mr::device_memory_resource *mr =
                            rmm::mr::get_default_resource());
 
+/**
+ * @brief Choices for drop_duplicates API for retainment of duplicate rows
+ */
+enum class duplicate_keep_option {
+  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
+  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
+  KEEP_NONE         ///< Don't keep any duplicate rows, Keeps only unique rows
+};
+
+std::unique_ptr<experimental::table>
+    drop_duplicates(table_view const& input,
+                            table_view const& keys,
+                            duplicate_keep_option const& keep,
+                            bool const& nulls_are_equal,
+                            rmm::mr::device_memory_resource *mr =
+                               rmm::mr::get_default_resource());
+
+cudf::size_type unique_count(column_view const& input,
+                           bool const& ignore_nulls,
+                           bool const& nan_as_null,
+                           rmm::mr::device_memory_resource *mr =
+                               rmm::mr::get_default_resource());
+
 } // namespace experimental
 } // namespace cudf

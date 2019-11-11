@@ -394,6 +394,7 @@ add_library(cudf
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/stream_compaction/legacy/apply_boolean_mask.cu
             src/stream_compaction/legacy/drop_nulls.cu
             src/stream_compaction/legacy/drop_duplicates.cu
