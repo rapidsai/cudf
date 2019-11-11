@@ -75,6 +75,7 @@
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3189 Port NVStrings find ops to cudf column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
@@ -142,6 +143,9 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
+- PR #3326 Fix and test for detail::gather map iterator type inference
+- PR #3334 Remove zero-size exception check from make_strings_column factories
+- PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 
 
 # cuDF 0.10.0 (16 Oct 2019)
