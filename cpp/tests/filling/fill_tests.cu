@@ -220,34 +220,34 @@ TEST_F(FillErrorTestFixture, InvalidRange)
 
   // empty range == no-op, this is valid
   EXPECT_NO_THROW(cudf::experimental::fill(destination_view, 0, 0, *p_val));
-  EXPECT_NO_THROW(auto ret =
+  EXPECT_NO_THROW(auto p_ret =
                     cudf::experimental::fill(destination, 0, 0, *p_val));
 
   // out_begin is negative
   EXPECT_THROW(cudf::experimental::fill(destination_view, -10, 0, *p_val),
                cudf::logic_error);
-  EXPECT_THROW(auto ret = cudf::experimental::fill(destination, -10, 0,
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, -10, 0,
                  *p_val),
                cudf::logic_error);
 
   // out_begin > out_end
   EXPECT_THROW(cudf::experimental::fill(destination_view, 10, 5, *p_val),
                cudf::logic_error);
-  EXPECT_THROW(auto ret = cudf::experimental::fill(destination, 10, 5,
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 10, 5,
                  *p_val),
                cudf::logic_error);
 
   // out_begin >= destination.size()
   EXPECT_THROW(cudf::experimental::fill(destination_view, 100, 100, *p_val),
                cudf::logic_error);
-  EXPECT_THROW(auto ret = cudf::experimental::fill(destination, 100, 100,
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 100, 100,
                  *p_val),
                cudf::logic_error);
 
   // out_end > destination.size()
   EXPECT_THROW(cudf::experimental::fill(destination_view, 99, 101, *p_val),
                cudf::logic_error);
-  EXPECT_THROW(auto ret = cudf::experimental::fill(destination, 99, 101,
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 99, 101,
                  *p_val),
                cudf::logic_error);
 }
@@ -270,7 +270,7 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
   EXPECT_THROW(cudf::experimental::fill(
                  destination_view, 0, 10, *p_val),
                cudf::logic_error);
-  EXPECT_THROW(auto ret = cudf::experimental::fill(
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(
                  destination, 0, 10, *p_val),
                cudf::logic_error);
 }
@@ -284,7 +284,7 @@ TEST_F(FillErrorTestFixture, StringCategoryNotSupported)
   auto destination_string =
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 
-  EXPECT_THROW(auto ret = cudf::experimental::fill(
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(
                  destination_string, 0, 1, *p_val),
                cudf::logic_error);
 }
