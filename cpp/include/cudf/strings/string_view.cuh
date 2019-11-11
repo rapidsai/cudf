@@ -41,6 +41,10 @@ using char_utf8 = uint32_t;
 class string_view
 {
  public:
+
+  /**
+   * @brief Default constructor represents an empty string.
+   */
   __host__ __device__ string_view();
   /**
    * @brief Create instance from existing device char array.
@@ -49,13 +53,7 @@ class string_view
    * @param bytes Number of bytes in data array.
    */
   __host__ __device__ string_view(const char* data, size_type bytes);
-  /**
-   * @brief Create instance from existing device char array. The array must
-   * include a null-terminator ('\0).
-   *
-   * @param data Device char array encoded in UTF8.
-   */
-//  __device__ string_view(const char* data);
+
   string_view(const string_view&) = default;
   string_view(string_view&&) = default;
   ~string_view() = default;
