@@ -77,6 +77,11 @@ enum class format_char_type : int8_t
     specifier  // timestamp format specifier
 };
 
+/**
+ * @brief Represents a format specifier or literal from a timestamp format string.
+ * 
+ * Created by the format_compiler when parsing a format string.
+ */
 struct alignas(4) format_item
 {
     format_char_type item_type;    // specifier or literal indicator
@@ -93,7 +98,13 @@ struct alignas(4) format_item
     }
 };
 
-//
+/**
+ * @brief The format_compiler parses a timestamp format string into a vector of
+ * format_items.
+ * 
+ * The vector of format_items are used when parsing a string into timestamp
+ * components and when formatting a string from timestamp components.
+ */
 struct format_compiler
 {
     std::string format;
@@ -362,7 +373,7 @@ struct dispatch_to_timestamps_fn
                      mutable_column_view& results_view,
                      cudaStream_t stream ) const
     {
-        CUDF_EXPECTS( cudf::is_timestamp<T>(), "Unexpected timestamp type" );
+        CUDF_EXPECTS( cudf::is_timestamp<T>(), "Expecting timestamp type" );
         format_compiler compiler(format.c_str(),units);
         auto d_items = compiler.compile_to_device();
         auto d_results = results_view.data<T>();
