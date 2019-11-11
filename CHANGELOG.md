@@ -63,14 +63,19 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #2971 Added initial gather and scatter methods for strings_column_view
+- PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
+- PR #2991 Added strings column functions concatenate and join_strings
 - PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3138 Move unary files to legacy
+- PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3189 Port NVStrings find ops to cudf column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
@@ -138,6 +143,8 @@
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
 - PR #3326 Fix and test for detail::gather map iterator type inference
+- PR #3334 Remove zero-size exception check from make_strings_column factories
+- PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 
 
 # cuDF 0.10.0 (16 Oct 2019)
@@ -183,7 +190,6 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
-- PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories
