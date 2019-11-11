@@ -14,14 +14,20 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <cudf/scalar/scalar.hpp>
 
-#ifndef CUDA_HOST_DEVICE_CALLABLE
-#ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE __device__ inline
-#else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE inline
-#endif
-#endif
+#include <rmm/device_buffer.hpp>
+
+#include <string>
+
+namespace cudf {
+
+std::string string_scalar::value(cudaStream_t stream) const {
+  std::string result;
+  result.resize(_data.size());
+  CUDA_TRY(cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+  return result;
+}
+
+}  // namespace cudf
