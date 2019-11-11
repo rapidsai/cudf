@@ -146,7 +146,10 @@ void copy_range(column_view const& source, mutable_column_view& target,
                  (source_end <= source.size()) &&
                  (target_begin >= 0) &&
                  (target_begin < target.size()) &&
-                 (target_begin + (source_end - source_begin) <= target.size()),
+                 (target_begin + (source_end - source_begin) <=
+                   target.size()) &&
+                 // overflow
+                 (target_begin + (source_end - source_begin) >= target_begin),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
   CUDF_EXPECTS((target.nullable() == true) || (source.has_nulls() == false),
@@ -174,7 +177,10 @@ std::unique_ptr<column> copy_range(column_view const& source,
                  (source_end <= source.size()) &&
                  (target_begin >= 0) &&
                  (target_begin < target.size()) &&
-                 (target_begin + (source_end - source_begin) <= target.size()),
+                 (target_begin + (source_end - source_begin) <=
+                   target.size()) &&
+                 // overflow
+                 (target_begin + (source_end - source_begin) >= target_begin),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
