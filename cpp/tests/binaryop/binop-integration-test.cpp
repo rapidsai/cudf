@@ -29,25 +29,6 @@ namespace binop {
 struct BinaryOperationIntegrationTest : public BinaryOperationTest {};
 
 
-TEST_F(BinaryOperationIntegrationTest, Scalar_Null_Test) {
-    using TypeOut = int32_t;
-    using TypeLhs = float;
-    using TypeRhs = int64_t;
-
-    using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
-
-    auto lhs = make_random_wrapped_scalar<TypeLhs>();
-    lhs.set_valid(false);
-    auto rhs = make_random_wrapped_column<TypeRhs>(100);
-
-    auto out = cudf::experimental::binary_operation(lhs, rhs, 
-                    cudf::experimental::binary_operator::ADD,
-                    data_type(experimental::type_to_id<TypeOut>()));
-
-    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
-}
-
-
 TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64) {
     using TypeOut = int32_t;
     using TypeLhs = float;
