@@ -83,11 +83,12 @@ namespace detail {
 /*
  * Filters a table to remove null elements.
  */
-std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
-                 table_view const& keys,
-                 cudf::size_type keep_threshold,
-                 rmm::mr::device_memory_resource *mr,
-                 cudaStream_t stream) {
+std::unique_ptr<experimental::table>
+  drop_nulls(table_view const& input,
+             table_view const& keys,
+             cudf::size_type keep_threshold,
+             rmm::mr::device_memory_resource *mr,
+             cudaStream_t stream) {
   if (keys.num_columns() == 0 || keys.num_rows() == 0 ||
       not cudf::has_nulls(keys)) {
       return std::make_unique<table>(input, stream, mr);
@@ -107,18 +108,20 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
 /*
  * Filters a table to remove null elements.
  */
-std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
-                 table_view const& keys,
-                 cudf::size_type keep_threshold,
-                 rmm::mr::device_memory_resource *mr) {
+std::unique_ptr<experimental::table>
+  drop_nulls(table_view const& input,
+             table_view const& keys,
+             cudf::size_type keep_threshold,
+             rmm::mr::device_memory_resource *mr) {
     return cudf::experimental::detail::drop_nulls(input, keys, keep_threshold, mr);
 }
 /*
  * Filters a table to remove null elements.
  */
-std::unique_ptr<experimental::table> drop_nulls(table_view const &input,
-                 table_view const &keys,
-                 rmm::mr::device_memory_resource *mr)
+std::unique_ptr<experimental::table>
+  drop_nulls(table_view const &input,
+             table_view const &keys,
+             rmm::mr::device_memory_resource *mr)
 {
     return cudf::experimental::detail::drop_nulls(input, keys, keys.num_columns(), mr);
 }

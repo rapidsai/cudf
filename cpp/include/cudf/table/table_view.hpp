@@ -159,7 +159,7 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief Creates an immutable `table_view` of the columns
    *---------------------------------------------------------------------------**/
-    operator table_view();
+  operator table_view();
 };
 
 inline bool has_nulls(table_view view) {

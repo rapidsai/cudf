@@ -178,12 +178,13 @@ cudf::size_type unique_count(table_view const& keys,
   }
 }
 
-std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
-                            table_view const& keys,
-                            duplicate_keep_option const& keep,
-                            bool const& nulls_are_equal,
-                            rmm::mr::device_memory_resource* mr,
-                            cudaStream_t stream)
+std::unique_ptr<experimental::table>
+  drop_duplicates(table_view const& input,
+                  table_view const& keys,
+                  duplicate_keep_option const& keep,
+                  bool const& nulls_are_equal,
+                  rmm::mr::device_memory_resource* mr,
+                  cudaStream_t stream)
 {
   if (0 == input.num_rows() || 
       0 == input.num_columns() ||
@@ -231,10 +232,10 @@ protected:
 };
 
 cudf::size_type unique_count(column_view const& input,
-                           bool const& ignore_nulls,
-                           bool const& nan_as_null,
-                           rmm::mr::device_memory_resource *mr,
-                          cudaStream_t stream)
+                             bool const& ignore_nulls,
+                             bool const& nan_as_null,
+                             rmm::mr::device_memory_resource *mr,
+                             cudaStream_t stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) {
     return 0;
@@ -280,19 +281,20 @@ cudf::size_type unique_count(column_view const& input,
 
 }// namespace detail
 
-std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
-                            table_view const& keys,
-                            duplicate_keep_option const& keep,
-                            bool const& nulls_are_equal,
-                            rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<experimental::table>
+  drop_duplicates(table_view const& input,
+                  table_view const& keys,
+                  duplicate_keep_option const& keep,
+                  bool const& nulls_are_equal,
+                  rmm::mr::device_memory_resource* mr) {
 
     return detail::drop_duplicates(input, keys, keep, nulls_are_equal, mr);
 }
 
 cudf::size_type unique_count(column_view const& input,
-                           bool const& ignore_nulls,
-                           bool const& nan_as_null,
-                           rmm::mr::device_memory_resource *mr) {
+                             bool const& ignore_nulls,
+                             bool const& nan_as_null,
+                             rmm::mr::device_memory_resource *mr) {
 
     return detail::unique_count(input, ignore_nulls, nan_as_null, mr);
 }
