@@ -97,9 +97,6 @@ auto get_unique_ordered_indices(cudf::table_view const& keys,
                                 rmm::mr::get_default_resource(),
                                 cudaStream_t stream=0)
 {
-  cudf::size_type ncols = keys.num_columns();
-  cudf::size_type nrows = keys.num_rows();
-
   // sort only indices
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
@@ -110,7 +107,6 @@ auto get_unique_ordered_indices(cudf::table_view const& keys,
 
   // extract unique indices 
   auto device_input_table = cudf::table_device_view::create(keys, stream);
-  rmm::device_vector<cudf::size_type>::iterator result_end;
 
   if(cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
@@ -146,9 +142,6 @@ cudf::size_type unique_count(table_view const& keys,
                                  = rmm::mr::get_default_resource(),
                              cudaStream_t stream=0)
 {
-  cudf::size_type ncols = keys.num_columns();
-  cudf::size_type nrows = keys.num_rows();
-
   // sort only indices
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
@@ -166,7 +159,7 @@ cudf::size_type unique_count(table_view const& keys,
                                               nulls_are_equal);
     return thrust::count_if(rmm::exec_policy(stream)->on(stream),
               thrust::counting_iterator<cudf::size_type>(0),
-              thrust::counting_iterator<cudf::size_type>(nrows),
+              thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
               [sorted_row_index, comp]
               __device__ (cudf::size_type i) mutable {
               return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i-1]));
@@ -177,7 +170,7 @@ cudf::size_type unique_count(table_view const& keys,
                                               nulls_are_equal);
     return thrust::count_if(rmm::exec_policy(stream)->on(stream),
               thrust::counting_iterator<cudf::size_type>(0),
-              thrust::counting_iterator<cudf::size_type>(nrows),
+              thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
               [sorted_row_index, comp]
               __device__ (cudf::size_type i) mutable {
               return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i-1]));
@@ -250,7 +243,8 @@ cudf::size_type unique_count(column_view const& input,
   cudf::size_type nrows = input.size();
  
   bool has_nans = false;
-  if (input.type().id() == FLOAT32) {
+  // Check for Nans
+  if (input.type().id() == FLOAT32 and input.has_nulls() and nan_as_null) {
 
       auto input_device_view = cudf::column_device_view::create(input, stream);
       auto device_view = *input_device_view;
@@ -260,7 +254,7 @@ cudf::size_type unique_count(column_view const& input,
                                 check_for_nan<float>(device_view));
 
   }
-  else if (input.type().id() == FLOAT64) {
+  else if (input.type().id() == FLOAT64 and input.has_nulls() and nan_as_null) {
 
       auto input_device_view = cudf::column_device_view::create(input, stream);
       auto device_view = *input_device_view;

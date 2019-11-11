@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
 
 namespace cudf {
@@ -97,6 +96,27 @@ std::unique_ptr<experimental::table>
                            rmm::mr::get_default_resource(),
                        cudaStream_t stream = 0);
 
+/**
+ * @brief Create a new table without duplicate rows
+ *
+ * Given an `input` table_view, each row is copied to output table if the corresponding
+ * row of `keys` table_view is unique, where the definition of unique depends on the value of @p keep:
+ * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
+ * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
+ * - KEEP_NONE: no duplicate rows are copied
+ *
+ * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
+ *
+ * @param[in] input           input table_view to copy only unique rows
+ * @param[in] keys            table_view to identify duplicate rows
+ * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
+ * @param[in] nulls_are_equal flag to denote nulls are equal if true,
+ * nulls are not equal if false
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @return unique_ptr<table> Table with unique rows as per specified `keep`.
+ */
 std::unique_ptr<experimental::table>
     drop_duplicates(table_view const& input,
                             table_view const& keys,
@@ -105,6 +125,25 @@ std::unique_ptr<experimental::table>
                             rmm::mr::device_memory_resource *mr =
                                rmm::mr::get_default_resource(),
                             cudaStream_t stream = 0);
+
+/**
+ * @brief Count the unique elements in the column_view
+ *
+ * Given an input column_view, number of unique elements in this column_view is returned
+ *
+ * If both `ignore_nulls` and `nan_as_null` are true, both `NaN` and `null`
+ * values are ignored.
+ * If `ignored_nulls` is true and `nan_as_null` is false, only `null` is
+ * ignored, `NaN` is considered in unique count.
+ *
+ * @param[in] input         The columni_view whose unique elements will be counted.
+ * @param[in] ignore_nulls  flag to ignore `null` in unique count if true
+ * @param[in] nan_as_null   flag to consider `NaN==null` if true.
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @return number of unique elements
+ */
 
 cudf::size_type unique_count(column_view const& input,
                            bool const& ignore_nulls,

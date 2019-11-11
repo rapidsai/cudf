@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include<cudf/cudf.h>
 #include<cudf/types.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
