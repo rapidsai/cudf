@@ -54,7 +54,7 @@ struct count_accessor {
     auto p_count =
       const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_scalar));
 #else
-    auto p_const = static_cast<ScalarType const*>(this->p_scalar);
+    auto p_count = static_cast<ScalarType const*>(this->p_scalar);
 #endif
     auto count = p_count->value();
     // static_cast is necessary due to bool8
@@ -141,17 +141,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-#if 1
-  // TODO: temporary work-around till the gather function is updated to handle
-  // iterators from rmm::device_vector
-  return gather(input_table,
-                indices.data().get(),
-                indices.data().get() + output_size,
-                false, false, false, mr, stream);
-#else
   return gather(input_table, indices.begin(), indices.end(),
                 false, false, false, mr, stream);
-#endif
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
