@@ -69,7 +69,6 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  *
  * Null string entries will return null output string entries.
  *
- *
  * @throw cudf::logic_error if repl is an empty string.
  *
  * @param strings Strings column for this operation.
@@ -80,11 +79,35 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> slice_replace( strings_column_view const& strings,
+std::unique_ptr<column> replace_slice( strings_column_view const& strings,
                                        string_scalar const& repl,
                                        size_type start, size_type stop = -1,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Replaces substrings matching a list of targets with the corresponding
+ * replacement strings.
+ *
+ * For each string in strings, the list of targets is searched within that string.
+ * If a target string is found, it is replaced by the corresponding entry in the repls column.
+ * All occurrences found in each string are replaced.
+ * 
+ * This does not use regex to match targets in the string.
+ *
+ * Null string entries will return null output string entries.
+ *
+ * @throw cudf::logic_error if targets and repls are different sizes.
+ *
+ * @param strings Strings column for this operation.
+ * @param targets Strings to search for in each string.
+ * @param repls Corresponding replacement strings for target strings.
+ * @param mr Resource for allocating device memory.
+ * @return New strings column.
+ */
+std::unique_ptr<column> replace( strings_column_view const& strings,
+                                 strings_column_view const& targets,
+                                 strings_column_view const& repls,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf

@@ -155,7 +155,7 @@ namespace
  * using the provided start, stop, and step parameters.
  */
 template <TwoPass Pass=SizeOnly>
-struct slice_replace_fn
+struct replace_slice_fn
 {
     column_device_view d_strings;
     string_view d_repl;
@@ -174,7 +174,7 @@ struct slice_replace_fn
             out_ptr = d_chars + d_offsets[idx];
         const char* in_ptr = d_str.data();
         size_type bytes = d_str.size_bytes();
-        size_type begin = (start < length) ? start : length;
+        size_type begin = ((start < 0) || (start > length) ? length : start);
         size_type end = ((stop < 0) || (stop > length) ? length : stop);
         begin = d_str.byte_offset(begin);
         end = d_str.byte_offset(end);
@@ -191,7 +191,7 @@ struct slice_replace_fn
 
 }
 
-std::unique_ptr<column> slice_replace( strings_column_view const& strings,
+std::unique_ptr<column> replace_slice( strings_column_view const& strings,
                                        string_scalar const& repl,
                                        size_type start, size_type stop = -1,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -202,7 +202,6 @@ std::unique_ptr<column> slice_replace( strings_column_view const& strings,
         return make_empty_strings_column(mr,stream);
     CUDF_EXPECTS( repl.is_valid(), "Parameter repl must be valid.");
     CUDF_EXPECTS( repl.size()>0, "Parameter repl must not be empty string.");
-    CUDF_EXPECTS( start>=0, "Parameter start must be 0 or positive integer.");
     if( stop > 0 )
         CUDF_EXPECTS( start <= stop, "Parameter start must be less than or equal to stop.");
 
@@ -215,7 +214,7 @@ std::unique_ptr<column> slice_replace( strings_column_view const& strings,
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        slice_replace_fn<SizeOnly>{d_strings, d_repl, start, stop} );
+        replace_slice_fn<SizeOnly>{d_strings, d_repl, start, stop} );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
@@ -228,12 +227,120 @@ std::unique_ptr<column> slice_replace( strings_column_view const& strings,
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        slice_replace_fn<ExecuteOp>{d_strings, d_repl, start, stop, d_offsets, d_chars} );
+        replace_slice_fn<ExecuteOp>{d_strings, d_repl, start, stop, d_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
 }
 
+namespace
+{
+
+/**
+ * @brief Function logic for the substring API.
+ *
+ * This will perform a substring operation on each string
+ * using the provided start, stop, and step parameters.
+ */
+template <TwoPass Pass=SizeOnly>
+struct replace_multi_fn
+{
+    column_device_view d_strings;
+    column_device_view d_targets;
+    column_device_view d_repls;
+    const int32_t* d_offsets{};
+    char* d_chars{};
+
+    __device__ size_type operator()(size_type idx)
+    {
+        if( d_strings.is_null(idx) )
+            return 0;
+        string_view d_str = d_strings.element<string_view>(idx);
+        //auto length = d_str.length();
+        char* out_ptr = nullptr;
+        if( Pass==ExecuteOp )
+            out_ptr = d_chars + d_offsets[idx];
+        const char* in_ptr = d_str.data();
+        size_type size = d_str.size_bytes();
+        size_type bytes = size, spos = 0, lpos = 0;
+        while( spos < size )
+        {   // check each character against each target
+            for( int tgt_idx=0; tgt_idx < d_targets.size(); ++tgt_idx )
+            {
+                string_view d_tgt = d_targets.element<string_view>(tgt_idx);
+                if( (d_tgt.size_bytes() <= (size-spos)) && // check fit
+                    (d_tgt.compare(in_ptr+spos, d_tgt.size_bytes())==0) ) // does it match
+                {   // found one
+                    string_view d_repl;
+                    if( d_repls.size()==1 )
+                        d_repl = d_repls.element<string_view>(0);
+                    else
+                        d_repl = d_repls.element<string_view>(tgt_idx);
+                    if( Pass==SizeOnly )
+                        bytes += d_repl.size_bytes() - d_tgt.size_bytes();
+                    else
+                    {
+                        out_ptr = copy_and_incr(out_ptr,in_ptr+lpos,spos-lpos);
+                        out_ptr = copy_string(out_ptr,d_repl);
+                        lpos = spos + d_tgt.size_bytes();
+                    }
+                    spos += d_tgt.size_bytes()-1;
+                    break;
+                }
+            }
+            ++spos;
+        }
+        if( Pass==ExecuteOp ) // copy remainder
+            copy_and_incr(out_ptr,in_ptr+lpos,size-lpos);
+        return bytes;
+    }
+};
+
+}
+
+std::unique_ptr<column> replace( strings_column_view const& strings,
+                                 strings_column_view const& targets,
+                                 strings_column_view const& repls,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                 cudaStream_t stream = 0)
+{
+    auto strings_count = strings.size();
+    if( strings_count==0 )
+        return make_empty_strings_column(mr,stream);
+    CUDF_EXPECTS( ((targets.size() > 0) && (targets.null_count()==0)), "Parameters targets must not be empty and must not have nulls");
+    CUDF_EXPECTS( ((repls.size() > 0) && (repls.null_count()==0)), "Parameters repls must not be empty and must not have nulls");
+    if( repls.size() > 1 )
+        CUDF_EXPECTS( repls.size()==targets.size(), "Sizes for targets and repls must match");
+
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_strings = *strings_column;
+    auto targets_column = column_device_view::create(targets.parent(),stream);
+    auto d_targets = *targets_column;
+    auto repls_column = column_device_view::create(repls.parent(),stream);
+    auto d_repls = *repls_column;
+
+    // copy the null mask
+    rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
+    // build offsets column
+    auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
+        replace_multi_fn<SizeOnly>{d_strings, d_targets, d_repls} );
+    auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
+                                       offsets_transformer_itr+strings_count,
+                                       mr, stream);
+    auto offsets_view = offsets_column->view();
+    auto d_offsets = offsets_view.data<int32_t>();
+
+    // build chars column
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto chars_view = chars_column->mutable_view();
+    auto d_chars = chars_view.data<char>();
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
+        replace_multi_fn<ExecuteOp>{d_strings, d_targets, d_repls, d_offsets, d_chars} );
+    //
+    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                               strings.null_count(), std::move(null_mask), stream, mr);
+}
 
 } // namespace detail
 
@@ -248,12 +355,20 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     return detail::replace(strings, target, repl, maxrepl, mr );
 }
 
-std::unique_ptr<column> slice_replace( strings_column_view const& strings,
+std::unique_ptr<column> replace_slice( strings_column_view const& strings,
                                        string_scalar const& repl,
                                        size_type start, size_type stop,
                                        rmm::mr::device_memory_resource* mr)
 {
-    return detail::slice_replace(strings, repl, start, stop, mr);
+    return detail::replace_slice(strings, repl, start, stop, mr);
+}
+
+std::unique_ptr<column> replace( strings_column_view const& strings,
+                                 strings_column_view const& targets,
+                                 strings_column_view const& repls,
+                                 rmm::mr::device_memory_resource* mr)
+{
+    return detail::replace(strings, targets, repls, mr);
 }
 
 } // namespace strings
