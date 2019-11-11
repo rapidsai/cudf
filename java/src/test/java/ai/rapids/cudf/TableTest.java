@@ -692,282 +692,211 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testLowerBound() {
+    boundsEmptyInput(false);
+
+    boundsEmptyValues(false);
+
+    boundsStringCategories(false);
+
+    boundsIntsSingleCol(false);
+
+    boundsLongsSingleCol(false);
+
+    boundsLongsMultiVal(false);
+
+    boundsMultiCol(false);
+
+    boundsUnequalCols1(false);
+
+    boundsUnequalCols2(false);
+
+    boundsNulls(false);
+  }
+
+  @Test
+  void testUpperBound() {
+    boundsEmptyInput(true);
+
+    boundsEmptyValues(true);
+
+    boundsStringCategories(true);
+
+    boundsIntsSingleCol(true);
+
+    boundsLongsSingleCol(true);
+
+    boundsLongsMultiVal(true);
+
+    boundsMultiCol(true);
+
+    boundsUnequalCols1(true);
+
+    boundsUnequalCols2(true);
+
+    boundsNulls(true);
+  }
+
+  private void boundsNulls(boolean isUpperBound) {
     boolean[] descFlags = new boolean[3];
-
-    try(ColumnVector cv = new ColumnVector(DType.INT64,
-          TimeUnit.NONE, 0, 0, null, null);
-        Table table = new Table(cv);
-        Table values = new Table.TestBuilder()
-            .column(20)
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
-        fail("Should throw an assertion error for empty table");
-    } catch (AssertionError e) {
-        assertEquals("Input table cannot be empty", e.getMessage());
-    }
-
-    try(ColumnVector cv = new ColumnVector(DType.INT64,
-          TimeUnit.NONE, 0, 0, null, null);
-        Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .build();
-        Table values = new Table(cv);
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for empty table");
-    } catch (AssertionError e) {
-      assertEquals("Value table cannot be empty", e.getMessage());
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20.0)
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for mismatching data types");
-    } catch (AssertionError e) {
-      assertEquals("Input and values tables' data types do not match", e.getMessage());
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column("a", "b", "c", "d", "e")
-            .build();
-        Table values = new Table.TestBuilder()
-            .column("f")
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for string type");
-    } catch (AssertionError e) {
-      assertEquals("Strings and String categories are not supported", e.getMessage());
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20)
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10.0, 20.6, 20.7)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20.6)
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10.0, 20.6, 20.7)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20.3, 20.8)
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1, 3)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .column(5.0, .5, .5, .7, .7)
-            .column(90, 77, 78, 61, 61)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20)
-            .column(0.7)
-            .column(61)
-            .build();
-        ColumnVector columnVector = table.lowerBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(3)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(90, 100, 120, 130, 135)
-            .column(.5, .5, .5, .7, .7)
-            .column(90, 100, 120, 130, 135)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(120)
-            .column(.3)
-            .build();
-        ColumnVector columnVector = table.lowerBound(true, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(90, 100, 120, 130, 135)
-            .column(.5, .5, .5, .7, .7)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(120)
-            .column(.3)
-            .column(.7)
-            .build();
-        ColumnVector columnVector = table.lowerBound(true, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
+    try(Table table = new TestBuilder()
             .column(null, 20, 20, 20, 30)
             .build();
-        Table values = new Table.TestBuilder()
+        Table values = new TestBuilder()
             .column(15)
             .build();
-        ColumnVector columnVector = table.lowerBound(true, values, descFlags);
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
         ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
       assertColumnsAreEqual(expected, columnVector);
     }
   }
 
-  @Test
-  void testUpperBound() {
+  private void boundsUnequalCols2(boolean isUpperBound) {
     boolean[] descFlags = new boolean[3];
-
-    try(ColumnVector cv = new ColumnVector(DType.INT64,
-          TimeUnit.NONE, 0, 0, null, null);
-        Table table = new Table(cv);
-        Table values = new Table.TestBuilder()
-            .column(20)
-            .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for empty table");
-    } catch (AssertionError e) {
-      assertEquals("Input table cannot be empty", e.getMessage());
-    }
-
-    try(ColumnVector cv = new ColumnVector(DType.INT64,
-          TimeUnit.NONE, 0, 0, null, null);
-        Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .build();
-        Table values = new Table(cv);
-        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for empty table");
-    } catch (AssertionError e) {
-      assertEquals("Value table cannot be empty", e.getMessage());
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20.0)
-            .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for mismatching data types");
-    } catch (AssertionError e) {
-      assertEquals("Input and values tables' data types do not match", e.getMessage());
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column("a", "b", "c", "d", "e")
-            .build();
-        Table values = new Table.TestBuilder()
-            .column("f")
-            .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags)) {
-      fail("Should throw an assertion error for string type");
-    } catch (AssertionError e) {
-      assertEquals("Strings and String categories are not supported", e.getMessage());
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .build();
-      Table values = new Table.TestBuilder()
-            .column(20)
-            .build();
-      ColumnVector columnVector = table.upperBound(false, values, descFlags);
-      ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10.0, 20.6, 20.7)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20.6)
-            .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10.0, 20.6, 20.7)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20.3, 20.8)
-            .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1, 3)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(10, 20, 20, 20, 20)
-            .column(5.0, .5, .5, .7, .7)
-            .column(90, 77, 78, 61, 61)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(20)
-            .column(0.7)
-            .column(61)
-            .build();
-        ColumnVector columnVector = table.upperBound(false, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
-            .column(90, 100, 120, 130, 135)
-            .column(.5, .5, .5, .7, .7)
-            .column(90, 100, 120, 130, 135)
-            .build();
-        Table values = new Table.TestBuilder()
-            .column(120)
-            .column(.3)
-            .build();
-        ColumnVector columnVector = table.upperBound(true, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      assertColumnsAreEqual(expected, columnVector);
-    }
-
-    try(Table table = new Table.TestBuilder()
+    try(Table table = new TestBuilder()
             .column(90, 100, 120, 130, 135)
             .column(.5, .5, .5, .7, .7)
             .build();
-        Table values = new Table.TestBuilder()
+        Table values = new TestBuilder()
             .column(120)
             .column(.3)
             .column(.7)
             .build();
-        ColumnVector columnVector = table.upperBound(true, values, descFlags);
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
         ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
       assertColumnsAreEqual(expected, columnVector);
     }
+  }
 
-    try(Table table = new Table.TestBuilder()
-            .column(null, 20, 20, 20, 30)
+  private void boundsUnequalCols1(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(90, 100, 120, 130, 135)
+            .column(.5, .5, .5, .7, .7)
+            .column(90, 100, 120, 130, 135)
             .build();
-        Table values = new Table.TestBuilder()
-            .column(15)
+        Table values = new TestBuilder()
+            .column(120)
+            .column(.3)
             .build();
-        ColumnVector columnVector = table.upperBound(true, values, descFlags);
-        ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
+        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
       assertColumnsAreEqual(expected, columnVector);
     }
+  }
+
+  private void boundsMultiCol(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .column(5.0, .5, .5, .7, .7)
+            .column(90, 77, 78, 61, 61)
+            .build();
+        Table values = new TestBuilder()
+            .column(20)
+            .column(0.7)
+            .column(61)
+            .build();
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
+        ColumnVector expected = isUpperBound ? ColumnVector.fromBoxedInts(5) :
+            ColumnVector.fromBoxedInts(3)) {
+      assertColumnsAreEqual(expected, columnVector);
+    }
+  }
+
+  private void boundsLongsMultiVal(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new TestBuilder()
+            .column(20.3, 20.8)
+            .build();
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
+        ColumnVector expected = ColumnVector.fromBoxedInts(1, 3)) {
+      assertColumnsAreEqual(expected, columnVector);
+    }
+  }
+
+  private void boundsLongsSingleCol(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new TestBuilder()
+            .column(20.6)
+            .build();
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
+        ColumnVector expected = isUpperBound ? ColumnVector.fromBoxedInts(2) :
+            ColumnVector.fromBoxedInts(1)) {
+      assertColumnsAreEqual(expected, columnVector);
+    }
+  }
+
+  private void boundsIntsSingleCol(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new TestBuilder()
+            .column(20)
+            .build();
+        ColumnVector columnVector = getBoundsCv(descFlags, isUpperBound, table, values);
+        ColumnVector expected = isUpperBound ? ColumnVector.fromBoxedInts(5) :
+            ColumnVector.fromBoxedInts(1)) {
+      assertColumnsAreEqual(expected, columnVector);
+    }
+  }
+
+  private void boundsStringCategories(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, 4, (b) -> {
+        for (int i = 0; i < 4; i++) {
+          b.appendUTF8String(String.valueOf(i).getBytes());
+        }
+      });
+        Table table = new Table(cIn);
+        ColumnVector cVal = ColumnVector.build(DType.STRING_CATEGORY, 2, (b) -> {
+          for (int i = 0; i < 2; i++) {
+            b.appendUTF8String(String.valueOf(i).getBytes());
+          }
+        });
+        Table values = new Table(cVal)) {
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, isUpperBound, table, values).close());
+    }
+  }
+
+  private void boundsEmptyValues(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table(cv)) {
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, isUpperBound, table, values).close());
+    }
+  }
+
+  private void boundsEmptyInput(boolean isUpperBound) {
+    boolean[] descFlags = new boolean[3];
+    try(ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new Table(cv);
+        Table values = new TestBuilder()
+            .column(20)
+            .build()) {
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, isUpperBound, table, values).close());
+    }
+  }
+
+  private ColumnVector getBoundsCv(boolean[] descFlags, boolean isUpperBound,
+      Table table, Table values) {
+    return isUpperBound ?
+        table.upperBound(true, values, descFlags) :
+        table.lowerBound(true, values, descFlags);
   }
 
   @Test
