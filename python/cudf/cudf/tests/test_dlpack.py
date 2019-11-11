@@ -3,20 +3,12 @@
 import itertools
 from contextlib import ExitStack as does_not_raise
 
+import cupy
 import numpy as np
 import pytest
 
 import cudf
 from cudf.tests.utils import assert_eq
-
-try:
-    import cupy
-
-    _have_cupy = True
-except ImportError:
-    _have_cupy = False
-
-require_cupy = pytest.mark.skipif(not _have_cupy, reason="no cupy")
 
 nelems = [0, 3, 10]
 dtype = [np.int32, np.float64]
@@ -105,7 +97,6 @@ def test_to_dlpack_column(data_1d):
         assert str(type(dlt)) == "<class 'PyCapsule'>"
 
 
-@require_cupy
 def test_to_dlpack_cupy_1d(data_1d):
     expectation = data_size_expectation_builder(data_1d)
 
@@ -120,7 +111,6 @@ def test_to_dlpack_cupy_1d(data_1d):
         assert_eq(cudf_host_array, cupy_host_array)
 
 
-@require_cupy
 def test_to_dlpack_cupy_2d(data_2d):
     expectation = data_size_expectation_builder(data_2d)
 
@@ -135,7 +125,6 @@ def test_to_dlpack_cupy_2d(data_2d):
         assert_eq(cudf_host_array, cupy_host_array)
 
 
-@require_cupy
 def test_from_dlpack_cupy_1d(data_1d):
     expectation = data_size_expectation_builder(data_1d)
 
@@ -150,7 +139,6 @@ def test_from_dlpack_cupy_1d(data_1d):
         assert_eq(cudf_host_array, cupy_host_array)
 
 
-@require_cupy
 def test_from_dlpack_cupy_2d(data_2d):
     expectation = data_size_expectation_builder(data_2d)
 

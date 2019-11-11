@@ -3,6 +3,7 @@
 import array as arr
 import operator
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -15,7 +16,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
-from cudf.utils.utils import _have_cupy
 
 
 def test_init_via_list_of_tuples():
@@ -1595,9 +1595,6 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
-    import cupy
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
@@ -3363,10 +3360,6 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
-    import cupy
-
     pds = pd.Series(data)
     gds = Series(data)
     gds_vals = gds.values
@@ -3412,8 +3405,6 @@ def test_series_values_property(data):
     ],
 )
 def test_df_values_property(data):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
     pdf = pd.DataFrame.from_dict(data)
     gdf = DataFrame.from_pandas(pdf)
 
@@ -3990,6 +3981,53 @@ def test_df_constructor_dtype(dtype):
     got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
+        ),
+        pytest.param(
+            gd.DataFrame(),
+            marks=[
+                pytest.mark.xfail(
+                    reason="_apply_support_method fails on empty dataframes."
+                )
+            ],
+        ),
+        pytest.param(
+            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Rowwise ops do not currently support nulls."
+                )
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+def test_rowwise_ops(data, op):
+    gdf = data
+    pdf = gdf.to_pandas()
+
+    if op in ("var", "std"):
+        expected = getattr(pdf, op)(axis=1, ddof=0)
+        got = getattr(gdf, op)(axis=1, ddof=0)
+    else:
+        expected = getattr(pdf, op)(axis=1)
+        got = getattr(gdf, op)(axis=1)
+
+    assert_eq(expected, got, check_less_precise=7)
 
 
 @pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
