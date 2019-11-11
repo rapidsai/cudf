@@ -142,6 +142,7 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
+- PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 
