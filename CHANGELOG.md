@@ -129,6 +129,7 @@
 - PR #3313 Fix public headers including non-public headers
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
+- PR #3341 Fix `Series` constructor converting NoneType to "None" 
 
 
 # cuDF 0.10.0 (16 Oct 2019)
