@@ -3977,7 +3977,6 @@ def test_df_constructor_dtype(dtype):
     expect = DataFrame()
     expect["foo"] = sr
     expect["bar"] = sr
-
     got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
