@@ -43,8 +43,6 @@
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
-namespace experimental {
-namespace detail {
 
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column with null bitmask
@@ -60,7 +58,7 @@ namespace detail {
  * @tparam Element The type of elements in the column
  * -------------------------------------------------------------------------**/
 template <typename Element>
-struct value_accessor
+struct column_device_view::null_replaced_value_accessor
 {
   column_device_view const col;         ///< column view of column in device
   Element const null_replacement{};     ///< value returned when element is null
@@ -70,7 +68,7 @@ struct value_accessor
  * @param[in] _col column device view of cudf column
  * @param[in] null_replacement The value to return for null elements
  * -------------------------------------------------------------------------**/
-  value_accessor(column_device_view const& _col, Element null_val)
+  null_replaced_value_accessor(column_device_view const& _col, Element null_val)
     : col{_col}, null_replacement{null_val}
   {
     // verify valid is non-null, otherwise, is_valid() will crash
@@ -98,7 +96,7 @@ struct value_accessor
  * -------------------------------------------------------------------------**/
 
 template <typename Element>
-struct no_null_value_accessor
+struct column_device_view::value_accessor
 {
   column_device_view const col;         ///< column view of column in device
 
@@ -106,7 +104,7 @@ struct no_null_value_accessor
  * @brief constructor
  * @param[in] _col column device view of cudf column
  * -------------------------------------------------------------------------**/
-  no_null_value_accessor(column_device_view const& _col)
+  value_accessor(column_device_view const& _col)
     : col{_col}
   {
     // verify valid is null
@@ -119,7 +117,39 @@ struct no_null_value_accessor
   }
 };
 
+template <typename T>
+column_device_view::const_iterator<T> column_device_view::begin() const {
+  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
+  return column_device_view::const_iterator<T>{
+      column_device_view::count_it{0},
+      column_device_view::value_accessor<T>{*this}};
+}
+template <typename T>
+column_device_view::const_iterator<T> column_device_view::end() const {
+  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
+  return column_device_view::const_iterator<T>{
+      column_device_view::count_it{size()},
+      column_device_view::value_accessor<T>{*this}};
+}
 
+template <typename T>
+column_device_view::const_null_iterator<T> column_device_view::nbegin(const T& null_val) const {
+  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
+  return column_device_view::const_null_iterator<T>{
+      column_device_view::count_it{0},
+      column_device_view::null_replaced_value_accessor<T>{*this, null_val}};
+}
+
+template <typename T>
+column_device_view::const_null_iterator<T> column_device_view::nend(const T& null_val) const {
+  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
+  return column_device_view::const_null_iterator<T>{
+      column_device_view::count_it{size()},
+      column_device_view::null_replaced_value_accessor<T>{*this, null_val}};
+}
+
+namespace experimental {
+namespace detail {
 /**
  * @brief Constructs an iterator over a column's values that replaces null
  * elements with a specified value.
@@ -145,7 +175,7 @@ auto make_null_replacement_iterator(column_device_view const& column,
 
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
-      value_accessor<Element>{column, null_replacement});
+      column_device_view::null_replaced_value_accessor<Element>{column, null_replacement});
 }
 
 
@@ -169,7 +199,7 @@ auto make_no_null_iterator(column_device_view const& column)
 
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
-      no_null_value_accessor<Element>{column});
+      column_device_view::value_accessor<Element>{column});
 }
 
 } //namespace detail

@@ -73,7 +73,8 @@ template <typename Element>
 struct iter_factory<true, Element> {
   static auto make_iterator(cudf::column_device_view const& column,
                             Element const null_replacement = Element{0}) {
-    return cudf::experimental::detail::make_null_replacement_iterator(column, null_replacement);
+    return column.nbegin<Element>(null_replacement);
+    //return cudf::experimental::detail::make_null_replacement_iterator(column, null_replacement);
   }
 };
 
@@ -81,7 +82,8 @@ template <typename Element>
 struct iter_factory<false, Element> {
   static auto make_iterator(cudf::column_device_view const& column,
                             Element const null_replacement = Element{0}) {
-    return cudf::experimental::detail::make_no_null_iterator<Element>(column);
+    return column.begin<Element>();
+    //return cudf::experimental::detail::make_no_null_iterator<Element>(column);
     //return column.data<Element>(); //can't do this for non-fixed types. eg. string_view
   }
 };
