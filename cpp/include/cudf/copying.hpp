@@ -20,6 +20,7 @@
 #include "types.hpp"
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 
@@ -49,13 +50,89 @@ namespace experimental {
  * @param[in] check_bounds Optionally perform bounds checking on the values
  * of `gather_map` and throw an error if any of its values are out of bounds.
  * @params[in] mr The resource to use for all allocations
- * @return cudf::table Result of the gather
+ * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
 			      bool check_bounds = false,
 			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-			       
+/**
+ * @brief Creates a new table that results from scattering values from the rows
+ * of a source table into the rows of a target table according to a scatter map.
+ *
+ * Scatters values from the source table into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a scatter map
+ * such that row "i" of the source table will be equal to row "scatter_map[i]"
+ * of the destination table. All other rows of the destination table will be equal to
+ * corresponding rows of the target table.
+ *
+ * The datatypes between coresponding columns in the source and destination
+ * must be the same.
+ *
+ * Optionally performs bounds checking on the values of the `scatter_map` and
+ * raises a runtime error if any of its values are outside the range
+ * [0, num_source_rows).
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param[in] source_table The input columns containing values to be scattered
+ * into the target columns
+ * @param[in] scatter_map A non-nullable column of integral indices that maps the
+ * rows in the source table to rows in the target table. Must be equal
+ * in size to the number of elements in the source columns.
+ * @param[out] target_table The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param ignore_out_of_bounds Ignore values in `scatter_map` that are
+ * out of bounds.
+ * @return std::unique_ptr<table> Result of scattering values from the source table
+ * to the target table
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(table_view const& source_table, column_view const& scatter_map,
+                               table_view const& target_table, bool check_bounds = false);
+
+
+/**
+ * @brief Creates a new table that results from scattering a set of scalar source values
+ * into the rows of a target table according to a scatter map.
+ *
+ * Scatters a set of scalar values into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a scatter map
+ * such that each row of the destination table specified in the scatter map will be
+ * equal to the source values. All other rows of the destination table will be equal to
+ * corresponding rows of the target table.
+ *
+ * The datatypes between coresponding columns in the source and destination
+ * must be the same.
+ *
+ * The number of elements in the scatter map must equal the number of rows in the
+ * source table.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param[in] source_table The input columns containing values to be scattered
+ * into the target columns
+ * @param[in] scatter_map A non-nullable column of integral indices that maps the
+ * rows in the source table to rows in the target table. Must be equal
+ * in size to the number of elements in the source columns.
+ * @param[out] target_table The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param ignore_out_of_bounds Ignore values in `scatter_map` that are
+ * out of bounds.
+ * @return std::unique_ptr<table> Result of scattering values from the source table
+ * to the target table
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(std::vector<std::unique_ptr<cudf::scalar>> const& source,
+	      column_view const& scatter_map,
+	      table_view const& target);
+
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
