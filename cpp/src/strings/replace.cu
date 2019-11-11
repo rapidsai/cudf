@@ -342,6 +342,50 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                strings.null_count(), std::move(null_mask), stream, mr);
 }
 
+std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
+                                       string_scalar const& repl = string_scalar(""),
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                       cudaStream_t stream = 0 )
+{
+    size_type strings_count = strings.size();
+    if( strings_count == 0 )
+        return make_empty_strings_column(mr,stream);
+    CUDF_EXPECTS( repl.is_valid(), "Parameter repl must be valid.");
+
+    string_view d_repl(repl.data(),repl.size());
+
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_strings = *strings_column;
+
+    // build offsets column
+    auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
+        [d_strings, d_repl] __device__ (size_type idx) {
+            return d_strings.is_null(idx) ? d_repl.size_bytes() : d_strings.element<string_view>(idx).size_bytes();
+        } );
+    auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
+                                       offsets_transformer_itr+strings_count,
+                                       mr, stream);
+    auto offsets_view = offsets_column->view();
+    auto d_offsets = offsets_view.data<int32_t>();
+
+    // build chars column
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto chars_view = chars_column->mutable_view();
+    auto d_chars = chars_view.data<char>();
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
+        [d_strings, d_repl, d_offsets, d_chars] __device__ (size_type idx) {
+            string_view d_str = d_repl;
+            if( !d_strings.is_null(idx) )
+                d_str = d_strings.element<string_view>(idx);
+            memcpy( d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
+        });
+    //
+    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                               0, rmm::device_buffer{}, stream, mr);
+}
+
+
 } // namespace detail
 
 // external API
@@ -369,6 +413,13 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
     return detail::replace(strings, targets, repls, mr);
+}
+
+std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
+                                       string_scalar const& repl,
+                                       rmm::mr::device_memory_resource* mr)
+{
+    return detail::replace_nulls(strings, repl, mr);
 }
 
 } // namespace strings

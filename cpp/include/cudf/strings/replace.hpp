@@ -91,7 +91,7 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  * For each string in strings, the list of targets is searched within that string.
  * If a target string is found, it is replaced by the corresponding entry in the repls column.
  * All occurrences found in each string are replaced.
- * 
+ *
  * This does not use regex to match targets in the string.
  *
  * Null string entries will return null output string entries.
@@ -108,6 +108,21 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  strings_column_view const& targets,
                                  strings_column_view const& repls,
                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Replaces any null string entries with the given string.
+ *
+ * This returns a strings column with no null entries.
+ *
+ * @param strings Strings column for this operation.
+ * @param repl Replacement string for null entries. Default is empty string.
+ * @param mr Resource for allocating device memory.
+ * @return New strings column.
+ */
+std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
+                                       string_scalar const& repl = string_scalar(""),
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 
 } // namespace strings
 } // namespace cudf
