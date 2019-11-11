@@ -145,6 +145,7 @@
 - PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
+- PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 
 
 # cuDF 0.10.0 (16 Oct 2019)
