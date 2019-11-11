@@ -3200,8 +3200,7 @@ def test_series_astype_null_cases():
 
     # numerical to other
     assert_eq(
-        gd.Series(data, dtype="str"),
-        gd.Series(data).astype("str"),
+        gd.Series(data, dtype="str"), gd.Series(data).astype("str"),
     )
 
     assert_eq(
@@ -3801,10 +3800,7 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
-    if as_dtype == "str":  # normal constructor results in None -> 'None'
-        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
-    else:
-        insert_data = Series(data, dtype=as_dtype)
+    insert_data = Series(data, dtype=as_dtype)
 
     expect = DataFrame()
     expect["foo"] = insert_data
@@ -3980,16 +3976,12 @@ def test_series_astype_error_handling(errors):
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
-        sr = Series(data, dtype=dtype)
-    elif dtype == "str":
+    elif dtype == "str" or "float" in dtype:
         data = [1, 2, 3, None]
-        sr = Series.from_pandas(pd.Series(data, dtype=dtype))
-    elif "float" in dtype:
-        data = [1, 2, 3, None]
-        sr = Series(data, dtype=dtype)
     else:
         data = [1.0, 0.5, -1.1, np.nan, None]
-        sr = Series(data, dtype=dtype)
+
+    sr = Series(data, dtype=dtype)
 
     expect = DataFrame()
     expect["foo"] = sr
