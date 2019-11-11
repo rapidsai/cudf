@@ -16,13 +16,13 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/strings/convert.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include "../utilities.hpp"
+#include "../utilities.cuh"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
@@ -261,7 +261,6 @@ struct dispatch_from_integers_fn
                                         cudaStream_t stream ) const
     {
         size_type strings_count = integers.size();
-        auto execpol = rmm::exec_policy(0);
         auto column = column_device_view::create(integers, stream);
         auto d_column = *column;
 
@@ -281,7 +280,7 @@ struct dispatch_from_integers_fn
         auto chars_column = detail::create_chars_child_column( strings_count, integers.null_count(), bytes, mr, stream );
         auto chars_view = chars_column->mutable_view();
         auto d_chars = chars_view.template data<char>();
-        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<size_type>(0), strings_count,
+        thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
             integer_to_string_fn<IntegerType>{d_column, d_new_offsets, d_chars});
         //
         return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
