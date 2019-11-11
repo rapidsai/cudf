@@ -314,7 +314,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return the 32 bit hash.
    */
   public ColumnVector hash() {
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT32.sizeInBytes * rows, "hash")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "hash")) {
       return new ColumnVector(hash(getNativeCudfColumnAddress(), HashFunction.MURMUR3.nativeId));
     }
   }
@@ -327,7 +327,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector hash(HashFunction func) {
     assert type != DType.STRING && type != DType.STRING_CATEGORY : "Strings are not supported for specific hash functions";
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT32.sizeInBytes * rows, "hash")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "hash")) {
       return new ColumnVector(hash(getNativeCudfColumnAddress(), func.nativeId));
     }
   }
@@ -375,7 +375,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector getByteCount() {
     assert type == DType.STRING : "type has to be a String";
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT32.sizeInBytes * rows, "byteCount")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "byteCount")) {
       return new ColumnVector(cudfByteCount(getNativeCudfColumnAddress()));
     }
   }
@@ -979,7 +979,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector year() {
     assert type == DType.DATE32 || type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT16.sizeInBytes * rows, "year")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "year")) {
       return new ColumnVector(Cudf.gdfExtractDatetimeYear(this));
     }
   }
@@ -993,7 +993,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector month() {
     assert type == DType.DATE32 || type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT16.sizeInBytes * rows, "month")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "month")) {
       return new ColumnVector(Cudf.gdfExtractDatetimeMonth(this));
     }
   }
@@ -1007,7 +1007,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector day() {
     assert type == DType.DATE32 || type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT16.sizeInBytes * rows, "day")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "day")) {
       return new ColumnVector(Cudf.gdfExtractDatetimeDay(this));
     }
   }
@@ -1021,7 +1021,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector hour() {
     assert type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT16.sizeInBytes * rows, "hour")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "hour")) {
       return new ColumnVector(Cudf.gdfExtractDatetimeHour(this));
     }
   }
@@ -1035,7 +1035,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector minute() {
     assert type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT16.sizeInBytes * rows, "minute")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "minute")) {
       return new ColumnVector(Cudf.gdfExtractDatetimeMinute(this));
     }
   }
@@ -1049,7 +1049,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector second() {
     assert type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(DType.INT16.sizeInBytes * rows, "second")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "second")) {
       return new ColumnVector(Cudf.gdfExtractDatetimeSecond(this));
     }
   }
@@ -1169,7 +1169,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    try (DevicePrediction prediction = new DevicePrediction(outType.sizeInBytes * rows, "binaryOp")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(outType), "binaryOp")) {
       if (rhs instanceof ColumnVector) {
         ColumnVector cvRhs = (ColumnVector) rhs;
         assert rows == cvRhs.getRowCount();
@@ -1510,6 +1510,23 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   // TYPE CAST
   /////////////////////////////////////////////////////////////////////////////
 
+  static long predictSizeFor(long baseSize, long rows, boolean hasNulls) {
+    long total = baseSize * rows;
+    if (hasNulls) {
+      total += BitVectorHelper.getValidityAllocationSizeInBytes(rows);
+    }
+    return total;
+  }
+
+  long predictSizeFor(DType type) {
+    return predictSizeFor(type.sizeInBytes, rows, hasNulls());
+  }
+
+  private long predictSizeForRowMult(long baseSize, double rowMult) {
+    long rowGuess = (long)(rows * rowMult);
+    return predictSizeFor(baseSize, rowGuess, hasNulls());
+  }
+
   /**
    * Generic method to cast ColumnVector
    * When casting from a Date, Timestamp, or Boolean to a numerical type the underlying numerical
@@ -1525,7 +1542,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       // Optimization
       return incRefCount();
     }
-    try (DevicePrediction prediction = new DevicePrediction(type.sizeInBytes * rows, "cast")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(type), "cast")) {
       return new ColumnVector(Cudf.gdfCast(this, type, unit));
     }
   }
@@ -1680,7 +1697,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       unit = TimeUnit.MILLISECONDS;
     }
     // Prediction could be better, but probably okay for now
-    try (DevicePrediction prediction = new DevicePrediction(format.length() * 2 * rows, "asTimestamp")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeForRowMult(format.length(), 2), "asTimestamp")) {
       return new ColumnVector(stringTimestampToTimestamp(getNativeCudfColumnAddress(),
           unit.getNativeId(), format));
     }
@@ -2393,7 +2410,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     ColumnVector cv = null;
     boolean needsCleanup = true;
 
-    long amount = scalar.type.sizeInBytes * rows;
+    long amount = predictSizeFor(scalar.type.sizeInBytes, rows, !scalar.isValid);
     try (DevicePrediction prediction = new DevicePrediction(amount, "fromScalar")) {
       dataBuffer = DeviceMemoryBuffer.allocate(amount);
 

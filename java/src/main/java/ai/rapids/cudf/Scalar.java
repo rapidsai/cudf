@@ -337,7 +337,7 @@ public final class Scalar implements BinaryOperable {
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
     if (rhs instanceof ColumnVector) {
       ColumnVector cvRhs = (ColumnVector) rhs;
-      try (DevicePrediction prediction = new DevicePrediction(outType.sizeInBytes * ((ColumnVector) rhs).getRowCount(), "binaryOp")) {
+      try (DevicePrediction prediction = new DevicePrediction(cvRhs.predictSizeFor(outType), "binaryOp")) {
         return new ColumnVector(Cudf.gdfBinaryOp(this, cvRhs, op, outType));
       }
     } else {
