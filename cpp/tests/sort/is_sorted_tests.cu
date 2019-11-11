@@ -73,12 +73,12 @@ auto nulls_before() {
 
 template<>
 auto ascending<bool8>() {
-    return fixed_width_column_wrapper<bool8>({ false, true });
+    return fixed_width_column_wrapper<bool8>({ false, false, true, true });
 }
 
 template<>
 auto descending<bool8>() {
-    return fixed_width_column_wrapper<bool8>({ true, false });
+    return fixed_width_column_wrapper<bool8>({ true, true, false, false });
 }
 
 // ----- string_view
