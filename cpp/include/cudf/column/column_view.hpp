@@ -321,8 +321,11 @@ class column_view : public detail::column_view_base {
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
+
   ~mutable_column_view() = default;
+
   mutable_column_view(mutable_column_view const&) = default;
+
   mutable_column_view(mutable_column_view&&) = default;
   mutable_column_view& operator=(mutable_column_view const&) = default;
   mutable_column_view& operator=(mutable_column_view&&) = default;
