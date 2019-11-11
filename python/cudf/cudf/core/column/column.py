@@ -403,6 +403,8 @@ class ColumnBase(Column):
                 slice_mask = cudautils.compact_mask_bytes(bytemask[arg])
             else:
                 slice_data = self._data_view()[arg]
+                if arg.step is not None and arg.step != 1:
+                    slice_data = cudautils.as_contiguous(slice_data)
                 slice_mask = None
             if self.dtype == "object":
                 return as_column(slice_data)
