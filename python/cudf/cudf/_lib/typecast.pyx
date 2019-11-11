@@ -26,7 +26,7 @@ def cast(Column incol, dtype=np.float64):
         return incol
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef gdf_dtype c_out_dtype = dtypes[np.dtype(dtype).type]
+    cdef gdf_dtype c_out_dtype = gdf_dtype_from_dtype(dtype)
     cdef uintptr_t c_category
     cdef gdf_dtype_extra_info c_out_info = gdf_dtype_extra_info(
         time_unit=np_dtype_to_gdf_time_unit(dtype),

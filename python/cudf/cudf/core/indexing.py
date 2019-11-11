@@ -14,7 +14,13 @@ def indices_from_labels(obj, labels):
 
     if is_categorical_dtype(obj.index):
         labels = labels.astype("category")
-        labels._data = labels.data.astype(obj.index._values.data.dtype)
+        codes = labels.codes.astype(obj.index._values.dtype.data_dtype)
+        dtype = cudf.CategoricalDtype(
+            data_dtype=codes.dtype,
+            categories=labels.dtype.categories,
+            ordered=labels.dtype.ordered,
+        )
+        labels = column.build_column(data=codes.data, dtype=dtype)
     else:
         labels = labels.astype(obj.index.dtype)
 

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -28,20 +29,12 @@ class CategoricalAccessor(object):
         return as_index(self._parent._categories)
 
     @property
-    def ordered(self):
-        return self._parent._ordered
+    def codes(self):
+        return cudf.Series(self._parent.codes)
 
     @property
-    def codes(self):
-        from cudf import Series
-
-        data = self._parent.data
-        dtype = self._parent.dtype.data_dtype
-        mask = self._parent.mask
-        name = self._parent.name
-        return Series(
-            column.build_column(data=data, dtype=dtype, mask=mask, name=name)
-        )
+    def ordered(self):
+        return self._parent._ordered
 
     def as_ordered(self, **kwargs):
         inplace = kwargs.get("inplace", False)
@@ -235,6 +228,7 @@ class CategoricalColumn(column.ColumnBase):
 
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
         self._categories = categories
+        self._codes = None
         self._ordered = dtype.ordered
 
     def _replace_defaults(self):
@@ -297,6 +291,17 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def categories(self):
         return self._categories
+
+    @property
+    def codes(self):
+        if self._codes is None:
+            self._codes = column.build_column(
+                data=self.data,
+                dtype=self.dtype.data_dtype,
+                mask=self.mask,
+                name=self.name,
+            )
+        return self._codes
 
     def cat(self):
         return CategoricalAccessor(self)

@@ -386,6 +386,7 @@ class ColumnBase(Column):
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))
+            slice_owner = self
             if start == stop:
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice
@@ -403,18 +404,20 @@ class ColumnBase(Column):
                 slice_mask = cudautils.compact_mask_bytes(bytemask[arg])
             else:
                 slice_data = self._data_view()[arg]
-                if arg.step is not None and arg.step != 1:
-                    slice_data = cudautils.as_contiguous(slice_data)
                 slice_mask = None
             if self.dtype == "object":
                 return as_column(slice_data)
             else:
-                # data Buffer lifetime is tied to self:
-                slice_data = Buffer(
-                    ptr=slice_data.device_ctypes_pointer.value,
-                    size=slice_data.nbytes,
-                    owner=self,
-                )
+                if arg.step is not None and arg.step != 1:
+                    slice_data = cudautils.as_contiguous(slice_data)
+                    slice_data = Buffer.from_array_like(slice_data)
+                else:
+                    # data Buffer lifetime is tied to self:
+                    slice_data = Buffer(
+                        ptr=slice_data.device_ctypes_pointer.value,
+                        size=slice_data.nbytes,
+                        owner=self,
+                    )
 
                 # mask Buffer lifetime is not:
                 if slice_mask:
@@ -1136,7 +1139,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
-        raise NotImplementedError
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
