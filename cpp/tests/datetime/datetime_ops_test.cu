@@ -50,7 +50,7 @@ TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::TimestampTypes);
 TYPED_TEST(DatetimeOpsTest, TestExtractingDatetimeComponents) {
 
   using namespace cudf::test;
-  using namespace cuda::std::chrono;
+  using namespace simt::std::chrono;
 
   auto test_timestamps_D = fixed_width_column_wrapper<cudf::timestamp_D>{
     -1528, // 1965-10-26
@@ -103,7 +103,7 @@ TYPED_TEST(DatetimeOpsTest, TestExtractingDatetimeComponents) {
 TYPED_TEST(DatetimeOpsTest, TestExtractingGeneratedDatetimeComponents) {
 
   using namespace cudf::test;
-  using namespace cuda::std::chrono;
+  using namespace simt::std::chrono;
   using Rep = typename TypeParam::rep;
   using Period = typename TypeParam::period;
 

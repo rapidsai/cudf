@@ -27,9 +27,9 @@
 namespace cudf {
 namespace test {
 
-using time_point_ms = cuda::std::chrono::time_point<
-  cuda::std::chrono::system_clock,
-  cuda::std::chrono::milliseconds
+using time_point_ms = simt::std::chrono::time_point<
+  simt::std::chrono::system_clock,
+  simt::std::chrono::milliseconds
 >;
 
 /**---------------------------------------------------------------------------*
@@ -40,17 +40,17 @@ using time_point_ms = cuda::std::chrono::time_point<
  * and `stop`.
  *
  * @tparam Rep The arithmetic type representing the number of ticks
- * @tparam Period A cuda::std::ratio representing the tick period (i.e. the number of seconds per tick)
+ * @tparam Period A simt::std::ratio representing the tick period (i.e. the number of seconds per tick)
  * @param count The number of timestamps to create
- * @param start The first timestamp as a cuda::std::chrono::time_point
- * @param stop The last timestamp as a cuda::std::chrono::time_point
+ * @param start The first timestamp as a simt::std::chrono::time_point
+ * @param stop The last timestamp as a simt::std::chrono::time_point
  *---------------------------------------------------------------------------**/
 template <typename Rep, typename Period>
 inline thrust::device_vector<Rep> generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
 
-  using ToDuration = cuda::std::chrono::duration<Rep, Period>;
-  auto lhs = cuda::std::chrono::time_point_cast<ToDuration>(start).time_since_epoch().count();
-  auto rhs = cuda::std::chrono::time_point_cast<ToDuration>(stop).time_since_epoch().count();
+  using ToDuration = simt::std::chrono::duration<Rep, Period>;
+  auto lhs = simt::std::chrono::time_point_cast<ToDuration>(start).time_since_epoch().count();
+  auto rhs = simt::std::chrono::time_point_cast<ToDuration>(stop).time_since_epoch().count();
 
   auto min = std::min(lhs, rhs);
   auto max = std::max(lhs, rhs);
