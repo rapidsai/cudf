@@ -236,7 +236,7 @@ struct integer_to_string_fn
         int digits_idx = 0;
         while( value > 0 )
         {
-            assert( digits_idx <= MAX_DIGITS );
+            assert( digits_idx < MAX_DIGITS );
             digits[digits_idx++] = '0' + (value % base);
             value = value/base;
         }
