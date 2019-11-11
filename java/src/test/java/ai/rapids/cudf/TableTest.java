@@ -1710,7 +1710,7 @@ public class TableTest extends CudfTestBase {
   void testJSONReadWithFilePath() throws IOException {
     File tempFile = createTempFile(jsonData);
 
-    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    try (Table t = Table.readJSON(tempFile);
     Table expectedTable = new Table.TestBuilder()
         .column( 1l,      3l,                 7l)
         .column(1.1,     4.2,                1.3)
@@ -1725,7 +1725,7 @@ public class TableTest extends CudfTestBase {
     File tempFile = createTempFile(jsonData);
     Schema schema = Schema.builder().column(DType.INT32, "0")
         .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+    try (Table t = Table.readJSON(schema, tempFile);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column(1.1,     4.2,                1.3)
@@ -1751,7 +1751,7 @@ public class TableTest extends CudfTestBase {
   void testJSONReadBufferWithDataTypes() {
     Schema schema = Schema.builder().column(DType.INT32, "0")
         .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(jsonData, schema);
+    try (Table t = Table.readJSON(schema, jsonData);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column(1.1f,     4.2f,                1.3f)
@@ -1763,7 +1763,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testJSONReadBufferWithRange() {
-    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+    try (Table t = Table.readJSON(Schema.INFERRED, JSONOptions.DEFAULT, jsonData, 14, 17);
          Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
              .build()) {
       assertTablesAreEqual(expectedTable, t);
@@ -1781,7 +1781,7 @@ public class TableTest extends CudfTestBase {
     Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
         .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
     JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
-    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+    try (Table t = Table.readJSON(schema, opts, jsonDataWithNames);
          Table expectedTable = new Table.TestBuilder()
              .column(  1l,       3l,                  7l)
              .column("a", "hello", "seven\u24E1\u25B6")
@@ -1798,7 +1798,7 @@ public class TableTest extends CudfTestBase {
     Schema schema = Schema.builder().column(DType.FLOAT32, "1")
         .column(DType.INT32, "0").column(DType.STRING, "2").build();
     JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
-    try (Table t = Table.readJSON(jsonData, opts, schema);
+    try (Table t = Table.readJSON(schema, opts, jsonData);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column("a", "hello", "seven\u24E1\u25B6")
