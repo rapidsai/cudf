@@ -216,7 +216,7 @@ def query_execute(df, expr, callenv):
             envargs.append(val)
     columns = compiled["colnames"]
     # prepare col args
-    colarrays = [df[col]._data_view() for col in columns]
+    colarrays = [df[col]._column._data_view() for col in columns]
     # allocate output buffer
     nrows = len(df)
     out = rmm.device_array(nrows, dtype=np.bool_)

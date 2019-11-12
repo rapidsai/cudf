@@ -147,7 +147,12 @@ class Index(object):
 
     def _find_segments(self):
         seg, markers = cudautils.find_segments(self.gpu_values)
-        return NumericalColumn(data=Buffer(seg), dtype=seg.dtype), markers
+        return (
+            column.build_column(
+                data=Buffer.from_array_like(seg), dtype=seg.dtype
+            ),
+            markers,
+        )
 
     @classmethod
     def _concat(cls, objs):
@@ -588,7 +593,7 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return NumericalColumn(
+        return column.build_column(
             data=Buffer.from_array_like(vals), dtype=vals.dtype, name=self.name
         )
 
@@ -869,11 +874,10 @@ class DatetimeIndex(GenericIndex):
         # column.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
-        out_column = NumericalColumn(
+        out_column = column.build_column(
             data=out_column.data,
-            mask=out_column.mask,
-            null_count=out_column.null_count,
             dtype=out_column.dtype,
+            mask=out_column.mask,
             name=self.name,
         )
         return as_index(out_column)
