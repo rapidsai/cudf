@@ -352,7 +352,7 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
                 if (!is_dupe)
                 {
                     dupes_before += s->scratch_red[t >> 5];
-                    s->col.dict_data[start_row + i + t - dupes_before] = ck_row - start_row;
+                    s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
                 }
                 else
                 {
@@ -408,9 +408,33 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         uint32_t num_rows = 0;
         uint32_t page_start = 0;
         uint32_t page_offset = 0;
+        uint32_t num_dict_entries = 0;
         uint32_t comp_page_offset = 0;
         uint32_t cur_row = ck_g.start_row;
 
+        if (ck_g.has_dictionary) {
+            if (!t) {
+                page_g.page_data = ck_g.uncompressed_bfr;
+                page_g.compressed_data = ck_g.compressed_bfr;
+                page_g.num_fragments = 0;
+                page_g.page_type = DICTIONARY_PAGE;
+                page_g.dict_bits_plus1 = 0;
+                page_g.chunk_id = blockIdx.y * num_columns + blockIdx.x;
+                page_g.hdr_size = 0;
+                page_g.max_hdr_size = 32;
+                page_g.max_data_size = ck_g.dictionary_size;
+                page_g.start_row = cur_row;
+                page_g.num_rows = ck_g.total_dict_entries;
+                page_offset += page_g.max_hdr_size + page_g.max_data_size;
+                comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
+            }
+            SYNCWARP();
+            if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
+                reinterpret_cast<uint32_t *>(&pages[ck_g.first_page])[t] = reinterpret_cast<uint32_t *>(&page_g)[t];
+            }
+            num_pages = 1;
+        }
+        SYNCWARP();
         do {
             uint32_t fragment_data_size, max_page_size;
             SYNCWARP();
@@ -423,16 +447,51 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                 frag_g.num_rows = 0;
             }
             SYNCWARP();
-            fragment_data_size = frag_g.fragment_data_size;
+            if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
+                fragment_data_size = frag_g.num_rows * 2; // Assume worst-case of 2-bytes per dictionary index
+            }
+            else {
+                fragment_data_size = frag_g.fragment_data_size;
+            }
             max_page_size = (rows_in_page * 2 >= ck_g.num_rows) ? 256 * 1024 : (rows_in_page * 3 >= ck_g.num_rows) ? 384 * 1024 : 512 * 1024;
-            if (num_rows >= ck_g.num_rows || page_size + fragment_data_size > max_page_size)
+            if (num_rows >= ck_g.num_rows || page_size + fragment_data_size > max_page_size
+             || (ck_g.has_dictionary && rows_in_page > 0 && fragments_in_chunk == ck_g.num_dict_fragments))
             {
+                uint32_t dict_bits_plus1;
+
+                if (ck_g.has_dictionary && page_start < ck_g.num_dict_fragments) {
+                    uint32_t dict_bits;
+                    if (num_dict_entries <= 2) {
+                        dict_bits = 1;
+                    }
+                    else if (num_dict_entries <= 4) {
+                        dict_bits = 2;
+                    }
+                    else if (num_dict_entries <= 16) {
+                        dict_bits = 4;
+                    }
+                    else if (num_dict_entries <= 256) {
+                        dict_bits = 8;
+                    }
+                    else if (num_dict_entries <= 4096) {
+                        dict_bits = 12;
+                    }
+                    else {
+                        dict_bits = 16;
+                    }
+                    page_size = 1 + 5 + ((rows_in_page * dict_bits + 7) >> 3) + (rows_in_page >> 8);
+                    dict_bits_plus1 = dict_bits + 1;
+                }
+                else {
+                    dict_bits_plus1 = 0;
+                }
                 if (!t) {
                     uint32_t def_level_bits = col_g.level_bits & 0xf;
-                    uint32_t def_level_size = (def_level_bits) ? 4 + 5 + ((def_level_bits * rows_in_page + 7) >> 3) : 0;
+                    uint32_t def_level_size = (def_level_bits) ? 4 + 5 + ((def_level_bits * rows_in_page + 7) >> 3) + (rows_in_page >> 8) : 0;
                     page_g.num_fragments = fragments_in_chunk - page_start;
                     page_g.chunk_id = blockIdx.y * num_columns + blockIdx.x;
                     page_g.page_type = DATA_PAGE;
+                    page_g.dict_bits_plus1 = dict_bits_plus1;
                     page_g.hdr_size = 0;
                     page_g.max_hdr_size = 32; // Max size excluding statistics
                     page_g.max_data_size = page_size + def_level_size;
@@ -453,6 +512,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                 rows_in_page = 0;
                 page_start = fragments_in_chunk;
             }
+            num_dict_entries += frag_g.num_dict_vals;
             page_size += fragment_data_size;
             rows_in_page += frag_g.num_rows;
             num_rows += frag_g.num_rows;
@@ -544,7 +604,7 @@ inline __device__ void PackLiterals(uint8_t *dst, uint32_t v, uint32_t count, ui
  * @param[in] numvals Total count of input values
  * @param[in] nbits number of bits per symbol (1..16)
  * @param[in] flush nonzero if last batch in block
- * @param[in] t thread id
+ * @param[in] t thread id (0..127)
  */
 static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
 {
@@ -553,46 +613,67 @@ static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t
     
     while (rle_pos < numvals) {
         uint32_t pos = rle_pos + t;
-        uint32_t v0 = s->vals[pos & (RLE_BFRSZ-1)];
-        uint32_t v1 = s->vals[(pos + 1) & (RLE_BFRSZ - 1)];
-        uint32_t mask = BALLOT(pos + 1 < numvals && v0 == v1);
-        uint32_t rle_lit_count, rle_rpt_count;
-        if (!(t & 0x1f)) {
-            s->rpt_map[t >> 5] = mask;
-        }
-        __syncthreads();
-        if (t < 32) {
-            if (rle_run > 0 && !(rle_run & 1)) {
-                // Currently in a long repeat run
+        if (rle_run > 0 && !(rle_run & 1)) {
+            // Currently in a long repeat run
+            uint32_t mask = BALLOT(pos < numvals && s->vals[pos & (RLE_BFRSZ - 1)] == s->run_val);
+            uint32_t rle_rpt_count, max_rpt_count;
+            if (!(t & 0x1f)) {
+                s->rpt_map[t >> 5] = mask;
+            }
+            __syncthreads();
+            if (t < 32) {
                 uint32_t c32 = BALLOT(t >= 4 || s->rpt_map[t] != 0xffffffffu);
                 if (!t) {
                     uint32_t last_idx = __ffs(c32) - 1;
-                    uint32_t rpt_count = last_idx * 32 + ((last_idx < 4) ? __ffs(~s->rpt_map[last_idx]) : 0);
-                    if (rpt_count && ((flush && rle_pos + rpt_count + 1 == numvals) || (rpt_count < min(numvals - rle_pos, 128)))) {
-                        rpt_count++;
-                    }
-                    s->rle_lit_count = 0;
-                    s->rle_rpt_count = rpt_count;
+                    s->rle_rpt_count = last_idx * 32 + ((last_idx < 4) ? __ffs(~s->rpt_map[last_idx]) - 1 : 0);
                 }
             }
-            else {
-                // Not currently in a repeat run: repeat run can only start on a multiple of 8 values
+            __syncthreads();
+            max_rpt_count = min(numvals - rle_pos, 128);
+            rle_rpt_count = s->rle_rpt_count;
+            rle_run += rle_rpt_count << 1;
+            rle_pos += rle_rpt_count;
+            if (rle_rpt_count < max_rpt_count || (flush && rle_pos == numvals)) {
+                if (!t) {
+                    uint32_t run_val = s->run_val;
+                    uint8_t *dst = VlqEncode(s->rle_out, rle_run);
+                    *dst++ = run_val;
+                    if (nbits > 8) {
+                        *dst++ = run_val >> 8;
+                    }
+                    s->rle_out = dst;
+                }
+                rle_run = 0;
+            }
+        }
+        else {
+            // New run or in a literal run
+            uint32_t v0 = s->vals[pos & (RLE_BFRSZ - 1)];
+            uint32_t v1 = s->vals[(pos + 1) & (RLE_BFRSZ - 1)];
+            uint32_t mask = BALLOT(pos + 1 < numvals && v0 == v1);
+            uint32_t maxvals = min(numvals - rle_pos, 128);
+            uint32_t rle_lit_count, rle_rpt_count;
+            if (!(t & 0x1f)) {
+                s->rpt_map[t >> 5] = mask;
+            }
+            __syncthreads();
+            if (t < 32) {
+                // Repeat run can only start on a multiple of 8 values
                 uint32_t idx8 = (t * 8) >> 5;
                 uint32_t pos8 = (t * 8) & 0x1f;
                 uint32_t m0 = (idx8 < 4) ? s->rpt_map[idx8] : 0;
-                uint32_t m1 = (idx8 < 3) ? s->rpt_map[idx8+1] : 0;
+                uint32_t m1 = (idx8 < 3) ? s->rpt_map[idx8 + 1] : 0;
                 uint32_t needed_mask = kRleRunMask[nbits - 1];
                 mask = BALLOT((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
                 if (!t) {
-                    uint32_t n = numvals - rle_pos;
-                    uint32_t rle_run_start = (mask != 0) ? min((__ffs(mask) - 1) * 8, n) : n;
+                    uint32_t rle_run_start = (mask != 0) ? min((__ffs(mask) - 1) * 8, maxvals) : maxvals;
                     uint32_t rpt_len = 0;
-                    if (rle_run_start < n) {
+                    if (rle_run_start < maxvals) {
                         uint32_t idx_cur = rle_run_start >> 5;
                         uint32_t idx_ofs = rle_run_start & 0x1f;
                         while (idx_cur < 4) {
                             m0 = (idx_cur < 4) ? s->rpt_map[idx_cur] : 0;
-                            m1 = (idx_cur < 3) ? s->rpt_map[idx_cur+1] : 0;
+                            m1 = (idx_cur < 3) ? s->rpt_map[idx_cur + 1] : 0;
                             mask = ~__funnelshift_r(m0, m1, idx_ofs);
                             if (mask != 0)
                             {
@@ -604,104 +685,63 @@ static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t
                         }
                     }
                     s->rle_lit_count = rle_run_start;
-                    s->rle_rpt_count = min(rpt_len, n - rle_run_start);
+                    s->rle_rpt_count = min(rpt_len, maxvals - rle_run_start);
                 }
             }
-        }
-        __syncthreads();
-        rle_lit_count = s->rle_lit_count;
-        rle_rpt_count = s->rle_rpt_count;
-        if (rle_run != 0 && !(rle_run & 1)) {
-            bool flush_run = (rle_rpt_count == 0) || (rle_lit_count != 0);
-            // Currently in a repeat run
-            if (rle_lit_count == 0) {
-                // Run continues
-                rle_run += rle_rpt_count * 2;
-                rle_pos += rle_rpt_count;
-                rle_rpt_count = 0;
-            }
-            if (flush_run || (flush && rle_pos == numvals)) {
-                uint8_t *dst;
-                // Output repeat run
-                if (t == 0) {
-                    uint32_t run_val = s->run_val;
-                    dst = VlqEncode(s->rle_out, rle_run);
-                    *dst++ = run_val;
-                    if (nbits > 8){
-                        *dst++ = run_val >> 8;
+            __syncthreads();
+            rle_lit_count = s->rle_lit_count;
+            rle_rpt_count = s->rle_rpt_count;
+            if (rle_lit_count != 0 || (rle_run != 0 && rle_rpt_count != 0)) {
+                uint32_t lit_div8;
+                bool need_more_data = false;
+                if (!flush && rle_pos + rle_lit_count == numvals) {
+                    // Wait for more data
+                    rle_lit_count -= min(rle_lit_count, 24);
+                    need_more_data = true;
+                }
+                if (rle_lit_count != 0) {
+                    lit_div8 = (rle_lit_count + ((flush && rle_pos + rle_lit_count == numvals) ? 7 : 0)) >> 3;
+                    if (rle_run + lit_div8 * 2 > 0x7f) {
+                        lit_div8 = 0x3f - (rle_run >> 1); // Limit to fixed 1-byte header (504 literals)
+                        rle_rpt_count = 0; // Defer repeat run
                     }
-                    s->rle_out = dst;
+                    if (lit_div8 != 0) {
+                        uint8_t *dst = s->rle_out + 1 + (rle_run >> 1) * nbits;
+                        PackLiterals(dst, (rle_pos + t < numvals) ? v0 : 0, lit_div8 * 8, nbits, t);
+                        rle_run = (rle_run + lit_div8 * 2) | 1;
+                        rle_pos = min(rle_pos + lit_div8 * 8, numvals);
+                    }
                 }
-                rle_run = 0;
-                __syncthreads();
-            }
-        }
-        // Process literals
-        if (rle_lit_count != 0 || (rle_run != 0 && rle_rpt_count != 0)) {
-            uint32_t lit_div8;
-            bool need_more_data = false;
-            if (!flush && rle_pos + rle_lit_count == numvals) {
-                // Wait for more data
-                rle_lit_count -= min(rle_lit_count, 24);
-                need_more_data = true;
-            }
-            if (rle_lit_count != 0) {
-                lit_div8 = (rle_lit_count + ((flush && rle_pos + rle_lit_count == numvals) ? 7 : 0)) >> 3;
-                if (rle_run + lit_div8 * 2 > 0x7f) {
-                    lit_div8 = 0x3f - (rle_run >> 1); // Limit to fixed 1-byte header (504 literals)
-                    rle_rpt_count = 0; // Defer repeat run
-                }
-                if (lit_div8 != 0) {
-                    uint8_t *dst = s->rle_out + 1 + (rle_run >> 1) * nbits;
-                    PackLiterals(dst, (rle_pos + t < numvals) ? v0 : 0, lit_div8 * 8, nbits, t);
-                    rle_run = (rle_run + lit_div8 * 2) | 1;
-                    rle_pos = min(rle_pos + lit_div8 * 8, numvals);
-                }
-            }
-            if (rle_run >= ((rle_rpt_count != 0 || (flush && rle_pos == numvals)) ? 0x03 : 0x7f)) {
-                __syncthreads();
-                // Complete literal run
-                if (!t) {
-                    uint8_t *dst = s->rle_out;
-                    dst[0] = rle_run; // At most 0x7f
-                    dst += nbits * (rle_run >> 1);
-                    s->rle_out = dst;
-                }
-                rle_run = 0;
-            }
-            if (need_more_data) {
-                break;
-            }
-        }
-        // Process repeat run
-        if (rle_rpt_count != 0) {
-            if (t == s->rle_lit_count) {
-                s->run_val = v0;
-            }
-            rle_run = rle_rpt_count * 2;
-            rle_pos += rle_rpt_count;
-            if (rle_pos + 1 == numvals) {
-                __syncthreads();
-                if (flush) {
-                    // Output the run
-                    rle_run += 2;
-                    rle_pos++;
-                    if (t == 0) {
-                        uint32_t run_val = s->run_val;
-                        uint8_t *dst = VlqEncode(s->rle_out, rle_run);
-                        *dst++ = run_val;
-                        if (nbits > 8) {
-                            *dst++ = run_val >> 8;
-                        }
+                if (rle_run >= ((rle_rpt_count != 0 || (flush && rle_pos == numvals)) ? 0x03 : 0x7f)) {
+                    __syncthreads();
+                    // Complete literal run
+                    if (!t) {
+                        uint8_t *dst = s->rle_out;
+                        dst[0] = rle_run; // At most 0x7f
+                        dst += 1 + nbits * (rle_run >> 1);
                         s->rle_out = dst;
                     }
                     rle_run = 0;
                 }
-                break;
+                if (need_more_data) {
+                    break;
+                }
+            }
+            // Start a repeat run
+            if (rle_rpt_count != 0) {
+                if (t == s->rle_lit_count) {
+                    s->run_val = v0;
+                }
+                rle_run = rle_rpt_count * 2;
+                rle_pos += rle_rpt_count;
+                if (rle_pos + 1 == numvals && !flush) {
+                    break;
+                }
             }
         }
         __syncthreads();
     }
+    __syncthreads();
     if (!t) {
         s->rle_run = rle_run;
         s->rle_pos = rle_pos;
@@ -718,7 +758,8 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
 
     page_enc_state_s * const s = &state_g;
     uint32_t t = threadIdx.x;
-    uint32_t dtype, dtype_len_in, dtype_len_out, dict_bits;
+    uint32_t dtype, dtype_len_in, dtype_len_out;
+    int32_t dict_bits;
 
     if (t < sizeof(EncPage) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t];
@@ -784,14 +825,14 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
     else {
         dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
     }
-    dict_bits = (dtype == BOOLEAN) ? 1 : 0;
+    dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
     if (t == 0) {
         uint8_t *dst = s->cur;
         s->rle_run = 0;
         s->rle_pos = 0;
         s->rle_numvals = 0;
         s->rle_out = dst;
-        if (dict_bits != 0 && dtype != BOOLEAN) {
+        if (dict_bits >= 0 && dtype != BOOLEAN) {
             dst[0] = dict_bits;
             s->rle_out = dst + 1;
         }
@@ -799,33 +840,52 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
     __syncthreads();
     for (uint32_t cur_row = 0; cur_row < s->page.num_rows; ) {
         uint32_t nrows = min(s->page.num_rows - cur_row, 128);
-        const uint32_t *valid = s->col.valid_map_base;
         uint32_t row = s->page.start_row + cur_row + t;
-        uint32_t is_valid = (row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
-        uint32_t warp_valids = BALLOT(is_valid);
-        uint32_t len, pos;
+        uint32_t is_valid, warp_valids, len, pos;
 
+        if (s->page.page_type == DICTIONARY_PAGE) {
+            is_valid = (cur_row + t < s->page.num_rows);
+            row = (is_valid) ? s->col.dict_data[row] : row;
+        }
+        else {
+            const uint32_t *valid = s->col.valid_map_base;
+            is_valid = (row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
+        }
+        warp_valids = BALLOT(is_valid);
         cur_row += nrows;
-        if (dict_bits != 0) {
+        if (dict_bits >= 0) {
             // Dictionary encoding
-            uint32_t v, rle_numvals;
+            if (dict_bits > 0) {
+                uint32_t v, rle_numvals;
 
-            pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
-            if (!(t & 0x1f)) {
-                s->scratch_red[t >> 5] = __popc(warp_valids);
+                pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
+                if (!(t & 0x1f)) {
+                    s->scratch_red[t >> 5] = __popc(warp_valids);
+                }
+                __syncthreads();
+                if (t < 32) {
+                    s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t);
+                }
+                __syncthreads();
+                pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
+                rle_numvals = s->rle_numvals;
+                if (dtype == BOOLEAN) {
+                    v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]; // NOTE: Assuming boolean for now
+                }
+                else {
+                    v = s->col.dict_index[row];
+                }
+                if (is_valid) {
+                    s->vals[(rle_numvals + pos) & (RLE_BFRSZ - 1)] = v;
+                }
+                rle_numvals += s->scratch_red[3];
+                __syncthreads();
+                RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
+                __syncthreads();
             }
-            __syncthreads();
-            if (t < 32) {
-                s->scratch_red[t] = WarpReducePos4((t < 4) ? s->scratch_red[t] : 0, t);
+            if (t == 0) {
+                s->cur = s->rle_out;
             }
-            __syncthreads();
-            pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
-            rle_numvals = s->rle_numvals + s->scratch_red[3];
-            v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]; // NOTE: Assuming boolean for now
-            if (is_valid) {
-                s->vals[(rle_numvals + pos) & (RLE_BFRSZ - 1)] = v;
-            }
-            RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
             __syncthreads();
         }
         else {
@@ -963,7 +1023,6 @@ gpuDecideCompression(EncColumnChunk *chunks, const EncPage *pages, const gpu_inf
         chunks[blockIdx.x].bfr_size = uncompressed_data_size;
         chunks[blockIdx.x].compressed_size = (is_compressed) ? compressed_data_size : uncompressed_data_size;
     }
-
 }
 
 
@@ -1073,7 +1132,10 @@ gpuEncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, const gpu_inf
             compressed_page_size = uncompressed_page_size;
         }
         CPW_BEGIN_STRUCT(hdr_start)
-            int page_type = DATA_PAGE;
+            int page_type = page_g.page_type;
+            // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and RLE_DICTIONARY in data page,
+            // but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data pages (actual encoding is identical).
+            int encoding = (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN;
             CPW_FLD_INT32(1, page_type)
             CPW_FLD_INT32(2, uncompressed_page_size)
             CPW_FLD_INT32(3, compressed_page_size)
@@ -1081,7 +1143,7 @@ gpuEncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, const gpu_inf
                 // DataPageHeader
                 CPW_FLD_STRUCT_BEGIN(5)
                     CPW_FLD_INT32(1, page_g.num_rows)   // NOTE: num_values != num_rows for list types
-                    CPW_FLD_INT32(2, PLAIN)             // TODO: encoding
+                    CPW_FLD_INT32(2, encoding)          // encoding
                     CPW_FLD_INT32(3, RLE)               // definition_level_encoding
                     CPW_FLD_INT32(4, RLE)               // repetition_level_encoding
                     // TODO: page-level statistics
@@ -1090,8 +1152,8 @@ gpuEncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, const gpu_inf
             else {
                 // DictionaryPageHeader
                 CPW_FLD_STRUCT_BEGIN(7)
-                    CPW_FLD_INT32(1, page_g.num_rows)   // FIXME: num_values in dictionary
-                    CPW_FLD_INT32(2, PLAIN)             // Dictionary values always using PLAIN encoding
+                    CPW_FLD_INT32(1, ck_g.total_dict_entries) // number of values in dictionary
+                    CPW_FLD_INT32(2, encoding)
                 CPW_FLD_STRUCT_END(7)
             }
         CPW_END_STRUCT(hdr_end)
@@ -1146,10 +1208,16 @@ gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
         memcpy_block<1024, true>(dst, src, data_len, t);
         dst += data_len;
         __syncthreads();
+        if (!t && page == 0 && ck_g.has_dictionary) {
+            ck_g.dictionary_size = hdr_len + data_len;
+        }
     }
     if (t == 0) {
         chunks[blockIdx.x].bfr_size = uncompressed_size;
         chunks[blockIdx.x].compressed_size = (dst - dst_base);
+        if (ck_g.has_dictionary) {
+            chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size;
+        }
     }
 }
 

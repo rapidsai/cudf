@@ -126,8 +126,8 @@ struct EncColumnDesc
 {
   const uint32_t *valid_map_base;   //!< base ptr of column valid map (null if not present)
   const void *column_data_base;     //!< base ptr of column data
-  uint32_t *dict_index;             //!< Dictionary index (row from dictionary index)
-  uint16_t *dict_data;              //!< Dictionary data (dictionary entry of non-null rows)
+  uint32_t *dict_index;             //!< Dictionary index [row]
+  uint32_t *dict_data;              //!< Dictionary data (unique row indices)
   uint32_t num_rows;                //!< number of rows in column
   uint8_t physical_type;            //!< physical data type
   uint8_t converted_type;           //!< logical data type
@@ -159,7 +159,7 @@ struct EncPage
   uint8_t *compressed_data;         //!< Ptr to compressed page
   uint16_t num_fragments;           //!< Number of fragments in page
   uint8_t page_type;                //!< Page type (0=data, 2=dictionary)
-  uint8_t pad;
+  uint8_t dict_bits_plus1;          //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
   uint32_t chunk_id;                //!< Index in chunk array
   uint32_t hdr_size;                //!< Size of page header
   uint32_t max_hdr_size;            //!< Maximum size of page header
@@ -167,6 +167,10 @@ struct EncPage
   uint32_t start_row;               //!< First row of page
   uint32_t num_rows;                //!< Rows in page
 };
+
+/// Size of hash used for building dictionaries
+constexpr unsigned int kDictHashBits = 16;
+constexpr size_t kDictScratchSize = (1 << kDictHashBits) * sizeof(uint32_t);
 
 /**
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
@@ -181,7 +185,7 @@ inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size, ui
 struct EncColumnChunk
 {
   const EncColumnDesc *col_desc;    //!< Column description
-  const PageFragment *fragments;    //!< First fragment in chunk
+  PageFragment *fragments;          //!< First fragment in chunk
   uint8_t *uncompressed_bfr;        //!< Uncompressed page data
   uint8_t *compressed_bfr;          //!< Compressed page data
   uint32_t bfr_size;                //!< Uncompressed buffer size
@@ -190,8 +194,12 @@ struct EncColumnChunk
   uint32_t num_rows;                //!< Number of rows in chunk
   uint32_t first_page;              //!< First page of chunk
   uint32_t num_pages;               //!< Number of pages in chunk
+  uint32_t dictionary_id;           //!< Dictionary id for this chunk
   uint8_t is_compressed;            //!< Nonzero if the chunk uses compression
-  uint8_t pad[3];
+  uint8_t has_dictionary;           //!< Nonzero if the chunk uses dictionary encoding
+  uint16_t num_dict_fragments;      //!< Number of fragments using dictionary
+  uint32_t dictionary_size;         //!< Size of dictionary
+  uint32_t total_dict_entries;      //!< Total number of entries in dictionary
 };
 
 /**
@@ -335,6 +343,21 @@ cudaError_t EncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, uint
  **/
 cudaError_t GatherPages(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks,
                         cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for building chunk dictionaries
+ *
+ * @param[in] chunks Column chunks
+ * @param[in] dev_scratch Device scratch data (kDictScratchSize bytes per dictionary)
+ * @param[in] scratch_size size of scratch data in bytes
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch, size_t scratch_size,
+                                   uint32_t num_chunks, cudaStream_t stream = (cudaStream_t)0);
 
 
 } // namespace gpu
