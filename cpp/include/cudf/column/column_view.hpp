@@ -100,7 +100,7 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* end() const noexcept {
-    static_assert(is_fixed_width<T>(), "column_view::begin only supports fixed-width types");
+    static_assert(is_fixed_width<T>(), "column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 
@@ -410,7 +410,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* begin() const noexcept {
-    static_assert(is_fixed_width<T>(), "column_view::begin only supports fixed-width types");
+    static_assert(is_fixed_width<T>(), "mutable_column_view::begin only supports fixed-width types");
     return data<T>();
   }
 
@@ -423,7 +423,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* end() const noexcept {
-    static_assert(is_fixed_width<T>(), "column_view::begin only supports fixed-width types");
+    static_assert(is_fixed_width<T>(), "mutable_column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 
