@@ -143,6 +143,9 @@ class column {
   template <typename B = rmm::device_buffer>
   void set_null_mask(
       B&& new_null_mask, size_type new_null_count = UNKNOWN_NULL_COUNT) {
+   if(new_null_count > 0){
+      CUDF_EXPECTS(new_null_mask.size() > 0, "Column with null values must be nullable.");
+   }
     _null_mask = std::forward<B>(new_null_mask);
     _null_count = new_null_count;
   }
