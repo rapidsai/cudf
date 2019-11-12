@@ -326,6 +326,14 @@ set(LEGACY_TRANSFORM_TEST_SRC
 ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
+# - unary transform tests -------------------------------------------------------------------------
+
+set(TRANSFORM_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu")
+
+ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
+
+###################################################################################################
 # - legacy jit cache tests ------------------------------------------------------------------------
 
 set(LEGACY_JITCACHE_TEST_SRC 
