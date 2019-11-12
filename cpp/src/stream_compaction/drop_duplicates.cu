@@ -22,7 +22,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy_if.cuh>
+#include <cudf/detail/copy.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/sorting.hpp>
@@ -113,25 +113,27 @@ auto get_unique_ordered_indices(cudf::table_view const& keys,
                                               *device_input_table,
                                                nulls_are_equal);
     auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
-        sorted_indices->view().begin<cudf::size_type>(),
-        sorted_indices->view().end<cudf::size_type>(),
-        unique_indices.mutable_view().begin<cudf::size_type>(),
-        comp,
-        keep);
+                                  sorted_indices->view().begin<cudf::size_type>(),
+                                  sorted_indices->view().end<cudf::size_type>(),
+                                  unique_indices.mutable_view().begin<cudf::size_type>(),
+                                  comp,
+                                  keep);
   
-    return cudf::detail::slice(unique_indices.view(), 0, thrust::distance(unique_indices.mutable_view().begin<cudf::size_type>(), result_end));
+    return cudf::detail::slice(unique_indices.view(), 0,
+            thrust::distance(unique_indices.mutable_view().begin<cudf::size_type>(), result_end));
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
                                                *device_input_table,
                                                nulls_are_equal);
     auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
-        sorted_indices->view().begin<cudf::size_type>(),
-        sorted_indices->view().end<cudf::size_type>(),
-        unique_indices.mutable_view().begin<cudf::size_type>(),
-        comp,
-        keep);
+                                  sorted_indices->view().begin<cudf::size_type>(),
+                                  sorted_indices->view().end<cudf::size_type>(),
+                                  unique_indices.mutable_view().begin<cudf::size_type>(),
+                                  comp,
+                                  keep);
   
-    return cudf::detail::slice(unique_indices.view(), 0, thrust::distance(unique_indices.mutable_view().begin<cudf::size_type>(), result_end));
+    return cudf::detail::slice(unique_indices.view(), 0,
+            thrust::distance(unique_indices.mutable_view().begin<cudf::size_type>(), result_end));
   }
   
 }
@@ -150,7 +152,7 @@ cudf::size_type unique_count(table_view const& keys,
                                      mr);
   
   // count unique elements
-  cudf::size_type* sorted_row_index = const_cast<cudf::size_type *>(sorted_indices->view().data<cudf::size_type>());
+  auto sorted_row_index = sorted_indices->view().data<cudf::size_type>();
   auto device_input_table = cudf::table_device_view::create(keys, stream);
 
   if(cudf::has_nulls(keys)) {
