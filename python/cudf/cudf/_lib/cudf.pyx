@@ -335,7 +335,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
 
     if gdf_dtype == GDF_STRING:
         data = nvstrings.bind_cpointer(data_ptr)
-        return as_column(data, name=name)
+        result = as_column(data, name=name)
     elif gdf_dtype == GDF_STRING_CATEGORY:
         # Need to do this just to make sure it's freed properly
         garbage = rmm.device_array_from_ptr(
@@ -350,7 +350,8 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
             nvcat_ptr = int(<uintptr_t>c_col.dtype_info.category)
             nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
             data = nvcat_obj.to_strings()
-        return as_column(data, name=name)
+        result = as_column(data, name=name)
+        
     else:
         dtype = np_dtype_from_gdf_column(c_col)
         dbuf = rmm.DeviceBuffer(
@@ -367,10 +368,11 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
             )
             mask = Buffer.from_device_buffer(mbuf)
 
-        return build_column(data=data,
+        result = build_column(data=data,
                             dtype=dtype,
                             mask=mask,
                             name=name)
+    return result
 
 
 cdef update_nvstrings_col(col, uintptr_t category_ptr):

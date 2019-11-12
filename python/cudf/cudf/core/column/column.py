@@ -952,7 +952,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             nbuf_ptr = nbuf.ptr
 
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, nbuf_ptr, bdevmem=True)
-        return string.StringColumn(data=sbuf, offsets=obuf, mask=nbuf)
+        data = build_column(data=sbuf, dtype="object", offsets=obuf, mask=nbuf)
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
