@@ -32,10 +32,6 @@
 #include <memory>
 
 namespace cudf {
-
-  //forward declaration for operator column_device_view
-  class column_device_view;
-
 namespace test {
 /**---------------------------------------------------------------------------*
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a

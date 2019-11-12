@@ -20,7 +20,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/equal.h>
 
