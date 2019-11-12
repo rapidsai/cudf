@@ -67,13 +67,7 @@ std::unique_ptr<experimental::table>
                        cudaStream_t stream) {
 
   if (boolean_mask.size() == 0) {
-      std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
-      std::transform(input.begin(), input.end(), out_columns.begin(),
-                [&stream] (auto col_view){
-                return detail::empty_like(col_view, stream);
-                });
-
-      return std::make_unique<experimental::table>(std::move(out_columns));
+      return experimental::detail::empty_like(input, stream);
   }
 
   CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");

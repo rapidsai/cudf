@@ -335,12 +335,8 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
                               rmm::mr::get_default_resource(),
                           cudaStream_t stream = 0) {
 
-    std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     if (0 == input.num_rows() || 0 == input.num_columns()) {
-        std::transform(input.begin(), input.end(), out_columns.begin(),
-                [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
-
-        return std::make_unique<experimental::table>(std::move(out_columns));
+        return experimental::detail::empty_like(input, stream);
     }
 
     constexpr int block_size = 256;
@@ -392,19 +388,19 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
        return std::make_unique<experimental::table>(input);
    } else if (output_size > 0){ 
 
+       std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
        std::transform(input.begin(), input.end(), out_columns.begin(),
                [&] (auto col_view){
                                     return cudf::experimental::type_dispatcher(col_view.type(),
                                     scatter_functor<Filter, block_size>{},
                                     col_view, output_size,
                                     block_offsets, filter, mr, stream);});
+   
+        return std::make_unique<experimental::table>(std::move(out_columns));
 
    } else {
-        std::transform(input.begin(), input.end(), out_columns.begin(),
-                [&stream] (auto col_view){return detail::empty_like(col_view, stream);});
+        return experimental::detail::empty_like(input, stream);
    }
-
-   return std::make_unique<experimental::table>(std::move(out_columns));
 }
 
 }// namespace detail

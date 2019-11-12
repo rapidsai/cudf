@@ -57,14 +57,14 @@ template<typename Exec,
                              BinaryPredicate comp,
                              const duplicate_keep_option keep)
 {
-  IndexType n = (last-first)-1;
+  size_type last_index = thrust::distance(first,last)-1;;
   if (keep == duplicate_keep_option::KEEP_FIRST) {
       return thrust::copy_if(exec,
               first,
               last,
               thrust::counting_iterator<IndexType>(0),
               output, 
-              [first, comp, n] __device__ (IndexType i) mutable {
+              [first, comp, last_index] __device__ (IndexType i) mutable {
               return (i == 0 || !comp(first[i], first[i-1]));
               }); 
   } else if (keep == duplicate_keep_option::KEEP_LAST) {
@@ -73,8 +73,8 @@ template<typename Exec,
               last,
               thrust::counting_iterator<IndexType>(0),
               output, 
-              [first, comp, n] __device__ (IndexType i) mutable {
-              return (i == n || !comp(first[i], first[i+1]));
+              [first, comp, last_index] __device__ (IndexType i) mutable {
+              return (i == last_index || !comp(first[i], first[i+1]));
               });
   } else {
       return thrust::copy_if(exec,
@@ -82,9 +82,9 @@ template<typename Exec,
               last,
               thrust::counting_iterator<IndexType>(0),
               output, 
-              [first, comp, n] __device__ (IndexType i) mutable {
+              [first, comp, last_index] __device__ (IndexType i) mutable {
               return (i == 0 || !comp(first[i], first[i-1])) 
-                  && (i == n || !comp(first[i], first[i+1]));
+                  && (i == last_index || !comp(first[i], first[i+1]));
               });
   }
 }
@@ -192,13 +192,7 @@ std::unique_ptr<experimental::table>
       0 == input.num_columns() ||
       0 == keys.num_columns()
       ) {
-      std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
-      std::transform(input.begin(), input.end(), out_columns.begin(),
-                [&stream] (auto col_view){
-                return detail::empty_like(col_view, stream);
-                });
-
-    return std::make_unique<experimental::table>(std::move(out_columns));
+      return experimental::detail::empty_like(input, stream);
   }
   
   CUDF_EXPECTS( input.num_rows() == keys.num_rows(), "number of \
@@ -216,7 +210,7 @@ rows in input table should be equal to number of rows in key colums table");
                                          keep, nulls_are_equal);
  
   // run gather operation to establish new order
-  return detail::gather(input, unique_indices_view, false, false, true, mr, stream);
+  return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
 }
 
 template <typename T>

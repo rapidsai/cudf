@@ -47,7 +47,7 @@ namespace detail {
  *                  col3: {7, null}}
  *
  * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
- * there is no error, and an empty `std::unique_ptr<table>` is returned
+ * there is no error, and an empty `table` is returned
  *
  * @throws cudf::logic_error if @p keys is non-empty and keys.num_rows() is less
  * than input.num_rows()
@@ -82,9 +82,9 @@ std::unique_ptr<experimental::table>
  * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
  * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
  *
- * @param[in] input The input tablei_view to filter
- * @param[in] boolean_mask A column_view of type BOOL8 used as a mask to filter
- * the `input`.
+ * @param[in] input The input table_view to filter
+ * @param[in] boolean_mask A potentially nullable column_view of type BOOL8 used as 
+ * a mask to filter the `input`.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return unique_ptr<table> Table containing copy of all rows of @p input passing
@@ -104,7 +104,7 @@ std::unique_ptr<experimental::table>
  * row of `keys` table_view is unique, where the definition of unique depends on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
+ * - KEEP_NONE: only unique rows are kept
  *
  * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
  *
@@ -134,10 +134,10 @@ std::unique_ptr<experimental::table>
  *
  * If both `ignore_nulls` and `nan_as_null` are true, both `NaN` and `null`
  * values are ignored.
- * If `ignored_nulls` is true and `nan_as_null` is false, only `null` is
+ * If `ignor_nulls` is true and `nan_as_null` is false, only `null` is
  * ignored, `NaN` is considered in unique count.
  *
- * @param[in] input         The columni_view whose unique elements will be counted.
+ * @param[in] input         The column_view whose unique elements will be counted.
  * @param[in] ignore_nulls  flag to ignore `null` in unique count if true
  * @param[in] nan_as_null   flag to consider `NaN==null` if true.
  * @param[in] mr Optional, The resource to use for all allocations
