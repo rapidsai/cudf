@@ -2,23 +2,34 @@
 
 ## New Features
 
-- PR #3011 Added libcudf++ transition guide
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
+- PR #2980 Added nvtext is_vowel/is_consonant functions
 - PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #3011 Added libcudf++ transition guide
 - PR #3129 Add strings column factory from `std::vector`s
 - PR #3054 Add parquet reader support for decimal data types
 - PR #3022 adds DataFrame.astype for cuDF dataframes
 - PR #2962 Add isnull(), notnull() and related functions
 - PR #3025 Move search files to legacy
+- PR #3068 Add `scalar` class
 - PR #3094 Adding `any` and `all` support from libcudf
 - PR #3130 Define and implement new `column_wrapper`
 - PR #3143 Define and implement new copying APIs `slice` and `split`
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
-- PR #3273 Define and implement new iterator and reduction APIs
+- PR #3300 Add `DataFrame.insert`
+- PR #3263 Define and implement new `valid_if`
+- PR #3278 Add `to_host` utility to copy `column_view` to host
+- PR #3087 Add new cudf::experimental bool8 wrapper
+- PR #3219 Construct column from column_view
+- PR #3308 java add API for memory usage callbacks
+- PR #2691 Row-wise reduction and scan operations via CuPy
+- PR #3291 Add normalize_nans_and_zeros
+- PR #3273 Define and implement new reduction APIs
 
 ## Improvements
 
@@ -54,23 +65,47 @@
 - PR #3126 Round 2 of snappy decompression optimizations
 - PR #3046 Define and implement new copying APIs `empty_like` and `allocate_like`
 - PR #3128 Support MultiIndex in DataFrame.join
+- PR #2971 Added initial gather and scatter methods for strings_column_view
+- PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
+- PR #2991 Added strings column functions concatenate and join_strings
+- PR #3028 Port gather and scatter to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
-- PR #3138 Movey unary files to legacy
+- PR #3138 Move unary files to legacy
+- PR #3170 Port NVStrings substring functions to cudf strings column
+- PR #3159 Port NVStrings is-chars-types function to cudf strings column
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3189 Port NVStrings find ops to cudf column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
+- PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
+- PR #3261 Small cleanup: remove `== true`
+- PR #3266 Remove optional checks for CuPy
+- PR #3268 Adding null ordering per column feature when sorting
+- PR #3239 Adding floating point specialization to comparators for NaNs
+- PR #3270 Move predicates files to legacy
+- PR #3281 Add to_host specialization for strings in column test utilities
+- PR #3282 Add `num_bitmask_words`
+- PR #3252 Add new factory methods to include passing an existing null mask
+- PR #3288 Make `bit.cuh` utilities usable from host code.
+- PR #3287 Move rolling windows files to legacy
+- PR #3182 Define and implement new unary APIs `is_null` and `is_not_null`
+- PR #3314 Drop `cython` from run requirements
+- PR #3301 Add tests for empty column wrapper.
+- PR #3294 Update to arrow-cpp and pyarrow 0.15.1
+- PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3286 Clean up the starter code on README
 
 ## Bug Fixes
 
@@ -90,8 +125,29 @@
 - PR #3212 Fix string to date casting when format is not specified
 - PR #3218 Fixes `row_lexicographic_comparator` issue with handling two tables
 - PR #3228 Default initialize RMM when Java native dependencies are loaded
+- PR #3012 replacing instances of `to_gpu_array` with `mem`
 - PR #3236 Fix Numba 0.46+/CuPy 6.3 interface compatibility
+- PR #3276 Update JNI includes for legacy moves
 - PR #3256 Fix orc writer crash with multiple string columns
+- PR #3211 Fix breaking change caused by rapidsai/rmm#167
+- PR #3265 Fix dangling pointer in `is_sorted`
+- PR #3267 ORC writer: fix incorrect ByteRLE encoding of long literal runs
+- PR #3277 Fix invalid reference to deleted temporary in `is_sorted`.
+- PR #3274 ORC writer: fix integer RLEv2 mode2 unsigned base value encoding
+- PR #3279 Fix shutdown hang issues with pinned memory pool init executor
+- PR #3280 Invalid children check in mutable_column_device_view
+- PR #3289 fix java memory usage API for empty columns
+- PR #3293 Fix loading of csv files zipped on MacOS (disabled zip min version check)
+- PR #3295 Fix storing storing invalid RMM exec policies.
+- PR #3307 Add pd.RangeIndex to from_pandas to fix dask_cudf meta_nonempty bug
+- PR #3313 Fix public headers including non-public headers
+- PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
+- PR #3317 Fix index-argument bug in dask_cudf parquet reader
+- PR #3323 Fix `insert` non-assert test case
+- PR #3326 Fix and test for detail::gather map iterator type inference
+- PR #3334 Remove zero-size exception check from make_strings_column factories
+- PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
+- PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 
 
 # cuDF 0.10.0 (16 Oct 2019)
@@ -137,7 +193,6 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
-- PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories

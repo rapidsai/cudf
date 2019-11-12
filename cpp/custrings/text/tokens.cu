@@ -22,6 +22,7 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/unique.h>
+#include <thrust/transform_scan.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/error.hpp>
@@ -714,4 +715,64 @@ NVStrings* NVText::normalize_spaces(NVStrings& strs)
         thrust::exclusive_scan( execpol->on(0), offsets.begin(), offsets.end(), offsets.begin() );
     }
     return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_indexes,count);
+}
+
+//
+NVStrings* NVText::character_tokenize(NVStrings const& strings)
+{
+    if( strings.size()==0 )
+        return strings.copy();
+
+    auto execpol = rmm::exec_policy(0);
+    // go get the strings
+    unsigned int count = strings.size();
+    rmm::device_vector<custring_view*> custrings(count,nullptr);
+    custring_view** d_strings = custrings.data().get();
+    strings.create_custring_index(d_strings);
+
+    // count the characters
+    unsigned int total_characters = 0;
+    {
+        rmm::device_vector<int> character_counts(count);
+        total_characters = strings.len(character_counts.data().get());
+    }
+    if( total_characters==0 )
+    {
+        std::pair<const char*,size_t> empty_string{"",0};
+        return NVStrings::create_from_index( &empty_string, 1, false);
+    }
+
+    rmm::device_vector<size_t> offsets(count);
+    size_t* d_offsets = offsets.data().get();
+
+    thrust::transform_exclusive_scan(execpol->on(0),
+        thrust::make_counting_iterator<unsigned int>(0),
+        thrust::make_counting_iterator<unsigned int>(count),
+        d_offsets,
+        [d_strings] __device__(unsigned int idx) {
+            custring_view* dstr = d_strings[idx];
+            return dstr ? dstr->chars_count() : 0;
+        },
+        0, thrust::plus<size_t>() );
+
+    rmm::device_vector< thrust::pair<const char*,size_t> > indexes(total_characters);
+    thrust::pair<const char*,size_t>* d_indexes = indexes.data().get();
+
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        [d_strings, d_offsets, d_indexes] __device__ (unsigned int idx) {
+            custring_view* dstr = d_strings[idx];
+            size_t offset = d_offsets[idx];
+            if( !dstr )
+            {
+                d_indexes[offset] = thrust::pair<const char*,size_t>{nullptr,0};
+                return;
+            }
+            for( auto itr = dstr->begin(); itr != dstr->end(); ++itr )
+            {
+                d_indexes[offset++] = thrust::pair<const char*,size_t>{
+                    dstr->data() + itr.byte_offset(), custring_view::bytes_in_char(*itr)};
+            }
+        });
+    //
+    return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_indexes,total_characters);
 }

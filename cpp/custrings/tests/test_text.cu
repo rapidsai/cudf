@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
@@ -103,6 +105,20 @@ TEST_F(TestText, TokensCounts)
     NVStrings::destroy(strs);
 }
 
+TEST_F(TestText, CharacterTokenize)
+{
+    NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
+    NVStrings* got = NVText::character_tokenize(*strs);
+
+    const char* expected[] = { "t","h","e"," ","f","o","x"," ","j","u","m","p","e","d"," ","o","v","e","r"," ","t","h","e"," ","d","o","g",
+                               "t","h","e"," ","d","o","g"," ","c","h","a","s","e","d"," ","t","h","e"," ","c","a","t",
+                               "t","h","e"," ","c","a","t"," ","c","h","a","s","e","d"," ","t","h","e"," ","m","o","u","s","e",
+                               "t","h","e"," ","m","o","u","s","e"," ","a","t","e"," ","t","h","e"," ","c","h","e","e","s","e" };
+    EXPECT_TRUE( verify_strings(got,expected));
+    NVStrings::destroy(got);
+    NVStrings::destroy(strs);
+}
+
 TEST_F(TestText, EditDistance)
 {
     std::vector<const char*> hstrs{ "dog", nullptr, "cat", "mouse",
@@ -186,6 +202,43 @@ TEST_F(TestText, PorterStemmerMeasure)
     NVStrings::destroy(strs);
 }
 
+TEST_F(TestText, VowelsAndConsonants)
+{
+    std::vector<const char*> hstrs{ "abandon", nullptr, "abbey", "cleans",
+                                    "trouble", "", "yearly" };
+    NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
+
+    thrust::device_vector<bool> results(hstrs.size(),0);
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::vowel, 5, results.data().get());
+        bool expected[] = { true, false, false, false, false, false, true };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::consonant, 5, results.data().get());
+        bool expected[] = { false, false, false, true, true, false, false };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    thrust::device_vector<int> indices(hstrs.size());
+    thrust::sequence( thrust::device, indices.begin(), indices.end() );
+    indices[hstrs.size()-1] = -1; // throw in a negative index too
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::vowel, indices.data().get(), results.data().get());
+        bool expected[] = { true, false, false, true, false, false, true };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::consonant, indices.data().get(), results.data().get());
+        bool expected[] = { false, false, true, false, true, false, false };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+
+    NVStrings::destroy(strs);
+}
 
 TEST_F(TestText, ScatterCount)
 {

@@ -813,9 +813,7 @@ def row_matrix(cols, nrow, ncol, dtype):
     for colidx, col in enumerate(cols):
         data = matrix[:, colidx]
         if data.size > 0:
-            gpu_row_matrix.forall(data.size)(
-                data, col.to_gpu_array(), nrow, ncol
-            )
+            gpu_row_matrix.forall(data.size)(data, col.data.mem, nrow, ncol)
     return matrix
 
 
