@@ -23,7 +23,6 @@
 #include "timezone.h"
 
 #include <io/comp/gpuinflate.h>
-#include <utilities/integer_utils.hpp>
 
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>

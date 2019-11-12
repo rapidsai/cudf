@@ -29,7 +29,7 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <fstream>
 #include <memory>

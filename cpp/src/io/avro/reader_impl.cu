@@ -22,7 +22,6 @@
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
-#include <utilities/integer_utils.hpp>
 
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>

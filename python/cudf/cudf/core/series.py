@@ -5,6 +5,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
@@ -16,7 +17,7 @@ from cudf.core.column import Column, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import cudautils, ioutils, numbautils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -143,9 +144,6 @@ class Series(object):
 
     @property
     def values(self):
-        if not utils._have_cupy:
-            raise ModuleNotFoundError("CuPy was not found.")
-        import cupy
 
         if is_categorical_dtype(self.dtype) or np.issubdtype(
             self.dtype, np.dtype("object")
@@ -155,7 +153,12 @@ class Series(object):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
-        return cupy.asarray(self.to_gpu_array())
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
+        # numbautils.PatchedNumbaDeviceArray() is a
+        # temporary fix for CuPy < 7.0, numba = 0.46
+        return cupy.asarray(numbautils.PatchedNumbaDeviceArray(self.data.mem))
 
     @property
     def values_host(self):
@@ -1416,7 +1419,9 @@ class Series(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+        return cudautils.compact_mask_bytes(self.data.mem)
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -1470,7 +1475,7 @@ class Series(object):
         """Sort by the index.
         """
         inds = self.index.argsort(ascending=ascending)
-        return self.take(inds.to_gpu_array())
+        return self.take(inds.data.mem)
 
     def sort_values(self, ascending=True, na_position="last"):
         """
@@ -1505,7 +1510,7 @@ class Series(object):
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        index = self.index.take(inds.to_gpu_array())
+        index = self.index.take(inds.data.mem)
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
@@ -1795,6 +1800,10 @@ class Series(object):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
         return self._column.product(dtype=dtype)
+
+    def prod(self, axis=None, skipna=True, dtype=None):
+        """Alias for product"""
+        return self.product(axis=axis, skipna=skipna, dtype=dtype)
 
     def cummin(self, axis=0, skipna=True):
         """Compute the cumulative minimum of the series"""
@@ -2092,7 +2101,7 @@ class Series(object):
             raise NotImplementedError(msg)
         vmin = self.min()
         vmax = self.max()
-        gpuarr = self.to_gpu_array()
+        gpuarr = self.data.mem
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
@@ -2195,9 +2204,14 @@ class Series(object):
             self._column, initial_hash_values=initial_hash
         )
 
+        if hashed_values.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
-        mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
-        return Series(mod_vals)
+        # mod_vals = hashed_values.binary_operator("mod", stop)
+        mod_vals = cudautils.modulo(hashed_values.data.mem, stop)
+
+        return Series(mod_vals, index=self.index)
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
@@ -2404,7 +2418,7 @@ class Series(object):
         if periods == 0:
             return self
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_shift.forall(output_dary.size)(
             input_dary, output_dary, periods
@@ -2430,7 +2444,7 @@ class Series(object):
                 "Diff currently only supports " "numeric dtypes"
             )
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_diff.forall(output_dary.size)(
             input_dary, output_dary, periods
