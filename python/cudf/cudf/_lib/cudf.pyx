@@ -389,29 +389,26 @@ cdef update_nvstrings_col(col, uintptr_t category_ptr):
 
 
 cdef gdf_column* column_view_from_string_column(
-    col,
+    Column col,
     col_name=None
 ) except? NULL:
-    if not isinstance(col.data, nvstrings.nvstrings):
-        raise ValueError("Column should be a cudf string column")
-
     cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
-    cdef uintptr_t data_ptr = col.data.get_cpointer()
+    cdef uintptr_t data_ptr = col.nvstrings.get_cpointer()
+    cdef uintptr_t mask_ptr
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
-    cdef uintptr_t valid_ptr
 
-    if col._mask is not None and col.null_count > 0:
-        valid_ptr = get_column_valid_ptr(col)
+    if col.mask is not None and col.null_count() > 0:
+        mask_ptr = col.mask.ptr
     else:
-        valid_ptr = 0
+        mask_ptr = 0
 
     if col_name is None:
         col_name = col.name
 
     cdef char* c_col_name = py_to_c_str(col_name)
     cdef size_type len_col = len(col)
-    cdef size_type c_null_count = col.null_count
+    cdef size_type c_null_count = col.null_count()
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit=TIME_UNIT_NONE,
         category=<void*>category
@@ -421,7 +418,7 @@ cdef gdf_column* column_view_from_string_column(
         gdf_column_view_augmented(
             <gdf_column*>c_col,
             <void*>data_ptr,
-            <valid_type*>valid_ptr,
+            <valid_type*>mask_ptr,
             len_col,
             c_dtype,
             c_null_count,
