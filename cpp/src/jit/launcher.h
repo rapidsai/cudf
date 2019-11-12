@@ -97,7 +97,7 @@ class launcher {
    */
   template <typename ... Args>
   gdf_error launch(Args ... args){
-    get_kernel().configure_1d_max_occupancy().launch(args...);
+    get_kernel().configure_1d_max_occupancy(0, 0, 0, stream).launch(args...);
     return GDF_SUCCESS;
   }
  private:
