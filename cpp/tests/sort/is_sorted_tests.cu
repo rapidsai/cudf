@@ -144,9 +144,7 @@ auto nulls_before<cudf::string_view>() {
 template <typename T>
 struct IsSortedTest : public BaseFixture {};
 
-using test_types = Concat<NumericTypes, TimestampTypes, StringTypes>;
-
-TYPED_TEST_CASE(IsSortedTest, test_types);
+TYPED_TEST_CASE(IsSortedTest, LexicographicalTypes);
 
 TYPED_TEST(IsSortedTest, NoColumns)
 {
