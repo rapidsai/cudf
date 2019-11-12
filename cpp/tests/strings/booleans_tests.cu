@@ -70,3 +70,9 @@ TEST_F(StringsConvertTest, ZeroSizeBooleansColumn)
     auto results = cudf::strings::to_booleans(zero_size_column);
     EXPECT_EQ(0,results->size());
 }
+
+TEST_F(StringsConvertTest, BooleanError)
+{
+    auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
+    EXPECT_THROW(cudf::strings::from_booleans(column->view()), cudf::logic_error);
+}
