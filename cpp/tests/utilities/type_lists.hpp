@@ -95,8 +95,8 @@ using TimestampTypes = cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms,
  *
  * Example:
  * ```
- * // Invokes all typed fixture tests for all timestamp types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::TimestampTypes);
+ * // Invokes all typed fixture tests for all string types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using StringTypes = cudf::test::Types<string_view>;
@@ -114,13 +114,13 @@ using StringTypes = cudf::test::Types<string_view>;
 using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
- * @brief Provides a list of all fixed-width element types for use in GTest
+ * @brief Provides a list of lexicographical/sortable types for use in GTest
  * typed tests.
  * 
  * Example:
  * ```
- * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * // Invokes all typed fixture tests for all lexicographical types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::LexicographicalTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using LexicographicalTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
