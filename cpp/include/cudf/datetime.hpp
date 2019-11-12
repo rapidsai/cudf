@@ -22,6 +22,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+#include <rmm/rmm.hpp>
+
 namespace cudf {
 namespace datetime {
 namespace detail {
@@ -64,7 +66,8 @@ std::pair<gdf_column, gdf_column> cast_to_common_resolution(gdf_column const& lh
  *
  * @returns cudf::column of the extracted int16_t years
  */
-std::unique_ptr<cudf::column> extract_year(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_year(cudf::column_view const& column, cudaStream_t stream = 0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Extracts month from any date time type and returns an int16_t cudf::column
@@ -73,7 +76,8 @@ std::unique_ptr<cudf::column> extract_year(cudf::column_view const& column, cuda
  *
  * @returns cudf::column of the extracted int16_t months
  */
-std::unique_ptr<cudf::column> extract_month(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_month(cudf::column_view const& column, cudaStream_t stream = 0,
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Extracts day from any date time type and returns an int16_t cudf::column
@@ -82,7 +86,8 @@ std::unique_ptr<cudf::column> extract_month(cudf::column_view const& column, cud
  *
  * @returns cudf::column of the extracted int16_t days
  */
-std::unique_ptr<cudf::column> extract_day(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_day(cudf::column_view const& column, cudaStream_t stream = 0,
+                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Extracts day from any date time type and returns an int16_t cudf::column
@@ -91,7 +96,8 @@ std::unique_ptr<cudf::column> extract_day(cudf::column_view const& column, cudaS
  *
  * @returns cudf::column of the extracted int16_t days
  */
-std::unique_ptr<cudf::column> extract_weekday(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_weekday(cudf::column_view const& column, cudaStream_t stream = 0,
+                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Extracts hour from either GDF_DATE64 or GDF_TIMESTAMP type and returns an int16_t cudf::column
@@ -100,7 +106,8 @@ std::unique_ptr<cudf::column> extract_weekday(cudf::column_view const& column, c
  *
  * @returns cudf::column of the extracted int16_t hours
  */
-std::unique_ptr<cudf::column> extract_hour(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_hour(cudf::column_view const& column, cudaStream_t stream = 0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Extracts minute from either GDF_DATE64 or GDF_TIMESTAMP type and returns an int16_t cudf::column
@@ -109,7 +116,8 @@ std::unique_ptr<cudf::column> extract_hour(cudf::column_view const& column, cuda
  *
  * @returns cudf::column of the extracted int16_t minutes
  */
-std::unique_ptr<cudf::column> extract_minute(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_minute(cudf::column_view const& column, cudaStream_t stream = 0,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Extracts second from either GDF_DATE64 or GDF_TIMESTAMP type and returns an int16_t cudf::column
@@ -118,7 +126,8 @@ std::unique_ptr<cudf::column> extract_minute(cudf::column_view const& column, cu
  *
  * @returns cudf::column of the extracted int16_t seconds
  */
-std::unique_ptr<cudf::column> extract_second(cudf::column_view const& column, cudaStream_t stream = 0);
+std::unique_ptr<cudf::column> extract_second(cudf::column_view const& column, cudaStream_t stream = 0,
+                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace datetime
 }  // namespace cudf
