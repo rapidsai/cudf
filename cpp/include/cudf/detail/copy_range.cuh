@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
 
@@ -22,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_scalar.hpp>
@@ -56,10 +56,8 @@ void copy_range_kernel(SourceValueIterator source_value_begin,
   const int warp_null_change_id = threadIdx.x / warp_size;
   const int lane_id = threadIdx.x % warp_size;
 
-  const cudf::size_type begin_mask_idx =
-      cudf::util::detail::bit_container_index<cudf::bitmask_type>(begin);
-  const cudf::size_type end_mask_idx =
-      cudf::util::detail::bit_container_index<cudf::bitmask_type>(end);
+  const cudf::size_type begin_mask_idx = cudf::word_index(begin);
+  const cudf::size_type end_mask_idx = cudf::word_index(end);
 
   cudf::size_type mask_idx = begin_mask_idx + warp_id;
 
@@ -162,7 +160,7 @@ void copy_range(SourceValueIterator source_value_begin,
   // this code assumes that source and target have the same type.
   CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
 
-  static_assert(warp_size == cudf::util::size_in_bits<bitmask_type>(),
+  static_assert(warp_size == cudf::detail::size_in_bits<bitmask_type>(),
     "copy_range_kernel assumes bitmask element size in bits == warp size");
 
   T * __restrict__ data = target.head<T>();
@@ -197,7 +195,7 @@ void copy_range(SourceValueIterator source_value_begin,
   static_assert(block_size <= 1024,
     "copy_range kernel assumes block_size is not larger than 1024");
 
-  auto grid = cudf::util::cuda::grid_config_1d{num_items, block_size, 1};
+  auto grid = cudf::experimental::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable() == true) {
     // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null

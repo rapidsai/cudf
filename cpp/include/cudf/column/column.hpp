@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include "column_view.hpp"
 
@@ -133,6 +134,9 @@ class column {
   /**---------------------------------------------------------------------------*
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
    *
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
+   * of `new_null_mask` does not match the size of this column.
+   *
    * @param new_null_mask New null value indicator bitmask to set the column's
    * null value indicator mask. May be empty if `new_null_count` is 0 or
    * `UNKOWN_NULL_COUNT`.
@@ -143,9 +147,11 @@ class column {
   template <typename B = rmm::device_buffer>
   void set_null_mask(
       B&& new_null_mask, size_type new_null_count = UNKNOWN_NULL_COUNT) {
-   if(new_null_count > 0){
-      CUDF_EXPECTS(new_null_mask.size() > 0, "Column with null values must be nullable.");
-   }
+    if(new_null_count > 0){
+      CUDF_EXPECTS(new_null_mask.size() ==
+                     cudf::bitmask_allocation_size_bytes(this->size()),
+                   "Column with null values must be nullable.");
+    }
     _null_mask = std::forward<B>(new_null_mask);
     _null_count = new_null_count;
   }
