@@ -772,6 +772,36 @@ class ColumnBase(Column):
     def sort_by_values(self, ascending):
         raise NotImplementedError
 
+    @property
+    def __cuda_array_interface__(self):
+        output = {
+            "shape": (len(self),),
+            "typestr": self.dtype.str,
+            "data": (self._data_view().device_ctypes_pointer.value, True),
+            "version": 1,
+        }
+
+        if self.mask is not None:
+            from types import SimpleNamespace
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (
+                        self._mask_view().device_ctypes_pointer.value,
+                        True,
+                    ),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
+
 
 class TypedColumnBase(ColumnBase):
     """Base class for all typed column
@@ -803,36 +833,6 @@ class TypedColumnBase(ColumnBase):
 
     def searchsorted(self, value, side="left"):
         raise NotImplementedError
-
-    @property
-    def __cuda_array_interface__(self):
-        output = {
-            "shape": (len(self),),
-            "typestr": self.dtype.str,
-            "data": (self.data.mem.device_ctypes_pointer.value, True),
-            "version": 1,
-        }
-
-        if self.has_null_mask:
-            from types import SimpleNamespace
-
-            # Create a simple Python object that exposes the
-            # `__cuda_array_interface__` attribute here since we need to modify
-            # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (
-                        self.nullmask.mem.device_ctypes_pointer.value,
-                        True,
-                    ),
-                    "version": 1,
-                }
-            )
-            output["mask"] = mask
-
-        return output
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
