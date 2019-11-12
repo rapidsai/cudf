@@ -52,10 +52,10 @@ namespace experimental {
  * @return cudf::table Result of the gather
  */
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
-			      bool check_bounds = false,
-			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                              bool check_bounds = false,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-			       
+
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
@@ -172,6 +172,28 @@ std::vector<column_view> slice(column_view const& input,
  */
 std::vector<column_view> split(column_view const& input,
                                std::vector<size_type> const& splits);
+
+/**
+* @brief Shifts a `column_view` by `periods`, using a fill_value for
+* pre- or post-fix data.
+*
+* Output will be nullable if either the input is nullable or the fill value is null.
+*
+* Example:
+* input:        {14, 72, 0, 8, 0, 9, 13, 7}
+* periods:      3
+* fill_value:   0
+* output:       {0, 0, 0, 14, 72, 0, 8, 0}
+*
+* @param[in] input      The input column whose rows will be shifted.
+* @param[in] periods    The amount and direction by which to shift the input.
+* @param[in] fill_value The value used in place of undefined outputs.
+*/
+std::unique_ptr<column> shift(const column_view& in,
+                              size_type periods,
+                              const scalar fill_value,
+                              rmm::mr::device_memory_resource *mr =
+                                  rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

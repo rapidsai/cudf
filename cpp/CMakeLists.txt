@@ -277,7 +277,7 @@ endif(BUILD_BENCHMARKS)
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
@@ -414,7 +414,7 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
-	    src/replace/replace.cu
+            src/replace/replace.cu
             src/reshape/stack.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -456,11 +456,12 @@ add_library(cudf
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
-	    src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/shift.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/legacy/copy.cpp
