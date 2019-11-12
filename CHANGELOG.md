@@ -144,6 +144,7 @@
 - PR #3323 Fix `insert` non-assert test case
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
+- PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 
 
 # cuDF 0.10.0 (16 Oct 2019)
