@@ -44,10 +44,12 @@ def from_dlpack(pycapsule_obj):
     for idx in range(len(valids)):
         mask = None
         if valids[idx]:
-            mask = Buffer(valids[idx])
+            mask = Buffer.from_array_like(valids[idx])
         cols.append(
             column.build_column(
-                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask
+                Buffer.from_array_like(res[idx]),
+                dtype=res[idx].dtype,
+                mask=mask,
             )
         )
     if len(cols) == 1:
@@ -71,7 +73,7 @@ def to_dlpack(cudf_obj):
         gdf_cols = [cudf_obj._column]
     elif isinstance(cudf_obj, Index):
         gdf_cols = [cudf_obj._values]
-    elif isinstance(cudf_obj, Column):
+    elif isinstance(cudf_obj, ColumnBase):
         gdf_cols = [cudf_obj]
     else:
         raise TypeError(
