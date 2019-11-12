@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "types.h"
-#include "types.hpp"
+#include <cudf/types.hpp>
+
+#include <memory>
 
 namespace cudf {
 namespace experimental {
@@ -43,7 +43,7 @@ namespace experimental {
  **/
 std::unique_ptr<column> transform(
   column_view const& input,
-  const std::string &unary_udf,
+  std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
