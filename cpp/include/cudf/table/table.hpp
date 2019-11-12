@@ -153,5 +153,20 @@ class table {
  *---------------------------------------------------------------------------**/
 table_view concat(std::vector<table_view> const& tables_to_concat);
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Elements of `tables_to_concat` are concatenated vertically to return
+ * single table_view
+ *
+ * @throws cudf::logic_error
+ * If number of columns mismatch
+ *
+ * @param tables_to_concat The table views to be concatenated into a single
+ * table
+ * @return Unique pointer to a single table having all the rows from the
+ * elements of `tables_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> rowwise_concat(std::vector<table_view> const& tables_to_concat);
+
 }  // namespace experimental
 }  // namespace cudf

@@ -280,4 +280,18 @@ class column {
                     ///< columns may contain additional data
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Elements of `columns_to_concat` are concatenated vertically to return
+ * single column
+ *
+ * @throws cudf::logic_error
+ * If types of the input columns mismatch
+ *
+ * @param columns_to_concat The column views to be concatenated into a single
+ * column
+ * @return Unique pointer to a single table having all the rows from the
+ * elements of `columns_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<column> rowwise_concat(std::vector<column_view> const& columns_to_concat);
+
 }  // namespace cudf
