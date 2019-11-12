@@ -198,7 +198,7 @@ class ColumnBase(Column):
 
         for i, obj in enumerate(objs):
             # Check that all columns are the same type:
-            if not objs[i].dtype == head.dtype:
+            if not pd.api.types.is_dtype_equal(objs[i].dtype, head.dtype):
                 # if all null, cast to appropriate dtype
                 if len(obj) == obj.null_count:
                     from cudf.core.column import column_empty_like
