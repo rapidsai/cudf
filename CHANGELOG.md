@@ -77,6 +77,7 @@
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
 - PR #3189 Port NVStrings find ops to cudf column
+- PR #3352 Port NVStrings convert float functions to cudf strings column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
