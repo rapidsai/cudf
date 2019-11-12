@@ -104,9 +104,9 @@ INSTANTIATE_TEST_CASE_P(StringsPadParmWidthTest, StringsPadParmsTest,
                         testing::ValuesIn(std::array<cudf::size_type,3>{5,6,7}));
 
 
-TEST_F(StringsPadTest, ZeroPad)
+TEST_F(StringsPadTest, ZFill)
 {
-    std::vector<const char*> h_strings{ "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5" };
+    std::vector<const char*> h_strings{ "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::size_type width = 6;
@@ -115,7 +115,7 @@ TEST_F(StringsPadTest, ZeroPad)
 
     auto results = cudf::strings::zfill(strings_view, width);
 
-    std::vector<const char*> h_expected{ "654321", "-12345", nullptr, "000000", "-00005", "000987", "000004", "+008.5" };
+    std::vector<const char*> h_expected{ "654321", "-12345", nullptr, "000000", "-00005", "000987", "000004", "+008.5", "0000éé" };
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);

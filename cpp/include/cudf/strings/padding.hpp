@@ -19,7 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
@@ -39,9 +39,15 @@ enum class pad_side {
  *
  * If the string is already width or more characters, no padding is performed.
  * No strings are truncated.
- * 
+ *
  * Null string entries result in null entries in the output column.
- * 
+ *
+ * ```
+ * s = ['aa','bbb','cccc','ddddd']
+ * r = pad(s,4)
+ * r is now ['aa  ','bbb ','cccc','ddddd']
+ * ```
+ *
  * @param strings Strings instance for this operation.
  * @param width The minimum number of characters for each string.
  * @param side Where to place the padding characters.
@@ -60,16 +66,20 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
  *
  * If the string is already width or more characters, no padding is performed.
  * No strings are truncated.
- * 
- * This will skip any leading '+' or '-' character encountered.
- * 
+ *
+ * This will skip any leading '+' or '-' character encountered in each string.
+ *
  * Null string entries result in null entries in the output column.
- * 
+ *
+ * ```
+ * s = ['1234','-9876','+0.34','-342567']
+ * r = zfill(s,6)
+ * r is now ['001234','-09876','+00.34','-342567']
+ * ```
+ *
  * @param strings Strings instance for this operation.
  * @param width The minimum number of characters for each string.
- * @param fillchar Single UTF-8 character to use for padding.
- *        Default is the space character.
- * @return New column with padded strings.
+ * @return New column of strings.
  */
 std::unique_ptr<column> zfill( strings_column_view const& strings,
                                size_type width,
