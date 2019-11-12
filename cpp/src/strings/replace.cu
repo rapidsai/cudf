@@ -201,7 +201,6 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
     if( strings_count == 0 )
         return make_empty_strings_column(mr,stream);
     CUDF_EXPECTS( repl.is_valid(), "Parameter repl must be valid.");
-    CUDF_EXPECTS( repl.size()>0, "Parameter repl must not be empty string.");
     if( stop > 0 )
         CUDF_EXPECTS( start <= stop, "Parameter start must be less than or equal to stop.");
 

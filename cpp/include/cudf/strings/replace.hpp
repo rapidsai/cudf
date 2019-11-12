@@ -61,27 +61,40 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Replaces the characters within a position range with a specified
- * string.
- *
- * This function replaces each string in the column with the provided
+ * @brief This function replaces each string in the column with the provided
  * repl string within the [start,stop) character position range.
  *
  * Null string entries will return null output string entries.
  *
- * @throw cudf::logic_error if repl is an empty string.
+ * Position values are 0-based meaning position 0 is the first character
+ * of each string.
+ *
+ * This function can be used to insert a string into specific position
+ * by specifying the same position value for start and stop. The repl
+ * string can be appended to each string by specifying -1 for both
+ * start and stop.
+ *
+ * ```
+ * s = ["abcdefghij","0123456789"]
+ * r = s.replace_slice(s,2,5,"z")
+ * r is now ["abzfghij", "01z56789"]
+ * ```
+ *
+ * @throw cudf::logic_error if start is greater than stop.
  *
  * @param strings Strings column for this operation.
  * @param repl Replacement string for specified positions found.
+ *        Default is empty string.
  * @param start Start position where repl will be added.
+ *        Default is 0, first character position.
  * @param stop End position (exclusive) to use for replacement.
- *        Default of -1 specifies the end of the string.
+ *        Default of -1 specifies the end of each string.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_slice( strings_column_view const& strings,
-                                       string_scalar const& repl,
-                                       size_type start, size_type stop = -1,
+                                       string_scalar const& repl = string_scalar(""),
+                                       size_type start = 0, size_type stop = -1,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -96,7 +109,20 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  *
  * Null string entries will return null output string entries.
  *
- * @throw cudf::logic_error if targets and repls are different sizes.
+ * The repls argument can optionally contain a single string. In this case, all
+ * matching target substrings will be replaced by that single string.
+ *
+ * ```
+ * s = ["hello", "goodbye"]
+ * tgts = ["e","o"]
+ * repls = ["E","O"]
+ * r = replace(s,tgt,repl)
+ * r is now ["hEllO", "gOOdbyE"]
+ * ```
+ *
+ * @throw cudf::logic_error if targets and repls are different sizes except
+ * if repls is a single string.
+ * @throw cudf::logic_error if targets or repls contain null entries.
  *
  * @param strings Strings column for this operation.
  * @param targets Strings to search for in each string.
@@ -113,6 +139,12 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  * @brief Replaces any null string entries with the given string.
  *
  * This returns a strings column with no null entries.
+ *
+ * ```
+ * s = ["hello", nullptr, "goodbye"]
+ * r = replace_nulls(s,"**")
+ * r is now ["hello", "**", "goodbye"]
+ * ```
  *
  * @param strings Strings column for this operation.
  * @param repl Replacement string for null entries. Default is empty string.

@@ -117,21 +117,41 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
     cudf::test::strings_column_wrapper targets( h_targets.begin(), h_targets.end() );
     auto targets_view = cudf::strings_column_view(targets);
 
-    std::vector<const char*> h_repls{"_ ", "_ ", "_ "};
-    cudf::test::strings_column_wrapper repls( h_repls.begin(), h_repls.end() );
-    auto repls_view = cudf::strings_column_view(repls);
+    {
+        std::vector<const char*> h_repls{"_ ", "A ", "2 "};
+        cudf::test::strings_column_wrapper repls( h_repls.begin(), h_repls.end() );
+        auto repls_view = cudf::strings_column_view(repls);
 
-    auto results = cudf::strings::replace(strings_view, targets_view, repls_view );
+        auto results = cudf::strings::replace(strings_view, targets_view, repls_view );
 
-    std::vector<const char*> h_expected{ "_ quick brown fox jumps over _ lazy dog",
-                                "_ fat cat lays next _ _ other accénted cat",
-                                 "_ slow moving turtlé cannot catch _ bird",
-                                 "which can be composéd together _ form _ more complete",
-                                 "The result does not include _ value in _ sum in",
-                                 "", nullptr };
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
-        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*results,expected);
+        std::vector<const char*> h_expected{ "_ quick brown fox jumps over _ lazy dog",
+                                    "_ fat cat lays next 2 _ other accénted cat",
+                                     "A slow moving turtlé cannot catch _ bird",
+                                     "which can be composéd together 2 form A more complete",
+                                     "The result does not include _ value in _ sum in",
+                                     "", nullptr };
+        cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+            thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+
+    {
+        std::vector<const char*> h_repls{"* "};
+        cudf::test::strings_column_wrapper repls( h_repls.begin(), h_repls.end() );
+        auto repls_view = cudf::strings_column_view(repls);
+
+        auto results = cudf::strings::replace(strings_view, targets_view, repls_view );
+
+        std::vector<const char*> h_expected{ "* quick brown fox jumps over * lazy dog",
+                                    "* fat cat lays next * * other accénted cat",
+                                     "* slow moving turtlé cannot catch * bird",
+                                     "which can be composéd together * form * more complete",
+                                     "The result does not include * value in * sum in",
+                                     "", nullptr };
+        cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+            thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
 }
 
 TEST_F(StringsReplaceTest, ReplaceNulls)
