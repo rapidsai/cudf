@@ -95,14 +95,15 @@ private:
     template <typename ResultType>
     static constexpr bool is_supported_v()
     {
-        // for single step reductions,
-        // the available combination of input and output dtypes are
-        //  - same dtypes (including cudf::wrappers)
-        //  - any arithmetic dtype to any arithmetic dtype
-        //  - cudf::bool8 to/from any arithmetic dtype TODO after bool support
-        return  std::is_convertible<ElementType, ResultType>::value && !(cudf::is_timestamp<ResultType>()) ||
-        ( std::is_arithmetic<ElementType >::value && std::is_same<ResultType, cudf::bool8>::value ) ||
-        ( std::is_arithmetic<ResultType>::value && std::is_same<ElementType , cudf::bool8>::value );
+      // for single step reductions,
+      // the available combination of input and output dtypes are
+      //  - same dtypes (including cudf::wrappers)
+      //  - any arithmetic dtype to any arithmetic dtype
+      //  - cudf::bool8 to/from any arithmetic dtype
+      return std::is_convertible<ElementType, ResultType>::value &&
+             (std::is_arithmetic<ResultType>::value ||
+              std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+              std::is_same<Op, cudf::experimental::reduction::op::max>::value);
     }
 
 public:
@@ -132,10 +133,11 @@ private:
     template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-        return std::is_arithmetic<ElementType>::value ||
-               std::is_same<ElementType, cudf::bool8>::value ||
-               std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-               std::is_same<Op, cudf::experimental::reduction::op::max>::value ;
+      // disable only for string ElementType.
+      return  !( std::is_same<ElementType, cudf::string_view>::value &&
+              !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+                 std::is_same<Op, cudf::experimental::reduction::op::max>::value ||
+                 std::is_same<Op, cudf::experimental::reduction::op::sum>::value ));
     }
 
 public:

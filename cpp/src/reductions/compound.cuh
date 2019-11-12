@@ -137,13 +137,11 @@ public:
 template <typename Op>
 struct element_type_dispatcher {
 private:
-    // return true if ElementType is arithmetic type or cudf::bool8
+    // return true if ElementType is arithmetic type 
     template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-        return std::is_arithmetic<ElementType>::value ||
-          //TODO change after bool support
-               std::is_same<ElementType, cudf::bool8>::value;
+        return std::is_arithmetic<ElementType>::value;
     }
 
 public:

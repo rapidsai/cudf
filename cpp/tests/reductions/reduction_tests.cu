@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
@@ -67,9 +68,8 @@ template <typename T>
 struct ReductionTest : public GdfTest
 {
     // Sum/Prod/SumOfSquare never support non arithmetics
-    // TODO(karthikeyann) after bool support
     static constexpr bool ret_non_arithmetic =
-        (std::is_arithmetic<T>::value || std::is_same<T, cudf::bool8>::value)
+        (std::is_arithmetic<T>::value || std::is_same<T, cudf::experimental::bool8>::value)
             ? true : false;
 
     ReductionTest(){}
@@ -101,20 +101,14 @@ struct ReductionTest : public GdfTest
     }
 };
 
-using AllTypes = testing::Types<
-    int8_t,int16_t, int32_t, int64_t, float, double>;
-    //cudf::string_view, 
-    //cudf::timestamp_D, cudf::timestamp_s, 
-    //cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
-    //TODO(karthikeyann) after bool support
-    //TODO after category support
-    //cudf::bool8, cudf::date32, cudf::date64, cudf::timestamp,
-    //cudf::category, cudf::nvstring_category>;
+template <typename T>
+struct MinMaxReductionTest : public ReductionTest<T>  { };
 
-TYPED_TEST_CASE(ReductionTest, AllTypes);
+using MinMaxTypes = cudf::test::AllTypes;
+TYPED_TEST_CASE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
-TYPED_TEST(ReductionTest, MinMax)
+TYPED_TEST(MinMaxReductionTest, MinMax)
 {
    using T = TypeParam;
    std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
@@ -146,6 +140,8 @@ TYPED_TEST(ReductionTest, MinMax)
    this->reduction_test(col_nulls, expected_min_null_result, result_error, cudf::experimental::reduction::MIN);
    this->reduction_test(col_nulls, expected_max_null_result, result_error, cudf::experimental::reduction::MAX);
 }
+
+TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
 {
@@ -230,15 +226,15 @@ TYPED_TEST(ReductionTest, SumOfSquare)
         cudf::experimental::reduction::SUMOFSQUARES);
 }
 
-/* TODO(karthikeyann) after bool support
-struct ReductionAnyAllTest : public ReductionTest<cudf::bool8> {
+//TODO TYPED_TEST case for AllTypes
+struct ReductionAnyAllTest : public ReductionTest<cudf::experimental::bool8> {
     ReductionAnyAllTest(){}
     ~ReductionAnyAllTest(){}
 };
 
 TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
 {
-   using T = cudf::bool8;
+   using T = cudf::experimental::bool8;
    std::vector<int> int_values({true, true, true, true});
    std::vector<bool> host_bools({1, 1, 0, 1});
    std::vector<T> v = convert_values<T>(int_values);
@@ -263,7 +259,7 @@ TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
 
 TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
 {
-   using T = cudf::bool8;
+   using T = cudf::experimental::bool8;
    std::vector<int> int_values({false, false, false, false});
    std::vector<bool> host_bools({1, 1, 0, 1});
    std::vector<T> v = convert_values<T>(int_values);
@@ -285,7 +281,6 @@ TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
    this->reduction_test(col_nulls, expected, result_error, cudf::experimental::reduction::ANY);
    this->reduction_test(col_nulls, expected, result_error, cudf::experimental::reduction::ALL);
 }
-*/
 
 // ----------------------------------------------------------------------------
 
@@ -296,9 +291,7 @@ struct MultiStepReductionTest : public ReductionTest<T>
     ~MultiStepReductionTest(){}
 };
 
-using MultiStepReductionTypes = testing::Types<
-    int8_t,int16_t, int32_t, int64_t, float, double>;
-
+using MultiStepReductionTypes = cudf::test::NumericTypes;
 TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
 
 TYPED_TEST(MultiStepReductionTest, Mean)
@@ -307,7 +300,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
     std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
     std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
 
-    auto calc_mean = [](std::vector<int>& v, cudf::size_type valid_count){
+    auto calc_mean = [](std::vector<T>& v, cudf::size_type valid_count){
         double sum = std::accumulate(v.begin(), v.end(), double{0});
         return sum / valid_count ;
     };
@@ -315,14 +308,14 @@ TYPED_TEST(MultiStepReductionTest, Mean)
     // test without nulls
     std::vector<T> v = convert_values<T>(int_values);
     cudf::test::fixed_width_column_wrapper<T> col(v);
-    double expected_value = calc_mean(int_values, int_values.size());
+    double expected_value = calc_mean(v, v.size());
     this->reduction_test(col, expected_value, true,
         cudf::experimental::reduction::MEAN, cudf::data_type(cudf::FLOAT64));
 
     // test with nulls
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
     cudf::size_type valid_count = cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-    auto replaced_array = replace_nulls(int_values, host_bools, int{0});
+    auto replaced_array = replace_nulls(v, host_bools, T{0});
 
     double expected_value_nulls = calc_mean(replaced_array, valid_count);
     this->reduction_test(col_nulls, expected_value_nulls, true,
@@ -336,7 +329,7 @@ TYPED_TEST(MultiStepReductionTest, var_std)
     std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
     std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
 
-    auto calc_var = [](std::vector<int>& v, cudf::size_type valid_count){
+    auto calc_var = [](std::vector<T>& v, cudf::size_type valid_count){
         double mean = std::accumulate(v.begin(), v.end(), double{0});
         mean /= valid_count ;
 
@@ -354,7 +347,7 @@ TYPED_TEST(MultiStepReductionTest, var_std)
     std::vector<T> v = convert_values<T>(int_values);
     cudf::test::fixed_width_column_wrapper<T> col(v);
 
-    double var = calc_var(int_values, int_values.size());
+    double var = calc_var(v, v.size());
     double std = std::sqrt(var);
 
     this->reduction_test(col, var, true, cudf::experimental::reduction::VAR, cudf::data_type(cudf::FLOAT64));
@@ -363,7 +356,7 @@ TYPED_TEST(MultiStepReductionTest, var_std)
     // test with nulls
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
     cudf::size_type valid_count = cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-    auto replaced_array = replace_nulls(int_values, host_bools, int{0});
+    auto replaced_array = replace_nulls(v, host_bools, T{0});
 
     double var_nulls = calc_var(replaced_array, valid_count);
     double std_nulls = std::sqrt(var_nulls);
@@ -397,7 +390,7 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T>
     }
 };
 
-TYPED_TEST_CASE(ReductionMultiStepErrorCheck, AllTypes);
+TYPED_TEST_CASE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
 
 TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
 {
@@ -496,81 +489,76 @@ TEST_F(ReductionDtypeTest, different_precision)
         (int_values, static_cast<int16_t>(expected_value), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT16));
 
-    /*TODO(karthikeyann)
     // not supported case:
-    // wrapper classes other than cudf::bool8 are not convertible
-    this->reduction_test<cudf::date64, cudf::timestamp>
-        (int_values, static_cast<cudf::timestamp>(expected_value), false,
-         cudf::experimental::reduction::SUM, GDF_TIMESTAMP);
+    // wrapper classes other than cudf::experimental::bool8 are not convertible
+    this->reduction_test<cudf::timestamp_D, cudf::timestamp_s>
+        (int_values, static_cast<cudf::timestamp_s>(expected_value), false,
+         cudf::experimental::reduction::SUM, cudf::data_type(cudf::TIMESTAMP_SECONDS));
 
-    this->reduction_test<cudf::date32, cudf::category>
+    this->reduction_test<cudf::timestamp_s, cudf::timestamp_ns>
+        (int_values, static_cast<cudf::timestamp_ns>(expected_value), false,
+         cudf::experimental::reduction::SUM, cudf::data_type(cudf::TIMESTAMP_NANOSECONDS));
+
+    this->reduction_test<int8_t, cudf::timestamp_us>
+        (int_values, static_cast<cudf::timestamp_us>(expected_value), false,
+         cudf::experimental::reduction::SUM, cudf::data_type(cudf::TIMESTAMP_MICROSECONDS));
+
+    /*TODO enable after category support
+    this->reduction_test<cudf::timestamp_s, cudf::category>
         (int_values, static_cast<cudf::category>(expected_value), false,
-         cudf::experimental::reduction::SUM, GDF_CATEGORY);
-
-    this->reduction_test<cudf::date32, cudf::date64>
-        (int_values, static_cast<cudf::date64>(expected_value), false,
-         cudf::experimental::reduction::SUM, GDF_DATE64);
-
-    this->reduction_test<int8_t, cudf::timestamp>
-        (int_values, static_cast<cudf::timestamp>(expected_value), false,
-         cudf::experimental::reduction::SUM, GDF_TIMESTAMP);
-
-    this->reduction_test<int8_t, cudf::nvstring_category>
-        (int_values, static_cast<cudf::nvstring_category>(expected_value), false,
-           cudf::experimental::reduction::SUM, GDF_STRING_CATEGORY);
+         cudf::experimental::reduction::SUM, cudf::data_type(cudf::CATEGORY));
 
     this->reduction_test<int8_t, cudf::category>
         (int_values, static_cast<cudf::category>(expected_value), false,
-         cudf::experimental::reduction::SUM, GDF_CATEGORY);
+         cudf::experimental::reduction::SUM, cudf::data_type(cudf::CATEGORY));
 
-    this->reduction_test<cudf::bool8, cudf::date32>
+    this->reduction_test<cudf::experimental::bool8, cudf::date32>
         (int_values, static_cast<cudf::date32>(expected_value), false,
-         cudf::experimental::reduction::SUM, GDF_CATEGORY);
+         cudf::experimental::reduction::SUM, cudf::data_type(cudf::CATEGORY));
+         )
+    this->reduction_test<int8_t, cudf::nvstring_category>
+        (int_values, static_cast<cudf::nvstring_category>(expected_value), false,
+           cudf::experimental::reduction::SUM, GDF_STRING_CATEGORY);
+     */
 
-    // supported case: cudf::bool8
+    // supported case: cudf::experimental::bool8
     std::vector<bool> v = convert_values<bool>(int_values);
 
     // When summing bool8 values into an non-bool arithmetic type,
     // it's an integer/float sum of ones and zeros.
     int expected_bool8 = std::accumulate(v.begin(), v.end(), int{0});
 
-    this->reduction_test<cudf::bool8, int8_t>
+    this->reduction_test<cudf::experimental::bool8, int8_t>
         (int_values, static_cast<int8_t>(expected_bool8), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT8));
-    this->reduction_test<cudf::bool8, int16_t>
+    this->reduction_test<cudf::experimental::bool8, int16_t>
         (int_values, static_cast<int16_t>(expected_bool8), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT16));
-    this->reduction_test<cudf::bool8, int32_t>
+    this->reduction_test<cudf::experimental::bool8, int32_t>
         (int_values, static_cast<int32_t>(expected_bool8), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT32));
-    this->reduction_test<cudf::bool8, int64_t>
+    this->reduction_test<cudf::experimental::bool8, int64_t>
         (int_values, static_cast<int64_t>(expected_bool8), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT64));
-    this->reduction_test<cudf::bool8, float>
+    this->reduction_test<cudf::experimental::bool8, float>
         (int_values, static_cast<float>(expected_bool8), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::FLOAT32));
-    this->reduction_test<cudf::bool8, double>
+    this->reduction_test<cudf::experimental::bool8, double>
         (int_values, static_cast<double>(expected_bool8), true,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::FLOAT64));
 
     // make sure boolean arithmetic semantics are obeyed when
     // reducing to a bool
-    this->reduction_test<cudf::bool8, cudf::bool8>
-        (int_values, cudf::true_v, true, cudf::experimental::reduction::SUM, GDF_BOOL8);
-         */
+    this->reduction_test<cudf::experimental::bool8, cudf::experimental::bool8>
+        (int_values, cudf::experimental::true_v, true, cudf::experimental::reduction::SUM, cudf::data_type(cudf::BOOL8));
 
-    // TODO: should this work? Currently "input type not convertible to output"
-    /*this->reduction_test<int32_t, cudf::bool8>
-        (int_values, cudf::true_v, false, cudf::experimental::reduction::SUM, GDF_BOOL8);*/
+    this->reduction_test<int32_t, cudf::experimental::bool8>
+        (int_values, cudf::experimental::true_v, true, cudf::experimental::reduction::SUM, cudf::data_type(cudf::BOOL8));
 
-    /*TODO(karthikeyann)
-    // Though the underlying type of cudf::date64 is int64_t,
-    // they are not convertible types.
-    this->reduction_test<cudf::date64, int64_t>
+    // cudf::timestamp_s and int64_t are not convertible types.
+    this->reduction_test<cudf::timestamp_s, int64_t>
         (int_values, static_cast<int64_t>(expected_value), false,
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT64));
-         */
-
 }
 
 struct ReductionErrorTest : public GdfTest{};
