@@ -36,15 +36,6 @@ struct DatetimeOpsTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
 };
 
-template <typename Element>
-void print_column(cudf::column_view col) {
-  print_typed_column<Element>(
-    col.data<Element>(),
-    (gdf_valid_type*) col.null_mask(),
-    col.size(),
-    1);
-}
-
 TYPED_TEST_CASE(DatetimeOpsTest, cudf::test::TimestampTypes);
 
 TYPED_TEST(DatetimeOpsTest, TestExtractingDatetimeComponents) {
@@ -102,26 +93,15 @@ TYPED_TEST(DatetimeOpsTest, TestExtractingDatetimeComponents) {
 
 TYPED_TEST(DatetimeOpsTest, TestExtractingGeneratedDatetimeComponents) {
 
+  using T = TypeParam;
   using namespace cudf::test;
   using namespace simt::std::chrono;
-  using Rep = typename TypeParam::rep;
-  using Period = typename TypeParam::period;
 
   auto start = milliseconds(-2500000000000); // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop_ = milliseconds( 2500000000000); // Mon, 22 Mar 2049 04:26:40 GMT
-  auto test_timestamps = generate_timestamps<Rep, Period>(this->size(),
-                                                          time_point_ms(start),
-                                                          time_point_ms(stop_));
-
-  auto timestamp_col = cudf::make_timestamp_column(this->type(), this->size(),
-                                                   cudf::mask_state::UNALLOCATED,
-                                                   this->stream(), this->mr());
-
-  cudf::mutable_column_view timestamp_view = *timestamp_col;
-
-  CUDA_TRY(cudaMemcpy(timestamp_view.data<Rep>(),
-    thrust::raw_pointer_cast(test_timestamps.data()),
-    test_timestamps.size() * sizeof(Rep), cudaMemcpyDefault));
+  auto timestamp_col = generate_timestamps<T>(this->size(),
+                                              time_point_ms(start),
+                                              time_point_ms(stop_));
 
   auto expected_years = fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033};
   auto expected_months = fixed_width_column_wrapper<int16_t>{10, 8, 6, 4, 2, 1, 11, 9, 7, 5};
@@ -140,11 +120,11 @@ TYPED_TEST(DatetimeOpsTest, TestExtractingGeneratedDatetimeComponents) {
     expected_seconds = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   }
 
-  expect_columns_equal(*cudf::datetime::extract_year(timestamp_view), expected_years);
-  expect_columns_equal(*cudf::datetime::extract_month(timestamp_view), expected_months);
-  expect_columns_equal(*cudf::datetime::extract_day(timestamp_view), expected_days);
-  expect_columns_equal(*cudf::datetime::extract_weekday(timestamp_view), expected_weekdays);
-  expect_columns_equal(*cudf::datetime::extract_hour(timestamp_view), expected_hours);
-  expect_columns_equal(*cudf::datetime::extract_minute(timestamp_view), expected_minutes);
-  expect_columns_equal(*cudf::datetime::extract_second(timestamp_view), expected_seconds);
+  expect_columns_equal(*cudf::datetime::extract_year(timestamp_col), expected_years);
+  expect_columns_equal(*cudf::datetime::extract_month(timestamp_col), expected_months);
+  expect_columns_equal(*cudf::datetime::extract_day(timestamp_col), expected_days);
+  expect_columns_equal(*cudf::datetime::extract_weekday(timestamp_col), expected_weekdays);
+  expect_columns_equal(*cudf::datetime::extract_hour(timestamp_col), expected_hours);
+  expect_columns_equal(*cudf::datetime::extract_minute(timestamp_col), expected_minutes);
+  expect_columns_equal(*cudf::datetime::extract_second(timestamp_col), expected_seconds);
 }
