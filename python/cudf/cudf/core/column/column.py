@@ -770,7 +770,7 @@ class ColumnBase(Column):
             "version": 1,
         }
 
-        if self.mask is not None:
+        if self.mask is not None and self.null_count > 0:
             from types import SimpleNamespace
 
             # Create a simple Python object that exposes the
@@ -988,6 +988,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         dtype = np.dtype(desc["typestr"])
         nelem = desc["shape"][0]
         col = build_column(data, dtype=dtype, mask=mask, name=name)
+
+        # Keep a reference to `arbitrary` with the underlying
+        # Buffer, so that the memory isn't freed out
+        # from under us
+        col.data._obj = arbitrary
         return col
 
     elif isinstance(arbitrary, np.ndarray):
