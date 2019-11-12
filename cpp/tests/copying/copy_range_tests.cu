@@ -32,7 +32,7 @@ auto even_valid = [](cudf::size_type row) { return (row % 2 == 0); };
 template <typename T>
 class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
 public:
-  static constexpr auto column_size = cudf::size_type{1000};
+  static constexpr cudf::size_type column_size{1000};
 
   void test(cudf::column_view const& source,
             cudf::column_view const& expected,
@@ -44,7 +44,7 @@ public:
 
     // test the out-of-place version first
 
-    const auto immutable_view = cudf::column_view{target};
+    const cudf::column_view immutable_view{target};
     auto p_ret =
       cudf::experimental::copy_range(
         source, immutable_view, source_begin, source_end, target_begin);
@@ -64,10 +64,10 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
 {
   using T = TypeParam;
 
-  auto size = cudf::size_type{CopyRangeTypedTestFixture<T>::column_size};
-  auto source_begin = cudf::size_type{9};
-  auto source_end = cudf::size_type{size - 50};
-  auto target_begin = cudf::size_type{30};
+  cudf::size_type size{CopyRangeTypedTestFixture<T>::column_size};
+  cudf::size_type source_begin{9};
+  cudf::size_type source_end{size - 50};
+  cudf::size_type target_begin{30};
   auto target_end = target_begin + (source_end - source_begin);
   auto row_diff = source_begin - target_begin;
 
@@ -102,7 +102,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
           even_valid(i + row_diff) : all_valid(i);
       }));
 
-  auto target_view = cudf::mutable_column_view{target};
+  cudf::mutable_column_view target_view{target};
   this->test(source, expected, target_view,
              source_begin, source_end, target_begin);
 }
@@ -111,10 +111,10 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls)
 {
   using T = TypeParam;
 
-  auto size = cudf::size_type{CopyRangeTypedTestFixture<T>::column_size};
-  auto source_begin = cudf::size_type{9};
-  auto source_end = cudf::size_type{size - 50};
-  auto target_begin = cudf::size_type{30};
+  cudf::size_type size{CopyRangeTypedTestFixture<T>::column_size};
+  cudf::size_type source_begin{9};
+  cudf::size_type source_end{size - 50};
+  cudf::size_type target_begin{30};
   auto target_end = target_begin + (source_end - source_begin);
   auto row_diff = source_begin - target_begin;
 
@@ -140,7 +140,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls)
     expected_elements,
     expected_elements + size);
 
-  auto target_view = cudf::mutable_column_view{target};
+  cudf::mutable_column_view target_view{target};
   this->test(source, expected, target_view,
              source_begin, source_end, target_begin);
 }
@@ -149,7 +149,7 @@ class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
 {
-  auto size = cudf::size_type{100};
+  cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0),
@@ -160,20 +160,20 @@ TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
     thrust::make_counting_iterator(0) + size,
     cudf::test::make_counting_transform_iterator(0, even_valid));
 
-  auto target_view = cudf::mutable_column_view{target};
+  cudf::mutable_column_view target_view{target};
   // source has null values but target is not nullable.
   EXPECT_THROW(cudf::experimental::copy_range(source, target_view,
                                               0, size, 0),
                cudf::logic_error);
 
-  auto strings =
-    std::vector<std::string>{"", "this", "is", "a", "column", "of", "strings"};
+  std::vector<std::string>
+    strings{"", "this", "is", "a", "column", "of", "strings"};
   auto target_string =
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
   auto source_string =
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 
-  auto target_view_string = cudf::mutable_column_view{target_string};
+  cudf::mutable_column_view target_view_string{target_string};
   EXPECT_THROW(cudf::experimental::copy_range(
                  source_string, target_view_string, 0, size, 0),
                cudf::logic_error);
@@ -181,7 +181,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
 
 TEST_F(CopyRangeErrorTestFixture, InvalidRange)
 {
-  auto size = cudf::size_type{100};
+  cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0),
@@ -191,7 +191,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + size);
 
-  auto target_view = cudf::mutable_column_view{target};
+  cudf::mutable_column_view target_view{target};
 
   // empty_range == no-op, this is valid
   EXPECT_NO_THROW(cudf::experimental::copy_range(
@@ -258,7 +258,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
 
 TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
 {
-  auto size = cudf::size_type{100};
+  cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0),
@@ -268,7 +268,7 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + size);
 
-  auto target_view = cudf::mutable_column_view{target};
+  cudf::mutable_column_view target_view{target};
 
   EXPECT_THROW(cudf::experimental::copy_range(
                  source, target_view, 0, 100, 0),
@@ -280,8 +280,8 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
 
 TEST_F(CopyRangeErrorTestFixture, StringCategoryNotSupported)
 {
-  auto strings =
-    std::vector<std::string>{"", "this", "is", "a", "column", "of", "strings"};
+  std::vector<std::string>
+    strings{"", "this", "is", "a", "column", "of", "strings"};
   auto target_string =
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
   auto source_string =

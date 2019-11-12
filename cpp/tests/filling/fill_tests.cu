@@ -47,7 +47,7 @@ public:
     static_assert(cudf::is_fixed_width<T>() == true,
                   "this code assumes fixed-width types.");
 
-    auto size = cudf::size_type{FillTypedTestFixture<T>::column_size};
+    cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
     auto destination = cudf::test::fixed_width_column_wrapper<T>(
                          thrust::make_counting_iterator(0),
@@ -55,8 +55,8 @@ public:
                          cudf::test::make_counting_transform_iterator(
                            0, destination_validity));
 
-    auto p_val = std::unique_ptr<cudf::scalar>{nullptr};
-    auto type = cudf::data_type{cudf::experimental::type_to_id<T>()};
+    std::unique_ptr<cudf::scalar> p_val{nullptr};
+    cudf::data_type type{cudf::experimental::type_to_id<T>()};
     if (cudf::is_numeric<T>()) {
       p_val = cudf::make_numeric_scalar(type);
     }
@@ -93,7 +93,7 @@ public:
 
     // test in-place version second
 
-    auto mutable_view = cudf::mutable_column_view{destination};
+    cudf::mutable_column_view mutable_view{destination};
     EXPECT_NO_THROW(cudf::experimental::fill(mutable_view, begin, end, *p_val));
     cudf::test::expect_columns_equal(mutable_view, expected);
   }
@@ -105,8 +105,8 @@ TYPED_TEST(FillTypedTestFixture, SetSingle)
 {
   using T = TypeParam;
 
-  auto index = cudf::size_type{9};
-  auto val = T{1};
+  cudf::size_type index{9};
+  T val{1};
 
   // First set it as valid
   this->test(index, index+1, val, true);
@@ -119,9 +119,9 @@ TYPED_TEST(FillTypedTestFixture, SetAll)
 {
   using T = TypeParam;
 
-  auto size = cudf::size_type{FillTypedTestFixture<T>::column_size};
+  cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-  auto val = T{1};
+  T val{1};
 
   // First set it as valid
   this->test(0, size, val, true);
@@ -134,9 +134,9 @@ TYPED_TEST(FillTypedTestFixture, SetRange)
 {
   using T = TypeParam;
 
-  auto begin = cudf::size_type{99};
-  auto end = cudf::size_type{299};
-  auto val = T{1};
+  cudf::size_type begin{99};
+  cudf::size_type end{299};
+  T val{1};
 
   // First set it as valid
   this->test(begin, end, val, true);
@@ -149,11 +149,11 @@ TYPED_TEST(FillTypedTestFixture, SetRangeNullCount)
 {
   using T = TypeParam;
 
-  auto size = cudf::size_type{FillTypedTestFixture<T>::column_size};
+  cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-  auto begin = cudf::size_type{10};
-  auto end = cudf::size_type{50};
-  auto val = T{1};
+  cudf::size_type begin{10};
+  cudf::size_type end{50};
+  T val{1};
 
   // First set it as valid value
   this->test(begin, end, val, true, odd_valid);
@@ -192,12 +192,12 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 
   auto p_val_str = cudf::make_string_scalar("five");
 
-  auto strings =
-    std::vector<std::string>{"", "this", "is", "a", "column", "of", "strings"};
+  std::vector<std::string>
+    strings{"", "this", "is", "a", "column", "of", "strings"};
   auto destination_string =
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 
-  auto destination_view_string = cudf::mutable_column_view{destination_string};
+  cudf::mutable_column_view destination_view_string{destination_string};
   EXPECT_THROW(cudf::experimental::fill(
                  destination_view_string, 0, 100, *p_val_str),
                cudf::logic_error);
@@ -216,7 +216,7 @@ TEST_F(FillErrorTestFixture, InvalidRange)
       thrust::make_counting_iterator(0) + 100,
       thrust::make_constant_iterator(true));
 
-  auto destination_view = cudf::mutable_column_view{destination};
+  cudf::mutable_column_view destination_view{destination};
 
   // empty range == no-op, this is valid
   EXPECT_NO_THROW(cudf::experimental::fill(destination_view, 0, 0, *p_val));
@@ -254,7 +254,7 @@ TEST_F(FillErrorTestFixture, InvalidRange)
 
 TEST_F(FillErrorTestFixture, DTypeMismatch)
 {
-  auto size = cudf::size_type{100};
+  cudf::size_type size{100};
 
   auto p_val = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T = cudf::experimental::id_to_type<cudf::INT32>;
@@ -279,8 +279,8 @@ TEST_F(FillErrorTestFixture, StringCategoryNotSupported)
 {
   auto p_val = cudf::make_string_scalar("five");
 
-  auto strings =
-    std::vector<std::string>{"", "this", "is", "a", "column", "of", "strings"};
+  std::vector<std::string>
+    strings{"", "this", "is", "a", "column", "of", "strings"};
   auto destination_string =
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 

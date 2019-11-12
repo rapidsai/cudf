@@ -51,8 +51,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   static_assert(cudf::is_fixed_width<T>() == true,
                 "this code assumes fixed-width types.");
 
-  constexpr auto num_values = cudf::size_type{10};
-  constexpr auto repeat_count = cudf::size_type{10};
+  constexpr cudf::size_type num_values{10};
+  constexpr cudf::size_type repeat_count{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T>(
                  thrust::make_counting_iterator(0),
@@ -68,7 +68,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
                     expected_elements,
                     expected_elements + num_values * repeat_count);
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
 
   auto p_count = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T_int = cudf::experimental::id_to_type<cudf::INT32>;
@@ -87,18 +87,18 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
   static_assert(cudf::is_fixed_width<T>() == true,
                 "this code assumes fixed-width types.");
 
-  constexpr auto num_values = cudf::size_type{10};
+  constexpr cudf::size_type num_values{10};
 
-  auto inputs = std::vector<T>(num_values);
+  std::vector<T> inputs(num_values);
   std::iota(inputs.begin(), inputs.end(), 0);
 
-  auto counts = std::vector<cudf::size_type>(num_values);
+  std::vector<cudf::size_type> counts(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(),
     [&](cudf::size_type count) { return this->repeat_count(); });
 
-  auto expected_values = std::vector<T>();
-  for (auto i = size_t{0}; i < counts.size(); i++) {
-    for (auto j = cudf::size_type{0}; j < counts[i]; j++) {
+  std::vector<T> expected_values;
+  for (size_t i{0}; i < counts.size(); i++) {
+    for (cudf::size_type j{0}; j < counts[i]; j++) {
       expected_values.push_back(inputs[i]);
     }
   }
@@ -112,7 +112,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
   auto expected = cudf::test::fixed_width_column_wrapper<T>(
                     expected_values.begin(), expected_values.end());
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
   auto p_ret = cudf::experimental::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
@@ -125,23 +125,23 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   static_assert(cudf::is_fixed_width<T>() == true,
                 "this code assumes fixed-width types.");
 
-  constexpr auto num_values = cudf::size_type{10};
+  constexpr cudf::size_type num_values{10};
 
-  auto input_values = std::vector<T>(num_values);
+  std::vector<T> input_values(num_values);
   std::iota(input_values.begin(), input_values.end(), 0);
-  auto input_valids = std::vector<bool>(num_values);
-  for (auto i = size_t{0}; i < input_valids.size(); i++) {
+  std::vector<bool> input_valids(num_values);
+  for (size_t i{0}; i < input_valids.size(); i++) {
     input_valids[i] = (i % 2) == 0 ? true : false;
   }
 
-  auto counts = std::vector<cudf::size_type>(num_values);
+  std::vector<cudf::size_type> counts(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(),
     [&](cudf::size_type count) { return this->repeat_count(); });
 
-  auto expected_values = std::vector<T>();
-  auto expected_valids = std::vector<bool>();
-  for (auto i = size_t{0}; i < counts.size(); i++) {
-    for (auto j = cudf::size_type{0}; j < counts[i]; j++) {
+  std::vector<T> expected_values;
+  std::vector<bool> expected_valids;
+  for (size_t i{0}; i < counts.size(); i++) {
+    for (cudf::size_type j{0}; j < counts[i]; j++) {
       expected_values.push_back(input_values[i]);
       expected_valids.push_back(input_valids[i]);
     }
@@ -158,7 +158,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
                     expected_values.begin(), expected_values.end(),
                     expected_valids.begin());
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
   auto p_ret = cudf::experimental::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
@@ -183,7 +183,7 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(0));
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
   auto p_ret = cudf::experimental::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
@@ -202,7 +202,7 @@ TEST_F(RepeatErrorTestFixture, LengthMismatch)
                   thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(0) + 200);
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
 
   // input_table.num_rows() != count.size()
   EXPECT_THROW(auto p_ret = cudf::experimental::repeat(input_table, count),
@@ -220,7 +220,7 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
                   thrust::make_counting_iterator(0) + 100,
                   thrust::make_constant_iterator(false));
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
 
   // input_table.has_nulls() == true
   EXPECT_THROW(auto ret = cudf::experimental::repeat(input_table, count),
@@ -242,7 +242,7 @@ TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
                           thrust::make_constant_iterator(value, 0),
                           thrust::make_constant_iterator(value, 100));
 
-  auto input_table = cudf::table_view{{input}};
+  cudf::table_view input_table{{input}};
 
   // negative
   EXPECT_THROW(auto p_ret =

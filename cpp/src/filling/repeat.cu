@@ -133,8 +133,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                                         compute_offsets{&count},
                                         check_count, stream);
 
-  auto output_size = size_type{offsets.back()};
-  auto indices = rmm::device_vector<size_type>(output_size);
+  size_type output_size{offsets.back()};
+  rmm::device_vector<size_type> indices(output_size);
   thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                       offsets.begin(), offsets.end(),
                       thrust::make_counting_iterator(0),

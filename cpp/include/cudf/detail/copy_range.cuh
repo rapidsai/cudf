@@ -176,7 +176,7 @@ void copy_range(SourceValueIterator source_value_begin,
     };
 #endif
 
-  constexpr auto block_size = int{256};
+  constexpr size_type block_size{256};
 
   auto grid = cudf::experimental::detail::grid_1d{num_items, block_size, 1};
 
