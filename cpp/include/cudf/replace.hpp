@@ -16,13 +16,10 @@
 
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
+#include <cudf/types.hpp>
+#include <memory>
 #include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/default_memory_resource.hpp>
-
-// Forward declaration
-typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 namespace experimental {
@@ -58,7 +55,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   * @returns Column with nulls replaced
   */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            cudf::scalar const* replacement,
+                                            cudf::scalar const& replacement,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 

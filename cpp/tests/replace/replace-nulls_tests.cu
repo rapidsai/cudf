@@ -80,7 +80,7 @@ void ReplaceNullsColumn(cudf::test::fixed_width_column_wrapper<T> input,
 
 template <typename T>
 void ReplaceNullsScalar(cudf::test::fixed_width_column_wrapper<T> input,
-                        cudf::scalar const* replacement_value,
+                        cudf::scalar const& replacement_value,
                         cudf::test::fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<cudf::column> result;
@@ -112,10 +112,10 @@ TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
   std::vector<TypeParam> inputColumn {0,1,2,3,4,5,6,7,8,9};
   std::vector<cudf::valid_type> inputValid {0,0,0,0,0,1,1,1,1,1};
   std::vector<TypeParam> expectedColumn{1,1,1,1,1,5,6,7,8,9};
-  std::unique_ptr<cudf::scalar> replacement(new cudf::numeric_scalar<TypeParam>(1));
+  cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(
     cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
-    replacement.get(),
+    replacement,
     cudf::test::fixed_width_column_wrapper<TypeParam> {expectedColumn.begin(), expectedColumn.end()});
 }
