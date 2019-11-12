@@ -1552,25 +1552,20 @@ class Series(object):
     def replace(self, to_replace, replacement):
         """
         Replace values given in *to_replace* with *replacement*.
-
         Parameters
         ----------
         to_replace : numeric, str or list-like
             Value(s) to replace.
-
             * numeric or str:
                 - values equal to *to_replace* will be replaced with *value*
-
             * list of numeric or str:
                 - If *replacement* is also list-like, *to_replace* and
                   *replacement* must be of same length.
         replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
-
         See also
         --------
         Series.fillna
-
         Returns
         -------
         result : Series
@@ -1584,11 +1579,24 @@ class Series(object):
                 all_nan = replacement is None
                 if all_nan:
                     replacement = [replacement] * len(to_replace)
+                # Do not broadcast numeric dtypes
+                elif pd.api.types.is_numeric_dtype(self.dtype):
+                    replacement = [replacement]
                 else:
                     replacement = utils.scalar_broadcast_to(
                         replacement,
                         (len(to_replace),),
                         np.dtype(type(replacement)),
+                    )
+            else:
+                # If both are non-scalar
+                if len(to_replace) != len(replacement):
+                    raise ValueError(
+                        "Replacement lists must be"
+                        "of same length."
+                        "Expected {}, got {}.".format(
+                            len(to_replace), len(replacement)
+                        )
                     )
         else:
             if not is_scalar(replacement):
@@ -1600,15 +1608,6 @@ class Series(object):
                 )
             to_replace = [to_replace]
             replacement = [replacement]
-
-        if len(to_replace) != len(replacement):
-            raise ValueError(
-                "Replacement lists must be"
-                "of same length."
-                "Expected {}, got {}.".format(
-                    len(to_replace), len(replacement)
-                )
-            )
 
         if is_dict_like(to_replace) or is_dict_like(replacement):
             raise TypeError("Dict-like args not supported in Series.replace()")
