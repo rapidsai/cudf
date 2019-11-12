@@ -405,7 +405,7 @@ std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0},
 TYPED_TEST(IteratorTest, error_handling) {
   using T = TypeParam;
   std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-  std::vector<bool> host_bools(hos_array.size(), true);
+  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
 
   cudf::test::fixed_width_column_wrapper<T> w_col_no_null(hos_array.begin(),
                                                           hos_array.end());
@@ -430,7 +430,7 @@ TYPED_TEST(IteratorTest, error_handling) {
                             "Unexpected non-nullable column.");
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_null->begin<T>()),
-                            "Unexpected nullable column.");
+                            "Unexpected column with nulls.");
 }
 
 struct StringIteratorTest :  public IteratorTest<cudf::string_view> { 

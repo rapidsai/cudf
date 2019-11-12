@@ -107,8 +107,8 @@ struct column_device_view::value_accessor
   value_accessor(column_device_view const& _col)
     : col{_col}
   {
-    // verify valid is null
-    CUDF_EXPECTS(!_col.nullable(), "Unexpected nullable column.");
+    // verify column does not have nulls
+    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
   }
 
   CUDA_DEVICE_CALLABLE
