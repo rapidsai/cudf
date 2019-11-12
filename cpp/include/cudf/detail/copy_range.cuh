@@ -197,7 +197,7 @@ void copy_range(SourceValueIterator source_value_begin,
 
   auto grid = cudf::experimental::detail::grid_1d{num_items, block_size, 1};
 
-  if (target.nullable() == true) {
+  if (target.nullable()) {
     // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
     // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
     // will scan the entire bitmask array, and this can be surprising
