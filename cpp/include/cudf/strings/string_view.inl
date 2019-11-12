@@ -22,8 +22,8 @@ namespace
 using BYTE = uint8_t;
 
 // number of characters in a string computed on-demand
-// the _nchars member is initialized to this value as a place-holder
-static constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
+// the _length member is initialized to this value as a place-holder
+constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
 
 /**
  * @brief Returns the number of bytes used to represent the provided byte.
@@ -51,7 +51,7 @@ __host__ __device__ inline cudf::size_type bytes_in_utf8_byte(BYTE byte)
  * @param str Null-terminated array of chars.
  * @return Number of bytes.
  */
-__device__ inline cudf::size_type string_length( const char* str )
+__device__ inline cudf::size_type string_bytes( const char* str )
 {
     if( !str )
         return 0;
@@ -67,11 +67,11 @@ namespace cudf
 {
 
 __host__ __device__ inline string_view::string_view()
-    : _data(""), _bytes(0), _nchars(0)
+    : _data(""), _bytes(0), _length(0)
 {}
 
 __host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
-    : _data(data), _bytes(bytes), _nchars(UNKNOWN_STRING_LENGTH)
+    : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH)
 {}
 
 //
@@ -82,9 +82,9 @@ __host__ __device__ inline size_type string_view::size_bytes() const
 
 __device__ inline size_type string_view::length() const
 {
-    if( _nchars <= UNKNOWN_STRING_LENGTH )
-        _nchars = strings::detail::characters_in_string(_data,_bytes);
-    return _nchars;
+    if( _length <= UNKNOWN_STRING_LENGTH )
+        _length = strings::detail::characters_in_string(_data,_bytes);
+    return _length;
 }
 
 __host__ __device__ inline const char* string_view::data() const
@@ -373,7 +373,7 @@ __device__ inline size_type string_view::split(const char* delim, int count, str
         return 1;
     }
 
-    size_type bytes = string_length(delim);
+    size_type bytes = string_bytes(delim);
     size_type delimCount = 0;
     size_type pos = find(delim, bytes);
     while(pos >= 0)
@@ -422,7 +422,7 @@ __device__ inline size_type string_view::rsplit(const char* delim, int count, st
         return 1;
     }
 
-    size_type bytes = string_length(delim);
+    size_type bytes = string_bytes(delim);
     size_type delimCount = 0;
     size_type pos = find(delim, bytes);
     while(pos >= 0)

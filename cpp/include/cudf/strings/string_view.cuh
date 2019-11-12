@@ -46,6 +46,7 @@ class string_view
    * @brief Default constructor represents an empty string.
    */
   __host__ __device__ string_view();
+
   /**
    * @brief Create instance from existing device char array.
    *
@@ -298,7 +299,7 @@ class string_view
 private:
     const char* _data{};           ///< Pointer to device memory contain char array for this string
     size_type _bytes{};            ///< Number of bytes in _data for this string
-    mutable size_type _nchars{};   ///< Number of characters in this string (computed)
+    mutable size_type _length{};   ///< Number of characters in this string (computed)
 
   /**
    * @brief Return the character position of the given byte offset.
