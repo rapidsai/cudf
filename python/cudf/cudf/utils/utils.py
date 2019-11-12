@@ -88,11 +88,11 @@ def scalar_broadcast_to(scalar, shape, dtype):
 
     if np.dtype(dtype) == np.dtype("object"):
         import nvstrings
-        from cudf.core.column import StringColumn
+        from cudf.core.column import as_column
         from cudf.utils.cudautils import zeros
 
         gather_map = zeros(shape[0], dtype="int32")
-        scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
+        scalar_str_col = as_column(nvstrings.to_device([scalar]))
         return scalar_str_col[gather_map]
     else:
         da = rmm.device_array(shape, dtype=dtype)
@@ -128,23 +128,31 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
     else:
         pamask = None
 
+    offset = pa_arr.offset
+    size = pa_arr.offset + len(pa_arr)
+
     if dtype:
-        new_dtype = dtype
+        data_dtype = dtype
+    elif isinstance(pa_arr, pa.StringArray):
+        data_dtype = np.int32
+        size = size + 1  # extra element holds number of bytes
     else:
         if isinstance(pa_arr, pa.DictionaryArray):
-            new_dtype = pa_arr.indices.type.to_pandas_dtype()
+            data_dtype = pa_arr.indices.type.to_pandas_dtype()
         else:
-            new_dtype = pa_arr.type.to_pandas_dtype()
+            data_dtype = pa_arr.type.to_pandas_dtype()
 
     if buffers[1]:
         padata = Buffer.from_array_like(
-            np.array(buffers[1]).view(new_dtype)[
-                pa_arr.offset : pa_arr.offset + len(pa_arr)
-            ]
+            np.array(buffers[1]).view(data_dtype)[offset : offset + size]
         )
     else:
         padata = Buffer.empty(0)
-    return (pamask, padata)
+
+    pastrs = None
+    if isinstance(pa_arr, pa.StringArray):
+        pastrs = Buffer.from_array_like(np.array(buffers[2]).view(np.int8))
+    return (pamask, padata, pastrs)
 
 
 def get_result_name(left, right):

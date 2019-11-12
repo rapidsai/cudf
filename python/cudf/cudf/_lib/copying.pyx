@@ -191,8 +191,6 @@ def copy_column(input_col):
 
 def copy_range(out_col, in_col, int out_begin, int out_end,
                int in_begin):
-    from cudf.core.column import Column
-
     if abs(out_end - out_begin) <= 1:
         return out_col
 
@@ -207,14 +205,12 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     if out_col.null_count == 0 and in_col.mask:
         mask = utils.make_mask(len(out_col))
         cudautils.fill_value(mask, 0xff)
-        out_col._mask = Buffer.from_array_like(mask)
-        out_col._null_count = 0
+        out_col.mask = Buffer.from_array_like(mask)
 
     if in_col.null_count == 0 and out_col.mask:
         mask = utils.make_mask(len(in_col))
         cudautils.fill_value(mask, 0xff)
-        in_col._mask = Buffer.from_array_like(mask)
-        in_col._null_count = 0
+        in_col.mask = Buffer.from_array_like(mask)
 
     cdef gdf_column* c_out_col = column_view_from_column(out_col)
     cdef gdf_column* c_in_col = column_view_from_column(in_col)
@@ -225,8 +221,6 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
                        out_begin,
                        out_end,
                        in_begin)
-
-    out_col._update_null_count(c_out_col.null_count)
 
     if is_string_dtype(out_col) and len(out_col) > 0:
         update_nvstrings_col(

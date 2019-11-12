@@ -19,7 +19,12 @@ from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    is_string_dtype,
+    np_to_pa_dtype,
+)
 from cudf.utils.utils import (
     buffers_from_pyarrow,
     calc_chunk_size,
@@ -420,7 +425,7 @@ class ColumnBase(Column):
                     )
 
                 # mask Buffer lifetime is not:
-                if slice_mask:
+                if slice_mask is not None:
                     slice_mask = Buffer.from_array_like(slice_mask)
 
                 return build_column(
@@ -466,12 +471,10 @@ class ColumnBase(Column):
                 from cudf.core.buffer import Buffer
                 from cudf.utils.cudautils import fill_value
 
-                data = rmm.device_array(nelem, dtype="int8")
+                data = rmm.device_array(nelem, dtype=self.dtype.data_dtype)
                 fill_value(data, self._encode(value))
-                value = CategoricalColumn(
-                    data=Buffer(data),
-                    categories=self._categories,
-                    ordered=False,
+                value = build_column(
+                    data=Buffer.from_array_like(data), dtype=self.dtype,
                 )
             elif value is None:
                 value = column.column_empty(nelem, self.dtype, masked=True)
@@ -504,6 +507,8 @@ class ColumnBase(Column):
 
         self.data = out.data
         self.mask = out.mask
+        if hasattr(out, "children"):
+            self.children = out.children
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -751,13 +756,13 @@ class ColumnBase(Column):
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask):
-
         mask = as_column(mask, dtype="bool")
         data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
         if not data:
             return column_empty_like(self, newsize=0)
         else:
-            result = data[0].rename(self.name, copy=False)
+            result = data[0]
+            result.name = self.name
             return result
 
     def argsort(self, ascending):
@@ -1014,27 +1019,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            count = len(arbitrary)
-            null_count = arbitrary.null_count
-
-            buffers = arbitrary.buffers()
-            # Buffer of actual strings values
-            if buffers[2] is not None:
-                sbuf = np.frombuffer(buffers[2], dtype="int8")
-            else:
-                sbuf = np.empty(0, dtype="int8")
-            sbuf = Buffer.from_array_like(sbuf)
-
-            # Buffer of offsets values
-            obuf = np.frombuffer(buffers[1], dtype="int32")
-            obuf = Buffer.from_array_like(obuf)
-
-            # Buffer of null bitmask
-            nbuf = None
-            if null_count > 0:
-                nbuf = np.frombuffer(buffers[0], dtype="int8")
-                nbuf = Buffer.from_array_like(nbuf)
-
+            nbuf, obuf, sbuf = buffers_from_pyarrow(arbitrary)
             data = string.StringColumn(data=sbuf, offsets=obuf, mask=nbuf)
 
         elif isinstance(arbitrary, pa.NullArray):
@@ -1062,7 +1047,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         )
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            pamask, padata = buffers_from_pyarrow(arbitrary.indices)
+            pamask, padata, _ = buffers_from_pyarrow(arbitrary.indices)
             dtype = CategoricalDtype(
                 arbitrary.type.index_type.to_pandas_dtype(),
                 categories=as_column(arbitrary.dictionary),
@@ -1073,14 +1058,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
-            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
+            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
 
             data = datetime.DatetimeColumn(
                 data=padata, mask=pamask, dtype=dtype,
             )
         elif isinstance(arbitrary, pa.Date64Array):
             raise NotImplementedError
-            pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
+            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
             data = datetime.DatetimeColumn(
                 data=padata, mask=pamask, dtype=np.dtype("M8[ms]"),
             )
@@ -1101,12 +1086,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 arbitrary = arbitrary.cast(pa.int8())
             else:
                 arbitrary = pa.array([], type=pa.int8())
-            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
+            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
                 data=padata, mask=pamask, dtype=dtype,
             )
         else:
-            pamask, padata = buffers_from_pyarrow(arbitrary)
+            pamask, padata, _ = buffers_from_pyarrow(arbitrary)
             data = numerical.NumericalColumn(
                 data=padata,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype()),

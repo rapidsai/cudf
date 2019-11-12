@@ -9,8 +9,12 @@ from rmm import DeviceBuffer
 
 class Buffer:
     def __init__(self, ptr, size=None, owner=None):
-        self.ptr = ptr
-        self.size = size
+        if not ptr:
+            self.ptr = 0
+            self.size = 0
+        else:
+            self.ptr = ptr
+            self.size = size
         self._owner = owner
 
     @classmethod

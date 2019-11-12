@@ -525,6 +525,7 @@ class StringColumn(column.ColumnBase):
                 self.children[1].data.ptr,
                 self.size,
                 mask,
+                ncount=self.null_count,
                 bdevmem=True,
             )
         return self._nvstrings

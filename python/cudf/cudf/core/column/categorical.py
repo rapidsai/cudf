@@ -294,14 +294,12 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self):
-        if self._codes is None:
-            self._codes = column.build_column(
-                data=self.data,
-                dtype=self.dtype.data_dtype,
-                mask=self.mask,
-                name=self.name,
-            )
-        return self._codes
+        return column.build_column(
+            data=self.data,
+            dtype=self.dtype.data_dtype,
+            mask=self.mask,
+            name=self.name,
+        )
 
     def cat(self):
         return CategoricalAccessor(self)
@@ -450,6 +448,12 @@ class CategoricalColumn(column.ColumnBase):
 
         result.mask = None
         return self._mimic_inplace(result, inplace)
+
+    def apply_boolean_mask(self, mask):
+        codes = super().apply_boolean_mask(mask)
+        return column.build_column(
+            data=codes.data, dtype=self.dtype, mask=codes.mask, name=self.name
+        )
 
     def find_first_value(self, value):
         """
