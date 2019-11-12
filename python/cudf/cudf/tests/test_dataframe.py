@@ -3196,9 +3196,7 @@ def test_series_astype_null_cases():
     data = [1, 2, None, 3]
 
     # numerical to other
-    assert_eq(
-        gd.Series(data, dtype="str"), gd.Series(data).astype("str"),
-    )
+    assert_eq(gd.Series(data, dtype="str"), gd.Series(data).astype("str"))
 
     assert_eq(
         gd.Series(data, dtype="category"), gd.Series(data).astype("category")
