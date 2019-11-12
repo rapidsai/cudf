@@ -114,16 +114,15 @@ using StringTypes = cudf::test::Types<string_view>;
 using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
- * @brief Provides a list of lexicographical/sortable types for use in GTest
- * typed tests.
+ * @brief Provides a list of sortable types for use in GTest typed tests.
  * 
  * Example:
  * ```
- * // Invokes all typed fixture tests for all lexicographical types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::LexicographicalTypes);
+ * // Invokes all typed fixture tests for all sortable types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using LexicographicalTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
+using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
