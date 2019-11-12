@@ -26,6 +26,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
 
@@ -85,6 +86,7 @@
 - PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3237 Define and implement new transform APIs
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
@@ -105,6 +107,7 @@
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
 - PR #3345 Add cache member for number of characters in string_view class
+- PR #3299 Define and implement new `is_sorted` APIs
 
 ## Bug Fixes
 
