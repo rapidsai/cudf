@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/types.h> //FIXME for gdf_scalar
 
 namespace cudf {
 namespace experimental {

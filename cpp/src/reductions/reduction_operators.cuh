@@ -17,10 +17,12 @@
 #pragma once
 
 #include <utilities/cudf_utils.h>   //for CUDA_HOST_DEVICE_CALLABLE
-#include <iterator/iterator.cuh>
+#include <cudf/detail/iterator.cuh>
+#include <iterator/transform_unary_functions.cuh>
 #include <utilities/device_operators.cuh>
 
 #include <cmath>
+#include <thrust/functional.h>
 
 namespace cudf {
 namespace experimental {
@@ -86,58 +88,37 @@ namespace op {
 struct sum {
     using Op = cudf::DeviceSum;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-    }
+    template<typename ResultType>
+    using transformer = thrust::identity<ResultType>;
 };
 
 struct product {
     using Op = cudf::DeviceProduct;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-    }
+    template<typename ResultType>
+    using transformer = thrust::identity<ResultType>;
 };
 
 struct sum_of_squares {
     using Op = cudf::DeviceSum;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-        return thrust::make_transform_iterator(it_raw,
-            cudf::transformer_squared<ResultType>{});
-    }
+    template<typename ResultType>
+    using transformer = cudf::transformer_squared<ResultType>;
 };
 
 struct min {
     using Op = cudf::DeviceMin;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-      return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-    }
+    template<typename ResultType>
+    using transformer = thrust::identity<ResultType>;
+
 };
 
 struct max {
     using Op = cudf::DeviceMax;
-    
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-    }
+
+    template<typename ResultType>
+    using transformer = thrust::identity<ResultType>;
 };
 
 
@@ -151,12 +132,8 @@ struct max {
 struct mean {
     using Op = cudf::DeviceSum;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-    }
+    template<typename ResultType>
+    using transformer = thrust::identity<ResultType>;
 
     template<typename ResultType>
     struct intermediate{
@@ -175,14 +152,8 @@ struct mean {
 struct variance {
     using Op = cudf::DeviceSum;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        auto transformer = cudf::experimental::reduction::transformer_var_std<ResultType>{};
-        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-        return thrust::make_transform_iterator(it_raw, transformer);
-    }
+    template<typename ResultType>
+    using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
 
     template<typename ResultType>
     struct intermediate{
@@ -205,14 +176,9 @@ struct variance {
 struct standard_deviation {
     using Op = cudf::DeviceSum;
 
-    template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(column_device_view const& column)
-    {
-        auto transformer = cudf::experimental::reduction::transformer_var_std<ResultType>{};
-        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
-            Op::template identity<ResultType>());
-        return thrust::make_transform_iterator(it_raw, transformer);
-    }
+    template<typename ResultType>
+    using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+
     template<typename ResultType>
     struct intermediate{
         using IntermediateType = var_std<ResultType>;
@@ -232,6 +198,21 @@ struct standard_deviation {
 
 } // namespace reduction
 } // namespace experimental
+
+template <typename ElementType, typename ResultType, typename Op, bool has_nulls>
+static auto make_reduction_iterator(column_device_view const& column) {
+    return thrust::make_transform_iterator(
+        make_null_replacement_iterator( column, Op::Op::template identity<ElementType>()),
+        typename Op::template transformer<ResultType>{});
+}
+
+//template <typename ElementType, typename ResultType, typename Op, false>
+//static auto make_reduction_iterator(column_device_view const& column) {
+//  return thrust::make_transform_iterator(
+//      column.data<ElementType>(),
+//      typename Op::template transformer<ResultType>{});
+//}
+
 } // namespace cudf
 
 

@@ -69,11 +69,22 @@ gdf_scalar compound_reduction(column_view const& col,
   CHECK_STREAM(stream);
 
   // reduction by iterator
-  auto dcolp = cudf::column_device_view::create(col, stream);
-  auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(*dcolp);
-  cudf::experimental::reduction::detail::reduce(
-      static_cast<IntermediateType*>(dev_result), it, col.size(), intermediate,
-      typename Op::Op{}, stream);
+  auto dcol = cudf::column_device_view::create(col, stream);
+  if (col.nullable()) {
+    auto it = thrust::make_transform_iterator(
+        dcol->nbegin(Op::Op::template identity<ElementType>()),
+        typename Op::template transformer<ResultType>{});
+
+    detail::reduce(static_cast<IntermediateType*>(dev_result), it, col.size(),
+                   intermediate, typename Op::Op{}, stream);
+  } else {
+    auto it = thrust::make_transform_iterator(
+        dcol->begin<ElementType>(),
+        typename Op::template transformer<ResultType>{});
+
+    detail::reduce(static_cast<IntermediateType*>(dev_result), it, col.size(),
+                   intermediate, typename Op::Op{}, stream);
+  }
 
   // read back the dev_result to host memory
   // TODO: asynchronous copy
