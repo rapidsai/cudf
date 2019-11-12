@@ -35,7 +35,8 @@
 
 namespace {
 
-template <typename SourceValueIterator, typename SourceValidityIterator,
+template <cudf::size_type block_size,
+          typename SourceValueIterator, typename SourceValidityIterator,
           typename T, bool has_validity>
 __global__
 void copy_range_kernel(SourceValueIterator source_value_begin,
@@ -47,34 +48,30 @@ void copy_range_kernel(SourceValueIterator source_value_begin,
                        cudf::size_type end) {
   using cudf::experimental::detail::warp_size;
 
-  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
-  constexpr size_t mask_size = warp_size;
+  static_assert(block_size <= 1024,
+    "copy_range_kernel assumes block_size is not larger than 1024");
+  static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
+    "copy_range_kernel assumes bitmask element size in bits == warp size");
 
-  const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / mask_size;
-  const int warp_id = tid / warp_size;
-  // this assumes that blockDim.x / warp_size <= warp_size
-  const int warp_null_change_id = threadIdx.x / warp_size;
+  constexpr cudf::size_type leader_lane{0};
   const int lane_id = threadIdx.x % warp_size;
+
+  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+  const int warp_id = tid / warp_size;
 
   const cudf::size_type begin_mask_idx = cudf::word_index(begin);
   const cudf::size_type end_mask_idx = cudf::word_index(end);
 
   cudf::size_type mask_idx = begin_mask_idx + warp_id;
+  const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / warp_size;
 
-  cudf::size_type target_offset = begin_mask_idx * mask_size - begin;
+  cudf::size_type target_offset = begin_mask_idx * warp_size - begin;
   cudf::size_type source_idx = tid + target_offset;
 
-  // each warp shares its total change in null count to shared memory to ease
-  // computing the total change to null_count.
-  // note maximum block size is limited to 1024 by this, but that's OK
-  __shared__ uint32_t warp_null_change[has_validity ? warp_size : 1];
-  if (has_validity) {
-    if (threadIdx.x < warp_size) warp_null_change[threadIdx.x] = 0;
-    __syncthreads(); // wait for shared data and validity mask to be complete
-  }
+  cudf::size_type warp_null_change{0};
 
   while (mask_idx <= end_mask_idx) {
-    cudf::size_type index = mask_idx * mask_size + lane_id;
+    cudf::size_type index = mask_idx * warp_size + lane_id;
     bool in_range = (index >= begin && index < end);
 
     // write data
@@ -88,12 +85,13 @@ void copy_range_kernel(SourceValueIterator source_value_begin,
 
       cudf::bitmask_type old_mask = bitmask[mask_idx];
 
-      if (lane_id == 0) {
+      if (lane_id == leader_lane) {
         cudf::bitmask_type new_mask = (old_mask & ~active_mask) |
                                       (warp_mask & active_mask);
         bitmask[mask_idx] = new_mask;
-        // null_diff = (mask_size - __popc(new_mask)) - (mask_size - __popc(old_mask))
-        warp_null_change[warp_null_change_id] +=
+        // null_diff =
+        //   (warp_size - __popc(new_mask)) - (warp_size - __popc(old_mask))
+        warp_null_change +=
           __popc(active_mask & old_mask) - __popc(active_mask & new_mask);
       }
     }
@@ -103,20 +101,10 @@ void copy_range_kernel(SourceValueIterator source_value_begin,
   }
 
   if (has_validity) {
-    __syncthreads(); // wait for shared null counts to be ready
-
-    // Compute total null_count change for this block and add it to global count
-    if (threadIdx.x < warp_size) {
-      uint32_t my_null_change = warp_null_change[threadIdx.x];
-
-      __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-
-      uint32_t block_null_change =
-        cub::WarpReduce<uint32_t>(temp_storage).Sum(my_null_change);
-
-      if (lane_id == 0) { // one thread computes and adds to null count
-        atomicAdd(null_count, block_null_change);
-      }
+    auto block_null_change =
+      cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_null_change);
+    if (threadIdx.x == 0) {  // if the first thread in a block
+      atomicAdd(null_count, block_null_change);
     }
   }
 }
@@ -160,9 +148,6 @@ void copy_range(SourceValueIterator source_value_begin,
   // this code assumes that source and target have the same type.
   CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
 
-  static_assert(warp_size == cudf::detail::size_in_bits<bitmask_type>(),
-    "copy_range_kernel assumes bitmask element size in bits == warp size");
-
   T * __restrict__ data = target.head<T>();
   bitmask_type * __restrict__ bitmask = target.null_mask();
   auto offset = target.offset();
@@ -192,8 +177,6 @@ void copy_range(SourceValueIterator source_value_begin,
 #endif
 
   constexpr auto block_size = int{256};
-  static_assert(block_size <= 1024,
-    "copy_range kernel assumes block_size is not larger than 1024");
 
   auto grid = cudf::experimental::detail::grid_1d{num_items, block_size, 1};
 
@@ -206,7 +189,8 @@ void copy_range(SourceValueIterator source_value_begin,
     rmm::device_scalar<size_type> null_count(target.null_count(), stream);
 
     auto kernel =
-      copy_range_kernel<SourceValueIterator, SourceValidityIterator, T, true>;
+      copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator,
+                        T, true>;
     kernel<<<grid.num_blocks, block_size, 0, stream>>>(
       source_value_begin, source_validity_begin,
       data, bitmask, null_count.data(), offset + target_begin, offset + target_end);
@@ -215,7 +199,8 @@ void copy_range(SourceValueIterator source_value_begin,
   }
   else {
     auto kernel =
-      copy_range_kernel<SourceValueIterator, SourceValidityIterator, T, false>;
+      copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator,
+                        T, false>;
     kernel<<<grid.num_blocks, block_size, 0, stream>>>(
       source_value_begin, source_validity_begin,
       data, bitmask, nullptr, offset + target_begin, offset + target_end);
