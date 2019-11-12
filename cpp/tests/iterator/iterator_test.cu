@@ -165,7 +165,7 @@ struct IteratorTest : public GdfTest
   void values_equal_test(std::vector<T_output>& expected, const cudf::column_device_view& col)
   {
     if (col.nullable()) {
-      auto it_dev = col.nbegin(T_output{0});
+      auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(col, T_output{0});
       iterator_test_thrust(expected, it_dev, col.size());
     } else {
       auto it_dev = col.begin<T_output>();
@@ -227,14 +227,14 @@ TYPED_TEST(IteratorTest, null_iterator) {
   // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = d_col->nbegin(T{0});
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, T{0});
   this->iterator_test_cub(expected_value, it_dev, d_col->size());
   this->values_equal_test(replaced_array, *d_col);
 }
 
 // Tests up cast reduction with null iterator.
-// The up cast iterator will be created by tranform_iterator and
-// col.nbegin<T>(T{0})
+// The up cast iterator will be created by transform_iterator and
+// cudf::experimental::detail::make_null_replacement_iterator(col, T{0})
 TYPED_TEST(IteratorTest, null_iterator_upcast) {
   const int column_size{1000};
   using T = int8_t;
@@ -263,7 +263,7 @@ TYPED_TEST(IteratorTest, null_iterator_upcast) {
   // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = d_col->nbegin(T{0});
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, T{0});
   auto it_dev_upcast =
       thrust::make_transform_iterator(it_dev, thrust::identity<T_upcast>());
   this->iterator_test_thrust(replaced_array, it_dev_upcast, d_col->size());
@@ -272,7 +272,9 @@ TYPED_TEST(IteratorTest, null_iterator_upcast) {
 
 // Tests for square input iterator using helper strcut
 // `cudf::transformer_squared<T, T_upcast>` The up cast iterator will be created
-// by make_transform_iterator(col.nbegin(T{0}), cudf::detail::transformer_squared<T_upcast>)
+// by make_transform_iterator(
+//        cudf::experimental::detail::make_null_replacement_iterator(col, T{0}), 
+//        cudf::detail::transformer_squared<T_upcast>)
 TYPED_TEST(IteratorTest, null_iterator_square) {
   const int column_size{1000};
   using T = int8_t;
@@ -302,7 +304,7 @@ TYPED_TEST(IteratorTest, null_iterator_square) {
   // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = d_col->nbegin(T{0});
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, T{0});
   auto it_dev_upcast = thrust::make_transform_iterator(it_dev, thrust::identity<T_upcast>());
   auto it_dev_squared = thrust::make_transform_iterator(it_dev_upcast, transformer);
   this->iterator_test_thrust(replaced_array, it_dev_squared, d_col->size());
@@ -336,7 +338,7 @@ TYPED_TEST(IteratorTest, large_size_reduction) {
   // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = d_col->nbegin(init);
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
   this->iterator_test_thrust(replaced_array, it_dev, d_col->size());
   this->iterator_test_cub(expected_value, it_dev, d_col->size());
 }
@@ -392,7 +394,7 @@ std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0},
 
     // GPU test
     // TODO: make_pair_iterator
-    auto it_dev = d_col->nbegin(init);
+    auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
     //auto it_dev = cudf::make_pair_iterator<true, T>
     //    (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
@@ -422,11 +424,11 @@ TYPED_TEST(IteratorTest, error_handling) {
   }
   // expects error: data type mismatch
   if (!(std::is_same<T, float>::value)) {
-    CUDF_EXPECT_THROW_MESSAGE((d_col_null->nbegin(float{0})),
+    CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_null_replacement_iterator(*d_col_null, float{0})),
                               "the data type mismatch");
   }
 
-  CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->nbegin(T{0})),
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_null_replacement_iterator(*d_col_no_null, T{0})),
                             "Unexpected non-nullable column.");
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_null->begin<T>()),
@@ -464,7 +466,7 @@ TEST_F(StringIteratorTest, string_view_null_iterator ) {
   auto d_col = cudf::column_device_view::create(w_col);
  
   // GPU test
-  auto it_dev = d_col->nbegin(init);
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
   this->iterator_test_thrust(replaced_array, it_dev, hos.size());
   // this->values_equal_test(replaced_array, *d_col); //string_view{0} is invalid
 }
