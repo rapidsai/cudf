@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <cub/cub.cuh>
+#include <utilities/cuda_utils.hpp>
 
 #include <type_traits>
 #include <assert.h>
@@ -139,6 +140,24 @@ size_type single_lane_block_popc_reduce(bit_container bit_mask) {
   }
 
   return block_count;
+}
+
+template <typename Kernel>
+int elements_per_thread(Kernel kernel,
+                        cudf::size_type total_size,
+                        cudf::size_type block_size)
+{
+  // calculate theoretical occupancy
+  int max_blocks = 0;
+  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel,
+                                                         block_size, 0));
+
+  int device = 0;
+  CUDA_TRY(cudaGetDevice(&device));
+  int num_sms = 0;
+  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+  int per_thread = total_size / (max_blocks * num_sms * block_size);
+  return std::max(1, std::min(per_thread, 32)); // switch to std::clamp with C++17
 }
 
 }  // namespace detail

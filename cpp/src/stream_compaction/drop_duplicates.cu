@@ -213,20 +213,6 @@ rows in input table should be equal to number of rows in key colums table");
   return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
 }
 
-template <typename T>
-struct check_for_nan
-{
-    check_for_nan(cudf::column_device_view input) :_input{input}{}
-  __device__
-  bool operator()(size_type index)
-  {
-    return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
-  }
-
-protected:
-  cudf::column_device_view _input;
-};
-
 cudf::size_type unique_count(column_view const& input,
                              bool const& ignore_nulls,
                              bool const& nan_as_null,
@@ -239,34 +225,20 @@ cudf::size_type unique_count(column_view const& input,
 
   cudf::size_type nrows = input.size();
  
-  bool has_nans = false;
+  bool has_nan = false;
   // Check for Nans
-  if (input.type().id() == FLOAT32 and input.has_nulls() and nan_as_null) {
-
-      auto input_device_view = cudf::column_device_view::create(input, stream);
-      auto device_view = *input_device_view;
-      has_nans = thrust::any_of(rmm::exec_policy(stream)->on(stream), 
-                                thrust::counting_iterator<cudf::size_type>(0),
-                                thrust::counting_iterator<cudf::size_type>(nrows),
-                                check_for_nan<float>(device_view));
-
-  }
-  else if (input.type().id() == FLOAT64 and input.has_nulls() and nan_as_null) {
-
-      auto input_device_view = cudf::column_device_view::create(input, stream);
-      auto device_view = *input_device_view;
-      has_nans = thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                                thrust::counting_iterator<cudf::size_type>(0),
-                                thrust::counting_iterator<cudf::size_type>(nrows),
-                                check_for_nan<double>(device_view));
-      
+  // Checking for nulls in input and flag nan_as_null, as the count will
+  // only get affected if these two conditions are true. NAN will only be
+  // be an extra if nan_as_null was true and input also had null, which
+  // will increase the count by 1.
+  if(input.has_nulls() and nan_as_null){
+      has_nan = cudf::experimental::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
   auto count = detail::unique_count(table_view{{input}}, true, mr, stream);
 
-
   // if nan is considered null and there are already null values
-  if (nan_as_null and has_nans and input.has_nulls())
+  if (nan_as_null and has_nan and input.has_nulls())
     --count;
 
   if(ignore_nulls and input.has_nulls())

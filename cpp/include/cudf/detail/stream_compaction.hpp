@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/column/column_device_view.cuh>
 
 namespace cudf {
 namespace experimental {
@@ -152,6 +154,41 @@ cudf::size_type unique_count(column_view const& input,
                              rmm::mr::device_memory_resource *mr =
                                  rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0);
+
+
+template <typename T>
+struct check_for_nan
+{
+    check_for_nan(cudf::column_device_view input) :_input{input}{}
+  __device__
+  bool operator()(size_type index)
+  {
+    return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
+  }
+
+protected:
+  cudf::column_device_view _input;
+};
+
+struct has_nans{
+    template <typename T,
+            std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+    bool operator()(column_view const& input, cudaStream_t stream){
+        auto input_device_view = cudf::column_device_view::create(input, stream);
+        auto device_view = *input_device_view;
+        auto count = thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                                      thrust::counting_iterator<cudf::size_type>(0),
+                                      thrust::counting_iterator<cudf::size_type>(input.size()),
+                                      check_for_nan<T>(device_view));
+        return count > 0;
+    }
+
+    template <typename T,
+            std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+    bool operator()(column_view const& input, cudaStream_t stream){
+        return false;
+    }
+};
 
 } // namespace detail
 } // namespace experimental
