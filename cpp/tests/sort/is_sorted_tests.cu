@@ -23,7 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-// #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/type_list_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <vector>
@@ -43,8 +42,8 @@ namespace testdata {
 template<typename T>
 auto ascending() {
     return fixed_width_column_wrapper<T>({ std::numeric_limits<T>::lowest(),
-                                            -100 -10, -1, 0, 1, 10, 100,
-                                            std::numeric_limits<T>::max() });
+                                           -100, -10, -1, 0, 1, 10, 100,
+                                           std::numeric_limits<T>::max() });
 }
 
 template<typename T>
@@ -81,6 +80,34 @@ auto descending<bool8>() {
     return fixed_width_column_wrapper<bool8>({ true, true, false, false });
 }
 
+// ----- timestamp
+
+template<typename T>
+fixed_width_column_wrapper<T> ascending_timestamp()
+{
+    return fixed_width_column_wrapper<T>({ T::min().time_since_epoch().count(),
+                                           T::max().time_since_epoch().count() });
+}
+
+template<typename T>
+fixed_width_column_wrapper<T> descending_timestamp()
+{
+    return fixed_width_column_wrapper<T>({ T::max().time_since_epoch().count(),
+                                           T::min().time_since_epoch().count() });
+}
+
+template<> auto ascending<cudf::timestamp_D>()  { return ascending_timestamp<cudf::timestamp_D>();  }
+template<> auto ascending<cudf::timestamp_s>()  { return ascending_timestamp<cudf::timestamp_s>();  }
+template<> auto ascending<cudf::timestamp_ms>() { return ascending_timestamp<cudf::timestamp_ms>(); }
+template<> auto ascending<cudf::timestamp_us>() { return ascending_timestamp<cudf::timestamp_us>(); }
+template<> auto ascending<cudf::timestamp_ns>() { return ascending_timestamp<cudf::timestamp_ns>(); }
+
+template<> auto descending<cudf::timestamp_D>()  { return descending_timestamp<cudf::timestamp_D>();  }
+template<> auto descending<cudf::timestamp_s>()  { return descending_timestamp<cudf::timestamp_s>();  }
+template<> auto descending<cudf::timestamp_ms>() { return descending_timestamp<cudf::timestamp_ms>(); }
+template<> auto descending<cudf::timestamp_us>() { return descending_timestamp<cudf::timestamp_us>(); }
+template<> auto descending<cudf::timestamp_ns>() { return descending_timestamp<cudf::timestamp_ns>(); }
+
 // ----- string_view
 
 template<>
@@ -115,9 +142,9 @@ auto nulls_before<cudf::string_view>() {
 // ---- tests ------------------------------------------------------------------
 
 template <typename T>
-struct IsSortedTest : public cudf::test::BaseFixture {};
+struct IsSortedTest : public BaseFixture {};
 
-using test_types = Concat<NumericTypes, Types<cudf::string_view>>;
+using test_types = Concat<NumericTypes, TimestampTypes, StringTypes>;
 
 TYPED_TEST_CASE(IsSortedTest, test_types);
 
