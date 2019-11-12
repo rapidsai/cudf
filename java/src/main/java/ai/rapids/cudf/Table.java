@@ -802,7 +802,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Given a sorted table based on orderByArgs return the lower bound.
+   * Given a sorted table return the lower bound.
    * Example:
    *
    *  Single column:
@@ -827,20 +827,18 @@ public final class Table implements AutoCloseable {
    * unsorted the results are wrong. Types of columns can be of mixed data types.
    * @param areNullsSmallest true if nulls are assumed smallest
    * @param valueTable the table of values that need to be inserted
-   * @param orderByArgs indicates the ordering of the column(s), true if descending,
-   *                    false if ascending or unspecified
+   * @param descFlags indicates the ordering of the column(s), true if descending
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
   public ColumnVector lowerBound(boolean areNullsSmallest,
-      Table valueTable, OrderByArg... orderByArgs) {
+      Table valueTable, boolean[] descFlags) {
     assertForBounds(valueTable);
-    boolean[] descFlags = getDescFlags(orderByArgs);
     return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
       descFlags, areNullsSmallest, false));
   }
 
   /**
-   * Given a sorted table based on orderByArgs, return the upper bound.
+   * Given a sorted table return the upper bound.
    * Example:
    *
    *  Single column:
@@ -865,14 +863,12 @@ public final class Table implements AutoCloseable {
    * unsorted the results are wrong. Types of columns can be of mixed data types.
    * @param areNullsSmallest true if nulls are assumed smallest
    * @param valueTable the table of values that need to be inserted
-   * @param orderByArgs indicates the ordering of the column(s), true if descending,
-   *                    false if ascending or unspecified
+   * @param descFlags indicates the ordering of the column(s), true if descending
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
   public ColumnVector upperBound(boolean areNullsSmallest,
-      Table valueTable, OrderByArg... orderByArgs) {
+      Table valueTable, boolean[] descFlags) {
     assertForBounds(valueTable);
-    boolean[] descFlags = getDescFlags(orderByArgs);
     return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
       descFlags, areNullsSmallest, true));
   }
@@ -892,21 +888,6 @@ public final class Table implements AutoCloseable {
       assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
           "Input and values tables' data types do not match";
     }
-  }
-
-  private boolean[] getDescFlags(OrderByArg[] args) {
-    ArrayList<OrderByArg> sortArgs = new ArrayList<>(Arrays.asList(args));
-    boolean[] descFlags = new boolean[this.getNumberOfColumns()];
-    //initialize them to false by default
-    for (int i = 0; i < descFlags.length; i++) {
-      descFlags[i] = false;
-    }
-    //set the desc flags based on order args passed which may not be sorted by index,
-    // as expected by bounds call
-    for (OrderByArg sortArg : sortArgs) {
-      descFlags[sortArg.index] = sortArg.isDescending;
-    }
-    return descFlags;
   }
 
   /////////////////////////////////////////////////////////////////////////////
