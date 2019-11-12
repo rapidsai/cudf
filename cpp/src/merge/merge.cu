@@ -37,6 +37,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/null_mask.hpp>
 
 namespace {
 
@@ -248,21 +249,65 @@ namespace detail {
 template<typename VectorI>
 struct ColumnMerger
 {
-  explicit ColumnMerger(VectorI const& row_order):
-    dv_row_order_(row_order)
+  //error: class "cudf::string_view" has no member "type"
+  //using StringT = typename cudf::experimental::id_to_type<cudf::STRING>::type;
+  
+  explicit ColumnMerger(VectorI const& row_order,
+                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                        cudaStream_t stream = nullptr):
+    dv_row_order_(row_order),
+    mr_(mr),
+    stream_(stream)
   {
   }
+
+  //raison d'etre for enable_if:
+  //need separate versions for primary `Element` != strings
   
   // type_dispatcher() _can_ dispatch host functors:
   //
-  template<typename Element>//required: column type
-  std::unique_ptr<cudf::column>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol)
-  {
-    return nullptr;//for now...
+  template<typename ElemenT>//required: column type
+  //std::enable_if_t<!(std::is_same<ElemenT,StringT>::value),
+  std::unique_ptr<cudf::column> //>
+  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
+  {   
+    auto merged_sz = lcol.size() + rcol.size();
+    auto type = lcol.type();
+    
+    rmm::device_buffer data{merged_sz * cudf::size_of(type),
+        stream_,
+        mr_};
+    
+    rmm::device_buffer mask = cudf::create_null_mask(merged_sz,
+                                                     ALL_VALID,
+                                                     stream_,
+                                                     mr_);
+
+    //state_null_count(state, merged_size);//cudf::mask_state state{ALL_VALID};
+    
+    std::unique_ptr<cudf::column> p_merged_col{
+      new cudf::column{type, merged_sz, data, mask}
+    };
+
+    //OR: instead cnstr a merged column_view, then a column out of it?
+    //
+    return p_merged_col;//for now...
   }
+
+  //specialization for string...?
+  //or should use `cudf::string_view` instead?
+  //
+  // template<typename ElemenT>//required: column type
+  // std::enable_if_t<std::is_same<ElemenT, StringT>::value, std::unique_ptr<cudf::column>>
+  // operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
+  // {
+  //   return nullptr;//<-TODO
+  // }
+
 private:
   VectorI const& dv_row_order_;
+  rmm::mr::device_memory_resource* mr_;
+  cudaStream_t stream_;
   
   //see `class element_relational_comparator` in `cpp/include/cudf/table/row_operators.cuh` as a model;
 };
@@ -330,7 +375,7 @@ private:
 
     static_assert(std::is_same<decltype(v_merged_cols), std::vector<std::unique_ptr<cudf::column>> >::value, "ERROR: unexpected type.");
 
-    ColumnMerger<rmm::device_vector<index_type>> merger{merged_indices};// <- TODO
+    ColumnMerger<rmm::device_vector<index_type>> merger{merged_indices};
     
     for(auto i=0;i<n_cols;++i)
       {
