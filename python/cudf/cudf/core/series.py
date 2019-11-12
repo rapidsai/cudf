@@ -1171,8 +1171,12 @@ class Series(object):
         """
         if self.null_count == 0:
             return self
-        result = self._column.dropna()
-        return self._copy_construct(data=result)
+        name = self.name
+        result = self.to_frame(name="_").dropna()
+        result = result["_"]
+        result.name = name
+        self.name = name
+        return result
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1317,7 +1321,7 @@ class Series(object):
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
             newmask = libcudf.unaryops.nans_to_nulls(sr._column)
-            return sr.set_mask(newmask)
+            self._column.mask = newmask
         return self
 
     def all(self, axis=0, skipna=True, level=None):
