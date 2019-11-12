@@ -256,6 +256,10 @@ class CategoricalColumn(column.ColumnBase):
         self._codes = None
 
     def __contains__(self, item):
+        try:
+            self._encode(item)
+        except ValueError:
+            return False
         return self._encode(item) in self.as_numerical
 
     def serialize(self):
