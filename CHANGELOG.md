@@ -29,6 +29,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3356 Add vertical concatenation for table/columns
 
 ## Improvements
 
