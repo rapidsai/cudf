@@ -226,9 +226,7 @@ class Groupby(object):
 
         for k in self._by:
             outdf[k] = (
-                grouped_df[k]
-                .take(sr_segs.to_gpu_array())
-                .reset_index(drop=True)
+                grouped_df[k].take(sr_segs.data.mem).reset_index(drop=True)
             )
 
         size = len(outdf)
@@ -244,7 +242,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=np.float64)
                     if size > 0:
                         group_mean.forall(size)(
-                            sr.to_gpu_array(), dev_begins, dev_out
+                            sr.data.mem, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -253,7 +251,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(
-                            sr.to_gpu_array(), dev_begins, dev_out
+                            sr.data.mem, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -262,7 +260,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(
-                            sr.to_gpu_array(), dev_begins, dev_out
+                            sr.data.mem, dev_begins, dev_out
                         )
                     values[newk] = dev_out
                 else:

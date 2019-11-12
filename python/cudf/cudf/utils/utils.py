@@ -249,16 +249,6 @@ def _is_nep18_active():
         return False
 
 
-def _have_cupy():
-    try:
-        import cupy  # noqa: F401
-
-        _have_cupy = True
-    except ModuleNotFoundError:
-        _have_cupy = False
-    return _have_cupy
-
-
 @initfunc
 def set_allocator(
     allocator="default",
@@ -293,4 +283,3 @@ def set_allocator(
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
-_have_cupy = _have_cupy()
