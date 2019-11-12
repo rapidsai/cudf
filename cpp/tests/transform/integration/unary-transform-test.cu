@@ -17,52 +17,41 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <cudf/legacy/transform.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/transform.hpp>
 #include "assert-unary.h"
 #include <cudf/types.h>
 
 #include <cctype>
 
-#include <tests/utilities/legacy/nvcategory_utils.cuh>
-#include <tests/utilities/legacy/valid_vectors.h>
-
 namespace cudf {
 namespace test {
 namespace transformation {
 
-struct UnaryOperationIntegrationTest : public GdfTest {};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
 template<class dtype, class Op, class Data>
-void test_cuda_and_ptx_udf(
-    const char cuda[], 
-    const char ptx[], 
+void test_udf(
+    const char udf[], 
     Op op, 
     Data data_init, 
-    cudf::size_type size
-){
-    auto in = cudf::test::column_wrapper<dtype>(
-        size, data_init, [](cudf::size_type row) {return true;});
-  { 
-    gdf_column cpp_output_col;
-    // false means the string is a piece of CUDA code
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), cuda, gdf_dtype_of<dtype>(), false));
+    cudf::size_type size,
+    bool is_ptx)
+{
+  auto all_valid = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return true; });
+  auto data_iter = cudf::test::make_counting_transform_iterator(
+    0, data_init);
 
-    auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
-    ASSERT_UNARY(cpp_out, in, op);
-    
-    gdf_column_free(&cpp_output_col);
-  }
-  {
-    gdf_column cpp_output_col;
-    // true means the string is a piece of PTX code
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, gdf_dtype_of<dtype>(), true));
+  auto in = cudf::test::fixed_width_column_wrapper<dtype>(
+      data_iter, data_iter + size, all_valid);
 
-    auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
-    ASSERT_UNARY(cpp_out, in, op);
-    
-    gdf_column_free(&cpp_output_col);
-  }
+  std::unique_ptr<cudf::column> out = cudf::experimental::transform(
+    in, udf, data_type(experimental::type_to_id<dtype>()), is_ptx);
+
+  ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32) {
@@ -122,7 +111,8 @@ R"***(
   auto op = [](dtype a) {return a*a*a*a;};
   auto data_init = [](cudf::size_type row) {return row % 3;};
   
-  test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
+  test_udf<dtype>(cuda, op, data_init, 500, false);
+  test_udf<dtype>(ptx, op, data_init, 500, true);
 
 }
 
@@ -164,7 +154,8 @@ R"***(
   auto op = [](dtype a) {return a*a-a;};
   auto data_init = [](cudf::size_type row) {return row % 78;};
   
-  test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
+  test_udf<dtype>(cuda, op, data_init, 500, false);
+  test_udf<dtype>(ptx, op, data_init, 500, true);
 
 }
 
@@ -219,7 +210,8 @@ R"***(
   auto op = [](dtype a){return std::toupper(a);};  
   auto data_init = [](cudf::size_type row){return 'a' + (row % 26);};
 
-  test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
+  test_udf<dtype>(cuda, op, data_init, 500, false);
+  test_udf<dtype>(ptx, op, data_init, 500, true);
 
 }
 
