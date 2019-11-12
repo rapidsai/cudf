@@ -1260,7 +1260,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Splits a column (including null values) into a set of columns
    * according to a set of indices. The caller owns the ColumnVectors and is responsible
-   * closing them
+   * closing them.
    *
    * The "split" function divides the input column into multiple intervals
    * of rows using the splits indices values and it stores the intervals into the
@@ -1309,7 +1309,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Splits a column (including null values) into a set of columns
    * according to a set of indices. The caller owns the ColumnVectors and is responsible
-   * closing them
+   * closing them.
    *
    * The "split" function divides the input column into multiple intervals
    * of rows using the splits indices values and it stores the intervals into the
