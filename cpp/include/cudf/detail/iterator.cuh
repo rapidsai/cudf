@@ -45,6 +45,43 @@
 namespace cudf {
 
 /** -------------------------------------------------------------------------*
+ * @brief value accessor of column without null bitmask
+ * A unary functor returns scalar value at `id`.
+ * `operator() (cudf::size_type id)` computes `element`
+ * This functor is only allowed for non-nullable columns.
+ *
+ * the return value for element `i` will return `column[i]`
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * -------------------------------------------------------------------------**/
+
+template <typename Element>
+struct column_device_view::value_accessor {
+  column_device_view const col;  ///< column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  value_accessor(column_device_view const& _col) : col{_col} {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
+                 "the data type mismatch");
+    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
+  }
+
+  CUDA_DEVICE_CALLABLE
+  Element operator()(cudf::size_type i) const {
+    return col.element<Element>(i);
+  }
+};
+
+namespace experimental {
+namespace detail {
+
+/** -------------------------------------------------------------------------*
  * @brief value accessor of column with null bitmask
  * A unary functor returns scalar value at `id`.
  * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
@@ -54,102 +91,36 @@ namespace cudf {
  * if it is valid, or `null_replacement` if it is null.
  *
  * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * -------------------------------------------------------------------------**/
 template <typename Element>
-struct column_device_view::null_replaced_value_accessor
+struct null_replaced_value_accessor
 {
-  column_device_view const col;         ///< column view of column in device
-  Element const null_replacement{};     ///< value returned when element is null
+  column_device_view const col;      ///< column view of column in device
+  Element const null_replacement{};  ///< value returned when element is null
 
-/** -------------------------------------------------------------------------*
- * @brief constructor
- * @param[in] _col column device view of cudf column
- * @param[in] null_replacement The value to return for null elements
- * -------------------------------------------------------------------------**/
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * @param[in] null_replacement The value to return for null elements
+   * -------------------------------------------------------------------------**/
   null_replaced_value_accessor(column_device_view const& _col, Element null_val)
-    : col{_col}, null_replacement{null_val}
+      : col{_col}, null_replacement{null_val}
   {
-    // verify valid is non-null, otherwise, is_valid() will crash
+    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
+                 "the data type mismatch");
+    // verify valid is non-null, otherwise, is_valid_nocheck() will crash
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
 
   CUDA_DEVICE_CALLABLE
   Element operator()(cudf::size_type i) const {
-    return col.is_valid_nocheck(i) ?
-      col.element<Element>(i) : null_replacement;
+    return col.is_valid_nocheck(i) ? col.element<Element>(i) : null_replacement;
   }
 };
 
-/** -------------------------------------------------------------------------*
- * @brief value accessor of column without null bitmask
- * A unary functor returns scalar value at `id`.
- * `operator() (cudf::size_type id)` computes `element`
- * This functor is only allowed for non-nullable columns.
- *
- * the return value for element `i` will return `column[i]`
- *
- * @throws `cudf::logic_error` if the column is nullable.
- *
- * @tparam Element The type of elements in the column
- * -------------------------------------------------------------------------**/
-
-template <typename Element>
-struct column_device_view::value_accessor
-{
-  column_device_view const col;         ///< column view of column in device
-
-/** -------------------------------------------------------------------------*
- * @brief constructor
- * @param[in] _col column device view of cudf column
- * -------------------------------------------------------------------------**/
-  value_accessor(column_device_view const& _col)
-    : col{_col}
-  {
-    // verify valid is null
-    CUDF_EXPECTS(!_col.nullable(), "Unexpected nullable column.");
-  }
-
-  CUDA_DEVICE_CALLABLE
-  Element operator()(cudf::size_type i) const {
-    return col.element<Element>(i);
-  }
-};
-
-template <typename T>
-column_device_view::const_iterator<T> column_device_view::begin() const {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
-  return column_device_view::const_iterator<T>{
-      column_device_view::count_it{0},
-      column_device_view::value_accessor<T>{*this}};
-}
-template <typename T>
-column_device_view::const_iterator<T> column_device_view::end() const {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
-  return column_device_view::const_iterator<T>{
-      column_device_view::count_it{size()},
-      column_device_view::value_accessor<T>{*this}};
-}
-
-template <typename T>
-column_device_view::const_null_iterator<T> column_device_view::nbegin(const T& null_val) const {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
-  return column_device_view::const_null_iterator<T>{
-      column_device_view::count_it{0},
-      column_device_view::null_replaced_value_accessor<T>{*this, null_val}};
-}
-
-template <typename T>
-column_device_view::const_null_iterator<T> column_device_view::nend(const T& null_val) const {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == type(), "the data type mismatch");
-  return column_device_view::const_null_iterator<T>{
-      column_device_view::count_it{size()},
-      column_device_view::null_replaced_value_accessor<T>{*this, null_val}};
-}
-
-namespace experimental {
-namespace detail {
 /**
  * @brief Constructs an iterator over a column's values that replaces null
  * elements with a specified value.
@@ -171,35 +142,9 @@ template <typename Element>
 auto make_null_replacement_iterator(column_device_view const& column,
                                     Element const null_replacement = Element{0})
 {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == column.type(), "the data type mismatch");
-
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
-      column_device_view::null_replaced_value_accessor<Element>{column, null_replacement});
-}
-
-
-/**
- * @brief Constructs an iterator over a column's values
- *
- * Dereferencing the returned iterator for element `i` will return `column[i]`
- * This iterator is only allowed for non-nullable columns.
- *
- * @throws `cudf::logic_error` if the column is nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
- *
- * @tparam Element The type of elements in the column
- * @param column The column to iterate
- * @return auto Iterator that returns valid column elements
- */
-template <typename Element>
-auto make_no_null_iterator(column_device_view const& column)
-{
-  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == column.type(), "the data type mismatch");
-
-  return thrust::make_transform_iterator(
-      thrust::counting_iterator<cudf::size_type>{0},
-      column_device_view::value_accessor<Element>{column});
+      null_replaced_value_accessor<Element>{column, null_replacement});
 }
 
 } //namespace detail

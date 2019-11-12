@@ -276,43 +276,28 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Iterator for navigating this column
    *---------------------------------------------------------------------------**/
-  using count_it = thrust::counting_iterator<size_type>;
   template <typename T>
   struct value_accessor;
+  using count_it = thrust::counting_iterator<size_type>;
   template <typename T>
   using const_iterator = thrust::transform_iterator<value_accessor<T>, count_it>;
+
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing to the beginning of this column
    *---------------------------------------------------------------------------**/
-  template<typename T>
-  const_iterator<T> begin() const;
-  //{ return const_iterator<T>{count_it{0}, value_accessor{*this}}; }
+  template <typename T>
+  const_iterator<T> begin() const {
+    return const_iterator<T>{count_it{0}, value_accessor<T>{*this}};
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing past the end of this column
    *---------------------------------------------------------------------------**/
   template<typename T>
-  const_iterator<T> end() const;
-  //{ return const_iterator<T>{count_it{size()}, value_accessor{*this}}; }
+  const_iterator<T> end() const {
+    return const_iterator<T>{count_it{size()}, value_accessor<T>{*this}};
+  }
 
-  /**---------------------------------------------------------------------------*
-   * @brief Iterator for navigating this column with nulls replaced with give value
-   *---------------------------------------------------------------------------**/
-  template <typename T>
-  struct null_replaced_value_accessor;
-  template <typename T>
-  using const_null_iterator = thrust::transform_iterator<null_replaced_value_accessor<T>, count_it>;
-  /**---------------------------------------------------------------------------*
-   * @brief Return new iterator pointing to the beginning of this null-replaced column
-   *---------------------------------------------------------------------------**/
-  template<typename T>
-  const_null_iterator<T> nbegin(const T& null_val) const;
-  //{ return const_null_iterator<T>{count_it{0}, null_replaced_value_accesor{*this, null_val}}; }
-  /**---------------------------------------------------------------------------*
-   * @brief Return new iterator pointing past the end of this null-replaced column
-   *---------------------------------------------------------------------------**/
-  template<typename T>
-  const_null_iterator<T> nend(const T& null_val) const;
-  //{ return const_null_iterator<T>{count_it{size()}, null_replaced_value_accesor{*this, null_val}}; }
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a column view that is usable in device memory.
    *
