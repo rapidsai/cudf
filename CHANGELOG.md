@@ -148,6 +148,7 @@
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
+- PR #3357 Disabling `column_view` iterators for non fixed-width types
 
 
 # cuDF 0.10.0 (16 Oct 2019)
