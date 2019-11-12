@@ -110,9 +110,24 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator++(int)
 {
-    const_iterator tmp(*this);
+    string_view::const_iterator tmp(*this);
     operator++();
     return tmp;
+}
+
+__device__ inline string_view::const_iterator string_view::const_iterator::operator+(string_view::const_iterator::difference_type off)
+{
+    const_iterator tmp(*this);
+    while(off-- > 0)
+        ++tmp;
+    return tmp;
+}
+
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator+=(string_view::const_iterator::difference_type off)
+{
+    while(off-- > 0)
+        operator++();
+    return *this;
 }
 
 __device__ inline bool string_view::const_iterator::operator==(const string_view::const_iterator& rhs) const
@@ -123,6 +138,11 @@ __device__ inline bool string_view::const_iterator::operator==(const string_view
 __device__ inline bool string_view::const_iterator::operator!=(const string_view::const_iterator& rhs) const
 {
     return (p != rhs.p) || (cpos != rhs.cpos);
+}
+
+__device__ inline bool string_view::const_iterator::operator<(const string_view::const_iterator& rhs) const
+{
+    return (p == rhs.p) && (cpos < rhs.cpos);
 }
 
 // unsigned int can hold 1-4 bytes for the UTF8 char
@@ -333,8 +353,7 @@ __device__ inline string_view string_view::substr(size_type pos, size_type lengt
         epos = size_bytes();
     if(spos >= epos)
         return string_view("",0);
-    length = epos - spos; // converts length to bytes
-    return string_view(data()+spos,length);
+    return string_view(data()+spos,epos-spos);
 }
 
 __device__ inline size_type string_view::split(const char* delim, int count, string_view* strs) const
@@ -385,7 +404,7 @@ __device__ inline size_type string_view::split(const char* delim, int count, str
     return rtn;
 }
 
-
+//
 __device__ inline size_type string_view::rsplit(const char* delim, int count, string_view* strs) const
 {
     const char* sptr = data();
