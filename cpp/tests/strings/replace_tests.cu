@@ -101,6 +101,15 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
     }
 }
 
+TEST_F(StringsReplaceTest, ReplaceSliceError)
+{
+    std::vector<const char*> h_strings{ "Héllo", "thesé", nullptr, "are not", "important", "" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
+    EXPECT_THROW(cudf::strings::replace_slice(strings_view,cudf::string_scalar(""),4,1), cudf::logic_error);
+}
+
 TEST_F(StringsReplaceTest, ReplaceMulti)
 {
     std::vector<const char*> h_strings{ "the quick brown fox jumps over the lazy dog",
