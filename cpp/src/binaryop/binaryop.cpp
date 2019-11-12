@@ -39,7 +39,7 @@ namespace binops {
 
 namespace jit {
 
-  const std::string hash = "prog_binop";
+  const std::string hash = "prog_binop.experimental";
 
   const std::vector<std::string> compiler_flags { "-std=c++14" };
   const std::vector<std::string> headers_name
