@@ -245,7 +245,7 @@ class ColumnBase(Column):
         if nulls:
             mask = Buffer.from_array_like(utils.make_mask(newsize))
 
-        col = head.replace(data=data, mask=mask)
+        col = build_column(data=data, dtype=head.dtype, mask=mask)
 
         # Performance the actual concatenation
         if newsize > 0:
@@ -330,17 +330,6 @@ class ColumnBase(Column):
         else:
             params = self._replace_defaults()
             return type(self)(**params)
-
-    def replace(self, **kwargs):
-        """Replace attributes of the class and return a new Column.
-
-        Valid keywords are valid parameters for ``self.__init__``.
-        Any omitted keywords will be defaulted to the corresponding
-        attributes in ``self``.
-        """
-        params = type(self)._replace_defaults(self)
-        params.update(kwargs)
-        return type(self)(**params)
 
     def view(self, newcls, **kwargs):
         """View the underlying column data differently using a subclass of

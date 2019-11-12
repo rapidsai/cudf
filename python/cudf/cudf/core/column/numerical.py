@@ -40,14 +40,6 @@ class NumericalColumn(column.ColumnBase):
         size = data.size // dtype.itemsize
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
 
-    def _replace_defaults(self):
-        return {
-            "data": self.data,
-            "dtype": self.dtype,
-            "mask": self.mask,
-            "name": self.name,
-        }
-
     def serialize(self):
         header, frames = super(NumericalColumn, self).serialize()
         header["type"] = pickle.dumps(type(self))
@@ -137,7 +129,11 @@ class NumericalColumn(column.ColumnBase):
                 ary = utils.scalar_broadcast_to(
                     other, shape=len(self), dtype=other_dtype
                 )
-                return self.replace(data=Buffer(ary), dtype=ary.dtype)
+                return column.build_column(
+                    data=Buffer.from_array_lik(ary),
+                    dtype=ary.dtype,
+                    mask=self.mask,
+                )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
@@ -172,8 +168,10 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self.replace(
-            data=libcudf.typecast.cast(self, dtype).data, dtype=np.dtype(dtype)
+        return column.build_column(
+            data=libcudf.typecast.cast(self, dtype).data,
+            dtype=np.dtype(dtype),
+            mask=self.mask,
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):

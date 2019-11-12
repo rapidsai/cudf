@@ -634,8 +634,13 @@ class Series(object):
                     mask = (lmask | rmask).data
                     lhs = lhs.fillna(fill_value)
                     rhs = rhs.fillna(fill_value)
-                    data = func(lhs, rhs).data
-                    data = lhs._column.replace(data=data, mask=mask)
+                    result = func(lhs, rhs)
+                    data = column.build_column(
+                        data=result.data,
+                        dtype=result.dtype,
+                        mask=mask,
+                        name=lhs.name,
+                    )
                     return lhs._copy_construct(data=data)
                 elif lhs.has_null_mask:
                     return func(lhs.fillna(fill_value), rhs)

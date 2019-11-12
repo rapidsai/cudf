@@ -492,14 +492,6 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = None
         self._indices = None
 
-    def _replace_defaults(self):
-        return {
-            "data": self.children[0].data,
-            "offsets": self.children[1].data,
-            "mask": self.mask,
-            "name": self.name,
-        }
-
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
 
@@ -781,7 +773,7 @@ class StringColumn(column.ColumnBase):
 
         filled_data = self.nvstrings.fillna(fill_value)
         result = column.as_column(filled_data)
-        result = result.replace(mask=None)
+        result.mask = None
         return self._mimic_inplace(result, inplace)
 
     def _find_first_and_last(self, value):

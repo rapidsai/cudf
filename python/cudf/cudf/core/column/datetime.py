@@ -45,14 +45,6 @@ class DatetimeColumn(column.ColumnBase):
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
-    def _replace_defaults(self):
-        return {
-            "data": self.data,
-            "dtype": self.dtype,
-            "mask": self.mask,
-            "name": self.name,
-        }
-
     def __contains__(self, item):
         # Handles improper item types
         try:
@@ -171,7 +163,9 @@ class DatetimeColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-        return self.replace(data=Buffer(ary), dtype=self.dtype)
+        return column.build_column(
+            data=Buffer.from_array_like(ary), dtype=self.dtype
+        )
 
     @property
     def as_numerical(self):
@@ -259,7 +253,7 @@ class DatetimeColumn(column.ColumnBase):
 
         result = libcudf.replace.replace_nulls(self, fill_value)
 
-        result = result.replace(mask=None)
+        result.mask = None
         return self._mimic_inplace(result, inplace)
 
     def sort_by_values(self, ascending=True, na_position="last"):
@@ -312,7 +306,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.has_null_mask:
+            if self.mask is not None:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -323,7 +317,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.has_null_mask:
+            if self.mask is not None:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(
@@ -334,9 +328,8 @@ class DatetimeColumn(column.ColumnBase):
 
 def binop(lhs, rhs, op, out_dtype):
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
-    masked = lhs.has_null_mask or rhs.has_null_mask
+    masked = lhs.mask is not None or rhs.mask is not None
     out = column.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = libcudf.binops.apply_op(lhs, rhs, out, op)
-    out = out.replace(null_count=null_count)
     libcudf.nvtx.nvtx_range_pop()
     return out
