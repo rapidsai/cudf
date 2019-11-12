@@ -512,7 +512,7 @@ class StringColumn(column.ColumnBase):
                 mask = self.mask.ptr
             else:
                 mask = None
-            return nvstrings.from_offsets(
+            self._nvstrings = nvstrings.from_offsets(
                 self.children[0].data.ptr,
                 self.children[1].data.ptr,
                 self.size,
