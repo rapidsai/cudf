@@ -24,14 +24,13 @@ namespace strings
 {
 
 /**
- * @brief Returns a new numeric column parsing float values from the
- * provided strings column.
+ * @brief Returns a new numeric column by parsing float values from each string
+ * in the provided strings column.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
  * Only characters [0-9] plus a prefix '-' and '+' and decimal '.' are recognized.
- * When any other character is encountered, the parsing ends for that string
- * and the current digits are converted into a float.
+ * Additionally, scientific notation is also supported (e.g. "-1.78e+5").
  *
  * @throw cudf::logic_error if output_type is not float type.
  *
@@ -52,8 +51,10 @@ std::unique_ptr<column> to_floats( strings_column_view const& strings,
  *
  * For each float, a string is created in base-10 decimal.
  * Negative numbers will include a '-' prefix.
+ * Numbers producing more than 10 significant digits will produce a string that
+ * includes scientific notation (e.g. "-1.78e+15").
  *
- * @throw cudf::logic_error if floats column is not integral type.
+ * @throw cudf::logic_error if floats column is not float type.
  *
  * @param column Numeric column to convert.
  * @param mr Resource for allocating device memory.

@@ -40,6 +40,15 @@ namespace detail
 namespace
 {
 
+/**
+ * @brief This function converts the given string into a
+ * floating point double value.
+ *
+ * This will also map strings containing "NaN", "Inf" and "-Inf"
+ * to the appropriate float values.
+ *
+ * This function will also handle scientific notation format.
+ */
 __device__ inline double stod( string_view const& d_str )
 {
     const char* in_ptr = d_str.data();
@@ -123,7 +132,7 @@ __device__ inline double stod( string_view const& d_str )
 }
 
 /**
- * @brief Converts strings into floats.
+ * @brief Converts strings column entries into floats.
  *
  * Used by the dispatch method to convert to different float types.
  */
@@ -164,7 +173,7 @@ struct dispatch_to_floats_fn
     template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
     void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const
     {
-        CUDF_FAIL("Output for to_floats must be integral type.");
+        CUDF_FAIL("Output for to_floats must be a float type.");
     }
 };
 
@@ -196,9 +205,10 @@ std::unique_ptr<column> to_floats( strings_column_view const& strings,
 } // namespace detail
 
 // external API
+
 std::unique_ptr<column> to_floats( strings_column_view const& strings,
-                                     data_type output_type,
-                                     rmm::mr::device_memory_resource* mr)
+                                   data_type output_type,
+                                   rmm::mr::device_memory_resource* mr)
 {
     return detail::to_floats(strings, output_type, mr );
 }
@@ -209,18 +219,24 @@ namespace detail
 namespace
 {
 
+/**
+ * @brief Code logic for converting float value into a string.
+ *
+ * The floating point components are dissected and used to fill an
+ * existing output char array.
+ */
 struct ftos_converter
 {
     // significant digits is independent of scientific notation range
     // digits more than this may require using long values instead of ints
-    const unsigned int significant_digits = 10;
+    static constexpr unsigned int significant_digits = 10;
     // maximum power-of-10 that will fit in 32-bits
-    const unsigned int nine_digits = 1000000000; // 1x10^9
+    static constexpr unsigned int nine_digits = 1000000000; // 1x10^9
     // Range of numbers here is for normalizing the value.
     // If the value is above or below the following limits, the output is converted to
     // scientific notation in order to show (at most) the number of significant digits.
-    const double upper_limit = 1000000000; // max is 1x10^9
-    const double lower_limit = 0.0001; // printf uses scientific notation below this
+    static constexpr double upper_limit = 1000000000; // max is 1x10^9
+    static constexpr double lower_limit = 0.0001; // printf uses scientific notation below this
     // Tables for doing normalization: converting to exponent form
     // IEEE double float has maximum exponent of 305 so these should cover everthing
     const double upper10[9]  = { 10, 100, 10000, 1e8,  1e16,  1e32,  1e64,  1e128,  1e256 };
@@ -235,7 +251,7 @@ struct ftos_converter
             *output++ = '0';
             return output;
         }
-        char buffer[10]; // should be big-enough for 10 significant digits
+        char buffer[significant_digits]; // should be big-enough for significant digits
         char* ptr = buffer;
         while( value > 0 )
         {
@@ -247,12 +263,13 @@ struct ftos_converter
         return output;
     }
 
-    //
-    // dissect value into parts
-    // return decimal_places
+    /**
+     * @brief Dissect a float value into integer, decimal, and exponent components.
+     *
+     * @return The number of decimal places.
+     */
     __device__ int dissect_value( double value, unsigned int& integer, unsigned int& decimal, int& exp10 )
     {
-        // dissect float into parts
         int decimal_places = significant_digits-1;
         // normalize step puts value between lower-limit and upper-limit
         // by adjusting the exponent up or down
@@ -292,10 +309,8 @@ struct ftos_converter
             max_digits /= 10;
         }
         double remainder = (value - (double)integer) * (double)max_digits;
-        //printf("remainder=%g,value=%g,integer=%u,sd=%u\n",remainder,value,integer,max_digits);
         decimal = (unsigned int)remainder;
         remainder -= (double)decimal;
-        //printf("remainder=%g,decimal=%u\n",remainder,decimal);
         decimal += (unsigned int)(2.0*remainder);
         if( decimal >= max_digits )
         {
@@ -316,11 +331,16 @@ struct ftos_converter
         return decimal_places;
     }
 
-    //
-    // Converts value to string into output
-    // Output need not be more than significant_digits+7
-    // 7 = 1 sign, 1 decimal point, 1 exponent ('e'), 1 exponent-sign, 3 digits for exponent
-    //
+    /**
+     * @brief Main kernel method for converting float value to char output array.
+     *
+     * Output need not be more than (significant_digits + 7) bytes:
+     * 7 = 1 sign, 1 decimal point, 1 exponent ('e'), 1 exponent-sign, 3 digits for exponent
+     *
+     * @param value Float value to convert.
+     * @param output Memory to write output characters.
+     * @return Number of bytes written.
+     */
     __device__ int float_to_string( double value, char* output )
     {
         // check for valid value
@@ -390,13 +410,15 @@ struct ftos_converter
             ptr = int2str(exp10,ptr);
         }
         // done
-        //*ptr = 0; // null-terminator
-
-        return (int)(ptr-output);
+        return (int)(ptr-output); // number of bytes written
     }
 
-    // need to compute how much memory is needed to
-    // hold the output string (not including null)
+    /**
+     * @brief Compute how man bytes are needed to hold the output string.
+     *
+     * @param value Float value to convert.
+     * @return Number of bytes required.
+     */
     __device__ int compute_ftos_size( double value )
     {
         if( std::isnan(value) )
@@ -443,7 +465,6 @@ struct ftos_converter
                 ++count;
             } // log10(exp10)
         }
-
         return count;
     }
 };
@@ -483,7 +504,8 @@ struct float_to_string_fn
 
 /**
  * @brief This dispatch method is for converting floats into strings.
- * The template function declaration ensures only float types are used.
+ *
+ * The template function declaration ensures only float types are allowed.
  */
 struct dispatch_from_floats_fn
 {
@@ -505,25 +527,25 @@ struct dispatch_from_floats_fn
                                                                 offsets_transformer_itr+strings_count,
                                                                 mr, stream);
         auto offsets_view = offsets_column->view();
-        auto d_new_offsets = offsets_view.template data<int32_t>();
+        auto d_offsets = offsets_view.template data<int32_t>();
 
         // build chars column
-        size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
+        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
         auto chars_column = detail::create_chars_child_column( strings_count, floats.null_count(), bytes, mr, stream );
         auto chars_view = chars_column->mutable_view();
         auto d_chars = chars_view.template data<char>();
         thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-            float_to_string_fn<FloatType>{d_column, d_new_offsets, d_chars});
+            float_to_string_fn<FloatType>{d_column, d_offsets, d_chars});
         //
         return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                    floats.null_count(), std::move(null_mask), stream, mr);
     }
 
-    // non-integral types throw an exception
+    // non-float types throw an exception
     template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
     std::unique_ptr<column> operator()(column_view const&, rmm::mr::device_memory_resource*, cudaStream_t) const
     {
-        CUDF_FAIL("Values for from_floats function must be integral type.");
+        CUDF_FAIL("Values for from_floats function must be a float type.");
     }
 };
 
