@@ -859,5 +859,7 @@ def _string_column_binop(lhs, rhs, op):
     # Allocate output
     masked = lhs.mask or rhs.mask
     out = column.column_empty_like(lhs, dtype="bool", masked=masked)
+    # Call and fix null_count
+    _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
     nvtx_range_pop()
     return out

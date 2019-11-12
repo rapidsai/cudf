@@ -5,6 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+import cudf
 from cudf._lib.cudf cimport *
 from cudf._lib.GDFError import GDFError
 from cudf._libxx.column cimport Column
