@@ -289,27 +289,43 @@ struct ColumnMerger
       new cudf::column{type, merged_sz, data, mask}
     };
 
-    //"gather" data from lcol, rcol
-    //according to dv_row_order_ "map"
-    //(gather() won't work because
-    // from lcol, rcol indices overlap!)
+    //"gather" data from lcol, rcol according to dv_row_order_ "map"
+    //(directly calling gather() won't work because
+    // lcol, rcol indices overlap!)
     //
     cudf::mutable_column_view merged_view = p_merged_col->mutable_view();
+
+    //to resolve view.data()'s types use: ElemenT
+    //
+    ElemenT const* p_d_lcol = lcol.data<ElemenT>();
+    ElemenT const* p_d_rcol = rcol.data<ElemenT>();
+    ElemenT* p_d_merged     = merged_view.data<ElemenT>();
+    
     auto exe_pol = rmm::exec_policy(stream_);
+    //capture lcol, rcol, merged_view
+    //and "gather" into merged_view.data()[ext_indx]
+    //from lcol or rcol, depending on side;
+    //
     thrust::for_each(exe_pol->on(stream_),
                      dv_row_order_.begin(), dv_row_order_.end(),
-                     [lsz] __device__ (index_type const& indx_pair){
+                     [p_d_lcol, p_d_rcol, p_d_merged, lsz] __device__ (index_type const& indx_pair){
                        auto side = thrust::get<0>(indx_pair);
                        auto indx = thrust::get<1>(indx_pair);
-                       auto ext_indx = (side == side::LEFT? indx : indx+lsz);
                        
-                       //TODO: capture lcol, rcol, merged_view
-                       //and "gather" into merged_view.data()[ext_indx]
-                       //from lcol or rcol, depending on side;
-                       //
-                       //to resolve merged_view.data()'s type
-                       //may need to move this into a functor
-                       //to be type-dispatched
+                       auto ext_indx = indx;
+                       ElemenT val{};
+                       if( side == side::RIGHT )
+                         {
+                           ext_indx = indx+lsz;
+                           val = p_d_rcol[indx];
+                         }
+                       else
+                         {
+                           val = p_d_lcol[indx];
+                         }
+                       
+                       p_d_merged[ext_indx] = val;
+                       
                      });
 
     //cudaDeviceSynchronize();//? nope...this two could proceed concurrently
