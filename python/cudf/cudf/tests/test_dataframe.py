@@ -4054,3 +4054,48 @@ def test_insert(data):
     gdf.insert(-1, "qux", data)
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64"
+    ],
+)
+def test_join_on_typecast_numeric(dtype_l, dtype_r):
+    join_data = [1,2,3]
+    other_data = ['a','b','c']
+
+    pdf_l = pd.DataFrame.from_dict({'join_col':join_data, 'B':other_data})
+    gdf_l = DataFrame.from_pandas(pdf_l)
+    
+    pdf_r = pdf_l.copy()
+    gdf_r = gdf_l.copy()
+
+    pdf_l['join_col'] = pdf_l['join_col'].astype(dtype_l)
+    gdf_l['join_col'] = gdf_l['join_col'].astype(dtype_l)
+
+    pdf_r['join_col'] = pdf_r['join_col'].astype(dtype_r)
+    gdf_r['join_col'] = gdf_r['join_col'].astype(dtype_r)
+
+    expect = pdf_l.merge(pdf_r, on='join_col', how='inner')
+    got = gdf_l.merge(gdf_r, on='join_col', how='inner')
+
+    assert_eq(expect, got)
+    
