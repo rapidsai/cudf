@@ -109,6 +109,7 @@
 - PR #3286 Clean up the starter code on README
 - PR #3345 Add cache member for number of characters in string_view class
 - PR #3299 Define and implement new `is_sorted` APIs
+- PR #3328 Partition by stripes in dask_cudf ORC reader
 - PR #3243 Use upstream join code in dask_cudf
 
 ## Bug Fixes
