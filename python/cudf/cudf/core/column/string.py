@@ -800,7 +800,8 @@ class StringColumn(column.ColumnBase):
             col = utils.scalar_broadcast_to(
                 other, shape=len(self), dtype="object"
             )
-            return self.replace(data=col.data)
+            col.name = self.name
+            return col
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
