@@ -291,7 +291,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing to the beginning of this column
    * this iterator works for non-nullable column only
-   * @throws `cudf::logic_error` if the column is nullable.
+   * @throws `cudf::logic_error` if `has_nulls() == true`
    *---------------------------------------------------------------------------**/
   template <typename T>
   const_iterator<T> begin() const {
