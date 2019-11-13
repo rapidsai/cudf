@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 #include <memory>
 
@@ -174,26 +175,33 @@ std::vector<column_view> split(column_view const& input,
                                std::vector<size_type> const& splits);
 
 /**
-* @brief Shifts a `column_view` by `periods`, using a fill_value for
-* pre- or post-fix data.
+* @brief Creates a new `table` similar to the input but with values in every
+* column offset by `periods`, using `fill_value` when input is out-of-bounds.
 *
-* Output will be nullable if either the input is nullable or the fill value is null.
+* When `i + periods` is in bounds:
+*   `out[col][i] = in[col][i + periods]`
 *
-* Example:
-* input:        {14, 72, 0, 8, 0, 9, 13, 7}
-* periods:      3
-* fill_value:   0
-* output:       {0, 0, 0, 14, 72, 0, 8, 0}
+* When `i + periods` is out of bounds and `fill_value` is supplied:
+*   `out[col][i] = fill_value[i]`
+*
+* When `i + periods` is out of bounds and `fill_value is not supplied:
+*   `out[col][i] = null`
+*
+* An output column's nullability is determined based on the corrosponding input
+* column and fill_value.
+*
+* An output column is nullable if either the corrosponding input column or
+* fill_value are nullable/null.
 *
 * @param[in] input      The input column whose rows will be shifted.
-* @param[in] periods    The amount and direction by which to shift the input.
-* @param[in] fill_value The value used in place of undefined outputs.
+* @param[in] periods    The index offset by which to shift the input.
+* @param[in] fill_value The value when 
 */
-std::unique_ptr<column> shift(const column_view& in,
-                              size_type periods,
-                              const scalar fill_value,
-                              rmm::mr::device_memory_resource *mr =
-                                  rmm::mr::get_default_resource());
+std::unique_ptr<table> shift(const table_view& in,
+                             size_type periods,
+                             const std::vector<scalar>& fill_value = {},
+                             rmm::mr::device_memory_resource *mr =
+                                 rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
