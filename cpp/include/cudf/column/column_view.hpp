@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <vector>
@@ -86,6 +87,7 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* begin() const noexcept {
+    static_assert(is_fixed_width<T>(), "column_view::begin only supports fixed-width types");
     return data<T>();
   }
 
@@ -98,6 +100,7 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* end() const noexcept {
+    static_assert(is_fixed_width<T>(), "column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 
@@ -321,8 +324,11 @@ class column_view : public detail::column_view_base {
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
+
   ~mutable_column_view() = default;
+
   mutable_column_view(mutable_column_view const&) = default;
+
   mutable_column_view(mutable_column_view&&) = default;
   mutable_column_view& operator=(mutable_column_view const&) = default;
   mutable_column_view& operator=(mutable_column_view&&) = default;
@@ -404,6 +410,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* begin() const noexcept {
+    static_assert(is_fixed_width<T>(), "mutable_column_view::begin only supports fixed-width types");
     return data<T>();
   }
 
@@ -416,6 +423,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* end() const noexcept {
+    static_assert(is_fixed_width<T>(), "mutable_column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 

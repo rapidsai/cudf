@@ -50,6 +50,10 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     )
     got = joined.compute().to_pandas()
 
+    if len(got.columns):
+        got = got.sort_values(list(got.columns))
+        expect = expect.sort_values(list(expect.columns))
+
     # Check index
     np.testing.assert_array_equal(expect.index.values, got.index.values)
 
@@ -108,6 +112,10 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
         right.set_index("x"), how=how, lsuffix="l", rsuffix="r"
     )
     got = joined.compute().to_pandas()
+
+    if len(got.columns):
+        got = got.sort_values(list(got.columns))
+        expect = expect.sort_values(list(expect.columns))
 
     # Check index
     np.testing.assert_array_equal(expect.index.values, got.index.values)
