@@ -19,7 +19,8 @@ cimport cudf._lib.includes.rolling as cpp_rolling
 
 
 def rolling(inp, window, min_periods, center, op):
-    from cudf.core.column import Column
+    from cudf.core.buffer import Buffer
+    from cudf.core.column import build_column
 
     cdef gdf_column* c_out_ptr = NULL
     cdef size_type c_window = 0
@@ -74,6 +75,11 @@ def rolling(inp, window, min_periods, center, op):
         data = cudautils.full(
             inp.data.mem.size, fill_value, inp.data.mem.dtype
         )
+        
+        out_col = build_column(Buffer.from_array_like(data),
+                               dtype=data.dtype,
+                               mask=Buffer.from_array_like(mask),
+                               name=inp.name)
     else:
         if callable(op):
             nb_type = numba.numpy_support.from_dtype(inp.dtype)
@@ -114,8 +120,6 @@ def rolling(inp, window, min_periods, center, op):
                     c_forward_window_col
                 )
             out_col = gdf_column_to_column(c_out_ptr)
-
-    out_col = Column.from_mem_views(data, mask, null_count, inp.name)
 
     if c_window_col is NULL and op == "count":
         # Pandas only does this for fixed windows...?
