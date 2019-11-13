@@ -367,6 +367,7 @@ add_library(cudf
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
+            src/sort/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
@@ -391,6 +392,7 @@ add_library(cudf
             src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
+            src/transform/transform.cpp
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/legacy/apply_boolean_mask.cu
             src/stream_compaction/legacy/drop_nulls.cu
@@ -413,6 +415,7 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
+	    src/replace/replace.cu
             src/reshape/stack.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
@@ -455,6 +458,7 @@ add_library(cudf
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
+	    src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
@@ -481,13 +485,20 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cu
             src/sort/sort.cu
+            src/column/legacy/interop.cpp
             src/strings/strings_column_factories.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
+            src/strings/attributes.cu
             src/strings/copying/copying.cu
             src/strings/sorting/sorting.cu
-            src/column/legacy/interop.cpp
+            src/strings/substring.cu
+            src/strings/combine.cu
+            src/strings/char_types/char_types.cu
+            src/strings/case.cu
+            src/strings/find.cu
+            src/strings/convert/convert_booleans.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 
