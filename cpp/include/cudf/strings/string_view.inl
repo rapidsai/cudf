@@ -136,6 +136,20 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
     return *this;
 }
 
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator--()
+{
+    while( bytes_in_utf8_byte((BYTE)p[--offset])==0 );
+    --cpos;
+    return *this;
+}
+
+__device__ inline string_view::const_iterator string_view::const_iterator::operator--(int)
+{
+    string_view::const_iterator tmp(*this);
+    operator--();
+    return tmp;
+}
+
 __device__ inline bool string_view::const_iterator::operator==(const string_view::const_iterator& rhs) const
 {
     return (p == rhs.p) && (cpos == rhs.cpos);

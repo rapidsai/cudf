@@ -94,7 +94,7 @@ class string_view
       using value_type = char_utf8;
       using reference = char_utf8&;
       using pointer = char_utf8*;
-      using iterator_category = std::input_iterator_tag; // do not allow going backwards
+      using iterator_category = std::input_iterator_tag;
       __device__ const_iterator(const string_view& str, size_type pos);
       const_iterator(const const_iterator& mit) = default;
       const_iterator(const_iterator&& mit) = default;
@@ -104,6 +104,8 @@ class string_view
       __device__ const_iterator operator++(int);
       __device__ const_iterator& operator+=(difference_type);
       __device__ const_iterator operator+(difference_type);
+      __device__ const_iterator& operator--();
+      __device__ const_iterator operator--(int);
       __device__ bool operator==(const const_iterator& rhs) const;
       __device__ bool operator!=(const const_iterator& rhs) const;
       __device__ bool operator<(const const_iterator& rhs) const;
