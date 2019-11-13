@@ -20,13 +20,13 @@
 #include <unordered_set>
 
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
-#include "cudf/copying.hpp"
-#include "cudf/groupby.hpp"
-#include "cudf/io_readers.hpp"
+#include "cudf/legacy/copying.hpp"
+#include "cudf/legacy/groupby.hpp"
+#include "cudf/legacy/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
-#include "cudf/stream_compaction.hpp"
+#include "cudf/legacy/stream_compaction.hpp"
 #include "cudf/types.hpp"
-#include "cudf/join.hpp"
+#include "cudf/legacy/join.hpp"
 
 #include "jni_utils.hpp"
 
@@ -317,6 +317,44 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfWriteORC(JNIEnv *env, jclass,
+                                                              jint compression_type,
+                                                              jstring outputfilepath, jlong buffer,
+                                                              jlong buffer_length, jlong table) {
+  bool write_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, outputfilepath, "output file or buffer must be supplied", 0);
+    write_buffer = false;
+  } else if (outputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an outputfilepath", 0);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
+  }
+
+  try {
+    cudf::jni::native_jstring filename(env, outputfilepath);
+    namespace orc = cudf::io::orc;
+    orc::compression_type n_compressionType = static_cast<orc::compression_type>(compression_type);
+    if (write_buffer) {
+      JNI_THROW_NEW(env, "java/lang/UnsupportedOperationException",
+                        "buffers are not supported", 0);
+    } else {
+      cudf::sink_info info(filename.get());
+      cudf::orc_write_arg args(info);
+      auto writer = [&]() {
+
+        orc::writer_options options(n_compressionType);
+        return std::make_unique<orc::writer>(args.sink.filepath, options);
+      }();
+
+      args.table = *reinterpret_cast<cudf::table *>(table);
+      writer->write_all(args.table);
+    }
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     JNIEnv *env, jclass clazz, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices) {
@@ -341,7 +379,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     context.flag_sort_inplace = 0;
 
     int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<gdf_size_type, gdf_size_type>> dedupe(dedupe_size);
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
     for (int i = 0; i < dedupe_size; i++) {
       dedupe[i].first = left_join_cols[i];
       dedupe[i].second = right_join_cols[i];
@@ -385,7 +423,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfInnerJoin(
     context.flag_sort_inplace = 0;
 
     int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<gdf_size_type, gdf_size_type>> dedupe(dedupe_size);
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
     for (int i = 0; i < dedupe_size; i++) {
       dedupe[i].first = left_join_cols[i];
       dedupe[i].second = right_join_cols[i];
@@ -430,7 +468,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     }
 
     // check for overflow
-    if (total_size != static_cast<gdf_size_type>(total_size)) {
+    if (total_size != static_cast<cudf::size_type>(total_size)) {
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
                                       "resulting column is too large");
     }
@@ -544,9 +582,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     cudf::table const n_keys_table(n_keys_cols);
     cudf::table const n_values_table(n_values_cols);
 
-    std::vector<cudf::groupby::hash::operators> ops;
+    std::vector<cudf::groupby::operators> ops;
     for (int i = 0; i < n_ops.size(); i++) {
-      ops.push_back(static_cast<cudf::groupby::hash::operators>(n_ops[i]));
+      ops.push_back(static_cast<cudf::groupby::operators>(n_ops[i]));
     }
 
     std::pair<cudf::table, cudf::table> result = cudf::groupby::hash::groupby(

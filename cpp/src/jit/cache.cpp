@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <jit/cache.h>
 #include <stdio.h>
 #include <unistd.h>

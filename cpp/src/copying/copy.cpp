@@ -14,164 +14,109 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/legacy/column.hpp>
-#include <utilities/column_utils.hpp>
-#include <utilities/error_utils.hpp>
 #include <cudf/cudf.h>
-#include <cudf/legacy/table.hpp>
-#include <nvstrings/NVCategory.h>
+#include <cudf/copying.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/detail/copy.hpp>
 
-#include <cuda_runtime.h>
 #include <algorithm>
 
 namespace cudf
 {
-
-/*
- * Initializes and returns gdf_column of the same type as the input.
- */
-gdf_column empty_like(gdf_column const& input)
+namespace experimental
 {
-  CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-  gdf_column output{};
-
-  gdf_dtype_extra_info info = input.dtype_info;
-  info.category = nullptr;
-
-  CUDF_EXPECTS(GDF_SUCCESS == 
-               gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                         input.dtype, 0, info, input.col_name),
-               "Invalid column parameters");
-
-  return output;
-}
-
-inline bool should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
-  return (mask_alloc == ALWAYS) || (mask_alloc == RETAIN && mask_exists);
-}
-
-/*
- * Allocates a new column of the same size and type as the input.
- * Does not copy data.
- */
-gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc, cudaStream_t stream)
+namespace detail
 {
-  bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
 
-  gdf_column output = empty_like(input);
-
-  output.size = input.size;
-
-  detail::allocate_column_fields(output, allocate_mask, stream);
-  
-  return output;
-}
-
-/*
- * Allocates a new column of specified size of the same type as the input.
- * Does not copy data.
- */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size,
-                         mask_allocation_policy mask_alloc, cudaStream_t stream)
-{
-  bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
-
-  gdf_column output = empty_like(input);
-  
-  output.size = size;
-  const auto byte_width = (input.dtype == GDF_STRING)
-                        ? sizeof(std::pair<const char *, size_t>)
-                        : cudf::size_of(input.dtype);
-  RMM_TRY(RMM_ALLOC(&output.data, size * byte_width, stream));
-  if (allocate_mask) {
-    size_t valid_size = gdf_valid_allocation_size(size);
-    RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
+inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
+  if ((mask_alloc == mask_allocation_policy::ALWAYS) ||
+      (mask_alloc == mask_allocation_policy::RETAIN && mask_exists)) {
+    return UNINITIALIZED;
+  } else {
+    return UNALLOCATED;
   }
-  
-  return output;
 }
 
 /*
- * Creates a new column that is a copy of input
+ * Initializes and returns an empty column of the same type as the `input`.
  */
-gdf_column copy(gdf_column const& input, cudaStream_t stream)
+std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
 {
-  CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-
-  gdf_column output = allocate_like(input, RETAIN, stream);
-  output.null_count = input.null_count;
-  if (input.size > 0) {
-    const auto byte_width = (input.dtype == GDF_STRING)
-                          ? sizeof(std::pair<const char *, size_t>)
-                          : cudf::size_of(input.dtype);
-    CUDA_TRY(cudaMemcpyAsync(output.data, input.data, input.size * byte_width,
-                             cudaMemcpyDefault, stream));
-    if (input.valid != nullptr) {
-      size_t valid_size = gdf_valid_allocation_size(input.size);
-      CUDA_TRY(cudaMemcpyAsync(output.valid, input.valid, valid_size,
-                               cudaMemcpyDefault, stream));
-    }
-
-    output.null_count = input.null_count;
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index = 0; index < input.num_children(); index++) {
+      children.emplace_back(empty_like(input.child(index), stream));
   }
 
-  if (input.dtype == GDF_STRING_CATEGORY) {
-    if (input.dtype_info.category != nullptr) {
-      NVCategory *cat = static_cast<NVCategory*>(input.dtype_info.category);
-      output.dtype_info.category = cat->copy();
-    }
+  return std::make_unique<column>(input.type(), 0, rmm::device_buffer {},
+		                  rmm::device_buffer {}, 0, std::move(children));
+}
+
+/*
+ * Creates an uninitialized new column of the specified size and same type as the `input`.
+ * Supports only fixed-width types.
+ */
+std::unique_ptr<column> allocate_like(column_view input,
+   		                      size_type size,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr,
+				      cudaStream_t stream)
+{
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
+  mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
+
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index = 0; index < input.num_children(); index++) {
+      children.emplace_back(allocate_like(input.child(index), size, mask_alloc, mr, stream));
   }
-  return output;
+
+  return std::make_unique<column>(input.type(),
+                                  size,
+                                  rmm::device_buffer(size*size_of(input.type()), stream, mr),
+                                  create_null_mask(size, allocate_mask, stream, mr),
+                                  state_null_count(allocate_mask, input.size()),
+                                  std::move(children));
 }
 
-table empty_like(table const& t) {
-  std::vector<gdf_column*> columns(t.num_columns());
-  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = empty_like(*in_col);
-      return out_col;
+/*
+ * Creates a table of empty columns with the same types as the `input_table`
+ */
+std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream) {
+  std::vector<std::unique_ptr<column>> columns(input_table.num_columns());
+  std::transform(input_table.begin(), input_table.end(), columns.begin(),
+    [&](column_view in_col) {
+      return empty_like(in_col, stream);
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return  std::make_unique<table>(std::move(columns));
 }
 
-table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStream_t stream) {
-  std::vector<gdf_column*> columns(t.num_columns());
-  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [mask_alloc,stream](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = allocate_like(*in_col,mask_alloc,stream);
-      return out_col;
-    });
+} // namespace detail
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+std::unique_ptr<column> empty_like(column_view input){
+  return detail::empty_like(input);
 }
 
-table allocate_like(table const& t, gdf_size_type size, 
-                    mask_allocation_policy mask_alloc, cudaStream_t stream) {
-  std::vector<gdf_column*> columns(t.num_columns());
-  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [size,mask_alloc,stream](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = allocate_like(*in_col,size,mask_alloc,stream);
-      return out_col;
-    });
-
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+std::unique_ptr<column> allocate_like(column_view input,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr) {
+  return detail::allocate_like(input, input.size(), mask_alloc, mr);
 }
 
-table copy(table const& t, cudaStream_t stream) {
-  std::vector<gdf_column*> columns(t.num_columns());
-  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [stream](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = copy(*in_col, stream);
-      return out_col;
-    });
-
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+std::unique_ptr<column> allocate_like(column_view input,
+		                      size_type size,
+                                      mask_allocation_policy mask_alloc,
+                                      rmm::mr::device_memory_resource *mr) {
+  return detail::allocate_like(input, size, mask_alloc, mr);
 }
 
+std::unique_ptr<table> empty_like(table_view input_table) {
+  return detail::empty_like(input_table);
+}
+
+} // namespace experimental
 } // namespace cudf

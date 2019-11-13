@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from librmm_cffi import librmm as rmm
+import rmm
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap

@@ -15,14 +15,14 @@
  */
 
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
@@ -62,9 +62,9 @@ constexpr int block_size = 256;
 
 // This is for NO_DISPATCHING
 template<FunctorType functor_type, class T>
-__global__ void no_dispatching_kernel(T** A, gdf_size_type n_rows, gdf_size_type n_cols){
+__global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols){
   using F = Functor<T, functor_type>;
-  gdf_index_type index = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
   while(index < n_rows){
     for(int c = 0; c < n_cols; c++){
       A[c][index] = F::f(A[c][index]);
@@ -75,9 +75,9 @@ __global__ void no_dispatching_kernel(T** A, gdf_size_type n_rows, gdf_size_type
 
 // This is for HOST_DISPATCHING
 template<FunctorType functor_type, class T>
-__global__ void host_dispatching_kernel(T* A, gdf_size_type n_rows){
+__global__ void host_dispatching_kernel(T* A, cudf::size_type n_rows){
   using F = Functor<T, functor_type>;
-  gdf_index_type index = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
   while(index < n_rows){
     A[index] = F::f(A[index]);
     index += blockDim.x * gridDim.x;
@@ -89,7 +89,7 @@ struct ColumnHandle {
   template <typename ColumnType>
   void operator()(gdf_column* source_column, int work_per_thread, cudaStream_t stream = 0) {
     ColumnType* source_data = static_cast<ColumnType*>(source_column->data);
-    gdf_size_type const n_rows = source_column->size;
+    cudf::size_type const n_rows = source_column->size;
     int grid_size = cudf::util::cuda::grid_config_1d(n_rows, block_size).num_blocks;
     // Launch the kernel.
     host_dispatching_kernel<functor_type><<<grid_size, block_size, 0, stream>>>(source_data, n_rows);
@@ -105,7 +105,7 @@ struct ColumnHandle {
 template<FunctorType functor_type>
 struct RowHandle {
   template<typename T>
-  __device__ void operator()(const gdf_column& source, gdf_index_type index){
+  __device__ void operator()(const gdf_column& source, cudf::size_type index){
     using F = Functor<T, functor_type>;
     static_cast<T*>(source.data)[index] = 
       F::f(static_cast<T*>(source.data)[index]);
@@ -116,11 +116,11 @@ struct RowHandle {
 template<FunctorType functor_type>
 __global__ void device_dispatching_kernel(device_table source){
 
-  const gdf_index_type n_rows = source.num_rows();
-  gdf_index_type index = threadIdx.x + blockIdx.x * blockDim.x;
+  const cudf::size_type n_rows = source.num_rows();
+  cudf::size_type index = threadIdx.x + blockIdx.x * blockDim.x;
   
   while(index < n_rows){
-    for(gdf_size_type i = 0; i < source.num_columns(); i++){
+    for(cudf::size_type i = 0; i < source.num_columns(); i++){
       cudf::type_dispatcher(source.get_column(i)->dtype,
                           RowHandle<functor_type>{}, *source.get_column(i), index);
     }
@@ -131,8 +131,8 @@ __global__ void device_dispatching_kernel(device_table source){
 template<FunctorType functor_type, DispatchingType dispatching_type, class T>
 void launch_kernel(cudf::table& input, T** d_ptr, int work_per_thread){
   
-  const gdf_size_type n_rows = input.num_rows();
-  const gdf_size_type n_cols = input.num_columns();
+  const cudf::size_type n_rows = input.num_rows();
+  const cudf::size_type n_cols = input.num_columns();
     
   int grid_size = cudf::util::cuda::grid_config_1d(n_rows, block_size).num_blocks;
  
@@ -155,19 +155,19 @@ void launch_kernel(cudf::table& input, T** d_ptr, int work_per_thread){
 
 template<class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
 void type_dispatcher_benchmark(benchmark::State& state){
-  const gdf_size_type source_size = static_cast<gdf_size_type>(state.range(1));
+  const cudf::size_type source_size = static_cast<cudf::size_type>(state.range(1));
   
-  const gdf_size_type n_cols = static_cast<gdf_size_type>(state.range(0));
+  const cudf::size_type n_cols = static_cast<cudf::size_type>(state.range(0));
   
-  const gdf_size_type work_per_thread = static_cast<gdf_size_type>(state.range(2));
+  const cudf::size_type work_per_thread = static_cast<cudf::size_type>(state.range(2));
 
   
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
       n_cols,
       {
         source_size,
-        [](gdf_index_type row){ return static_cast<TypeParam>(row); },
-        [](gdf_index_type row) { return true; }
+        [](cudf::size_type row){ return static_cast<TypeParam>(row); },
+        [](cudf::size_type row) { return true; }
       }
   );
   
@@ -203,13 +203,13 @@ void type_dispatcher_benchmark(benchmark::State& state){
 
 }
 
-using namespace cudf;
+class TypeDispatcher : public cudf::benchmark {};
 
 #define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)                  \
-BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {                               \
+BENCHMARK_DEFINE_F(TypeDispatcher, name)(::benchmark::State& state) {                          \
   type_dispatcher_benchmark<TypeParam, functor_type, dispatching_type>(state);                 \
 }                                                                                              \
-BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
+BENCHMARK_REGISTER_F(TypeDispatcher, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
 
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);

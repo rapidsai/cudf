@@ -17,6 +17,9 @@
 #include <algorithm>
 #include "timezone.h"
 
+namespace cudf {
+namespace io {
+
 // NOTE: Assumes little-endian platform
 #ifdef _MSC_VER
 #define bswap_32(v)    _byteswap_ulong(v)
@@ -597,4 +600,8 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
     }
     return true;
 }
+
+
+} // namespace io
+} // namespace cudf
 

@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.10.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -61,9 +61,47 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     endif(CMAKE_CXX11_ABI)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
-#set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
+if(CMAKE_CUDA_COMPILER_VERSION)
+  # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${CMAKE_CUDA_COMPILER_VERSION})
+  set(CUDA_VERSION "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}" CACHE STRING "Version of CUDA as computed from nvcc.")
+  mark_as_advanced(CUDA_VERSION)
+endif()
+
+message(STATUS "CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
+message(STATUS "CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
+message(STATUS "CUDA_VERSION: ${CUDA_VERSION}")
+
+# Always set this convenience variable
+set(CUDA_VERSION_STRING "${CUDA_VERSION}")
+
+# Auto-detect available GPU compute architectures
+set(GPU_ARCHS "ALL" CACHE STRING
+  "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
+
+if("${GPU_ARCHS}" STREQUAL "")
+  include(cmake/EvalGpuArchs.cmake)
+  evaluate_gpu_archs(GPU_ARCHS)
+endif()
+
+if("${GPU_ARCHS}" STREQUAL "ALL")
+  set(GPU_ARCHS "60")
+  if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+    set(GPU_ARCHS "${GPU_ARCHS};70")
+  endif()
+  if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
+    set(GPU_ARCHS "${GPU_ARCHS};75")
+  endif()
+endif()
+message("GPU_ARCHS = ${GPU_ARCHS}")
+
+foreach(arch ${GPU_ARCHS})
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
+endforeach()
+
+list(GET GPU_ARCHS -1 ptx)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
@@ -169,7 +207,7 @@ find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include")
 
 find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib")
+             HINTS "$ENV{RMM_ROOT}/lib" "$ENV{RMM_ROOT}/build")
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -247,6 +285,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
@@ -324,107 +363,144 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
-            src/string/nvcategory_util.cpp
-            src/join/joining.cu
-            src/orderby/orderby.cu
-            src/predicates/is_sorted.cu
-            src/sort/digitize.cu
-            src/groupby/hash/groupby.cu
-            src/groupby/sort/sort_helper.cu
-            src/groupby/sort/groupby.cu
-            src/groupby/groupby_without_aggregation.cu
-            src/groupby/common/aggregation_requests.cpp
-            src/rolling/rolling.cu
-            src/rolling/jit/code/kernel.cpp
-            src/rolling/jit/code/operation.cpp
-            src/rolling/jit/util/type.cpp
-            src/binaryop/binaryop.cpp
-            src/binaryop/compiled/binary_ops.cu
-            src/binaryop/jit/code/kernel.cpp
-            src/binaryop/jit/code/operation.cpp
-            src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/util/operator.cpp
-            src/binaryop/jit/util/type.cpp
-            src/jit/type.cpp
+            src/strings/nvcategory_util.cpp
+            src/join/legacy/joining.cu
+            src/orderby/legacy/orderby.cu
+            src/predicates/legacy/is_sorted.cu
+            src/sort/is_sorted.cu
+            src/sort/legacy/digitize.cu
+            src/groupby/hash/legacy/groupby.cu
+            src/groupby/sort/legacy/sort_helper.cu
+            src/groupby/sort/legacy/groupby.cu
+            src/groupby/legacy/groupby_without_aggregation.cu
+            src/groupby/common/legacy/aggregation_requests.cpp
+            src/rolling/legacy/rolling.cu
+            src/rolling/legacy/jit/code/kernel.cpp
+            src/rolling/legacy/jit/code/operation.cpp
+            src/rolling/legacy/jit/util/type.cpp
+            src/binaryop/legacy/binaryop.cpp
+            src/binaryop/legacy/compiled/binary_ops.cu
+            src/binaryop/legacy/jit/code/kernel.cpp
+            src/binaryop/legacy/jit/code/operation.cpp
+            src/binaryop/legacy/jit/code/traits.cpp
+            src/binaryop/legacy/jit/util/operator.cpp
+            src/binaryop/legacy/jit/util/type.cpp
+            src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
-            src/transform/transform.cpp
+            src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
-            src/transform/nans_to_nulls.cu
+            src/transform/legacy/nans_to_nulls.cu
+            src/transform/transform.cpp
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/apply_boolean_mask.cu
-            src/stream_compaction/drop_nulls.cu
-            src/stream_compaction/drop_duplicates.cu
-            src/datetime/datetime_ops.cu
+            src/stream_compaction/legacy/apply_boolean_mask.cu
+            src/stream_compaction/legacy/drop_nulls.cu
+            src/stream_compaction/legacy/drop_duplicates.cu
+            src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
-            src/hash/hashing.cu
+            src/hash/legacy/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/reductions/reductions.cu
-            src/reductions/min.cu
-            src/reductions/max.cu
-            src/reductions/sum.cu
-            src/reductions/product.cu
-            src/reductions/sum_of_squares.cu
-            src/reductions/mean.cu
-            src/reductions/var.cu
-            src/reductions/std.cu
-            src/reductions/group_std.cu
-            src/replace/replace.cu
-            src/reductions/scan.cu
-            src/transpose/transpose.cu
-            src/merge/merge.cu
-            src/unary/math_ops.cu
-            src/unary/cast_ops.cu
-            src/io/cuio_common.cpp
-            src/io/io_functions.cpp
-            src/io/convert/csr/cudf_to_csr.cu
-            src/io/convert/dlpack/cudf_dlpack.cpp
-            src/io/avro/avro_reader_impl.cu
+            src/reductions/legacy/reductions.cu
+            src/reductions/legacy/min.cu
+            src/reductions/legacy/max.cu
+            src/reductions/legacy/any.cu
+            src/reductions/legacy/all.cu
+            src/reductions/legacy/sum.cu
+            src/reductions/legacy/product.cu
+            src/reductions/legacy/sum_of_squares.cu
+            src/reductions/legacy/mean.cu
+            src/reductions/legacy/var.cu
+            src/reductions/legacy/std.cu
+            src/reductions/legacy/group_std.cu
+            src/reductions/legacy/scan.cu
+            src/replace/legacy/replace.cu
+	    src/replace/replace.cu
+            src/reshape/stack.cu
+            src/transpose/legacy/transpose.cu
+            src/merge/legacy/merge.cu
+            src/unary/null_ops.cu
+            src/unary/legacy/math_ops.cu
+            src/unary/legacy/cast_ops.cu
+            src/unary/legacy/null_ops.cu
+            src/io/legacy/cuio_common.cpp
+            src/io/legacy/io_functions.cpp
+            src/io/convert/csr/legacy/cudf_to_csr.cu
+            src/io/convert/dlpack/legacy/cudf_dlpack.cpp
+            src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
-            src/io/csv/csv_reader_impl.cu
-            src/io/csv/csv_writer.cu
-            src/io/csv/csv_gpu.cu
-            src/io/json/json_reader_impl.cu
-            src/io/orc/orc_reader_impl.cu
+            src/io/csv/legacy/csv_reader_impl.cu
+            src/io/csv/legacy/csv_writer.cu
+            src/io/csv/legacy/csv_gpu.cu
+            src/io/json/legacy/json_reader_impl.cu
+            src/io/orc/legacy/orc_reader_impl.cu
+            src/io/orc/legacy/orc_writer_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
             src/io/orc/stripe_init.cu
+            src/io/orc/stripe_enc.cu
+            src/io/orc/dict_enc.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
-            src/io/parquet/parquet_reader_impl.cu
+            src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
             src/io/comp/debrotli.cu
+            src/io/comp/snap.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/utilities/datasource.cpp
-            src/io/utilities/parsing_utils.cu
-            src/utilities/cuda_utils.cu
+            src/io/utilities/legacy/parsing_utils.cu
+            src/utilities/legacy/cuda_utils.cu
             src/utilities/column_utils.cpp
-            src/utilities/error_utils.cpp
+	    src/copying/gather.cu
+            src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
+            src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
-            src/copying/gather.cu
-            src/copying/scatter.cu
-            src/copying/slice.cu
-            src/copying/split.cu
+            src/copying/slice.cpp
+            src/copying/split.cpp
+            src/copying/legacy/copy.cpp
+            src/copying/legacy/gather.cu
+            src/copying/legacy/scatter.cu
+            src/copying/legacy/slice.cu
+            src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu
-            src/copying/copy_range.cu
-            src/filling/fill.cu
-            src/filling/repeat.cu
-            src/search/search.cu)
-
-# Override RPATH for nvstrings
-set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
+            src/copying/legacy/copy_range.cu
+            src/filling/legacy/fill.cu
+            src/filling/legacy/repeat.cu
+            src/filling/legacy/tile.cu
+            src/search/legacy/search.cu
+            src/column/column.cu
+            src/column/column_view.cpp
+            src/column/column_device_view.cu
+            src/column/column_factories.cpp
+            src/table/table_view.cpp
+            src/table/table_device_view.cu
+            src/table/table.cpp
+            src/bitmask/null_mask.cu
+            src/sort/sort.cu
+            src/column/legacy/interop.cpp
+            src/strings/strings_column_factories.cu
+            src/strings/strings_scalar_factories.cpp
+            src/strings/strings_column_view.cu
+            src/strings/utilities.cu
+            src/strings/attributes.cu
+            src/strings/copying/copying.cu
+            src/strings/sorting/sorting.cu
+            src/strings/substring.cu
+            src/strings/combine.cu
+            src/strings/char_types/char_types.cu
+            src/strings/case.cu
+            src/strings/find.cu
+            src/strings/convert/convert_booleans.cu
+            src/scalar/scalar.cpp
+            src/scalar/scalar_factories.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -433,6 +509,11 @@ set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
 
 # Override RPATH for cudf
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+# Override RPATH for nvstrings
+set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -449,7 +530,16 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
 
-add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   COMMENT "Run stringify on header types.hpp to convert it to c-str for use in JIT compiled code"
+                   DEPENDS stringify
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
+
+add_custom_target(stringify_run DEPENDS
+                  ${CMAKE_BINARY_DIR}/include/types.h.jit
+                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
 
 add_dependencies(cudf stringify_run)
 

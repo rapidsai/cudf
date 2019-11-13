@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <cudf/groupby.hpp>
+#include <cudf/legacy/groupby.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -38,8 +38,8 @@ namespace detail {
  * @param stream Stream to perform computation in
  */
 void group_quantiles(gdf_column const& values,
-                     rmm::device_vector<gdf_size_type> const& group_offsets,
-                     rmm::device_vector<gdf_size_type> const& group_sizes,
+                     rmm::device_vector<cudf::size_type> const& group_offsets,
+                     rmm::device_vector<cudf::size_type> const& group_sizes,
                      gdf_column * result,
                      std::vector<double> const& quantiles,
                      cudf::interpolation interpolation,
@@ -55,8 +55,8 @@ void group_quantiles(gdf_column const& values,
  * @param stream Stream to perform computation in
  */
 void group_medians(gdf_column const& values,
-                   rmm::device_vector<gdf_size_type> const& group_offsets,
-                   rmm::device_vector<gdf_size_type> const& group_sizes,
+                   rmm::device_vector<cudf::size_type> const& group_offsets,
+                   rmm::device_vector<cudf::size_type> const& group_sizes,
                    gdf_column * result,
                    cudaStream_t stream = 0);
 

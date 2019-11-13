@@ -120,6 +120,8 @@ class _DataFrameIndexer(object):
         operation should be "downcasted" from a DataFrame to a
         Series
         """
+        from cudf.core.column import as_column
+
         if isinstance(df, cudf.Series):
             return False
         nrows, ncols = df.shape
@@ -127,12 +129,15 @@ class _DataFrameIndexer(object):
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
                     return False
+            else:
+                # row selection using boolean indexing - never downcasts
+                if pd.api.types.is_bool_dtype(as_column(arg[0]).dtype):
+                    return False
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
                 [pd.api.types.is_numeric_dtype(t) for t in dtypes]
             )
-            all_identical = dtypes.count(dtypes[0]) == len(dtypes)
-            if all_numeric or all_identical:
+            if all_numeric:
                 return True
         if ncols == 1:
             if type(arg[1]) is slice:
@@ -182,6 +187,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import DataFrame
+        from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf.utils.cudautils import arange
         from cudf import MultiIndex
@@ -192,8 +198,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         else:
             columns = self._get_column_selection(arg[1])
             columns_df = DataFrame()
-            for col in columns:
-                columns_df.add_column(name=col, data=self._df[col])
+            for i, col in enumerate(columns):
+                columns_df.insert(i, col, self._df[col])
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
@@ -217,7 +223,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     start = self._df.index[0]
                 df.index = as_index(start)
             else:
-                df.index = as_index(arg[0])
+                row_selection = column.as_column(arg[0])
+                if pd.api.types.is_bool_dtype(row_selection.dtype):
+                    df.index = self._df.index.take(row_selection)
+                else:
+                    df.index = as_index(row_selection)
         # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
@@ -289,8 +299,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             if isinstance(arg[0], slice):
                 columns_df = DataFrame()
-                for col in columns:
-                    columns_df.add_column(name=col, data=self._df[col])
+                for i, col in enumerate(columns):
+                    columns_df.insert(i, col, self._df[col])
                 columns_df._index = self._df._index
             else:
                 columns_df = self._df._columns_view(columns)

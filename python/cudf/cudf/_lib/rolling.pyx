@@ -22,12 +22,12 @@ def rolling(inp, window, min_periods, center, op):
     from cudf.core.column import Column
 
     cdef gdf_column* c_out_ptr = NULL
-    cdef gdf_index_type c_window = 0
-    cdef gdf_index_type c_forward_window = 0
+    cdef size_type c_window = 0
+    cdef size_type c_forward_window = 0
     cdef gdf_agg_op c_op
-    cdef gdf_index_type *c_window_col = NULL
-    cdef gdf_index_type *c_min_periods_col = NULL
-    cdef gdf_index_type *c_forward_window_col = NULL
+    cdef size_type *c_window_col = NULL
+    cdef size_type *c_min_periods_col = NULL
+    cdef size_type *c_forward_window_col = NULL
 
     cdef string cpp_str
     cdef gdf_dtype g_type
@@ -40,7 +40,7 @@ def rolling(inp, window, min_periods, center, op):
     if op == "count":
         min_periods = 0
 
-    cdef gdf_index_type c_min_periods = min_periods
+    cdef size_type c_min_periods = min_periods
 
     cdef uintptr_t c_window_ptr
     if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
@@ -50,7 +50,7 @@ def rolling(inp, window, min_periods, center, op):
                 "center is not implemented for offset-based windows"
             )
         c_window_ptr = get_ctype_ptr(window)
-        c_window_col = <gdf_index_type*> c_window_ptr
+        c_window_col = <size_type*> c_window_ptr
     else:
         if center:
             c_window = (window // 2) + 1

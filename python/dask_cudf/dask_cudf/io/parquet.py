@@ -1,7 +1,12 @@
+from functools import partial
+
+import pyarrow.parquet as pq
+
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
+from cudf.core.column import CategoricalColumn
 
 
 class CudfEngine(ArrowEngine):
@@ -31,6 +36,20 @@ class CudfEngine(ArrowEngine):
         if isinstance(index, list):
             columns += index
 
+        if isinstance(piece, str):
+            # `piece` is a file-path string
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
+            )
+        else:
+            # `piece` contains (path, row_group, partition_keys)
+            piece = pq.ParquetDatasetPiece(
+                piece[0],
+                row_group=piece[1],
+                partition_keys=piece[2],
+                open_file_func=partial(fs.open, mode="rb"),
+            )
+
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         if cudf.utils.ioutils._is_local_filesystem(fs):
             df = cudf.read_parquet(
@@ -52,8 +71,20 @@ class CudfEngine(ArrowEngine):
                     **kwargs.get("read", {}),
                 )
 
-        if index is not None and index[0] in df.columns:
+        if index and index[0] in df.columns:
             df = df.set_index(index[0])
+
+        if len(piece.partition_keys) > 0:
+            if partitions is None:
+                raise ValueError("Must pass partition sets")
+            for i, (name, index2) in enumerate(piece.partition_keys):
+                categories = [
+                    val.as_py() for val in partitions.levels[i].dictionary
+                ]
+                sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
+                df[name] = CategoricalColumn(
+                    data=sr._column.data, categories=categories, ordered=False
+                )
 
         return df
 

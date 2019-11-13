@@ -20,8 +20,8 @@
 
 #include <cudf/cudf.h>
 #include <cudf/quantiles.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/release_assert.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/release_assert.cuh>
 
 namespace cudf {
 namespace interpolate {
@@ -102,19 +102,19 @@ namespace detail {
  * 
  */
 struct quantile_index {
-    gdf_size_type lower_bound;
-    gdf_size_type upper_bound;
-    gdf_size_type nearest;
+    cudf::size_type lower_bound;
+    cudf::size_type upper_bound;
+    cudf::size_type nearest;
     double fraction;
 
     CUDA_HOST_DEVICE_CALLABLE
-    quantile_index(gdf_size_type length, double quant)
+    quantile_index(cudf::size_type length, double quant)
     {
         // clamp quant value.
         // Todo: use std::clamp if c++17 is supported.
         quant = std::min(std::max(quant, 0.0), 1.0);
 
-        // since gdf_size_type is int32_t, there is no underflow/overflow
+        // since cudf::size_type is int32_t, there is no underflow/overflow
         double val = quant*(length -1);
         lower_bound = std::floor(val);
         upper_bound = static_cast<size_t>(std::ceil(val));
@@ -125,7 +125,7 @@ struct quantile_index {
 
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE
-T get_array_value(T const* devarr, gdf_size_type location)
+T get_array_value(T const* devarr, cudf::size_type location)
 {
     T result;
 #if defined(__CUDA_ARCH__)
@@ -148,7 +148,7 @@ T get_array_value(T const* devarr, gdf_size_type location)
 template <typename T,
           typename RetT = double>
 CUDA_HOST_DEVICE_CALLABLE
-RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
+RetT select_quantile(T const* devarr, cudf::size_type size, double quantile,
                        interpolation interpolation)
 {
     T temp[2];

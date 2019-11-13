@@ -7,6 +7,8 @@ import pyarrow as pa
 from pandas.api.types import pandas_dtype
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
+import cudf
+
 _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
@@ -54,6 +56,10 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
+def is_string_dtype(obj):
+    return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
+
+
 def is_datetime_dtype(obj):
     if obj is None:
         return False
@@ -72,12 +78,17 @@ def is_categorical_dtype(obj):
 
     if obj is None:
         return False
+    if isinstance(obj, cudf.core.dtypes.CategoricalDtype):
+        return True
+    if obj is cudf.core.dtypes.CategoricalDtype:
+        return True
     if obj is CategoricalDtypeType:
         return True
     if isinstance(obj, str) and obj == "category":
         return True
-    if hasattr(obj, "type") and obj.type is CategoricalDtypeType:
-        return True
+    if hasattr(obj, "type"):
+        if obj.type is CategoricalDtypeType:
+            return True
     if isinstance(
         obj,
         (
@@ -101,17 +112,10 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
     """
-    try:
-        # pd 0.24.X
-        from pandas.core.dtypes.common import infer_dtype_from_object
-    except ImportError:
-        # pd 0.23.X
-        from pandas.core.dtypes.common import (
-            _get_dtype_from_object as infer_dtype_from_object,
-        )
+    from pandas.core.dtypes.common import infer_dtype_from_object
 
     if is_categorical_dtype(dtype):
-        pass
+        return cudf.core.dtypes.CategoricalDtype
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
 

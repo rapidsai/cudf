@@ -24,7 +24,6 @@ def test_categorical_basic():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(cat.codes, sr.to_array())
-    assert sr.dtype == pdsr.dtype
 
     # Test attributes
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
@@ -324,7 +323,6 @@ def test_categorical_empty():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(cat.codes, sr.to_array())
-    assert sr.dtype == pdsr.dtype
 
     # Test attributes
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)

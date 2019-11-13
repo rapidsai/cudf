@@ -101,6 +101,33 @@ def token_count(strs, delimiter=" ", devptr=0):
     return rtn
 
 
+def character_tokenize(strs):
+    """
+    Each string is split into individual characters.
+    The nvstrings instance returned contains each character as an
+    individual string.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["hello world",
+    ...                          "goodbye"])
+    >>> t = nvtext.character_tokenize(s)
+    >>> print(t)
+    ["h","e","l","l","o"," ","w","o","r","l","d","g","o","o","d","b","y","e"]
+
+    """
+    rtn = pyniNVText.n_character_tokenize(strs)
+    if rtn is not None:
+        rtn = nvs.nvstrings(rtn)
+    return rtn
+
+
 def contains_strings(strs, tgts, devptr=0):
     """
     The tgts strings are searched for within each strs.
@@ -287,6 +314,39 @@ def edit_distance(strs, tgt, algo=0, devptr=0):
     return rtn
 
 
+def edit_distance_matrix(strs, algo=0, devptr=0):
+    """
+    Compute the edit-distance between each pair of strings in strs .
+    Edit distance is how many character changes between strings.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation.
+    algo: int
+        0 = Levenshtein
+    devptr : GPU memory pointer
+        Must be able to hold at least strs.size()*strs.size() of int32 values.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["honda","hyundai","suzuki"])
+    >>> n = nvtext.edit_distance_matrix(s)
+    >>> print(n)
+    [[0, 3, 6],
+     [3, 0, 5],
+     [6, 5, 0]]
+
+    """
+    if strs.size() < 2:
+        raise ValueError("minimum two strings are required!")
+    if algo != 0:
+        raise ValueError("Only `levenshtein` algorithm is supported yet.")
+    rtn = pyniNVText.n_edit_distance_matrix(strs, algo, devptr)
+    return rtn
+
+
 def ngrams(tokens, N=2, sep="_"):
     """
     Generate the n-grams from a set of tokens.
@@ -345,4 +405,139 @@ def scatter_count(strs, counts):
     rtn = pyniNVText.n_scatter_count(strs, counts)
     if rtn is not None:
         rtn = nvs.nvstrings(rtn)
+    return rtn
+
+
+def porter_stemmer_measure(strs, vowels="aeiou", y_char="y", devptr=0):
+    """
+    Calculates porter stemmer measure of each string
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation
+
+    vowels: str
+     chars to consider as vowels
+     Default are 'aeiou'
+
+    y_char: str
+     characters to treat as 'y_char'
+     Default is 'y'
+
+    devptr : GPU memory pointer
+        Must be able to hold at least strs.size() of int32 values.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["tr","trouble", "troubles"])
+    >>> n = nvtext.porter_stemmer_measure(s)
+    >>> print(n)
+    >>> [0, 1, 2]
+    """
+    if not isinstance(strs, nvs.nvstrings):
+        raise ValueError("strs must be nvstrings object")
+
+    rtn = pyniNVText.n_porter_stemmer_measure(strs, vowels, y_char, devptr)
+    return rtn
+
+
+def is_consonant(
+    strs, index, index_is_ptr=False, vowels="aeiou", y_char="y", devptr=0
+):
+    """
+    Returns a bool array with True if the character at the specified
+    (0-based) index position is a consonant.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation
+
+    index : int
+        The position of character to check in each string.
+        This may also be a device pointer to memory containing
+        index values of type int32 for each of the strings.
+        The number of values must be at least strs.size().
+
+    index_is_ptr : boolean
+        Set to True if index parameter is device memory pointer
+        instead of an character position.
+
+    vowels: str
+        Characters to consider as vowels
+        Default is 'aeiou'
+
+    y_char: str
+        Characters to treat as 'y' for vowel-specific algorithm.
+        Default is 'y'
+
+    devptr : GPU memory pointer
+        Must be able to hold at least strs.size() of int8 values.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["one", "berry", "blast"])
+    >>> n = nvtext.is_consonant(s,4)
+    >>> print(n)
+    >>> [false, false, true]
+    """
+    if not isinstance(strs, nvs.nvstrings):
+        raise ValueError("strs must be nvstrings object")
+
+    rtn = pyniNVText.n_is_letter(
+        strs, False, index, index_is_ptr, vowels, y_char, devptr
+    )
+    return rtn
+
+
+def is_vowel(
+    strs, index, index_is_ptr=False, vowels="aeiou", y_char="y", devptr=0
+):
+    """
+    Returns a bool array with True if the character at the specified
+    (0-based) index position is a vowel.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation.
+
+    index : int
+        The position of character to check in each string.
+        This may also be a device pointer to memory containing
+        index values of type int32 for each of the strings.
+        The number of values must be at least strs.size().
+
+    index_is_ptr : boolean
+        Set to True if index parameter is device memory pointer
+        instead of an character position.
+
+    vowels: str
+        Characters to consider as vowels
+        Default is 'aeiou'
+
+    y_char: str
+        Characters to treat as 'y' for vowel-specific algorithm.
+        Default is 'y'
+
+    devptr : GPU memory pointer
+        Must be able to hold at least strs.size() of int8 values.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["twelve", "berry", "blazing", "two"])
+    >>> n = nvtext.is_consonant(s,4)
+    >>> print(n)
+    >>> [false, true, true, false]
+    """
+    if not isinstance(strs, nvs.nvstrings):
+        raise ValueError("strs must be nvstrings object")
+
+    rtn = pyniNVText.n_is_letter(
+        strs, True, index, index_is_ptr, vowels, y_char, devptr
+    )
     return rtn

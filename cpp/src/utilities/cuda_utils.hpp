@@ -23,8 +23,8 @@
  * function implementations
  */
 
-#include <utilities/integer_utils.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/types.h>
 
 namespace cudf {
@@ -53,9 +53,9 @@ public:
      * element; this affects the number of threads the grid must contain
      */
     grid_config_1d (
-        gdf_size_type  overall_num_elements,
+        cudf::size_type  overall_num_elements,
         int            num_threads_per_block_,
-        gdf_size_type  elements_per_thread = 1
+        cudf::size_type  elements_per_thread = 1
      ) :
         num_threads_per_block(num_threads_per_block_),
         num_blocks(util::div_rounding_up_safe(overall_num_elements, elements_per_thread * num_threads_per_block))

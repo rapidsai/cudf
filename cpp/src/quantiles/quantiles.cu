@@ -19,7 +19,7 @@
 #include <cudf/cudf.h>
 #include <quantiles/quantiles_util.hpp>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <rmm/thrust_rmm_allocator.h>
@@ -33,7 +33,7 @@ namespace{ // anonymous
   // compute quantile value as `result` from `quant` value by `interpolation` method
   template<typename T, typename RetT>
   gdf_error select_quantile(T* devarr,
-                          gdf_size_type n,
+                          cudf::size_type n,
                           double quant, 
                           cudf::interpolation interpolation,
                           RetT& result,

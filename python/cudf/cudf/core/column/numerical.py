@@ -9,7 +9,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf.core._sort import get_sorted_inds
@@ -174,7 +174,7 @@ class NumericalColumn(column.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = libcudf.copying.gather(self, sort_inds.data.mem)
+        col_keys = self[sort_inds]
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
@@ -220,16 +220,16 @@ class NumericalColumn(column.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = libcudf.copying.gather(sortedvals, segs)
+        out_col = column.as_column(sortedvals)[segs]
         return out_col
 
     def all(self):
-        return bool(self.min(dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(self.max(dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
         return libcudf.reduce.reduce("min", self, dtype=dtype)
@@ -349,7 +349,9 @@ class NumericalColumn(column.TypedColumnBase):
         Returns offset of first value that matches. For monotonic
         columns, returns the offset of the first larger value.
         """
-        found = cudautils.find_first(self.data.mem, value)
+        found = 0
+        if len(self):
+            found = cudautils.find_first(self.data.mem, value)
         if found == -1 and self.is_monotonic:
             if value < self.min():
                 found = 0
@@ -370,7 +372,9 @@ class NumericalColumn(column.TypedColumnBase):
         Returns offset of last value that matches. For monotonic
         columns, returns the offset of the last smaller value.
         """
-        found = cudautils.find_last(self.data.mem, value)
+        found = 0
+        if len(self):
+            found = cudautils.find_last(self.data.mem, value)
         if found == -1 and self.is_monotonic:
             if value < self.min():
                 found = -1

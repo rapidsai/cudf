@@ -20,14 +20,14 @@
 
 #include <gtest/gtest.h>
 
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
-#include <cudf/join.hpp>
+#include <cudf/legacy/join.hpp>
 
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/types.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <utilities/column_utils.hpp>
 #include <iostream>
 #include <random>
@@ -37,18 +37,18 @@
 
 #include <rmm/rmm.h>
 #include <cstring>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 
-gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
+gdf_column * create_column_ints(int32_t* host_data, cudf::size_type num_rows){
 	gdf_column * column = new gdf_column{};
 	int32_t * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int32_t) , 0), RMM_SUCCESS);
@@ -59,13 +59,13 @@ gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
 
 	gdf_error err = gdf_column_view(column,
 			(void *) data,
-			(gdf_valid_type *)valid,
+			(cudf::valid_type *)valid,
 			num_rows,
 			GDF_INT32);
 	return column;
 }
 
-gdf_column * create_column_constant(gdf_size_type num_rows, int value){
+gdf_column * create_column_constant(cudf::size_type num_rows, int value){
 	gdf_column * column = new gdf_column{};
 	int * data;
 	bit_mask::bit_mask_t * valid;
@@ -74,16 +74,16 @@ gdf_column * create_column_constant(gdf_size_type num_rows, int value){
 	cudaMemset(data,value,sizeof(int) * num_rows);
 	gdf_error err = gdf_column_view(column,
 			(void *) data,
-			(gdf_valid_type *) valid,
+			(cudf::valid_type *) valid,
 			num_rows,
 			GDF_INT32);
 	return column;
 }
 
-int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=false){
+int32_t* generate_int_data(cudf::size_type num_rows, size_t max_value, bool print=false){
 	int32_t* host_data = new int32_t[num_rows];
 
-	for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+	for(cudf::size_type row_index = 0; row_index < num_rows; row_index++){
 		host_data[row_index] = std::rand() % max_value;
 
 		if(print)
@@ -97,7 +97,7 @@ int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=
 
 struct NVCategoryTest : public GdfTest
 {
-	gdf_column * create_boolean_column(gdf_size_type num_rows){
+	gdf_column * create_boolean_column(cudf::size_type num_rows){
 		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
@@ -105,14 +105,14 @@ struct NVCategoryTest : public GdfTest
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int8_t) , 0), RMM_SUCCESS);
 		gdf_error err = gdf_column_view(column,
 				(void *) data,
-				(gdf_valid_type *) valid,
+				(cudf::valid_type *) valid,
 				num_rows,
 				GDF_INT8);
 		return column;
 
 	}
 
-	gdf_column * create_indices_column(gdf_size_type num_rows){
+	gdf_column * create_indices_column(cudf::size_type num_rows){
 		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
@@ -120,7 +120,7 @@ struct NVCategoryTest : public GdfTest
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int) , 0), RMM_SUCCESS);
 		gdf_error err = gdf_column_view(column,
 				(void *) data,
-				(gdf_valid_type *) valid,
+				(cudf::valid_type *) valid,
 				num_rows,
 				GDF_INT32);
 		return column;
@@ -587,7 +587,7 @@ struct NVCategoryJoinTest : public GdfTest
 
     // Copy result of gdf join to local result
     EXPECT_EQ(RMM_ALLOC(&result_col->data, result.get_column(0)->size * cudf::size_of(result.get_column(0)->dtype), 0), RMM_SUCCESS);
-    EXPECT_EQ(RMM_ALLOC(&result_col->valid, gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(gdf_valid_type), 0), RMM_SUCCESS);
+    EXPECT_EQ(RMM_ALLOC(&result_col->valid, gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(cudf::valid_type), 0), RMM_SUCCESS);
     result_col->size = result.get_column(0)->size;
     result_col->dtype = result.get_column(0)->dtype;
     result_col->null_count = 0;
@@ -595,7 +595,7 @@ struct NVCategoryJoinTest : public GdfTest
     EXPECT_EQ(cudaMemcpy(result_col->data, result.get_column(0)->data, 
                result.get_column(0)->size * cudf::size_of(result.get_column(0)->dtype), cudaMemcpyDeviceToDevice), cudaSuccess);
     EXPECT_EQ(cudaMemcpy(result_col->valid, result.get_column(0)->valid, 
-               gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice), cudaSuccess);
+               gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(cudf::valid_type), cudaMemcpyDeviceToDevice), cudaSuccess);
     gdf_raw_result_columns.push_back (result_col);
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices

@@ -6,7 +6,7 @@ from itertools import chain
 import numpy as np
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -79,7 +79,17 @@ _dfsegs_pack = namedtuple("_dfsegs_pack", ["df", "segs"])
 
 
 class Groupby(object):
-    """Groupby object returned by cudf.DataFrame.groupby().
+    """Groupby object returned by cudf.DataFrame.groupby(method="cudf").
+    `method=cudf` uses numba kernels to compute aggregations and allows
+    custom UDFs via the `apply` and `apply_grouped` methods.
+
+    Notes
+    -----
+    - `method=cudf` may be deprecated in the future.
+    - Grouping and aggregating over columns with null values will
+      return incorrect results.
+    - Grouping by or aggregating over string columns is currently
+      not supported.
     """
 
     _NAMED_FUNCTIONS = {
@@ -216,9 +226,7 @@ class Groupby(object):
 
         for k in self._by:
             outdf[k] = (
-                grouped_df[k]
-                .take(sr_segs.to_gpu_array())
-                .reset_index(drop=True)
+                grouped_df[k].take(sr_segs.data.mem).reset_index(drop=True)
             )
 
         size = len(outdf)
@@ -234,7 +242,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=np.float64)
                     if size > 0:
                         group_mean.forall(size)(
-                            sr.to_gpu_array(), dev_begins, dev_out
+                            sr.data.mem, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -243,7 +251,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(
-                            sr.to_gpu_array(), dev_begins, dev_out
+                            sr.data.mem, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -252,7 +260,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(
-                            sr.to_gpu_array(), dev_begins, dev_out
+                            sr.data.mem, dev_begins, dev_out
                         )
                     values[newk] = dev_out
                 else:
@@ -313,9 +321,6 @@ class Groupby(object):
         Returns
         -------
         result : DataFrame
-
-        Notes
-        -----
         """
 
         def _get_function(x):

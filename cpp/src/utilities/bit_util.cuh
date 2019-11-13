@@ -19,7 +19,7 @@
 #pragma once
 
 #include <utilities/cudf_utils.h>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cudf/types.h>
 
@@ -111,7 +111,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer* bits, Si
 }
 
 template <typename BitContainer, typename Size>
-inline constexpr gdf_size_type packed_bit_sequence_size_in_bytes (Size num_bits) {
+inline constexpr cudf::size_type packed_bit_sequence_size_in_bytes (Size num_bits) {
     return cudf::util::div_rounding_up_safe<Size>(num_bits, size_in_bits<BitContainer>());
 }
 

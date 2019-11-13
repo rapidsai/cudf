@@ -69,7 +69,7 @@ Navigating the API
 ------------------
 
 This project reuses the
-[Dask DataFrame](https://dask.org/en/latest/dataframes.html) project, which
+[Dask DataFrame](https://docs.dask.org/en/latest/dataframe.html) project, which
 was originally designed for Pandas, with the newer library cuDF.  Because we use
 the same Dask classes for both projects there are often methods that are
 implemented for Pandas, but not yet for cuDF.  As a result users looking at the

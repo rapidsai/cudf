@@ -8,19 +8,21 @@
 from cudf._lib.cudf cimport *
 
 
-cdef extern from "cudf/reduction.hpp" namespace "cudf::reduction" nogil:
+cdef extern from "cudf/legacy/reduction.hpp" namespace "cudf::reduction" nogil:
 
     ctypedef enum operators:
         SUM = 0,
         MIN,
         MAX,
+        ANY,
+        ALL,
         PRODUCT,
         SUMOFSQUARES,
         MEAN,
         VAR,
         STD,
 
-cdef extern from "cudf/reduction.hpp" nogil:
+cdef extern from "cudf/legacy/reduction.hpp" nogil:
 
     ctypedef enum gdf_scan_op:
         GDF_SCAN_SUM = 0,
@@ -28,13 +30,13 @@ cdef extern from "cudf/reduction.hpp" nogil:
         GDF_SCAN_MAX,
         GDF_SCAN_PRODUCT,
 
-cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/reduction.hpp" namespace "cudf" nogil:
 
     cdef gdf_scalar reduce(
         gdf_column *inp,
         operators op,
         gdf_dtype output_dtype,
-        gdf_size_type ddof
+        size_type ddof
     ) except +
 
     cdef void scan(

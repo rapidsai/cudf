@@ -10,7 +10,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -57,12 +57,12 @@ class Column(object):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
             elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
-                    data=Column(Buffer.null(np.dtype("int8"))),
+                    data=as_column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
                     ordered=False,
                 )
             else:
-                return Column(Buffer.null(dtype))
+                return as_column(Buffer.null(dtype))
 
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
@@ -515,9 +515,7 @@ class Column(object):
                     data_size = self.data.size()
                 else:
                     data_size = self.data.size
-                bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask.to_gpu_array()
-                )
+                bytemask = cudautils.expand_mask_bits(data_size, self.mask.mem)
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
                 return col
@@ -592,7 +590,13 @@ class Column(object):
                 self, value, key_start, key_stop, 0
             )
         else:
-            out = libcudf.copying.scatter(value, key, self)
+            try:
+                out = libcudf.copying.scatter(value, key, self)
+            except RuntimeError as e:
+                if "out of bounds" in str(e):
+                    raise IndexError(
+                        f"index out of bounds for column of size {len(self)}"
+                    )
 
         self._data = out.data
         self._mask = out.mask
@@ -606,11 +610,29 @@ class Column(object):
         if not self.has_null_mask:
             return self
         out = cudautils.fillna(
-            data=self.data.to_gpu_array(),
-            mask=self.mask.to_gpu_array(),
-            value=value,
+            data=self.data.mem, mask=self.mask.mem, value=value
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
+
+    def isnull(self):
+        """Identify missing values in a Column.
+        """
+        return libcudf.unaryops.is_null(self)
+
+    def isna(self):
+        """Identify missing values in a Column. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in a Column.
+        """
+        return libcudf.unaryops.is_not_null(self)
+
+    def notnull(self):
+        """Identify non-missing values in a Column. Alias for notna.
+        """
+        return self.notna()
 
     def to_dense_buffer(self, fillna=None):
         """Get dense (no null values) ``Buffer`` of the data.
@@ -652,14 +674,15 @@ class Column(object):
         DeviceNDArray
            logical inverted mask
         """
-
-        gpu_mask = self.to_gpu_array()
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+        gpu_mask = self.data.mem
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
     def _copy_to_dense_buffer(self):
-        data = self.data.to_gpu_array()
-        mask = self.mask.to_gpu_array()
+        data = self.data.mem
+        mask = self.mask.mem
         nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
         return Buffer(mem, size=nnz, capacity=mem.size)
 
@@ -704,13 +727,19 @@ class Column(object):
         """
         from cudf.core.column import column_empty_like
 
-        indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
 
-        # Returns a new column
-        result = libcudf.copying.gather(self, indices)
+        try:
+            result = libcudf.copying.gather(self, indices)
+        except RuntimeError as e:
+            if "out of bounds" in str(e):
+                raise IndexError(
+                    f"index out of bounds for column of size {len(self)}"
+                )
+            raise
+
         result.name = self.name
         return result
 
@@ -721,7 +750,11 @@ class Column(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
+        return cudautils.compact_mask_bytes(self.data.mem)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -999,6 +1032,20 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     return column_empty(row_count, dtype, masked, categories=categories)
 
 
+def column_empty_like_same_mask(column, dtype):
+    """Create a new empty Column with the same length and the same mask.
+
+    Parameters
+    ----------
+    dtype : np.dtype like
+        The dtype of the data buffer.
+    """
+    result = column_empty_like(column, dtype)
+    if column.has_null_mask:
+        result = result.set_mask(column.mask)
+    return result
+
+
 def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
@@ -1031,61 +1078,6 @@ def column_empty(row_count, dtype, masked, categories=None):
     from cudf.core.column import build_column
 
     return build_column(data, dtype, mask, categories)
-
-
-def column_empty_like_same_mask(column, dtype):
-    """Create a new empty Column with the same length and the same mask.
-
-    Parameters
-    ----------
-    dtype : np.dtype like
-        The dtype of the data buffer.
-    """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
-    params = dict(data=Buffer(data))
-    if column.has_null_mask:
-        params.update(mask=column.nullmask)
-    return Column(**params)
-
-
-def column_select_by_boolmask(column, boolmask):
-    """Select by a boolean mask to a column.
-
-    Returns (selected_column, selected_positions)
-    """
-    from cudf.core.column import NumericalColumn
-
-    assert column.null_count == 0  # We don't properly handle the boolmask yet
-    boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
-    indices = cudautils.arange(len(boolmask))
-    _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
-    _, selvals = cudautils.copy_to_dense(
-        column.data.to_gpu_array(), mask=boolbits
-    )
-
-    selected_values = column.replace(data=Buffer(selvals))
-    selected_index = Buffer(selinds)
-    return (
-        selected_values,
-        NumericalColumn(data=selected_index, dtype=selected_index.dtype),
-    )
-
-
-def column_select_by_position(column, positions):
-    """Select by a series of dtype int64 indicating positions.
-
-    Returns (selected_column, selected_positions)
-    """
-    from cudf.core.column import NumericalColumn
-
-    pos_ary = positions.data.to_gpu_array()
-    selected_values = libcudf.copying.gather(column, pos_ary)
-    selected_index = Buffer(pos_ary)
-
-    return (
-        selected_values,
-        NumericalColumn(data=selected_index, dtype=selected_index.dtype),
-    )
 
 
 def build_column(
@@ -1157,15 +1149,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         name = arbitrary.name
 
     if isinstance(arbitrary, Column):
-        categories = None
-        if hasattr(arbitrary, "categories"):
-            categories = arbitrary.categories
-        data = build_column(
-            arbitrary.data,
-            arbitrary.dtype,
-            mask=arbitrary.mask,
-            categories=categories,
-        )
+        return arbitrary
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column
@@ -1217,10 +1201,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             null_count = nelem - nnz
         else:
             null_count = 0
-
-        return build_column(
+        col = build_column(
             data, dtype=data.dtype, mask=mask, name=name, null_count=null_count
         )
+        # Keep a reference to `arbitrary` with the underlying
+        # RMM device array, so that the memory isn't freed out
+        # from under us
+        col.data.mem._obj = arbitrary
+        return col
 
     elif isinstance(arbitrary, np.ndarray):
         # CUDF assumes values are always contiguous
@@ -1415,10 +1403,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    data = as_column(
-                        pd.Series(arbitrary, dtype="category"),
-                        nan_as_null=nan_as_null,
-                    )
+                    sr = pd.Series(arbitrary, dtype="category")
+                    data = as_column(sr, nan_as_null=nan_as_null)
+                elif np_type == np.str_:
+                    sr = pd.Series(arbitrary, dtype="str")
+                    data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
                         np.array(arbitrary, dtype=np_type),
@@ -1447,7 +1436,7 @@ def column_applymap(udf, column, out_dtype):
     """
     core = njit(udf)
     results = rmm.device_array(shape=len(column), dtype=out_dtype)
-    values = column.data.to_gpu_array()
+    values = column.data.mem
     if column.mask:
         # For masked columns
         @cuda.jit
@@ -1460,7 +1449,7 @@ def column_applymap(udf, column, out_dtype):
                     # call udf
                     results[i] = core(values[i])
 
-        masks = column.mask.to_gpu_array()
+        masks = column.mask.mem
         kernel_masked.forall(len(column))(values, masks, results)
     else:
         # For non-masked columns

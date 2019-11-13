@@ -31,9 +31,8 @@ import java.util.stream.LongStream;
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Table.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class TableTest {
+public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
@@ -59,10 +58,10 @@ public class TableTest {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
-  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName) {
+  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
-    if (rowOffset == 0 && length == expected.getRowCount()) {
+    if (enableNullCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
@@ -118,12 +117,12 @@ public class TableTest {
   }
 
   public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
-  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table) {
+  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table, boolean enableNullCheck) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
-    assertEquals(length, table.getRowCount());
+    assertEquals(length, table.getRowCount(), "ROW COUNT");
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
       ColumnVector expect = expected.getColumn(col);
       ColumnVector cv = table.getColumn(col);
@@ -131,12 +130,12 @@ public class TableTest {
       if (rowOffset != 0 || length != expected.getRowCount()) {
         name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
       }
-      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name);
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
     }
   }
 
   public static void assertTablesAreEqual(Table expected, Table table) {
-    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table);
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -176,7 +175,6 @@ public class TableTest {
 
   @Test
   void testOrderByAD() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
         .column(5, 3, 3, 1, 1)
         .column(5, 3, 4, 1, 2)
@@ -194,7 +192,6 @@ public class TableTest {
 
   @Test
   void testOrderByDD() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
         .column(5, 3, 3, 1, 1)
         .column(5, 3, 4, 1, 2)
@@ -212,7 +209,6 @@ public class TableTest {
 
   @Test
   void testOrderByWithNulls() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
@@ -232,7 +228,6 @@ public class TableTest {
 
   @Test
   void testOrderByWithNullsAndStrings() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = new Table.TestBuilder()
 	.categoryColumn("4", "3", "2", "1", "0")
         .column(5, null, 3, 1, 1)
@@ -252,7 +247,6 @@ public class TableTest {
 
   @Test
   void testTableCreationIncreasesRefCount() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     //tests the Table increases the refcount on column vectors
     assertThrows(IllegalStateException.class, () -> {
       try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
@@ -269,7 +263,6 @@ public class TableTest {
 
   @Test
   void testGetRows() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
@@ -285,7 +278,6 @@ public class TableTest {
 
   @Test
   void testAllRowsSize() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v1 = ColumnVector.build(DType.INT32, 4, Range.appendInts(4));
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5))) {
       assertThrows(AssertionError.class, () -> {
@@ -297,7 +289,6 @@ public class TableTest {
 
   @Test
   void testGetNumberOfColumns() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v1 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
@@ -307,7 +298,6 @@ public class TableTest {
 
   @Test
   void testReadCSVPrune() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
         .column(DType.FLOAT64, "B")
@@ -328,7 +318,6 @@ public class TableTest {
 
   @Test
   void testReadCSVBufferInferred() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A")
         .includeColumn("B")
@@ -358,7 +347,6 @@ public class TableTest {
 
   @Test
   void testReadCSVBuffer() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A")
         .includeColumn("B")
@@ -379,7 +367,6 @@ public class TableTest {
 
   @Test
   void testReadCSVWithOffset() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A")
         .includeColumn("B")
@@ -419,7 +406,6 @@ public class TableTest {
         .column(DType.STRING, "D")
         .build();
 
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     CSVOptions opts = CSVOptions.builder()
         .includeColumn("A", "B", "D")
         .hasHeader(true)
@@ -440,7 +426,6 @@ public class TableTest {
 
   @Test
   void testReadCSV() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
         .column(DType.FLOAT64, "B")
@@ -460,7 +445,6 @@ public class TableTest {
 
   @Test
   void testReadParquet() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("loan_id")
         .includeColumn("zip")
@@ -475,7 +459,6 @@ public class TableTest {
 
   @Test
   void testReadParquetBuffer() throws IOException {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("loan_id")
         .includeColumn("coborrow_credit_score")
@@ -496,7 +479,6 @@ public class TableTest {
 
   @Test
   void testReadParquetFull() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table table = Table.readParquet(TEST_PARQUET_FILE)) {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
@@ -536,7 +518,6 @@ public class TableTest {
 
   @Test
   void testReadORC() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ORCOptions opts = ORCOptions.builder()
         .includeColumn("string1")
         .includeColumn("float1")
@@ -554,7 +535,6 @@ public class TableTest {
 
   @Test
   void testReadORCBuffer() throws IOException {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     ORCOptions opts = ORCOptions.builder()
         .includeColumn("string1")
         .includeColumn("float1")
@@ -576,7 +556,6 @@ public class TableTest {
 
   @Test
   void testReadORCFull() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (Table expected = new Table.TestBuilder()
         .column(false, true)
         .column((byte)1, (byte)100)
@@ -594,7 +573,6 @@ public class TableTest {
 
   @Test
   void testReadORCNumPyTypes() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     // by default ORC will promote DATE32 to DATE64
     // and TIMESTAMP is kept as it is
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
@@ -614,7 +592,6 @@ public class TableTest {
 
   @Test
   void testReadORCTimeUnit() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     // specifying no NumPy types should load them as DATE32 and TIMESTAMP
     // specifying TimeUnit will return the result in that unit
     ORCOptions opts = ORCOptions.builder()
@@ -812,6 +789,158 @@ public class TableTest {
   }
 
   @Test
+  void testSerializationRoundTripConcatHostSide() throws IOException {
+    try (Table t = new Table.TestBuilder()
+        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .build()) {
+      for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
+        ByteArrayOutputStream bout = new ByteArrayOutputStream();
+        for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
+          int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
+          JCudfSerialization.writeToStream(t, bout, i, len);
+        }
+        ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+        DataInputStream din = new DataInputStream(bin);
+        ArrayList<JCudfSerialization.SerializedTableHeader> headers = new ArrayList<>();
+        List<HostMemoryBuffer> buffers = new ArrayList<>();
+        try {
+          JCudfSerialization.SerializedTableHeader head;
+          long numRows = 0;
+          do {
+            head = new JCudfSerialization.SerializedTableHeader(din);
+            if (head.wasInitialized()) {
+              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              buffers.add(buff);
+              JCudfSerialization.readTableIntoBuffer(din, head, buff);
+              assert head.wasDataRead();
+            }
+            numRows += head.getNumRows();
+            assert numRows <= Integer.MAX_VALUE;
+            headers.add(head);
+          } while (head.wasInitialized());
+          assert numRows == t.getRowCount();
+          try (Table found = JCudfSerialization.readAndConcat(
+              headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
+              buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false);
+          }
+        } finally {
+          for (HostMemoryBuffer buff: buffers) {
+            buff.close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConcatHost() throws IOException {
+    try (Table t1 = new Table.TestBuilder()
+        .column(
+            1, 2, null, 4, 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null,
+            1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(
+                 null, 12, 13, 14, null, null,
+                 1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null,
+                 1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null,
+                 1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null,
+                 null, 12, 13, 14, null, null,
+                 1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null,
+                 1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null,
+                 1, 2, null, 4 , 5, 6, 7, 8, 9, 10, null, 12, 13, 14, null, null)
+             .build();
+         Table t2 = t1.concatenate(t1, t1)) {
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t2, out, 10, t2.getRowCount() - 10);
+      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out.toByteArray()));
+      JCudfSerialization.SerializedTableHeader header = new JCudfSerialization.SerializedTableHeader(in);
+      assert header.wasInitialized();
+      try (HostMemoryBuffer buff = HostMemoryBuffer.allocate(header.dataLen)) {
+        JCudfSerialization.readTableIntoBuffer(in, header, buff);
+        assert header.wasDataRead();
+        try (Table result = JCudfSerialization.readAndConcat(
+            new JCudfSerialization.SerializedTableHeader[] {header, header},
+            new HostMemoryBuffer[] {buff, buff})) {
+          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false);
+        }
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripSlicedHostSide() throws IOException {
+    try (Table t = new Table.TestBuilder()
+        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .build()) {
+      for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
+        ByteArrayOutputStream bout = new ByteArrayOutputStream();
+        for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
+          int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
+          JCudfSerialization.writeToStream(t, bout, i, len);
+        }
+        ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+        DataInputStream din = new DataInputStream(bin);
+        ArrayList<JCudfSerialization.SerializedTableHeader> headers = new ArrayList<>();
+        List<HostMemoryBuffer> buffers = new ArrayList<>();
+        try {
+          JCudfSerialization.SerializedTableHeader head;
+          long numRows = 0;
+          do {
+            head = new JCudfSerialization.SerializedTableHeader(din);
+            if (head.wasInitialized()) {
+              HostMemoryBuffer buff = HostMemoryBuffer.allocate(100 * 1024);
+              buffers.add(buff);
+              JCudfSerialization.readTableIntoBuffer(din, head, buff);
+              assert head.wasDataRead();
+            }
+            numRows += head.getNumRows();
+            assert numRows <= Integer.MAX_VALUE;
+            headers.add(head);
+          } while (head.wasInitialized());
+          assert numRows == t.getRowCount();
+          ByteArrayOutputStream bout2 = new ByteArrayOutputStream();
+          JCudfSerialization.writeConcatedStream(
+              headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
+              buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
+          ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
+          try (Table found = JCudfSerialization.readTableFrom(bin2)) {
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false);
+          }
+          assertNull(JCudfSerialization.readTableFrom(bin2));
+        } finally {
+          for (HostMemoryBuffer buff: buffers) {
+            buff.close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testSerializationRoundTripSliced() throws IOException {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
@@ -834,26 +963,22 @@ public class TableTest {
           JCudfSerialization.writeToStream(t, bout, i, len);
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (Table found = JCudfSerialization.readTableFrom(bin)) {
-            assertPartialTablesAreEqual(t, i, len, found);
+            assertPartialTablesAreEqual(t, i, len, found, i == 0 && len == t.getRowCount());
           }
           assertNull(JCudfSerialization.readTableFrom(bin));
         }
       }
     }
   }
-  
+
   @Test
-  void testValidityCopyLastByte() {
-    try (ColumnVector column =
-          ColumnVector.fromBoxedLongs(null, 2L, 3L, 4L, 5L, 6L, 7L, 8L, null, 10L, null, 12L, null, 14L, 15L)) {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      DataOutputStream dos = new DataOutputStream(baos);
-      byte[] buff = new byte[1024 * 128];
-      JCudfSerialization.copyValidityData(dos, column, 4, 11, buff);
-      byte[] output = baos.toByteArray();
-      assertEquals(output[0], 0xFFFFFFAF);   // 1010 1111 => 12, null, 10, null, 8, 7, 6, 5
-      assertEquals(output[1], 0x0000000E);   // 0000 1110 => ..., 15, 14, null
-    } catch (Exception e){}
+  void testValidityFill() {
+    byte[] buff = new byte[2];
+    buff[0] = 0;
+    int bitsToFill = (buff.length * 8) - 1;
+    assertEquals(bitsToFill, JCudfSerialization.fillValidity(buff, 1, bitsToFill));
+    assertEquals(buff[0], 0xFFFFFFFE);
+    assertEquals(buff[1], 0xFFFFFFFF);
   }
 
   @Test
@@ -1218,7 +1343,6 @@ public class TableTest {
 
   @Test
   void testMaskWithValidity() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     final int numRows = 5;
     try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
       for (int i = 0; i < numRows; ++i) {
@@ -1243,7 +1367,6 @@ public class TableTest {
 
   @Test
   void testMaskDataOnly() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
          Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
@@ -1260,7 +1383,6 @@ public class TableTest {
 
   @Test
   void testAllFilteredFromData() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, false);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
@@ -1274,7 +1396,6 @@ public class TableTest {
 
   @Test
   void testAllFilteredFromValidity() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     final int numRows = 5;
     try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
       for (int i = 0; i < numRows; ++i) {
@@ -1293,7 +1414,6 @@ public class TableTest {
 
   @Test
   void testMismatchedSizes() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Boolean[] maskVals = new Boolean[3];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
@@ -1304,7 +1424,6 @@ public class TableTest {
 
   @Test
   void testTableBasedFilter() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
          Table input = new Table(
@@ -1320,7 +1439,6 @@ public class TableTest {
 
   @Test
   void testStringsAreNotSupported() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
@@ -1346,7 +1464,7 @@ public class TableTest {
   void testJSONReadWithFilePath() throws IOException {
     File tempFile = createTempFile(jsonData);
 
-    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    try (Table t = Table.readJSON(tempFile);
     Table expectedTable = new Table.TestBuilder()
         .column( 1l,      3l,                 7l)
         .column(1.1,     4.2,                1.3)
@@ -1361,7 +1479,7 @@ public class TableTest {
     File tempFile = createTempFile(jsonData);
     Schema schema = Schema.builder().column(DType.INT32, "0")
         .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+    try (Table t = Table.readJSON(schema, tempFile);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column(1.1,     4.2,                1.3)
@@ -1387,7 +1505,7 @@ public class TableTest {
   void testJSONReadBufferWithDataTypes() {
     Schema schema = Schema.builder().column(DType.INT32, "0")
         .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(jsonData, schema);
+    try (Table t = Table.readJSON(schema, jsonData);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column(1.1f,     4.2f,                1.3f)
@@ -1399,7 +1517,7 @@ public class TableTest {
 
   @Test
   void testJSONReadBufferWithRange() {
-    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+    try (Table t = Table.readJSON(Schema.INFERRED, JSONOptions.DEFAULT, jsonData, 14, 17);
          Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
              .build()) {
       assertTablesAreEqual(expectedTable, t);
@@ -1417,7 +1535,7 @@ public class TableTest {
     Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
         .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
     JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
-    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+    try (Table t = Table.readJSON(schema, opts, jsonDataWithNames);
          Table expectedTable = new Table.TestBuilder()
              .column(  1l,       3l,                  7l)
              .column("a", "hello", "seven\u24E1\u25B6")
@@ -1434,12 +1552,50 @@ public class TableTest {
     Schema schema = Schema.builder().column(DType.FLOAT32, "1")
         .column(DType.INT32, "0").column(DType.STRING, "2").build();
     JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
-    try (Table t = Table.readJSON(jsonData, opts, schema);
+    try (Table t = Table.readJSON(schema, opts, jsonData);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column("a", "hello", "seven\u24E1\u25B6")
              .build()) {
       assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  private Table getExpectedFileTable() {
+    return new TestBuilder()
+        .column(true, false, false, true, false)
+        .column(5, 1, 0, 2, 7)
+        .column(new Byte[]{2, 3, 4, 5, 9})
+        .column(3l, 9l, 4l, 2l, 20l)
+        .column("this", "is", "a", "test", "string")
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d)
+        .build();
+  }
+
+  @Test
+  void testORCWriteToFile() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    try (Table table0 = getExpectedFileTable()) {
+      table0.writeORC(tempFile.getAbsoluteFile());
+      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteToFileUncompressed() throws IOException {
+    File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
+    try (Table table0 = getExpectedFileTable()) {
+      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
+      try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFileUncompressed.delete();
     }
   }
 }

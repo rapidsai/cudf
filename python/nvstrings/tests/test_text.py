@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import nvstrings
 import nvtext
@@ -96,6 +96,97 @@ def test_unique_tokens():
         [" favorite book", "Your Favorite book is different", "this is "]
     )
     assert set(unique_tokens_outcome.to_host()) == expected
+
+
+def test_character_tokenize():
+    strs = nvstrings.to_device(
+        [
+            "the quick fox jumped over the lazy dog",
+            "the siamésé cat jumped under the sofa",
+            None,
+            "",
+        ]
+    )
+    outcome = nvtext.character_tokenize(strs)
+    expected = [
+        "t",
+        "h",
+        "e",
+        " ",
+        "q",
+        "u",
+        "i",
+        "c",
+        "k",
+        " ",
+        "f",
+        "o",
+        "x",
+        " ",
+        "j",
+        "u",
+        "m",
+        "p",
+        "e",
+        "d",
+        " ",
+        "o",
+        "v",
+        "e",
+        "r",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "l",
+        "a",
+        "z",
+        "y",
+        " ",
+        "d",
+        "o",
+        "g",
+        "t",
+        "h",
+        "e",
+        " ",
+        "s",
+        "i",
+        "a",
+        "m",
+        "é",
+        "s",
+        "é",
+        " ",
+        "c",
+        "a",
+        "t",
+        " ",
+        "j",
+        "u",
+        "m",
+        "p",
+        "e",
+        "d",
+        " ",
+        "u",
+        "n",
+        "d",
+        "e",
+        "r",
+        " ",
+        "t",
+        "h",
+        "e",
+        " ",
+        "s",
+        "o",
+        "f",
+        "a",
+    ]
+
+    assert outcome.to_host() == expected
 
 
 def test_contains_strings():
@@ -222,6 +313,16 @@ def test_edit_distance():
     )
     distance_outcomes = nvtext.edit_distance(strs, comparators, algo=0)
     expected = [6, 5, 7]
+    assert distance_outcomes == expected
+
+
+def test_edit_distance_matrix():
+
+    strs = nvstrings.to_device(
+        ["my least favorite sentence", "fish", "software"]
+    )
+    distance_outcomes = nvtext.edit_distance_matrix(strs, algo=0)
+    expected = [[0, 23, 22], [23, 0, 7], [22, 7, 0]]
     assert distance_outcomes == expected
 
 

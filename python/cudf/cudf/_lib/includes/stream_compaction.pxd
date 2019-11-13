@@ -9,15 +9,15 @@ from cudf._lib.cudf cimport *
 
 from libcpp.vector cimport vector
 
-cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/stream_compaction.hpp" namespace "cudf" nogil:
 
-    # defined in cpp/include/stream_compaction.hpp
+    # defined in cpp/include/cudf/legacy/stream_compaction.hpp
     ctypedef enum duplicate_keep_option:
         KEEP_FIRST
         KEEP_LAST
         KEEP_NONE
 
-    # defined in cpp/include/stream_compaction.hpp
+    # defined in cpp/include/cudf/legacy/stream_compaction.hpp
     ctypedef enum any_or_all:
         ANY
         ALL
@@ -30,7 +30,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
     cdef cudf_table drop_nulls(
         const cudf_table &input,
         const cudf_table &keys,
-        const gdf_size_type keep_threshold
+        const size_type keep_threshold
     ) except +
 
     cdef cudf_table drop_duplicates(
@@ -39,7 +39,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         const duplicate_keep_option keep
     ) except +
 
-    cdef gdf_size_type unique_count(
+    cdef size_type unique_count(
         const gdf_column& input_column,
         const bool dropna,
         const bool nan_as_null

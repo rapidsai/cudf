@@ -38,7 +38,15 @@ def read_orc(path, **kwargs):
             for i, f in enumerate(files)
         }
     else:
-        filenames = sorted(glob(str(path)))
+        if isinstance(path, list):
+            filenames = path
+        elif isinstance(path, str):
+            filenames = sorted(glob(path))
+        elif hasattr(path, "__fspath__"):
+            filenames = sorted(glob(path.__fspath__()))
+        else:
+            raise TypeError("Path type not understood:{}".format(type(path)))
+
         meta = cudf.read_orc(filenames[0], **kwargs)
         dsk = {
             (name, i): (apply, cudf.read_orc, [fn], kwargs)

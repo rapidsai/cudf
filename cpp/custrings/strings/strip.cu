@@ -19,6 +19,7 @@
 #include <thrust/for_each.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"
 

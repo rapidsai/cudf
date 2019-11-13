@@ -98,7 +98,14 @@ class MultiIndex(Index):
         self._source_data = DataFrame()
         for i, name in enumerate(self._codes.columns):
             codes = as_index(self._codes[name]._column)
-            level = DataFrame({name: self._levels[i]})
+            if -1 in self._codes[name].values:
+                # Must account for null(s) in _source_data column
+                level = DataFrame(
+                    {name: [None] + list(self._levels[i])},
+                    index=range(-1, len(self._levels[i])),
+                )
+            else:
+                level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
             self._source_data[name] = level[name].reset_index(drop=True)
 
@@ -194,6 +201,7 @@ class MultiIndex(Index):
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
+            cats.name = None
             cats = cats.reset_index(drop=True)._copy_construct(name=None)
             levels.append(cats)
 
@@ -430,7 +438,9 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            indices = indices.to_gpu_array()
+            if indices.null_count != 0:
+                raise ValueError("Column must have no nulls.")
+            indices = indices.data.mem
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)

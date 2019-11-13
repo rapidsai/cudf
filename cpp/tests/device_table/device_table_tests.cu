@@ -20,9 +20,9 @@
 #include <table/legacy/device_table_row_operators.cuh>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
 
 #include <thrust/execution_policy.h>
@@ -33,7 +33,7 @@
 #include <random>
 
 struct DeviceTableTest : GdfTest {
-  gdf_size_type const size{2000};
+  cudf::size_type const size{2000};
 };
 
 /**---------------------------------------------------------------------------*
@@ -56,7 +56,7 @@ struct all_rows_equal {
    *
    *---------------------------------------------------------------------------**/
   __device__ bool operator()(int lhs_index) {
-    auto row_equality = [this, lhs_index](gdf_size_type rhs_index) {
+    auto row_equality = [this, lhs_index](cudf::size_type rhs_index) {
       return rows_equal<nullable>(lhs, lhs_index, rhs, rhs_index,
                                   nulls_are_equal);
     };
@@ -70,7 +70,7 @@ template <bool nullable>
 struct row_comparison {
   row_equality_comparator<nullable> comp;
 
-  using index_pair = thrust::tuple<gdf_size_type, gdf_size_type>;
+  using index_pair = thrust::tuple<cudf::size_type, cudf::size_type>;
 
   row_comparison(device_table _lhs, device_table _rhs,
                  bool _nulls_are_equal = false)
@@ -85,7 +85,7 @@ template <bool nullable>
 struct row_hasher {
   device_table t;
   row_hasher(device_table _t) : t{_t} {}
-  __device__ hash_value_type operator()(gdf_size_type row_index) {
+  __device__ hash_value_type operator()(cudf::size_type row_index) {
     return hash_row<nullable>(t, row_index);
   }
 };
@@ -180,7 +180,7 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
   auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
 
   // If NULL==NULL, every row should be equal to itself
-  thrust::device_vector<gdf_size_type> indices(table->num_rows());
+  thrust::device_vector<cudf::size_type> indices(table->num_rows());
   thrust::sequence(indices.begin(), indices.end());
   EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
                              thrust::make_zip_iterator(thrust::make_tuple(
@@ -207,9 +207,9 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
                              row_hashes.begin()));
 
   // Every row should be different from every other row other than itself
-  for (gdf_size_type i = 0; i < table->num_rows(); ++i) {
-    thrust::device_vector<gdf_size_type> left_indices(table->num_rows(), i);
-    thrust::device_vector<gdf_size_type> right_indices(table->num_rows());
+  for (cudf::size_type i = 0; i < table->num_rows(); ++i) {
+    thrust::device_vector<cudf::size_type> left_indices(table->num_rows(), i);
+    thrust::device_vector<cudf::size_type> right_indices(table->num_rows());
     thrust::sequence(right_indices.begin(), right_indices.end());
 
     // Remove indices comparing a row against itself
@@ -253,7 +253,7 @@ TEST_F(DeviceTableTest, TwoTablesAllRowsEqual) {
   auto right_table = device_table::create(right_cols.size(), right_cols.data());
 
   // If NULL==NULL, left_table row @ i should equal right_table row @ i
-  thrust::device_vector<gdf_size_type> indices(left_table->num_rows());
+  thrust::device_vector<cudf::size_type> indices(left_table->num_rows());
   thrust::sequence(indices.begin(), indices.end());
   EXPECT_TRUE(
       thrust::all_of(rmm::exec_policy()->on(0),
@@ -278,7 +278,7 @@ struct row_copier {
   device_table target;
   device_table source;
 
-  using index_pair = thrust::tuple<gdf_size_type, gdf_size_type>;
+  using index_pair = thrust::tuple<cudf::size_type, cudf::size_type>;
 
   row_copier(device_table _target, device_table _source)
       : target{_target}, source{_source} {}
@@ -315,13 +315,13 @@ TEST_F(DeviceTableTest, CopyRowsNoNulls) {
   // Copy a random row from the source table to a random row in the target table
   // Thrust doesn't have a `shuffle` algorithm, so we've got to do it on the
   // host
-  std::vector<gdf_size_type> indices(source_table->num_rows());
+  std::vector<cudf::size_type> indices(source_table->num_rows());
   std::iota(indices.begin(), indices.end(), 0);
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> target_indices(indices);
+  thrust::device_vector<cudf::size_type> target_indices(indices);
 
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> source_indices(indices);
+  thrust::device_vector<cudf::size_type> source_indices(indices);
 
   // Copy source_table row @ source_indices[i] to target_table @
   // target_indices[i]
@@ -349,7 +349,7 @@ struct verify_bitmask {
 
   verify_bitmask(bit_mask::bit_mask_t* _bitmask) : bitmask{_bitmask} {}
 
-  __device__ bool operator()(gdf_size_type i) {
+  __device__ bool operator()(cudf::size_type i) {
     return bit_mask::is_valid(bitmask, i);
   }
 };
@@ -381,13 +381,13 @@ TEST_F(DeviceTableTest, CopyRowsSourceNullTargetValid) {
   // Copy a random row from the source table to a random row in the target table
   // Thrust doesn't have a `shuffle` algorithm, so we've got to do it on the
   // host
-  std::vector<gdf_size_type> indices(source_table->num_rows());
+  std::vector<cudf::size_type> indices(source_table->num_rows());
   std::iota(indices.begin(), indices.end(), 0);
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> target_indices(indices);
+  thrust::device_vector<cudf::size_type> target_indices(indices);
 
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> source_indices(indices);
+  thrust::device_vector<cudf::size_type> source_indices(indices);
 
   // Copy source_table row @ source_indices[i] to target_table @
   // target_indices[i]
@@ -447,13 +447,13 @@ TEST_F(DeviceTableTest, CopyRowsSourceValidTargetNull) {
   // Copy a random row from the source table to a random row in the target table
   // Thrust doesn't have a `shuffle` algorithm, so we've got to do it on the
   // host
-  std::vector<gdf_size_type> indices(source_table->num_rows());
+  std::vector<cudf::size_type> indices(source_table->num_rows());
   std::iota(indices.begin(), indices.end(), 0);
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> target_indices(indices);
+  thrust::device_vector<cudf::size_type> target_indices(indices);
 
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> source_indices(indices);
+  thrust::device_vector<cudf::size_type> source_indices(indices);
 
   // Copy source_table row @ source_indices[i] to target_table @
   // target_indices[i]
@@ -485,7 +485,7 @@ TEST_F(DeviceTableTest, CopyRowsSourceValidTargetNull) {
 
   // No row should contain a null value
   cudf::table target_host_table{target_cols.data(),
-                                static_cast<gdf_size_type>(target_cols.size())};
+                                static_cast<cudf::size_type>(target_cols.size())};
   auto row_bitmask = cudf::row_bitmask(target_host_table);
 
   EXPECT_TRUE(thrust::all_of(
@@ -519,13 +519,13 @@ TEST_F(DeviceTableTest, CopyRowsSourceNoBitmaskTargetNull) {
   // Copy a random row from the source table to a random row in the target table
   // Thrust doesn't have a `shuffle` algorithm, so we've got to do it on the
   // host
-  std::vector<gdf_size_type> indices(source_table->num_rows());
+  std::vector<cudf::size_type> indices(source_table->num_rows());
   std::iota(indices.begin(), indices.end(), 0);
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> target_indices(indices);
+  thrust::device_vector<cudf::size_type> target_indices(indices);
 
   std::shuffle(indices.begin(), indices.end(), std::default_random_engine{});
-  thrust::device_vector<gdf_size_type> source_indices(indices);
+  thrust::device_vector<cudf::size_type> source_indices(indices);
 
   // Copy source_table row @ source_indices[i] to target_table @
   // target_indices[i]
@@ -557,7 +557,7 @@ TEST_F(DeviceTableTest, CopyRowsSourceNoBitmaskTargetNull) {
 
   // No row should contain a null value
   cudf::table target_host_table{target_cols.data(),
-                                static_cast<gdf_size_type>(target_cols.size())};
+                                static_cast<cudf::size_type>(target_cols.size())};
   auto row_bitmask = cudf::row_bitmask(target_host_table);
 
   EXPECT_TRUE(thrust::all_of(

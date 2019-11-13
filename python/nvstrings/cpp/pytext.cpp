@@ -132,6 +132,22 @@ static PyObject* n_unique_tokens( PyObject* self, PyObject* args )
 }
 
 //
+static PyObject* n_character_tokenize( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    Py_BEGIN_ALLOW_THREADS
+    strs = NVText::character_tokenize(*strs);
+    Py_END_ALLOW_THREADS
+    if( strs==0 )
+        Py_RETURN_NONE;
+    return PyLong_FromVoidPtr((void*)strs);
+}
+
+//
 static PyObject* n_token_count( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -492,6 +508,60 @@ static PyObject* n_normalize_spaces( PyObject* self, PyObject* args )
     return PyLong_FromVoidPtr((void*)strs);
 }
 
+static PyObject* n_edit_distance_matrix( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    unsigned int count = strs->size();
+    if( count < 2 )
+    {
+        PyErr_Format(PyExc_ValueError,"minimum two strings are required!");
+        Py_RETURN_NONE;
+    }
+
+    NVText::distance_type algo = NVText::levenshtein;
+    PyObject* pyalgo = PyTuple_GetItem(args,1);
+
+    if( pyalgo != Py_None )
+    {
+        int ialgo = (int)PyLong_AsLong(pyalgo);
+        if( ialgo != (int)NVText::levenshtein )
+        {
+            PyErr_Format(PyExc_ValueError,"unrecognized edit-distance algorithm");
+            Py_RETURN_NONE;
+        }
+    }
+
+    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,2));
+    if( devptr )
+    {
+        Py_BEGIN_ALLOW_THREADS
+        NVText::edit_distance_matrix(NVText::levenshtein,*strs,devptr);
+        Py_END_ALLOW_THREADS
+        Py_RETURN_NONE;
+    }
+
+    // or fill in python list with host memory
+    PyObject* ret = PyList_New(count);
+
+    std::vector<unsigned int> rtn(count*count);
+    Py_BEGIN_ALLOW_THREADS
+    NVText::edit_distance_matrix(NVText::levenshtein, *strs, rtn.data(),false);
+    Py_END_ALLOW_THREADS
+    for(unsigned int row=0; row < count; row++)
+    {
+        PyObject* tmp = PyList_New(count);
+        for(unsigned int idx=0; idx < count; idx++)
+            PyList_SetItem(tmp, idx, PyLong_FromLong((long)rtn[row*count+idx]));
+
+        PyList_SetItem(ret, row, tmp);
+    }
+    return ret;
+}
+
 static PyObject* n_edit_distance( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -650,10 +720,130 @@ static PyObject* n_scatter_count( PyObject* self, PyObject* args )
 }
 
 //
+static PyObject* n_porter_stemmer_measure( PyObject* self, PyObject* args )
+{
+
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+
+     if( strs==0 )
+        Py_RETURN_NONE;
+
+    const char* vowels = "aeiou";
+    PyObject* argVowels = PyTuple_GetItem(args,1);
+    if( argVowels != Py_None )
+        vowels = PyUnicode_AsUTF8(argVowels);
+
+    const char* y_char  = "y";
+    PyObject* argYChar = PyTuple_GetItem(args,2);
+    if( argYChar != Py_None )
+        y_char = PyUnicode_AsUTF8(argYChar);
+
+    // get device pointer
+    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,3));
+
+    if( devptr )
+    {
+        Py_BEGIN_ALLOW_THREADS
+        NVText::porter_stemmer_measure(*strs, vowels, y_char, devptr);
+        Py_END_ALLOW_THREADS
+        return PyLong_FromVoidPtr((void*)devptr);
+    }
+
+    // copy to host option
+
+    unsigned int count = strs->size();
+
+    PyObject* ret = PyList_New(count);
+    if( count==0 )
+        return ret;
+
+    unsigned int* rtn = new unsigned int[count];
+    Py_BEGIN_ALLOW_THREADS
+    NVText::porter_stemmer_measure(*strs, vowels, y_char, rtn, false);
+    Py_END_ALLOW_THREADS
+
+    for(unsigned int idx=0; idx < count; idx++)
+        PyList_SetItem(ret, idx, PyLong_FromLong((long)rtn[idx]));
+
+    delete rtn;
+    return ret;
+}
+
+//
+static PyObject* n_is_letter( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    NVText::letter_type ltype = NVText::vowel;
+    PyObject* argLetterType = PyTuple_GetItem(args,1);
+    if( argLetterType != Py_None )
+        ltype = PyObject_IsTrue(argLetterType) ? NVText::vowel : NVText::consonant;
+
+    PyObject* argIndex = PyTuple_GetItem(args,2);
+    if( argIndex == Py_None )
+    {
+        PyErr_Format(PyExc_ValueError,"nvtext: parameter index is required");
+        Py_RETURN_NONE;
+    }
+
+    int position = 0;
+    int* positions = nullptr;
+    if( PyObject_IsTrue(PyTuple_GetItem(args,3)) )
+        positions = (int*)PyLong_AsVoidPtr(argIndex);
+    else
+        position = (int)PyLong_AsLong(argIndex);
+
+    const char* vowels = "aeiou";
+    PyObject* argVowels = PyTuple_GetItem(args,4);
+    if( argVowels != Py_None )
+        vowels = PyUnicode_AsUTF8(argVowels);
+
+    const char* y_char  = "y";
+    PyObject* argYChar = PyTuple_GetItem(args,5);
+    if( argYChar != Py_None )
+        y_char = PyUnicode_AsUTF8(argYChar);
+
+    // get device pointer
+    bool* devptr = (bool*)PyLong_AsVoidPtr(PyTuple_GetItem(args,6));
+    if( devptr )
+    {
+        Py_BEGIN_ALLOW_THREADS
+        if( positions )
+            NVText::is_letter(*strs, vowels, y_char, ltype, positions, devptr);
+        else
+            NVText::is_letter(*strs, vowels, y_char, ltype, position, devptr);
+        Py_END_ALLOW_THREADS
+        return PyLong_FromVoidPtr((void*)devptr);
+    }
+
+    // copy to host option
+    unsigned int count = strs->size();
+    PyObject* ret = PyList_New(count);
+    if( count==0 )
+        return ret;
+    bool* rtn = new bool[count];
+    Py_BEGIN_ALLOW_THREADS
+    if( positions )
+        NVText::is_letter(*strs, vowels, y_char, ltype, positions, rtn, false);
+    else
+        NVText::is_letter(*strs, vowels, y_char, ltype, position, rtn, false);
+    Py_END_ALLOW_THREADS
+    for(unsigned int idx=0; idx < count; idx++)
+        PyList_SetItem(ret, idx, PyBool_FromLong((long)rtn[idx]));
+    delete rtn;
+    return ret;
+}
+
+//
 static PyMethodDef s_Methods[] = {
     { "n_tokenize", n_tokenize, METH_VARARGS, "" },
     { "n_tokenize_multi", n_tokenize_multi, METH_VARARGS, "" },
     { "n_unique_tokens", n_unique_tokens, METH_VARARGS, "" },
+    { "n_character_tokenize", n_character_tokenize, METH_VARARGS, "" },
     { "n_token_count", n_token_count, METH_VARARGS, "" },
     { "n_contains_strings", n_contains_strings, METH_VARARGS, "" },
     { "n_strings_counts", n_strings_counts, METH_VARARGS, "" },
@@ -661,8 +851,11 @@ static PyMethodDef s_Methods[] = {
     { "n_replace_tokens", n_replace_tokens, METH_VARARGS, "" },
     { "n_normalize_spaces", n_normalize_spaces, METH_VARARGS, "" },
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
+    { "n_edit_distance_matrix", n_edit_distance_matrix, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
+    { "n_porter_stemmer_measure", n_porter_stemmer_measure, METH_VARARGS, "" },
+    { "n_is_letter", n_is_letter, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }
 };
 

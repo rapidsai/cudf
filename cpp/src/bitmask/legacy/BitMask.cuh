@@ -18,7 +18,7 @@
 #define _BIT_MASK_H_
 
 #include "bit_mask.cuh"
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 
@@ -91,7 +91,7 @@ public:
    *
    * @return the number of elements
    */
-  __device__ gdf_size_type num_elements() const {
+  __device__ cudf::size_type num_elements() const {
     return bit_mask::num_elements(bitlength_);
   }
 
@@ -102,7 +102,7 @@ public:
    *
    * @return reference to the specified element
    */
-  __device__ bit_mask_t &get_element_device(gdf_size_type element_idx) {
+  __device__ bit_mask_t &get_element_device(cudf::size_type element_idx) {
     return valid_[element_idx];
   }
 
@@ -114,7 +114,7 @@ public:
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  __host__ gdf_error get_element_host(gdf_size_type element_idx, bit_mask_t &element) const {
+  __host__ gdf_error get_element_host(cudf::size_type element_idx, bit_mask_t &element) const {
     return bit_mask::get_element(&element, valid_ + element_idx);
   }
 
@@ -125,7 +125,7 @@ public:
    *
    * @return the specified element
    */
-  __host__ gdf_error set_element_host(gdf_size_type element_idx, const bit_mask_t &element) {
+  __host__ gdf_error set_element_host(cudf::size_type element_idx, const bit_mask_t &element) {
     return bit_mask::put_element(element, valid_ + element_idx);
   }
 
@@ -143,13 +143,13 @@ public:
    *
    * @return length of bit container in bits
    */
-  __host__ __device__ gdf_size_type length() const {
+  __host__ __device__ cudf::size_type length() const {
     return bitlength_;
   }
 
 private:
   bit_mask_t      *valid_;
-  gdf_size_type    bitlength_;
+  cudf::size_type    bitlength_;
 };
 
 #endif

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
- * Copyright 2018-2019 BlazingDB, Inc.
- *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,18 +14,31 @@
  * limitations under the License.
  */
 
-#ifndef GDF_JIT_UTIL_TYPE_H
-#define GDF_JIT_UTIL_TYPE_H
-
-#include <cudf/binaryop.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <string>
 
 namespace cudf {
 namespace jit {
 
-    std::string getTypeName(gdf_dtype type);
-
-}
-}
-
-#endif
+    /**
+     * @brief Maps a `cudf::data_type` to the name of its corresponding C++ type
+     * 
+     * When passed a `cudf::data_type`, returns the `std::string` name of the C++
+     * type used to represent the data.
+     * 
+     * Example:
+     * @code
+     *   auto d = data_type(type_id::INT32);
+     *   auto s = jit::getTypeName(d);
+     *   // s == std::string("int32_t")
+     * @endcode
+     * 
+     * @param type The data type
+     * @return std::string Name of the data type in string
+     */
+    std::string inline get_type_name(data_type type) {
+        return experimental::type_dispatcher(type, experimental::type_to_name{});
+    }
+ 
+} // namespace jit
+} // namespace cudf
