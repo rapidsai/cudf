@@ -29,6 +29,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3368 Enable dropna argument in dask_cudf groupby
 
 ## Improvements
 
@@ -109,6 +110,7 @@
 - PR #3286 Clean up the starter code on README
 - PR #3345 Add cache member for number of characters in string_view class
 - PR #3299 Define and implement new `is_sorted` APIs
+- PR #3328 Partition by stripes in dask_cudf ORC reader
 - PR #3243 Use upstream join code in dask_cudf
 - PR #3201 Define and implement new datetime_ops APIs
 
