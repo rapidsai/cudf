@@ -29,6 +29,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3368 Enable dropna argument in dask_cudf groupby
 
 ## Improvements
 
@@ -84,8 +85,10 @@
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
 - PR #3217 Port NVStrings upper and lower case conversion functions
+- PR #3350 Port NVStrings booleans convert functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3237 Define and implement new transform APIs
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
@@ -106,6 +109,10 @@
 - PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
+- PR #3345 Add cache member for number of characters in string_view class
+- PR #3299 Define and implement new `is_sorted` APIs
+- PR #3328 Partition by stripes in dask_cudf ORC reader
+- PR #3243 Use upstream join code in dask_cudf
 
 ## Bug Fixes
 
@@ -144,10 +151,13 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
+- PR #3341 Fix `Series` constructor converting NoneType to "None" 
 - PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
+- PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
+- PR #3357 Disabling `column_view` iterators for non fixed-width types
 
 
 # cuDF 0.10.0 (16 Oct 2019)
