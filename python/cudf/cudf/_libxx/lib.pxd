@@ -39,7 +39,7 @@ cdef extern from "types.hpp" namespace "cudf" nogil:
         data_type(type_id id)
         type_id id()
 
-cdef extern from "column/column.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
         unique_ptr[device_buffer] data
         unique_ptr[device_buffer] null_mask
@@ -56,7 +56,7 @@ cdef extern from "column/column.hpp" namespace "cudf" nogil:
         mutable_column_view mutable_view()
         column_contents release()
 
-cdef extern from "column/column_view.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
     cdef cppclass column_view:
         column_view()
         column_view(const column_view& other)
