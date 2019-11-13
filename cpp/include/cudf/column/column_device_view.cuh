@@ -20,6 +20,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 
@@ -583,5 +586,36 @@ __device__ inline string_view const column_device_view::element<string_view>(
   size_type offset = d_offsets[index];
   return string_view{d_strings + offset, d_offsets[index + 1] - offset};
 }
+
+/** -------------------------------------------------------------------------*
+ * @brief value accessor of column without null bitmask
+ * A unary functor returns scalar value at `id`.
+ * `operator() (cudf::size_type id)` computes `element`
+ * This functor is only allowed for non-nullable columns.
+ *
+ * the return value for element `i` will return `column[i]`
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ *
+ * @tparam T The type of elements in the column
+ * -------------------------------------------------------------------------**/
+
+template <typename T>
+struct column_device_view::value_accessor {
+  column_device_view const col;  ///< column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  value_accessor(column_device_view const& _col) : col{_col} {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
+                 "the data type mismatch");
+    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
+  }
+
+  __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
+};
 
 }  // namespace cudf
