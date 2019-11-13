@@ -270,6 +270,7 @@ ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 # - reduction tests -------------------------------------------------------------------------------
 
 set(LEGACY_REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_std_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/reduction_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/scan_tests.cu")
 

@@ -117,7 +117,7 @@ std::vector<gdf_column*>  compute_ordered_aggregations(
           GDF_FLOAT64, groupby.num_groups());
 
         cudf::detail::group_var(sorted_values, groupby.group_labels(),
-                                group_sizes, result_col,
+                                group_sizes, groupby.num_groups(), result_col,
                                 args->ddof, stream);
         break;
       }

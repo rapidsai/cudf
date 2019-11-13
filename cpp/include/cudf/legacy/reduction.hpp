@@ -95,6 +95,11 @@ gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
 void scan(const gdf_column *input, gdf_column *output,
                    gdf_scan_op op, bool inclusive);
 
+std::pair<cudf::table, cudf::table>
+group_std(cudf::table const& keys,
+          cudf::table const& values,
+          cudf::size_type ddof = 1);
+
 }  // namespace cudf
 
 #endif  // REDUCTION_HPP

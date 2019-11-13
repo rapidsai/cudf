@@ -31,15 +31,17 @@ namespace detail {
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_labels Vector of size(@p values) indicating the group that each value belongs to
  * @param group_sizes Number of valid elements per group
+ * @param num_groups Number of groups
  * @param result Pre-allocated column to put output of this operation into
  * @param ddof Delta Degrees of Freedom: the divisor used in calculations is `N - ddof`, where `N` is the group size
  * @param stream Stream to perform computation in
  */
 void group_std(gdf_column const& values,
-               rmm::device_vector<gdf_size_type> const& group_labels,
-               rmm::device_vector<gdf_size_type> const& group_sizes,
+               rmm::device_vector<size_type> const& group_labels,
+               rmm::device_vector<size_type> const& group_sizes,
+               cudf::size_type num_groups,
                gdf_column * result,
-               gdf_size_type ddof = 1,
+               size_type ddof = 1,
                cudaStream_t stream = 0);
 
 /**
@@ -48,15 +50,17 @@ void group_std(gdf_column const& values,
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_labels Vector of size(@p values) indicating the group that each value belongs to
  * @param group_sizes Number of valid elements per group
+ * @param num_groups Number of groups
  * @param result Pre-allocated column to put output of this operation into
  * @param ddof Delta Degrees of Freedom: the divisor used in calculations is `N - ddof`, where `N` is the group size
  * @param stream Stream to perform computation in
  */
 void group_var(gdf_column const& values,
-               rmm::device_vector<gdf_size_type> const& group_labels,
-               rmm::device_vector<gdf_size_type> const& group_sizes,
+               rmm::device_vector<size_type> const& group_labels,
+               rmm::device_vector<size_type> const& group_sizes,
+               cudf::size_type num_groups,
                gdf_column * result,
-               gdf_size_type ddof = 1,
+               size_type ddof = 1,
                cudaStream_t stream = 0);
 
 } // namespace detail
