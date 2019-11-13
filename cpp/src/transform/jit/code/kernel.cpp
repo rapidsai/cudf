@@ -15,13 +15,13 @@
  */
 
 namespace cudf {
+namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
 
 const char* kernel =
     R"***(
-    #include <cudf/types.h>
     #include <cudf/types.hpp>
 
     template <typename TypeOut, typename TypeIn>
@@ -45,4 +45,5 @@ const char* kernel =
 }  // namespace code
 }  // namespace jit
 }  // namespace transformation
+}  // namespace experimental
 }  // namespace cudf
