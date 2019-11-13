@@ -503,7 +503,7 @@ class ColumnBase(Column):
                         f"index out of bounds for column of size {len(self)}"
                     )
 
-        self._mimic_inplace(out)
+        self._mimic_inplace(out, inplace=True)
 
     def fillna(self, value):
         """Fill null values with ``value``.
