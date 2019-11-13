@@ -62,7 +62,7 @@ template<typename Exec,
               last,
               thrust::counting_iterator<size_type>(0),
               output, 
-              [first, comp, last_index] __device__ (size_type i) mutable {
+              [first, comp, last_index] __device__ (size_type i) {
               return (i == 0 || !comp(first[i], first[i-1]));
               }); 
   } else if (keep == duplicate_keep_option::KEEP_LAST) {
@@ -71,7 +71,7 @@ template<typename Exec,
               last,
               thrust::counting_iterator<size_type>(0),
               output, 
-              [first, comp, last_index] __device__ (size_type i) mutable {
+              [first, comp, last_index] __device__ (size_type i) {
               return (i == last_index || !comp(first[i], first[i+1]));
               });
   } else {
@@ -80,7 +80,7 @@ template<typename Exec,
               last,
               thrust::counting_iterator<size_type>(0),
               output, 
-              [first, comp, last_index] __device__ (size_type i) mutable {
+              [first, comp, last_index] __device__ (size_type i) {
               return (i == 0 || !comp(first[i], first[i-1])) 
                   && (i == last_index || !comp(first[i], first[i+1]));
               });
@@ -177,7 +177,7 @@ cudf::size_type unique_count(table_view const& keys,
               thrust::counting_iterator<cudf::size_type>(0),
               thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
               [sorted_row_index, comp]
-              __device__ (cudf::size_type i) mutable {
+              __device__ (cudf::size_type i) {
               return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i-1]));
               });
   } else {
@@ -188,7 +188,7 @@ cudf::size_type unique_count(table_view const& keys,
               thrust::counting_iterator<cudf::size_type>(0),
               thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
               [sorted_row_index, comp]
-              __device__ (cudf::size_type i) mutable {
+              __device__ (cudf::size_type i) {
               return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i-1]));
               });
   }

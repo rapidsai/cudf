@@ -57,6 +57,16 @@ template class table_view_base<column_view>;
 template class table_view_base<mutable_column_view>;
 }  // namespace detail
 
+// Returns a table_view with set of specified columns
+table_view table_view::select(std::vector<cudf::size_type> const& column_indices) const {
+  std::vector<column_view> columns;
+  for (auto index : column_indices) {
+    CUDF_EXPECTS(index >= 0 && index < num_columns(), "Index out of bounds");
+    columns.push_back(column(index));
+  }
+  return table_view(columns);
+}
+
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view() {
   return table_view{{begin(), end()}};

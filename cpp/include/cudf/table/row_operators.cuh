@@ -201,7 +201,7 @@ class row_equality_comparator {
                  "Mismatched number of columns.");
   }
 
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) {
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept{
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::experimental::type_dispatcher(
           l.type(),
@@ -209,7 +209,7 @@ class row_equality_comparator {
           lhs_row_index, rhs_row_index);
     };
 
-    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
+    return thrust::equal(thrust::seq, lhs.cbegin(), lhs.cend(), rhs.cbegin(),
                          equal_elements);
   }
 
