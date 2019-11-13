@@ -48,7 +48,6 @@ struct var_functor {
   operator()(gdf_column const& values,
              rmm::device_vector<cudf::size_type> const& group_labels,
              rmm::device_vector<cudf::size_type> const& group_sizes,
-             cudf::size_type num_groups,
              gdf_column * result,
              cudf::size_type ddof,
              bool is_std,
@@ -67,7 +66,7 @@ struct var_functor {
     
     // Calculate sum
     // TODO: replace with mean function call when that gets an internal API
-    rmm::device_vector<T> sums(num_groups);
+    rmm::device_vector<T> sums(group_sizes.size());
 
     thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
                           group_labels.begin(), group_labels.end(),
@@ -125,7 +124,8 @@ struct var_functor {
     // if std, do a sqrt
     if (is_std) {
       thrust::transform(rmm::exec_policy(stream)->on(stream),
-                        result_data, result_data + num_groups, result_data,
+                        result_data, result_data + group_sizes.size(),
+                        result_data,
         [] __device__ (double data) { return sqrt(data); });
     }
   }
@@ -146,25 +146,23 @@ namespace detail {
 void group_var(gdf_column const& values,
                rmm::device_vector<size_type> const& group_labels,
                rmm::device_vector<size_type> const& group_sizes,
-               cudf::size_type num_groups,
                gdf_column * result,
                size_type ddof,
                cudaStream_t stream)
 {
   type_dispatcher(values.dtype, var_functor{},
-    values, group_labels, group_sizes, num_groups, result, ddof, false, stream);
+    values, group_labels, group_sizes, result, ddof, false, stream);
 }
 
 void group_std(gdf_column const& values,
                rmm::device_vector<size_type> const& group_labels,
                rmm::device_vector<size_type> const& group_sizes,
-               cudf::size_type num_groups,
                gdf_column * result,
                size_type ddof,
                cudaStream_t stream)
 {
   type_dispatcher(values.dtype, var_functor{},
-    values, group_labels, group_sizes, num_groups, result, ddof, true, stream);
+    values, group_labels, group_sizes, result, ddof, true, stream);
 }
 
 } // namespace detail
@@ -176,9 +174,8 @@ group_std(cudf::table const& keys,
 {
   groupby::sort::detail::helper gb_obj(keys);
   auto group_labels = gb_obj.group_labels();
-  size_type num_groups = gb_obj.num_groups();
 
-  cudf::table result_table(num_groups,
+  cudf::table result_table(gb_obj.num_groups(),
                            std::vector<gdf_dtype>(values.num_columns(), GDF_FLOAT64),
                            std::vector<gdf_dtype_extra_info>(values.num_columns()),
                            true);
@@ -192,7 +189,7 @@ group_std(cudf::table const& keys,
 
     gdf_column* result_col = result_table.get_column(i);
 
-    detail::group_std(sorted_values, group_labels, group_sizes, num_groups,
+    detail::group_std(sorted_values, group_labels, group_sizes,
                       result_col, ddof);
 
     gdf_column_free(&sorted_values);
