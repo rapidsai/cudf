@@ -4,6 +4,7 @@ import operator
 import numpy as np
 
 import nvstrings
+import rmm
 from rmm import DeviceBuffer
 
 
@@ -16,6 +17,14 @@ class Buffer:
             self.ptr = ptr
             self.size = size
         self._owner = owner
+
+    def __reduce__(self):
+        return self.__class__.from_array_like, (self.to_host_array(),)
+
+    def to_host_array(self):
+        return rmm.device_array_from_ptr(
+            self.ptr, nelem=self.size, dtype="int8"
+        ).copy_to_host()
 
     @classmethod
     def from_array_like(cls, data):
