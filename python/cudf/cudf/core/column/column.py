@@ -1052,9 +1052,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata, _ = buffers_from_pyarrow(arbitrary.indices)
+            categories_dtype = None
+            if isinstance(arbitrary.dictionary, pa.NullArray):
+                categories = as_column([], dtype="object")
+            else:
+                categories = as_column(arbitrary.dictionary)
             dtype = CategoricalDtype(
                 arbitrary.type.index_type.to_pandas_dtype(),
-                categories=as_column(arbitrary.dictionary),
+                categories=categories,
                 ordered=arbitrary.type.ordered,
             )
             data = categorical.CategoricalColumn(
