@@ -285,7 +285,10 @@ struct ColumnMerger
                                                      mr_);
     
     std::unique_ptr<cudf::column> p_merged_col{
-      new cudf::column{type, merged_sz, data, mask}
+      new cudf::column{type,
+          merged_sz,
+          std::move(data),
+          std::move(mask)}
     };
 
     //"gather" data from lcol, rcol according to dv_row_order_ "map"
