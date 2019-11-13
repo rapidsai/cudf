@@ -11,7 +11,7 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
 import cudf.utils.utils as utils
-from cudf.utils.dtypes import is_string_dtype
+from cudf.utils.dtypes import is_string_dtype, is_categorical_dtype
 from cudf._lib.utils cimport (
     columns_from_table,
     table_from_columns,
@@ -255,10 +255,10 @@ def scatter_to_frames(source, maps, index=None):
     -------
     list of scattered dataframes
     """
-    from cudf.core.column import column, CategoricalColumn
+    from cudf.core.column import column, build_column
     from cudf.core.series import Series
-
     in_cols = source
+
     if index:
         ind_names = [ind.name for ind in index]
         ind_names_tmp = [(ind_name or "_tmp_index") for ind_name in ind_names]
@@ -272,10 +272,10 @@ def scatter_to_frames(source, maps, index=None):
     cats = {}
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
-        if isinstance(in_cols[i], CategoricalColumn):
+        if is_categorical_dtype(in_cols[i]):
             cats[in_cols[i].name] = (
-                Series(in_cols[i]._categories),
-                in_cols[i]._ordered
+                Series(in_cols[i].categories),
+                in_cols[i].ordered
             )
 
     in_size = in_cols[0].size
@@ -296,8 +296,12 @@ def scatter_to_frames(source, maps, index=None):
     for tab in c_out_tables:
         df = table_to_dataframe(&tab, int_col_names=False)
         for name, cat_info in cats.items():
+            if is_categorical_dtype(df[name].dtype):
+                data_dtype = df[name].dtype.data_dtype
+            else:
+                data_dtype = df[name].dtype
             dtype = cudf.CategoricalDtype(
-                data_dtype=df[name].dtype.data_dtype,
+                data_dtype=data_dtype,
                 categories=cat_info[0],
                 ordered=cat_info[1])
             df[name] = Series(
