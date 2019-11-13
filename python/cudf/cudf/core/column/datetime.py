@@ -306,7 +306,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.mask is not None:
+            if self.mask is not None and self.null_count > 0:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -317,7 +317,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.mask is not None:
+            if self.mask is not None and self.null_count > 0:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(

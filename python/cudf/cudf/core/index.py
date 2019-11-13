@@ -900,16 +900,24 @@ class CategoricalIndex(GenericIndex):
         elif isinstance(values, pd.Series) and (
             is_categorical_dtype(values.dtype)
         ):
-            values = CategoricalColumn(
-                data=Buffer(values.cat.codes.values),
-                categories=values.cat.categories,
-                ordered=values.cat.ordered,
+            codes_data = values.cat.codes.values
+            values = column.build_column(
+                data=Buffer.from_array_like(codes_data),
+                dtype=cudf.CategoricalDtype(
+                    data_dtype=codes_data.dtype,
+                    categories=values.cat.categories,
+                    ordered=values.cat.ordered,
+                ),
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
-            values = CategoricalColumn(
-                data=Buffer(values.codes),
-                categories=values.categories,
-                ordered=values.ordered,
+            codes_data = values.codes
+            values = column.build_column(
+                data=Buffer.from_array_like(codes_data),
+                dtype=cudf.CategoricalDtype(
+                    data_dtype=codes_data.dtype,
+                    categories=values.categories,
+                    ordered=values.ordered,
+                ),
             )
         elif isinstance(values, (list, tuple)):
             values = column.as_column(

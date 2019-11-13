@@ -666,9 +666,9 @@ class ColumnBase(Column):
         # TODO: Handle errors/missing keys correctly
         #       Not currently using `kind` argument.
         if side == "left":
-            return self.find_first_value(label)
+            return self.find_first_value(label, closest=True)
         if side == "right":
-            return self.find_last_value(label) + 1
+            return self.find_last_value(label, closest=True) + 1
 
     def sort_by_values(self):
         raise NotImplementedError
