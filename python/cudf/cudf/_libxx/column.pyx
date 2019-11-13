@@ -46,9 +46,9 @@ cudf_to_np_types = {INT8: np.dtype('int8'),
 cdef class Column:
     def __init__(self, data, size, dtype, mask=None):
         if not isinstance(data, Buffer):
-            raise TypeError("Expected a Buffer for data, got {type(data).__name__}")
+            raise TypeError("Expected a Buffer for data, got " + type(data).__name__)
         if mask is not None and not isinstance(mask, Buffer):
-            raise TypeError("Expected a Buffer for mask, got {type(mask).__name__}")
+            raise TypeError("Expected a Buffer for mask, got " + type(mask).__name__)
         self.data = data
         self.size = size
         self.dtype = dtype
@@ -111,4 +111,5 @@ cdef class Column:
             mask = DeviceBuffer.from_ptr(contents.null_mask.release())
         else:
             mask = None
-        return build_column(data, dtype=dtype, mask=mask)
+        buffer = Buffer.from_device_buffer(data)
+        return build_column(buffer, dtype=dtype, mask=mask)
