@@ -29,6 +29,7 @@ using cudf::test::column_view_to_str;
 
 using cudf::column_view;
 using cudf::numeric_scalar;
+using cudf::string_scalar;
 
 class SearchTest : public GdfTest {};
 
@@ -473,7 +474,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
                                                           {   0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
     fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
                                                           {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
-    fixed_width_column_wrapper<int8_t>         column_2 { {  50,  95,  90,  79,  76,  77,  78,  61,  62,  63,  41 },
+    fixed_width_column_wrapper<int8_t>         column_2 { {  50,  90,  95,  79,  76,  77,  78,  61,  62,  63,  41 },
                                                           {   1,   1,   1,   0,   0,   1,   1,   1,   1,   1,   1 } };
 
     fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
@@ -688,6 +689,870 @@ TEST_F(SearchTest, contains_nullable_column_false)
     fixed_width_column_wrapper<element_type>    column { { 0, 1, 17, 19, 23, 29, 71},
                                                          { 0,  0,  1,  1,  0,  1,  1 } };
     numeric_scalar<element_type>                scalar {23};
+
+    result = cudf::experimental::contains(column, scalar);
+
+    ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, empty_table_string)
+{
+  std::vector<const char*> h_col_strings { };
+  std::vector<const char*> h_val_strings { "0", "10", "11", "30", "32", "40", "47", "50", "7", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  fixed_width_column_wrapper<index_type>    expect {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 };
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::BEFORE})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, empty_values_string)
+{
+  std::vector<const char*> h_col_strings { "10", "20", "30", "40", "50" };
+  std::vector<const char*> h_val_strings { };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    fixed_width_column_wrapper<index_type>    expect {};
+
+    std::unique_ptr<cudf::column> result{};
+
+    EXPECT_NO_THROW(
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             {cudf::null_order::BEFORE})
+                    );
+
+    expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, non_null_column__find_first_string)
+{
+  std::vector<const char*> h_col_strings { "10", "20", "30", "40", "50" };
+  std::vector<const char*> h_val_strings { "00", "07", "10", "11", "30", "32", "40", "47", "50", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  fixed_width_column_wrapper<index_type>    expect {  0,  0,  0,  1,  2,  3,  3,  4,  4,  5 };
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::BEFORE})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, non_null_column__find_last_string)
+{
+  std::vector<const char*> h_col_strings { "10", "20", "30", "40", "50" };
+  std::vector<const char*> h_val_strings { "00", "07", "10", "11", "30", "32", "40", "47", "50", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    fixed_width_column_wrapper<index_type>    expect {  0,  0,  1,  1,  3,  3,  4,  4,  5,  5 };
+
+    std::unique_ptr<cudf::column> result{};
+
+    EXPECT_NO_THROW(
+                    result = cudf::experimental::upper_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::ASCENDING},
+                                                             {cudf::null_order::BEFORE})
+                    );
+
+    expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, non_null_column_desc__find_first_string)
+{
+  std::vector<const char*> h_col_strings { "50", "40", "30", "20", "10" };
+  std::vector<const char*> h_val_strings { "00", "07", "10", "11", "30", "32", "40", "47", "50", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    fixed_width_column_wrapper<index_type>    expect {  5,  5,  4,  4,  2,  2,  1,  1,  0,  0 };
+
+    std::unique_ptr<cudf::column> result{};
+
+    EXPECT_NO_THROW(
+                    result = cudf::experimental::lower_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::DESCENDING},
+                                                             {cudf::null_order::BEFORE})
+    );
+
+    expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, non_null_column_desc__find_last_string)
+{
+  std::vector<const char*> h_col_strings { "50", "40", "30", "20", "10" };
+  std::vector<const char*> h_val_strings { "00", "07", "10", "11", "30", "32", "40", "47", "50", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    fixed_width_column_wrapper<index_type>    expect {  5,  5,  5,  4,  3,  2,  2,  1,  1,  0 };
+
+    std::unique_ptr<cudf::column> result{};
+
+    EXPECT_NO_THROW(
+                    result = cudf::experimental::upper_bound(
+                                                             {cudf::table_view{{column}}},
+                                                             {cudf::table_view{{values}}},
+                                                             {cudf::order::DESCENDING},
+                                                             {cudf::null_order::BEFORE})
+    );
+
+    expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
+{
+  std::vector<const char*> h_col_strings { nullptr, nullptr, "10", "20", "30", "40", "50" };
+  std::vector<const char*> h_val_strings { nullptr, "08", "10", "11", "30", "32", "40", "47", "50", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  fixed_width_column_wrapper<index_type>     expect {  2,  2,  3,  3,  5,  5,  6,  6,  7,  7 };
+    
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::BEFORE})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
+{
+  std::vector<const char*> h_col_strings { nullptr, nullptr, "10", "20", "30", "40", "50" };
+  std::vector<const char*> h_val_strings { nullptr, "08", "10", "11", "30", "32", "40", "47", "50", "90" };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  fixed_width_column_wrapper<index_type>     expect {  0,  2,  2,  3,  4,  5,  5,  6,  6,  7 };
+    
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::BEFORE})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
+{
+  std::vector<const char*> h_col_strings { "10", "20", "30", "40", "50", nullptr, nullptr };
+  std::vector<const char*> h_val_strings { "08", "10", "11", "30", "32", "40", "47", "50", "90", nullptr };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  fixed_width_column_wrapper<index_type>     expect {  0,  1,  1,  3,  3,  4,  4,  5,  5,  7 };
+    
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::AFTER})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
+{
+  std::vector<const char*> h_col_strings { "10", "20", "30", "40", "50", nullptr, nullptr };
+  std::vector<const char*> h_val_strings { "08", "10", "11", "30", "32", "40", "47", "50", "90", nullptr };
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values(h_val_strings.begin(),
+                                            h_val_strings.end(),
+                                            thrust::make_transform_iterator( h_val_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  fixed_width_column_wrapper<index_type>     expect {  0,  0,  1,  2,  3,  3,  4,  4,  5,  5 };
+    
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::AFTER})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table__find_first_string)
+{
+  std::vector<const char*> h_col_0_strings { "10",  "20",  "20",  "20",  "20",  "20",  "50" };
+  std::vector<const char*> h_col_2_strings { "90",  "77",  "78",  "61",  "62",  "63",  "41" };
+
+  std::vector<const char*> h_val_0_strings { "0",  "0",  "0",  "0", "10", "10", "10", "10", "10", "10", "10", "10", "11", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "30", "50", "60" };
+  std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
+
+  fixed_width_column_wrapper<float>   column_1 { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
+  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+
+  fixed_width_column_wrapper<index_type> expect { 0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  1,  1,  1,  1,  1,  1,  2,  1,  3,  3,  3,  6,  4,  6,  6,  6,  7 };
+
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table__find_last_string)
+{
+  std::vector<const char*> h_col_0_strings { "10",  "20",  "20",  "20",  "20",  "20",  "50" };
+  std::vector<const char*> h_col_2_strings { "90",  "77",  "78",  "61",  "62",  "63",  "41" };
+
+  std::vector<const char*> h_val_0_strings { "0",  "0",  "0",  "0", "10", "10", "10", "10", "10", "10", "10", "10", "11", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "30", "50", "60" };
+  std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
+
+  fixed_width_column_wrapper<float>   column_1 { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
+  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+
+  fixed_width_column_wrapper<index_type> expect { 0,  0,  0,  0,  0,  0,  1,  1,  0,  1,  1,  1,  1,  1,  1,  2,  3,  1,  3,  3,  3,  6,  5,  6,  6,  7,  7 };
+
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table_partial_desc__find_first_string)
+{
+  std::vector<const char*> h_col_0_strings { "50",  "20",  "20",  "20",  "20",  "20",  "10" };
+  std::vector<const char*> h_col_2_strings { "41",  "78",  "77",  "63",  "62",  "61",  "90" };
+
+  std::vector<const char*> h_val_0_strings { "0",  "0",  "0",  "0", "10", "10", "10", "10", "10", "10", "10", "10", "11", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "30", "50", "60" };
+  std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
+
+  fixed_width_column_wrapper<float>   column_1 {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
+  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+
+  fixed_width_column_wrapper<index_type> expect   { 7,  7,  7,  7,  6,  7,  6,  6,  7,  7,  7,  7,  6,  1,  3,  2,  1,  3,  3,  3,  3,  3,  4,  3,  1,  0,  0 };
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table_partial_desc__find_last_string)
+{
+  std::vector<const char*> h_col_0_strings { "50",  "20",  "20",  "20",  "20",  "20",  "10" };
+  std::vector<const char*> h_col_2_strings { "41",  "78",  "77",  "63",  "62",  "61",  "90" };
+
+  std::vector<const char*> h_val_0_strings { "0",  "0",  "0",  "0", "10", "10", "10", "10", "10", "10", "10", "10", "11", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "20", "30", "50", "60" };
+  std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
+
+  fixed_width_column_wrapper<float>      column_1 {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
+
+  fixed_width_column_wrapper<float>      values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+
+
+  fixed_width_column_wrapper<index_type> expect   { 7,  7,  7,  7,  6,  7,  7,  6,  7,  7,  7,  7,  6,  1,  3,  3,  2,  3,  3,  3,  3,  3,  5,  3,  1,  1,  0 };
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
+{
+  std::vector<const char*> h_col_0_strings { nullptr, "10",  "10",  "20",     "20",     "20", "20", "20", "20", "20", "50" };
+  std::vector<const char*> h_col_2_strings { "50",    "95",  "90",  nullptr,  nullptr,  "77", "78", "61", "62", "63", "41" };
+
+  std::vector<const char*> h_val_0_strings { "10", nullptr, "20"     };
+  std::vector<const char*> h_val_2_strings { "95", "50",     nullptr };
+
+  fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
+                                                        {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+
+  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                        {  0,  1,  1 } };
+
+  fixed_width_column_wrapper<index_type>     expect   {  1,  0,  3 };
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
+{
+  std::vector<const char*> h_col_0_strings { nullptr, "10",  "10",  "20",     "20",     "20", "20", "20", "20", "20", "50" };
+  std::vector<const char*> h_col_2_strings { "50",    "90",  "95",  nullptr,  nullptr,  "77", "78", "61", "62", "63", "41" };
+
+  std::vector<const char*> h_val_0_strings { "10", nullptr, "20"     };
+  std::vector<const char*> h_val_2_strings { "95", "50",     nullptr };
+
+  fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
+                                                        {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+
+  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                        {  0,  1,  1 } };
+
+  fixed_width_column_wrapper<index_type>     expect   {  2,  1,  5 };
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::BEFORE, cudf::null_order::BEFORE, cudf::null_order::BEFORE}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
+{
+  std::vector<const char*> h_col_0_strings { "10", "10", "20", "20", "20",    "20",    "20", "20", "20", "50", nullptr };
+  std::vector<const char*> h_col_2_strings { "90", "95", "77", "78", nullptr, nullptr, "61", "62", "63", "41", "50"    };
+
+  std::vector<const char*> h_val_0_strings { "10", nullptr, "20"     };
+  std::vector<const char*> h_val_2_strings { "95", "50",     nullptr };
+
+
+  fixed_width_column_wrapper<float>          column_1 { { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 },
+                                                        {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+
+  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                        {  0,  1,  1 } };
+
+  fixed_width_column_wrapper<index_type>     expect   {  1, 10,  4 };
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::lower_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
+{
+  std::vector<const char*> h_col_0_strings { "10", "10", "20", "20", "20",    "20",    "20", "20", "20", "50", nullptr };
+  std::vector<const char*> h_col_2_strings { "90", "95", "77", "78", nullptr, nullptr, "61", "62", "63", "41", "50"    };
+
+  std::vector<const char*> h_val_0_strings { "10", nullptr, "20"     };
+  std::vector<const char*> h_val_2_strings { "95", "50",     nullptr };
+
+
+  fixed_width_column_wrapper<float>          column_1 { { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 },
+                                                        {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
+
+  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+                                                        {  0,  1,  1 } };
+
+  fixed_width_column_wrapper<index_type>     expect   {  2, 11,  6 };
+
+  cudf::test::strings_column_wrapper column_0(h_col_0_strings.begin(),
+                                              h_col_0_strings.end(),
+                                              thrust::make_transform_iterator( h_col_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper column_2(h_col_2_strings.begin(),
+                                              h_col_2_strings.end(),
+                                              thrust::make_transform_iterator( h_col_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_0(h_val_0_strings.begin(),
+                                              h_val_0_strings.end(),
+                                              thrust::make_transform_iterator( h_val_0_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper values_2(h_val_2_strings.begin(),
+                                              h_val_2_strings.end(),
+                                              thrust::make_transform_iterator( h_val_2_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(column_0.release());
+  columns.push_back(column_1.release());
+  columns.push_back(column_2.release());
+
+  std::vector<std::unique_ptr<cudf::column>> values;
+  values.push_back(values_0.release());
+  values.push_back(values_1.release());
+  values.push_back(values_2.release());
+
+  cudf::experimental::table input_table(std::move(columns));
+  cudf::experimental::table values_table(std::move(values));
+
+  std::vector<cudf::order>       order_flags{{cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+  std::vector<cudf::null_order>  null_order_flags{{cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER}};
+
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           input_table,
+                                                           values_table,
+                                                           order_flags,
+                                                           null_order_flags)
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, contains_true_string)
+{
+  std::vector<const char*> h_col_strings { "00", "01", "17", "19", "23", "29", "71"};
+  string_scalar scalar {"23"};
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  bool  expect = true;
+  bool  result = false;
+
+  result = cudf::experimental::contains(column, scalar);
+
+  ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, contains_false_string)
+{
+  std::vector<const char*> h_col_strings { "0", "1", "17", "19", "23", "29", "71"};
+  string_scalar  scalar {"24"};
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    bool  expect = false;
+    bool  result = false;
+
+    result = cudf::experimental::contains(column, scalar);
+
+    ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, contains_empty_value_string)
+{
+  std::vector<const char *> h_col_strings { "0", "1", "17", "19", "23", "29", "71"};
+  string_scalar             scalar {"23", false};
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    bool  expect = false;
+    bool  result = false;
+
+    result = cudf::experimental::contains(column, scalar);
+
+    ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, contains_empty_column_string)
+{
+  std::vector<const char*> h_col_strings { };
+  string_scalar            scalar {"24"};
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    bool  expect = false;
+    bool  result = false;
+
+    result = cudf::experimental::contains(column, scalar);
+
+    ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, contains_nullable_column_true_string)
+{
+  std::vector<const char*> h_col_strings { nullptr, nullptr, "17", "19", "23", "29", "71"};
+  string_scalar            scalar {"23"};
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    bool result = false;
+    bool expect = true;
+
+    result = cudf::experimental::contains(column, scalar);
+
+    ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, contains_nullable_column_false_string)
+{
+  std::vector<const char*> h_col_strings { nullptr, nullptr, "17", "19", nullptr, "29", "71"};
+  string_scalar            scalar {"23"};
+
+  cudf::test::strings_column_wrapper column(h_col_strings.begin(),
+                                            h_col_strings.end(),
+                                            thrust::make_transform_iterator( h_col_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    bool result = false;
+    bool expect = false;
 
     result = cudf::experimental::contains(column, scalar);
 

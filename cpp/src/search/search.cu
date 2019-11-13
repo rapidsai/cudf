@@ -20,6 +20,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -97,13 +98,10 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto d_values = table_device_view::create(values, stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
 
-  //  Need an order*
   rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
   rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
 
   if (has_nulls(t)) {
-    // TODO:  One of the PRs made null_precedence an array and
-    //    changed the order in the constructor
     auto ineq_op = (find_first)
       ? row_lexicographic_comparator<true>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
       : row_lexicographic_comparator<true>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
@@ -122,15 +120,77 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
-template <bool nullable = true>
+template <typename Element, bool nullable = true>
 struct compare_with_value{
-  compare_with_value(table_device_view t, table_device_view val, bool nulls_are_equal = true)
-    : compare(t, val, nulls_are_equal) {}
+  compare_with_value(column_device_view c, const char *str, bool val_is_valid, bool nulls_are_equal)
+    : col{c}, value{str}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
+  
+  compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
 
-  __device__ bool operator()(size_type i){
-    return compare(i, 0);
+    : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
+
+  __device__ bool operator()(size_type i) noexcept {
+    if (nullable) {
+      bool const col_is_null{col.nullable() and col.is_null(i)};
+      if (col_is_null and not val_is_valid)
+        return nulls_are_equal;
+      else if (col_is_null == val_is_valid)
+        return false;
+    }
+    
+    return equality_compare<Element>(col.element<Element>(i), value);
   }
-  row_equality_comparator<nullable> compare;
+
+  column_device_view        col;
+  Element                   value;
+  bool val_is_valid;
+  bool nulls_are_equal;
+};
+
+template <typename Element>
+void populate_element(scalar const& value, Element &e) {
+  using ScalarType = cudf::experimental::scalar_type_t<Element>;
+  auto s1 = static_cast<const ScalarType *>(&value);
+
+  e = s1->value();
+}
+
+template <>
+void populate_element<string_view>(scalar const& value, string_view &e) {
+  using ScalarType = cudf::experimental::scalar_type_t<string_view>;
+  auto s1 = static_cast<const ScalarType *>(&value);
+
+  e = string_view{s1->data(), s1->size()};
+}
+  
+struct contains_scalar {
+  template <typename Element>
+  bool operator()(column_view const& col, scalar const& value,
+                  cudaStream_t stream,
+                  rmm::mr::device_memory_resource *mr) {
+
+    auto d_col = column_device_view::create(col, stream);
+    auto data_it = thrust::make_counting_iterator<size_type>(0);
+
+    bool    h_value_is_valid{value.is_valid()};
+    Element h_value;
+
+    populate_element(value, h_value);
+
+    if (col.has_nulls()) {
+      auto eq_op = compare_with_value<Element, true>(*d_col, h_value, h_value_is_valid, true);
+
+      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                            data_it, data_it + col.size(),
+                            eq_op);
+    } else {
+      auto eq_op = compare_with_value<Element, false>(*d_col, h_value, h_value_is_valid, true);
+
+      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                            data_it, data_it + col.size(),
+                            eq_op);
+    }
+  }
 };
 
 bool contains(column_view const& col,
@@ -148,40 +208,10 @@ bool contains(column_view const& col,
     return col.has_nulls();
   }
 
-  std::unique_ptr<column> scalar_as_column = make_numeric_column(col.type(), 1, mask_state::UNALLOCATED, stream, mr);
-
-#ifdef USE_FILL
-  cudf::experimental::fill(scalar_as_column, size_type{0}, size_type{1}, value, mr);
-#else
-  //
-  // NOTE:  This is an ugly hack that works for the unit tests
-  //        Once fill is implemented this can be replaced by the above logic
-  //
-  CUDA_TRY(cudaMemcpy(scalar_as_column->mutable_view().head<void>(),
-                      ((cudf::detail::fixed_width_scalar<int8_t> *) &value)->data(),
-                      size_of(scalar_as_column->type()),
-                      cudaMemcpyHostToDevice));
-#endif
-  
-
-  auto d_t = cudf::table_device_view::create(cudf::table_view{{col}}, stream);
-  auto d_value = cudf::table_device_view::create(cudf::table_view{{*scalar_as_column}}, stream);
-
-  auto data_it = thrust::make_counting_iterator<size_type>(0);
-
-  if (col.has_nulls()) {
-    auto eq_op = compare_with_value<true>(*d_t, *d_value, true);
-
-    return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                          data_it, data_it + col.size(),
-                          eq_op);
-  } else {
-    auto eq_op = compare_with_value<false>(*d_t, *d_value, true);
-
-    return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                          data_it, data_it + col.size(),
-                          eq_op);
-  }
+  return cudf::experimental::type_dispatcher(col.type(),
+                                             contains_scalar{},
+                                             col, value,
+                                             stream, mr);
 }
 } // namespace detail
 
