@@ -34,50 +34,9 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <thrust/iterator/iterator_adaptor.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
-
-/** -------------------------------------------------------------------------*
- * @brief value accessor of column without null bitmask
- * A unary functor returns scalar value at `id`.
- * `operator() (cudf::size_type id)` computes `element`
- * This functor is only allowed for non-nullable columns.
- *
- * the return value for element `i` will return `column[i]`
- *
- * @throws `cudf::logic_error` if the column is nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
- *
- * @tparam Element The type of elements in the column
- * -------------------------------------------------------------------------**/
-
-template <typename Element>
-struct column_device_view::value_accessor {
-  column_device_view const col;  ///< column view of column in device
-
-  /** -------------------------------------------------------------------------*
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
-   * -------------------------------------------------------------------------**/
-  value_accessor(column_device_view const& _col) : col{_col} {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
-                 "the data type mismatch");
-    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
-  }
-
-  CUDA_DEVICE_CALLABLE
-  Element operator()(cudf::size_type i) const {
-    return col.element<Element>(i);
-  }
-};
-
 namespace experimental {
 namespace detail {
 
