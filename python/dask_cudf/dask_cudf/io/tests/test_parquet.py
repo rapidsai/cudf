@@ -60,6 +60,17 @@ def test_roundtrip_from_dask(tmpdir):
     assert_eq(ddf[["y"]], ddf2)
 
 
+def test_roundtrip_from_dask_cudf(tmpdir):
+    tmpdir = str(tmpdir)
+    gddf = dask_cudf.from_dask_dataframe(ddf)
+    gddf.to_parquet(tmpdir)
+
+    # NOTE: Need `.compute()` to resolve correct index
+    #       name after `from_dask_dataframe`
+    gddf2 = dask_cudf.read_parquet(tmpdir)
+    assert_eq(gddf.compute(), gddf2)
+
+
 def test_roundtrip_from_pandas(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
 

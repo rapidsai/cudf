@@ -263,6 +263,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         results = [p for i, p in enumerate(parts) if uniques[i]]
         return from_delayed(results, meta=self._meta).reset_index()
 
+    def to_parquet(self, path, *args, **kwargs):
+        """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
+        from dask_cudf.io import to_parquet
+
+        return to_parquet(self, path, *args, **kwargs)
+
     @derived_from(pd.DataFrame)
     def var(
         self,
