@@ -68,6 +68,9 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
  *
  * The number of columns in source must match the number of columns in target
  * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
  *
  * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
  * is the number of rows in the `source_table`.
@@ -105,6 +108,9 @@ std::unique_ptr<table> scatter(
  *
  * The number of elements in source must match the number of columns in target
  * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
  *
  * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in

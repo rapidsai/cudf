@@ -17,6 +17,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
@@ -25,21 +26,35 @@ namespace experimental {
 
 namespace {
 
-template <typename T>
-__global__
-void invert_map(mutable_column_device_view gather_map, column_device_view scatter_map)
-{
-  auto source = threadIdx.x + blockIdx.x * blockDim.x;
-  if (source < scatter_map.size()) {
-    T dest = scatter_map.element<T>(source);
-    if (dest < 0) {
-      dest += gather_map.size();
-    }
-    if (dest >= 0 && dest < gather_map.size()) {
-      gather_map.element<T>(dest) = static_cast<T>(source);
-    }
+template <typename index_type>
+struct column_scatterer {
+  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& source,
+      column_view const& scatter_map, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    auto result = detail::allocate_like(target, target.size(),
+      mask_allocation_policy::RETAIN, mr, stream);
+    auto result_view = result->mutable_view();
+
+    // NOTE using source.begin + scatter_map.size for end in case scatter_map
+    // is smaller than source. If we instead assert that map size == source size
+    // then we can replace this with source.end instead.
+    thrust::scatter(rmm::exec_policy(stream)->on(stream), source.begin<T>(),
+      source.begin<T>() + scatter_map.size(), scatter_map.begin<index_type>(),
+      result_view.begin<T>());
+
+    return result;
   }
-}
+
+  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& source,
+      column_view const& scatter_map, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    CUDF_FAIL("Scatter column type must be fixed width");
+  }
+};
 
 struct scatter_impl {
   template <typename T, std::enable_if_t<std::is_integral<T>::value
@@ -49,11 +64,6 @@ struct scatter_impl {
       table_view const& target, bool check_bounds,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    // Negative values are used to indicate unmodified rows in the gather map,
-    // so assert against unsigned integer types added in the future
-    static_assert(std::is_signed<T>::value,
-      "Need special case to handle unsigned index types");
-
     if (check_bounds) {
       auto const begin = -target.num_rows();
       auto const end = target.num_rows();
@@ -63,24 +73,19 @@ struct scatter_impl {
         "Scatter map index out of bounds");
     }
 
-    // Allocate gather map initialized with negative indices
-    auto const default_value = static_cast<T>(-1);
-    auto gather_map = detail::allocate_like(scatter_map, target.num_rows(),
-      mask_allocation_policy::NEVER, mr, stream);
-    auto gather_map_view = gather_map->mutable_view();
-    thrust::fill(rmm::exec_policy(stream)->on(stream),
-      gather_map_view.begin<T>(), gather_map_view.end<T>(), default_value);
+    // TODO create separate streams for each col and then sync with master?
+    std::vector<std::unique_ptr<column>> result(target.num_columns());
+    for (size_type i = 0; i < target.num_columns(); ++i) {
+      auto& result_col = result[i];
+      auto const& source_col = source.column(i);
+      auto const& target_col = target.column(i);
+      result_col = type_dispatcher(source_col.type(), column_scatterer<T>{},
+        source_col, scatter_map, target_col, mr, stream);
+    };
 
-    // TODO replace invert_map with thrust::scatter?
-    // Invert the scatter map into the gather map
-    auto grid = detail::grid_1d(source.num_rows(), 256);
-    auto gather_map_device = mutable_column_device_view::create(gather_map_view, stream);
-    auto scatter_map_device = column_device_view::create(scatter_map, stream);
-    invert_map<T><<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-      *gather_map_device, *scatter_map_device);
+    // TODO scatter bitmask
 
-    // TODO
-    return std::make_unique<table>(target, stream, mr);
+    return std::make_unique<table>(std::move(result));
   }
 
   template <typename T, std::enable_if_t<not std::is_integral<T>::value
@@ -102,11 +107,6 @@ struct scatter_scalar_impl {
       column_view const& indices, table_view const& target, bool check_bounds,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    // Negative values are used to indicate unmodified rows in the gather map,
-    // so assert against unsigned integer types added in the future
-    static_assert(std::is_signed<T>::value,
-      "Need special case to handle unsigned index types");
-
     if (check_bounds) {
       auto const begin = -target.num_rows();
       auto const end = target.num_rows();
@@ -155,6 +155,7 @@ std::unique_ptr<table> scatter(
     return std::make_unique<table>(target, stream, mr);
   }
 
+  // First dispatch for scatter map index type
   return type_dispatcher(scatter_map.type(), scatter_impl{}, source,
     scatter_map, target, check_bounds, mr, stream);
 }
@@ -177,6 +178,7 @@ std::unique_ptr<table> scatter(
     return std::make_unique<table>(target, stream, mr);
   }
 
+  // First dispatch for scatter index type
   return type_dispatcher(indices.type(), scatter_scalar_impl{}, source,
     indices, target, check_bounds, mr, stream);
 }
