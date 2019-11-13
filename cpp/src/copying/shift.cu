@@ -14,24 +14,55 @@
  * limitations under the License.
  */
 
- #include <cudf/copying.hpp>
- #include <cudf/table/table.hpp>
- #include <cudf/table/table_view.hpp>
- #include <cudf/scalar/scalar.hpp>
+#include <algorithm>
+#include <cudf/copying.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <memory>
+#include <vector>
+#include "boost/range/iterator_range_core.hpp"
+#include "cudf/column/column_view.hpp"
+#include "cudf/legacy/copying.hpp"
+#include "thrust/iterator/constant_iterator.h"
+#include <boost/range/combine.hpp>
+#include <boost/range/irange.hpp>
 
- namespace cudf {
+namespace cudf {
 
- std::unique_ptr<table> shift(const table_view& in,
-                              size_type periods,
-                              const std::vector<scalar>& fill_value = {},
-                              rmm::mr::device_memory_resource *mr =
-                                  rmm::mr::get_default_resource())
+namespace experimental{
+
+namespace detail {
+
+}
+
+template<typename GenerateColumnOp>
+std::unique_ptr<table> generate_like(table_view const& in,
+                                     GenerateColumnOp generate_column)
 {
-    if (not fill_value.empty()) {
-        CUDF_EXPECTS(static_cast <unsigned int>(in.num_columns()) == fill_value.size(), "`fill_value.size()` and `in.num_columns() must be the same.");
+    auto columns = std::vector<std::unique_ptr<column>>(in.num_columns());
+
+    std::transform(in.begin(), in.end(), columns.begin(), generate_column);
+
+    return std::make_unique<table>(std::move(columns));
+}
+
+std::unique_ptr<table> shift(table_view const& in,
+                              size_type periods,
+                              std::vector<scalar> const& fill_values,
+                              rmm::mr::device_memory_resource *mr)
+{
+    if (not fill_values.empty()) {
+        CUDF_EXPECTS(static_cast <unsigned int>(in.num_columns()) == fill_values.size(), "`fill_values.size()` and `in.num_columns() must be the same.");
+    }
+
+    if (periods == 0 || in.num_rows() == 0) {
+        return empty_like(in);
     }
 
     throw cudf::logic_error("not implemented");
 }
+
+} // namespace experimental
 
 } // namespace cudf

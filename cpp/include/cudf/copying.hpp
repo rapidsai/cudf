@@ -73,7 +73,7 @@ enum class  mask_allocation_policy {
  * @param[in] input Immutable view of input column to emulate
  * @return std::unique_ptr<column> An empty column of same type as `input`
  */
-std::unique_ptr<column> empty_like(column_view input);
+std::unique_ptr<column> empty_like(column_view const& input);
 
 /**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
@@ -84,7 +84,7 @@ std::unique_ptr<column> empty_like(column_view input);
  * @param[in] mr Optional, The resource to use for all allocations
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
-std::unique_ptr<column> allocate_like(column_view input,
+std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
                                           rmm::mr::get_default_resource());
@@ -99,7 +99,7 @@ std::unique_ptr<column> allocate_like(column_view input,
  * @param[in] mr Optional, The resource to use for all allocations
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
-std::unique_ptr<column> allocate_like(column_view input, size_type size,
+std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                       mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
                                           rmm::mr::get_default_resource());
@@ -194,9 +194,9 @@ std::vector<column_view> split(column_view const& input,
 * @param[in] periods    The index offset by which to shift the input.
 * @param[in] fill_value The value when 
 */
-std::unique_ptr<table> shift(const table_view& in,
+std::unique_ptr<table> shift(table_view const& in,
                              size_type periods,
-                             const std::vector<scalar>& fill_value = {},
+                             std::vector<scalar> const& fill_value = {},
                              rmm::mr::device_memory_resource *mr =
                                  rmm::mr::get_default_resource());
 
