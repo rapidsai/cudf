@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column import as_column
 from cudf.tests.utils import assert_eq, assert_neq
 
 
@@ -109,7 +110,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_column(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
