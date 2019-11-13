@@ -71,25 +71,8 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
     std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
-    auto prog = Reprog_device::create(pattern32.data(),d_flags);
+    auto prog = Reprog_device::create(pattern32.data(),d_flags,strings_count,stream);
     auto d_prog = *prog;
-
-    // allocate regex working memory if necessary
-    int regex_insts = d_prog.inst_counts();
-    if( regex_insts > MAX_STACK_INSTS )
-    {
-        if( !d_prog.alloc_relists(strings_count) )
-        {
-            std::ostringstream message;
-            message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
-            message << "number of instructions (" << d_prog.inst_counts() << ") ";
-            message << "and number of strings (" << strings_count << ") ";
-            message << "exceeds available memory";
-            // throw std::invalid_argument(message.str());
-            //CUDF_FAIL(message.str());
-            throw cudf::logic_error(message.str());
-        }
-    }
 
     // create the output column
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
@@ -97,8 +80,9 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<cudf::experimental::bool8>();
 
-    // do the thing
+    //
     auto execpol = rmm::exec_policy(stream);
+    int regex_insts = d_prog.insts_counts();
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
         thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),
@@ -202,33 +186,18 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
     auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
     std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
-    auto prog = Reprog_device::create(pattern32.data(),d_flags);
+    auto prog = Reprog_device::create(pattern32.data(),d_flags,strings_count,stream);
     auto d_prog = *prog;
 
-    // allocate regex working memory if necessary
-    int regex_insts = d_prog.inst_counts();
-    if( regex_insts > MAX_STACK_INSTS )
-    {
-        if( !d_prog.alloc_relists(strings_count) )
-        {
-            std::ostringstream message;
-            message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
-            message << "number of instructions (" << d_prog.inst_counts() << ") ";
-            message << "and number of strings (" << strings_count << ") ";
-            message << "exceeds available memory";
-            // throw std::invalid_argument(message.str());
-            //CUDF_FAIL(message.str());
-            throw cudf::logic_error(message.str());
-        }
-    }
     // create the output column
     auto results = make_numeric_column( data_type{INT32}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int32_t>();
 
-    // do the thing
+    //
     auto execpol = rmm::exec_policy(stream);
+    int regex_insts = d_prog.insts_counts();
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
         thrust::transform(execpol->on(stream),
             thrust::make_counting_iterator<size_type>(0),

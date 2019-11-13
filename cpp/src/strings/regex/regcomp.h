@@ -72,16 +72,12 @@ struct Reinst
     int32_t reserved4;
 };
 
-// Regex program handles parsing a pattern in to individual set
-// of chained instructions.
+/**
+ * @brief Regex program handles parsing a pattern in to individual set
+ * of chained instructions.
+ */
 class Reprog
 {
-    std::vector<Reinst> insts;
-    std::vector<Reclass> classes;
-    int32_t startinst_id;
-    std::vector<int32_t> startinst_ids; // short-cut to speed-up ORs
-    int32_t num_capturing_groups;
-
  public:
 
     Reprog() = default;
@@ -101,7 +97,7 @@ class Reprog
     int32_t groups_count() const;
 
     const Reinst* insts_data() const;
-    int32_t inst_count() const;
+    int32_t insts_count() const;
     Reinst& inst_at(int32_t id);
 
     Reclass& class_at(int32_t id);
@@ -116,6 +112,13 @@ class Reprog
     void optimize1();
     void optimize2();
     void print(); // for debugging
+
+private:
+    std::vector<Reinst> _insts;
+    std::vector<Reclass> _classes;
+    int32_t _startinst_id;
+    std::vector<int32_t> _startinst_ids; // short-cut to speed-up ORs
+    int32_t _num_capturing_groups;
 };
 
 } // namespace detail

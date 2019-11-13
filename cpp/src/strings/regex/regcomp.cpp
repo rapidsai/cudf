@@ -52,7 +52,7 @@ static Reclass ccls_D(32);// = { '\n', '\n', '0', '9' };
 //static Reclass ccls_S_Neg = { 0, 0x8, 0xE, 0x1F, 0x21, 0xFFFFFFFF };
 //static Reclass ccls_D_Neg = { 0, 0x9, 0xB, 0x2F, 0x3A, 0xFFFFFFFF };
 
-int Reprog::add_inst(int t)
+int32_t Reprog::add_inst(int32_t t)
 {
     Reinst inst;
     inst.type = t;
@@ -61,71 +61,71 @@ int Reprog::add_inst(int t)
     return add_inst(inst);
 }
 
-int Reprog::add_inst(Reinst inst)
+int32_t Reprog::add_inst(Reinst inst)
 {
-    insts.push_back(inst);
-    return (int)insts.size() - 1;
+    _insts.push_back(inst);
+    return (int)_insts.size() - 1;
 }
 
-int Reprog::add_class(Reclass cls)
+int32_t Reprog::add_class(Reclass cls)
 {
-    classes.push_back(cls);
-    return (int)classes.size()-1;
+    _classes.push_back(cls);
+    return (int)_classes.size()-1;
 }
 
-Reinst& Reprog::inst_at(int id)
+Reinst& Reprog::inst_at(int32_t id)
 {
-    return insts[id];
+    return _insts[id];
 }
 
-Reclass& Reprog::class_at(int id)
+Reclass& Reprog::class_at(int32_t id)
 {
-    return classes[id];
+    return _classes[id];
 }
 
-void Reprog::set_start_inst(int id)
+void Reprog::set_start_inst(int32_t id)
 {
-    startinst_id = id;
+    _startinst_id = id;
 }
 
-int Reprog::get_start_inst() const
+int32_t Reprog::get_start_inst() const
 {
-    return startinst_id;
+    return _startinst_id;
 }
 
-int Reprog::inst_count() const
+int32_t Reprog::insts_count() const
 {
-    return (int)insts.size();
+    return (int)_insts.size();
 }
 
-int Reprog::classes_count() const
+int32_t Reprog::classes_count() const
 {
-    return (int)classes.size();
+    return (int)_classes.size();
 }
 
-void Reprog::set_groups_count(int groups)
+void Reprog::set_groups_count(int32_t groups)
 {
-    num_capturing_groups = groups;
+    _num_capturing_groups = groups;
 }
 
-int Reprog::groups_count() const
+int32_t Reprog::groups_count() const
 {
-    return num_capturing_groups;
+    return _num_capturing_groups;
 }
 
 const Reinst* Reprog::insts_data() const
 {
-    return insts.data();
+    return _insts.data();
 }
 
-const int* Reprog::starts_data() const
+const int32_t* Reprog::starts_data() const
 {
-    return startinst_ids.data();
+    return _startinst_ids.data();
 }
 
-int Reprog::starts_count() const
+int32_t Reprog::starts_count() const
 {
-    return (int)startinst_ids.size();
+    return (int)_startinst_ids.size();
 }
 
 // Converts pattern into regex classes
@@ -575,7 +575,9 @@ public:
     }
 };
 
-// Compiler converts class list into instructions
+/**
+ * @brief The compiler converts class list into instructions.
+ */
 class RegCompiler
 {
     Reprog& m_prog;
@@ -954,6 +956,7 @@ Reprog Reprog::create_from(const char32_t* pattern)
     return rtn;
 }
 
+// future
 //Reprog regcompnl(const char32_t* pattern)
 //{
 //	RegCompiler compiler(pattern, ANYNL);
@@ -963,85 +966,85 @@ Reprog Reprog::create_from(const char32_t* pattern)
 void Reprog::optimize1()
 {
     // Treat non-capturing LBRAs/RBRAs as NOOP
-    for (int i = 0; i < (int)insts.size(); i++)
+    for (int i = 0; i < (int)_insts.size(); i++)
     {
-        if (insts[i].type == LBRA || insts[i].type == RBRA)
+        if (_insts[i].type == LBRA || _insts[i].type == RBRA)
         {
-            if (insts[i].u1.subid < 1)
+            if (_insts[i].u1.subid < 1)
             {
-                insts[i].type = NOP;
+                _insts[i].type = NOP;
             }
         }
     }
 
     // get rid of NOP chains
-    for (int i=0; i < inst_count(); i++)
+    for (int i=0; i < insts_count(); i++)
     {
-        if( insts[i].type != NOP )
+        if( _insts[i].type != NOP )
         {
             {
-                int target_id = insts[i].u2.next_id;
-                while(insts[target_id].type == NOP)
-                    target_id = insts[target_id].u2.next_id;
-                insts[i].u2.next_id = target_id;
+                int target_id = _insts[i].u2.next_id;
+                while(_insts[target_id].type == NOP)
+                    target_id = _insts[target_id].u2.next_id;
+                _insts[i].u2.next_id = target_id;
             }
-            if( insts[i].type == OR )
+            if( _insts[i].type == OR )
             {
-                int target_id = insts[i].u1.right_id;
-                while(insts[target_id].type == NOP)
-                    target_id = insts[target_id].u2.next_id;
-                insts[i].u1.right_id = target_id;
+                int target_id = _insts[i].u1.right_id;
+                while(_insts[target_id].type == NOP)
+                    target_id = _insts[target_id].u2.next_id;
+                _insts[i].u1.right_id = target_id;
             }
         }
     }
     // skip NOPs from the beginning
     {
-        int target_id = startinst_id;
-        while( insts[target_id].type == NOP)
-            target_id = insts[target_id].u2.next_id;
-        startinst_id = target_id;
+        int target_id = _startinst_id;
+        while( _insts[target_id].type == NOP)
+            target_id = _insts[target_id].u2.next_id;
+        _startinst_id = target_id;
     }
     // actually remove the no-ops
-    std::vector<int> id_map(inst_count());
+    std::vector<int> id_map(insts_count());
     int j = 0; // compact the ops (non no-ops)
-    for( int i = 0; i < inst_count(); i++)
+    for( int i = 0; i < insts_count(); i++)
     {
         id_map[i] = j;
-        if( insts[i].type != NOP )
+        if( _insts[i].type != NOP )
         {
-            insts[j] = insts[i];
+            _insts[j] = _insts[i];
             j++;
         }
     }
-    insts.resize(j);
+    _insts.resize(j);
     // fix up the ORs
-    for( int i=0; i < inst_count(); i++)
+    for( int i=0; i < insts_count(); i++)
     {
         {
-            int target_id = insts[i].u2.next_id;
-            insts[i].u2.next_id = id_map[target_id];
+            int target_id = _insts[i].u2.next_id;
+            _insts[i].u2.next_id = id_map[target_id];
         }
-        if( insts[i].type == OR )
+        if( _insts[i].type == OR )
         {
-            int target_id = insts[i].u1.right_id;
-            insts[i].u1.right_id = id_map[target_id];
+            int target_id = _insts[i].u1.right_id;
+            _insts[i].u1.right_id = id_map[target_id];
         }
     }
     // set the new start id
-    startinst_id = id_map[startinst_id];
+    _startinst_id = id_map[_startinst_id];
 }
 
 // expand leading ORs to multiple startinst_ids
 void Reprog::optimize2()
 {
-    startinst_ids.clear();
+    _startinst_ids.clear();
     std::vector<int> stack;
-    stack.push_back(startinst_id);
+    stack.push_back(_startinst_id);
     while(stack.size() > 0)
     {
         int id = *(stack.end() - 1);
         stack.pop_back();
-        const Reinst& inst = insts[id];
+        const Reinst& inst = _insts[id];
         if(inst.type == OR)
         {
             stack.push_back(inst.u2.left_id);
@@ -1049,18 +1052,18 @@ void Reprog::optimize2()
         }
         else
         {
-            startinst_ids.push_back(id);
+            _startinst_ids.push_back(id);
         }
     }
-    startinst_ids.push_back(-1); // terminator mark
+    _startinst_ids.push_back(-1); // terminator mark
 }
 
 void Reprog::print()
 {
     printf("Instructions:\n");
-    for(int i = 0; i < insts.size(); i++)
+    for(int i = 0; i < _insts.size(); i++)
     {
-        const Reinst& inst = insts[i];
+        const Reinst& inst = _insts[i];
         printf("%d :", i);
         switch (inst.type)
         {
@@ -1125,20 +1128,20 @@ void Reprog::print()
         printf("\n");
     }
 
-    printf("startinst_id=%d\n", startinst_id);
-    if( startinst_ids.size() > 0 )
+    printf("startinst_id=%d\n", _startinst_id);
+    if( _startinst_ids.size() > 0 )
     {
         printf("startinst_ids:");
-        for (size_t i = 0; i < startinst_ids.size(); i++)
-            printf(" %d", startinst_ids[i]);
+        for (size_t i = 0; i < _startinst_ids.size(); i++)
+            printf(" %d", _startinst_ids[i]);
         printf("\n");
     }
 
-    int count = (int)classes.size();
+    int count = (int)_classes.size();
     printf("\nClasses %d\n",count);
     for( int i = 0; i < count; i++ )
     {
-        const Reclass& cls = classes[i];
+        const Reclass& cls = _classes[i];
         int len = (int)cls.chrs.size();
         printf("%2d: ", i);
         for( int j=0; j < len; j += 2 )
@@ -1172,8 +1175,8 @@ void Reprog::print()
         }
         printf("\n");
     }
-    if( num_capturing_groups )
-        printf("Number of capturing groups: %d\n", num_capturing_groups);
+    if( _num_capturing_groups )
+        printf("Number of capturing groups: %d\n", _num_capturing_groups);
 }
 
 } // namespace detail

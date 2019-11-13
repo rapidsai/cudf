@@ -155,25 +155,25 @@ __device__ inline bool Reclass_device::is_match(char32_t ch, const uint8_t* code
 
 __device__ inline void Reprog_device::set_stack_mem(u_char* s1, u_char* s2)
 {
-    stack_mem1 = s1;
-    stack_mem2 = s2;
+    _stack_mem1 = s1;
+    _stack_mem2 = s2;
 }
 
 __host__ __device__ inline Reinst* Reprog_device::get_inst(int32_t idx)
 {
-    assert( (idx >= 0) && (idx < insts_count) );
-    return insts + idx;
+    assert( (idx >= 0) && (idx < _insts_count) );
+    return _insts + idx;
 }
 
 __device__ inline Reclass_device Reprog_device::get_class(int32_t idx)
 {
-    assert( (idx >= 0) && (idx < classes_count) );
-    return classes[idx];
+    assert( (idx >= 0) && (idx < _classes_count) );
+    return _classes[idx];
 }
 
 __device__ inline int32_t* Reprog_device::get_startinst_ids()
 {
-    return startinst_ids;
+    return _startinst_ids;
 }
 
 
@@ -287,8 +287,8 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
                         auto codept = utf8_to_codepoint(c);
                         char32_t last_c = static_cast<char32_t>(pos ? dstr[pos-1] : 0);
                         auto last_codept = utf8_to_codepoint(last_c);
-                        bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(codepoint_flags[codept]);
-                        bool last_alphaNumeric = (last_codept < 0x010000) && IS_ALPHANUM(codepoint_flags[last_codept]);
+                        bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
+                        bool last_alphaNumeric = (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
                         if( cur_alphaNumeric != last_alphaNumeric )
                         {
                             id_activate = inst->u2.next_id;
@@ -301,8 +301,8 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
                         auto codept = utf8_to_codepoint(c);
                         char32_t last_c = static_cast<char32_t>(pos ? dstr[pos-1] : 0);
                         auto last_codept = utf8_to_codepoint(last_c);
-                        bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(codepoint_flags[codept]);
-                        bool last_alphaNumeric = (last_codept < 0x010000) && IS_ALPHANUM(codepoint_flags[last_codept]);
+                        bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
+                        bool last_alphaNumeric = (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
                         if( cur_alphaNumeric == last_alphaNumeric )
                         {
                             id_activate = inst->u2.next_id;
@@ -349,14 +349,14 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
             case CCLASS:
             {
                 Reclass_device cls = get_class(inst->u1.cls_id);
-                if( cls.is_match(c,codepoint_flags) )
+                if( cls.is_match(c,_codepoint_flags) )
                     id_activate = inst->u2.next_id;
                 break;
             }
             case NCCLASS:
             {
                 Reclass_device cls = get_class(inst->u1.cls_id);
-                if( !cls.is_match(c,codepoint_flags) )
+                if( !cls.is_match(c,_codepoint_flags) )
                     id_activate = inst->u2.next_id;
                 break;
             }
@@ -401,30 +401,30 @@ __device__ inline int Reprog_device::call_regexec( int32_t idx, string_view cons
     Reljunk jnk;
     jnk.starttype = 0;
     jnk.startchar = 0;
-    int type = get_inst(startinst_id)->type;
+    int type = get_inst(_startinst_id)->type;
     if( type == CHAR || type == BOL )
     {
         jnk.starttype = type;
-        jnk.startchar = get_inst(startinst_id)->u1.c;
+        jnk.startchar = get_inst(_startinst_id)->u1.c;
     }
 
-    if( relists_mem==0 )
+    if( _relists_mem==0 )
     {
         Relist relist1, relist2;
         jnk.list1 = &relist1;
         jnk.list2 = &relist2;
-        jnk.list1->set_data((short)insts_count,stack_mem1);
-        jnk.list2->set_data((short)insts_count,stack_mem2);
+        jnk.list1->set_data((short)_insts_count,_stack_mem1);
+        jnk.list2->set_data((short)_insts_count,_stack_mem2);
         return regexec(dstr,jnk,begin,end,groupid);
     }
 
-    auto relists_size = Relist::alloc_size(insts_count);
-    u_char* drel = reinterpret_cast<u_char*>(relists_mem);        // beginning of Relist buffer;
+    auto relists_size = Relist::alloc_size(_insts_count);
+    u_char* drel = reinterpret_cast<u_char*>(_relists_mem);       // beginning of Relist buffer;
     drel += (idx * relists_size * 2);                             // two Relist ptrs in Reljunk:
     jnk.list1 = reinterpret_cast<Relist*>(drel);                  // - first one
     jnk.list2 = reinterpret_cast<Relist*>(drel + relists_size);   // - second one
-    jnk.list1->set_data(static_cast<int16_t>(insts_count));       // essentially this is
-    jnk.list2->set_data(static_cast<int16_t>(insts_count));       // substitute ctor call
+    jnk.list1->set_data(static_cast<int16_t>(_insts_count));      // essentially this is
+    jnk.list2->set_data(static_cast<int16_t>(_insts_count));      // substitute ctor call
     return regexec(dstr,jnk,begin,end,groupid);
 }
 
