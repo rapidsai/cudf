@@ -52,6 +52,15 @@ class ColumnBase(Column):
         self.name = name
         self.children = children or []
 
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, value):
+        self._nvstrings = None
+        self._mask = value
+
     def _data_view(self):
         """
         View the data as a device array or nvstrings object
@@ -498,6 +507,7 @@ class ColumnBase(Column):
         self.mask = out.mask
         if hasattr(out, "children"):
             self.children = out.children
+            self._nvstrings = None  # force nvstrings to be recomputed
 
     def fillna(self, value):
         """Fill null values with ``value``.

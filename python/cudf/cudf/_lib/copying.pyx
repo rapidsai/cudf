@@ -191,6 +191,9 @@ def copy_column(input_col):
 
 def copy_range(out_col, in_col, int out_begin, int out_end,
                int in_begin):
+
+    from cudf.core.column import as_column
+    
     if abs(out_end - out_begin) <= 1:
         return out_col
 
@@ -223,10 +226,15 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
                        in_begin)
 
     if is_string_dtype(out_col) and len(out_col) > 0:
-        update_nvstrings_col(
-            out_col,
-            <uintptr_t>c_out_col.dtype_info.category)
-
+        nvcat_ptr = int(<uintptr_t>c_out_col.dtype_info.category)
+        nvcat_obj = None
+        if nvcat_ptr:
+            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+            nvstr_obj = nvcat_obj.to_strings()
+        else:
+            nvstr_obj = nvstrings.to_device([])
+        out_col = as_column(nvstr_obj, name=out_col.name)
+    
     free_column(c_in_col)
     free_column(c_out_col)
 

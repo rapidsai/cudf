@@ -522,10 +522,6 @@ class StringColumn(column.ColumnBase):
             )
         return self._nvstrings
 
-    @nvstrings.setter
-    def nvstrings(self, nvs):
-        self._nvstrings = nvs
-
     @property
     def nvcategory(self):
         if self._nvcategory is None:

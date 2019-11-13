@@ -376,18 +376,6 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
     return result
 
 
-cdef update_nvstrings_col(col, uintptr_t category_ptr):
-    nvcat_ptr = int(category_ptr)
-    nvcat_obj = None
-    if nvcat_ptr:
-        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-        nvstr_obj = nvcat_obj.to_strings()
-    else:
-        nvstr_obj = nvstrings.to_device([])
-    col.nvstrings = nvstr_obj
-    col.nvcategory = nvcat_obj
-
-
 cdef gdf_column* column_view_from_string_column(
     Column col,
     col_name=None
