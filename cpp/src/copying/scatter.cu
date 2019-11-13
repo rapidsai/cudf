@@ -34,8 +34,7 @@ struct column_scatterer {
       column_view const& scatter_map, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    auto result = allocate_like(target, target.size(),
-      mask_allocation_policy::RETAIN, mr, stream);
+    auto result = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
     // Transform negative indices
@@ -78,6 +77,7 @@ struct scatter_impl {
         "Scatter map index out of bounds");
     }
 
+    // TODO thrust::transform w/ 2 inputs?
     // TODO create separate streams for each col and then sync with master?
     std::vector<std::unique_ptr<column>> result(target.num_columns());
     for (size_type i = 0; i < target.num_columns(); ++i) {
