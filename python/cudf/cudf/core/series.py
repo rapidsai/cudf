@@ -1625,9 +1625,7 @@ class Series(object):
     def reverse(self):
         """Reverse the Series
         """
-        rinds = cudautils.arange_reversed(
-            self._column.data.size, dtype=np.int32
-        )
+        rinds = cudautils.arange_reversed(self._column.size, dtype=np.int32)
         col = self._column[rinds]
         index = self.index.as_column()[rinds]
         return self._copy_construct(data=col, index=index)
