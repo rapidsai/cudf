@@ -33,6 +33,12 @@ namespace strings
  * When any other character is encountered, the parsing ends for that string
  * and the current digits are converted into an integer.
  *
+ * Overflow of the resulting integer type is not checked.
+ * Each string is converted using an int64 type and then cast to the
+ * target integer type before storing it into the output column.
+ * If the resulting integer type is too small to hold the value,
+ * the stored value will be undefined.
+ *
  * @throw cudf::logic_error if output_type is not integral type.
  *
  * @param strings Strings instance for this operation.

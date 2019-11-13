@@ -109,14 +109,14 @@ struct dispatch_to_integers_fn
     template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
     void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const
     {
-        CUDF_FAIL("Output for to_integers must be integral type.");
+        CUDF_FAIL("Output for to_integers must be an integral type.");
     }
 };
 
 template <>
 void dispatch_to_integers_fn::operator()<experimental::bool8>(column_device_view const&, mutable_column_view&, cudaStream_t) const
 {
-    CUDF_FAIL("Output for to_integers must not be bool type.");
+    CUDF_FAIL("Output for to_integers must not be a boolean type.");
 }
 
 } // namespace
@@ -291,14 +291,14 @@ struct dispatch_from_integers_fn
     template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
     std::unique_ptr<column> operator()(column_view const&, rmm::mr::device_memory_resource*, cudaStream_t) const
     {
-        CUDF_FAIL("Values for from_integers function must be integral type.");
+        CUDF_FAIL("Values for from_integers function must be an integral type.");
     }
 };
 
 template <>
 std::unique_ptr<column> dispatch_from_integers_fn::operator()<experimental::bool8>(column_view const&, rmm::mr::device_memory_resource*, cudaStream_t) const
 {
-    CUDF_FAIL("Input for from_integers must not be bool type.");
+    CUDF_FAIL("Input for from_integers must not be a boolean type.");
 }
 
 } // namespace
