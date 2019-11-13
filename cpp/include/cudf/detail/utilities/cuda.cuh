@@ -142,10 +142,19 @@ size_type single_lane_block_popc_reduce(bit_container bit_mask) {
   return block_count;
 }
 
+/**
+ * @brief Get number of elements can be processed per thread.
+ *
+ * @param[in] kernel The kernel for which the elements per thread needs to be assessed
+ * @param[in] total_size Number of elements
+ * @param[in] block_size Expected block size
+ *
+ * @return cudf::size_type Elements per thread that can be processed for given specification.
+ */
 template <typename Kernel>
-int elements_per_thread(Kernel kernel,
-                        cudf::size_type total_size,
-                        cudf::size_type block_size)
+cudf::size_type elements_per_thread(Kernel kernel,
+                                    cudf::size_type total_size,
+                                    cudf::size_type block_size)
 {
   // calculate theoretical occupancy
   int max_blocks = 0;
