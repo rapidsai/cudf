@@ -67,7 +67,7 @@
 - PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
 - PR #2991 Added strings column functions concatenate and join_strings
-- PR #3028 Port gather and scatter to libcudf++
+- PR #3028 Port gather to libcudf++
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Move unary files to legacy
@@ -105,6 +105,7 @@
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
+- PR #3354 Port gather and scatter to libcudf++
 
 ## Bug Fixes
 
