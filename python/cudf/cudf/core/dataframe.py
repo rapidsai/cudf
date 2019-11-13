@@ -2183,6 +2183,21 @@ class DataFrame(object):
 
         return melt(self, **kwargs)
 
+    def _typecast_before_merge(self, lhs, rhs, left_on, right_on):
+        left_on = sorted(left_on)
+        right_on = sorted(right_on)
+
+        for lcol, rcol in zip(left_on, right_on):
+            # handle if we can join on some casted values, but not others
+            to_dtype = lhs[lcol].dtype
+            msg = "Not all values can be cast without losing information. Will join on other values"
+            if not (rhs[rcol] == rhs[rcol].astype(to_dtype))[rhs[rcol].notna()].all():
+                warnings.warn(msg)
+            rhs[rcol] = rhs[rcol].astype(to_dtype)
+
+        return lhs, rhs
+
+
     def merge(
         self,
         right,
@@ -2390,6 +2405,9 @@ class DataFrame(object):
 
         # Save the order of the original column names for preservation later
         org_names = list(itertools.chain(lhs._cols.keys(), rhs._cols.keys()))
+
+        # potentially do an implicit typecast
+        lhs, rhs = self._typecast_before_merge(lhs, rhs, left_on, right_on)
 
         # Compute merge
         gdf_result = libcudf.join.join(
@@ -4252,3 +4270,4 @@ def _align_indices(lhs, rhs):
                 rhs_out[col] = df[col]
 
     return lhs_out, rhs_out
+
