@@ -187,9 +187,6 @@ std::vector<column_view> split(column_view const& input,
 * When `i + periods` is out of bounds and `fill_value is not supplied:
 *   `out[col][i] = null`
 *
-* An output column's nullability is determined based on the corrosponding input
-* column and fill_value.
-*
 * An output column is nullable if either the corrosponding input column or
 * fill_value are nullable/null.
 *

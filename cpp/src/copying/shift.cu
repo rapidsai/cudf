@@ -27,11 +27,6 @@
                               rmm::mr::device_memory_resource *mr =
                                   rmm::mr::get_default_resource())
 {
-    // if (periods == 0 || in.num_rows() == 0) {
-    //     // return cudf::experimental::empty_like(in);
-    //     return table(in);
-    // }
-
     if (not fill_value.empty()) {
         CUDF_EXPECTS(static_cast <unsigned int>(in.num_columns()) == fill_value.size(), "`fill_value.size()` and `in.num_columns() must be the same.");
     }
