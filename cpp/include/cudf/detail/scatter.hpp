@@ -39,7 +39,7 @@ namespace detail {
  * and their corresponding datatypes must be the same.
  *
  * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
- * is the number of rows in the `source_table`.
+ * is the number of rows in the `target` table.
  * 
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
@@ -51,8 +51,8 @@ namespace detail {
  * @param source The input columns containing values to be scattered into the
  * target columns
  * @param scatter_map A non-nullable column of integral indices that maps the
- * rows in the source table to rows in the target table. Must be equal
- * in size to the number of elements in the source columns.
+ * rows in the source table to rows in the target table. The size must be equal
+ * to or less than the number of elements in the source columns.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of

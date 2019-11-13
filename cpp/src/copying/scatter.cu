@@ -23,6 +23,7 @@
 
 namespace cudf {
 namespace experimental {
+namespace detail {
 
 namespace {
 
@@ -33,15 +34,19 @@ struct column_scatterer {
       column_view const& scatter_map, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    auto result = detail::allocate_like(target, target.size(),
+    auto result = allocate_like(target, target.size(),
       mask_allocation_policy::RETAIN, mr, stream);
     auto result_view = result->mutable_view();
 
-    // NOTE using source.begin + scatter_map.size for end in case scatter_map
-    // is smaller than source. If we instead assert that map size == source size
-    // then we can replace this with source.end instead.
+    // Transform negative indices
+    auto scatter_iter = thrust::make_transform_iterator(
+      scatter_map.begin<index_type>(),
+      index_converter<index_type>{target.size()});
+
+    // NOTE use source.begin + scatter_map.size rather than end in case the
+    // scatter map is smaller than the number of source rows
     thrust::scatter(rmm::exec_policy(stream)->on(stream), source.begin<T>(),
-      source.begin<T>() + scatter_map.size(), scatter_map.begin<index_type>(),
+      source.begin<T>() + scatter_map.size(), scatter_iter,
       result_view.begin<T>());
 
     return result;
@@ -67,7 +72,7 @@ struct scatter_impl {
     if (check_bounds) {
       auto const begin = -target.num_rows();
       auto const end = target.num_rows();
-      auto bounds = detail::bounds_checker<T>{begin, end};
+      auto bounds = bounds_checker<T>{begin, end};
       CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream)->on(stream),
         scatter_map.begin<T>(), scatter_map.end<T>(), bounds),
         "Scatter map index out of bounds");
@@ -110,7 +115,7 @@ struct scatter_scalar_impl {
     if (check_bounds) {
       auto const begin = -target.num_rows();
       auto const end = target.num_rows();
-      auto bounds = detail::bounds_checker<T>{begin, end};
+      auto bounds = bounds_checker<T>{begin, end};
       CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream)->on(stream),
         indices.begin<T>(), indices.end<T>(), bounds),
         "Scatter map index out of bounds");
@@ -133,8 +138,6 @@ struct scatter_scalar_impl {
 
 }  // namespace
 
-namespace detail {
-
 std::unique_ptr<table> scatter(
     table_view const& source, column_view const& scatter_map,
     table_view const& target, bool check_bounds,
@@ -143,13 +146,13 @@ std::unique_ptr<table> scatter(
 {
   CUDF_EXPECTS(source.num_columns() == target.num_columns(),
     "Number of columns in source and target not equal");
+  CUDF_EXPECTS(scatter_map.size() <= source.num_rows(),
+    "Size of scatter map must be equal to or less than source rows");
   CUDF_EXPECTS(std::equal(source.begin(), source.end(), target.begin(),
     [](auto const& col1, auto const& col2) {
       return col1.type().id() == col2.type().id();
     }), "Column types do not match between source and target");
-  CUDF_EXPECTS(scatter_map.has_nulls() == false, "scatter_map contains nulls");
-
-  // TODO need to assert that scatter_map.size() == source.num_rows()?
+  CUDF_EXPECTS(scatter_map.has_nulls() == false, "Scatter map contains nulls");
 
   if (scatter_map.size() == 0) {
     return std::make_unique<table>(target, stream, mr);
