@@ -849,7 +849,7 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
         }
         else {
             const uint32_t *valid = s->col.valid_map_base;
-            is_valid = (row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
+            is_valid = (row < s->col.num_rows && cur_row + t < s->page.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
         }
         warp_valids = BALLOT(is_valid);
         cur_row += nrows;
@@ -955,7 +955,7 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
     if (t == 0) {
         uint8_t *base = s->page.page_data + s->page.max_hdr_size;
         uint32_t actual_data_size = static_cast<uint32_t>(s->cur - base);
-        uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(s->page.max_data_size);
+        uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
         s->page.max_data_size = actual_data_size;
         s->comp_in.srcDevice = base;
         s->comp_in.srcSize = actual_data_size;
@@ -1196,6 +1196,7 @@ gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
             reinterpret_cast<uint32_t *>(&page_g)[t] = reinterpret_cast<const uint32_t *>(&first_page[page])[t];
         }
         __syncthreads();
+
         src = (ck_g.is_compressed) ? page_g.compressed_data : page_g.page_data;
         // Copy page header
         hdr_len = page_g.hdr_size;
