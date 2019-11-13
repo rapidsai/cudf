@@ -21,9 +21,12 @@ namespace cudf {
 namespace detail {
 
 /** --------------------------------------------------------------------------*
- * @brief Computes the hash values of the rows in the specified columns of the 
- * input columns and bins the hash values into the desired number of partitions. 
- * Rearranges the input columns such that rows with hash values in the same bin 
+ * @brief Partitions a table into the desired number of partitions according to
+ * the hash value of each row. 
+ *
+ * Computes the hash values of the rows in the specified columns of the input
+ * columns and bins the hash values into the desired number of partitions.
+ * Rearranges the input columns such that rows with hash values in the same bin
  * are contiguous.
  * 
  * @param input The table to partition
