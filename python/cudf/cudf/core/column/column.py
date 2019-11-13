@@ -944,14 +944,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         )
 
         nbuf = None
-        nbuf_ptr = None
         if arbitrary.null_count() > 0:
             mask_size = calc_chunk_size(arbitrary.size(), mask_bitsize)
             nbuf = Buffer.empty(mask_size)
-            nbuf_ptr = nbuf.ptr
-
-        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, nbuf_ptr, bdevmem=True)
+            arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
+        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
         data = build_column(data=sbuf, dtype="object", offsets=obuf, mask=nbuf)
+        data._nvstrings = arbitrary
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:

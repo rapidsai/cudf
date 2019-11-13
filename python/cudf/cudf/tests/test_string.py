@@ -120,7 +120,7 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         rmm.to_device(np.array([True] * 5)),
         rmm.to_device(np.array([False] * 5)),
-        list(np.random.randint(0, 2, 5).astype("bool")),
+        np.random.randint(0, 2, 5).astype("bool").tolist(),
         np.random.randint(0, 2, 5).astype("bool"),
         rmm.to_device(np.random.randint(0, 2, 5).astype("bool")),
     ],
@@ -826,6 +826,8 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
+    from cudf.core.column import as_column
+
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
@@ -840,7 +842,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_column(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

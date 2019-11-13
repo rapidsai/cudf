@@ -52,9 +52,10 @@ class StringMethods(object):
     This mimicks pandas `df.str` interface.
     """
 
-    def __init__(self, parent, index=None):
+    def __init__(self, parent, index=None, name=None):
         self._parent = parent
         self._index = index
+        self._name = name
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
@@ -70,7 +71,7 @@ class StringMethods(object):
                         ret = Series(
                             column.as_column(ret),
                             index=self._index,
-                            name=self._parent.name,
+                            name=self._name,
                         )
                     return ret
 
@@ -104,7 +105,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+            Buffer.from_array_like(out_dev_arr), np.dtype("int32"), mask=mask
         )
         return Series(col, index=self._index, name=self._parent.name)
 
@@ -146,14 +147,14 @@ class StringMethods(object):
             (same type as caller) of str dtype is returned.
         """
         from cudf.core import Series, Index
+        from cudf.core.column import as_column
 
-        if isinstance(others, (Series, Index)):
-            """
-            If others is just another Series/Index,
-            great go ahead with concatenation
-            """
+        if isinstance(others, Series):
             assert others.dtype == np.dtype("object")
-            others = others.data
+            others = others._column.nvstrings
+        elif isinstance(others, Index):
+            assert others.dtype == np.dtype("object")
+            others = others.as_column().nvstrings
         elif isinstance(others, StringMethods):
             """
             If others is a StringMethods then
@@ -186,7 +187,7 @@ class StringMethods(object):
                 """
                 first = None
                 for frame in others:
-                    if not isinstance(frame, (Series, Index)):
+                    if not isinstance(frame, Series):
                         """
                         Make sure all inputs to .cat function call
                         are of type nvstrings so creating a Series object.
@@ -199,10 +200,10 @@ class StringMethods(object):
                         `frame` is of type Series/Index and
                         first isn't yet initialized.
                         """
-                        first = frame.data
+                        first = frame._column.nvstrings
                     else:
                         assert frame.dtype == np.dtype("object")
-                        frame = frame.data
+                        frame = frame._column.nvstrings
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
@@ -217,16 +218,15 @@ class StringMethods(object):
                 first element of list.
                 """
                 others = Series(others)
-                others = others.data
+                others = others._column.nvstrings
         elif isinstance(others, (pd.Series, pd.Index)):
             others = Series(others)
-            others = others.data
+            others = others._column.nvstrings
 
-        out = Series(
-            self._parent.nvstrings.cat(others=others, sep=sep, na_rep=na_rep),
-            index=self._index,
-            name=self._parent.name,
+        data = self._parent.nvstrings.cat(
+            others=others, sep=sep, na_rep=na_rep
         )
+        out = Series(data, index=self._index, name=self._parent.name,)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -435,6 +435,7 @@ class StringMethods(object):
 
         out_df = DataFrame(index=self._index)
         out = self._parent.nvstrings.split(delimiter=pat, n=n)
+
         for idx, val in enumerate(out):
             out_df[idx] = val
         return out_df
@@ -499,8 +500,8 @@ class StringColumn(column.ColumnBase):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
 
-    def str(self, index=None):
-        return StringMethods(self, index=index)
+    def str(self, index=None, name=None):
+        return StringMethods(self, index=index, name=name)
 
     def __len__(self):
         return self.nvstrings.size()
@@ -512,14 +513,17 @@ class StringColumn(column.ColumnBase):
                 mask = self.mask.ptr
             else:
                 mask = None
-            self._nvstrings = nvstrings.from_offsets(
-                self.children[0].data.ptr,
-                self.children[1].data.ptr,
-                self.size,
-                mask,
-                ncount=self.null_count,
-                bdevmem=True,
-            )
+            if self.size == 0:
+                self._nvstrings = nvstrings.to_device([])
+            else:
+                self._nvstrings = nvstrings.from_offsets(
+                    self.children[0].data.ptr,
+                    self.children[1].data.ptr,
+                    self.size,
+                    mask,
+                    ncount=self.null_count,
+                    bdevmem=True,
+                )
         return self._nvstrings
 
     @property
@@ -813,7 +817,7 @@ class StringColumn(column.ColumnBase):
         if reflect:
             lhs, rhs = rhs, lhs
         if isinstance(rhs, StringColumn) and binop == "add":
-            return lhs.data.cat(others=rhs.data)
+            return lhs.nvstrings.cat(others=rhs.nvstrings)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))

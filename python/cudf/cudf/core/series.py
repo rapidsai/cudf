@@ -1097,7 +1097,7 @@ class Series(object):
 
     @property
     def str(self):
-        return self._column.str(self.index)
+        return self._column.str(self.index, self.name)
 
     @property
     def dtype(self):
@@ -1389,7 +1389,7 @@ class Series(object):
 
     @index.setter
     def index(self, _index):
-        self._index = _index
+        self._index = as_index(_index)
 
     @property
     def loc(self):
