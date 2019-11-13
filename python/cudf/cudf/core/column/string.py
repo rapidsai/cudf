@@ -779,10 +779,10 @@ class StringColumn(column.ColumnBase):
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
 
-    def find_first_value(self, value):
+    def find_first_value(self, value, closest=False):
         return self._find_first_and_last(value)[0]
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         return self._find_first_and_last(value)[1]
 
     def unique(self, method="sort"):

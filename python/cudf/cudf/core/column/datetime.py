@@ -268,21 +268,21 @@ class DatetimeColumn(column.ColumnBase):
     def max(self, dtype=None):
         return libcudf.reduce.reduce("max", self, dtype=dtype)
 
-    def find_first_value(self, value):
+    def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches
         """
         value = pd.to_datetime(value)
         value = column.as_column(value).as_numerical[0]
-        return self.as_numerical.find_first_value(value)
+        return self.as_numerical.find_first_value(value, closest=closest)
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         """
         Returns offset of last value that matches
         """
         value = pd.to_datetime(value)
         value = column.as_column(value).as_numerical[0]
-        return self.as_numerical.find_last_value(value)
+        return self.as_numerical.find_last_value(value, closest=closest)
 
     def searchsorted(self, value, side="left"):
         value_col = column.as_column(value)

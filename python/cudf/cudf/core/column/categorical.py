@@ -499,13 +499,13 @@ class CategoricalColumn(column.ColumnBase):
             data=codes.data, dtype=self.dtype, mask=codes.mask, name=self.name
         )
 
-    def find_first_value(self, value):
+    def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches
         """
         return self.as_numerical.find_first_value(self._encode(value))
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         """
         Returns offset of last value that matches
         """

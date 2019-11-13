@@ -765,9 +765,9 @@ class GenericIndex(Index):
         col = self._values
         begin, end = None, None
         if first is not None:
-            begin = col.find_first_value(first)
+            begin = col.find_first_value(first, closest=True)
         if last is not None:
-            end = col.find_last_value(last)
+            end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
 

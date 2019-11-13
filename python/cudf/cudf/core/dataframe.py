@@ -2592,10 +2592,12 @@ class DataFrame(object):
         )
 
         for name, cats in cat_join:
+            if is_categorical_dtype(df[name]):
+                data_dtype = df[name].dtype.data_dtype
+            else:
+                data_dtype = df[name].dtype
             dtype = cudf.CategoricalDtype(
-                data_dtype=df[name].dtype.data_dtype,
-                categories=cats,
-                ordered=False,
+                data_dtype=data_dtype, categories=cats, ordered=False,
             )
             df[name] = column.build_column(data=df[name].data, dtype=dtype)
 
