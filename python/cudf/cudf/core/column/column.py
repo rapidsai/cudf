@@ -52,6 +52,9 @@ class ColumnBase(Column):
         self.name = name
         self.children = children or []
 
+    def __reduce__(self):
+        return (build_column, (self.data, self.dtype, self.mask, self.name))
+
     @property
     def mask(self):
         return self._mask
@@ -801,6 +804,29 @@ class ColumnBase(Column):
 
         return output
 
+    def serialize(self):
+        header = {"null_count": self.null_count}
+        frames = []
+
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self.dtype.str
+        header["data_buffer"], data_frames = self.data.serialize()
+
+        header["data_frame_count"] = len(data_frames)
+        frames.extend(data_frames)
+
+        if self._mask:
+            header["mask_buffer"], mask_frames = self._mask.serialize()
+            header["mask_frame_count"] = len(mask_frames)
+        else:
+            header["mask_buffer"] = []
+            header["mask_frame_count"] = 0
+            mask_frames = {}
+
+        frames.extend(mask_frames)
+        header["frame_count"] = len(frames)
+        return header, frames
+
 
 class TypedColumnBase(ColumnBase):
     """Base class for all typed column
@@ -1206,11 +1232,11 @@ def column_applymap(udf, column, out_dtype):
 
     Returns
     -------
-    result : Buffer
+    result : rmm.device_array
     """
     core = njit(udf)
     results = rmm.device_array(shape=len(column), dtype=out_dtype)
-    values = column.data.to_gpu_array()
+    values = column.to_gpu_array()
     if column.mask:
         # For masked columns
         @cuda.jit
@@ -1236,8 +1262,8 @@ def column_applymap(udf, column, out_dtype):
                 results[i] = core(values[i])
 
         kernel_non_masked.forall(len(column))(values, results)
-    # Output
-    return Buffer(results)
+
+    return results
 
 
 def _data_from_cuda_array_interface_desc(desc):

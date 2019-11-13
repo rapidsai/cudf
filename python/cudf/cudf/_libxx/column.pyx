@@ -1,5 +1,5 @@
 import numpy as np
-
+import cython
 import rmm
 
 from libc.stdint cimport uintptr_t
@@ -43,6 +43,7 @@ cudf_to_np_types = {INT8: np.dtype('int8'),
                     BOOL8: np.dtype("bool")
 }
 
+@cython.auto_pickle(True)
 cdef class Column:
     def __init__(self, data, size, dtype, mask=None):
         if not isinstance(data, Buffer):
