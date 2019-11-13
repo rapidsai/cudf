@@ -18,11 +18,17 @@ def test_cdt_basic():
 )
 @pytest.mark.parametrize("ordered", [None, False, True])
 def test_cdt_eq(data, ordered):
-    dt = cudf.CategoricalDtype(categories=data, ordered=ordered)
+    dt = cudf.CategoricalDtype(
+        data_dtype="int32", categories=data, ordered=ordered
+    )
     assert dt == "category"
     assert dt == dt
-    assert dt == cudf.CategoricalDtype(categories=None, ordered=ordered)
-    assert dt == cudf.CategoricalDtype(categories=data, ordered=ordered)
+    assert dt == cudf.CategoricalDtype(
+        data_dtype="int32", categories=None, ordered=ordered
+    )
+    assert dt == cudf.CategoricalDtype(
+        data_dtype="int32", categories=data, ordered=ordered
+    )
 
 
 @pytest.mark.parametrize(
@@ -32,5 +38,7 @@ def test_cdt_eq(data, ordered):
 def test_cdf_to_pandas(data, ordered):
     assert (
         pd.CategoricalDtype(data, ordered)
-        == cudf.CategoricalDtype(data, ordered).to_pandas()
+        == cudf.CategoricalDtype(
+            data_dtype="int32", categories=data, ordered=ordered
+        ).to_pandas()
     )
