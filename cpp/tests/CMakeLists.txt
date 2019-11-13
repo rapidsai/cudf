@@ -195,10 +195,15 @@ ConfigureTest(LEGACY_ORDERBY_TEST "${LEGACY_ORDERBY_TEST_SRC}")
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
 
-set(LEGACY_IS_SORTED_TEST_SRC 
+set(IS_SORTED_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/is_sorted_tests.cu")
+
+ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
+
+set(LEGACY_IS_SORTED_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/legacy/is_sorted_tests.cu")
 
-ConfigureTest(IS_SORTED_TEST "${LEGACY_IS_SORTED_TEST_SRC}")
+ConfigureTest(LEGACY_IS_SORTED_TEST "${LEGACY_IS_SORTED_TEST_SRC}")
 
 ###################################################################################################
 # - legacy bitmask tests --------------------------------------------------------------------------
@@ -604,7 +609,8 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
