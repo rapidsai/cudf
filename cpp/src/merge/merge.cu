@@ -21,12 +21,13 @@
 #include <thrust/tuple.h>
 #include <thrust/device_vector.h>
 #include <thrust/merge.h>
-///#include <thrust/gather.h>
+
 #include <algorithm>
 #include <utility>
 #include <vector>
 #include <memory>
 #include <type_traits>
+
 #include <nvstrings/NVCategory.h>
 
 #include <cudf/cudf.h>
@@ -252,6 +253,8 @@ struct ColumnMerger
 {
   //error: class "cudf::string_view" has no member "type"
   //using StringT = typename cudf::experimental::id_to_type<cudf::STRING>::type;
+
+  using IndexT = typename VectorI::value_type;
   
   explicit ColumnMerger(VectorI const& row_order,
                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -261,15 +264,11 @@ struct ColumnMerger
     stream_(stream)
   {
   }
-
-  //raison d'etre for enable_if:
-  //need separate versions for primary `Element` != strings
   
-  // type_dispatcher() _can_ dispatch host functors:
+  // column merger operator;
   //
   template<typename ElemenT>//required: column type
-  //std::enable_if_t<!(std::is_same<ElemenT,StringT>::value),
-  std::unique_ptr<cudf::column> //>
+  std::unique_ptr<cudf::column>
   operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
   {
     auto lsz = lcol.size();
@@ -300,35 +299,27 @@ struct ColumnMerger
     ElemenT const* p_d_lcol = lcol.data<ElemenT>();
     ElemenT const* p_d_rcol = rcol.data<ElemenT>();
     ElemenT* p_d_merged     = merged_view.data<ElemenT>();
+    IndexT const* p_d_indx  = dv_row_order_.data().get();
     
     auto exe_pol = rmm::exec_policy(stream_);
     //capture lcol, rcol, merged_view
-    //and "gather" into merged_view.data()[ext_indx]
+    //and "gather" into merged_view.data()[indx_merged]
     //from lcol or rcol, depending on side;
     //
     thrust::for_each(exe_pol->on(stream_),
-                     dv_row_order_.begin(), dv_row_order_.end(),
-                     [p_d_lcol, p_d_rcol, p_d_merged, lsz] __device__ (index_type const& indx_pair){
+                     thrust::make_counting_iterator<size_type>(0), thrust::make_counting_iterator<size_type>(merged_sz),
+                     [p_d_lcol, p_d_rcol, p_d_indx, p_d_merged, lsz] __device__ (size_type indx_mrgd){
+                       auto indx_pair = p_d_indx[indx_mrgd];
                        auto side = thrust::get<0>(indx_pair);
                        auto indx = thrust::get<1>(indx_pair);
                        
-                       auto ext_indx = indx;
-                       ElemenT val{};
-                       if( side == side::RIGHT )
-                         {
-                           ext_indx = indx+lsz;
-                           val = p_d_rcol[indx];
-                         }
-                       else
-                         {
-                           val = p_d_lcol[indx];
-                         }
+                       ElemenT val = (side == side::LEFT ? p_d_lcol[indx] : p_d_rcol[indx]);
                        
-                       p_d_merged[ext_indx] = val;
+                       p_d_merged[indx_mrgd] = val;
                        
                      });
 
-    //cudaDeviceSynchronize();//? nope...this two could proceed concurrently
+    //cudaDeviceSynchronize();//? nope...these two could proceed concurrently
     
     //resolve null mask:
     //
