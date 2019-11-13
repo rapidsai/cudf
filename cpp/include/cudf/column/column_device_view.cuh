@@ -300,7 +300,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing past the end of this column
-   * this iterator works for non-nullable column only
+   *
+   * This iterator only supports columns where `has_nulls() == false`.
+   * For columns with null elements, use `make_null_replacement_iterator`.
    * @throws `cudf::logic_error` if `has_nulls() == true`
    *---------------------------------------------------------------------------**/
   template<typename T>
