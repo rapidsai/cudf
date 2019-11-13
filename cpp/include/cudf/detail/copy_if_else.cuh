@@ -34,47 +34,36 @@ namespace detail {
 
 namespace {    // anonymous
 
-template <typename T, typename Filter, bool has_validity>
+template <size_type block_size, typename T, typename Filter, bool has_validity>
 __global__
 void copy_if_else_kernel(  column_device_view const lhs,
                            column_device_view const rhs,
                            Filter filter,
                            mutable_column_device_view out,
-                           cudf::size_type * __restrict__ const null_count)
+                           size_type * __restrict__ const null_count)
 {   
    const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;   
    const int w_id = tid / warp_size;
    // begin/end indices for the column data
-   cudf::size_type begin = 0;
-   cudf::size_type end = lhs.size();   
+   size_type begin = 0;
+   size_type end = lhs.size();   
    // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
    // each warp will process one (32 bit) of the validity mask via 
    // __ballot_sync()
-   cudf::size_type w_begin = cudf::util::detail::bit_container_index<bit_mask::bit_mask_t>(begin);
-   cudf::size_type w_end = cudf::util::detail::bit_container_index<bit_mask::bit_mask_t>(end);
+   size_type w_begin = cudf::util::detail::bit_container_index<bit_mask::bit_mask_t>(begin);
+   size_type w_end = cudf::util::detail::bit_container_index<bit_mask::bit_mask_t>(end);
 
    // lane id within the current warp
+   constexpr size_type w_leader_lane{0};
    const int w_lane_id = threadIdx.x % warp_size;
 
-   // store a null count for each warp in the block
-   constexpr cudf::size_type b_max_warps = 32;
-   __shared__ uint32_t b_warp_null_count[b_max_warps];
-   // initialize count to 0. we have to do this because the WarpReduce
-   // at the end will end up summing all values, even ones which we never 
-   // visit.
-   if(has_validity){   
-      if(threadIdx.x < b_max_warps){
-         b_warp_null_count[threadIdx.x] = 0;
-      }   
-      __syncthreads();   
-   }   
-
+   size_type w_null_count{0};
+  
    // current warp.
-   cudf::size_type w_cur = w_begin + w_id;         
-   // process each grid
+   size_type w_cur = w_begin + w_id;            
    while(w_cur <= w_end){
       // absolute element index
-      cudf::size_type index = (w_cur * warp_size) + w_lane_id;
+      size_type index = (w_cur * warp_size) + w_lane_id;
       bool in_range = (index >= begin && index < end);
 
       bool valid = true;
@@ -95,9 +84,8 @@ void copy_if_else_kernel(  column_device_view const lhs,
          int w_mask = __ballot_sync(w_active_mask, valid);
          // only one guy in the warp needs to update the mask and count
          if(w_lane_id == 0){
-            out.set_mask_word(w_cur, w_mask);
-            cudf::size_type b_warp_cur = threadIdx.x / warp_size;
-            b_warp_null_count[b_warp_cur] = __popc(~(w_mask | ~w_active_mask));
+            out.set_mask_word(w_cur, w_mask);            
+            w_null_count += __popc(~(w_mask | ~w_active_mask));
          }
       }      
 
@@ -106,21 +94,13 @@ void copy_if_else_kernel(  column_device_view const lhs,
    }
 
    if(has_validity){
-      __syncthreads();
-      // first warp uses a WarpReduce to sum the null counts from all warps
-      // within the block
-      if(threadIdx.x < b_max_warps){
-         // every thread collectively sums all the null counts using a WarpReduce      
-         uint32_t w_null_count = b_warp_null_count[threadIdx.x];
-         __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-         uint32_t b_null_count = cub::WarpReduce<uint32_t>(temp_storage).Sum(w_null_count);
-
-         // only one thread in the warp needs to do the actual store
-         if(w_lane_id == 0){
-            // using an atomic here because there are multiple blocks doing this work
-            atomicAdd(null_count, b_null_count);
-         }
-      }
+      // sum all null counts across all warps
+      size_type b_null_count = single_lane_block_sum_reduce<block_size, w_leader_lane>(w_null_count);
+      // b_null_count will only be valid on thread 0
+      if(threadIdx.x == 0){
+         // using an atomic here because there are multiple blocks doing this work
+         atomicAdd(null_count, b_null_count);
+      }      
    }
 }
 
@@ -140,7 +120,11 @@ struct copy_if_else_functor {
                      mutable_column_view& out,                     
                      cudaStream_t stream)
    {
-      auto kernel = copy_if_else_kernel<T, Filter, false>;
+      cudf::size_type num_els = warp_size * cudf::util::div_rounding_up_safe(lhs.size(), warp_size);
+      constexpr int block_size = 256;
+      cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+
+      auto kernel = copy_if_else_kernel<block_size, T, Filter, false>;
 
       // if the columns are nullable we need to allocate a gpu-size count
       // variable and initialize to 0.
@@ -150,7 +134,7 @@ struct copy_if_else_functor {
          RMM_ALLOC(&null_count, sizeof(cudf::size_type), stream);
          CUDA_TRY(cudaMemcpyAsync(null_count, &zero, sizeof(cudf::size_type), cudaMemcpyHostToDevice, stream));
 
-         kernel = copy_if_else_kernel<T, Filter, true>;
+         kernel = copy_if_else_kernel<block_size, T, Filter, true>;
       }
 
       // device views
@@ -158,18 +142,17 @@ struct copy_if_else_functor {
       auto rhs_dv = column_device_view::create(rhs);
       auto out_dv = mutable_column_device_view::create(out);
 
-      // call the kernel      
-      cudf::size_type num_els = warp_size * cudf::util::div_rounding_up_safe(lhs.size(), warp_size);
-      constexpr int block_size = 256;
-      cudf::util::cuda::grid_config_1d grid{num_els, block_size, 1};
+      // call the kernel            
       kernel<<<grid.num_blocks, block_size, 0, stream>>>(
          *lhs_dv, *rhs_dv, filter, *out_dv, null_count);      
 
       // maybe read back null count and free up gpu scratch memory
       if(lhs.nullable()){
          cudf::size_type null_count_out;
-         CUDA_TRY(cudaMemcpy(&null_count_out, null_count, sizeof(cudf::size_type), cudaMemcpyDeviceToHost));
+         
+         CUDA_TRY(cudaMemcpyAsync(&null_count_out, null_count, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
          RMM_FREE(null_count, stream);
+         cudaStreamSynchronize(stream);
          
          out.set_null_count(null_count_out);
       }
