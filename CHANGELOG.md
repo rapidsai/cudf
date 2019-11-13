@@ -107,6 +107,7 @@
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
 - PR #3299 Define and implement new `is_sorted` APIs
+- PR #3243 Use upstream join code in dask_cudf
 
 ## Bug Fixes
 
