@@ -289,7 +289,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
       thrust::transform_iterator<detail::value_accessor<T>, count_it>;
 
   /**---------------------------------------------------------------------------*
-   * @brief Return new iterator pointing to the beginning of this column
+   * @brief Return an iterator to the first element of the column.
    * this iterator works for non-nullable column only
    * @throws `cudf::logic_error` if `has_nulls() == true`
    *---------------------------------------------------------------------------**/
