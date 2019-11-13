@@ -129,7 +129,7 @@ def groupby_without_aggregations(cols, key_cols):
     offsets : Column
         Integer offsets to the start of each set of unique keys
     """
-    from cudf.core.column import Column, build_column
+    from cudf.core.column import build_column
 
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef vector[size_type] c_key_col_indices
