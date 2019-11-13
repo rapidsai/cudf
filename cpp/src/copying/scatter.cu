@@ -77,16 +77,13 @@ struct scatter_impl {
         "Scatter map index out of bounds");
     }
 
-    // TODO thrust::transform w/ 2 inputs?
     // TODO create separate streams for each col and then sync with master?
     std::vector<std::unique_ptr<column>> result(target.num_columns());
-    for (size_type i = 0; i < target.num_columns(); ++i) {
-      auto& result_col = result[i];
-      auto const& source_col = source.column(i);
-      auto const& target_col = target.column(i);
-      result_col = type_dispatcher(source_col.type(), column_scatterer<T>{},
-        source_col, scatter_map, target_col, mr, stream);
-    };
+    std::transform(source.begin(), source.end(), target.begin(), result.begin(),
+      [&scatter_map, mr, stream](auto source_col, auto target_col) {
+        return type_dispatcher(source_col.type(), column_scatterer<T>{},
+          source_col, scatter_map, target_col, mr, stream);
+      });
 
     // TODO scatter bitmask
 
