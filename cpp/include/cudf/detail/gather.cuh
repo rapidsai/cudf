@@ -134,11 +134,13 @@ struct column_gatherer
     Element const *source_data{source_column.data<Element>()};
     Element *destination_data{destination_column->mutable_view().data<Element>()};
 
+    using map_type = typename std::iterator_traits<MapIterator>::value_type;
+
     if (ignore_out_of_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                         gather_map_end, gather_map_begin,
                         source_data, destination_data,
-                        bounds_checker<decltype(*gather_map_begin)>{0, source_column.size()});
+                        bounds_checker<map_type>{0, source_column.size()});
     } else {
       thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                      gather_map_end, source_data, destination_data);
