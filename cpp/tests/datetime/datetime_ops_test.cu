@@ -50,16 +50,16 @@ TYPED_TEST(DatetimeOpsTest, TestExtractingDatetimeComponents) {
   };
 
   auto test_timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
-		-131968728, // 1965-10-26 14:01:12
-		1530705600, // 2018-07-04 12:00:00
-		1674631932, // 2023-01-25 07:32:12
-	};
+    -131968728, // 1965-10-26 14:01:12
+    1530705600, // 2018-07-04 12:00:00
+    1674631932, // 2023-01-25 07:32:12
+  };
 
   auto test_timestamps_ms = fixed_width_column_wrapper<cudf::timestamp_ms>{
-		-131968727238, // 1965-10-26 14:01:12.762
-		1530705600000, // 2018-07-04 12:00:00.000
-		1674631932929, // 2023-01-25 07:32:12.929
-	};
+    -131968727238, // 1965-10-26 14:01:12.762
+    1530705600000, // 2018-07-04 12:00:00.000
+    1674631932929, // 2023-01-25 07:32:12.929
+  };
 
   expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_D), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
   expect_columns_equal(*cudf::datetime::extract_year(test_timestamps_s), fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
