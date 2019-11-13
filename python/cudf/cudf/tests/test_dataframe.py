@@ -4065,6 +4065,8 @@ def test_insert(data):
         "int64",
         "float32",
         "float64",
+        "str",
+        "category"
     ],
 )
 @pytest.mark.parametrize(
@@ -4075,7 +4077,9 @@ def test_insert(data):
         "int32",
         "int64",
         "float32",
-        "float64"
+        "float64",
+        "str",
+        "category"
     ],
 )
 def test_join_on_typecast_numeric(dtype_l, dtype_r):
@@ -4094,8 +4098,11 @@ def test_join_on_typecast_numeric(dtype_l, dtype_r):
     pdf_r['join_col'] = pdf_r['join_col'].astype(dtype_r)
     gdf_r['join_col'] = gdf_r['join_col'].astype(dtype_r)
 
-    expect = pdf_l.merge(pdf_r, on='join_col', how='inner')
+    try:
+        expect = pdf_l.merge(pdf_r, on='join_col', how='inner')
+    except ValueError:
+        pytest.skip("Pandas does not support this case")
     got = gdf_l.merge(gdf_r, on='join_col', how='inner')
 
     assert_eq(expect, got)
-    
+
