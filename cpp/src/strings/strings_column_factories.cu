@@ -38,8 +38,8 @@ std::unique_ptr<column> make_strings_column(
     rmm::mr::device_memory_resource* mr)
 {
     size_type strings_count = strings.size();
-    // maybe a separate factory for creating null strings-column
-    CUDF_EXPECTS(strings_count > 0, "must specify at least one pair");
+    if( strings_count==0 )
+        return strings::detail::make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
     auto d_strings = strings.data().get();
@@ -100,7 +100,9 @@ std::unique_ptr<column> make_strings_column(
     rmm::mr::device_memory_resource* mr )
 {
     size_type num_strings = offsets.size()-1;
-    CUDF_EXPECTS( num_strings > 0, "strings count must be greater than 0");
+    if( num_strings==0 )
+        return strings::detail::make_empty_strings_column(mr,stream);
+
     CUDF_EXPECTS( null_count < num_strings, "null strings column not yet supported");
     if( null_count > 0 ) {
         CUDF_EXPECTS( !valid_mask.empty(), "Cannot have null elements without a null mask." );

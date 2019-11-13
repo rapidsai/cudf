@@ -106,12 +106,13 @@ def test_dask_timeseries_from_pandas(tmpdir):
     assert_eq(ddf2, read_df.compute().to_pandas())
 
 
-def test_dask_timeseries_from_dask(tmpdir):
+@pytest.mark.parametrize("index", [False, None])
+def test_dask_timeseries_from_dask(tmpdir, index):
 
     fn = str(tmpdir)
     ddf2 = dask.datasets.timeseries(freq="D")
-    ddf2.to_parquet(fn, engine="pyarrow")
-    read_df = dask_cudf.read_parquet(fn)
+    ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
+    read_df = dask_cudf.read_parquet(fn, index=index)
     # Note: Loosing the index name here
     assert_eq(ddf2, read_df.compute().to_pandas(), check_index=False)
 
@@ -169,7 +170,7 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
     ddf2 = dd.from_pandas(df, npartitions=2)
 
     ddf2.to_parquet(tmpdir, engine="pyarrow", partition_on=parts)
-    df_read = dd.read_parquet(tmpdir)
+    df_read = dd.read_parquet(tmpdir, engine="pyarrow")
     gdf_read = dask_cudf.read_parquet(tmpdir)
 
     assert_eq(

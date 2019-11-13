@@ -198,8 +198,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         else:
             columns = self._get_column_selection(arg[1])
             columns_df = DataFrame()
-            for col in columns:
-                columns_df.add_column(name=col, data=self._df[col])
+            for i, col in enumerate(columns):
+                columns_df.insert(i, col, self._df[col])
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
@@ -299,8 +299,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             if isinstance(arg[0], slice):
                 columns_df = DataFrame()
-                for col in columns:
-                    columns_df.add_column(name=col, data=self._df[col])
+                for i, col in enumerate(columns):
+                    columns_df.insert(i, col, self._df[col])
                 columns_df._index = self._df._index
             else:
                 columns_df = self._df._columns_view(columns)
