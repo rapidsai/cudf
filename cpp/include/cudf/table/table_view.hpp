@@ -106,6 +106,9 @@ class table_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Returns a reference to the view of the specified column
    *
+   * @throws std::out_of_range
+   * If `column_index` is out of the range [0, num_columns)
+   * 
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
@@ -146,7 +149,7 @@ class table_view : public detail::table_view_base<column_view> {
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
    *
-   * @throws cudf::logic_error
+   * @throws std::out_of_range
    * If any element in `column_indices` is outside [0, num_columns())
    *
    * @param column_indices Indices of columns in the table
