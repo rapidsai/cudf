@@ -112,6 +112,7 @@
 - PR #3299 Define and implement new `is_sorted` APIs
 - PR #3328 Partition by stripes in dask_cudf ORC reader
 - PR #3243 Use upstream join code in dask_cudf
+- PR #3309 Add java and JNI bindings for search bounds
 
 ## Bug Fixes
 
