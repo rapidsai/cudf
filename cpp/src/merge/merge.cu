@@ -40,6 +40,7 @@
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/copying.hpp>
 
 namespace {
 
@@ -48,9 +49,7 @@ namespace {
  */
 enum class side : bool { LEFT, RIGHT };
   
-using index_type = thrust::tuple<side, cudf::size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
-
-using BitMaskT = cudf::bitmask_type;// some confusion around this type (11/11/19)...
+using index_type = thrust::tuple<side, cudf::size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index  
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -81,9 +80,9 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
                                                   index_type const* const __restrict__ merged_indices) {
   cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
-  BitMaskT const* const __restrict__ source_left_mask = left_dcol.null_mask();
-  BitMaskT const* const __restrict__ source_right_mask= right_dcol.null_mask();
-  BitMaskT* const destination_mask = out_dcol.null_mask();
+  cudf::bitmask_type const* const __restrict__ source_left_mask = left_dcol.null_mask();
+  cudf::bitmask_type const* const __restrict__ source_right_mask= right_dcol.null_mask();
+  cudf::bitmask_type* const destination_mask = out_dcol.null_mask();
   
   auto active_threads =
     __ballot_sync(0xffffffff, destination_row < num_destination_rows);
@@ -103,7 +102,7 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
 
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
-    BitMaskT const result_mask{
+    cudf::bitmask_type const result_mask{
       __ballot_sync(active_threads, source_bit_is_valid)};
 
     cudf::size_type const output_element = cudf::word_index(destination_row);
@@ -165,7 +164,7 @@ void materialize_bitmask(cudf::column_view const& left_col,
 rmm::device_vector<index_type>
 generate_merged_indices(cudf::table_view const& left_table,
                         cudf::table_view const& right_table,
-                        std::vector<cudf::order> const& asc_desc,
+                        std::vector<cudf::order> const& column_order,
                         std::vector<cudf::null_order> const& null_precedence,
                         bool nullable = true,
                         cudaStream_t stream = nullptr) {
@@ -191,7 +190,7 @@ generate_merged_indices(cudf::table_view const& left_table,
     auto lhs_tdv = cudf::table_device_view::create(left_table, stream);
     auto rhs_tdv = cudf::table_device_view::create(right_table, stream);
 
-    rmm::device_vector<cudf::order> d_column_order(asc_desc); 
+    rmm::device_vector<cudf::order> d_column_order(column_order); 
     
     auto exec_pol = rmm::exec_policy(stream);
     if (nullable){
@@ -357,31 +356,35 @@ private:
   std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_table,
                                                    cudf::table_view const& right_table,
                                                    std::vector<cudf::size_type> const& key_cols,
-                                                   std::vector<cudf::order> const& asc_desc,
+                                                   std::vector<cudf::order> const& column_order,
                                                    std::vector<cudf::null_order> const& null_precedence) {
     auto n_cols = left_table.num_columns();
     CUDF_EXPECTS( n_cols == right_table.num_columns(), "Mismatched number of columns");
     if (left_table.num_columns() == 0) {
-        return nullptr;
+      return cudf::experimental::empty_like(left_table);
     }
 
-    CUDF_EXPECTS(std::equal(left_table.begin(), left_table.end(), right_table.begin(), right_table.end(),
-                            [](cudf::column_view const& lcol, cudf::column_view const& rcol){
-                              return (lcol.type() == rcol.type());
-                            }),
-                 "Mismatched column dtypes");
+    CUDF_EXPECTS(cudf::have_same_types(left_table, right_table), "Mismatched column dtypes");
     
     CUDF_EXPECTS(key_cols.size() > 0, "Empty key_cols");
     CUDF_EXPECTS(key_cols.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
-    CUDF_EXPECTS(asc_desc.size() > 0, "Empty asc_desc");
-    CUDF_EXPECTS(asc_desc.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in asc_desc");
-    CUDF_EXPECTS(key_cols.size() == asc_desc.size(), "Mismatched size between key_cols and asc_desc");    
+    
+    if (not column_order.empty())
+      {
+        CUDF_EXPECTS(key_cols.size() == column_order.size(), "Mismatched size between key_cols and column_order");
+
+        CUDF_EXPECTS(column_order.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in column_order");
+      }
 
     //collect index columns for lhs, rhs, resp.
     //
     std::vector<cudf::column_view> left_index_cols;
     std::vector<cudf::column_view> right_index_cols;
     bool nullable{false};
+
+    //TODO: use `table_view select(std::vector<cudf::size_type> const& column_indices) const;`
+    //(when it becomes available; currently in PR# 3144)
+    //
     for(auto&& indx: key_cols)
       {
         const cudf::column_view& left_col = left_table.column(indx);
@@ -405,7 +408,7 @@ private:
     rmm::device_vector<index_type>
       merged_indices = generate_merged_indices(index_left_view,
                                                index_right_view,
-                                               asc_desc,
+                                               column_order,
                                                null_precedence,
                                                nullable);
 
@@ -443,9 +446,9 @@ private:
 std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                                  table_view const& right_table,
                                                  std::vector<cudf::size_type> const& key_cols,
-                                                 std::vector<cudf::order> const& asc_desc,
+                                                 std::vector<cudf::order> const& column_order,
                                                  std::vector<cudf::null_order> const& null_precedence){
-  return detail::merge(left_table, right_table, key_cols, asc_desc, null_precedence);
+  return detail::merge(left_table, right_table, key_cols, column_order, null_precedence);
 }
 
 }  // namespace experimental

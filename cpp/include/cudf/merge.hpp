@@ -25,7 +25,7 @@ namespace experimental {
 /**
  * @brief Merge sorted tables.
  * 
- * Merges two sorted tables (including null values) into one sorted table
+ * Merges two sorted tables into one sorted table
  * containing data from both tables.
  *
  * Example 1:
@@ -69,7 +69,7 @@ namespace experimental {
  * @Param[in] right_table A sorted table to be merged
  * @Param[in] key_cols Indices of left_cols and right_cols to be used
  *                     for comparison criteria
- * @Param[in] asc_desc Sort order types of columns indexed by key_cols
+ * @Param[in] column_order Sort order types of columns indexed by key_cols
  * @Param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the indexing columns (key_cols)
  *
  * @Returns A table containing sorted data from left_table and right_table
@@ -77,7 +77,7 @@ namespace experimental {
 std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                                  table_view const& right_table,
                                                  std::vector<cudf::size_type> const& key_cols,
-                                                 std::vector<cudf::order> const& asc_desc,
+                                                 std::vector<cudf::order> const& column_order,
                                                  std::vector<cudf::null_order> const& null_precedence);
 
 }  // namespace experimental

@@ -162,4 +162,12 @@ inline bool has_nulls(table_view view) {
   return std::any_of(view.begin(), view.end(),
                      [](column_view col) { return col.has_nulls(); });
 }
+
+inline bool have_same_types(table_view lhs, table_view rhs) {
+  return std::equal(lhs.begin(), lhs.end(),
+                    rhs.begin(), rhs.end(),
+                    [](cudf::column_view const& lcol, cudf::column_view const& rcol){
+                      return (lcol.type() == rcol.type());
+                    });
+}
 }  // namespace cudf
