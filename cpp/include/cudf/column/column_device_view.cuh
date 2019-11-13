@@ -233,6 +233,10 @@ class alignas(16) column_device_view_base {
         _null_count{null_count},
         _offset{offset} {}
 };
+
+//Forward declaration
+template <typename T>
+class value_accessor; 
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
@@ -279,26 +283,29 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Iterator for navigating this column
    *---------------------------------------------------------------------------**/
-  template <typename T>
-  struct value_accessor;
   using count_it = thrust::counting_iterator<size_type>;
   template <typename T>
-  using const_iterator = thrust::transform_iterator<value_accessor<T>, count_it>;
+  using const_iterator =
+      thrust::transform_iterator<detail::value_accessor<T>, count_it>;
 
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing to the beginning of this column
+   * this iterator works for non-nullable column only
+   * @throws `cudf::logic_error` if the column is nullable.
    *---------------------------------------------------------------------------**/
   template <typename T>
   const_iterator<T> begin() const {
-    return const_iterator<T>{count_it{0}, value_accessor<T>{*this}};
+    return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
   }
 
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing past the end of this column
+   * this iterator works for non-nullable column only
+   * @throws `cudf::logic_error` if the column is nullable.
    *---------------------------------------------------------------------------**/
   template<typename T>
   const_iterator<T> end() const {
-    return const_iterator<T>{count_it{size()}, value_accessor<T>{*this}};
+    return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
 
   /**---------------------------------------------------------------------------*
@@ -587,6 +594,7 @@ __device__ inline string_view const column_device_view::element<string_view>(
   return string_view{d_strings + offset, d_offsets[index + 1] - offset};
 }
 
+namespace detail {
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column without null bitmask
  * A unary functor returns scalar value at `id`.
@@ -602,7 +610,7 @@ __device__ inline string_view const column_device_view::element<string_view>(
  * -------------------------------------------------------------------------**/
 
 template <typename T>
-struct column_device_view::value_accessor {
+struct value_accessor {
   column_device_view const col;  ///< column view of column in device
 
   /** -------------------------------------------------------------------------*
@@ -617,5 +625,5 @@ struct column_device_view::value_accessor {
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
 };
-
+}  // namespace detail
 }  // namespace cudf
