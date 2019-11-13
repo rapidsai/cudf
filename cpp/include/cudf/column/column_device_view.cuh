@@ -299,7 +299,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Return new iterator pointing past the end of this column
+   * @brief Return an iterator to the element following the last element of the column. 
    *
    * This iterator only supports columns where `has_nulls() == false`.
    * For columns with null elements, use `make_null_replacement_iterator`.
