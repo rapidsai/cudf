@@ -15,7 +15,7 @@ from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
 from cudf.core import Series
-from cudf.utils.utils import mask_bitsize, mask_dtype
+from cudf.utils.utils import calc_chunk_size, mask_bitsize, mask_dtype
 
 
 class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
@@ -141,15 +141,14 @@ class GpuArrowNodeReader(object):
         return self._series.copy(deep=False)
 
 
-def gpu_view_as(buf, dtype, shape=None, strides=None):
+def gpu_view_as(nbytes, buf, dtype, shape=None, strides=None):
     ptr = numba.cuda.cudadrv.driver.device_pointer(buf.to_numba())
     return rmm.device_array_from_ptr(
-        ptr, buf.size // dtype.itemsize, dtype=dtype
+        ptr, nbytes // dtype.itemsize, dtype=dtype
     )
 
 
 def make_device_arrays(array):
-
     buffers = array.buffers()
     dtypes = [np.dtype(np.int8), None, None]
 
@@ -163,18 +162,21 @@ def make_device_arrays(array):
     else:
         dtypes[1] = arrow_to_pandas_dtype(array.type.index_type)
 
-    for i in range(len(buffers)):
-        buffers[i] = (
-            None
-            if buffers[i] is None
-            else gpu_view_as(CudaBuffer.from_buffer(buffers[i]), dtypes[i])
-        )
+    if buffers[0] is not None:
+        buf = CudaBuffer.from_buffer(buffers[0])
+        nbytes = min(buf.size, calc_chunk_size(len(array), mask_bitsize))
+        buffers[0] = gpu_view_as(nbytes, buf, dtypes[0])
+
+    for i in range(1, len(buffers)):
+        if buffers[i] is not None:
+            buf = CudaBuffer.from_buffer(buffers[i])
+            nbytes = min(buf.size, len(array) * dtypes[i].itemsize)
+            buffers[i] = gpu_view_as(nbytes, buf, dtypes[i])
 
     return buffers
 
 
 def array_to_series(array):
-
     if isinstance(array, pa.ChunkedArray):
         return Series._concat(
             [array_to_series(chunk) for chunk in array.chunks]
