@@ -47,9 +47,7 @@ namespace detail {
 template<typename Exec,
          typename InputIterator,
          typename OutputIterator,
-         typename BinaryPredicate,
-    typename IndexType = typename
-  thrust::iterator_difference<InputIterator>::type>
+         typename BinaryPredicate>
   OutputIterator unique_copy(Exec&& exec,
                              InputIterator first,
                              InputIterator last,
@@ -62,47 +60,65 @@ template<typename Exec,
       return thrust::copy_if(exec,
               first,
               last,
-              thrust::counting_iterator<IndexType>(0),
+              thrust::counting_iterator<size_type>(0),
               output, 
-              [first, comp, last_index] __device__ (IndexType i) mutable {
+              [first, comp, last_index] __device__ (size_type i) mutable {
               return (i == 0 || !comp(first[i], first[i-1]));
               }); 
   } else if (keep == duplicate_keep_option::KEEP_LAST) {
       return thrust::copy_if(exec,
               first,
               last,
-              thrust::counting_iterator<IndexType>(0),
+              thrust::counting_iterator<size_type>(0),
               output, 
-              [first, comp, last_index] __device__ (IndexType i) mutable {
+              [first, comp, last_index] __device__ (size_type i) mutable {
               return (i == last_index || !comp(first[i], first[i+1]));
               });
   } else {
       return thrust::copy_if(exec,
               first,
               last,
-              thrust::counting_iterator<IndexType>(0),
+              thrust::counting_iterator<size_type>(0),
               output, 
-              [first, comp, last_index] __device__ (IndexType i) mutable {
+              [first, comp, last_index] __device__ (size_type i) mutable {
               return (i == 0 || !comp(first[i], first[i-1])) 
                   && (i == last_index || !comp(first[i], first[i+1]));
               });
   }
 }
 
-auto get_unique_ordered_indices(cudf::table_view const& keys,
-                                cudf::column &unique_indices,
-                                duplicate_keep_option const& keep,
-                                bool const& nulls_are_equal = true,
-                                rmm::mr::device_memory_resource* mr =
-                                rmm::mr::get_default_resource(),
-                                cudaStream_t stream=0)
+/**
+ * @brief Create a column_view of index values which represent the row values
+ * without duplicates as per @p `keep`
+ *
+ * Given a `keys` table_view, each row index is copied to output `unique_indices`, if the corresponding
+ * row of `keys` table_view is unique, where the definition of unique depends on the value of @p keep:
+ * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
+ * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
+ * - KEEP_NONE: only unique rows are kept
+ *
+ * @param[in] keys            table_view to identify duplicate rows
+ * @param[out] unique_indices Column to store the index with unique rows
+ * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
+ * @param[in] nulls_are_equal flag to denote nulls are equal if true,
+ * nulls are not equal if false
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @return column_view column_view of unique row index as per specified `keep`, this is actually slice of `unique_indices`.
+ */
+column_view get_unique_ordered_indices(cudf::table_view const& keys,
+                                       cudf::mutable_column_view & unique_indices,
+                                       duplicate_keep_option const& keep,
+                                       bool const& nulls_are_equal = true,
+                                       cudaStream_t stream=0)
 {
   // sort only indices
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
                                      stream,
-                                     mr);
+                                     rmm::mr::get_default_resource());
 
 
   // extract unique indices 
@@ -115,12 +131,12 @@ auto get_unique_ordered_indices(cudf::table_view const& keys,
     auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
                                   sorted_indices->view().begin<cudf::size_type>(),
                                   sorted_indices->view().end<cudf::size_type>(),
-                                  unique_indices.mutable_view().begin<cudf::size_type>(),
+                                  unique_indices.begin<cudf::size_type>(),
                                   comp,
                                   keep);
   
-    return cudf::detail::slice(unique_indices.view(), 0,
-            thrust::distance(unique_indices.mutable_view().begin<cudf::size_type>(), result_end));
+    return cudf::detail::slice(column_view(unique_indices), 0,
+            thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
                                                *device_input_table,
@@ -128,20 +144,18 @@ auto get_unique_ordered_indices(cudf::table_view const& keys,
     auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
                                   sorted_indices->view().begin<cudf::size_type>(),
                                   sorted_indices->view().end<cudf::size_type>(),
-                                  unique_indices.mutable_view().begin<cudf::size_type>(),
+                                  unique_indices.begin<cudf::size_type>(),
                                   comp,
                                   keep);
   
-    return cudf::detail::slice(unique_indices.view(), 0,
-            thrust::distance(unique_indices.mutable_view().begin<cudf::size_type>(), result_end));
+    return cudf::detail::slice(column_view(unique_indices), 0,
+            thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
   }
   
 }
 
 cudf::size_type unique_count(table_view const& keys,
                              bool const& nulls_are_equal = true,
-                             rmm::mr::device_memory_resource* mr 
-                                 = rmm::mr::get_default_resource(),
                              cudaStream_t stream=0)
 {
   // sort only indices
@@ -149,7 +163,7 @@ cudf::size_type unique_count(table_view const& keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
                                      stream,
-                                     mr);
+                                     rmm::mr::get_default_resource());
   
   // count unique elements
   auto sorted_row_index = sorted_indices->view().data<cudf::size_type>();
@@ -182,7 +196,7 @@ cudf::size_type unique_count(table_view const& keys,
 
 std::unique_ptr<experimental::table>
   drop_duplicates(table_view const& input,
-                  table_view const& keys,
+                  std::vector<size_type> const& keys,
                   duplicate_keep_option const& keep,
                   bool const& nulls_are_equal,
                   rmm::mr::device_memory_resource* mr,
@@ -190,24 +204,25 @@ std::unique_ptr<experimental::table>
 {
   if (0 == input.num_rows() || 
       0 == input.num_columns() ||
-      0 == keys.num_columns()
+      0 == keys.size()
       ) {
       return experimental::detail::empty_like(input, stream);
   }
-  
-  CUDF_EXPECTS( input.num_rows() == keys.num_rows(), "number of \
-rows in input table should be equal to number of rows in key colums table");
 
+  auto keys_view = input.select(keys);
+  
   // The values will be filled into this column
   auto unique_indices = 
         cudf::make_numeric_column(data_type{INT32}, 
-                                  keys.num_rows(), UNALLOCATED, stream, mr);
+                                  keys_view.num_rows(), UNALLOCATED, stream, mr);
+  auto mutable_unique_indices_view = unique_indices->mutable_view();
   // This is just slice of `unique_indices` but with different size as per the
-  // keys has been processed in `get_unique_ordered_indices`
+  // keys_view has been processed in `get_unique_ordered_indices`
   auto unique_indices_view = 
-      detail::get_unique_ordered_indices(keys, 
-                                         *unique_indices,
-                                         keep, nulls_are_equal);
+      detail::get_unique_ordered_indices(keys_view,
+                                         mutable_unique_indices_view,
+                                         keep, nulls_are_equal,
+                                         stream);
  
   // run gather operation to establish new order
   return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
@@ -216,7 +231,6 @@ rows in input table should be equal to number of rows in key colums table");
 cudf::size_type unique_count(column_view const& input,
                              bool const& ignore_nulls,
                              bool const& nan_as_null,
-                             rmm::mr::device_memory_resource *mr,
                              cudaStream_t stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) {
@@ -235,7 +249,7 @@ cudf::size_type unique_count(column_view const& input,
       has_nan = cudf::experimental::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
-  auto count = detail::unique_count(table_view{{input}}, true, mr, stream);
+  auto count = detail::unique_count(table_view{{input}}, true, stream);
 
   // if nan is considered null and there are already null values
   if (nan_as_null and has_nan and input.has_nulls())
@@ -251,7 +265,7 @@ cudf::size_type unique_count(column_view const& input,
 
 std::unique_ptr<experimental::table>
   drop_duplicates(table_view const& input,
-                  table_view const& keys,
+                  std::vector<size_type> const& keys,
                   duplicate_keep_option const& keep,
                   bool const& nulls_are_equal,
                   rmm::mr::device_memory_resource* mr) {
@@ -264,7 +278,7 @@ cudf::size_type unique_count(column_view const& input,
                              bool const& nan_as_null,
                              rmm::mr::device_memory_resource *mr) {
 
-    return detail::unique_count(input, ignore_nulls, nan_as_null, mr);
+    return detail::unique_count(input, ignore_nulls, nan_as_null);
 }
 
 }// namespace experimental

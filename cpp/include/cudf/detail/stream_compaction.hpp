@@ -85,7 +85,7 @@ std::unique_ptr<experimental::table>
  * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
  *
  * @param[in] input The input table_view to filter
- * @param[in] boolean_mask A potentially nullable column_view of type BOOL8 used as 
+ * @param[in] boolean_mask A nullable column_view of type BOOL8 used as
  * a mask to filter the `input`.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
@@ -103,7 +103,7 @@ std::unique_ptr<experimental::table>
  * @brief Create a new table without duplicate rows
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` table_view is unique, where the definition of unique depends on the value of @p keep:
+ * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: only unique rows are kept
@@ -111,7 +111,7 @@ std::unique_ptr<experimental::table>
  * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
  *
  * @param[in] input           input table_view to copy only unique rows
- * @param[in] keys            table_view to identify duplicate rows
+ * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_are_equal flag to denote nulls are equal if true,
  * nulls are not equal if false
@@ -122,7 +122,7 @@ std::unique_ptr<experimental::table>
  */
 std::unique_ptr<experimental::table>
     drop_duplicates(table_view const& input,
-                    table_view const& keys,
+                    std::vector<size_type> const& keys,
                     duplicate_keep_option const& keep,
                     bool const& nulls_are_equal=true,
                     rmm::mr::device_memory_resource *mr =
@@ -151,8 +151,6 @@ std::unique_ptr<experimental::table>
 cudf::size_type unique_count(column_view const& input,
                              bool const& ignore_nulls,
                              bool const& nan_as_null,
-                             rmm::mr::device_memory_resource *mr =
-                                 rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0);
 
 
