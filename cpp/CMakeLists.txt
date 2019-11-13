@@ -498,6 +498,7 @@ add_library(cudf
             src/strings/case.cu
             src/strings/find.cu
             src/strings/convert/convert_datetime.cu
+            src/strings/convert/convert_booleans.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 

@@ -25,7 +25,7 @@
 #include <random>
 
 template <class T>
-class Reshape : public ::benchmark::Fixture {
+class Reshape : public cudf::benchmark {
 public:
   using TypeParam = T;
 };
