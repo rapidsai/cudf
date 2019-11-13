@@ -21,6 +21,7 @@
 #include <thrust/tuple.h>
 #include <thrust/device_vector.h>
 #include <thrust/merge.h>
+///#include <thrust/gather.h>
 #include <algorithm>
 #include <utility>
 #include <vector>
@@ -270,8 +271,9 @@ struct ColumnMerger
   //std::enable_if_t<!(std::is_same<ElemenT,StringT>::value),
   std::unique_ptr<cudf::column> //>
   operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
-  {   
-    auto merged_sz = lcol.size() + rcol.size();
+  {
+    auto lsz = lcol.size();
+    auto merged_sz = lsz + rcol.size();
     auto type = lcol.type();
     
     rmm::device_buffer data{merged_sz * cudf::size_of(type),
@@ -282,16 +284,45 @@ struct ColumnMerger
                                                      ALL_VALID,
                                                      stream_,
                                                      mr_);
-
-    //state_null_count(state, merged_size);//cudf::mask_state state{ALL_VALID};
     
     std::unique_ptr<cudf::column> p_merged_col{
       new cudf::column{type, merged_sz, data, mask}
     };
 
-    //OR: instead cnstr a merged column_view, then a column out of it?
+    //"gather" data from lcol, rcol
+    //according to dv_row_order_ "map"
+    //(gather() won't work because
+    // from lcol, rcol indices overlap!)
     //
-    return p_merged_col;//for now...
+    cudf::mutable_column_view merged_view = p_merged_col->mutable_view();
+    auto exe_pol = rmm::exec_policy(stream_);
+    thrust::for_each(exe_pol->on(stream_),
+                     dv_row_order_.begin(), dv_row_order_.end(),
+                     [lsz] __device__ (index_type const& indx_pair){
+                       auto side = thrust::get<0>(indx_pair);
+                       auto indx = thrust::get<1>(indx_pair);
+                       auto ext_indx = (side == side::LEFT? indx : indx+lsz);
+                       
+                       //TODO: capture lcol, rcol, merged_view
+                       //and "gather" into merged_view.data()[ext_indx]
+                       //from lcol or rcol, depending on side;
+                       //
+                       //to resolve merged_view.data()'s type
+                       //may need to move this into a functor
+                       //to be type-dispatched
+                     });
+
+    //cudaDeviceSynchronize();//? nope...this two could proceed concurrently
+    
+    //resolve null mask:
+    //
+    materialize_bitmask(lcol,
+                        rcol,
+                        merged_view,
+                        dv_row_order_.data().get(),
+                        stream_);
+                   
+    return p_merged_col;
   }
 
   //specialization for string...?
