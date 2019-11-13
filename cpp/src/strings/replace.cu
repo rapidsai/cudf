@@ -86,7 +86,7 @@ struct replace_fn
             else // ExecuteOp
             {
                 size_type curr_pos = d_str.byte_offset(position);
-                out_ptr = copy_and_incr(out_ptr, in_ptr + last_pos, curr_pos - last_pos); // copy left
+                out_ptr = copy_and_increment(out_ptr, in_ptr + last_pos, curr_pos - last_pos); // copy left
                 out_ptr = copy_string(out_ptr, d_repl); // copy repl
                 last_pos = curr_pos + d_target.size_bytes();
             }
@@ -94,7 +94,7 @@ struct replace_fn
             --max_n;
         }
         if( Pass==ExecuteOp ) // copy whats left (or right depending on your point of view)
-            copy_and_incr(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
+            copy_and_increment(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
         return bytes;
     }
 };
@@ -181,9 +181,9 @@ struct replace_slice_fn
         bytes += d_repl.size_bytes() - (end - begin);
         if( Pass==ExecuteOp )
         {
-            out_ptr = copy_and_incr( out_ptr, in_ptr, begin );
+            out_ptr = copy_and_increment( out_ptr, in_ptr, begin );
             out_ptr = copy_string( out_ptr, d_repl );
-            out_ptr = copy_and_incr( out_ptr, in_ptr + end, d_str.size_bytes() - end );
+            out_ptr = copy_and_increment( out_ptr, in_ptr + end, d_str.size_bytes() - end );
         }
         return bytes;
     }
@@ -279,7 +279,7 @@ struct replace_multi_fn
                         bytes += d_repl.size_bytes() - d_tgt.size_bytes();
                     else
                     {
-                        out_ptr = copy_and_incr(out_ptr,in_ptr+lpos,spos-lpos);
+                        out_ptr = copy_and_increment(out_ptr,in_ptr+lpos,spos-lpos);
                         out_ptr = copy_string(out_ptr,d_repl);
                         lpos = spos + d_tgt.size_bytes();
                     }
@@ -290,7 +290,7 @@ struct replace_multi_fn
             ++spos;
         }
         if( Pass==ExecuteOp ) // copy remainder
-            copy_and_incr(out_ptr,in_ptr+lpos,size-lpos);
+            copy_and_increment(out_ptr,in_ptr+lpos,size-lpos);
         return bytes;
     }
 };

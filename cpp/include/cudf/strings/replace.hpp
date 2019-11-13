@@ -40,8 +40,10 @@ namespace strings
  *
  * ```
  * s = ["hello", "goodbye"]
- * r = replace(s,"o","O")
- * r is now ["hellO","gOOdbye"]
+ * r1 = replace(s,"o","OOO")
+ * r1 is now ["hellOOO","gOOOOOOdbye"]
+ * r2 = replace(s,"oo","")
+ * r2 is now ["hello","gdbye"]
  * ```
  *
  * @throw cudf::logic_error if target is an empty string.
@@ -115,9 +117,13 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  * ```
  * s = ["hello", "goodbye"]
  * tgts = ["e","o"]
- * repls = ["E","O"]
- * r = replace(s,tgt,repl)
- * r is now ["hEllO", "gOOdbyE"]
+ * repls = ["EE","OO"]
+ * r1 = replace(s,tgts,repls)
+ * r1 is now ["hEEllO", "gOOOOdbyEE"]
+ * tgts = ["e","oo"]
+ * repls = ["33",""]
+ * r2 = replace(s,tgts,repls)
+ * r2 is now ["h33llo", "gdby33"]
  * ```
  *
  * @throw cudf::logic_error if targets and repls are different sizes except
