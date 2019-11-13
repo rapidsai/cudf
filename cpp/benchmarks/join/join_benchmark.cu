@@ -15,6 +15,8 @@
  */
 
 #include <benchmark/benchmark.h>
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
 #include <vector>
 #include <cudf/cudf.h>
 #include <cudf/legacy/join.hpp>
@@ -22,11 +24,12 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include "generate_input_tables.cuh"
-#include "../synchronization/synchronization.hpp"
 
+template <typename key_type, typename payload_type>
+class Join : public cudf::benchmark {};
 
 template<typename key_type, typename payload_type>
-static void join_benchmark(benchmark::State& state)
+static void BM_join(benchmark::State& state)
 {
     const cudf::size_type build_table_size {(cudf::size_type) state.range(0)};
     const cudf::size_type probe_table_size {(cudf::size_type) state.range(1)};
@@ -89,7 +92,16 @@ static void join_benchmark(benchmark::State& state)
     }
 }
 
-BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMillisecond)
+#define JOIN_BENCHMARK_DEFINE(name, key_type, payload_type)     \
+BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type) \
+(::benchmark::State& st) {                                      \
+  BM_join<key_type, payload_type>(st);                          \
+}
+
+JOIN_BENCHMARK_DEFINE(join_32bit, int32_t, int32_t);
+JOIN_BENCHMARK_DEFINE(join_64bit, int64_t, int64_t);
+
+BENCHMARK_REGISTER_F(Join, join_32bit)->Unit(benchmark::kMillisecond)
     ->Args({100'000, 100'000})
     ->Args({100'000, 400'000})
     ->Args({100'000, 1'000'000})
@@ -100,7 +112,7 @@ BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMilliseco
     ->Args({80'000'000, 240'000'000})
     ->UseManualTime();
 
-BENCHMARK_TEMPLATE(join_benchmark, int64_t, int64_t)->Unit(benchmark::kMillisecond)
+BENCHMARK_REGISTER_F(Join, join_64bit)->Unit(benchmark::kMillisecond)
     ->Args({50'000'000, 50'000'000})
     ->Args({40'000'000, 120'000'000})
     ->UseManualTime();
