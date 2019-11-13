@@ -503,11 +503,7 @@ class ColumnBase(Column):
                         f"index out of bounds for column of size {len(self)}"
                     )
 
-        self.data = out.data
-        self.mask = out.mask
-        if hasattr(out, "children"):
-            self.children = out.children
-            self._nvstrings = None  # force nvstrings to be recomputed
+        self._mimic_inplace(out)
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -704,6 +700,10 @@ class ColumnBase(Column):
         if inplace:
             self.data = result.data
             self.mask = result.mask
+            if hasattr(result, "children"):
+                self.children = result.children
+                if is_string_dtype(self):
+                    self._nvstrings = None  # force nvstrings to be recomputed
         else:
             return result
 

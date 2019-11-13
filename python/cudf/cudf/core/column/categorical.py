@@ -480,8 +480,8 @@ class CategoricalColumn(column.ColumnBase):
             fill_value = fill_value.cat()._set_categories(
                 self.categories, is_unique=True
             )
-            fill_value = column.as_column(fill_value.data).astype(
-                self.data.dtype
+            fill_value = column.as_column(fill_value.codes).astype(
+                self.dtype.data_dtype
             )
 
         result = libcudf.replace.replace_nulls(self, fill_value)

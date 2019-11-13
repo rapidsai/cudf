@@ -733,10 +733,10 @@ class StringColumn(column.ColumnBase):
         to_replace = column.as_column(to_replace)
         replacement = column.as_column(replacement)
         if len(to_replace) == 1 and len(replacement) == 1:
-            to_replace = to_replace.data.to_host()[0]
-            replacement = replacement.data.to_host()[0]
+            to_replace = to_replace.nvstrings.to_host()[0]
+            replacement = replacement.nvstrings.to_host()[0]
             result = self.nvstrings.replace(to_replace, replacement)
-            return self.replace(data=result)
+            return column.as_column(result, name=self.name)
         else:
             raise NotImplementedError(
                 "StringColumn currently only supports replacing"
@@ -765,7 +765,7 @@ class StringColumn(column.ColumnBase):
                     "greater length than the series to be filled"
                 )
 
-            fill_value = fill_value[: len(self)]._column._data
+            fill_value = fill_value[: len(self)]._column.nvstrings
 
         filled_data = self.nvstrings.fillna(fill_value)
         result = column.as_column(filled_data)
