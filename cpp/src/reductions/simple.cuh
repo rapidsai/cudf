@@ -64,7 +64,7 @@ gdf_scalar simple_reduction(column_view const& col, data_type const output_dtype
     auto dcol = cudf::column_device_view::create(col, stream);
     if (col.nullable()) {
       auto it = thrust::make_transform_iterator(
-          dcol->nbegin(Op::Op::template identity<ElementType>()),
+          experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
           typename Op::template transformer<ResultType>{});
       detail::reduce(result, it, col.size(), identity, typename Op::Op{}, stream);
     } else {

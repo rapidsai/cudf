@@ -200,19 +200,10 @@ struct standard_deviation {
 } // namespace experimental
 
 template <typename ElementType, typename ResultType, typename Op, bool has_nulls>
-static auto make_reduction_iterator(column_device_view const& column) {
+auto make_reduction_iterator(column_device_view const& column) {
     return thrust::make_transform_iterator(
-        make_null_replacement_iterator( column, Op::Op::template identity<ElementType>()),
+        experimental::detail::make_null_replacement_iterator( column, Op::Op::template identity<ElementType>()),
         typename Op::template transformer<ResultType>{});
 }
 
-//template <typename ElementType, typename ResultType, typename Op, false>
-//static auto make_reduction_iterator(column_device_view const& column) {
-//  return thrust::make_transform_iterator(
-//      column.data<ElementType>(),
-//      typename Op::template transformer<ResultType>{});
-//}
-
 } // namespace cudf
-
-
