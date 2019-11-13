@@ -267,7 +267,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
         from dask_cudf.io import to_parquet
 
-        to_parquet(self, path, *args, **kwargs)
+        return to_parquet(self, path, *args, **kwargs)
 
     @derived_from(pd.DataFrame)
     def var(
