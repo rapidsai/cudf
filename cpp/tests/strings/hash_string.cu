@@ -17,9 +17,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include "../src/hash/hash_functions.cuh"
 #include "./utilities.h"
 
 #include <gmock/gmock.h>

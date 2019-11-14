@@ -132,6 +132,22 @@ static PyObject* n_unique_tokens( PyObject* self, PyObject* args )
 }
 
 //
+static PyObject* n_character_tokenize( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    Py_BEGIN_ALLOW_THREADS
+    strs = NVText::character_tokenize(*strs);
+    Py_END_ALLOW_THREADS
+    if( strs==0 )
+        Py_RETURN_NONE;
+    return PyLong_FromVoidPtr((void*)strs);
+}
+
+//
 static PyObject* n_token_count( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -827,6 +843,7 @@ static PyMethodDef s_Methods[] = {
     { "n_tokenize", n_tokenize, METH_VARARGS, "" },
     { "n_tokenize_multi", n_tokenize_multi, METH_VARARGS, "" },
     { "n_unique_tokens", n_unique_tokens, METH_VARARGS, "" },
+    { "n_character_tokenize", n_character_tokenize, METH_VARARGS, "" },
     { "n_token_count", n_token_count, METH_VARARGS, "" },
     { "n_contains_strings", n_contains_strings, METH_VARARGS, "" },
     { "n_strings_counts", n_strings_counts, METH_VARARGS, "" },

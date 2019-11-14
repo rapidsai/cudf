@@ -61,11 +61,11 @@ void unary_operation(gdf_column& output, const gdf_column& input,
       cudf::jit::parse_single_function_ptx(
           udf, "GENERIC_UNARY_OP", 
           cudf::jit::getTypeName(output_type), {0}
-          ) + code::kernel;
+          ) + cudf::experimental::transformation::jit::code::kernel;
   }else{  
     cuda_source = 
       cudf::jit::parse_single_function_cuda(
-          udf, "GENERIC_UNARY_OP") + code::kernel;
+          udf, "GENERIC_UNARY_OP") + cudf::experimental::transformation::jit::code::kernel;
   }
   
   // Launch the jitify kernel

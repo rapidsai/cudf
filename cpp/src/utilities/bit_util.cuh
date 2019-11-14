@@ -19,7 +19,7 @@
 #pragma once
 
 #include <utilities/cudf_utils.h>
-#include <utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cudf/types.h>
 
