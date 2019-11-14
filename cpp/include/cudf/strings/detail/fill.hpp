@@ -35,9 +35,10 @@ namespace detail
  *
  * @throw cudf::logic_error if [first,last) is outside the range of the input column.
  *
- * @param strings Strings column fill.
- * @param first First row position to include the new string.
- * @param last Last row position (exclusive).
+ * @param strings Strings column to fill.
+ * @param first First row index to include the new string.
+ * @param last Last row index (exclusive).
+ * @param value String to use when filling the range.
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use for any kernels in this function.
  * @return New strings column.
