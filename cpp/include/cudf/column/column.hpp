@@ -150,7 +150,8 @@ class column {
     if(new_null_count > 0){
       CUDF_EXPECTS(new_null_mask.size() ==
                      cudf::bitmask_allocation_size_bytes(this->size()),
-                   "Column with null values must be nullable.");
+                   "Column with null values must be nullable and the null mask
+                    buffer size should match the size of the column.");
     }
     _null_mask = std::forward<B>(new_null_mask);
     _null_count = new_null_count;
