@@ -10,6 +10,7 @@ import pyarrow as pa
 
 import rmm
 
+import cudf
 from cudf._lib.arrow._cuda import CudaBuffer
 from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
@@ -189,17 +190,20 @@ def array_to_series(array):
     dtype = arrow_to_pandas_dtype(array.type)
 
     if pa.types.is_dictionary(array.type):
-        from cudf.core.column import CategoricalColumn
+        from cudf.core.column import build_column
+        from cudf.core.buffer import Buffer
 
         codes = array_to_series(array.indices)
         categories = array_to_series(array.dictionary)
-        data = CategoricalColumn(
-            data=codes.data,
-            mask=mask,
-            null_count=null_count,
+        dtype = cudf.CategoricalDtype(
+            data_dtype=codes.dtype,
             categories=categories,
             ordered=array.type.ordered,
         )
+        if mask is not None:
+            mask = Buffer.from_array_like(mask)
+        data = build_column(data=codes.data, dtype=dtype, mask=mask)
+
     elif pa.types.is_string(array.type):
         import nvstrings
 

@@ -79,7 +79,7 @@ class ColumnBase(Column):
         result = rmm.device_array_from_ptr(
             ptr=self.data.ptr, nelem=len(self), dtype=dtype
         )
-        result._obj = self
+        result.gpu_data._obj = self
         return result
 
     def _mask_view(self):
@@ -91,7 +91,7 @@ class ColumnBase(Column):
             nelem=calc_chunk_size(len(self), mask_bitsize),
             dtype=np.int8,
         )
-        result._obj = self
+        result.gpu_data._obj = self
         return result
 
     def __len__(self):
