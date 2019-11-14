@@ -195,10 +195,15 @@ ConfigureTest(LEGACY_ORDERBY_TEST "${LEGACY_ORDERBY_TEST_SRC}")
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
 
-set(LEGACY_IS_SORTED_TEST_SRC 
+set(IS_SORTED_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/is_sorted_tests.cu")
+
+ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
+
+set(LEGACY_IS_SORTED_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/legacy/is_sorted_tests.cu")
 
-ConfigureTest(IS_SORTED_TEST "${LEGACY_IS_SORTED_TEST_SRC}")
+ConfigureTest(LEGACY_IS_SORTED_TEST "${LEGACY_IS_SORTED_TEST_SRC}")
 
 ###################################################################################################
 # - legacy bitmask tests --------------------------------------------------------------------------
@@ -324,6 +329,14 @@ set(LEGACY_TRANSFORM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/legacy/unary-operation-integration-test.cu")
 
 ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
+
+###################################################################################################
+# - unary transform tests -------------------------------------------------------------------------
+
+set(TRANSFORM_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu")
+
+ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
 # - legacy jit cache tests ------------------------------------------------------------------------
@@ -456,6 +469,14 @@ set(LEGACY_UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/legacy/column_wrapper_tests.cu")
 
 ConfigureTest(LEGACY_UTILITIES_TEST "${LEGACY_UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - legacy iterator tests --------------------------------------------------------------------------------
+
+set(LEGACY_ITERATOR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/legacy/iterator_test.cu")
+
+ConfigureTest(LEGACY_ITERATOR_TEST "${LEGACY_ITERATOR_TEST_SRC}")
 
 ###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
@@ -596,7 +617,9 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
@@ -625,7 +648,7 @@ enable_testing()
 ###################################################################################################
 # - iterator benchmarks----------------------------------------------------------------------------
 
-set(ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
+set(LEGACY_ITERATOR_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/legacy/iterator_bench.cu")
 
-ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+  ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")
