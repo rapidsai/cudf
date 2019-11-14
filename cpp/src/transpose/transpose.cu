@@ -91,16 +91,36 @@ void gpu_transpose_valids(table_device_view const input, mutable_table_device_vi
 }
 
 struct launch_kernel {
-  template <typename T>
-  void operator()(
-    table_view const& input,
-    mutable_table_view& output,
-    std::vector<size_type>& null_counts,
-    cudaStream_t stream)
+  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<experimental::table> operator()(table_view const& input,
+      bool allocate_nulls, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    // Copy input columns `data` and `valid` pointers to device
+    // Output has transposed shape of input
+    auto const output_ncols = input.num_rows();
+    auto const output_nrows = input.num_columns();
+
+    // If any input column has nulls, all output columns must
+    auto const& first = input.column(0);
+    auto const allocation_policy = allocate_nulls
+      ? experimental::mask_allocation_policy::ALWAYS
+      : experimental::mask_allocation_policy::NEVER;
+
+    // Allocate output columns
+    std::vector<std::unique_ptr<column>> output(output_ncols);
+    std::generate(output.begin(), output.end(), [=, &first]() {
+      return experimental::detail::allocate_like(first, output_nrows,
+        allocation_policy, mr, stream);
+    });
+
+    // Create mutable device view from input
     auto device_input = table_device_view::create(input, stream);
-    auto device_output = mutable_table_device_view::create(output, stream);
+
+    // Create mutable table device view from output columns
+    auto output_views = std::vector<mutable_column_view>(output.size());
+    std::transform(output.begin(), output.end(), output_views.begin(),
+      [](auto const& col) { return static_cast<mutable_column_view>(*col); });
+    auto output_table = mutable_table_view(output_views);
+    auto device_output = mutable_table_device_view::create(output_table, stream);
 
     // TODO benchmark, because a smaller block size (e.g. 32x8) may perform
     // better. It would also require transposing via shared memory, which may
@@ -112,16 +132,33 @@ struct launch_kernel {
 
     gpu_transpose<T><<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
 
-    if (not null_counts.empty()) {
-      rmm::device_vector<cudf::size_type> d_null_counts(null_counts.size());
+    if (allocate_nulls) {
+      // Transpose valids and compute null counts
+      rmm::device_vector<size_type> d_null_counts(output.size());
       gpu_transpose_valids<<<dimGrid, dimBlock, 0, stream>>>(*device_input,
         *device_output, d_null_counts.data().get());
 
-      // This memcpy needs to be synchronous as we immediately read the value from host
-      CUDA_TRY(cudaMemcpyAsync(null_counts.data(), d_null_counts.data().get(),
-        null_counts.size() * sizeof(size_type), cudaMemcpyDefault, stream));
-      CUDA_TRY(cudaStreamSynchronize(stream));
+      // Set null counts on output columns
+      thrust::host_vector<size_type> null_counts(d_null_counts);
+      auto begin = thrust::make_zip_iterator(thrust::make_tuple(output.begin(), null_counts.begin()));
+      auto end = thrust::make_zip_iterator(thrust::make_tuple(output.end(), null_counts.end()));
+      thrust::for_each(thrust::host, begin, end,
+        [](thrust::tuple<std::unique_ptr<column>&, size_type const&> tuple) {
+          auto& out_col = thrust::get<0>(tuple);
+          auto const& null_count = thrust::get<1>(tuple);
+          out_col->set_null_count(null_count);
+        });;
     }
+
+    return std::make_unique<experimental::table>(std::move(output));
+  }
+
+  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<experimental::table> operator()(table_view const& input,
+      bool allocate_nulls, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    // TODO add string support
+    CUDF_FAIL("Invalid, non-fixed-width type");
   }
 };
 
@@ -132,51 +169,20 @@ namespace detail {
 std::unique_ptr<experimental::table> transpose(table_view const& input,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  auto const input_ncols = input.num_columns();
-  auto const input_nrows = input.num_rows();
-
   // If there are no rows in the input, return successfully
-  if (input_ncols == 0 || input_nrows == 0) {
+  if (input.num_columns() == 0 || input.num_rows() == 0) {
     return std::make_unique<experimental::table>();
   }
 
   // Check datatype homogeneity
-  auto const& first = input.column(0);
-  auto const dtype = first.type();
+  auto const dtype = input.column(0).type();
   CUDF_EXPECTS(std::all_of(input.begin(), input.end(), [dtype](auto const& col) {
     return dtype == col.type(); }), "Column type mismatch");
 
-  // TODO string support may be needed in future
-  CUDF_EXPECTS(is_fixed_width(dtype), "Invalid, non-fixed-width type.");
-
-
-  // Check if there are nulls to be processed
-  bool const has_null = has_nulls(input);
-  auto const allocation_policy = has_null ? experimental::mask_allocation_policy::ALWAYS
-    : experimental::mask_allocation_policy::NEVER;
-
-  auto const& output_ncols = input_nrows;
-  auto const& output_nrows = input_ncols;
-  std::vector<size_type> null_counts(has_null ? output_ncols : 0);
-
-  // Allocate output table with transposed shape
-  std::vector<std::unique_ptr<column>> out_columns(output_ncols);
-  std::generate(out_columns.begin(), out_columns.end(), [=]() {
-    return experimental::detail::allocate_like(first, output_nrows,
-      allocation_policy, mr, stream);
-  });
-  auto output = std::make_unique<experimental::table>(std::move(out_columns));
-  auto output_view = output->mutable_view();
-
   nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
-  experimental::type_dispatcher(dtype, launch_kernel{}, input, output_view, null_counts, stream);
+  auto output = experimental::type_dispatcher(dtype, launch_kernel{}, input,
+    has_nulls(input), mr, stream);
   nvtx::range_pop();
-
-  if (has_null) {
-    for (size_type i = 0; i < output_ncols; ++i) {
-      output->get_column(i).set_null_count(null_counts[i]);
-    }
-  }
 
   return output;
 }
