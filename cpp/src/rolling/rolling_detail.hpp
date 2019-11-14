@@ -40,17 +40,17 @@ namespace detail
   template <typename ColumnType, bool average>
   struct store_output_functor
   {
-    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, cudf::size_type count)
+    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, size_type count)
     {
       out = val;
     }
   };
 
-  // partial specialization for AVG
+  // partial specialization for MEAN
   template <typename ColumnType>
   struct store_output_functor<ColumnType, true>
   {
-    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, cudf::size_type count)
+    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, size_type count)
     {
       out = val / count;
     }
