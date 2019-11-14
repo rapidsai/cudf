@@ -31,7 +31,7 @@ namespace test {
  * @param lhs The first column
  * @param rhs The second column
  */
-void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs);
+void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
@@ -41,7 +41,7 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
  * @param lhs The first column
  * @param rhs The second column
  */
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -62,7 +62,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view const& c) {
   std::vector<T> host_data;
   std::vector<bitmask_type> host_bitmask;
 
@@ -98,7 +98,7 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
+inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view const& c) {
   std::vector<std::string> host_data;
   std::vector<bitmask_type> host_bitmask;
 

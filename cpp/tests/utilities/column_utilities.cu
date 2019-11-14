@@ -29,7 +29,7 @@ namespace cudf {
 namespace test {
 
 // Property equality
-void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs) {
+void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());
@@ -41,7 +41,7 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
 }
 
 // Verify elementwise equality
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
