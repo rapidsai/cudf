@@ -516,9 +516,7 @@ class ColumnBase(Column):
         if not self.has_null_mask:
             return self
         out = cudautils.fillna(
-            data=self.data.to_gpu_array(),
-            mask=self.mask.to_gpu_array(),
-            value=value,
+            data=self._data_view(), mask=self._mask_view(), value=value
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
@@ -550,8 +548,9 @@ class ColumnBase(Column):
         DeviceNDArray
            logical inverted mask
         """
-
-        gpu_mask = self.to_gpu_array()
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+        gpu_mask = self._data_view()
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
@@ -619,7 +618,11 @@ class ColumnBase(Column):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
+        return cudautils.compact_mask_bytes(self._data_view())
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -1174,10 +1177,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    data = as_column(
-                        pd.Series(arbitrary, dtype="category"),
-                        nan_as_null=nan_as_null,
-                    )
+                    sr = pd.Series(arbitrary, dtype="category")
+                    data = as_column(sr, nan_as_null=nan_as_null)
+                elif np_type == np.str_:
+                    sr = pd.Series(arbitrary, dtype="str")
+                    data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
                         np.array(arbitrary, dtype=np.dtype(dtype)),
@@ -1219,7 +1223,7 @@ def column_applymap(udf, column, out_dtype):
                     # call udf
                     results[i] = core(values[i])
 
-        masks = column.mask.to_gpu_array()
+        masks = column._mask_view()
         kernel_masked.forall(len(column))(values, masks, results)
     else:
         # For non-masked columns

@@ -86,6 +86,7 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* begin() const noexcept {
+    // static_assert(is_fixed_width<T>(), "column_view::begin only supports fixed-width types");
     return data<T>();
   }
 
@@ -98,6 +99,7 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* end() const noexcept {
+    // static_assert(is_fixed_width<T>(), "column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 
@@ -407,6 +409,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* begin() const noexcept {
+    // static_assert(is_fixed_width<T>(), "mutable_column_view::begin only supports fixed-width types");
     return data<T>();
   }
 
@@ -419,6 +422,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* end() const noexcept {
+    // static_assert(is_fixed_width<T>(), "mutable_column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 
@@ -497,9 +501,9 @@ template <typename ColumnView>
 ColumnView slice(ColumnView const& input,
                   cudf::size_type begin,
                   cudf::size_type end) {
-   static_assert(std::is_same<ColumnView, cudf::column_view>::value or
-                    std::is_same<ColumnView, cudf::mutable_column_view>::value,
-                "slice can be performed only on column_view and mutable_column_view");
+   // static_assert(std::is_same<ColumnView, cudf::column_view>::value or
+   // std::is_same<ColumnView, cudf::mutable_column_view>::value,
+  // "slice can be performed only on column_view and mutable_column_view");
    CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
    CUDF_EXPECTS(end >= begin, "Invalid end of range.");
    CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");

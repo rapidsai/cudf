@@ -112,11 +112,11 @@ cpdef get_ctype_ptr(obj):
 
 
 cpdef get_column_data_ptr(obj):
-    return get_ctype_ptr(obj._data.mem)
+    return get_ctype_ptr(obj._data_view())
 
 
 cpdef get_column_valid_ptr(obj):
-    return get_ctype_ptr(obj._mask.mem)
+    return get_ctype_ptr(obj._mask_view())
 
 
 cdef np_dtype_from_gdf_column(gdf_column* col):

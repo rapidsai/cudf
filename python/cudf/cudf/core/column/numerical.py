@@ -339,7 +339,9 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the first larger value
         if closest=True.
         """
-        found = cudautils.find_first(self._data_view(), value)
+        found = 0
+        if len(self):
+            found = cudautils.find_first(self._data_view(), value)
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = 0
@@ -361,7 +363,9 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the last smaller value
         if closest=True.
         """
-        found = cudautils.find_last(self._data_view(), value)
+        found = 0
+        if len(self):
+            found = cudautils.find_last(self._data_view(), value)
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = -1

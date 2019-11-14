@@ -3,6 +3,7 @@
 import types
 from contextlib import ExitStack as does_not_raise
 
+import cupy
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,13 +11,6 @@ from numba import cuda
 
 import cudf
 from cudf.tests.utils import assert_eq
-
-try:
-    import cupy
-
-    _have_cupy = True
-except ImportError:
-    _have_cupy = False
 
 basic_dtypes = [
     np.dtype("int8"),
@@ -42,8 +36,6 @@ def test_cuda_array_interface_interop_in(dtype, module):
 
     expectation = does_not_raise()
     if module == "cupy":
-        if not _have_cupy:
-            pytest.skip("no cupy")
         module_constructor = cupy.array
         if dtype in datetime_dtypes:
             expectation = pytest.raises(ValueError)
@@ -74,8 +66,6 @@ def test_cuda_array_interface_interop_out(dtype, module):
     if dtype in string_dtypes:
         expectation = pytest.raises(NotImplementedError)
     if module == "cupy":
-        if not _have_cupy:
-            pytest.skip("no cupy")
         module_constructor = cupy.asarray
 
         def to_host_function(x):
@@ -109,8 +99,6 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
             "cupy doesn't support version 1 of "
             "`__cuda_array_interface__` yet"
         )
-        if not _have_cupy:
-            pytest.skip("no cupy")
         module_constructor = cupy.asarray
 
         def to_host_function(x):
@@ -175,7 +163,6 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
     assert_eq(expect, got)
 
 
-@pytest.mark.skipif(not _have_cupy, reason="CuPy is not installed")
 def test_column_from_ephemeral_cupy():
     # Test that we keep a reference to the ephemeral
     # CuPy array. If we didn't, then `a` would end
@@ -187,7 +174,6 @@ def test_column_from_ephemeral_cupy():
     assert_eq(pd.Series([1, 1, 1]), b)
 
 
-@pytest.mark.skipif(not _have_cupy, reason="CuPy is not installed")
 def test_column_from_ephemeral_cupy_try_lose_reference():
     # Try to lose the reference we keep to the ephermal
     # CuPy array

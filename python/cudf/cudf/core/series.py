@@ -5,6 +5,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
@@ -141,9 +142,6 @@ class Series(object):
 
     @property
     def values(self):
-        if not utils._have_cupy:
-            raise ModuleNotFoundError("CuPy was not found.")
-        import cupy
 
         if is_categorical_dtype(self.dtype) or np.issubdtype(
             self.dtype, np.dtype("object")
@@ -153,9 +151,13 @@ class Series(object):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
+        # numbautils.PatchedNumbaDeviceArray() is a
+        # temporary fix for CuPy < 7.0, numba = 0.46
         return cupy.asarray(
-            # Temporary fix for CuPy < 7.0, numba = 0.46
-            numbautils.PatchedNumbaDeviceArray(self.to_gpu_array())
+            numbautils.PatchedNumbaDeviceArray(self._column._data_view())
         )
 
     @property
@@ -1422,7 +1424,9 @@ class Series(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+        return cudautils.compact_mask_bytes(self._column._data_view())
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -1476,7 +1480,7 @@ class Series(object):
         """Sort by the index.
         """
         inds = self.index.argsort(ascending=ascending)
-        return self.take(inds.to_gpu_array())
+        return self.take(inds)
 
     def sort_values(self, ascending=True, na_position="last"):
         """
@@ -1511,7 +1515,7 @@ class Series(object):
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        index = self.index.take(inds.to_gpu_array())
+        index = self.index.take(inds)
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
@@ -1804,6 +1808,10 @@ class Series(object):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
         return self._column.product(dtype=dtype)
+
+    def prod(self, axis=None, skipna=True, dtype=None):
+        """Alias for product"""
+        return self.product(axis=axis, skipna=skipna, dtype=dtype)
 
     def cummin(self, axis=0, skipna=True):
         """Compute the cumulative minimum of the series"""
@@ -2098,9 +2106,10 @@ class Series(object):
         if self.null_count != 0:
             msg = "masked series not supported by this operation"
             raise NotImplementedError(msg)
+
         vmin = self.min()
         vmax = self.max()
-        gpuarr = self.to_gpu_array()
+        gpuarr = self._column._data_view()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
@@ -2203,9 +2212,12 @@ class Series(object):
             self._column, initial_hash_values=initial_hash
         )
 
+        if hashed_values.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
         mod_vals = cudautils.modulo(hashed_values.to_gpu_array(), stop)
-        return Series(mod_vals)
+        return Series(mod_vals, index=self.index)
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True

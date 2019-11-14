@@ -107,10 +107,10 @@ cdef class Column:
         dtype = cudf_to_np_types[c_col.get()[0].type().id()]
         has_nulls = c_col.get()[0].has_nulls()
         cdef column_contents contents = c_col.get()[0].release()
-        data = DeviceBuffer.from_ptr(contents.data.release())
+        data = DeviceBuffer.from_unique_ptr(move(contents.data))
         data = Buffer.from_device_buffer(data)
         if has_nulls:
-            mask = DeviceBuffer.from_ptr(contents.null_mask.release())
+            mask = DeviceBuffer.from_unique_ptr(move(contents.null_mask))
             mask = Buffer.from_device_buffer(mask)
         else:
             mask = None
