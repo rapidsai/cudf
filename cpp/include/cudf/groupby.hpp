@@ -111,6 +111,16 @@ struct aggregation_result {
 };
 
 /**
+ * @brief Opaque type representing the group labels for an aggregation result.
+ * 
+ * A pointer to an instance of this opaque type is returned from
+ * `groupby::aggregate`. This instance may be passed into `groupby::groups` in
+ * order to materialize the groups' unique keys in the same order as the results
+ * from the aggregation.
+ */
+class group_labels;
+
+/**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
 class groupby {
@@ -155,10 +165,18 @@ class groupby {
    * For each `aggregation` in a request, `values[i]` is aggregated with
    * all other `values[j]` where rows `i` and `j` in `keys` are equivalent.
    *
-   * The order of the values in the results correspond to the order returned by
-   * `groups()`.
-   *
    * The `size()` of the request column must equal `keys.num_rows()`.
+   *
+   * For every `aggregation_request` an `aggregation_result` will be returned.
+   * The `aggregation_result` holds the resulting column(s) for each requested
+   * aggregation on the `request`s values. The order of the columns in each
+   * result is the same order as was specified in the request.
+   *
+   * The values within the columns across all aggregation_results share the same
+   * order, however, that order is arbitrary. The returned `group_labels` opaque
+   * object encodes the order of the values. In order to materialize the
+   * corresponding row from `keys` for each group, the `group_labels` may be
+   * passed to `groupby::groups`.
    *
    * @throws cudf::logic_error If `requests[i].values.size() !=
    * keys.num_rows()`.
@@ -184,24 +202,31 @@ class groupby {
    * @param requests The set of columns to aggregate and the aggregations to
    * perform
    * @param mr Memory resource used to allocate the returned table and columns
-   * @return Vector of `aggregation_results` for each request in the same order
-   * as specified in `requests`.
+   * @return Pair containing vector of `aggregation_results` for each request in
+   * the same order as specified in `requests` and `group_labels` that indicates
+   * the order of the values in the results.
    */
-  std::vector<aggregation_result> aggregate(
+  std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
+  aggregate(
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Returns table with each groups unique row from `keys`.
+   * @brief Materializes the table of each group's unique row from `keys`
    *
-   * The keys will be returned in a sorted order where all columns are in
-   * ascending order. If `ignore_null_keys == false`, then null elements will be
-   * ordered after all other values.
+   * Uses a `group_labels` returned from a `groupby::aggregate` to return a
+   * table of the unique rows from `keys` in the same order as the values in the
+   * `aggregation_result`s.
    *
+   * This operation takes ownership of and consumes the `group_labels` object.
+   *
+   * @param labels Labels from a `groupby::aggregate` that determines the order
+   * of the rows in the returned table.
    * @param mr Memory resource used to allocate the returned table
-   * @return Table of unique keys.
+   * @return Table of unique keys in the order determined by the `group_labels`
    */
   std::unique_ptr<experimental::table> groups(
+      std::unique_ptr<group_labels> labels,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  private:
@@ -218,9 +243,10 @@ class groupby {
    * @brief Dispatches to the appropriate implementation to satisfy the
    * aggregation requests.
    */
-  std::vector<aggregation_result> dispatch_aggregation(
-      std::vector<aggregation_request> const& requests, cudaStream_t stream,
-      rmm::mr::device_memory_resource* mr);
+  std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
+  dispatch_aggregation(std::vector<aggregation_request> const& requests,
+                       cudaStream_t stream,
+                       rmm::mr::device_memory_resource* mr);
 };
 }  // namespace groupby
 }  // namespace experimental

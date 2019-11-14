@@ -30,6 +30,7 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 
+
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation() {
   return std::make_unique<aggregation>(aggregation::SUM);
@@ -73,9 +74,10 @@ groupby::groupby(table_view const& keys, bool ignore_null_keys,
       _null_precedence{null_precedence} {}
 
 // Select hash vs. sort groupby implementation
-std::vector<aggregation_result> groupby::dispatch_aggregation(
-    std::vector<aggregation_request> const& requests, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
+groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
+                              cudaStream_t stream,
+                              rmm::mr::device_memory_resource* mr) {
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (not _keys_are_sorted and
@@ -88,9 +90,9 @@ std::vector<aggregation_result> groupby::dispatch_aggregation(
 }
 
 // Compute aggregation requests
-std::vector<aggregation_result> groupby::aggregate(
-    std::vector<aggregation_request> const& requests,
-    rmm::mr::device_memory_resource* mr) {
+std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
+groupby::aggregate(std::vector<aggregation_request> const& requests,
+                   rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
                            [this](auto const& request) {
                              return request.values.size() == _keys.num_rows();
