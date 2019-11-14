@@ -41,11 +41,12 @@ namespace detail
  * ```
  *
  * @param strings Strings instance for this operation.
- * @param gather_map The indices with which to select strings for the new column.
- *        Values must be within [0,size()) range.
- * @param stream CUDA stream to use kernels in this method.
+ * @param begin Start of index iterator.
+ * @param end End of index iterator.
+ * @param ignore_out_of_bounds If true, indices outside the column's range are ignored.
  * @param mr Resource for allocating device memory.
- * @return New strings column of size indices.size()
+ * @param stream CUDA stream to use kernels in this method.
+ * @return New strings column containing the gather strings only
  */
 template<typename MapIterator>
 std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
@@ -103,7 +104,6 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
-
 
 } // namespace detail
 } // namespace strings
