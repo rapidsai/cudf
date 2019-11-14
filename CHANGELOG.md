@@ -94,6 +94,7 @@
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3271 Update rmm API based on `rmm.reinitialize(...)` change
 - PR #3266 Remove optional checks for CuPy
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
@@ -161,6 +162,7 @@
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
+
 
 
 # cuDF 0.10.0 (16 Oct 2019)
