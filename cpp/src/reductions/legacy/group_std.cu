@@ -27,21 +27,6 @@
 
 namespace {
 
-template <typename T>
-void print(rmm::device_vector<T> const& d_vec, std::string label = "") {
-  thrust::host_vector<T> h_vec = d_vec;
-  printf("%s \t", label.c_str());
-  for (auto &&i : h_vec)  std::cout << i << " ";
-  printf("\n");
-}
-
-template <typename T>
-void print(gdf_column const& col, std::string label = "") {
-  auto col_data = reinterpret_cast<T*>(col.data);
-  auto d_vec = rmm::device_vector<T>(col_data, col_data+col.size);
-  print(d_vec, label);
-}
-
 struct var_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void >
@@ -53,10 +38,6 @@ struct var_functor {
              bool is_std,
              cudaStream_t stream)
   {
-    print(group_labels, "labels");
-    print(group_sizes, "sizes");
-    print<T>(values, "values");
-
     auto values_data = static_cast<const T*>(values.data);
     auto result_data = static_cast<double *>(result->data);
     auto values_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(values.valid);
@@ -78,7 +59,6 @@ struct var_functor {
                             }),
                           thrust::make_discard_iterator(),
                           sums.begin());
-    print(sums, "sums");
 
     // TODO: use target_type for sums and result_data
     T* d_sums = sums.data().get();
