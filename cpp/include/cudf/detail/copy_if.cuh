@@ -106,8 +106,7 @@ cudf::size_type get_output_size(cudf::size_type * block_counts,
 template <typename T, typename Filter,
           int block_size, bool has_validity>
 __launch_bounds__(block_size)
-__global__ void scatter_kernel(T* __restrict__ output_data,
-                               cudf::bitmask_type * __restrict__ output_valid,
+__global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
                                cudf::size_type * output_null_count,
                                cudf::column_device_view input_view,
                                cudf::size_type  * __restrict__ block_offsets,
@@ -115,6 +114,9 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
                                cudf::size_type per_thread,
                                Filter filter)
 {
+  T* __restrict__ output_data = output_view.data<T>();
+  cudf::bitmask_type * __restrict__ output_valid = output_view.null_mask();
+  constexpr cudf::size_type leader_lane{0};
   static_assert(block_size <= 1024, "Maximum thread block size exceeded");
 
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -155,8 +157,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
     // each warp shares its total valid count to shared memory to ease
     // computing the total number of valid / non-null elements written out.
     // note maximum block size is limited to 1024 by this, but that's OK
-    __shared__ uint32_t warp_valid_counts[has_validity ? cudf::experimental::detail::warp_size : 1];
-    if (has_validity && threadIdx.x < cudf::experimental::detail::warp_size) warp_valid_counts[threadIdx.x] = 0;
+    cudf::size_type warp_valid_counts{0};
 
     __syncthreads(); // wait for shared data and validity mask to be complete
 
@@ -188,7 +189,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
         // all zero before the kernel
 
         if (lane == 0 && valid_warp != 0) {
-          warp_valid_counts[wid] = __popc(valid_warp);
+          warp_valid_counts = __popc(valid_warp);
           if (wid > 0 && wid < last_warp)
             output_valid[valid_index] = valid_warp;
           else {
@@ -201,7 +202,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
           uint32_t valid_warp =
             __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
-            warp_valid_counts[wid] += __popc(valid_warp);
+            warp_valid_counts += __popc(valid_warp);
             atomicOr(&output_valid[valid_index + num_warps], valid_warp);
           }
         }
@@ -211,12 +212,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
 
       // Compute total null_count for this block and add it to global count
       if (threadIdx.x < cudf::experimental::detail::warp_size) {
-        uint32_t my_valid_count = warp_valid_counts[threadIdx.x];
-
-        __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-
-        uint32_t block_valid_count =
-          cub::WarpReduce<uint32_t>(temp_storage).Sum(my_valid_count);
+          cudf::size_type block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
 
         if (lane == 0) { // one thread computes and adds to null count
           atomicAdd(output_null_count, block_sum - block_valid_count);
@@ -272,7 +268,7 @@ struct scatter_functor
                                           block_size, per_thread};
 
     rmm::device_scalar<cudf::size_type> null_count{0, stream, mr};
-    if (has_valid) {
+    if (output.nullable()) {
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
       CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()), 0,
@@ -280,13 +276,14 @@ struct scatter_functor
                                stream));
     }
     
+    auto output_device_view  = cudf::mutable_column_device_view::create(output, stream);
     auto input_device_view  = cudf::column_device_view::create(input, stream);
     scatter<<<grid.num_blocks, block_size, 0, stream>>>
-      (output.data<T>(), output.null_mask(), null_count.data(),
+      (*output_device_view, null_count.data(),
        *input_device_view, block_offsets, input.size(), per_thread, filter);
 
     if (has_valid) {
-      output.set_null_count(null_count.value());
+      output_column->set_null_count(null_count.value());
     }
     return output_column;
   }
