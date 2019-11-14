@@ -36,7 +36,28 @@ struct FixedWidthColumnWrapperTest
 
 TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(FixedWidthColumnWrapperTest, First) { ASSERT_TRUE(true); }
+TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(sequence, sequence);
+  cudf::column_view view = col;
+  EXPECT_EQ(view.size(), 0);
+  EXPECT_EQ(view.head(), nullptr);
+  EXPECT_EQ(view.type(), this->data_type());
+  EXPECT_FALSE(view.nullable());
+  EXPECT_FALSE(view.has_nulls());
+  EXPECT_EQ(view.offset(), 0);
+}
+TYPED_TEST(FixedWidthColumnWrapperTest, EmptyList) {
+  cudf::test::fixed_width_column_wrapper<TypeParam> col{};
+  cudf::column_view view = col;
+  EXPECT_EQ(view.size(), 0);
+  EXPECT_EQ(view.head(), nullptr);
+  EXPECT_EQ(view.type(), this->data_type());
+  EXPECT_FALSE(view.nullable());
+  EXPECT_FALSE(view.has_nulls());
+  EXPECT_EQ(view.offset(), 0);
+}
 
 TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableIteratorConstructor) {
   auto sequence = cudf::test::make_counting_transform_iterator(
@@ -171,4 +192,3 @@ TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull) {
   EXPECT_EQ(view.null_count(), 5);
   EXPECT_EQ(view.offset(), 0);
 }
-

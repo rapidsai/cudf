@@ -3,6 +3,6 @@ from .json import read_json
 from .orc import read_orc
 
 try:
-    from .parquet import read_parquet
+    from .parquet import read_parquet, to_parquet
 except ImportError:
     pass
