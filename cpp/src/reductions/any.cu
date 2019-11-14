@@ -20,6 +20,7 @@
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::any( column_view const& col, cudf::data_type const output_dtype, cudaStream_t stream)
 {
+  CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::BOOL8), "any() operation can be applied with output type `bool8` only");
   using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<cudf::experimental::reduction::op::max>;
   return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, stream);
 }
