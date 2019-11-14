@@ -79,6 +79,7 @@
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3191 Port NVStrings integer convert ops to cudf column
 - PR #3189 Port NVStrings find ops to cudf column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`

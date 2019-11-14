@@ -509,6 +509,7 @@ add_library(cudf
             src/strings/char_types/char_types.cu
             src/strings/case.cu
             src/strings/find.cu
+            src/strings/convert/convert_integers.cu
             src/strings/convert/convert_booleans.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
