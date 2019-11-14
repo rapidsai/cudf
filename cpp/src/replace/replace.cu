@@ -209,13 +209,12 @@ __device__ auto get_new_value(cudf::size_type         idx,
                     cudf::column_view const& values_to_replace,
                     cudf::column_view const& replacement_values,
                     cudf::mutable_column_view& output,
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                     cudaStream_t stream = 0)
     {
       cudf::size_type *valid_count = nullptr;
+      rmm::device_scalar<cudf::size_type> valid_counter(0);
       if (output.nullable()) {
-        valid_count = reinterpret_cast<cudf::size_type*>(mr->allocate(sizeof(cudf::size_type), stream));
-        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(cudf::size_type), stream));
+        valid_count = valid_counter.data();
       }
 
       cudf::experimental::detail::grid_1d grid{output.size(), BLOCK_SIZE, 1};
@@ -259,21 +258,18 @@ __device__ auto get_new_value(cudf::size_type         idx,
                                  cudaMemcpyDefault,
                                  stream));
         output.set_null_count(output.size() - valids);
-        mr->deallocate(valid_count, sizeof(cudf::size_type), stream);
       }
     }
+      template <typename col_type,
+                std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
+      void operator()(cudf::column_view const& input_col,
+                      cudf::column_view const& values_to_replace,
+                      cudf::column_view const& replacement_values,
+                      cudf::mutable_column_view& output,
+                      cudaStream_t stream = 0){
+     CUDF_FAIL("Non fixed-width types are not supported.");
+    };
   };
-
-  template<>
-  void replace_kernel_forwarder::operator()<cudf::string_view> (cudf::column_view const& input_col,
-                                                                cudf::column_view const& values_to_replace,
-                                                                cudf::column_view const& replacement_values,
-                                                                cudf::mutable_column_view& output,
-                                                                rmm::mr::device_memory_resource* mr,
-                                                                cudaStream_t stream) {
-    CUDF_FAIL("Strings are not supported yet for replacement.");
-  }
-
  } //end anonymous namespace
 
 namespace cudf{
@@ -321,7 +317,6 @@ namespace detail {
                                         values_to_replace,
                                         replacement_values,
                                         outputView,
-                                        mr,
                                         stream);
 
     CHECK_STREAM(stream);
@@ -354,35 +349,13 @@ namespace experimental {
 
 namespace{ //anonymous
 
-template <typename Type>
+template <typename Type, typename iter>
 __global__
-void replace_nulls_with_scalar(cudf::size_type size,
-                               const Type* __restrict__ in_data,
-                               const cudf::bitmask_type* __restrict__ in_valid,
-                               const Type* __restrict__ replacement,
-                               Type* __restrict__ out_data)
-{
-  int tid = threadIdx.x;
-  int blkid = blockIdx.x;
-  int blksz = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step = blksz * gridsz;
-
-  for (int i=start; i<size; i+=step) {
-    out_data[i] = cudf::bit_is_set(in_valid, i)? in_data[i] : *replacement;
-  }
-}
-
-
-template <typename Type>
-__global__
-void replace_nulls_with_column(cudf::size_type size,
-                               Type const* __restrict__ in_data,
-                               cudf::bitmask_type const* __restrict__ in_valid,
-                               Type const* __restrict__ replacement,
-                               Type* __restrict__ out_data)
+void replace_nulls(cudf::size_type size,
+                   const Type* __restrict__ in_data,
+                   const cudf::bitmask_type* __restrict__ in_valid,
+                   iter replacement,
+                   Type* __restrict__ out_data)
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
@@ -397,7 +370,6 @@ void replace_nulls_with_column(cudf::size_type size,
   }
 }
 
-
 /* --------------------------------------------------------------------------*/
 /**
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
@@ -405,31 +377,32 @@ void replace_nulls_with_column(cudf::size_type size,
  */
 /* ----------------------------------------------------------------------------*/
 struct replace_nulls_column_kernel_forwarder {
-  template <typename col_type>
+  template <typename col_type,
+            std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   void operator()(cudf::column_view const& input,
                   cudf::column_view const& replacement,
                   cudf::mutable_column_view& output,
                   cudaStream_t stream = 0)
   {
     cudf::size_type nrows = input.size();
-    cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
+    cudf::experimental::detail::grid_1d grid{nrows, BLOCK_SIZE};
 
-    replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
-                                                                          input.data<col_type>(),
-                                                                          input.null_mask(),
-                                                                          replacement.data<col_type>(),
-                                                                          output.data<col_type>());
+    replace_nulls<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
+                                                              input.data<col_type>(),
+                                                              input.null_mask(),
+                                                              replacement.data<col_type>(),
+                                                              output.data<col_type>());
 
   }
+  template <typename col_type,
+            std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
+  void operator()(cudf::column_view const& input,
+                  cudf::column_view const& replacement,
+                  cudf::mutable_column_view& output,
+                  cudaStream_t stream = 0) {
+    CUDF_FAIL("Non-fixed-width types are not supported for replace.");
+  }
 };
-
-template<>
-void replace_nulls_column_kernel_forwarder::operator ()<cudf::string_view>(cudf::column_view const& input,
-                                                                           cudf::column_view const& replacement,
-                                                                           cudf::mutable_column_view& output,
-                                                                           cudaStream_t stream){
-  CUDF_FAIL("Strings not supported for replacement.");
-}
 
 
 /* --------------------------------------------------------------------------*/
@@ -439,36 +412,35 @@ void replace_nulls_column_kernel_forwarder::operator ()<cudf::string_view>(cudf:
  */
 /* ----------------------------------------------------------------------------*/
 struct replace_nulls_scalar_kernel_forwarder {
-  template <typename col_type>
+  template <typename col_type,
+            std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   void operator()(cudf::column_view const& input,
                   cudf::scalar const& replacement,
                   cudf::mutable_column_view& output,
-                  cudaStream_t stream = 0,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                  cudaStream_t stream = 0)
   {
     cudf::size_type nrows = input.size();
-    cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
+    cudf::experimental::detail::grid_1d grid{nrows, BLOCK_SIZE};
 
     using ScalarType = cudf::experimental::scalar_type_t<col_type>;
     auto s1 = static_cast<ScalarType const&>(replacement);
 
-    replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
-                                                                          input.data<col_type>(),
-                                                                          input.null_mask(),
-                                                                          s1.data(),
-                                                                          output.data<col_type>());
+    replace_nulls<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
+                                                              input.data<col_type>(),
+                                                              input.null_mask(),
+                                                              thrust::make_constant_iterator(s1.value()),
+                                                              output.data<col_type>());
+  }
+
+  template <typename col_type,
+            std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
+  void operator()(cudf::column_view const& input,
+                  cudf::scalar const& replacement,
+                  cudf::mutable_column_view& output,
+                  cudaStream_t stream = 0) {
+    CUDF_FAIL("Non-fixed-width types are not supported for replace.");
   }
 };
-
-template<>
-void replace_nulls_scalar_kernel_forwarder::operator ()<cudf::string_view>(cudf::column_view const& input,
-                                                                           cudf::scalar const& replacement,
-                                                                           cudf::mutable_column_view& output,
-                                                                           cudaStream_t stream,
-                                                                           rmm::mr::device_memory_resource* mr) {
-  CUDF_FAIL("Strings not supported for replacement");
-}
-
 
 } //end anonymous namespace
 
@@ -535,8 +507,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                       input,
                                       replacement,
                                       outputView,
-                                      stream,
-                                      mr);
+                                      stream);
   return output;
 }
 
