@@ -30,6 +30,7 @@
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
 - PR #3368 Enable dropna argument in dask_cudf groupby
+- PR #3298 add null replacement iterator for column_device_view
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 
 ## Improvements
@@ -113,6 +114,7 @@
 - PR #3299 Define and implement new `is_sorted` APIs
 - PR #3328 Partition by stripes in dask_cudf ORC reader
 - PR #3243 Use upstream join code in dask_cudf
+- PR #3309 Add java and JNI bindings for search bounds
 
 ## Bug Fixes
 
@@ -158,6 +160,7 @@
 - PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
+- PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 
 
 # cuDF 0.10.0 (16 Oct 2019)
