@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/datetime.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -32,17 +33,6 @@
 namespace cudf {
 namespace datetime {
 namespace detail {
-
-enum class datetime_component {
-  invalid = 0,
-  year,
-  month,
-  day,
-  weekday,
-  hour,
-  minute,
-  second,
-};
 
 template <typename Timestamp, datetime_component Component>
 struct extract_component_operator {
@@ -118,73 +108,67 @@ struct launch_extract_component {
 };
 
 template <datetime_component Component>
-std::unique_ptr<column> extract_component(column_view const& input,
+std::unique_ptr<column> extract_component(column_view const& column,
                                           cudaStream_t stream,
                                           rmm::mr::device_memory_resource* mr) {
-  auto size = input.size();
+  auto size = column.size();
   auto type = data_type{type_id::INT16};
-  auto null_mask = copy_bitmask(input, stream, mr);
-  auto output = std::make_unique<column>(
+  auto null_mask = copy_bitmask(column, stream, mr);
+  auto output = std::make_unique<cudf::column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      null_mask, input.null_count(), std::vector<std::unique_ptr<column>>{});
+      null_mask, column.null_count(),
+      std::vector<std::unique_ptr<cudf::column>>{});
 
   auto launch = launch_extract_component<Component>{
-      *column_device_view::create(input),
+      *column_device_view::create(column),
       static_cast<mutable_column_view>(*output)};
 
-  experimental::type_dispatcher(input.type(), launch, stream);
+  experimental::type_dispatcher(column.type(), launch, stream);
 
   return output;
 }
 }  // namespace detail
 
 std::unique_ptr<column> extract_year(column_view const& column,
-                                     cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::year>(
-      column, stream, mr);
+  return detail::extract_component<detail::datetime_component::year>(column, 0,
+                                                                     mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
-                                      cudaStream_t stream,
                                       rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::month>(
-      column, stream, mr);
+  return detail::extract_component<detail::datetime_component::month>(column, 0,
+                                                                      mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column,
-                                    cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::day>(column,
-                                                                    stream, mr);
+  return detail::extract_component<detail::datetime_component::day>(column, 0,
+                                                                    mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
-                                        cudaStream_t stream,
                                         rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::weekday>(
-      column, stream, mr);
+  return detail::extract_component<detail::datetime_component::weekday>(column,
+                                                                        0, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column,
-                                     cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::hour>(
-      column, stream, mr);
+  return detail::extract_component<detail::datetime_component::hour>(column, 0,
+                                                                     mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
-                                       cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::minute>(
-      column, stream, mr);
+  return detail::extract_component<detail::datetime_component::minute>(column,
+                                                                       0, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
-                                       cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::second>(
-      column, stream, mr);
+  return detail::extract_component<detail::datetime_component::second>(column,
+                                                                       0, mr);
 }
 
 }  // namespace datetime
