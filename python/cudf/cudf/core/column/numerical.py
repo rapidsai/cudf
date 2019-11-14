@@ -40,12 +40,6 @@ class NumericalColumn(column.ColumnBase):
         size = data.size // dtype.itemsize
         super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
 
-    def serialize(self):
-        header, frames = super(NumericalColumn, self).serialize()
-        header["type"] = pickle.dumps(type(self))
-        header["dtype"] = self._dtype.str
-        return header, frames
-
     def __contains__(self, item):
         """
         Returns True if column contains item, else False.
@@ -60,15 +54,6 @@ class NumericalColumn(column.ColumnBase):
         except Exception:
             return False
         return libcudf.search.contains(self, item)
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        data, mask = super(NumericalColumn, cls).deserialize(header, frames)
-        dtype = header["dtype"]
-        col = cls(
-            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
-        )
-        return col
 
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [

@@ -652,7 +652,7 @@ class StringColumn(column.ColumnBase):
         return self.to_arrow().to_pandas().array
 
     def serialize(self):
-        header = {"null_count": self._null_count}
+        header = {"null_count": self.null_count}
         header["type"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
@@ -705,7 +705,7 @@ class StringColumn(column.ColumnBase):
             ncount=header["null_count"],
             bdevmem=True,
         )
-        return data
+        return column.as_column(data)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":

@@ -263,37 +263,42 @@ class CategoricalColumn(column.ColumnBase):
         return self._encode(item) in self.as_numerical
 
     def serialize(self):
-        header, frames = super(CategoricalColumn, self).serialize()
-        header["ordered"] = self.ordered
-        header["categories"], category_frames = self.categories.serialize()
-        header["category_frame_count"] = len(category_frames)
+        header = {}
+        frames = []
         header["type"] = pickle.dumps(type(self))
-        header["dtype"] = self._dtype.str
-        frames.extend(category_frames)
+        header["dtype"], dtype_frames = self.dtype.serialize()
+        header["dtype_frames_count"] = len(dtype_frames)
+        frames.extend(dtype_frames)
+        header["data"], data_frames = self.codes.serialize()
+        header["data_frames_count"] = len(data_frames)
+        frames.extend(data_frames)
+        if self.mask is not None:
+            mask_frames = [self._mask_view()]
+        else:
+            mask_frames = []
+        frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        data, mask = super(CategoricalColumn, cls).deserialize(header, frames)
-
-        # Handle categories that were serialized as a cudf.Column
-        category_frames = frames[
-            len(frames) - header["category_frame_count"] :
-        ]
-        cat_typ = pickle.loads(header["categories"]["type"])
-        _categories = cat_typ.deserialize(
-            header["categories"], category_frames
+        n_dtype_frames = header["dtype_frames_count"]
+        dtype = CategoricalDtype.deserialize(
+            header["dtype"], frames[:n_dtype_frames]
         )
+        n_data_frames = header["data_frames_count"]
 
-        categories = column.as_column(_categories)
-
-        return cls(
-            data=data,
-            mask=mask,
-            categories=categories,
-            ordered=header["ordered"],
+        column_type = pickle.loads(header["data"]["type"])
+        data = column_type.deserialize(
+            header["data"],
+            frames[n_dtype_frames : n_dtype_frames + n_data_frames],
         )
+        mask = None
+        if header["frame_count"] > n_dtype_frames + n_data_frames:
+            mask = Buffer.from_array_like(
+                frames[n_dtype_frames + n_data_frames]
+            )
+        return column.build_column(data=data.data, dtype=dtype, mask=mask)
 
     @property
     def as_numerical(self):

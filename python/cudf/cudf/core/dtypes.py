@@ -67,3 +67,23 @@ class CategoricalDtype(ExtensionDtype):
 
     def construct_from_string(self):
         raise NotImplementedError()
+
+    def serialize(self):
+        header = {}
+        frames = []
+        header["data_dtype"] = self.data_dtype.str
+        header["ordered"] = self.ordered
+        categories_buffer = []
+        if self.categories is not None:
+            categories_buffer = [self.categories.as_column()._data_view()]
+        frames.extend(categories_buffer)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        data_dtype = header["data_dtype"]
+        ordered = header["ordered"]
+        categories = frames[0]
+        return cls(
+            data_dtype=data_dtype, categories=categories, ordered=ordered
+        )

@@ -1,7 +1,6 @@
 from cudf.core.column.categorical import CategoricalColumn  # noqa: F401
 from cudf.core.column.column import (  # noqa: F401
     ColumnBase,
-    TypedColumnBase,
     as_column,
     build_column,
     column_applymap,

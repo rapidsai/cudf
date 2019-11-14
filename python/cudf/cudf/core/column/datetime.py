@@ -53,21 +53,6 @@ class DatetimeColumn(column.ColumnBase):
             return False
         return item.astype("int_") in self.as_numerical
 
-    def serialize(self):
-        header, frames = super(DatetimeColumn, self).serialize()
-        header["type"] = pickle.dumps(type(self))
-        header["dtype"] = self._dtype.str
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        data, mask = super(DatetimeColumn, cls).deserialize(header, frames)
-        dtype = header["dtype"]
-        col = cls(
-            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
-        )
-        return col
-
     @classmethod
     def from_numpy(cls, array):
         cast_dtype = array.dtype.type == np.int64

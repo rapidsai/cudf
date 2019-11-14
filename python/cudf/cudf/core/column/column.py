@@ -805,59 +805,29 @@ class ColumnBase(Column):
         return output
 
     def serialize(self):
-        header = {"null_count": self.null_count}
+        header = {}
         frames = []
-
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        header["data_buffer"], data_frames = self.data.serialize()
-
-        header["data_frame_count"] = len(data_frames)
+        data_frames = [self._data_view()]
         frames.extend(data_frames)
 
-        if self._mask:
-            header["mask_buffer"], mask_frames = self._mask.serialize()
-            header["mask_frame_count"] = len(mask_frames)
+        if self.mask is not None:
+            mask_frames = [self._mask_view()]
         else:
-            header["mask_buffer"] = []
-            header["mask_frame_count"] = 0
-            mask_frames = {}
-
+            mask_frames = []
         frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
-
-class TypedColumnBase(ColumnBase):
-    """Base class for all typed column
-    e.g. NumericalColumn, CategoricalColumn
-
-    This class provides common operations to implement logical view and
-    type-based operations for the column.
-
-    Notes
-    -----
-    Not designed to be instantiated directly.  Instantiate subclasses instead.
-    """
-
-    def __init__(self, **kwargs):
-        dtype = kwargs.pop("dtype")
-        super(TypedColumnBase, self).__init__(**kwargs)
-        # Logical dtype
-        self._dtype = pd.api.types.pandas_dtype(dtype)
-
-    @property
-    def dtype(self):
-        return self._dtype
-
-    def find_and_replace(self, to_replace, values):
-        raise NotImplementedError
-
-    def fillna(self, fill_value, inplace):
-        raise NotImplementedError
-
-    def searchsorted(self, value, side="left"):
-        raise NotImplementedError
+    @classmethod
+    def deserialize(cls, header, frames):
+        dtype = header["dtype"]
+        data = Buffer.from_array_like(frames[0])
+        mask = None
+        if header["frame_count"] > 1:
+            mask = Buffer.from_array_like(frames[1])
+        return build_column(data=data, dtype=dtype, mask=mask)
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
