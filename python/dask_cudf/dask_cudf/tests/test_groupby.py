@@ -195,3 +195,37 @@ def test_groupby_split_out(split_out, column):
     )
 
     dd.assert_eq(gddf_result, ddf_result, check_index=False)
+
+
+@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.parametrize(
+    "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
+)
+def test_groupby_dropna(dropna, by):
+
+    # NOTE: This test is borrowed from upstream dask
+    #       (dask/dask/dataframe/tests/test_groupby.py)
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, None, 1, 3, None, 3, 1, 3],
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    df["b"] = df["b"].astype("datetime64[ns]")
+    df["d"] = df["c"].astype("category")
+    ddf = dask_cudf.from_cudf(df, npartitions=3)
+
+    if dropna is None:
+        dask_result = ddf.groupby(by).e.sum()
+        cudf_result = df.groupby(by).e.sum()
+    else:
+        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+    if by in ["c", "d"]:
+        # Loose string/category index name in cudf...
+        dask_result = dask_result.compute()
+        dask_result.index.name = cudf_result.index.name
+
+    dd.assert_eq(dask_result, cudf_result)

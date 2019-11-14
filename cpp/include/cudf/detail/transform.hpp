@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <memory>
+#include <cudf/transform.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -35,7 +34,7 @@ namespace detail {
  *
  * @param input         An immutable view of the input column to transform
  * @param unary_udf     The PTX/CUDA string of the unary function to apply
- * @param outout_type   The output type that is compatible with the output type in the PTX code
+ * @param outout_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param mr            The memory resource to use for for all device allocations
  * @param stream        CUDA stream on which to execute kernels
@@ -44,7 +43,7 @@ namespace detail {
  **/
 std::unique_ptr<column> transform(
   column_view const& input,
-  const std::string &unary_udf,
+  std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),

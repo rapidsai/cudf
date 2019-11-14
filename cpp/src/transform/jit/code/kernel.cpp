@@ -22,7 +22,6 @@ namespace code {
 
 const char* kernel =
     R"***(
-    #include <cudf/types.h>
     #include <cudf/types.hpp>
 
     template <typename TypeOut, typename TypeIn>

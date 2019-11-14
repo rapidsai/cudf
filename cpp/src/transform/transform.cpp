@@ -26,7 +26,6 @@
 #include <jit/parser.h>
 #include "jit/code/code.h"
 
-#include <types.h.jit>
 #include <types.hpp.jit>
 
 namespace cudf {
@@ -39,7 +38,7 @@ void unary_operation(mutable_column_view output, column_view input,
                      const std::string& udf, data_type output_type, bool is_ptx,
                      cudaStream_t stream) {
  
-  std::string hash = "prog_transform." 
+  std::string hash = "prog_transform.experimental" 
     + std::to_string(std::hash<std::string>{}(udf));
 
   std::string cuda_source;
@@ -58,7 +57,7 @@ void unary_operation(mutable_column_view output, column_view input,
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
-    { cudf_types_h, cudf_types_hpp },
+    { cudf_types_hpp },
     { "-std=c++14" }, nullptr, stream
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
@@ -79,12 +78,12 @@ void unary_operation(mutable_column_view output, column_view input,
 namespace detail {
 
 std::unique_ptr<column> transform(column_view const& input,
-                                  const std::string &unary_udf,
+                                  std::string const& unary_udf,
                                   data_type output_type, bool is_ptx,
                                   rmm::mr::device_memory_resource *mr,
                                   cudaStream_t stream)
 {
-  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed width type.");
+  CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
 
   std::unique_ptr<column> output =
     make_numeric_column(output_type, input.size(), copy_bitmask(input),
@@ -106,7 +105,7 @@ std::unique_ptr<column> transform(column_view const& input,
 } // namespace detail
 
 std::unique_ptr<column> transform(column_view const& input,
-                                  const std::string &unary_udf,
+                                  std::string const& unary_udf,
                                   data_type output_type, bool is_ptx,
                                   rmm::mr::device_memory_resource *mr)
 {
