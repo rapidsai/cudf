@@ -15,61 +15,73 @@
  */
 
 #include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include "reduction_functions.hpp"
 
 namespace cudf {
 namespace experimental {
 
-gdf_scalar reduce(column_view const& col,
+// Allocate storage for a single identity scalar
+std::unique_ptr<scalar> make_identity_scalar(
+    data_type type, cudaStream_t stream=0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  if(is_numeric(type))
+    return  make_numeric_scalar(type, stream, mr);
+  else if(is_timestamp(type))
+    return make_timestamp_scalar(type, stream, mr);
+  else if(type == data_type(STRING))
+    return make_string_scalar("", stream, mr);
+  else 
+    CUDF_FAIL("Invalid type.");
+}
+
+std::unique_ptr<scalar> reduce(column_view const& col,
                   cudf::experimental::reduction::operators op,
                   cudf::data_type output_dtype, cudf::size_type ddof)
 {
-  gdf_scalar scalar;
-  //scalar.dtype = output_dtype; //TODO after cudf::scalar support
-  scalar.is_valid = false;  // the scalar is not valid for error case
+  std::unique_ptr<scalar> result = make_identity_scalar(output_dtype);
 
-  //TODO CUDF_EXPECTS(col != nullptr, "Input column is null");
   // check if input column is empty
-  if (col.size() <= col.null_count()) return scalar;
+  if (col.size() <= col.null_count()) return result;
 
   switch (op) {
     case cudf::experimental::reduction::SUM:
-      scalar = cudf::experimental::reduction::sum(col, output_dtype);
+      result = cudf::experimental::reduction::sum(col, output_dtype);
       break;
     case cudf::experimental::reduction::MIN:
-      scalar = cudf::experimental::reduction::min(col, output_dtype);
+      result = cudf::experimental::reduction::min(col, output_dtype);
       break;
     case cudf::experimental::reduction::MAX:
-      scalar = cudf::experimental::reduction::max(col, output_dtype);
+      result = cudf::experimental::reduction::max(col, output_dtype);
       break;
     case cudf::experimental::reduction::ANY:
-      scalar = cudf::experimental::reduction::any(col, output_dtype);
+      result = cudf::experimental::reduction::any(col, output_dtype);
       break;
     case cudf::experimental::reduction::ALL:
-      scalar = cudf::experimental::reduction::all(col, output_dtype);
+      result = cudf::experimental::reduction::all(col, output_dtype);
       break;
     case cudf::experimental::reduction::PRODUCT:
-      scalar = cudf::experimental::reduction::product(col, output_dtype);
+      result = cudf::experimental::reduction::product(col, output_dtype);
       break;
     case cudf::experimental::reduction::SUMOFSQUARES:
-      scalar =
+      result =
           cudf::experimental::reduction::sum_of_squares(col, output_dtype);
       break;
 
     case cudf::experimental::reduction::MEAN:
-      scalar = cudf::experimental::reduction::mean(col, output_dtype);
+      result = cudf::experimental::reduction::mean(col, output_dtype);
       break;
     case cudf::experimental::reduction::VAR:
-      scalar = cudf::experimental::reduction::variance(col, output_dtype, ddof);
+      result = cudf::experimental::reduction::variance(col, output_dtype, ddof);
       break;
     case cudf::experimental::reduction::STD:
-      scalar = cudf::experimental::reduction::standard_deviation(col, output_dtype, ddof);
+      result = cudf::experimental::reduction::standard_deviation(col, output_dtype, ddof);
       break;
     default:
       CUDF_FAIL("Unsupported reduction operator");
   }
 
-  return scalar;
+  return result;
 }
 
 }  // namespace experimental

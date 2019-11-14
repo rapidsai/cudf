@@ -22,7 +22,7 @@
 //                 The divisor used in calculations is N - ddof, where N
 //                 represents the number of elements.
 
-gdf_scalar cudf::experimental::reduction::standard_deviation(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
+std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)

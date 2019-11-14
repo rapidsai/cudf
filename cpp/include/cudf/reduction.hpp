@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/cudf.h>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 
@@ -62,7 +63,7 @@ enum operators {
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (timestamp, string...).
  * The null values are skipped for the operation.
- * If the column is empty, the member is_valid of the output gdf_scalar
+ * If the column is empty, the member is_valid of the output scalar
  * will contain `false`.
  *
  * @param[in] col Input column view
@@ -77,11 +78,11 @@ enum operators {
  *     (timestamp, string...), the same type must be specified.
  * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of `std` and `var` is `N - ddof`, where `N` is the population size.`
  *
- * @returns  gdf_scalar the result value
- * If the reduction fails, the member is_valid of the output gdf_scalar
+ * @returns  cudf::scalar the result value
+ * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduce(const column_view& col,
+std::unique_ptr<scalar> reduce(const column_view& col,
                   cudf::experimental::reduction::operators op,
                   cudf::data_type output_dtype, cudf::size_type ddof = 1);
 

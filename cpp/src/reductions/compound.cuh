@@ -20,7 +20,8 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp> //TODO remove gdf_dtype_of after cudf::scalar support
+#include <cudf/scalar/scalar_factories.hpp>
+#include <rmm/device_scalar.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -43,30 +44,30 @@ namespace compound {
  * @tparam has_nulls    true if column has nulls
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op, bool has_nulls>
-gdf_scalar compound_reduction(column_view const& col,
+std::unique_ptr<scalar> compound_reduction(column_view const& col,
                               data_type const output_dtype,
                               cudf::size_type ddof, cudaStream_t stream) {
-  gdf_scalar scalar;
-  scalar.dtype = gdf_dtype_of<ResultType>();
-  // TODO: after cudf::scalar support
-  // scalar.dtype = output_dtype;
-  scalar.is_valid = false;  // the scalar is not valid for error case
+  std::unique_ptr<scalar> result;
+  if(std::is_same<string_scalar::value_type, ResultType>::value) {
+    //TODO cudf::string_view support 
+    result = make_string_scalar("min/max/sum", stream);
+  } else if(is_numeric<ResultType>()) {
+    result = make_numeric_scalar(output_dtype, stream);
+  } else if(is_timestamp<ResultType>()) {
+    result = make_timestamp_scalar(output_dtype, stream);
+  } else {
+    CUDF_FAIL("Unexpected type");
+  }
+  result->set_valid(false);  // the scalar is not valid for error case
   cudf::size_type valid_count = col.size() - col.null_count();
 
   using intermediateOp = typename Op::template intermediate<ResultType>;
   // IntermediateType: intermediate structure, output type of `reduction_op` and
   // input type of `intermediateOp::ComputeResult`
   using IntermediateType = typename intermediateOp::IntermediateType;
+
+  rmm::device_scalar<IntermediateType> intermediate_result;
   IntermediateType intermediate{0};
-
-  // allocate temporary memory for the dev_result
-  void* dev_result = NULL;
-  RMM_TRY(RMM_ALLOC(&dev_result, sizeof(IntermediateType), stream));
-
-  // initialize output by identity value
-  CUDA_TRY(cudaMemcpyAsync(dev_result, &intermediate, sizeof(IntermediateType),
-                           cudaMemcpyHostToDevice, stream));
-  CHECK_STREAM(stream);
 
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
@@ -75,32 +76,29 @@ gdf_scalar compound_reduction(column_view const& col,
         experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
         typename Op::template transformer<ResultType>{});
 
-    detail::reduce(static_cast<IntermediateType*>(dev_result), it, col.size(),
+    detail::reduce(intermediate_result.data(), it, col.size(),
                    intermediate, typename Op::Op{}, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(),
         typename Op::template transformer<ResultType>{});
 
-    detail::reduce(static_cast<IntermediateType*>(dev_result), it, col.size(),
+    detail::reduce(intermediate_result.data(), it, col.size(),
                    intermediate, typename Op::Op{}, stream);
   }
 
-  // read back the dev_result to host memory
-  // TODO: asynchronous copy
-  CUDA_TRY(cudaMemcpy(&intermediate, dev_result, sizeof(IntermediateType),
-                      cudaMemcpyDeviceToHost));
-
-  // compute the dev_result value from intermediate value.
-  ResultType hos_result = intermediateOp::compute_result(intermediate, valid_count, ddof);
-  memcpy(&scalar.data, &hos_result, sizeof(ResultType));
-
-  // cleanup temporary memory
-  RMM_TRY(RMM_FREE(dev_result, stream));
+  // compute the hos_result value from intermediate value.
+  ResultType hos_result = intermediateOp::compute_result(intermediate_result.value(stream), valid_count, ddof);
+  using ScalarResultType = cudf::experimental::scalar_type_t<ResultType>;
+  auto dev_result = static_cast<ScalarResultType *>(result.get());
+  dev_result->set_value(hos_result);
 
   // set scalar is valid
-  if (col.null_count() < col.size()) scalar.is_valid = true;
-  return scalar;
+  if (col.null_count() < col.size())
+    result->set_valid(true);
+  else 
+    result->set_valid(false);
+  return result;
 };
 
 // @brief result type dispatcher for compound reduction (a.k.a. mean, var, std)
@@ -117,7 +115,7 @@ private:
 
 public:
     template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         if(col.has_nulls()) {
             return compound_reduction<ElementType, ResultType, Op, true >(col, output_dtype, ddof, stream);
@@ -127,7 +125,7 @@ public:
     }
 
     template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr >
-    gdf_scalar operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         CUDF_FAIL("Unsupported output data type");
     }
@@ -146,14 +144,14 @@ private:
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         return cudf::experimental::type_dispatcher(output_dtype,
             result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");

@@ -21,7 +21,7 @@
 
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp> //TODO remove gdf_dtype_of after cudf::scalar support
+#include <cudf/scalar/scalar_factories.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -42,23 +42,25 @@ namespace simple {
  * @tparam has_nulls    true if column has nulls
  * ----------------------------------------------------------------------------**/
 template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
-gdf_scalar simple_reduction(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+std::unique_ptr<scalar> simple_reduction(column_view const& col, data_type const output_dtype, cudaStream_t stream)
 {
-    gdf_scalar scalar;
-    scalar.dtype = gdf_dtype_of<ResultType>();
-    //TODO: after cudf::scalar support
-    //scalar.type = datatype(cudf::experimental::type_to_id<ResultType>())
-    scalar.is_valid = false; // the scalar is not valid for error case
+    std::unique_ptr<scalar> result;
+    if(std::is_same<string_scalar::value_type, ResultType>::value) {
+      //TODO cudf::string_view support 
+      result = make_string_scalar("min/max/sum", stream);
+    } else if(is_numeric<ResultType>()) {
+      result = make_numeric_scalar(output_dtype, stream);
+    } else if(is_timestamp<ResultType>()) {
+      result = make_timestamp_scalar(output_dtype, stream);
+    } else {
+      CUDF_FAIL("Unexpected type");
+    }
+    result->set_valid(false);
+    //TODO cudf::string_view support  string_view{"",0}
     ResultType identity = Op::Op::template identity<ResultType>();
 
-    //  allocate temporary memory for the result
-    ResultType *result = NULL;
-    RMM_TRY(RMM_ALLOC(&result, sizeof(ResultType), stream));
-
-    // initialize output by identity value
-    CUDA_TRY(cudaMemcpyAsync(result, &identity,
-            sizeof(ResultType), cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
+    using ScalarType = cudf::experimental::scalar_type_t<ResultType>;
+    auto dev_result = static_cast<ScalarType *>(result.get());
 
     // reduction by iterator
     auto dcol = cudf::column_device_view::create(col, stream);
@@ -66,26 +68,20 @@ gdf_scalar simple_reduction(column_view const& col, data_type const output_dtype
       auto it = thrust::make_transform_iterator(
           experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
           typename Op::template transformer<ResultType>{});
-      detail::reduce(result, it, col.size(), identity, typename Op::Op{}, stream);
+      detail::reduce(dev_result->data(), it, col.size(), identity, typename Op::Op{}, stream);
     } else {
       auto it = thrust::make_transform_iterator(
           dcol->begin<ElementType>(),
           typename Op::template transformer<ResultType>{});
-      detail::reduce(result, it, col.size(), identity, typename Op::Op{}, stream);
+      detail::reduce(dev_result->data(), it, col.size(), identity, typename Op::Op{}, stream);
     }
-
-    // read back the result to host memory
-    // TODO: asynchronous copy
-    CUDA_TRY(cudaMemcpy(&scalar.data, result,
-            sizeof(ResultType), cudaMemcpyDeviceToHost));
-
-    // cleanup temporary memory
-    RMM_TRY(RMM_FREE(result, stream));
 
     // set scalar is valid
     if (col.null_count() < col.size())
-      scalar.is_valid = true;
-    return scalar;
+      result->set_valid(true);
+    else
+      result->set_valid(false);
+    return result;
 };
 
 // @brief result type dispatcher for simple reduction (a.k.a. sum, prod, min...)
@@ -108,7 +104,7 @@ private:
 
 public:
     template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
     {
         if( col.has_nulls() ){
           return simple_reduction<ElementType, ResultType, Op, true >(col, output_dtype, stream);
@@ -118,7 +114,7 @@ public:
     }
 
     template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
     {
         CUDF_FAIL("input data type is not convertible to output data type");
     }
@@ -134,22 +130,23 @@ private:
     static constexpr bool is_supported_v()
     {
       // disable only for string ElementType.
-      return  !( std::is_same<ElementType, cudf::string_view>::value &&
-              !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-                 std::is_same<Op, cudf::experimental::reduction::op::max>::value ||
-                 std::is_same<Op, cudf::experimental::reduction::op::sum>::value ));
+      return  !( std::is_same<ElementType, cudf::string_view>::value ); 
+      //return  !( std::is_same<ElementType, cudf::string_view>::value &&
+      //        !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+      //           std::is_same<Op, cudf::experimental::reduction::op::max>::value ||
+      //           std::is_same<Op, cudf::experimental::reduction::op::sum>::value ));
     }
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
     {
         return cudf::experimental::type_dispatcher(output_dtype,
             result_type_dispatcher<ElementType, Op>(), col, output_dtype, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");

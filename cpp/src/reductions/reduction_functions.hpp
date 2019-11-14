@@ -17,23 +17,23 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/types.h> //FIXME for gdf_scalar
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 namespace experimental {
 namespace reduction {
 
-gdf_scalar sum(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar min(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar max(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar any(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar all(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar product(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar sum_of_squares(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> sum(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> min(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> max(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> any(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> all(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> product(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> sum_of_squares(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
 
-gdf_scalar mean(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
-gdf_scalar variance(column_view const& col, data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream=0);
-gdf_scalar standard_deviation(column_view const& col, data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream=0);
+std::unique_ptr<scalar> mean(column_view const& col, data_type const output_dtype, cudaStream_t stream=0);
+std::unique_ptr<scalar> variance(column_view const& col, data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream=0);
+std::unique_ptr<scalar> standard_deviation(column_view const& col, data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream=0);
 
 } // namespace reduction
 } // namespace experimental

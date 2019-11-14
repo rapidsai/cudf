@@ -88,9 +88,11 @@ struct ReductionTest : public GdfTest
         if( cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
 
         auto statement = [&]() {
-            cudf::test::scalar_wrapper<T_out> result
+          std::unique_ptr<cudf::scalar> result
                 = cudf::experimental::reduce(underlying_column, op, output_dtype, ddof);
-            EXPECT_EQ(expected_value, result.value());
+            using ScalarType = cudf::experimental::scalar_type_t<T_out>;
+            auto result1 = static_cast<ScalarType *>(result.get());
+            EXPECT_EQ(expected_value, result1->value());
         };
 
         if( succeeded_condition ){
@@ -242,7 +244,7 @@ TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
    // Min/Max succeeds for any gdf types including
    // non-arithmetic types (date32, date64, timestamp, category)
    bool result_error(true);
-   bool expected = true;
+   T expected = true;
 
    // test without nulls
    cudf::test::fixed_width_column_wrapper<T> col(v);
@@ -267,7 +269,7 @@ TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
    // Min/Max succeeds for any gdf types including
    // non-arithmetic types (date32, date64, timestamp, category)
    bool result_error(true);
-   bool expected = false;
+   T expected = false;
 
    // test without nulls
    cudf::test::fixed_width_column_wrapper<T> col(v);
@@ -444,10 +446,12 @@ struct ReductionDtypeTest : public GdfTest
         cudf::test::fixed_width_column_wrapper<T_in> const col(input_values);
 
         auto statement = [&]() {
-            cudf::test::scalar_wrapper<T_out> result =
+            std::unique_ptr<cudf::scalar> result = 
                 cudf::experimental::reduce(col, op, out_dtype);
-            if( result.is_valid() && ! expected_overflow){
-                EXPECT_EQ(expected_value, result.value());
+            using ScalarType = cudf::experimental::scalar_type_t<T_out>;
+            auto result1 = static_cast<ScalarType *>(result.get());
+            if( result1->is_valid() && ! expected_overflow){
+                EXPECT_EQ(expected_value, result1->value());
             }
         };
 
@@ -568,9 +572,9 @@ TEST_F(ReductionErrorTest, empty_column)
 {
     using T = int32_t;
     auto statement = [](const cudf::column_view col) {
-        cudf::test::scalar_wrapper<T> result =
+        std::unique_ptr<cudf::scalar> result =
             cudf::experimental::reduce(col, cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT64));
-        EXPECT_EQ( result.is_valid(), false );
+        EXPECT_EQ( result->is_valid(), false );
     };
 
     // test input column is nullptr, reduction throws an error if input is nullptr
