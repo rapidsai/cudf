@@ -58,7 +58,8 @@ struct count_accessor {
 #endif
     auto count = p_count->value();
     // static_cast is necessary due to bool8
-    CUDF_EXPECTS(static_cast<int64_t>(count) < std::numeric_limits<cudf::size_type>::max(),
+    CUDF_EXPECTS(static_cast<int64_t>(count) <=
+                   std::numeric_limits<cudf::size_type>::max(),
                  "count should not exceed size_type's limit.");
     return static_cast<cudf::size_type>(count);
   }

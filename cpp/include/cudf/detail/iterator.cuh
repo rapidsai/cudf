@@ -81,12 +81,10 @@ struct null_replaced_value_accessor
 };
 
 /** -------------------------------------------------------------------------*
- * @brief validity accessor of column with null bitmask
+ * @brief validity accessor of column
  * A unary functor returns validity at `id`.
- * `operator() (cudf::size_type id)` computes validity flag at `id`
- * This functor is only allowed for nullable columns.
- *
- * @throws `cudf::logic_error` if the column is not nullable.
+ * `operator() (cudf::size_type id)` returns true if this column is not nullable
+ * and computes validity flag at `id` if this column is nullable.
  * -------------------------------------------------------------------------**/
 struct validity_accessor {
   column_device_view const col;
@@ -96,15 +94,11 @@ struct validity_accessor {
    * @param[in] _col column device view of cudf column
    * -------------------------------------------------------------------------**/
   validity_accessor(column_device_view const& _col)
-    : col{_col}
-  {
-    // verify valid is non-null, otherwise, is_valid() will crash
-    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
-  }
+    : col{_col} {}
 
   CUDA_DEVICE_CALLABLE
   bool operator()(cudf::size_type i) const {
-    return col.is_valid_nocheck(i);
+    return not col.nullable() or col.is_valid_nocheck(i);
   }
 };
 
