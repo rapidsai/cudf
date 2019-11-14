@@ -37,6 +37,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/utilities/traits.hpp>
 
 namespace{ //anonymous
 
@@ -112,17 +113,22 @@ __device__ auto get_new_value(cudf::size_type         idx,
   template <class T,
             bool input_has_nulls, bool replacement_has_nulls>
   __global__
-  void replace_kernel(const T* __restrict__           input_data,
-                      cudf::bitmask_type const * __restrict__ input_valid,
-                      T * __restrict__          output_data,
-                      cudf::bitmask_type * __restrict__ output_valid,
+  void replace_kernel(cudf::column_device_view input,
+                      cudf::mutable_column_device_view output,
                       cudf::size_type * __restrict__    output_valid_count,
                       cudf::size_type                   nrows,
-                      const T* __restrict__ values_to_replace_begin,
-                      const T* __restrict__ values_to_replace_end,
-                      const T* __restrict__           d_replacement_values,
-                      cudf::bitmask_type const * __restrict__ replacement_valid)
+                      cudf::column_device_view values_to_replace,
+                      cudf::column_device_view replacement)
   {
+  const T* __restrict__ input_data = input.data<T>();
+  cudf::bitmask_type const * __restrict__ input_valid = input.null_mask();
+  T * __restrict__ output_data = output.data<T>();
+  cudf::bitmask_type * __restrict__ output_valid = output.null_mask();
+  const T* __restrict__ values_to_replace_begin = values_to_replace.data<T>();
+  const T* __restrict__ values_to_replace_end = values_to_replace.data<T>() + values_to_replace.size();
+  const T* __restrict__ d_replacement_values = replacement.data<T>();
+  cudf::bitmask_type const * __restrict__ replacement_valid = replacement.null_mask();
+
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
@@ -197,13 +203,14 @@ __device__ auto get_new_value(cudf::size_type         idx,
    */
   /* ----------------------------------------------------------------------------*/
   struct replace_kernel_forwarder {
-    template <typename col_type>
+    template <typename col_type,
+              std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
     void operator()(cudf::column_view const& input_col,
                     cudf::column_view const& values_to_replace,
                     cudf::column_view const& replacement_values,
                     cudf::mutable_column_view& output,
-                    cudaStream_t stream = 0,
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                    cudaStream_t stream = 0)
     {
       cudf::size_type *valid_count = nullptr;
       if (output.nullable()) {
@@ -211,7 +218,7 @@ __device__ auto get_new_value(cudf::size_type         idx,
         CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(cudf::size_type), stream));
       }
 
-      cudf::util::cuda::grid_config_1d grid{output.size(), BLOCK_SIZE, 1};
+      cudf::experimental::detail::grid_1d grid{output.size(), BLOCK_SIZE, 1};
 
       auto replace = replace_kernel<col_type, true, true>;
 
@@ -228,17 +235,19 @@ __device__ auto get_new_value(cudf::size_type         idx,
           replace = replace_kernel<col_type, false, false>;
         }
       }
+
+      auto device_in = cudf::column_device_view::create(input_col);
+      auto device_out = cudf::mutable_column_device_view::create(output);
+      auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
+      auto device_replacement_values = cudf::column_device_view::create(replacement_values);
+
       replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
-                                             input_col.data<col_type>(),
-                                             input_col.null_mask(),
-                                             output.data<col_type>(),
-                                             output.null_mask(),
+                                             *device_in,
+                                             *device_out,
                                              valid_count,
                                              output.size(),
-                                             values_to_replace.data<col_type>(),
-                                             values_to_replace.data<col_type>() + replacement_values.size(),
-                                             replacement_values.data<col_type>(),
-                                             replacement_values.null_mask());
+                                             *device_values_to_replace,
+                                             *device_replacement_values);
 
       cudaStreamSynchronize(stream);
 
@@ -260,8 +269,8 @@ __device__ auto get_new_value(cudf::size_type         idx,
                                                                 cudf::column_view const& values_to_replace,
                                                                 cudf::column_view const& replacement_values,
                                                                 cudf::mutable_column_view& output,
-                                                                cudaStream_t stream,
-                                                                rmm::mr::device_memory_resource* mr) {
+                                                                rmm::mr::device_memory_resource* mr,
+                                                                cudaStream_t stream) {
     CUDF_FAIL("Strings are not supported yet for replacement.");
   }
 
@@ -312,8 +321,8 @@ namespace detail {
                                         values_to_replace,
                                         replacement_values,
                                         outputView,
-                                        stream,
-                                        mr);
+                                        mr,
+                                        stream);
 
     CHECK_STREAM(stream);
     return output;
