@@ -172,7 +172,7 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
         destination_word_index + word_index(bit_offset);
     bitmask_type curr_word = source[source_word_index];
     bitmask_type next_word = 0;
-    if (destination_word_index + 1 < number_of_mask_words) {
+    if ((bit_offset % detail::size_in_bits<bitmask_type>()) != 0) {
       next_word = source[source_word_index + 1];
     }
     bitmask_type write_word = __funnelshift_r(curr_word, next_word, bit_offset);
