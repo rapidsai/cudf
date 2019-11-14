@@ -155,6 +155,9 @@ class groupby {
    * For each `aggregation` in a request, `values[i]` is aggregated with
    * all other `values[j]` where rows `i` and `j` in `keys` are equivalent.
    *
+   * The order of the values in the results correspond to the order returned by
+   * `groups()`.
+   *
    * The `size()` of the request column must equal `keys.num_rows()`.
    *
    * @throws cudf::logic_error If `requests[i].values.size() !=
@@ -186,6 +189,19 @@ class groupby {
    */
   std::vector<aggregation_result> aggregate(
       std::vector<aggregation_request> const& requests,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Returns table with each groups unique row from `keys`.
+   *
+   * The keys will be returned in a sorted order where all columns are in
+   * ascending order. If `ignore_null_keys == false`, then null elements will be
+   * ordered after all other values.
+   *
+   * @param mr Memory resource used to allocate the returned table
+   * @return Table of unique keys.
+   */
+  std::unique_ptr<experimental::table> groups(
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  private:
