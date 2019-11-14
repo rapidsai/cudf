@@ -21,8 +21,8 @@ import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-cimport cudf._lib.includes.reduce as cpp_reduce
 from cudf._lib.utils cimport *
+cimport cudf._lib.includes.reduce as cpp_reduce
 
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
@@ -125,6 +125,7 @@ def scan(col_inp, col_out, scan_op, inclusive):
     free_column(c_col_out)
 
     return
+
 
 def group_std(key_columns, value_columns, ddof=1):
     """ Calculate the group wise `quant` quantile for the value_columns
