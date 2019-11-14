@@ -17,18 +17,8 @@
 #include <cudf/datetime.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/wrappers/timestamps.hpp>
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
-#include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/transform.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace datetime {
@@ -76,10 +66,10 @@ struct extract_component_operator {
 
 template <datetime_component Component>
 struct launch_extract_component {
-  column_device_view input;
+  column_view input;
   mutable_column_view output;
 
-  launch_extract_component(column_device_view inp, mutable_column_view out)
+  launch_extract_component(column_view inp, mutable_column_view out)
       : input(inp), output(out) {}
 
   template <typename Element>
@@ -111,8 +101,7 @@ std::unique_ptr<column> extract_component(column_view const& column,
       std::vector<std::unique_ptr<cudf::column>>{});
 
   auto launch = launch_extract_component<Component>{
-      *column_device_view::create(column),
-      static_cast<mutable_column_view>(*output)};
+      column, static_cast<mutable_column_view>(*output)};
 
   experimental::type_dispatcher(column.type(), launch, stream);
 
