@@ -108,9 +108,10 @@ cdef class Column:
         has_nulls = c_col.get()[0].has_nulls()
         cdef column_contents contents = c_col.get()[0].release()
         data = DeviceBuffer.from_ptr(contents.data.release())
+        data = Buffer.from_device_buffer(data)
         if has_nulls:
             mask = DeviceBuffer.from_ptr(contents.null_mask.release())
+            mask = Buffer.from_device_buffer(mask)
         else:
             mask = None
-        buffer = Buffer.from_device_buffer(data)
-        return build_column(buffer, dtype=dtype, mask=mask)
+        return build_column(data, dtype=dtype, mask=mask)

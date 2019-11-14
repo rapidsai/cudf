@@ -11,6 +11,9 @@ cdef class Table:
     def __init__(self, columns):
         self.columns = columns
 
+    def __getitem__(self, i):
+        return self.columns[i]
+    
     cdef table_view view(self) except *:
         cdef vector[column_view] column_views
 
