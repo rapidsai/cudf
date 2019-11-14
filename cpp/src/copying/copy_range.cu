@@ -23,6 +23,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_range.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
@@ -32,61 +33,6 @@
 #include <cuda_runtime.h>
 
 #include <memory>
-
-// TODO: should be moved to cpp/include/cudf/detail/iterator.cuh once the null
-// replacement iterator PR is merged.
-#if 1
-namespace cudf {
-namespace experimental {
-namespace detail {
-
-/** -------------------------------------------------------------------------*
- * @brief validity accessor of column with null bitmask
- * A unary functor returns validity at `id`.
- * `operator() (cudf::size_type id)` computes validity flag at `id`
- * This functor is only allowed for nullable columns.
- *
- * @throws `cudf::logic_error` if the column is not nullable.
- * -------------------------------------------------------------------------**/
-struct validity_accessor {
-  column_device_view const col;
-
-  validity_accessor(column_device_view const& _col)
-    : col{_col}
-  {
-    // verify valid is non-null, otherwise, is_valid() will crash
-    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
-  }
-
-  CUDA_DEVICE_CALLABLE
-  bool operator()(cudf::size_type i) const {
-    return col.is_valid_nocheck(i);
-  }
-};
-
-/**
- * @brief Constructs an iterator over a column's validities.
- *
- * Dereferencing the returned iterator for element `i` will return the validity
- * of `column[i]`
- * This iterator is only allowed for nullable columns.
- *
- * @throws `cudf::logic_error` if the column is not nullable.
- *
- * @param column The column to iterate
- * @return auto Iterator that returns validities of column elements.
- */
-auto make_validity_iterator(column_device_view const& column)
-{
-  return thrust::make_transform_iterator(
-      thrust::counting_iterator<cudf::size_type>{0},
-      validity_accessor{column});
-}
-
-}  // namespace detail
-}  // namespace experimental
-}  // namespace cudf
-#endif
 
 namespace {
 
