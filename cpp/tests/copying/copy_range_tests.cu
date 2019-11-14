@@ -145,6 +145,71 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls)
              source_begin, source_end, target_begin);
 }
 
+TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
+{
+  using T = TypeParam;
+
+  cudf::size_type size{CopyRangeTypedTestFixture<T>::column_size};
+  cudf::size_type source_offset{27};
+  cudf::size_type source_begin{9};
+  cudf::size_type source_end{50};
+  cudf::size_type target_offset{58};
+  cudf::size_type target_begin{30};
+  auto target_end = target_begin + (source_end - source_begin);
+  auto row_diff =
+    (source_offset + source_begin) - (target_offset + target_begin);
+
+  auto target = cudf::test::fixed_width_column_wrapper<T>(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(0) + size,
+    cudf::test::make_counting_transform_iterator(0, all_valid));
+
+  cudf::mutable_column_view tmp = target;
+  cudf::mutable_column_view target_slice(tmp.type(), tmp.size() - target_offset,
+                                         tmp.head<T>(), tmp.null_mask(),
+                                         tmp.null_count(), target_offset);
+
+  auto source_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return i * 2; });
+  auto source = cudf::test::fixed_width_column_wrapper<T>(
+    source_elements,
+    source_elements + size,
+    cudf::test::make_counting_transform_iterator(
+      0, even_valid));
+
+  auto source_slice = cudf::experimental::slice(
+    source,
+    std::vector<cudf::size_type>{source_offset, size})[0];
+
+  auto expected_elements =
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_offset, target_begin, target_end, row_diff](auto i) {
+        return ((i >= target_offset + target_begin) &&
+                (i < target_offset + target_end)) ?
+          (i + row_diff) * 2 : i;
+     });
+  auto expected = cudf::test::fixed_width_column_wrapper<T>(
+    expected_elements,
+    expected_elements + size,
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_offset, target_begin, target_end, row_diff](auto i) {
+        return ((i >= target_offset + target_begin) &&
+                (i < target_offset + target_end)) ?
+          even_valid(i + row_diff) : all_valid(i);
+      }));
+
+  auto expected_slice =
+    cudf::experimental::slice(
+      expected,
+      std::vector<cudf::size_type>{target_offset, size})[0];
+
+  this->test(source_slice, expected_slice, target_slice,
+             source_begin, source_end, target_begin);
+}
+
 class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
