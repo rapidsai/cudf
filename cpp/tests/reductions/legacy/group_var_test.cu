@@ -21,14 +21,14 @@
 
 #include <gtest/gtest.h>
 
-struct GroupSTDTest : public GdfTest {
+struct GroupVarTest : public GdfTest {
     auto all_valid() {
         auto all_valid = [] (cudf::size_type) { return true; };
         return all_valid;
     }
 };
 
-TEST_F(GroupSTDTest, SingleColumn)
+TEST_F(GroupVarTest, SingleColumn)
 {
     auto keys = cudf::test::column_wrapper<int32_t>        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     auto vals = cudf::test::column_wrapper<float>          { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -36,12 +36,12 @@ TEST_F(GroupSTDTest, SingleColumn)
                                                        //  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
     auto expect_keys = cudf::test::column_wrapper<int32_t> { 1,       2,          3      };
                                                        //  { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-    auto expect_vals = cudf::test::column_wrapper<double> ({    3,   sqrt(131./12),sqrt(31./3)},
+    auto expect_vals = cudf::test::column_wrapper<double> ({    9,    131./12,    31./3  },
         all_valid());
     
     cudf::table key_table;
     cudf::table val_table;
-    std::tie(key_table, val_table) = cudf::group_std({keys}, {vals});
+    std::tie(key_table, val_table) = cudf::group_var({keys}, {vals});
 
     auto result_keys = cudf::test::column_wrapper<int32_t>(*(key_table.get_column(0)));
     ASSERT_EQ(result_keys, expect_keys) << "Expected: " << expect_keys.to_str()
@@ -50,7 +50,7 @@ TEST_F(GroupSTDTest, SingleColumn)
     cudf::test::detail::expect_values_are_equal({val_table.get_column(0)}, {expect_vals.get()});
 }
 
-TEST_F(GroupSTDTest, MultiColumn)
+TEST_F(GroupVarTest, MultiColumn)
 {
     auto keys = cudf::test::column_wrapper<int32_t>        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     auto vals0 = cudf::test::column_wrapper<float>         { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -59,15 +59,15 @@ TEST_F(GroupSTDTest, MultiColumn)
                                                        //  { 1, 1, 1,   2, 2, 2, 2,    3, 3, 3}
     auto expect_keys = cudf::test::column_wrapper<int32_t> { 1,         2,             3      };
                                                        //  { 0, 3, 6,   1, 4, 5, 9,    2, 7, 8}
-    auto expect_vals0 = cudf::test::column_wrapper<double>({    3,     sqrt(131./12),  sqrt(31./3)}, 
+    auto expect_vals0 = cudf::test::column_wrapper<double>({    9,      131./12,       31./3  },
         all_valid());
                                                        //  { 0, 1, 3,   2, 4, 4, 8,    6, 6, 6}
-    auto expect_vals1 = cudf::test::column_wrapper<double>({sqrt(7./3), sqrt(19./3),   0      },
+    auto expect_vals1 = cudf::test::column_wrapper<double>({7./3,       19./3,         0      },
         all_valid());
     
     cudf::table key_table;
     cudf::table val_table;
-    std::tie(key_table, val_table) = cudf::group_std({keys}, {vals0, vals1});
+    std::tie(key_table, val_table) = cudf::group_var({keys}, {vals0, vals1});
 
     auto result_keys = cudf::test::column_wrapper<int32_t>(*(key_table.get_column(0)));
     ASSERT_EQ(result_keys, expect_keys) << "Expected: " << expect_keys.to_str()
@@ -76,7 +76,7 @@ TEST_F(GroupSTDTest, MultiColumn)
     cudf::test::detail::expect_tables_are_equal(val_table, {expect_vals0.get(), expect_vals1.get()});
 }
 
-TEST_F(GroupSTDTest, SingleColumnNullable)
+TEST_F(GroupVarTest, SingleColumnNullable)
 {
     std::vector<int32_t> keys_data  { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4};
     std::vector<bool>    keys_valid { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1};
@@ -86,7 +86,7 @@ TEST_F(GroupSTDTest, SingleColumnNullable)
                                                        //  { 1, 1,     2, 2, 2,   3, 3,      4}
     auto expect_keys_data = std::vector<int32_t>           { 1,        2,         3,         4};
                                                        //  { 3, 6,     1, 4, 9,   2, 8,      -}
-    auto expect_vals_data = std::vector<double>            {3/sqrt(2), 7/sqrt(3), 3*sqrt(2), 0};
+    auto expect_vals_data = std::vector<double>            {9./2, 49./3, 18, 0};
     auto expect_vals_valid = std::vector<bool>             {1,           1,         1,       0};
     
     auto keys = cudf::test::column_wrapper<int32_t> ( keys_data,
@@ -105,7 +105,7 @@ TEST_F(GroupSTDTest, SingleColumnNullable)
 
     cudf::table key_table;
     cudf::table val_table;
-    std::tie(key_table, val_table) = cudf::group_std({keys}, {vals});
+    std::tie(key_table, val_table) = cudf::group_var({keys}, {vals});
 
     auto result_keys = cudf::test::column_wrapper<int32_t>(*(key_table.get_column(0)));
     ASSERT_EQ(result_keys, expect_keys) << "Expected: " << expect_keys.to_str()

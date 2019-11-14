@@ -165,12 +165,11 @@ void group_std(gdf_column const& values,
     values, group_labels, group_sizes, result, ddof, true, stream);
 }
 
-} // namespace detail
-
 std::pair<cudf::table, cudf::table>
-group_std(cudf::table const& keys,
-          cudf::table const& values,
-          cudf::size_type ddof)
+group_var_std(cudf::table const& keys,
+              cudf::table const& values,
+              cudf::size_type ddof,
+              bool is_std)
 {
   groupby::sort::detail::helper gb_obj(keys);
   auto group_labels = gb_obj.group_labels();
@@ -189,13 +188,36 @@ group_std(cudf::table const& keys,
 
     gdf_column* result_col = result_table.get_column(i);
 
-    detail::group_std(sorted_values, group_labels, group_sizes,
-                      result_col, ddof);
+    if (is_std) {
+      detail::group_std(sorted_values, group_labels, group_sizes,
+                        result_col, ddof);
+    } else {
+      detail::group_var(sorted_values, group_labels, group_sizes,
+                        result_col, ddof);
+    }
 
     gdf_column_free(&sorted_values);
   }
 
   return std::make_pair(gb_obj.unique_keys(), result_table);
+}
+
+} // namespace detail
+
+std::pair<cudf::table, cudf::table>
+group_std(cudf::table const& keys,
+          cudf::table const& values,
+          cudf::size_type ddof)
+{
+  return detail::group_var_std(keys, values, ddof, true);
+}
+
+std::pair<cudf::table, cudf::table>
+group_var(cudf::table const& keys,
+          cudf::table const& values,
+          cudf::size_type ddof)
+{
+  return detail::group_var_std(keys, values, ddof, false);
 }
 
 } // namespace cudf
