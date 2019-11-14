@@ -64,18 +64,18 @@ TYPED_TEST(RollingTest, SizeMismatch) {
   {
     cudf::test::fixed_width_column_wrapper<int32_t> window{{1, 1}}; // wrong size
     cudf::test::fixed_width_column_wrapper<int32_t> forward_window{{1, 1, 1}};
-    CUDF_EXPECT_THROW_MESSAGE(output = cudf::experimental::rolling_window(nonempty_col, window,
-                                                                          forward_window,
-                                                                          2, rolling_operator::SUM),
-                              "window/forward_window size must match input size");
+    EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, window,
+                                                             forward_window,
+                                                             2, rolling_operator::SUM),
+                 cudf::logic_error);
   }
   {
     cudf::test::fixed_width_column_wrapper<int32_t> window{{1, 1, 1}};
     cudf::test::fixed_width_column_wrapper<int32_t> forward_window{{1, 2}}; // wrong size
-    CUDF_EXPECT_THROW_MESSAGE(output = cudf::experimental::rolling_window(nonempty_col, window,
-                                                                          forward_window,
-                                                                          2, rolling_operator::SUM),
-                              "window/forward_window size must match input size");
+    EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, window,
+                                                             forward_window,
+                                                             2, rolling_operator::SUM),
+                 cudf::logic_error);
   }
 }
 
@@ -88,10 +88,10 @@ TYPED_TEST(RollingTest, WindowWrongDtype) {
   {
     cudf::test::fixed_width_column_wrapper<float> window{{1.0f, 1.0f, 1.0f}}; 
     cudf::test::fixed_width_column_wrapper<float> forward_window{{1.0f, 1.0f, 1.0f}};
-    CUDF_EXPECT_THROW_MESSAGE(output = cudf::experimental::rolling_window(nonempty_col, window,
-                                                                          forward_window,
-                                                                          2, rolling_operator::SUM),
-                              "window/forward_window must have INT32 type");
+    EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, window,
+                                                             forward_window,
+                                                             2, rolling_operator::SUM),
+                 cudf::logic_error);
   }
 }
 
