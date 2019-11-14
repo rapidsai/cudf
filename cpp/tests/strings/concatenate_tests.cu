@@ -15,7 +15,6 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 
@@ -32,23 +31,20 @@ struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {
-    std::vector<const char*> h_strings1{ "aaa", "bb", "", "cccc", "d", "ééé" };
-    cudf::test::strings_column_wrapper strings1( h_strings1.begin(), h_strings1.end() );
-    std::vector<const char*> h_strings2{ "ff", "gggg", "", "h" };
-    cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end() );
+    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h" };
+
+    cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
+    cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
 
     std::vector<cudf::strings_column_view> strings_columns;
     strings_columns.push_back(cudf::strings_column_view(strings1));
     strings_columns.push_back(cudf::strings_column_view(strings2));
 
-    {
-        auto results = cudf::strings::detail::concatenate_vertically(strings_columns);
+    auto results = cudf::strings::detail::concatenate_vertically(strings_columns);
 
-        std::vector<const char*> h_expected{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h" };
-        cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
-            thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-        cudf::test::expect_columns_equal(*results,expected);
-    }
+    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end(),
+            thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)

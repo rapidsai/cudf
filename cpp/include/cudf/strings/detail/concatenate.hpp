@@ -27,7 +27,7 @@ namespace detail
 {
 
 /**
- * @brief Returns a single column vertically concatenating the given vector of
+ * @brief Returns a single column by vertically concatenating the given vector of
  * strings columns.
  *
  * The caller is required to fill in the validity mask in the output column.

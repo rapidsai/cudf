@@ -19,13 +19,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/string_view.cuh>
 #include "../utilities.hpp"
-#include "../utilities.cuh"
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/for_each.h>
-#include <thrust/transform_scan.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf
@@ -72,6 +68,7 @@ std::unique_ptr<column> concatenate_vertically( std::vector<strings_column_view>
         column_view chars_child = column->chars();
         size_type size = column->size();
 
+        // copy the offsets column
         auto d_offsets = offsets_child.data<int32_t>();
         CUDA_TRY(cudaMemcpyAsync( d_new_offsets, d_offsets+1, size*sizeof(int32_t), cudaMemcpyDeviceToDevice, stream ));
 
@@ -79,9 +76,12 @@ std::unique_ptr<column> concatenate_vertically( std::vector<strings_column_view>
         thrust::for_each_n( execpol->on(stream), thrust::make_counting_iterator<size_type>(0), size,
             [d_new_offsets, offset_adjust] __device__ (size_type idx) { d_new_offsets[idx] += offset_adjust; });
 
+        // copy the chars column
         auto d_chars = chars_child.data<char*>();
         auto bytes = chars_child.size();
         CUDA_TRY(cudaMemcpyAsync( d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream ));
+
+        // get ready for the next column
         offset_adjust += bytes;
         d_new_chars += bytes;
         d_new_offsets += size;
@@ -89,6 +89,7 @@ std::unique_ptr<column> concatenate_vertically( std::vector<strings_column_view>
     CUDA_TRY(cudaMemsetAsync( offsets_view.data<int32_t>(), 0, sizeof(int32_t), stream));
 
     // create empty null mask -- caller should be setting this
+    // (made this all-valid to make it easier on the gtest code)
     rmm::device_buffer null_mask = create_null_mask( strings_count, ALL_VALID, stream,mr );
 
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
