@@ -121,6 +121,17 @@ std::vector<gdf_column*>  compute_ordered_aggregations(
                                 args->ddof, stream);
         break;
       }
+      case STD: {
+        auto args = static_cast<std_args*>(input_ops_args[i]);
+
+        *result_col = cudf::allocate_column(
+          GDF_FLOAT64, groupby.num_groups());
+
+        cudf::detail::group_std(sorted_values, groupby.group_labels(),
+                                group_sizes, result_col,
+                                args->ddof, stream);
+        break;
+      }
       default:
         break;
       }
@@ -260,7 +271,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(cudf::tabl
 
   // Update size and null count of output columns
   std::transform(final_output_values.begin(), final_output_values.end(), final_output_values.begin(),
-                 [num_groups](gdf_column *col) {
+                 [](gdf_column *col) {
                    CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
                    set_null_count(*col);
                    return col;
