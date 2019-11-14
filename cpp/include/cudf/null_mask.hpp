@@ -156,7 +156,8 @@ rmm::device_buffer copy_bitmask(
  * @return rmm::device_buffer A `device_buffer` containing the bits
  * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
  *---------------------------------------------------------------------------**/
-rmm::device_buffer copy_bitmask(column_view const& view, cudaStream_t stream,
-                                rmm::mr::device_memory_resource* mr);
+rmm::device_buffer copy_bitmask(column_view const& view,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf
