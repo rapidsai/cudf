@@ -30,7 +30,6 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 
-
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation() {
   return std::make_unique<aggregation>(aggregation::SUM);
@@ -103,6 +102,19 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   }
   return dispatch_aggregation(requests, 0, mr);
 }
+
+// Materialize unique keys for each group from a group_labels
+std::unique_ptr<experimental::table> groupby::groups(
+    std::unique_ptr<group_labels> labels, rmm::mr::device_memory_resource* mr) {
+  if (labels->method == group_labels::HASH) {
+    auto hash_labels = static_cast<detail::hash::hash_group_labels*>(labels.get());
+    return std::move(hash_labels->unique_keys);
+  } else {
+    CUDF_FAIL(
+        "Returning groups from a sort-based groupby is currently unsupported.");
+  }
+}
+
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

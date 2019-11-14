@@ -27,11 +27,14 @@ namespace experimental {
 namespace groupby {
 /// Definition of the opaque base class
 class group_labels {
- protected:
+ public:
   enum Method { HASH, SORT };
-  group_labels(group_labels::Method _method) : method{_method} {}
   Method method;  ///< Indicates the method used to compute the aggregation
+ protected:
+  group_labels(group_labels::Method _method) : method{_method} {}
 };
+namespace detail {
+namespace hash {
 
 /// Derived type for group labels from a hash-based groupby
 class hash_group_labels : public group_labels {
@@ -42,15 +45,6 @@ class hash_group_labels : public group_labels {
   std::unique_ptr<experimental::table> unique_keys{};
 };
 
-/// Derived type for group labels from a sort-based groupby
-class sort_group_labels : public group_labels {
- public:
-  sort_group_labels() : group_labels{group_labels::SORT} {}
-  /// For sort-based groupby, we can do something smarter.
-};
-
-namespace detail {
-namespace hash {
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.
@@ -72,6 +66,13 @@ groupby(table_view const& keys,
 }  // namespace hash
 
 namespace sort {
+
+/// Derived type for group labels from a sort-based groupby
+class sort_group_labels : public group_labels {
+ public:
+  sort_group_labels() : group_labels{group_labels::SORT} {}
+  /// For sort-based groupby, we can do something smarter.
+};
 // Sort-based groupby
 std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
 groupby(table_view const& keys,
