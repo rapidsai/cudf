@@ -24,24 +24,6 @@
 
 namespace cudf {
 namespace experimental {
-
-/**
- * @brief Interpolation method to use, when the desired quantile lies between
- * two data points i and j
- *
- * TODO: Move this somewhere else once quantiles are ported to libcudf++
- *
- */
-struct interpolation {
-  enum type {
-    LINEAR = 0,  ///< Linear interpolation between i and j
-    LOWER,       ///< Lower data point (i)
-    HIGHER,      ///< Higher data point (j)
-    MIDPOINT,    ///< (i + j)/2
-    NEAREST      ///< i or j, whichever is nearest
-  };
-};
-
 namespace groupby {
 /**
  * @brief Base class for specifying the desired aggregation in an
