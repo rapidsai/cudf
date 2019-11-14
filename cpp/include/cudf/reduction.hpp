@@ -83,8 +83,8 @@ enum operators {
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<scalar> reduce(const column_view& col,
-                  cudf::experimental::reduction::operators op,
-                  cudf::data_type output_dtype, cudf::size_type ddof = 1);
+                  reduction::operators op,
+                  data_type output_dtype, cudf::size_type ddof = 1);
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.
@@ -98,7 +98,7 @@ std::unique_ptr<scalar> reduce(const column_view& col,
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> scan(const column_view& input,
-                             cudf::experimental::scan_op op, bool inclusive);
+                             scan_op op, bool inclusive);
 
 }  // namespace experimental
 }  // namespace cudf
