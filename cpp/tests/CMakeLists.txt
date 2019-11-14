@@ -471,6 +471,14 @@ set(LEGACY_UTILITIES_TEST_SRC
 ConfigureTest(LEGACY_UTILITIES_TEST "${LEGACY_UTILITIES_TEST_SRC}")
 
 ###################################################################################################
+# - legacy iterator tests --------------------------------------------------------------------------------
+
+set(LEGACY_ITERATOR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/legacy/iterator_test.cu")
+
+ConfigureTest(LEGACY_ITERATOR_TEST "${LEGACY_ITERATOR_TEST_SRC}")
+
+###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
 
 set(ITERATOR_TEST_SRC
@@ -611,6 +619,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
@@ -640,7 +649,7 @@ enable_testing()
 ###################################################################################################
 # - iterator benchmarks----------------------------------------------------------------------------
 
-set(ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
+set(LEGACY_ITERATOR_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/legacy/iterator_bench.cu")
 
-ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+  ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")
