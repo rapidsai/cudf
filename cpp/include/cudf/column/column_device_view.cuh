@@ -260,7 +260,7 @@ class alignas(16) column_device_view_base {
 
 //Forward declaration
 template <typename T>
-class value_accessor; 
+struct value_accessor; 
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
