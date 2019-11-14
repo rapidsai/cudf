@@ -20,6 +20,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -41,11 +42,10 @@ template <cudf::size_type block_size,
 __global__
 void copy_range_kernel(SourceValueIterator source_value_begin,
                        SourceValidityIterator source_validity_begin,
-                       T* __restrict__ const data,
-                       cudf::bitmask_type* __restrict__ const bitmask,
-                       cudf::size_type* __restrict__ const null_count,
-                       cudf::size_type begin,
-                       cudf::size_type end) {
+                       cudf::mutable_column_device_view target,
+                       cudf::size_type target_begin,
+                       cudf::size_type target_end,
+                       cudf::size_type* __restrict__ const null_count) {
   using cudf::experimental::detail::warp_size;
 
   static_assert(block_size <= 1024,
@@ -59,23 +59,26 @@ void copy_range_kernel(SourceValueIterator source_value_begin,
   const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   const int warp_id = tid / warp_size;
 
-  const cudf::size_type begin_mask_idx = cudf::word_index(begin);
-  const cudf::size_type end_mask_idx = cudf::word_index(end);
+  const cudf::size_type offset = target.offset();
+  const cudf::size_type begin_mask_idx =
+    cudf::word_index(offset + target_begin);
+  const cudf::size_type end_mask_idx = cudf::word_index(offset + target_end);
 
   cudf::size_type mask_idx = begin_mask_idx + warp_id;
   const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / warp_size;
 
-  cudf::size_type target_offset = begin_mask_idx * warp_size - begin;
+  cudf::size_type target_offset =
+    begin_mask_idx * warp_size - (offset + target_begin);
   cudf::size_type source_idx = tid + target_offset;
 
   cudf::size_type warp_null_change{0};
 
   while (mask_idx <= end_mask_idx) {
-    cudf::size_type index = mask_idx * warp_size + lane_id;
-    bool in_range = (index >= begin && index < end);
+    cudf::size_type index = mask_idx * warp_size + lane_id - offset;
+    bool in_range = (index >= target_begin && index < target_end);
 
     // write data
-    if (in_range) data[index] = *(source_value_begin + source_idx);
+    if (in_range) target.element<T>(index) = *(source_value_begin + source_idx);
 
     if (has_validity) {  // update bitmask
       int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
@@ -83,12 +86,12 @@ void copy_range_kernel(SourceValueIterator source_value_begin,
       bool valid = in_range && *(source_validity_begin + source_idx);
       int warp_mask = __ballot_sync(active_mask, valid);
 
-      cudf::bitmask_type old_mask = bitmask[mask_idx];
+      cudf::bitmask_type old_mask = target.get_mask_word(mask_idx);
 
       if (lane_id == leader_lane) {
         cudf::bitmask_type new_mask = (old_mask & ~active_mask) |
                                       (warp_mask & active_mask);
-        bitmask[mask_idx] = new_mask;
+        target.set_mask_word(mask_idx, new_mask);
         // null_diff =
         //   (warp_size - __popc(new_mask)) - (warp_size - __popc(old_mask))
         warp_null_change +=
@@ -148,18 +151,11 @@ void copy_range(SourceValueIterator source_value_begin,
   // this code assumes that source and target have the same type.
   CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
 
-  T * __restrict__ data = target.head<T>();
-  bitmask_type * __restrict__ bitmask = target.null_mask();
-  auto offset = target.offset();
-
 #if 1
   auto warp_aligned_begin_lower_bound =
-    size_type{target_begin - (target_begin % warp_size)};
+    cudf::util::round_down_safe(target_begin, warp_size);
   auto warp_aligned_end_upper_bound =
-    size_type{
-      (target_end % warp_size) == 0 ? \
-        target_end : target_end + (warp_size - (target_end % warp_size))
-    };
+    cudf::util::round_up_safe(target_end, warp_size);
   auto num_items =
     warp_aligned_end_upper_bound - warp_aligned_begin_lower_bound;
 #else
@@ -193,7 +189,8 @@ void copy_range(SourceValueIterator source_value_begin,
                         T, true>;
     kernel<<<grid.num_blocks, block_size, 0, stream>>>(
       source_value_begin, source_validity_begin,
-      data, bitmask, null_count.data(), offset + target_begin, offset + target_end);
+      *mutable_column_device_view::create(target, stream),
+      target_begin, target_end, null_count.data());
 
     target.set_null_count(null_count.value());
   }
@@ -203,7 +200,8 @@ void copy_range(SourceValueIterator source_value_begin,
                         T, false>;
     kernel<<<grid.num_blocks, block_size, 0, stream>>>(
       source_value_begin, source_validity_begin,
-      data, bitmask, nullptr, offset + target_begin, offset + target_end);
+      *mutable_column_device_view::create(target, stream),
+      target_begin, target_end, nullptr);
   }
 
   CHECK_STREAM(stream);
