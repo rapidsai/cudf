@@ -38,28 +38,10 @@ template <typename Timestamp, datetime_component Component>
 struct extract_component_operator {
   static_assert(cudf::is_timestamp<Timestamp>(), "");
 
-  column_device_view column;
-
-  extract_component_operator(column_device_view col) : column(col) {}
-
-  CUDA_DEVICE_CALLABLE int16_t operator()(size_type const i) const {
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const {
     using namespace simt::std::chrono;
 
-    auto ts = column.element<Timestamp>(i);
     auto days_since_epoch = floor<days>(ts);
-
-    switch (Component) {
-      case datetime_component::year:
-        return static_cast<int>(year_month_day(days_since_epoch).year());
-      case datetime_component::month:
-        return static_cast<unsigned>(year_month_day(days_since_epoch).month());
-      case datetime_component::day:
-        return static_cast<unsigned>(year_month_day(days_since_epoch).day());
-      case datetime_component::weekday:
-        return year_month_weekday(days_since_epoch).weekday().iso_encoding();
-      default:
-        break;
-    }
 
     auto time_since_midnight = ts - days_since_epoch;
 
@@ -72,6 +54,14 @@ struct extract_component_operator {
     auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
 
     switch (Component) {
+      case datetime_component::year:
+        return static_cast<int>(year_month_day(days_since_epoch).year());
+      case datetime_component::month:
+        return static_cast<unsigned>(year_month_day(days_since_epoch).month());
+      case datetime_component::day:
+        return static_cast<unsigned>(year_month_day(days_since_epoch).day());
+      case datetime_component::weekday:
+        return year_month_weekday(days_since_epoch).weekday().iso_encoding();
       case datetime_component::hour:
         return hrs_.count();
       case datetime_component::minute:
@@ -101,9 +91,10 @@ struct launch_extract_component {
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void>
   operator()(cudaStream_t stream) {
-    thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-                     output.begin<int16_t>(), output.end<int16_t>(),
-                     extract_component_operator<Timestamp, Component>{input});
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      input.begin<Timestamp>(), input.end<Timestamp>(),
+                      output.begin<int16_t>(),
+                      extract_component_operator<Timestamp, Component>{});
   }
 };
 
