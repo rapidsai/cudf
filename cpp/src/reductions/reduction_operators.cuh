@@ -40,7 +40,7 @@ struct var_std
     : value(_value), value_squared(_value_squared)
     {};
 
-    using this_t = cudf::experimental::reduction::var_std<ResultType>;
+    using this_t = var_std<ResultType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -65,7 +65,7 @@ struct var_std
 template<typename ResultType>
 struct transformer_var_std
 {
-    using OutputType = cudf::experimental::reduction::var_std<ResultType>;
+    using OutputType = var_std<ResultType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     OutputType operator() (ResultType const & value)
@@ -186,7 +186,7 @@ struct standard_deviation {
         // compute `standard deviation` from intermediate type `IntermediateType`
         static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
-            using intermediateOp = typename cudf::experimental::reduction::op::variance::template intermediate<ResultType>;
+            using intermediateOp = typename variance::template intermediate<ResultType>;
             ResultType var = intermediateOp::compute_result(input, count, ddof);
 
             return static_cast<ResultType>(std::sqrt(var));

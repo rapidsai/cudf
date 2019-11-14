@@ -36,8 +36,8 @@ std::unique_ptr<scalar> make_identity_scalar(
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
-                  cudf::experimental::reduction::operators op,
-                  cudf::data_type output_dtype, cudf::size_type ddof)
+                  reduction::operators op,
+                  data_type output_dtype, size_type ddof)
 {
   std::unique_ptr<scalar> result = make_identity_scalar(output_dtype);
 
@@ -45,37 +45,37 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   if (col.size() <= col.null_count()) return result;
 
   switch (op) {
-    case cudf::experimental::reduction::SUM:
-      result = cudf::experimental::reduction::sum(col, output_dtype);
+    case reduction::SUM:
+      result = reduction::sum(col, output_dtype);
       break;
-    case cudf::experimental::reduction::MIN:
-      result = cudf::experimental::reduction::min(col, output_dtype);
+    case reduction::MIN:
+      result = reduction::min(col, output_dtype);
       break;
-    case cudf::experimental::reduction::MAX:
-      result = cudf::experimental::reduction::max(col, output_dtype);
+    case reduction::MAX:
+      result = reduction::max(col, output_dtype);
       break;
-    case cudf::experimental::reduction::ANY:
-      result = cudf::experimental::reduction::any(col, output_dtype);
+    case reduction::ANY:
+      result = reduction::any(col, output_dtype);
       break;
-    case cudf::experimental::reduction::ALL:
-      result = cudf::experimental::reduction::all(col, output_dtype);
+    case reduction::ALL:
+      result = reduction::all(col, output_dtype);
       break;
-    case cudf::experimental::reduction::PRODUCT:
-      result = cudf::experimental::reduction::product(col, output_dtype);
+    case reduction::PRODUCT:
+      result = reduction::product(col, output_dtype);
       break;
-    case cudf::experimental::reduction::SUMOFSQUARES:
+    case reduction::SUMOFSQUARES:
       result =
-          cudf::experimental::reduction::sum_of_squares(col, output_dtype);
+          reduction::sum_of_squares(col, output_dtype);
       break;
 
-    case cudf::experimental::reduction::MEAN:
-      result = cudf::experimental::reduction::mean(col, output_dtype);
+    case reduction::MEAN:
+      result = reduction::mean(col, output_dtype);
       break;
-    case cudf::experimental::reduction::VAR:
-      result = cudf::experimental::reduction::variance(col, output_dtype, ddof);
+    case reduction::VAR:
+      result = reduction::variance(col, output_dtype, ddof);
       break;
-    case cudf::experimental::reduction::STD:
-      result = cudf::experimental::reduction::standard_deviation(col, output_dtype, ddof);
+    case reduction::STD:
+      result = reduction::standard_deviation(col, output_dtype, ddof);
       break;
     default:
       CUDF_FAIL("Unsupported reduction operator");
