@@ -144,9 +144,11 @@ class GpuArrowNodeReader(object):
 
 def gpu_view_as(nbytes, buf, dtype, shape=None, strides=None):
     ptr = numba.cuda.cudadrv.driver.device_pointer(buf.to_numba())
-    return rmm.device_array_from_ptr(
+    arr = rmm.device_array_from_ptr(
         ptr, nbytes // dtype.itemsize, dtype=dtype
     )
+    arr.gpu_data._obj = buf
+    return arr
 
 
 def make_device_arrays(array):
