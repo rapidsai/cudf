@@ -69,4 +69,28 @@ TYPED_TEST(ScatterTests, Basic)
   expect_tables_equal(result->view(), expected_table);
 }
 
+TYPED_TEST(ScatterTests, BasicNulls)
+{
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+
+  auto const source = fixed_width_column_wrapper<TypeParam>(
+    {2, 4, 6, 8}, {1, 1, 0, 0});
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80}, {0, 0, 0, 0, 1, 1, 1, 1});
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>(
+    {1, 3, -3, -1});
+  auto const expected = fixed_width_column_wrapper<TypeParam>(
+    {10, 2, 30, 4, 50, 6, 70, 8}, {0, 1, 0, 1, 1, 0, 1, 0});
+  
+  auto const source_table = cudf::table_view({source, source});
+  auto const target_table = cudf::table_view({target, target});
+  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const result = cudf::experimental::scatter(source_table, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
+
 // TODO bitmask tests

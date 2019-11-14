@@ -19,6 +19,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
 namespace cudf {
@@ -26,6 +27,126 @@ namespace experimental {
 namespace detail {
 
 namespace {
+
+template <typename T>
+thrust::device_vector<T> make_gather_map(column_view const& scatter_map,
+    size_type rows, cudaStream_t stream)
+{
+  // Transform negative indices to index + rows
+  auto scatter_iter = thrust::make_transform_iterator(
+    scatter_map.begin<T>(),
+    index_converter<T>{rows});
+
+  static_assert(std::is_signed<T>::value,
+    "Need different invalid index if unsigned index types are added");
+  auto const invalid_index = static_cast<T>(-1);
+
+  // Convert scatter map to a gather map
+  auto gather_map = thrust::device_vector<T>(rows, invalid_index);
+  thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator<T>(0),
+    thrust::make_counting_iterator<T>(scatter_map.size()),
+    scatter_iter, gather_map.begin());
+
+  return gather_map;
+}
+
+template <bool ignore_out_of_bounds, bool source_nullable, typename MapIterator>
+__device__ size_type gather_bitmask_column_inplace(column_device_view& source_col,
+    MapIterator gather_map, mutable_column_device_view destination_col)
+{
+  size_type destination_row_base = blockIdx.x * blockDim.x;
+  size_type valid_count_accumulate = 0;
+
+  while (destination_row_base < destination_col.size()) {
+    size_type destination_row = destination_row_base + threadIdx.x;
+
+    const bool thread_active = destination_row < destination_col.size();
+    size_type source_row = thread_active ? gather_map[destination_row] : 0;
+
+    // Read destination bit if source index is out of bounds
+    bool bit_is_valid;
+    if (ignore_out_of_bounds && (source_row < 0 || source_row >= source_col.size())) {
+      bit_is_valid = thread_active ? destination_col.is_valid(destination_row) : false;
+    } else {
+      bit_is_valid = source_nullable ? source_col.is_valid_nocheck(source_row) : true;
+    }
+
+    // Use ballot to find all valid bits in this warp and create the output bitmask element
+    uint32_t const valid_warp = __ballot_sync(0xffffffff, thread_active && bit_is_valid);
+
+    size_type const valid_index = word_index(destination_row);
+
+    // Only one thread writes output
+    if (0 == threadIdx.x % warp_size) {
+      destination_col.set_mask_word(valid_index, valid_warp);
+    }
+    valid_count_accumulate += single_lane_block_popc_reduce(valid_warp);
+    destination_row_base += blockDim.x * gridDim.x;
+  }
+
+  return valid_count_accumulate;
+}
+
+template <bool ignore_out_of_bounds, typename MapIterator>
+__global__ void gather_bitmask_inplace_kernel(table_device_view source_table,
+    MapIterator gather_map, mutable_table_device_view destination_table,
+    size_type* valid_counts)
+{
+  for (size_type i = 0; i < source_table.num_columns(); i++) {
+    column_device_view source_col = source_table.column(i);
+    mutable_column_device_view destination_col = destination_table.column(i);
+
+    if (destination_col.nullable()) {
+      size_type valid_count_accumulate;
+      if (source_col.nullable()) {
+        valid_count_accumulate = gather_bitmask_column_inplace<ignore_out_of_bounds, true>(
+          source_col, gather_map, destination_col);
+      } else {
+        valid_count_accumulate = gather_bitmask_column_inplace<ignore_out_of_bounds, false>(
+          source_col, gather_map, destination_col);
+      }
+      if (threadIdx.x == 0) {
+        atomicAdd(valid_counts + i, valid_count_accumulate);
+      }
+    } else {
+      if (threadIdx.x == 0 && blockIdx.x == 0) {
+        valid_counts[i] = destination_col.size();
+      }
+    }
+  }
+}
+
+template <typename T>
+void gather_bitmask_inplace(
+    table_view const& source, thrust::device_vector<T>& gather_map,
+    std::vector<std::unique_ptr<column>>& target, cudaStream_t stream)
+{
+  auto const device_source = table_device_view::create(source, stream);
+
+  // Make mutable table view from columns
+  auto target_views = std::vector<mutable_column_view>(target.size());
+  std::transform(target.begin(), target.end(), target_views.begin(),
+    [](auto const& col) { return static_cast<mutable_column_view>(*col); });
+  auto target_table = mutable_table_view(target_views);
+  auto device_target = mutable_table_device_view::create(target_table, stream);
+
+  // Compute block size
+  int grid_size, block_size;
+  auto gather_map_begin = gather_map.begin();
+  auto bitmask_kernel = gather_bitmask_inplace_kernel<true, decltype(gather_map_begin)>;
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, bitmask_kernel));
+
+  auto valid_counts = thrust::device_vector<size_type>(target.size());
+  bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
+    gather_map_begin, *device_target, valid_counts.data().get());
+
+  // TODO for_each with a zip iterator?
+  auto valid_counts_host = thrust::host_vector<size_type>(valid_counts);
+  for (size_t i = 0; i < target.size(); ++i) {
+    target[i]->set_null_count(target[i]->size() - valid_counts_host[i]);
+  }
+}
 
 template <typename index_type>
 struct column_scatterer {
@@ -35,9 +156,13 @@ struct column_scatterer {
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     auto result = std::make_unique<column>(target, stream, mr);
+    if (source.nullable() and not result->nullable()) {
+      // TODO should be allocating a null mask in result if source has one even if target does not... how?
+      CUDF_FAIL("Not yet suppporting scatter from nullable source into non-nullable target");
+    }
     auto result_view = result->mutable_view();
 
-    // Transform negative indices
+    // Transform negative indices to index + target size
     auto scatter_iter = thrust::make_transform_iterator(
       scatter_map.begin<index_type>(),
       index_converter<index_type>{target.size()});
@@ -78,14 +203,15 @@ struct scatter_impl {
     }
 
     // TODO create separate streams for each col and then sync with master?
-    std::vector<std::unique_ptr<column>> result(target.num_columns());
+    auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
     std::transform(source.begin(), source.end(), target.begin(), result.begin(),
-      [&scatter_map, mr, stream](auto source_col, auto target_col) {
+      [&scatter_map, mr, stream](auto const& source_col, auto const& target_col) {
         return type_dispatcher(source_col.type(), column_scatterer<T>{},
           source_col, scatter_map, target_col, mr, stream);
       });
 
-    // TODO scatter bitmask
+    auto gather_map = make_gather_map<T>(scatter_map, target.num_rows(), stream);
+    gather_bitmask_inplace<T>(source, gather_map, result, stream);
 
     return std::make_unique<table>(std::move(result));
   }
