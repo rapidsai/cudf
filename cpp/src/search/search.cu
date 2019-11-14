@@ -122,9 +122,6 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
 template <typename Element, bool nullable = true>
 struct compare_with_value{
-  compare_with_value(column_device_view c, const char *str, bool val_is_valid, bool nulls_are_equal)
-    : col{c}, value{str}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
-  
   compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
 
     : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
@@ -172,19 +169,19 @@ struct contains_scalar {
     auto d_col = column_device_view::create(col, stream);
     auto data_it = thrust::make_counting_iterator<size_type>(0);
 
-    bool    h_value_is_valid{value.is_valid()};
-    Element h_value;
+    bool    element_is_valid{value.is_valid()};
+    Element element;
 
-    populate_element(value, h_value);
+    populate_element(value, element);
 
     if (col.has_nulls()) {
-      auto eq_op = compare_with_value<Element, true>(*d_col, h_value, h_value_is_valid, true);
+      auto eq_op = compare_with_value<Element, true>(*d_col, element, element_is_valid, true);
 
       return thrust::any_of(rmm::exec_policy(stream)->on(stream),
                             data_it, data_it + col.size(),
                             eq_op);
     } else {
-      auto eq_op = compare_with_value<Element, false>(*d_col, h_value, h_value_is_valid, true);
+      auto eq_op = compare_with_value<Element, false>(*d_col, element, element_is_valid, true);
 
       return thrust::any_of(rmm::exec_policy(stream)->on(stream),
                             data_it, data_it + col.size(),
