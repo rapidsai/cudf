@@ -37,6 +37,12 @@ struct SingleColumnVariance : public GdfTest {
   using ValueType = typename KV::Value;
 };
 
+template <typename K>
+struct key_accessor {
+  std::vector<int> const& keys;
+  K operator()(cudf::size_type i) { return K(keys[i]); }
+};
+
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
@@ -47,7 +53,10 @@ struct KV {
 };
 
 using TestingTypes =
-    ::testing::Types< KV<int32_t, int32_t> >;
+    ::testing::Types< KV<int8_t, int8_t>, KV<int32_t, int32_t>,
+                      KV<int64_t, int64_t>, KV<int32_t, float>,
+                      KV<int32_t, double>, KV<cudf::category, int32_t>,
+                      KV<cudf::date32, int8_t>, KV<cudf::date64, double>>;
 
 // TODO: tests for cudf::bool8
 
@@ -56,12 +65,10 @@ using std_args =  cudf::groupby::sort::std_args;
 TYPED_TEST_CASE(SingleColumnVariance, TestingTypes);
  
 TYPED_TEST(SingleColumnVariance, TestVariancePreSorted) {
-  using Key = typename SingleColumnVariance<TypeParam>::KeyType;
-  using Value = typename SingleColumnVariance<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using K = typename SingleColumnVariance<TypeParam>::KeyType;
+  using V = typename SingleColumnVariance<TypeParam>::ValueType;
+  using R = cudf::test::expected_result_t<V, op>;
+  using T = int;
 
   std::vector<T>   in_keys{1, 1, 1, 2, 2, 2, 2, 2};
   std::vector<V>   in_vals{0, 1, 2, 3, 4, 5, 6, 7};
@@ -74,21 +81,19 @@ TYPED_TEST(SingleColumnVariance, TestVariancePreSorted) {
   int ddof = 1;
   cudf::groupby::sort::operation operation_with_args {op, std::make_unique<std_args>(ddof)}; 
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>(in_keys),
-      column_wrapper<Value>(in_vals),
-      column_wrapper<Key>(out_keys),
-      column_wrapper<ResultValue>(out_vals, [](auto){ return true; })
+      column_wrapper<K>(in_keys.size(), key_accessor<K>{in_keys}),
+      column_wrapper<V>(in_vals),
+      column_wrapper<K>(out_keys.size(), key_accessor<K>{out_keys}),
+      column_wrapper<R>(out_vals, [](auto){ return true; })
   );
  
 }  
 
 TYPED_TEST(SingleColumnVariance, TestVariance) {
-  using Key = typename SingleColumnVariance<TypeParam>::KeyType;
-  using Value = typename SingleColumnVariance<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using K = typename SingleColumnVariance<TypeParam>::KeyType;
+  using V = typename SingleColumnVariance<TypeParam>::ValueType;
+  using R = cudf::test::expected_result_t<V, op>;
+  using T = int;
 
   std::vector<T>   in_keys{3, 2, 1, 1, 2, 3, 3, 2, 1};
   std::vector<V>   in_vals{1, 2, 3, 4, 4, 3, 2, 1, 0};
@@ -101,20 +106,18 @@ TYPED_TEST(SingleColumnVariance, TestVariance) {
   int ddof = 1;
   cudf::groupby::sort::operation operation_with_args {op, std::make_unique<std_args>(ddof)}; 
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>(in_keys),
-      column_wrapper<Value>(in_vals),
-      column_wrapper<Key>(out_keys),
-      column_wrapper<ResultValue>(out_vals, [](auto){ return true; }));
+      column_wrapper<K>(in_keys.size(), key_accessor<K>{in_keys}),
+      column_wrapper<V>(in_vals),
+      column_wrapper<K>(out_keys.size(), key_accessor<K>{out_keys}),
+      column_wrapper<R>(out_vals, [](auto){ return true; }));
 }
  
 
 TYPED_TEST(SingleColumnVariance, TestVarianceDifferentSizeGroups) {
-  using Key = typename SingleColumnVariance<TypeParam>::KeyType;
-  using Value = typename SingleColumnVariance<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using K = typename SingleColumnVariance<TypeParam>::KeyType;
+  using V = typename SingleColumnVariance<TypeParam>::ValueType;
+  using R = cudf::test::expected_result_t<V, op>;
+  using T = int;
 
   std::vector<T>   in_keys{1, 2, 3, 3, 2, 1, 0, 3, 0, 1, 0, 2, 3, 0, 3, 3, 2, 1, 0};
   std::vector<V>   in_vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
@@ -127,20 +130,18 @@ TYPED_TEST(SingleColumnVariance, TestVarianceDifferentSizeGroups) {
   int ddof = 1;
   cudf::groupby::sort::operation operation_with_args {op, std::make_unique<std_args>(ddof)}; 
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>(in_keys),
-      column_wrapper<Value>(in_vals),
-      column_wrapper<Key>(out_keys),
-      column_wrapper<ResultValue>(out_vals, [](auto){ return true; }));
+      column_wrapper<K>(in_keys.size(), key_accessor<K>{in_keys}),
+      column_wrapper<V>(in_vals),
+      column_wrapper<K>(out_keys.size(), key_accessor<K>{out_keys}),
+      column_wrapper<R>(out_vals, [](auto){ return true; }));
 }
  
 
 TYPED_TEST(SingleColumnVariance, TestVarianceNullable) {
-  using Key = typename SingleColumnVariance<TypeParam>::KeyType;
-  using Value = typename SingleColumnVariance<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using K = typename SingleColumnVariance<TypeParam>::KeyType;
+  using V = typename SingleColumnVariance<TypeParam>::ValueType;
+  using R = cudf::test::expected_result_t<V, op>;
+  using T = int;
 
   std::vector<T>    in_keys   {1, 1, 1, 1, 1};
   std::vector<bool> key_valid {1, 0, 1, 1, 1};
@@ -156,24 +157,22 @@ TYPED_TEST(SingleColumnVariance, TestVarianceNullable) {
   int ddof = 1;
   cudf::groupby::sort::operation operation_with_args {op, std::make_unique<std_args>(ddof)}; 
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>(in_keys,
+      column_wrapper<K>(in_keys.size(), key_accessor<K>{in_keys},
         [&](auto index) { return key_valid[index]; }),
-      column_wrapper<Value>(in_vals,
+      column_wrapper<V>(in_vals,
         [&](auto index) { return vals_valid[index]; }),
-      column_wrapper<Key>(out_keys,
+      column_wrapper<K>(out_keys.size(), key_accessor<K>{out_keys},
         [](auto index) { return true; }),
-      column_wrapper<ResultValue>(out_vals,
+      column_wrapper<R>(out_vals,
         [&](auto index) { return out_valids[index]; })
   );
 }
 
 TYPED_TEST(SingleColumnVariance, TestVarianceNullableZeroGroupSize) {
-  using Key = typename SingleColumnVariance<TypeParam>::KeyType;
-  using Value = typename SingleColumnVariance<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using K = typename SingleColumnVariance<TypeParam>::KeyType;
+  using V = typename SingleColumnVariance<TypeParam>::ValueType;
+  using R = cudf::test::expected_result_t<V, op>;
+  using T = int;
 
   std::vector<T>    in_keys   {1, 1, 1, 1, 1, 2, 2};
   std::vector<bool> key_valid {1, 0, 1, 1, 1, 1, 1};
@@ -189,24 +188,22 @@ TYPED_TEST(SingleColumnVariance, TestVarianceNullableZeroGroupSize) {
   int ddof = 1;
   cudf::groupby::sort::operation operation_with_args {op, std::make_unique<std_args>(ddof)}; 
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>(in_keys,
+      column_wrapper<K>(in_keys.size(), key_accessor<K>{in_keys},
         [&](auto index) { return key_valid[index]; }),
-      column_wrapper<Value>(in_vals,
+      column_wrapper<V>(in_vals,
         [&](auto index) { return vals_valid[index]; }),
-      column_wrapper<Key>(out_keys,
+      column_wrapper<K>(out_keys.size(), key_accessor<K>{out_keys},
         [](auto index) { return true; }),
-      column_wrapper<ResultValue>(out_vals,
+      column_wrapper<R>(out_vals,
         [&](auto index) { return out_valids[index]; })
   );
 }
 
 TYPED_TEST(SingleColumnVariance, TestVarianceNullableZeroDDoFDivisor) {
-  using Key = typename SingleColumnVariance<TypeParam>::KeyType;
-  using Value = typename SingleColumnVariance<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using K = typename SingleColumnVariance<TypeParam>::KeyType;
+  using V = typename SingleColumnVariance<TypeParam>::ValueType;
+  using R = cudf::test::expected_result_t<V, op>;
+  using T = int;
 
   std::vector<T>    in_keys   {1, 1, 1, 1, 1, 3};
   std::vector<bool> key_valid {1, 0, 1, 1, 1, 1};
@@ -222,13 +219,13 @@ TYPED_TEST(SingleColumnVariance, TestVarianceNullableZeroDDoFDivisor) {
   int ddof = 1;
   cudf::groupby::sort::operation operation_with_args {op, std::make_unique<std_args>(ddof)}; 
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>(in_keys,
+      column_wrapper<K>(in_keys.size(), key_accessor<K>{in_keys},
         [&](auto index) { return key_valid[index]; }),
-      column_wrapper<Value>(in_vals,
+      column_wrapper<V>(in_vals,
         [&](auto index) { return vals_valid[index]; }),
-      column_wrapper<Key>(out_keys,
+      column_wrapper<K>(out_keys.size(), key_accessor<K>{out_keys},
         [](auto index) { return true; }),
-      column_wrapper<ResultValue>(out_vals,
+      column_wrapper<R>(out_vals,
         [&](auto index) { return out_valids[index]; })
   );
 }
