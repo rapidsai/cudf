@@ -132,6 +132,7 @@ enum class interpolation {
     NEAREST      ///< i or j, whichever is nearest
 };
 }
+
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/
