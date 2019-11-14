@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>                // include iterator header
+#include <iterator/transform_unary_functions.cuh>  //for meanvar
 
-#include <iterator/legacy/iterator.cuh>    // include iterator header
-
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <bitset>
 #include <cstdint>
@@ -27,16 +27,15 @@
 #include <random>
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/legacy/scalar_wrapper.cuh>
+#include <tests/utilities/column_wrapper.hpp>
 #include <utilities/device_operators.cuh>
 
+#include <thrust/equal.h>
 #include <thrust/transform.h>
 
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
 #include <thrust/device_vector.h>
-#include <cudf/legacy/reduction.hpp>
 
 // ---------------------------------------------------------------------------
 
@@ -56,295 +55,296 @@ bool random_bool()
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<int> uniform{0, 1};
 
-  return static_cast<bool>( uniform(engine) );
+  return static_cast<bool>(uniform(engine));
 }
 
-template<typename T>
+template <typename T>
 std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
 {
   return os << "[" << rhs.value <<
-      ", " << rhs.value_squared <<
-      ", " << rhs.count << "] ";
+               ", " << rhs.value_squared << 
+               ", " << rhs.count << "] ";
 };
 
-// ---------------------------------------------------------------------------
+auto strings_to_string_views(std::vector<std::string>& input_strings) {
+  auto all_valid =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  std::vector<char> chars;
+  std::vector<int32_t> offsets;
+  std::tie(chars, offsets) = 
+    cudf::test::detail::make_chars_and_offsets(
+      input_strings.begin(), input_strings.end(), all_valid);
+  thrust::device_vector<char> dev_chars(chars);
+  char* c_start = thrust::raw_pointer_cast(dev_chars.data());
 
+ // calculate the expected value by CPU. (but contains device pointers)
+  std::vector<cudf::string_view> replaced_array(input_strings.size());
+  std::transform(thrust::counting_iterator<size_t>(0),
+                 thrust::counting_iterator<size_t>(replaced_array.size()),
+                 replaced_array.begin(), [c_start, offsets](auto i) {
+                   return cudf::string_view(c_start + offsets[i],
+                                            offsets[i + 1] - offsets[i]);
+                 });
+  return std::make_tuple(std::move(dev_chars), replaced_array);
+}
+
+// ---------------------------------------------------------------------------
 
 template <typename T>
 struct IteratorTest : public GdfTest
 {
-    // iterator test case which uses cub
-    template <typename InputIterator, typename T_output>
-    void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
-    {
-        T_output init{0};
-        thrust::device_vector<T_output> dev_result(1, init);
+  // iterator test case which uses cub
+  template <typename InputIterator, typename T_output>
+  void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
+  {
+    T_output init{0};
+    thrust::device_vector<T_output> dev_result(1, init);
 
-        void     *d_temp_storage = NULL;
-        size_t   temp_storage_bytes = 0;
+    void* d_temp_storage = NULL;
+    size_t temp_storage_bytes = 0;
 
-        cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result.begin(), num_items,
-            cudf::DeviceSum{}, init);
-        // Allocate temporary storage
-        RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0));
+    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
+                              dev_result.begin(), num_items,
+                              cudf::DeviceMin{},
+                              init);
+    // Allocate temporary storage
+    RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0));
 
-        // Run reduction
-        cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result.begin(), num_items,
-            cudf::DeviceSum{}, init);
+    // Run reduction
+    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
+                              dev_result.begin(), num_items,
+                              cudf::DeviceMin{},
+                              init);
 
-        evaluate(expected, dev_result, "cub test");
+    evaluate(expected, dev_result, "cub test");
+  }
+
+  // iterator test case which uses thrust
+  template <typename InputIterator, typename T_output>
+  void iterator_test_thrust(std::vector<T_output>& expected, InputIterator d_in, int num_items) 
+  {
+    InputIterator d_in_last = d_in + num_items;
+    EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
+    thrust::device_vector<T_output> dev_expected(expected);
+
+    // Can't use this because time_point make_pair bug in libcudacxx
+    // bool result = thrust::equal(thrust::device, d_in, d_in_last, dev_expected.begin());
+    bool result = thrust::transform_reduce(thrust::device,
+        thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
+        thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
+        [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); },
+        true,
+        thrust::logical_and<bool>());
+    #ifndef NDEBUG
+    thrust::device_vector<bool> vec(expected.size(), false);
+    thrust::transform(thrust::device,
+        thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
+        thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
+        vec.begin(),
+        [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); }
+        );
+    thrust::copy(vec.begin(), vec.end(), std::ostream_iterator<bool>(std::cout, " "));
+    std::cout<<std::endl;
+    #endif
+
+    EXPECT_TRUE(result) << "thrust test";
+  }
+
+  template <typename T_output>
+  void evaluate(T_output expected, thrust::device_vector<T_output>& dev_result, const char* msg = nullptr) 
+  {
+    thrust::host_vector<T_output> hos_result(dev_result);
+
+    EXPECT_EQ(expected, hos_result[0]) << msg;
+    std::cout << "Done: expected <" << msg << "> = "
+      //<< hos_result[0] //TODO uncomment after time_point ostream operator<< 
+      << std::endl;
+  }
+
+  template <typename T_output>
+  void values_equal_test(std::vector<T_output>& expected, const cudf::column_device_view& col)
+  {
+    if (col.nullable()) {
+      auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(col, T_output{0});
+      iterator_test_thrust(expected, it_dev, col.size());
+    } else {
+      auto it_dev = col.begin<T_output>();
+      iterator_test_thrust(expected, it_dev, col.size());
     }
-
-    // iterator test case which uses thrust
-    template <typename InputIterator, typename T_output>
-    void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items)
-    {
-        T_output init{0};
-        InputIterator d_in_last =  d_in + num_items;
-        EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
-
-        T_output result = thrust::reduce(thrust::device, d_in, d_in_last, init, cudf::DeviceSum{});
-        EXPECT_EQ(expected, result) << "thrust test";
-    }
-
-
-    template <typename T_output>
-    void evaluate(T_output expected, thrust::device_vector<T_output> &dev_result, const char* msg=nullptr)
-    {
-        thrust::host_vector<T_output>  hos_result(dev_result);
-
-        EXPECT_EQ(expected, hos_result[0]) << msg ;
-        std::cout << "Done: expected <" << msg << "> = " << hos_result[0] << std::endl;
-    }
-
-    template <typename T_output>
-    void column_sum_test(T_output& expected, const gdf_column& col)
-    {
-        if( col.valid == nullptr){
-            column_sum_test<false, T_output>(expected, col);
-        }else{
-            column_sum_test<true, T_output>(expected, col);
-        }
-    }
-
-    template <bool has_nulls, typename T_output>
-    void column_sum_test(T_output& expected, const gdf_column& col)
-    {
-        auto it_dev = cudf::make_iterator<has_nulls, T_output>(col,  T{0});
-        iterator_test_cub(expected, it_dev, col.size);
-    }
+  }
 };
 
-using TestingTypes = ::testing::Types<
-    int32_t
->;
+// using TestingTypes = cudf::test::NumericTypes;
+using TestingTypes = cudf::test::AllTypes;
 
 TYPED_TEST_CASE(IteratorTest, TestingTypes);
 
 // tests for non-null iterator (pointer of device array)
-TYPED_TEST(IteratorTest, non_null_iterator)
-{
-    using T = int32_t;
-    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-    thrust::device_vector<T> dev_array(hos_array);
+TYPED_TEST(IteratorTest, non_null_iterator) {
+  using T = TypeParam;
+  std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+  thrust::device_vector<T> dev_array(hos_array);
 
-    // calculate the expected value by CPU.
-    T expected_value = std::accumulate(hos_array.begin(), hos_array.end(), T{0});
+  // calculate the expected value by CPU.
+  std::vector<T> replaced_array(hos_array);
 
-    // driven by iterator as a pointer of device array.
-    auto it_dev = dev_array.begin();
-    this->iterator_test_cub(expected_value, it_dev, dev_array.size());
-    this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
+  // driven by iterator as a pointer of device array.
+  // FIXME: compilation error for cudf::experimental::bool8
+  // auto it_dev = dev_array.begin();
+  // this->iterator_test_thrust(replaced_array, it_dev, dev_array.size());
+  // this->iterator_test_cub(expected_value, it_dev, dev_array.size());
 
-    // test column input
-    cudf::test::column_wrapper<T> w_col(hos_array);
-    this->column_sum_test(expected_value, w_col);
-
+  // test column input
+  cudf::test::fixed_width_column_wrapper<T> w_col(hos_array.begin(),
+                                                  hos_array.end());
+  this->values_equal_test(replaced_array, *cudf::column_device_view::create(w_col));
 }
 
 // Tests for null input iterator (column with null bitmap)
-// Actually, we can use cub for reduction with nulls without creating custom kernel or multiple steps.
-// We may accelarate the reduction for a column using cub
-TYPED_TEST(IteratorTest, null_iterator)
-{
-    using T = int32_t;
-    T init = T{0};
-    std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
+// Actually, we can use cub for reduction with nulls without creating custom
+// kernel or multiple steps. We may accelarate the reduction for a column using
+// cub
+TYPED_TEST(IteratorTest, null_iterator) {
+  using T = TypeParam;
+  T init = T{0};
+  // data and valid arrays
+  std::vector<T> hos({0, 6, 0, -14, 13, 64, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
 
-    // create a column with bool vector
-    cudf::test::column_wrapper<T> w_col({0, 6, 0, -14, 13, 64, -13, -20, 45},
-        [&](cudf::size_type row) { return host_bools[row]; });
+  // create a column with bool vector
+  cudf::test::fixed_width_column_wrapper<T> w_col(hos.begin(), hos.end(),
+                                                  host_bools.begin());
+  auto d_col = cudf::column_device_view::create(w_col);
 
-    // copy back data and valid arrays
-    auto hos = w_col.to_host();
+  // calculate the expected value by CPU.
+  std::vector<T> replaced_array(hos.size());
+  std::transform(hos.begin(), hos.end(), host_bools.begin(),
+                 replaced_array.begin(),
+                 [&](T x, bool b) { return (b) ? x : init; });
+  T expected_value =
+      *std::min_element(replaced_array.begin(), replaced_array.end());
+  // TODO uncomment after time_point ostream operator<<
+  // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // calculate the expected value by CPU.
-    std::vector<T> replaced_array(w_col.size());
-    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
-        replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
-    T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
-    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
-
-
-    // GPU test
-    auto it_dev = cudf::make_iterator<true, T>(w_col, init);
-    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev, w_col.size());
-
-    this->column_sum_test(expected_value, w_col);
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, T{0});
+  this->iterator_test_cub(expected_value, it_dev, d_col->size());
+  this->values_equal_test(replaced_array, *d_col);
 }
 
 // Tests up cast reduction with null iterator.
-// The up cast iterator will be created by `cudf::make_iterator<true, T, T_upcast>(...)`
-TYPED_TEST(IteratorTest, null_iterator_upcast)
-{
-    const int column_size{1000};
-    using T = int8_t;
-    using T_upcast = int64_t;
-    T init{0};
+// The up cast iterator will be created by transform_iterator and
+// cudf::experimental::detail::make_null_replacement_iterator(col, T{0})
+TYPED_TEST(IteratorTest, null_iterator_upcast) {
+  const int column_size{1000};
+  using T = int8_t;
+  using T_upcast = int64_t;
+  T init{0};
 
-    std::vector<bool> host_bools(column_size);
-    std::generate(host_bools.begin(), host_bools.end(),
-        []() { return static_cast<bool>( random_bool() ); } );
+  // data and valid arrays
+  std::vector<T> hos(column_size);
+  std::generate(hos.begin(), hos.end(),
+                []() { return static_cast<T>(random_int<T>(-128, 127)); });
+  std::vector<bool> host_bools(column_size);
+  std::generate(host_bools.begin(), host_bools.end(),
+                []() { return static_cast<bool>(random_bool()); });
 
-    cudf::test::column_wrapper<T> w_col(
-        column_size,
-        [](cudf::size_type row) { return T{random_int<T>(-128, 127)}; },
-        [&](cudf::size_type row) { return host_bools[row]; } );
+  cudf::test::fixed_width_column_wrapper<T> w_col(hos.begin(), hos.end(),
+                                                  host_bools.begin());
+  auto d_col = cudf::column_device_view::create(w_col);
 
-    // copy back data and valid arrays
-    auto hos = w_col.to_host();
+  // calculate the expected value by CPU.
+  std::vector<T> replaced_array(d_col->size());
+  std::transform(hos.begin(), hos.end(), host_bools.begin(),
+                 replaced_array.begin(),
+                 [&](T x, bool b) { return (b) ? x : init; });
+  T_upcast expected_value =
+      *std::min_element(replaced_array.begin(), replaced_array.end());
+  // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // calculate the expected value by CPU.
-    std::vector<T> replaced_array(w_col.size());
-    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
-        replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
-    T_upcast expected_value = std::accumulate(
-        replaced_array.begin(), replaced_array.end(), T_upcast{0});
-    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
-
-    // GPU test
-    auto it_dev = cudf::make_iterator<true, T, T_upcast>(w_col, T_upcast{0});
-    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev, w_col.size());
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, T{0});
+  auto it_dev_upcast =
+      thrust::make_transform_iterator(it_dev, thrust::identity<T_upcast>());
+  this->iterator_test_thrust(replaced_array, it_dev_upcast, d_col->size());
+  this->iterator_test_cub(expected_value, it_dev, d_col->size());
 }
 
+// Tests for square input iterator using helper strcut
+// `cudf::transformer_squared<T, T_upcast>` The up cast iterator will be created
+// by make_transform_iterator(
+//        cudf::experimental::detail::make_null_replacement_iterator(col, T{0}), 
+//        cudf::detail::transformer_squared<T_upcast>)
+TYPED_TEST(IteratorTest, null_iterator_square) {
+  const int column_size{1000};
+  using T = int8_t;
+  using T_upcast = int64_t;
+  T init{0};
+  cudf::transformer_squared<T_upcast> transformer{};
 
-// Tests for square input iterator using helper strcut `cudf::transformer_squared<T, T_upcast>`
-// The up cast iterator will be created by
-//  `cudf::make_iterator<true, T, T_upcast, cudf::detail::transformer_squared<T, T_upcast>`
-TYPED_TEST(IteratorTest, null_iterator_square)
-{
-    const int column_size{1000};
-    using T = int8_t;
-    using T_upcast = int64_t;
-    T init{0};
-    cudf::transformer_squared<T_upcast> transformer{};
+  // data and valid arrays
+  std::vector<T> hos(column_size);
+  std::generate(hos.begin(), hos.end(),
+                []() { return static_cast<T>(random_int(-128, 128)); });
+  std::vector<bool> host_bools(column_size);
+  std::generate(host_bools.begin(), host_bools.end(),
+                []() { return static_cast<bool>(random_bool()); });
 
-    std::vector<bool> host_bools(column_size);
-    std::generate(host_bools.begin(), host_bools.end(),
-        []() { return static_cast<bool>( random_bool() ); } );
+  cudf::test::fixed_width_column_wrapper<T> w_col(hos.begin(), hos.end(),
+                                                  host_bools.begin());
+  auto d_col = cudf::column_device_view::create(w_col);
 
-    cudf::test::column_wrapper<T> w_col(
-        column_size,
-        [](cudf::size_type row) { return T{random_int<T>(-128, 127)}; },
-        [&](cudf::size_type row) { return host_bools[row]; } );
+  // calculate the expected value by CPU.
+  std::vector<T_upcast> replaced_array(d_col->size());
+  std::transform(hos.begin(), hos.end(), host_bools.begin(),
+                 replaced_array.begin(),
+                 [&](T x, bool b) { return (b) ? x * x : init; });
+  T_upcast expected_value =
+      *std::min_element(replaced_array.begin(), replaced_array.end());
+  // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // copy back data and valid arrays
-    auto hos = w_col.to_host();
-
-    // calculate the expected value by CPU.
-    std::vector<T_upcast> replaced_array(w_col.size());
-    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
-        replaced_array.begin(), [&](T x, bool b) { return (b)?  x*x : init; } );
-    T_upcast expected_value = std::accumulate(
-        replaced_array.begin(), replaced_array.end(), T_upcast{0});
-    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
-
-    // GPU test
-    auto it_dev = cudf::make_iterator<true, T, T_upcast>(w_col, T{0});
-    auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-    this->iterator_test_thrust(expected_value, it_dev_squared, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev_squared, w_col.size());
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, T{0});
+  auto it_dev_upcast = thrust::make_transform_iterator(it_dev, thrust::identity<T_upcast>());
+  auto it_dev_squared = thrust::make_transform_iterator(it_dev_upcast, transformer);
+  this->iterator_test_thrust(replaced_array, it_dev_squared, d_col->size());
+  this->iterator_test_cub(expected_value, it_dev_squared, d_col->size());
 }
 
-//    tests for indexed access
-//    this was used by old implementation of group_by.
-//
-//    This won't be used with the newer implementation
-//     (a.k.a. Single pass, distributive groupby https://github.com/rapidsai/cudf/pull/1478)
-//    distributive groupby uses atomic operation to accumulate.
-//
-//    For group_by.cumsum() (scan base group_by) may not be single pass scan.
-//    There is a possiblity that this process may be used for group_by.cumsum().
-TYPED_TEST(IteratorTest, indexed_iterator)
-{
-    using T = int32_t;
-    using T_index = cudf::size_type;
+TYPED_TEST(IteratorTest, large_size_reduction) {
+  using T = TypeParam;
 
-    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-    thrust::device_vector<T> dev_array(hos_array);
+  const int column_size{1000000};
+  const T init{0};
 
-    std::vector<T_index> hos_indices({0, 1, 3, 5}); // sorted indices belongs to a group
-    thrust::device_vector<T_index> dev_indices(hos_indices);
+  // data and valid arrays
+  std::vector<T> hos(column_size);
+  std::generate(hos.begin(), hos.end(),
+                []() { return static_cast<T>(random_int(-128, 128)); });
+  std::vector<bool> host_bools(column_size);
+  std::generate(host_bools.begin(), host_bools.end(),
+                []() { return static_cast<bool>(random_bool()); });
 
-    // calculate the expected value by CPU.
-    T expected_value = std::accumulate(hos_indices.begin(), hos_indices.end(), T{0},
-        [&](T acc, T_index id){ return (acc + hos_array[id]); } );
-    std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
+  cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
+      hos.begin(), hos.end(), host_bools.begin());
+  auto d_col = cudf::column_device_view::create(w_col);
 
-    const bit_mask::bit_mask_t *dummy = nullptr;
+  // calculate by cudf::reduce
+  std::vector<T> replaced_array(d_col->size());
+  std::transform(hos.begin(), hos.end(), host_bools.begin(),
+                 replaced_array.begin(),
+                 [&](T x, bool b) { return (b) ? x : init; });
+  T expected_value = *std::min_element(replaced_array.begin(), replaced_array.end());
+  // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // GPU test
-    auto it_dev = cudf::make_iterator<false, T, T, T_index*>
-        (dev_array.data().get(), dummy, T{0}, dev_indices.data().get());
-    this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
-    this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
+  this->iterator_test_thrust(replaced_array, it_dev, d_col->size());
+  this->iterator_test_cub(expected_value, it_dev, d_col->size());
 }
 
-
-TYPED_TEST(IteratorTest, large_size_reduction)
-{
-    using T = int32_t;
-
-    const int column_size{1000000};
-    const T init{0};
-
-    std::vector<bool> host_bools(column_size);
-    std::generate(host_bools.begin(), host_bools.end(),
-        []() { return static_cast<bool>( random_bool() ); } );
-
-    cudf::test::column_wrapper<TypeParam> w_col(
-        column_size,
-        [](cudf::size_type row) { return T{random_int(-128, 128)}; },
-        [&](cudf::size_type row) { return host_bools[row]; } );
-
-    // copy back data and valid arrays
-    auto hos = w_col.to_host();
-
-    // calculate by cudf::reduce
-    std::vector<T> replaced_array(w_col.size());
-    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
-        replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
-    T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
-    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
-
-
-    // GPU test
-    auto it_dev = cudf::make_iterator<true, T>(w_col, init);
-    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev, w_col.size());
-
-
-    // compare with cudf::reduce
-    cudf::test::scalar_wrapper<T> result =
-        cudf::reduce(w_col, cudf::reduction::SUM, GDF_INT32);
-
-    EXPECT_EQ(expected_value, result.value());
-}
-
-
-
+/*
+// TODO: make_pair_iterator and enable this test
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.
 // Workaround: exclude this test only at device debug mode.
@@ -362,77 +362,135 @@ TYPED_TEST(IteratorTest, mean_var_output)
     const int column_size{5000};
     const T_upcast init{0};
 
+    // data and valid arrays
+    std::vector<T>  hos(column_size);
+    std::generate(hos.begin(), hos.end(),
+        []()  { return static_cast<T>(random_int(-128, 128)); });
+
     std::vector<bool> host_bools(column_size);
     std::generate(host_bools.begin(), host_bools.end(),
         []() { return static_cast<bool>( random_bool() ); } );
 
-    cudf::test::column_wrapper<TypeParam> w_col(
-        column_size,
-        [](cudf::size_type row) { return T{random_int(-128, 128)}; },
-        [&](cudf::size_type row) { return host_bools[row]; } );
-
-    // copy back data and valid arrays
-    auto hos = w_col.to_host();
+    cudf::test::fixed_width_column_wrapper<TypeParam> w_col(hos.begin(),
+hos.end(), host_bools.begin()); auto d_col =
+cudf::column_device_view::create(w_col);
 
     // calculate expected values by CPU
     T_output expected_value;
 
-    expected_value.count = w_col.size() - w_col.null_count();
+    expected_value.count = d_col->size() - d_col->null_count();
 
-    std::vector<T> replaced_array(w_col.size());
-    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
+    std::vector<T> replaced_array(d_col->size());
+    std::transform(hos.begin(), hos.end(), host_bools.begin(),
         replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
 
-    expected_value.count = w_col.size() - w_col.null_count();
-    expected_value.value = std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0});
-    expected_value.value_squared = std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0},
+    expected_value.count = d_col->size() - d_col->null_count();
+    expected_value.value = std::accumulate(replaced_array.begin(),
+replaced_array.end(), T_upcast{0}); expected_value.value_squared =
+std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0},
         [](T acc, T i) { return acc + i * i; });
 
     std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
     // GPU test
-    auto it_dev = cudf::make_pair_iterator<true, T>
-        (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    // TODO: make_pair_iterator
+    auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
+    //auto it_dev = cudf::make_pair_iterator<true, T>
+    //    (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-    this->iterator_test_thrust(expected_value, it_dev_squared, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev_squared, w_col.size());
+    this->iterator_test_thrust(replaced_array, it_dev_squared, d_col->size());
+    //this->iterator_test_cub(expected_value, it_dev_squared, d_col->size());
 }
 #endif
+*/
 
+TYPED_TEST(IteratorTest, error_handling) {
+  using T = TypeParam;
+  std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
 
+  cudf::test::fixed_width_column_wrapper<T> w_col_no_null(hos_array.begin(),
+                                                          hos_array.end());
+  cudf::test::fixed_width_column_wrapper<T> w_col_null(hos_array.begin(),
+                                                       hos_array.end(),
+                                                       host_bools.begin());
+  auto d_col_no_null = cudf::column_device_view::create(w_col_no_null);
+  auto d_col_null = cudf::column_device_view::create(w_col_null);
 
-TYPED_TEST(IteratorTest, error_handling)
-{
-    using T = int32_t;
-    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+  // expects error: data type mismatch
+  if (!(std::is_same<T, double>::value)) {
+    CUDF_EXPECT_THROW_MESSAGE((d_col_null->begin<double>()),
+                              "the data type mismatch");
+  }
+  // expects error: data type mismatch
+  if (!(std::is_same<T, float>::value)) {
+    CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_null_replacement_iterator(*d_col_null, float{0})),
+                              "the data type mismatch");
+  }
 
-    cudf::test::column_wrapper<T> w_col_no_null(hos_array);
-    cudf::test::column_wrapper<T> w_col_null(hos_array,
-        [&](cudf::size_type row) { return true; });
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_null_replacement_iterator(*d_col_no_null, T{0})),
+                            "Unexpected non-nullable column.");
 
-    // expects error: data type mismatch
-    CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<false, double>( *w_col_null.get(), double{0}) ),
-        "the data type mismatch");
-    CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<true, float>( *w_col_null.get(), float{0}) ),
-        "the data type mismatch");
-
-    CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<true, T>( *w_col_no_null.get(), T{0}) ),
-        "non-null bit mask is required");
-
-    // expects no error: treat no null iterator with column has nulls
-    CUDF_EXPECT_NO_THROW( (cudf::make_iterator<false, T>( *w_col_null.get(), T{0}) ) );
-
-    // same test for `make_pair_iterator`
-    // expects error: data type mismatch
-    CUDF_EXPECT_THROW_MESSAGE((cudf::make_pair_iterator<false, double>( *w_col_null.get(), double{0}) ),
-        "the data type mismatch");
-    CUDF_EXPECT_THROW_MESSAGE((cudf::make_pair_iterator<true, float>( *w_col_null.get(), float{0}) ),
-        "the data type mismatch");
-
-    CUDF_EXPECT_THROW_MESSAGE((cudf::make_pair_iterator<true, T>( *w_col_no_null.get(), T{0}) ),
-        "non-null bit mask is required");
-
-    // expects no error: treat no null iterator with column has nulls
-    CUDF_EXPECT_NO_THROW( (cudf::make_pair_iterator<false, T>( *w_col_null.get(), T{0}) ) );
+  CUDF_EXPECT_THROW_MESSAGE((d_col_null->begin<T>()),
+                            "Unexpected column with nulls.");
 }
 
+struct StringIteratorTest :  public IteratorTest<cudf::string_view> { 
+};
+
+TEST_F(StringIteratorTest, string_view_null_iterator ) {
+  using T = cudf::string_view;
+  // T init = T{"", 0};
+  std::string zero("zero");
+  // the char data has to be in GPU
+  thrust::device_vector<char> initmsg(zero.begin(), zero.end());
+  T init = T{initmsg.data().get(), int(initmsg.size())};
+
+  // data and valid arrays
+  std::vector<std::string> hos({"one", "two", "three", "four", "five", "six", "eight", "nine"});
+  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
+
+  // replace nulls in CPU
+  std::vector<std::string> replaced_strings(hos.size());
+  std::transform(hos.begin(), hos.end(), host_bools.begin(),
+                 replaced_strings.begin(),
+                 [zero](auto s, auto b) { return b ? s : zero; });
+
+  thrust::device_vector<char> dev_chars;
+  std::vector<T> replaced_array(hos.size());
+  std::tie(dev_chars, replaced_array) = strings_to_string_views(replaced_strings);
+
+  // create a column with bool vector
+  cudf::test::strings_column_wrapper w_col(hos.begin(), hos.end(),
+                                           host_bools.begin());
+  auto d_col = cudf::column_device_view::create(w_col);
+ 
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
+  this->iterator_test_thrust(replaced_array, it_dev, hos.size());
+  // this->values_equal_test(replaced_array, *d_col); //string_view{0} is invalid
+}
+
+TEST_F(StringIteratorTest, string_view_no_null_iterator ) {
+  using T = cudf::string_view;
+  // T init = T{"", 0};
+  std::string zero("zero");
+  // the char data has to be in GPU
+  thrust::device_vector<char> initmsg(zero.begin(), zero.end());
+  T init = T{initmsg.data().get(), int(initmsg.size())};
+
+  // data array
+  std::vector<std::string> hos({"one", "two", "three", "four", "five", "six", "eight", "nine"});
+
+  thrust::device_vector<char> dev_chars;
+  std::vector<T> all_array(hos.size());
+  std::tie(dev_chars, all_array) = strings_to_string_views(hos);
+
+  // create a column with bool vector
+  cudf::test::strings_column_wrapper w_col(hos.begin(), hos.end());
+  auto d_col = cudf::column_device_view::create(w_col);
+ 
+  // GPU test
+  auto it_dev = d_col->begin<T>();
+  this->iterator_test_thrust(all_array, it_dev, hos.size());
+}
