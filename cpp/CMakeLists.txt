@@ -491,6 +491,7 @@ add_library(cudf
             src/strings/utilities.cu
             src/strings/attributes.cu
             src/strings/copying/copying.cu
+            src/strings/copying/concatenate.cu
             src/strings/sorting/sorting.cu
             src/strings/substring.cu
             src/strings/combine.cu
