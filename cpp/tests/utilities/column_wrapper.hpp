@@ -281,7 +281,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param element_list The vector of elements
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::vector<Element> elements)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements)} {
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
   }
 
   /**---------------------------------------------------------------------------*
@@ -303,8 +303,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::initializer_list<Element> elements,
                              std::initializer_list<bool> validity)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements),
-                                   std::cbegin(validity)} {}
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
+                                   std::cbegin(validity)) {}
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a vector of fixed-width elements
    * using another vector to indicate the validity of each element.
@@ -318,8 +318,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::vector<Element> elements,
                              std::vector<bool> validity)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements),
-                                   std::cbegin(validity)} {}
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
+                                   std::cbegin(validity)) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements and
