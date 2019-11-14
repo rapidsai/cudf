@@ -19,9 +19,6 @@
 
 #include <tests/binaryop/binop-fixture.hpp>
 #include <cudf/binaryop.hpp>
-#include <gtest/gtest.h>
-#include <vector>
-#include <numeric>
 
 
 namespace cudf {
