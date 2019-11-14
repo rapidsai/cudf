@@ -29,6 +29,42 @@ namespace detail {
 namespace {
 
 template <typename T>
+std::unique_ptr<column> copy_with_policy(column_view const& original,
+    mask_allocation_policy policy, rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+{
+  std::unique_ptr<column> copy;
+  if (original.nullable() || policy == mask_allocation_policy::RETAIN) {
+    // Copy null mask from the original, if it exists
+    copy = std::make_unique<column>(original, stream, mr);
+  } else {
+    // Original doesn't have a null mask, but we may allocate an empty one
+    copy = allocate_like(original, original.size(), policy, mr, stream);
+    auto copy_view = copy->mutable_view();
+    thrust::copy(rmm::exec_policy(stream)->on(stream),
+      original.begin<T>(), original.end<T>(), copy_view.begin<T>());
+    copy->set_null_count(0);
+  }
+  return copy;
+}
+
+/*std::unique_ptr<column> copy_with_policy(column_view const& original,
+    mask_allocation_policy policy, rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+{
+  // TODO this doesn't handle NEVER policy correctly
+  auto copy = std::make_unique<column>(original, stream, mr);
+  if (policy == mask_allocation_policy::ALWAYS and not original.nullable()) {
+    // Create an all-valid null mask if original has none
+    auto contents = copy->release();
+    auto bitmask = create_null_mask(original.size(), mask_state::ALL_VALID, stream, mr);
+    copy = std::make_unique<column>(original.type(), original.size(),
+      std::move(*contents.data), std::move(bitmask), 0, std::move(contents.children));
+  }
+  return copy;
+}*/
+
+template <typename T>
 thrust::device_vector<T> make_gather_map(column_view const& scatter_map,
     size_type rows, cudaStream_t stream)
 {
@@ -155,11 +191,10 @@ struct column_scatterer {
       column_view const& scatter_map, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    auto result = std::make_unique<column>(target, stream, mr);
-    if (source.nullable() and not result->nullable()) {
-      // TODO should be allocating a null mask in result if source has one even if target does not... how?
-      CUDF_FAIL("Not yet suppporting scatter from nullable source into non-nullable target");
-    }
+    // Result column must have a null mask if the source does
+    mask_allocation_policy nullable = source.nullable() ?
+      mask_allocation_policy::ALWAYS : mask_allocation_policy::RETAIN;
+    std::unique_ptr<column> result = copy_with_policy<T>(target, nullable, mr, stream);
     auto result_view = result->mutable_view();
 
     // Transform negative indices to index + target size
