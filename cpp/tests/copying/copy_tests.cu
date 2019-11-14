@@ -36,52 +36,187 @@ TYPED_TEST_CASE(CopyTest, cudf::test::NumericTypes);
 #define wrapper cudf::test::fixed_width_column_wrapper
 using bool_wrapper = wrapper<cudf::experimental::bool8>;
 
-TYPED_TEST(CopyTest, CopyIfElseTest) 
+TYPED_TEST(CopyTest, CopyIfElseTestShort) 
 { 
-   using T = TypeParam;   
-      
-   // make sure we span at least 2 warps
+   using T = TypeParam;
+
+   // short one. < 1 warp/bitmask length
+   int num_els = 4;
+
+   bool mask[]    = { 1, 0, 0, 0 };
+   bool_wrapper mask_w(mask, mask + num_els);
+
+   T lhs[]        = { 5, 5, 5, 5 }; 
+   bool lhs_v[]   = { 1, 1, 1, 1 };
+   wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
+
+   T rhs[]        = { 6, 6, 6, 6 };
+   bool rhs_v[]   = { 1, 1, 1, 1 };
+   wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+   
+   T expected[]   = { 5, 6, 6, 6 };
+   bool exp_v[]   = { 1, 1, 1, 1 };
+   wrapper<T> expected_w(expected, expected + num_els, exp_v);
+
+   auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
+   cudf::test::expect_columns_equal(out->view(), expected_w);
+}
+
+TYPED_TEST(CopyTest, CopyIfElseTestManyNulls) 
+{ 
+   using T = TypeParam;
+
+   // bunch of nulls in output, non-aligned # of elements
+   int num_els = 7;
+
+   bool mask[]    = { 1, 0, 0, 0, 0, 0, 1 };
+   bool_wrapper mask_w(mask, mask + num_els);
+
+   T lhs[]        = { 5, 5, 5, 5, 5, 5, 5 }; 
+   bool lhs_v[]   = { 1, 1, 1, 1, 1, 1, 1 };
+   wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
+
+   T rhs[]        = { 6, 6, 6, 6, 6, 6, 6 };
+   bool rhs_v[]   = { 1, 0, 0, 0, 0, 0, 1 };
+   wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+   
+   T expected[]   = { 5, 6, 6, 6, 6, 6, 5 };
+   bool exp_v[]   = { 1, 0, 0, 0, 0, 0, 1 };
+   wrapper<T> expected_w(expected, expected + num_els, exp_v);
+
+   auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);      
+   cudf::test::expect_columns_equal(out->view(), expected_w);   
+}
+
+TYPED_TEST(CopyTest, CopyIfElseTestLong) 
+{  
+   using T = TypeParam;
+
+   // make sure we span at least 2 warps      
    int num_els = 64;
 
-   bool _mask[]   = { 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-   bool_wrapper mask_w(_mask, _mask + num_els);
+   bool mask[]    = { 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
+   bool_wrapper mask_w(mask, mask + num_els);
 
-   T _lhs[]       = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
-                      5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
-   bool _lhs_v[]  = { 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-   wrapper<T> lhs_w(_lhs, _lhs + num_els, _lhs_v);      
+   T lhs[]        = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+                     5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
+   bool lhs_v[]   = { 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
+   wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
 
-   T _rhs[]       = { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-                      6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 };
-   bool _rhs_v[]  = { 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-   wrapper<T> rhs_w(_rhs, _rhs + num_els, _rhs_v);            
+   T rhs[]        = { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+                     6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 };
+   bool rhs_v[]   = { 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };                      
+   wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+   
+   T expected[]   = { 5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+                     5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
+   bool exp_v[]   = { 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
+   wrapper<T> expected_w(expected, expected + num_els, exp_v);
 
-   T _expected[]  = { 5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
-                      5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
-   bool _exp_v[]  = { 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-   wrapper<T> expected_w(_expected, _expected + num_els, _exp_v);
+   auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);      
+   cudf::test::expect_columns_equal(out->view(), expected_w);   
+}
 
-   // construct input views
-   cudf::column mask(mask_w);
-   cudf::column_view mask_v(mask);
-   //
-   cudf::column lhs(lhs_w);
-   cudf::column_view lhs_v = lhs.view();
-   //
-   cudf::column rhs(rhs_w);
-   cudf::column_view rhs_v = rhs.view();
-   //
-   cudf::column expected(expected_w);
-   cudf::column_view expected_v = expected.view();
+TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs) 
+{ 
+   using T = TypeParam;
+         
+   int num_els = 0;
+   
+   bool mask[]    = {};
+   bool_wrapper mask_w(mask, mask + num_els);
 
-   // get the result
-   auto out = cudf::experimental::copy_if_else(lhs_v, rhs_v, mask_v);
-   cudf::column_view out_v = out->view();      
+   T lhs[]        = {};
+   wrapper<T> lhs_w(lhs, lhs + num_els);
 
-   // compare
-   cudf::test::expect_columns_equal(out_v, expected_v);   
+   T rhs[]        = {};
+   wrapper<T> rhs_w(rhs, rhs + num_els);
+   
+   T expected[]   = {};
+   wrapper<T> expected_w(expected, expected + num_els);
+
+   auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);      
+   cudf::test::expect_columns_equal(out->view(), expected_w);
+}
+
+TYPED_TEST(CopyTest, CopyIfElseBadInputValidity)
+{ 
+   using T = TypeParam;   
+         
+   int num_els = 4;
+
+   bool mask[]    = { 1, 1, 1, 1 };
+   bool_wrapper mask_w(mask, mask + num_els);
+
+   T lhs[]        = { 5, 5, 5, 5 };   
+   wrapper<T> lhs_w(lhs, lhs + num_els);
+
+   T rhs[]        = { 6, 6, 6, 6 };                      
+   wrapper<T> rhs_w(rhs, rhs + num_els, mask);      
+
+   EXPECT_THROW(  cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w),
+                  cudf::logic_error);
+}
+
+TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
+{ 
+   using T = TypeParam;   
+         
+   int num_els = 4;
+
+   // mask length mismatch
+   {
+      bool mask[]    = { 1, 1, 1, 1 };
+      bool_wrapper mask_w(mask, mask + 3);
+
+      T lhs[]        = { 5, 5, 5, 5 };
+      wrapper<T> lhs_w(lhs, lhs + num_els, mask);
+
+      T rhs[]        = { 6, 6, 6, 6 };
+      wrapper<T> rhs_w(rhs, rhs + num_els, mask);
+
+      EXPECT_THROW(  cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w),
+                     cudf::logic_error);
+   }
+
+   // column length mismatch
+   {
+      bool mask[]    = { 1, 1, 1, 1 };
+      bool_wrapper mask_w(mask, mask + num_els);
+
+      T lhs[]        = { 5, 5, 5 };
+      wrapper<T> lhs_w(lhs, lhs + 3, mask);
+
+      T rhs[]        = { 6, 6, 6, 6 };
+      wrapper<T> rhs_w(rhs, rhs + num_els, mask);
+
+      EXPECT_THROW(  cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w), 
+                     cudf::logic_error);
+   }
+}
+
+struct CopyTestUntyped : public cudf::test::BaseFixture {};
+
+TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
+{               
+   int num_els = 4;
+
+   bool mask[]    = { 1, 1, 1, 1 };
+   bool_wrapper mask_w(mask, mask + num_els);
+   cudf::column _mask(mask_w);
+
+   float lhs[]    = { 5, 5, 5, 5 };   
+   wrapper<float> lhs_w(lhs, lhs + num_els, mask);
+   cudf::column _lhs(lhs_w);
+
+   int rhs[]      = { 6, 6, 6, 6 };                      
+   wrapper<int> rhs_w(rhs, rhs + num_els, mask);
+   cudf::column _rhs(rhs_w);      
+
+   EXPECT_THROW(  cudf::experimental::copy_if_else(_lhs, _rhs, _mask),
+                  cudf::logic_error);
 }
