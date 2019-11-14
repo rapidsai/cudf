@@ -134,7 +134,21 @@ void materialize_bitmask(cudf::column_view const& left_col,
   auto left_valid  = *p_left_dcol;
   auto right_valid = *p_right_dcol;
   auto out_valid   = *p_out_dcol;
-  
+
+  //these tests in the legacy code
+  //tested the null_mask buffer against nullptr,
+  //not if there were nulls, which may not be
+  //equivalent with semantics below...
+  //
+  //in fact, the null_mask being nullptr is
+  //equivalent to ALL_VALID (see types.hpp comment on
+  //UNALLOCATED);
+  //this is not the meaning of
+  //left_have_valids and right_have_valids non-template
+  //bool params (which indicate whether the corresponding
+  //null_maks buffers are non-nullptr<true> or not<false>);
+  //
+  //
   if (p_left_dcol->has_nulls()) {
     if (p_right_dcol->has_nulls()) {
       materialize_merged_bitmask_kernel<true, true>
@@ -287,13 +301,23 @@ struct ColumnMerger
     
     std::unique_ptr<cudf::column> p_merged_col = cudf::experimental::allocate_like(lcol, merged_size);
 
-    //(IMPORTANT!) TODO: set_null_mask(p_merged_col->null_mask(), p_merged_col->size(), ALL_VALID, stream_);
-
     //"gather" data from lcol, rcol according to dv_row_order_ "map"
     //(directly calling gather() won't work because
     // lcol, rcol indices overlap!)
     //
     cudf::mutable_column_view merged_view = p_merged_col->mutable_view();
+
+    //initialize null_mask to all valid:
+    //
+    //Note: this initialization in conjunction with _conditionally_
+    //calling materialze_bitmask() below covers the case
+    //materialize_merged_bitmask_kernel<false, false>()
+    //which won't be called anymore (because of the _condition_ below)
+    //
+    cudf::set_null_mask(merged_view.null_mask(),
+                        merged_view.size(),
+                        ALL_VALID,
+                        stream_);
 
     //to resolve view.data()'s types use: ElemenT
     //

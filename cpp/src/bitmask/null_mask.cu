@@ -86,6 +86,27 @@ rmm::device_buffer create_null_mask(size_type size, mask_state state,
   return mask;
 }
 
+// Set pre-allocated null mask to given state
+void set_null_mask(bitmask_type* ptr_bitmask,
+                   size_type size, mask_state state,
+                   cudaStream_t stream)
+{
+  if (ptr_bitmask != nullptr)
+    {
+      size_type mask_size{0};
+
+      if (state != UNALLOCATED) {
+        mask_size = bitmask_allocation_size_bytes(size);
+      }
+
+      if (state != UNINITIALIZED) {
+        uint8_t fill_value = (state == ALL_VALID) ? 0xff : 0x00;
+        CUDA_TRY(cudaMemsetAsync(ptr_bitmask,
+                                 fill_value, mask_size, stream));
+      }
+    }
+}
+
 namespace {
 
 /**---------------------------------------------------------------------------*
