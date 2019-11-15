@@ -71,70 +71,8 @@ thrust::device_vector<T> make_gather_map(column_view const& scatter_map,
   return gather_map;
 }
 
-template <bool ignore_out_of_bounds, bool source_nullable, typename MapIterator>
-__device__ size_type gather_bitmask_column_inplace(column_device_view& source_col,
-    MapIterator gather_map, mutable_column_device_view destination_col)
-{
-  size_type destination_row_base = blockIdx.x * blockDim.x;
-  size_type valid_count_accumulate = 0;
-
-  while (destination_row_base < destination_col.size()) {
-    size_type destination_row = destination_row_base + threadIdx.x;
-
-    const bool thread_active = destination_row < destination_col.size();
-    size_type source_row = thread_active ? gather_map[destination_row] : 0;
-
-    // Read destination bit if source index is out of bounds
-    bool bit_is_valid;
-    if (ignore_out_of_bounds && (source_row < 0 || source_row >= source_col.size())) {
-      bit_is_valid = thread_active ? destination_col.is_valid(destination_row) : false;
-    } else {
-      bit_is_valid = source_nullable ? source_col.is_valid_nocheck(source_row) : true;
-    }
-
-    // Use ballot to find all valid bits in this warp and create the output bitmask element
-    uint32_t const valid_warp = __ballot_sync(0xffffffff, thread_active && bit_is_valid);
-
-    size_type const valid_index = word_index(destination_row);
-
-    // Only one thread writes output
-    if (0 == threadIdx.x % warp_size) {
-      destination_col.set_mask_word(valid_index, valid_warp);
-    }
-    valid_count_accumulate += single_lane_block_popc_reduce(valid_warp);
-    destination_row_base += blockDim.x * gridDim.x;
-  }
-
-  return valid_count_accumulate;
-}
-
-template <bool ignore_out_of_bounds, typename MapIterator>
-__global__ void gather_bitmask_inplace_kernel(table_device_view source_table,
-    MapIterator gather_map, mutable_table_device_view destination_table,
-    size_type* valid_counts)
-{
-  for (size_type i = 0; i < source_table.num_columns(); i++) {
-    column_device_view source_col = source_table.column(i);
-    mutable_column_device_view destination_col = destination_table.column(i);
-
-    if (destination_col.nullable()) {
-      size_type valid_count_accumulate;
-      if (source_col.nullable()) {
-        valid_count_accumulate = gather_bitmask_column_inplace<ignore_out_of_bounds, true>(
-          source_col, gather_map, destination_col);
-      } else {
-        valid_count_accumulate = gather_bitmask_column_inplace<ignore_out_of_bounds, false>(
-          source_col, gather_map, destination_col);
-      }
-      if (threadIdx.x == 0) {
-        atomicAdd(valid_counts + i, valid_count_accumulate);
-      }
-    }
-  }
-}
-
 template <typename MapIterator>
-void gather_bitmask_inplace(table_view const& source, MapIterator gather_map,
+void gather_bitmask(table_view const& source, MapIterator gather_map,
     std::vector<std::unique_ptr<column>>& target, cudaStream_t stream)
 {
   auto const device_source = table_device_view::create(source, stream);
@@ -148,7 +86,7 @@ void gather_bitmask_inplace(table_view const& source, MapIterator gather_map,
 
   // Compute block size
   int grid_size, block_size;
-  auto bitmask_kernel = gather_bitmask_inplace_kernel<true, decltype(gather_map)>;
+  auto bitmask_kernel = gather_bitmask_kernel<true, decltype(gather_map)>;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, bitmask_kernel));
 
   auto valid_counts = thrust::device_vector<size_type>(target.size());
@@ -161,46 +99,6 @@ void gather_bitmask_inplace(table_view const& source, MapIterator gather_map,
     auto const& target_col = target[i];
     if (target_col->nullable()) {
       target_col->set_null_count(target_col->size() - valid_counts_host[i]);
-    }
-  }
-}
-
-template <typename MapIterator>
-__global__ void scatter_bitmask_kernel(column_device_view source_col,
-    MapIterator scatter_map, size_type scatter_map_size,
-    mutable_column_device_view target_col)
-{
-  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
-
-  while (row_number < scatter_map_size) {
-    auto const output_row = scatter_map[row_number];
-    if (source_col.is_valid(row_number)) {
-      target_col.set_valid(output_row);
-    } else {
-      target_col.set_null(output_row);
-    }
-
-    row_number += blockDim.x * gridDim.x;
-  }
-}
-
-template <typename MapIterator>
-void scatter_bitmask(table_view const& source, MapIterator scatter_map,
-    size_type scatter_map_size, std::vector<std::unique_ptr<column>>& target,
-    cudaStream_t stream)
-{
-  constexpr size_type block_size{256};
-  experimental::detail::grid_1d grid(scatter_map_size, block_size);
-
-  for (size_type i = 0; i < source.num_columns(); ++i) {
-    if (target[i]->nullable()) {
-      auto source_col = column_device_view::create(source.column(i), stream);
-      auto target_col = mutable_column_device_view::create(target[i]->mutable_view(), stream);
-      scatter_bitmask_kernel<<<grid.num_blocks, block_size, 0, stream>>>(
-          *source_col, scatter_map, scatter_map_size, *target_col);
-
-      // Recompute the null count
-      target[i]->null_count();
     }
   }
 }
@@ -266,17 +164,8 @@ struct scatter_impl {
           source_col, scatter_map, target_col, mr, stream);
       });
 
-    constexpr bool use_gather_bitmask = false;
-    if (use_gather_bitmask) {
-      auto gather_map = make_gather_map<T>(scatter_map, target.num_rows(), stream);
-      gather_bitmask_inplace(source, gather_map.begin(), result, stream);
-    }
-    else {
-      // Transform negative indices to index + target size
-      auto scatter_iter = thrust::make_transform_iterator(
-        scatter_map.begin<T>(), index_converter<T>{target.num_rows()});
-      scatter_bitmask(source, scatter_iter, scatter_map.size(), result, stream);
-    }
+    auto gather_map = make_gather_map<T>(scatter_map, target.num_rows(), stream);
+    gather_bitmask(source, gather_map.begin(), result, stream);
 
     return std::make_unique<table>(std::move(result));
   }
