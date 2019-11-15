@@ -20,21 +20,18 @@
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
-
 namespace experimental {
 
 /**
- * @brief These enums indicate the supported operations of prefix scan that can be
- * performed on a column
+ * @brief These enums indicate the supported operations of prefix scan that can
+ * be performed on a column
  */
-typedef enum {
-  SCAN_SUM = 0,             ///< Computes the prefix scan of sum operation of all values for the column
-  SCAN_MIN,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  SCAN_MAX,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  SCAN_PRODUCT,             ///< Computes the prefix scan of multiplicative product operation of all values for the column
-} scan_op;
-
-
+enum scan_op {
+  SCAN_SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
+  SCAN_MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
+  SCAN_MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
+  SCAN_PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
+};
 
 namespace reduction {
 /**
@@ -97,8 +94,10 @@ std::unique_ptr<scalar> reduce(const column_view& col,
  * an exclusive scan if false.
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
-std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive);
+std::unique_ptr<column> scan(
+    const column_view& input, scan_op op, bool inclusive,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
