@@ -28,6 +28,40 @@ namespace strings
 {
 namespace detail
 {
+namespace
+{
+
+/**
+ * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
+ *
+ * No character conversion occurs.
+ * Each UTF-8 character is promoted into a 32-bit value.
+ * The last entry in the returned vector will be a 0 value.
+ * The fixed-width vector makes it easier to compile and faster to execute.
+ *
+ * @param pattern Regular expression encoded with UTF-8.
+ * @return Fixed-width 32-bit character vector.
+ */
+std::vector<char32_t> string_to_char32_vector( std::string const& pattern )
+{
+    size_type size = static_cast<size_type>(pattern.size());
+    size_type count = characters_in_string(pattern.c_str(),size);
+    std::vector<char32_t> result(count+1);
+    char32_t* output_ptr = result.data();
+    const char* input_ptr = pattern.data();
+    for( size_type idx=0; idx < size; ++idx )
+    {
+        char_utf8 output_character = 0;
+        size_type ch_width = to_char_utf8(input_ptr,output_character);
+        input_ptr += ch_width;
+        idx += ch_width - 1;
+        *output_ptr++ = output_character;
+    }
+    result[count] = 0; // last entry set to 0
+    return result;
+}
+
+}
 
 // Copy Reprog primitive values
 Reprog_device::Reprog_device(Reprog& prog)
@@ -44,10 +78,11 @@ Reprog_device::Reprog_device(Reprog& prog)
 
 // Create instance of the Reprog that can be passed into a device kernel
 std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
- Reprog_device::create(const char32_t* pattern, const uint8_t* codepoint_flags, size_type strings_count, cudaStream_t stream )
+ Reprog_device::create(std::string const& pattern, const uint8_t* codepoint_flags, size_type strings_count, cudaStream_t stream )
 {
+    std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
     // compile pattern into host object
-    Reprog h_prog = Reprog::create_from(pattern);
+    Reprog h_prog = Reprog::create_from(pattern32.data());
     // compute size to hold all the member data
     auto insts_count = h_prog.insts_count();
     auto classes_count = h_prog.classes_count();
@@ -56,7 +91,7 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
     auto startids_size = starts_count * sizeof(_startinst_ids[0]);
     auto classes_size = classes_count * sizeof(_classes[0]);
     for( int32_t idx=0; idx < classes_count; ++idx )
-        classes_size += static_cast<int32_t>((h_prog.class_at(idx).chrs.size())*sizeof(char32_t));
+        classes_size += static_cast<int32_t>((h_prog.class_at(idx).literals.size())*sizeof(char32_t));
     size_t memsize = insts_size + startids_size + classes_size;
     size_t rlm_size = 0;
     // check memory size needed for executing regex
@@ -109,12 +144,12 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
         Reclass& h_class = h_prog.class_at(idx);
         Reclass_device d_class;
         d_class.builtins = h_class.builtins;
-        d_class.count = h_class.chrs.size();
-        d_class.chrs = reinterpret_cast<char32_t*>(d_end);
+        d_class.count = h_class.literals.size();
+        d_class.literals = reinterpret_cast<char32_t*>(d_end);
         memcpy( classes++, &d_class, sizeof(d_class) );
-        memcpy( h_end, h_class.chrs.c_str(), h_class.chrs.size()*sizeof(char32_t) );
-        h_end += h_class.chrs.size()*sizeof(char32_t);
-        d_end += h_class.chrs.size()*sizeof(char32_t);
+        memcpy( h_end, h_class.literals.c_str(), h_class.literals.size()*sizeof(char32_t) );
+        h_end += h_class.literals.size()*sizeof(char32_t);
+        d_end += h_class.literals.size()*sizeof(char32_t);
     }
     // initialize the rest of the elements
     d_prog->_insts_count = insts_count;

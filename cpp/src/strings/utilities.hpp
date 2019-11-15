@@ -141,17 +141,6 @@ using character_cases_table_type = uint16_t;
  */
 const character_cases_table_type* get_character_cases_table();
 
-/**
- * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
- * 
- * Each UTF-8 character is promoted into a 32-bit value.
- * The last entry in the returned vector will be a 0 value.
- *
- * @param str String encoded with UTF-8.
- * @return Fixed-width 32-bit character vector.
- */
-std::vector<char32_t> string_to_char32_vector( std::string const& str );
-
 
 } // namespace detail
 } // namespace strings

@@ -35,8 +35,18 @@ namespace detail
 namespace
 {
 
-// This functor handles both contains() and match() to minimize the number
-// of regex calls to find() to be inlined greatly reducing compile time.
+/**
+ * @brief This functor handles both contains_re and match_re to minimize the number
+ * of regex calls to find() to be inlined greatly reducing compile time.
+ *
+ * The stack is used to keep progress on evaluating the regex instructions on each string.
+ * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
+ *
+ * There are three call types based on the number of regex instructions in the given pattern.
+ * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
+ * Longer patterns require global memory. Shorter patterns are common in data cleaning.
+ *
+ */
 template<size_t stack_size>
 struct contains_fn
 {
@@ -70,8 +80,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
 
     auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
-    std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
-    auto prog = Reprog_device::create(pattern32.data(),d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
     auto d_prog = *prog;
 
     // create the output column
@@ -185,8 +194,7 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
 
     auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
-    std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
-    auto prog = Reprog_device::create(pattern32.data(),d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
     auto d_prog = *prog;
 
     // create the output column

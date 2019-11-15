@@ -498,6 +498,8 @@ add_library(cudf
             src/strings/copying/copying.cu
             src/strings/filling/fill.cu
             src/strings/find.cu
+            src/strings/regex/regcomp.cpp
+            src/strings/regex/regexec.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp

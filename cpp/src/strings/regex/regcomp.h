@@ -55,7 +55,7 @@ enum InstType
 struct Reclass
 {
     int32_t builtins;    // bit mask identifying builtin classes
-    std::u32string chrs; // ranges as pairs of UTF-8 characters
+    std::u32string literals; // ranges as pairs of utf-8 characters
     Reclass() : builtins(0) {}
     Reclass(int m) : builtins(m) {}
 };
