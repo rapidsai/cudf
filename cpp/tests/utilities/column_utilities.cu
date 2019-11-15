@@ -63,8 +63,7 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool pri
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
 
-  thrust::device_vector<int> differences;
-  differences.reserve(lhs.size());
+  thrust::device_vector<int> differences(lhs.size());
 
   auto diff_iter = thrust::copy_if(thrust::device,
                                    thrust::make_counting_iterator(0),
@@ -74,9 +73,9 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool pri
 
   CUDA_TRY(cudaDeviceSynchronize());
 
-  if (diff_iter > differences.begin()) {
-    int difference_count = diff_iter - differences.begin();
+  differences.resize(thrust::distance(differences.begin(), diff_iter));
 
+  if (diff_iter > differences.begin()) {
     if (print_all_differences) {
       //
       //  If there are differences, display them all
@@ -86,7 +85,7 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool pri
       
       cudf::table_view source_table ({lhs, rhs});
 
-      fixed_width_column_wrapper<int> diff_column(differences.begin(), diff_iter);
+      fixed_width_column_wrapper<int32_t> diff_column(differences.begin(), differences.end());
 
       std::unique_ptr<cudf::experimental::table> diff_table = cudf::experimental::gather(source_table,
 											 diff_column);
@@ -97,37 +96,29 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool pri
       std::vector<std::string> h_left_strings = to_strings(diff_table->get_column(0));
       std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
 
-      for (int i = 0 ; i < difference_count ; ++i) {
+      for (size_t i = 0 ; i < differences.size() ; ++i) {
           buffer << "lhs[" << differences[i] << "] = " << h_left_strings[i]
                  << ", rhs[" << differences[i] << "] = " << h_right_strings[i] << std::endl;
       }
 
-      EXPECT_EQ(difference_count, 0) << buffer.str();
+      EXPECT_EQ(differences.size(), size_t{0}) << buffer.str();
     } else {
       //
       //  If there are differences, just display the first one
       //
       int index = differences[0];
 
-      cudf::column_view diff_lhs(lhs.type(),
-                                 1,
-                                 lhs.data<void *>(),
-                                 lhs.null_mask(),
-                                 0,
-                                 index);
-                               
-      cudf::column_view diff_rhs(rhs.type(),
-                                 1,
-                                 rhs.data<void *>(),
-                                 rhs.null_mask(),
-                                 0,
-                                 index);
+      auto diff_lhs = slice(lhs, index, index+1);
+      auto diff_rhs = slice(rhs, index, index+1);
 
-      EXPECT_EQ(difference_count, 0) << "first difference: "
-                                     << "lhs[" << index << "] = "
-                                     << to_string(diff_lhs, "")
-                                     << ", rhs[" << index << "] = "
-                                     << to_string(diff_rhs, "");
+      std::vector<std::string> h_left_strings = to_strings(diff_lhs);
+      std::vector<std::string> h_right_strings = to_strings(diff_rhs);
+
+      EXPECT_EQ(differences.size(), size_t{0}) << "first difference: "
+                                               << "lhs[" << index << "] = "
+                                               << to_string(diff_lhs, "")
+                                               << ", rhs[" << index << "] = "
+                                               << to_string(diff_rhs, "");
     }
   }
 }
@@ -175,7 +166,7 @@ struct column_view_printer {
     this->template operator()<cudf::string_view>(*col_as_strings, out);
   }
 
-  template <typename Element, typename std::enable_if_t<is_compound<Element>()>* = nullptr>
+  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     //
     //  Implementation for strings, call special to_host variant
