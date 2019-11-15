@@ -40,69 +40,70 @@ namespace detail
  * s2 is ["a", "c"]
  * ```
  *
+ * @tparam ignore_out_of_bounds If true, indices outside the column's range are ignored.
+ * @tparam MapIterator Iterator for retrieving integer indices of the column.
+ *
  * @param strings Strings instance for this operation.
  * @param begin Start of index iterator.
  * @param end End of index iterator.
- * @param ignore_out_of_bounds If true, indices outside the column's range are ignored.
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use kernels in this method.
- * @return New strings column containing the gather strings only
+ * @return New strings column containing the gathered strings.
  */
-template<typename MapIterator>
+template<bool IgnoreOutOfBounds, typename MapIterator>
 std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
                                       MapIterator begin, MapIterator end,
-                                      bool ignore_out_of_bounds,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                       cudaStream_t stream=0 )
 {
-    auto strings_count = std::distance(begin, end);
-    if( strings_count == 0 )
-        return std::make_unique<column>( data_type{STRING}, 0,
-                                         rmm::device_buffer{0,stream,mr},
-                                         rmm::device_buffer{0,stream,mr}, 0 );
+    auto output_count = std::distance(begin, end);
+    auto strings_count = strings.size();
+    if( output_count == 0 || strings_count == 0 )
+        return make_empty_strings_column(mr,stream);
+
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
 
     // create null mask
     rmm::device_buffer null_mask;
-    auto valid_mask = cudf::experimental::detail::valid_if( begin, end,
-        [d_strings] __device__ (size_type idx) { return !d_strings.is_null(idx); },
-        stream, mr );
-    auto null_count = valid_mask.second;
-    if( null_count > 0 )
-        null_mask = valid_mask.first;
+    if( strings.null_count() > 0 ) // make output nullable
+        null_mask = create_null_mask( output_count, UNINITIALIZED, stream,mr );
 
     // build offsets column
-    auto offsets_transformer = [d_strings] __device__ (size_type idx) {
-            size_type bytes = 0;
-            if( !d_strings.is_null(idx) ) // handles offset
-                bytes = d_strings.element<string_view>(idx).size_bytes();
-            return bytes;
+    auto offsets_transformer = [d_strings, strings_count] __device__ (size_type idx) {
+            if( IgnoreOutOfBounds && ((idx<0) || (idx >= strings_count)) )
+                return 0;
+             if( d_strings.is_null(idx) )
+                return 0;
+            return d_strings.element<string_view>(idx).size_bytes();
         };
     auto offsets_transformer_itr = thrust::make_transform_iterator( begin, offsets_transformer );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
-                                                    offsets_transformer_itr+strings_count,
+                                                    offsets_transformer_itr+output_count,
                                                     mr, stream);
     auto offsets_view = offsets_column->view();
     auto d_offsets = offsets_view.template data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column = create_chars_child_column( strings_count, null_count, bytes, mr, stream );
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[output_count];
+    auto chars_column = create_chars_child_column( output_count, 0, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.template data<char>();
-    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        [d_strings, begin, d_offsets, d_chars] __device__(size_type idx){
-            size_type index = begin[idx];
+    // fill in chars
+    auto gather_chars = [d_strings, begin, strings_count, d_offsets, d_chars] __device__(size_type idx){
+            auto index = begin[idx];
+            if( IgnoreOutOfBounds && ((index<0) || (index >= strings_count)) )
+                return;
             if( d_strings.is_null(index) )
                 return;
             string_view d_str = d_strings.element<string_view>(index);
             memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
-        });
+        };
+    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), output_count, gather_chars);
 
-    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               null_count, std::move(null_mask), stream, mr);
+    return make_strings_column(output_count, std::move(offsets_column), std::move(chars_column),
+                               UNKNOWN_NULL_COUNT, std::move(null_mask), stream, mr);
 }
 
 } // namespace detail
