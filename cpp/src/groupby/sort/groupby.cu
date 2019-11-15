@@ -30,15 +30,12 @@ namespace experimental {
 namespace groupby {
 namespace detail {
 namespace sort {
-
 // Sort-based groupby
-std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
-groupby(table_view const& keys,
-        std::vector<aggregation_request> const& requests, cudaStream_t stream,
-        rmm::mr::device_memory_resource* mr) {
+std::vector<aggregation_result> groupby(
+    table_view const& keys, std::vector<aggregation_request> const& requests,
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
   // stub
-  return std::make_pair(std::unique_ptr<group_labels>{new sort_group_labels{}},
-                        std::vector<aggregation_result>{});
+  return std::vector<aggregation_result>{};
 }
 }  // namespace sort
 }  // namespace detail

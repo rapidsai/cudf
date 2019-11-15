@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <cudf/groupby.hpp>
 #include <cudf/types.hpp>
 
@@ -25,26 +23,8 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
-/// Definition of the opaque base class
-class group_labels {
- public:
-  enum Method { HASH, SORT };
-  Method method;  ///< Indicates the method used to compute the aggregation
- protected:
-  group_labels(group_labels::Method _method) : method{_method} {}
-};
 namespace detail {
 namespace hash {
-
-/// Derived type for group labels from a hash-based groupby
-class hash_group_labels : public group_labels {
- public:
-  hash_group_labels() : group_labels{group_labels::HASH} {}
-  /// For a hash-based groupby, the group_labels contains the actual table of
-  /// unique keys
-  std::unique_ptr<experimental::table> unique_keys{};
-};
-
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.
@@ -59,25 +39,17 @@ bool use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests);
 
 // Hash-based groupby
-std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
-groupby(table_view const& keys,
-        std::vector<aggregation_request> const& requests, bool ignore_null_keys,
-        cudaStream_t stream, rmm::mr::device_memory_resource* mr);
+std::vector<aggregation_result> groupby(
+    table_view const& keys, std::vector<aggregation_request> const& requests,
+    bool ignore_null_keys, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 
 namespace sort {
-
-/// Derived type for group labels from a sort-based groupby
-class sort_group_labels : public group_labels {
- public:
-  sort_group_labels() : group_labels{group_labels::SORT} {}
-  /// For sort-based groupby, we can do something smarter.
-};
 // Sort-based groupby
-std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
-groupby(table_view const& keys,
-        std::vector<aggregation_request> const& requests, cudaStream_t stream,
-        rmm::mr::device_memory_resource* mr);
+std::vector<aggregation_result> groupby(
+    table_view const& keys, std::vector<aggregation_request> const& requests,
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }  // namespace sort
 }  // namespace detail
 }  // namespace groupby

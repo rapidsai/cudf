@@ -73,10 +73,9 @@ groupby::groupby(table_view const& keys, bool ignore_null_keys,
       _null_precedence{null_precedence} {}
 
 // Select hash vs. sort groupby implementation
-std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
-groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
-                              cudaStream_t stream,
-                              rmm::mr::device_memory_resource* mr) {
+std::vector<aggregation_result> groupby::dispatch_aggregation(
+    std::vector<aggregation_request> const& requests, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (not _keys_are_sorted and
@@ -89,9 +88,9 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
 }
 
 // Compute aggregation requests
-std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
-groupby::aggregate(std::vector<aggregation_request> const& requests,
-                   rmm::mr::device_memory_resource* mr) {
+std::vector<aggregation_result> groupby::aggregate(
+    std::vector<aggregation_request> const& requests,
+    rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
                            [this](auto const& request) {
                              return request.values.size() == _keys.num_rows();
@@ -102,19 +101,6 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   }
   return dispatch_aggregation(requests, 0, mr);
 }
-
-// Materialize unique keys for each group from a group_labels
-std::unique_ptr<experimental::table> groupby::groups(
-    std::unique_ptr<group_labels> labels, rmm::mr::device_memory_resource* mr) {
-  if (labels->method == group_labels::HASH) {
-    auto hash_labels = static_cast<detail::hash::hash_group_labels*>(labels.get());
-    return std::move(hash_labels->unique_keys);
-  } else {
-    CUDF_FAIL(
-        "Returning groups from a sort-based groupby is currently unsupported.");
-  }
-}
-
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

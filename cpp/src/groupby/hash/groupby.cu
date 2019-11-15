@@ -17,7 +17,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/detail/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -31,7 +30,6 @@ namespace groupby {
 namespace detail {
 namespace hash {
 namespace {
-
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
@@ -59,7 +57,6 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
 constexpr bool is_hash_aggregation(aggregation::Kind t) {
   return array_contains(hash_aggregations, t);
 }
-
 }  // namespace
 
 /**
@@ -83,13 +80,12 @@ bool use_hash_groupby(table_view const& keys,
 }
 
 // Hash-based groupby
-std::pair<std::unique_ptr<group_labels>, std::vector<aggregation_result>>
-groupby(table_view const& keys,
-        std::vector<aggregation_request> const& requests, bool ignore_null_keys,
-        cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+std::vector<aggregation_result> groupby(
+    table_view const& keys, std::vector<aggregation_request> const& requests,
+    bool ignore_null_keys, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
   // stub
-  return std::make_pair(std::unique_ptr<group_labels>{new hash_group_labels{}},
-                        std::vector<aggregation_result>{});
+  return std::vector<aggregation_result>{};
 }
 }  // namespace hash
 }  // namespace detail
