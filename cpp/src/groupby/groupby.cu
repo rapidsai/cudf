@@ -57,8 +57,8 @@ std::unique_ptr<aggregation> make_median_aggregation() {
 }
 /// Factory to create a QUANTILE aggregation
 std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& quantiles, interpolation::type interpolation) {
-  aggregation* a = new quantile_aggregation{quantiles, interpolation};
+    std::vector<double> const& q, interpolation i) {
+  aggregation* a = new quantile_aggregation{q, i};
   return std::unique_ptr<aggregation>(a);
 }
 

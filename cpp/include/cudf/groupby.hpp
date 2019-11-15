@@ -46,13 +46,11 @@ struct aggregation {
  * @brief Derived class for specifying a quantile aggregation
  */
 struct quantile_aggregation : aggregation {
-  quantile_aggregation(std::vector<double> const& quantiles,
-                       interpolation::type interpolation)
-      : aggregation{QUANTILE},
-        quantiles{quantiles},
-        interpolation{interpolation} {}
-  std::vector<double> quantiles;      ///< Desired quantile(s)
-  interpolation::type interpolation;  ///< Desired interpolation
+  quantile_aggregation(std::vector<double> const& q,
+                       experimental::interpolation i)
+      : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
+  std::vector<double> _quantiles;              ///< Desired quantile(s)
+  experimental::interpolation _interpolation;  ///< Desired interpolation
 };
 
 /// Factory to create a SUM aggregation
@@ -80,7 +78,7 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param interpolation The desired interpolation
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& quantiles, interpolation::type interpolation);
+    std::vector<double> const& q, interpolation i);
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
@@ -129,8 +127,9 @@ class groupby {
    * @brief Construct a groupby object with the specified @p `keys`
    *
    * If the @p `keys` are already sorted, better performance may be achieved by
-   * passing @p `keys_are_sorted == true` and indicating the ascending/descending
-   * order of each column and null order in @p `column_order` and
+   * passing @p `keys_are_sorted == true` and indicating the
+   * ascending/descending order of each column and null order in @p
+   * `column_order` and
    * @p `null_precedence`, respectively.
    *
    * @note This object does *not* maintain the lifetime of @p `keys`. It is the
