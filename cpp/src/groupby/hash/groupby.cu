@@ -72,7 +72,7 @@ constexpr bool is_hash_aggregation(aggregation::Kind t) {
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool use_hash_groupby(table_view const& keys,
+bool can_use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests) {
   return std::all_of(
       requests.begin(), requests.end(), [](aggregation_request const& r) {

@@ -35,7 +35,7 @@ namespace hash {
  * @return true A hash-based groupby can be used
  * @return false A hash-based groupby cannot be used
  */
-bool use_hash_groupby(table_view const& keys,
+bool can_use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests);
 
 // Hash-based groupby

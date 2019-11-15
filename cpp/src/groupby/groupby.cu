@@ -49,7 +49,7 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (not _keys_are_sorted and
-      detail::hash::use_hash_groupby(_keys, requests)) {
+      detail::hash::can_use_hash_groupby(_keys, requests)) {
     return detail::hash::groupby(_keys, requests, _ignore_null_keys, stream,
                                  mr);
   } else {
