@@ -17,7 +17,6 @@ sample_orc = os.path.join(cur_dir, "sample.orc")
 def test_read_orc_defaults():
     df1 = cudf.read_orc(sample_orc)
     df2 = dask_cudf.read_orc(sample_orc)
-    df2.head().to_pandas()
     dd.assert_eq(df1, df2, check_index=False)
 
 
