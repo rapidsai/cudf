@@ -413,10 +413,12 @@ add_library(cudf
             src/reductions/legacy/mean.cu
             src/reductions/legacy/var.cu
             src/reductions/legacy/std.cu
+            src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
 	    src/replace/replace.cu
             src/reshape/stack.cu
+            src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
             src/unary/null_ops.cu
@@ -499,6 +501,7 @@ add_library(cudf
             src/strings/find.cu
             src/strings/convert/convert_integers.cu
             src/strings/convert/convert_booleans.cu
+            src/strings/filling/fill.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 
