@@ -175,7 +175,7 @@ __device__ auto get_new_value(cudf::size_type         idx,
       bitmask &= __ballot_sync(active_mask, output_is_valid);
 
       if(0 == (threadIdx.x % cudf::experimental::detail::warp_size)){
-        output_valid[(int)(i/cudf::experimental::detail::warp_size)] = bitmask;
+        output_valid[word_index(i)] = bitmask;
         valid_sum[(int)(threadIdx.x / cudf::experimental::detail::warp_size)] += __popc(bitmask);
       }
     }
@@ -305,10 +305,11 @@ namespace detail {
                                                  cudf::experimental::mask_allocation_policy::ALWAYS,
                                                  mr);
     }
-    else
+    else {
       output = cudf::experimental::allocate_like(input_col,
                                                  cudf::experimental::mask_allocation_policy::NEVER,
                                                  mr);
+      }
 
     cudf::mutable_column_view outputView = output->mutable_view();
     cudf::experimental::type_dispatcher(input_col.type(),
