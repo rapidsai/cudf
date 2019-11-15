@@ -24,7 +24,7 @@ namespace cudf {
 namespace datetime {
 namespace detail {
 
-template <typename Timestamp, datetime_component Component>
+template <typename Timestamp, DATETIME_COMPONENT Component>
 struct extract_component_operator {
   static_assert(cudf::is_timestamp<Timestamp>(), "");
 
@@ -44,19 +44,19 @@ struct extract_component_operator {
     auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
 
     switch (Component) {
-      case datetime_component::year:
+      case DATETIME_COMPONENT::year:
         return static_cast<int>(year_month_day(days_since_epoch).year());
-      case datetime_component::month:
+      case DATETIME_COMPONENT::month:
         return static_cast<unsigned>(year_month_day(days_since_epoch).month());
-      case datetime_component::day:
+      case DATETIME_COMPONENT::day:
         return static_cast<unsigned>(year_month_day(days_since_epoch).day());
-      case datetime_component::weekday:
+      case DATETIME_COMPONENT::weekday:
         return year_month_weekday(days_since_epoch).weekday().iso_encoding();
-      case datetime_component::hour:
+      case DATETIME_COMPONENT::hour:
         return hrs_.count();
-      case datetime_component::minute:
+      case DATETIME_COMPONENT::minute:
         return mins_.count();
-      case datetime_component::second:
+      case DATETIME_COMPONENT::second:
         return secs_.count();
       default:
         return 0;
@@ -64,7 +64,7 @@ struct extract_component_operator {
   }
 };
 
-template <datetime_component Component>
+template <DATETIME_COMPONENT Component>
 struct launch_extract_component {
   column_view input;
   mutable_column_view output;
@@ -88,7 +88,7 @@ struct launch_extract_component {
   }
 };
 
-template <datetime_component Component>
+template <DATETIME_COMPONENT Component>
 std::unique_ptr<column> extract_component(column_view const& column,
                                           cudaStream_t stream,
                                           rmm::mr::device_memory_resource* mr) {
@@ -111,43 +111,43 @@ std::unique_ptr<column> extract_component(column_view const& column,
 
 std::unique_ptr<column> extract_year(column_view const& column,
                                      rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::year>(column, 0,
+  return detail::extract_component<detail::DATETIME_COMPONENT::year>(column, 0,
                                                                      mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
                                       rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::month>(column, 0,
+  return detail::extract_component<detail::DATETIME_COMPONENT::month>(column, 0,
                                                                       mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column,
                                     rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::day>(column, 0,
+  return detail::extract_component<detail::DATETIME_COMPONENT::day>(column, 0,
                                                                     mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
                                         rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::weekday>(column,
+  return detail::extract_component<detail::DATETIME_COMPONENT::weekday>(column,
                                                                         0, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column,
                                      rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::hour>(column, 0,
+  return detail::extract_component<detail::DATETIME_COMPONENT::hour>(column, 0,
                                                                      mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
                                        rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::minute>(column,
+  return detail::extract_component<detail::DATETIME_COMPONENT::minute>(column,
                                                                        0, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
                                        rmm::mr::device_memory_resource* mr) {
-  return detail::extract_component<detail::datetime_component::second>(column,
+  return detail::extract_component<detail::DATETIME_COMPONENT::second>(column,
                                                                        0, mr);
 }
 

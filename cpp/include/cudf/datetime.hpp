@@ -28,7 +28,7 @@ namespace cudf {
 namespace datetime {
 namespace detail {
 
-enum class datetime_component {
+enum class DATETIME_COMPONENT {
   invalid = 0,
   year,
   month,
@@ -56,7 +56,7 @@ gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit);
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 
-template <datetime_component Component>
+template <DATETIME_COMPONENT Component>
 std::unique_ptr<column> extract_component(
     column_view const& column,
     cudaStream_t stream = 0,
