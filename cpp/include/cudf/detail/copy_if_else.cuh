@@ -66,8 +66,7 @@ void copy_if_else_kernel(  column_device_view const lhs,
    // current warp.
    size_type w_cur = w_begin + w_id;
    size_type index = tid;
-   auto w_active_mask = __ballot_sync(0xFFFF'FFFF, w_cur <= w_end);
-   while(w_cur <= w_end){      
+   while(w_cur <= w_end){
       bool in_range = (index >= begin && index < end);
 
       bool valid = true;
@@ -83,7 +82,7 @@ void copy_if_else_kernel(  column_device_view const lhs,
       // update validity
       if(has_validity){
          // the final validity mask for this warp
-         int w_mask = __ballot_sync(w_active_mask, valid);
+         int w_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
          // only one guy in the warp needs to update the mask and count
          if(w_lane_id == 0){
             out.set_mask_word(w_cur, w_mask);
@@ -93,8 +92,7 @@ void copy_if_else_kernel(  column_device_view const lhs,
 
       // next grid
       w_cur += warps_per_grid;
-      index += blockDim.x * gridDim.x;
-      w_active_mask = __ballot_sync(w_active_mask, w_cur <= w_end);      
+      index += blockDim.x * gridDim.x;      
    }
 
    if(has_validity){
