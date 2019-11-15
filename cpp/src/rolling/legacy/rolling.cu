@@ -41,7 +41,7 @@
 #include <types.h.jit>
 #include <types.hpp.jit>
 
-#include <cudf/scalar/scalar.hpp>
+#include <rmm/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 
 namespace
