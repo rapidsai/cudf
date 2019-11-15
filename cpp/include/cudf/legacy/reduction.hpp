@@ -95,6 +95,62 @@ gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
 void scan(const gdf_column *input, gdf_column *output,
                    gdf_scan_op op, bool inclusive);
 
+/**
+ * @brief Computes a group wise standard deviation
+ * 
+ * Computes groupby @p keys and computes the standard deviation of each group 
+ * of each column in @p values.  Nulls are always ignored in @p values.
+ * 
+ * @code
+ * Let
+ * keys   = {[ a, c, b, c, a],}
+ * values = {[v1,v2,v3,v4,v5],}
+ * out_keys, out_vals = group_std(keys, values)
+ * 
+ * out_keys = {[ a,           b,       c          ],}
+ * out_vals = {[ std(v1, v5), std(v3), std(v2, v4)],}
+ * @endcode
+ * 
+ * @param keys Keys to group by
+ * @param values Values to find standard deviation for
+ * @param ddof Delta Degrees of Freedom: the divisor used in calculation is 
+ *             `N - ddof`, where `N` is the population size.`
+ * @return std::pair<cudf::table, cudf::table> First table contains the unique
+ *  keys in @p keys. Second table contains per-group standard deviation
+ */
+std::pair<cudf::table, cudf::table>
+group_std(cudf::table const& keys,
+          cudf::table const& values,
+          cudf::size_type ddof = 1);
+
+/**
+ * @brief Computes a group wise variance
+ * 
+ * Computes groupby @p keys and computes the variance of each group 
+ * of each column in @p values.  Nulls are always ignored in @p values.
+ * 
+ * @code
+ * Let
+ * keys   = {[ a, c, b, c, a],}
+ * values = {[v1,v2,v3,v4,v5],}
+ * out_keys, out_vals = group_std(keys, values)
+ * 
+ * out_keys = {[ a,           b,       c          ],}
+ * out_vals = {[ var(v1, v5), var(v3), var(v2, v4)],}
+ * @endcode
+ * 
+ * @param keys Keys to group by
+ * @param values Values to find variance for
+ * @param ddof Delta Degrees of Freedom: the divisor used in calculation is 
+ *             `N - ddof`, where `N` is the population size.`
+ * @return std::pair<cudf::table, cudf::table> First table contains the unique
+ *  keys in @p keys. Second table contains per-group variance
+ */
+std::pair<cudf::table, cudf::table>
+group_var(cudf::table const& keys,
+          cudf::table const& values,
+          cudf::size_type ddof = 1);
+
 }  // namespace cudf
 
 #endif  // REDUCTION_HPP

@@ -517,6 +517,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_split(JNIEnv *env, jclass clazz,
+                                                                    jlong input_column,
+                                                                    jlong slice_indices) {
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  JNI_NULL_CHECK(env, slice_indices, "slice indices are null", 0);
+
+  gdf_column *n_column = reinterpret_cast<gdf_column *>(input_column);
+  gdf_column *n_slice_indices = reinterpret_cast<gdf_column *>(slice_indices);
+
+  try {
+    std::vector<gdf_column *> result = cudf::split(
+        *n_column, static_cast<cudf::size_type *>(n_slice_indices->data), n_slice_indices->size);
+    cudf::jni::native_jlongArray n_result(env, reinterpret_cast<jlong *>(result.data()),
+                                          result.size());
+    return n_result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfLengths(JNIEnv *env, jclass clazz,
                                                                      jlong column_handle) {
   JNI_NULL_CHECK(env, column_handle, "input column is null", 0);
