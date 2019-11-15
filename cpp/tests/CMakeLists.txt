@@ -259,11 +259,11 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 
-set(QUANTILES_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
+set(LEGACY_QUANTILES_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
 
-ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
+ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 ###################################################################################################
 # - reduction tests -------------------------------------------------------------------------------

@@ -39,7 +39,7 @@
 #include "groupby_kernels.cuh"
 #include "sort_helper.hpp"
 
-#include <quantiles/group_quantiles.hpp>
+#include <quantiles/legacy/group_quantiles.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf {

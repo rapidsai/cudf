@@ -400,8 +400,8 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
-            src/quantiles/quantiles.cu
-            src/quantiles/group_quantiles.cu
+            src/quantiles/legacy/quantiles.cu
+            src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
             src/reductions/legacy/max.cu
