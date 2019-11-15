@@ -413,6 +413,7 @@ add_library(cudf
             src/reductions/legacy/mean.cu
             src/reductions/legacy/var.cu
             src/reductions/legacy/std.cu
+            src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
 	    src/replace/replace.cu
