@@ -18,7 +18,6 @@
 
 #include <cudf/types.hpp>
 #include <memory>
-#include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/default_memory_resource.hpp>
 
 namespace cudf {
