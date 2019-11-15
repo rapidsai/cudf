@@ -91,7 +91,6 @@ std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream) {
     [&](column_view in_col) {
       return empty_like(in_col, stream);
     });
-
   return  std::make_unique<table>(std::move(columns));
 }
 
@@ -108,7 +107,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 }
 
 std::unique_ptr<column> allocate_like(column_view input,
-		                      size_type size,
+                                      size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr) {
   return detail::allocate_like(input, size, mask_alloc, mr);
