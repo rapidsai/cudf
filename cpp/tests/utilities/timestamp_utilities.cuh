@@ -46,7 +46,7 @@ using time_point_ms =
  * @param start The first timestamp as a simt::std::chrono::time_point
  * @param stop The last timestamp as a simt::std::chrono::time_point
  *---------------------------------------------------------------------------**/
-template <typename T>
+template <typename T, bool nullable = false>
 inline cudf::test::fixed_width_column_wrapper<T>
 generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
   using Rep = typename T::rep;
@@ -65,6 +65,11 @@ generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
   auto range = static_cast<Rep>(std::abs(max - min));
   auto iter = cudf::test::make_counting_transform_iterator(
       0, [=](auto i) { return min + (range / count) * i; });
+
+  if (nullable) {
+    auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count, mask);
+  }
 
   return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
 }
