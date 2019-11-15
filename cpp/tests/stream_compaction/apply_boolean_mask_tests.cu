@@ -94,3 +94,16 @@ TEST_F(ApplyBooleanMask, MaskAndInputSizeMismatch) {
 
     EXPECT_THROW(cudf::experimental::apply_boolean_mask(input, boolean_mask), cudf::logic_error);
 }
+
+TEST_F(ApplyBooleanMask, StringColumnTest) {
+    cudf::test::strings_column_wrapper col1{{"This", "is", "the", "a", "k12", "string", "table", "column"}, {1, 1, 1, 1, 1, 0, 1, 1}};
+    cudf::table_view input {{col1}};
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> boolean_mask{{true, true, true, true, false, true, false, true}, {1, 1, 0, 1, 1, 1, 1, 1}};
+    cudf::test::strings_column_wrapper col1_expected{{"This", "is", "a", "string", "column"}, {1, 1, 1, 0, 1}};
+    cudf::table_view expected {{col1_expected}};
+
+    auto got = cudf::experimental::apply_boolean_mask(input, boolean_mask);
+
+    cudf::test::expect_tables_equal(expected, got->view());
+}
+

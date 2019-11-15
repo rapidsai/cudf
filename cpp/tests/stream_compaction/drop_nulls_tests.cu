@@ -116,6 +116,20 @@ TEST_F(DropNullsTest, MisMatchInKeysAndInputSize) {
     EXPECT_THROW(cudf::experimental::drop_nulls(input, keys), cudf::logic_error);
 }
 
+TEST_F(DropNullsTest, StringColWithNull) {
+    cudf::test::fixed_width_column_wrapper<int16_t> col1{{ 11,       12,  11,   13,      12,       15},  {1, 1, 0, 1, 0, 1}};
+    cudf::test::strings_column_wrapper col2             {{"Hi", "Hello", "Hi", "No", "Hello", "Naive"}, {1, 1, 0, 1, 0, 1}};
+    cudf::table_view input {{col1, col2}};
+    cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{ 11,       12,   13,      15},  {1, 1, 1, 1}};
+    cudf::test::strings_column_wrapper              col2_expected{{"Hi", "Hello", "No", "Naive"}, {1, 1, 1, 1}};
+    cudf::table_view expected {{col1_expected, col2_expected}};
+
+    auto got = cudf::experimental::drop_nulls(input, input);
+
+    cudf::test::expect_tables_equal(expected, got->view());
+}
+
+
 template <typename T>
 struct DropNullsTestAll : public cudf::test::BaseFixture {};
 

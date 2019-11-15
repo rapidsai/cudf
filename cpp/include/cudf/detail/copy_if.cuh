@@ -224,7 +224,7 @@ struct scatter_gather_functor
                   cudaStream_t stream = 0) {
       //Actually we gather here
       auto indices = cudf::make_numeric_column(cudf::data_type{cudf::INT32},
-                                  input.size(), cudf::UNALLOCATED, stream, rmm::mr::get_default_resource());
+                                  output_size, cudf::UNALLOCATED, stream, rmm::mr::get_default_resource());
 
       thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
