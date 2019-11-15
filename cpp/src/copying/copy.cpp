@@ -52,7 +52,7 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
   }
 
   return std::make_unique<column>(input.type(), 0, rmm::device_buffer {},
-		                  rmm::device_buffer {}, 0, std::move(children));
+                                  rmm::device_buffer {}, 0, std::move(children));
 }
 
 /*
@@ -60,10 +60,10 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
  * Supports only fixed-width types.
  */
 std::unique_ptr<column> allocate_like(column_view input,
-   		                      size_type size,
+                                      size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr,
-				      cudaStream_t stream)
+                                      cudaStream_t stream)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
@@ -71,7 +71,7 @@ std::unique_ptr<column> allocate_like(column_view input,
   std::vector<std::unique_ptr<column>> children {};
   children.reserve(input.num_children());
   for (size_type index = 0; index < input.num_children(); index++) {
-      children.emplace_back(allocate_like(input.child(index), size, mask_alloc, mr, stream));
+    children.emplace_back(allocate_like(input.child(index), size, mask_alloc, mr, stream));
   }
 
   return std::make_unique<column>(input.type(),
