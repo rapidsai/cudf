@@ -24,13 +24,16 @@
 namespace cudf {
 namespace experimental {
 
+namespace detail {
+
 // Applies a fixed-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
                                        size_type forward_window,
                                        size_type min_periods,
                                        rolling_operator op,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream = 0)
 {
   if (input.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -44,7 +47,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& forward_window,
                                        size_type min_periods,
                                        rolling_operator op,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream = 0)
 {
   if (input.size() == 0 || window.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -66,7 +70,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
                                        data_type output_type,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream = 0)
 {
   if (input.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -82,7 +87,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
                                        data_type output_type,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream = 0)
 {
   if (input.size() == 0 || window.size() == 0 || forward_window.size() == 0)
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -94,6 +100,60 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                "window/forward_window size must match input size");
 
   return cudf::make_numeric_column(data_type{INT32}, 0);
+}
+
+} // namespace detail
+
+// Applies a fixed-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       size_type window,
+                                       size_type forward_window,
+                                       size_type min_periods,
+                                       rolling_operator op,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return cudf::experimental::detail::rolling_window(input, window, forward_window, min_periods,
+                                                    op, mr, 0);
+}
+
+// Applies a variable-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& window,
+                                       column_view const& forward_window,
+                                       size_type min_periods,
+                                       rolling_operator op,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return cudf::experimental::detail::rolling_window(input, window, forward_window, min_periods,
+                                                    op, mr, 0);
+}
+
+// Applies a fixed-size user-defined rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const &input,
+                                       size_type window,
+                                       size_type forward_window,
+                                       size_type min_periods,
+                                       std::string const& user_defined_aggregator,
+                                       rolling_operator op,
+                                       data_type output_type,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return cudf::experimental::detail::rolling_window(input, window, forward_window, min_periods,
+                                                    user_defined_aggregator, op, output_type, mr, 0);
+}
+
+// Applies a variable-size user-defined rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const &input,
+                                       column_view const& window,
+                                       column_view const& forward_window,
+                                       size_type min_periods,
+                                       std::string const& user_defined_aggregator,
+                                       rolling_operator op,
+                                       data_type output_type,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return cudf::experimental::detail::rolling_window(input, window, forward_window, min_periods,
+                                                    user_defined_aggregator, op, output_type, mr, 0);
 }
 
 } // namespace experimental 
