@@ -7,6 +7,8 @@
 
 from cudf._lib.cudf cimport *
 
+from libcpp.utility cimport pair
+
 
 cdef extern from "cudf/legacy/reduction.hpp" namespace "cudf::reduction" nogil:
 
@@ -44,4 +46,10 @@ cdef extern from "cudf/legacy/reduction.hpp" namespace "cudf" nogil:
         gdf_column *out,
         gdf_scan_op op,
         bool inclusive
+    ) except +
+
+    cdef pair[cudf_table, cudf_table] group_std(
+        const cudf_table& key_table,
+        const cudf_table& val_table,
+        size_type ddof
     ) except +
