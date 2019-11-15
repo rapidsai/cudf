@@ -97,6 +97,9 @@ class SeriesGroupBy(_Groupby):
     def quantile(self, q=0.5, interpolation="linear"):
         raise NotImplementedError
 
+    def std(self, ddof=1):
+        raise NotImplementedError
+
 
 class DataFrameGroupBy(_Groupby):
     def __init__(
@@ -188,10 +191,31 @@ class DataFrameGroupBy(_Groupby):
             out_key_columns, out_value_columns
         )
 
+    def std(self, ddof=1):
+        # Get Key_cols from _GroupbyHelper. It's generated at init.
+        key_cols = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self._groupby.key_columns
+        ]
+        # Do the things that'll make it generate the value columns
+        self._groupby.normalize_agg("std")
+        self._groupby.normalize_values()
+        # Get the value_columns
+        val_cols = self._groupby.value_columns
+
+        out_key_columns, out_value_columns = libcudf.reduce.group_std(
+            key_cols, val_cols, ddof
+        )
+        return self._groupby.construct_result(
+            out_key_columns, out_value_columns
+        )
+
 
 class _GroupbyHelper(object):
 
-    NAMED_AGGS = ("sum", "mean", "min", "max", "count", "quantile")
+    NAMED_AGGS = ("sum", "mean", "min", "max", "count", "quantile", "std")
 
     def __init__(
         self, obj, by=None, level=None, as_index=True, sort=None, dropna=True
