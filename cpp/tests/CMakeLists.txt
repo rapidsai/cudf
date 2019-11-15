@@ -497,6 +497,14 @@ ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 ###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
 
+set(TRANSPOSE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
+
+ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
+
+###################################################################################################
+# - legacy transpose tests -------------------------------------------------------------------------------
+
 set(LEGACY_TRANSPOSE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transpose/legacy/transpose_test.cu")
 
@@ -620,7 +628,9 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
