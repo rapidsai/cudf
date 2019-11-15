@@ -73,6 +73,58 @@ std::unique_ptr<table> read_avro(read_avro_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
+std::unique_ptr<table> read_csv(read_csv_args const& args,
+                                rmm::mr::device_memory_resource* mr) {
+  namespace csv = cudf::experimental::io::detail::csv;
+
+  csv::reader_options options{};
+  options.compression = args.compression;
+  options.lineterminator = args.lineterminator;
+  options.delimiter = args.delimiter;
+  options.decimal = args.decimal;
+  options.thousands = args.thousands;
+  options.comment = args.comment;
+  options.dayfirst = args.dayfirst;
+  options.delim_whitespace = args.delim_whitespace;
+  options.skipinitialspace = args.skipinitialspace;
+  options.skip_blank_lines = args.skip_blank_lines;
+  options.header = args.header;
+  options.names = args.names;
+  options.dtype = args.dtype;
+  options.use_cols_indexes = args.use_cols_indexes;
+  options.use_cols_names = args.use_cols_names;
+  options.true_values.insert(options.true_values.end(),
+                             args.true_values.begin(), args.true_values.end());
+  options.false_values.insert(options.false_values.end(),
+                              args.false_values.begin(),
+                              args.false_values.end());
+  if (!args.na_filter) {
+    options.na_values.clear();
+  } else if (!args.keep_default_na) {
+    options.na_values = args.na_values;
+  } else {
+    options.na_values.insert(options.na_values.end(), args.na_values.begin(),
+                             args.na_values.end());
+  }
+  options.prefix = args.prefix;
+  options.mangle_dupe_cols = args.mangle_dupe_cols;
+  options.quotechar = args.quotechar;
+  options.quoting = args.quoting;
+  options.doublequote = args.doublequote;
+  options.timestamp_type = args.timestamp_type;
+  auto reader = make_reader<csv::reader>(args.source, options, mr);
+
+  if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
+    return reader->read_byte_range(args.byte_range_offset,
+                                   args.byte_range_size);
+  } else if (args.skiprows != -1 || args.skipfooter != -1 || args.nrows != -1) {
+    return reader->read_rows(args.skiprows, args.skipfooter, args.nrows);
+  } else {
+    return reader->read_all();
+  }
+}
+
+// Freeform API wraps the detail reader class API
 std::unique_ptr<table> read_orc(read_orc_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace orc = cudf::experimental::io::detail::orc;

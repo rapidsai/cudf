@@ -76,6 +76,117 @@ std::unique_ptr<table> read_avro(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Settings to use for `read_csv()`
+ */
+struct read_csv_args {
+  source_info source;
+
+  // Read settings
+
+  /// Specify the compression format of the source or infer from file extension
+  compression_type compression = compression_type::AUTO;
+  /// Bytes to skip from the source start
+  size_t byte_range_offset = 0;
+  /// Bytes to read; always reads complete rows
+  size_t byte_range_size = 0;
+  /// Names of all the columns; if empty then names are auto-generated
+  std::vector<std::string> names;
+  /// If there is no header or names, prepend this to the column ID as the name
+  std::string prefix;
+  /// Whether to rename duplicate column names
+  bool mangle_dupe_cols = true;
+
+  // Filter settings
+
+  /// Names of columns to read; empty is all columns
+  std::vector<std::string> use_cols_names;
+  /// Indexes of columns to read; empty is all columns
+  std::vector<int> use_cols_indexes;
+  /// Rows to read; -1 is all
+  size_type nrows = -1;
+  /// Rows to skip from the start; -1 is none
+  size_type skiprows = -1;
+  /// Rows to skip from the end
+  size_type skipfooter = -1;
+  /// Header row index
+  size_type header = 0;
+
+  // Parsing settings
+
+  /// Line terminator
+  char lineterminator = '\n';
+  /// Field delimiter
+  char delimiter = ',';
+  /// Numeric data thousands seperator; cannot match delimiter
+  char thousands = '\0';
+  /// Decimal point character; cannot match delimiter
+  char decimal = '.';
+  /// Comment line start character
+  char comment = '\0';
+  /// Treat `\r\n` as line terminator
+  bool windowslinetermination = false;
+  /// Treat whitespace as field delimiter; overrides character delimiter
+  bool delim_whitespace = false;
+  /// Skip whitespace after the delimiter
+  bool skipinitialspace = false;
+  /// Ignore empty lines or parse line values as invalid
+  bool skip_blank_lines = true;
+  /// Treatment of quoting behavior
+  quote_style quoting = quote_style::MINIMAL;
+  /// Quoting character (if `quoting` is true)
+  char quotechar = '"';
+  /// Whether a quote inside a value is double-quoted
+  bool doublequote = true;
+  /// Names of columns to read as datetime
+  std::vector<std::string> infer_date_names;
+  /// Indexes of columns to read as datetime
+  std::vector<int> infer_date_indexes;
+
+  // Conversion settings
+
+  /// Per-column types; disables type inference on those columns
+  std::vector<std::string> dtype;
+  /// Additional values to recognize as boolean true values
+  std::vector<std::string> true_values;
+  /// Additional values to recognize as boolean false values
+  std::vector<std::string> false_values;
+  /// Additional values to recognize as null values
+  std::vector<std::string> na_values;
+  /// Whether to keep the built-in default NA values
+  bool keep_default_na = true;
+  /// Whether to disable null filter; disabling can improve performance
+  bool na_filter = true;
+  /// Whether to parse dates as DD/MM versus MM/DD
+  bool dayfirst = false;
+  /// Cast timestamp columns to a specific type
+  data_type timestamp_type{EMPTY};
+
+  explicit read_csv_args(source_info const& src) : source(src) {}
+};
+
+/**
+ * @brief Reads a CSV dataset into a set of columns
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.csv";
+ *  cudf::read_csv_args args{cudf::source_info(filepath)};
+ *  ...
+ *  auto result = cudf::read_csv(args);
+ * @endcode
+ *
+ * @param args Settings for controlling reading behavior
+ * @param mr Optional resource to use for device memory allocation
+ *
+ * @return `std::unique_ptr<table>` The set of columns
+ */
+std::unique_ptr<table> read_csv(
+    read_csv_args const& args,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
  * @brief Settings to use for `read_orc()`
  */
 struct read_orc_args {

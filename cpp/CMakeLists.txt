@@ -432,6 +432,8 @@ add_library(cudf
             src/io/csv/legacy/csv_reader_impl.cu
             src/io/csv/legacy/csv_writer.cu
             src/io/csv/legacy/csv_gpu.cu
+            src/io/csv/csv_gpu.cu
+            src/io/csv/reader_impl.cu
             src/io/json/legacy/json_reader_impl.cu
             src/io/orc/legacy/orc_reader_impl.cu
             src/io/orc/legacy/orc_writer_impl.cu

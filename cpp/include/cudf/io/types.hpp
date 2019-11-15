@@ -47,7 +47,9 @@ enum class compression_type {
   SNAPPY,  ///< Snappy format, using byte-oriented LZ77
   GZIP,    ///< GZIP format, using DEFLATE algorithm
   BZIP2,   ///< BZIP2 format, using Burrows-Wheeler transform
-  BROTLI   ///< BROTLI format, using LZ77 + Huffman + 2nd order context modeling
+  BROTLI,  ///< BROTLI format, using LZ77 + Huffman + 2nd order context modeling
+  ZIP,     ///< ZIP format, typically using DEFLATE algorithm
+  XZ       ///< XZ format, using LZMA(2) algorithm
 };
 
 /**
@@ -57,6 +59,16 @@ enum class io_type {
   FILEPATH,                  ///< Input/output is a file path
   HOST_BUFFER,               ///< Input/output is a buffer in host memory,
   ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
+};
+
+/**
+ * @brief Behavior when handling quotations in field data
+ */
+enum class quote_style {
+  MINIMAL,     ///< Quote only fields which contain special characters
+  ALL,         ///< Quote all fields
+  NONNUMERIC,  ///< Quote all non-numeric fields
+  NONE         ///< Never quote fields; disable quotation parsing
 };
 
 /**

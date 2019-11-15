@@ -148,51 +148,75 @@ namespace csv {
  * @brief Options for the CSV reader.
  */
 struct reader_options {
+  // Read settings
+
+  /// Specify the compression format of the source or infer from file extension
   compression_type compression = compression_type::AUTO;
-  std::vector<std::string> columns;
-
-  std::vector<std::string> column_filter_by_name;
-  std::vector<int> column_filter_by_index;
-  size_type header_row = 0;
-
-  char terminator = '\n';
-  char delimiter = ',';
-  char thousands_char = '\0';
-  char decimal_char = '.';
-  char comment_char = '\0';
-
-  bool windowslinetermination = false;
-  bool whitespace_delimiter = false;
-  bool ignore_leading_whitespace = false;
-  bool ignore_empty_lines = true;
-
-  bool quoting = true;
-  char quote_char = '"';
-  bool double_quote = true;
-
-  std::unordered_map<std::string, std::shared_ptr<data_type>> column_types;
-  std::vector<std::string> true_values{"True", "TRUE", "true"};
-  std::vector<std::string> false_values{"False", "FALSE", "false"};
-  std::vector<std::string> null_values{
-      "#N/A", "#N/A N/A", "#NA",     "-1.#IND", "-1.#QNAN", "-NaN",
-      "-nan", "1.#IND",   "1.#QNAN", "N/A",     "NA",       "NULL",
-      "NaN",  "n/a",      "nan",     "null"};
-
+  /// Names of all the columns; if empty then names are auto-generated
+  std::vector<std::string> names;
+  /// If there is no header or names, prepend this to the column ID as the name
   std::string prefix;
-  bool day_first_dates = false;
+  /// Whether to rename duplicate column names
+  bool mangle_dupe_cols = true;
+
+  // Filter settings
+
+  /// Names of columns to read; empty is all columns
+  std::vector<std::string> use_cols_names;
+  /// Indexes of columns to read; empty is all columns
+  std::vector<int> use_cols_indexes;
+  /// Header row index
+  size_type header = 0;
+
+  // Parsing settings
+
+  /// Line terminator
+  char lineterminator = '\n';
+  /// Field delimiter
+  char delimiter = ',';
+  /// Numeric data thousands seperator; cannot match delimiter
+  char thousands = '\0';
+  /// Decimal point character; cannot match delimiter
+  char decimal = '.';
+  /// Comment line start character
+  char comment = '\0';
+  /// Treat whitespace as field delimiter; overrides character delimiter
+  bool delim_whitespace = false;
+  /// Skip whitespace after the delimiter
+  bool skipinitialspace = false;
+  /// Ignore empty lines or parse line values as invalid
+  bool skip_blank_lines = true;
+  /// Treatment of quoting behavior
+  quote_style quoting = quote_style::MINIMAL;
+  /// Quoting character (if `quoting` is true)
+  char quotechar = '\"';
+  /// Whether a quote inside a value is double-quoted
+  bool doublequote = true;
+  /// Whether to parse dates as DD/MM versus MM/DD
+  bool dayfirst = false;
+  /// Names of columns to read as datetime
+  std::vector<std::string> infer_date_names;
+  /// Indexes of columns to read as datetime
+  std::vector<int> infer_date_indexes;
+
+  // Conversion settings
+
+  /// Per-column types; disables type inference on those columns
+  std::vector<std::string> dtype;
+  /// User-extensible list of values to recognize as boolean true values
+  std::vector<std::string> true_values{"True", "TRUE", "true"};
+  /// User-extensible list of values to recognize as boolean false values
+  std::vector<std::string> false_values{"False", "FALSE", "false"};
+  /// User-extensible list of values to recognize as null values
+  std::vector<std::string> na_values{"#N/A",     "#N/A N/A", "#NA",  "-1.#IND",
+                                     "-1.#QNAN", "-NaN",     "-nan", "1.#IND",
+                                     "1.#QNAN",  "N/A",      "NA",   "NULL",
+                                     "NaN",      "n/a",      "nan",  "null"};
+  /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
-
-  /**
-   * @brief Constructor to populate reader options.
-   *
-   * @param compression Source dataset compression format
-   * @param columns Set of columns to read; empty for all columns
-   */
-  reader_options(compression_type compression, std::vector<std::string> columns)
-      : compression(compression), columns(std::move(columns)) {}
 };
 
 /**
@@ -254,13 +278,20 @@ class reader {
   std::unique_ptr<table> read_all(cudaStream_t stream = 0);
 
   /**
-   * @brief Reads a complete group of rows in the next chunk of data.
+   * @brief Reads all the rows within a byte range.
    *
+   * The returned data includes the row that straddles the end of the range.
+   * In other words, a row is included as long as the row begins within the byte
+   * range.
+   *
+   * @param offset Byte offset from the start
+   * @param size Number of bytes from the offset; set to 0 for all remaining
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return `std::unique_ptr<table>` The set of columns
    */
-  std::unique_ptr<table> read_chunk(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_byte_range(size_t offset, size_t size,
+                                         cudaStream_t stream = 0);
 
   /**
    * @brief Reads a range of rows.
