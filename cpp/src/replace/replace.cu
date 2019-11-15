@@ -305,7 +305,7 @@ namespace detail {
                                                  cudf::experimental::mask_allocation_policy::ALWAYS,
                                                  mr);
     }
-    else
+    else {
       output = cudf::experimental::allocate_like(input_col,
                                                  cudf::experimental::mask_allocation_policy::NEVER,
                                                  mr);
