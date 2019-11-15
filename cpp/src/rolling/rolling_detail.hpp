@@ -30,10 +30,12 @@ namespace detail
   template <typename ColumnType, class AggOp>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic<ColumnType>::value ||
-           std::is_same<AggOp, DeviceMin>::value ||
-           std::is_same<AggOp, DeviceMax>::value ||
-           std::is_same<AggOp, DeviceCount>::value;
+    return !(std::is_same<ColumnType, cudf::bool8>::value ||
+             std::is_same<ColumnType, cudf::string_view>::value) && 
+            (std::is_arithmetic<ColumnType>::value ||
+             std::is_same<AggOp, DeviceMin>::value ||
+             std::is_same<AggOp, DeviceMax>::value ||
+             std::is_same<AggOp, DeviceCount>::value);
   }
 
   // store functor
