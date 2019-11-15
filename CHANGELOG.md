@@ -31,6 +31,7 @@
 - PR #3291 Add normalize_nans_and_zeros
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
+- PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 
 ## Improvements
 
