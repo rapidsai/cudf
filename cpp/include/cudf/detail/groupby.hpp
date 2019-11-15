@@ -39,15 +39,15 @@ bool use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests);
 
 // Hash-based groupby
-std::vector<aggregation_result> groupby(
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    bool ignore_null_keys, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr);
+    bool ignore_null_keys,
+    cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 
 namespace sort {
 // Sort-based groupby
-std::vector<aggregation_result> groupby(
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }  // namespace sort

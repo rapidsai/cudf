@@ -46,10 +46,13 @@ struct aggregation {
  * @brief Derived class for specifying a quantile aggregation
  */
 struct quantile_aggregation : aggregation {
-  quantile_aggregation(std::vector<double> const& quantiles, interpolation i)
-      : aggregation{QUANTILE}, _quantiles{quantiles}, _interpolation{i} {}
-  std::vector<double> _quantiles;  ///< Desired quantile(s)
-  interpolation _interpolation;    ///< Desired interpolation
+  quantile_aggregation(std::vector<double> const& quantiles,
+                       interpolation::type interpolation)
+      : aggregation{QUANTILE},
+        quantiles{quantiles},
+        interpolation{interpolation} {}
+  std::vector<double> quantiles;      ///< Desired quantile(s)
+  interpolation::type interpolation;  ///< Desired interpolation
 };
 
 /// Factory to create a SUM aggregation
@@ -74,10 +77,10 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @brief Factory to create a QUANTILE aggregation
  *
  * @param quantiles The desired quantiles
- * @param i The desired interpolation
+ * @param interpolation The desired interpolation
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& quantiles, experimental::interpolation i);
+    std::vector<double> const& quantiles, interpolation::type interpolation);
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
@@ -100,8 +103,8 @@ struct aggregation_request {
  *
  * For every `aggregation_request` given to `groupby::aggregate` an
  * `aggregation_result` will be returned. The `aggregation_result` holds the
- * resulting column(s) for each requested aggregation on the `request`s values
- * in the same order as was specified in the request.
+ * resulting column(s) for each requested aggregation on the `request`s values.
+ *
  */
 struct aggregation_result {
   /// Pairs containing columns of aggregation results and their corresponding
@@ -184,10 +187,11 @@ class groupby {
    * @param requests The set of columns to aggregate and the aggregations to
    * perform
    * @param mr Memory resource used to allocate the returned table and columns
-   * @return Vector of `aggregation_results` for each request in the same order
-   * as specified in `requests`.
+   * @return Pair containing the table with each group's unique key and
+   * a vector of aggregation_results for each request in the same order as
+   * specified in `requests`.
    */
-  std::vector<aggregation_result> aggregate(
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -218,9 +222,10 @@ class groupby {
    * @brief Dispatches to the appropriate implementation to satisfy the
    * aggregation requests.
    */
-  std::vector<aggregation_result> dispatch_aggregation(
-      std::vector<aggregation_request> const& requests, cudaStream_t stream,
-      rmm::mr::device_memory_resource* mr);
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
+  dispatch_aggregation(std::vector<aggregation_request> const& requests,
+                       cudaStream_t stream,
+                       rmm::mr::device_memory_resource* mr);
 };
 }  // namespace groupby
 }  // namespace experimental
