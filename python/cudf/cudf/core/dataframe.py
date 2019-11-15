@@ -4178,10 +4178,10 @@ class DataFrame(object):
         cov : DataFrame
         """
         cov = cupy.cov(self.values, rowvar=False)
-        df = DataFrame()
-        for i, col in enumerate(self.columns):
-            df[col] = cov[i]
-        df.index = self.columns
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
         return df
 
 
