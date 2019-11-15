@@ -118,6 +118,7 @@
 - PR #3243 Use upstream join code in dask_cudf
 - PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
+- PR #3382 Add fill function for strings column
 
 ## Bug Fixes
 

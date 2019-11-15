@@ -500,6 +500,7 @@ add_library(cudf
             src/strings/find.cu
             src/strings/convert/convert_integers.cu
             src/strings/convert/convert_booleans.cu
+            src/strings/filling/fill.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 
