@@ -61,7 +61,6 @@ struct valid_table_filter
   ~valid_table_filter() = default;
 
 protected:
-
   valid_table_filter(cudf::table_device_view const& keys_device_view,
                      cudf::size_type num_columns,
                      cudf::size_type keep_threshold)

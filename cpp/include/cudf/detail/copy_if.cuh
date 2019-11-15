@@ -93,7 +93,7 @@ __launch_bounds__(block_size)
 __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
                                cudf::size_type * output_null_count,
                                cudf::column_device_view input_view,
-                               cudf::size_type  * __restrict__ block_offsets,
+                               cudf::size_type  const* __restrict__ block_offsets,
                                cudf::size_type size,
                                cudf::size_type per_thread,
                                Filter filter)
@@ -217,7 +217,7 @@ struct scatter_gather_functor
   std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& input,
              cudf::size_type const& output_size,
-                  cudf::size_type  *block_offsets,
+                  cudf::size_type const* block_offsets,
                   Filter filter,
                   rmm::mr::device_memory_resource *mr =
                       rmm::mr::get_default_resource(),
@@ -242,7 +242,7 @@ struct scatter_gather_functor
   std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& input,
              cudf::size_type const& output_size,
-             cudf::size_type  *block_offsets,
+             cudf::size_type const* block_offsets,
              Filter filter,
              rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
