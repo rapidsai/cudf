@@ -21,6 +21,7 @@
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
+- PR #3255 Add utility to print column
 - PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
@@ -30,7 +31,10 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3344 java split API
+- PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
+- PR #3298 add null replacement iterator for column_device_view
 
 ## Improvements
 
@@ -78,7 +82,9 @@
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3191 Port NVStrings integer convert ops to cudf column
 - PR #3189 Port NVStrings find ops to cudf column
+- PR #3352 Port NVStrings convert float functions to cudf strings column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
@@ -89,11 +95,14 @@
 - PR #3350 Port NVStrings booleans convert functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3232 Port NVStrings datetime conversion to cudf strings column
+- PR #3136 Define and implement new transpose API
 - PR #3237 Define and implement new transform APIs
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3271 Update rmm API based on `rmm.reinitialize(...)` change
 - PR #3266 Remove optional checks for CuPy
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
@@ -113,7 +122,9 @@
 - PR #3299 Define and implement new `is_sorted` APIs
 - PR #3328 Partition by stripes in dask_cudf ORC reader
 - PR #3243 Use upstream join code in dask_cudf
+- PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
+- PR #3382 Add fill function for strings column
 
 ## Bug Fixes
 
@@ -159,6 +170,7 @@
 - PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
+- PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 
 
