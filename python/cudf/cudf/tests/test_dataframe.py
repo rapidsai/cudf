@@ -1728,6 +1728,7 @@ def test_dataframe_boolmask(mask_shape):
             gdf[col].fillna(-1).to_pandas().values, pdf[col].fillna(-1).values
         )
 
+
 @pytest.mark.parametrize('mask', [
     [True, False, True],
     pytest.param(

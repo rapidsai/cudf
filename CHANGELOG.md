@@ -168,6 +168,7 @@
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
 - PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
+- PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 
 
 # cuDF 0.10.0 (16 Oct 2019)
