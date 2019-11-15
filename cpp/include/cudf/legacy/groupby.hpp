@@ -79,7 +79,7 @@ struct Options {
  * @brief Supported aggregation operations
  *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE};
+enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD};
 
 namespace hash {
 
@@ -121,6 +121,14 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 namespace sort {
 
 struct operation_args {};
+
+struct std_args : operation_args {
+  int ddof;
+  
+  std_args(int _ddof)
+  : operation_args{}, ddof{_ddof}
+  {}
+};
 
 struct quantile_args : operation_args {
   std::vector<double> quantiles;
