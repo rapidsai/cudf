@@ -41,7 +41,12 @@ using char_utf8 = uint32_t;
 class string_view
 {
  public:
-  string_view() = default;
+
+  /**
+   * @brief Default constructor represents an empty string.
+   */
+  __host__ __device__ string_view();
+
   /**
    * @brief Create instance from existing device char array.
    *
@@ -49,13 +54,7 @@ class string_view
    * @param bytes Number of bytes in data array.
    */
   __host__ __device__ string_view(const char* data, size_type bytes);
-  /**
-   * @brief Create instance from existing device char array. The array must
-   * include a null-terminator ('\0).
-   *
-   * @param data Device char array encoded in UTF8.
-   */
-  __device__ string_view(const char* data);
+
   string_view(const string_view&) = default;
   string_view(string_view&&) = default;
   ~string_view() = default;
@@ -298,8 +297,9 @@ class string_view
   __device__ size_type rsplit( const char* delimiter, size_type count, string_view* strs ) const;
 
 private:
-    const char* _data{};   ///< Pointer to device memory contain char array for this string
-    size_type _bytes{};    ///< Number of bytes in _data for this string
+    const char* _data{};           ///< Pointer to device memory contain char array for this string
+    size_type _bytes{};            ///< Number of bytes in _data for this string
+    mutable size_type _length{};   ///< Number of characters in this string (computed)
 
   /**
    * @brief Return the character position of the given byte offset.

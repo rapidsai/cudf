@@ -165,6 +165,9 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
 
+  private static native long gdfBound(long inputTable, long valueTable,
+    boolean[] descFlags, boolean areNullsSmallest, boolean isUpperBound) throws CudfException;
+
   private static native void gdfWriteORC(int compressionType, String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
 
   /**
@@ -795,6 +798,95 @@ public final class Table implements AutoCloseable {
     }
     try (DevicePrediction prediction = new DevicePrediction(amount, "concat")) {
       return new Table(concatenate(tableHandles));
+    }
+  }
+
+  /**
+   * Given a sorted table return the lower bound.
+   * Example:
+   *
+   *  Single column:
+   *      idx            0   1   2   3   4
+   *   inputTable  =   { 10, 20, 20, 30, 50 }
+   *   valuesTable =   { 20 }
+   *   result      =   { 1 }
+   *
+   *  Multi Column:
+   *      idx                0    1    2    3    4
+   *   inputTable      = {{  10,  20,  20,  20,  20 },
+   *                      { 5.0,  .5,  .5,  .7,  .7 },
+   *                      {  90,  77,  78,  61,  61 }}
+   *   valuesTable     = {{ 20 },
+   *                      { .7 },
+   *                      { 61 }}
+   *   result          = {  3 }
+   * NaNs in column values produce incorrect results.
+   * The input table and the values table need to be non-empty (row count > 0)
+   * The column data types of the tables' have to match in order.
+   * Strings and String categories do not work for this method. If the input table is
+   * unsorted the results are wrong. Types of columns can be of mixed data types.
+   * @param areNullsSmallest true if nulls are assumed smallest
+   * @param valueTable the table of values that need to be inserted
+   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @return ColumnVector with lower bound indices for all rows in valueTable
+   */
+  public ColumnVector lowerBound(boolean areNullsSmallest,
+      Table valueTable, boolean[] descFlags) {
+    assertForBounds(valueTable);
+    return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
+      descFlags, areNullsSmallest, false));
+  }
+
+  /**
+   * Given a sorted table return the upper bound.
+   * Example:
+   *
+   *  Single column:
+   *      idx            0   1   2   3   4
+   *   inputTable  =   { 10, 20, 20, 30, 50 }
+   *   valuesTable =   { 20 }
+   *   result      =   { 3 }
+   *
+   *  Multi Column:
+   *      idx                0    1    2    3    4
+   *   inputTable      = {{  10,  20,  20,  20,  20 },
+   *                      { 5.0,  .5,  .5,  .7,  .7 },
+   *                      {  90,  77,  78,  61,  61 }}
+   *   valuesTable     = {{ 20 },
+   *                      { .7 },
+   *                      { 61 }}
+   *   result          = {  5 }
+   * NaNs in column values produce incorrect results.
+   * The input table and the values table need to be non-empty (row count > 0)
+   * The column data types of the tables' have to match in order.
+   * Strings and String categories do not work for this method. If the input table is
+   * unsorted the results are wrong. Types of columns can be of mixed data types.
+   * @param areNullsSmallest true if nulls are assumed smallest
+   * @param valueTable the table of values that need to be inserted
+   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @return ColumnVector with upper bound indices for all rows in valueTable
+   */
+  public ColumnVector upperBound(boolean areNullsSmallest,
+      Table valueTable, boolean[] descFlags) {
+    assertForBounds(valueTable);
+    return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
+      descFlags, areNullsSmallest, true));
+  }
+
+  private void assertForBounds(Table valueTable) {
+    assert this.getRowCount() != 0 : "Input table cannot be empty";
+    assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
+    for (ColumnVector column : columns) {
+      assert column.getType() != DType.STRING && column.getType() != DType.STRING_CATEGORY :
+        "Strings and String categories are not supported";
+    }
+    for (ColumnVector column : valueTable.columns) {
+      assert column.getType() != DType.STRING && column.getType() != DType.STRING_CATEGORY :
+          "Strings and String categories are not supported";
+    }
+    for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
+      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+          "Input and values tables' data types do not match";
     }
   }
 

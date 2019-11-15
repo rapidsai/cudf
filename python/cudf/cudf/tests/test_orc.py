@@ -181,18 +181,19 @@ def test_orc_reader_strings(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
-def test_orc_read_stripe(datadir):
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_read_stripe(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:
-        orcfile = pa.orc.ORCFile(path)
+        pdf = cudf.read_orc(path, engine=engine)
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
-    pdf = orcfile.read().to_pandas(date_as_object=False)
-
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
 
-    gdf = [cudf.read_orc(path, stripe=i) for i in range(stripes)]
+    gdf = [
+        cudf.read_orc(path, engine=engine, stripe=i) for i in range(stripes)
+    ]
     gdf = cudf.concat(gdf).reset_index(drop=True)
 
     assert_eq(pdf, gdf, check_categorical=False)

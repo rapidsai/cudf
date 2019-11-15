@@ -106,10 +106,13 @@ class table_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Returns a reference to the view of the specified column
    *
+   * @throws std::out_of_range
+   * If `column_index` is out of the range [0, num_columns)
+   * 
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
-  ColumnView const& column(size_type column_index) const noexcept;
+  ColumnView const& column(size_type column_index) const;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of columns
@@ -141,6 +144,19 @@ class table_view_base {
  *---------------------------------------------------------------------------**/
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a table_view with set of specified columns.
+   *
+   * @throws std::out_of_range
+   * If any element in `column_indices` is outside [0, num_columns())
+   *
+   * @param column_indices Indices of columns in the table
+   * @return A table_view consisting of columns from the original table
+   * specified by the elements of `column_indices`
+   *---------------------------------------------------------------------------**/
+  table_view select(std::vector<size_type> const& column_indices) const;
 };
 
 /**---------------------------------------------------------------------------*
@@ -153,7 +169,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
 public:
-  mutable_column_view& column(size_type column_index) const noexcept {
+  mutable_column_view& column(size_type column_index) const {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
   /**---------------------------------------------------------------------------*
