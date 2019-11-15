@@ -44,10 +44,8 @@ table_view_base<ColumnView>::table_view_base(
 
 template <typename ColumnView>
 ColumnView const& table_view_base<ColumnView>::column(
-    size_type column_index) const noexcept {
-  assert(column_index >= 0);
-  assert(column_index < _columns.size());
-  return _columns[column_index];
+    size_type column_index) const {
+  return _columns.at(column_index);
 }
 
 // Explicit instantiation for a table of `column_view`s
@@ -58,12 +56,10 @@ template class table_view_base<mutable_column_view>;
 }  // namespace detail
 
 // Returns a table_view with set of specified columns
-table_view table_view::select(std::vector<cudf::size_type> const& column_indices) const {
-  std::vector<column_view> columns;
-  for (auto index : column_indices) {
-    CUDF_EXPECTS(index >= 0 && index < num_columns(), "Index out of bounds");
-    columns.push_back(column(index));
-  }
+table_view table_view::select(std::vector<size_type> const& column_indices) const {
+  std::vector<column_view> columns(column_indices.size());
+  std::transform(column_indices.begin(), column_indices.end(), columns.begin(),
+    [this](auto index) { return this->column(index); });
   return table_view(columns);
 }
 

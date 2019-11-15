@@ -3196,10 +3196,7 @@ def test_series_astype_null_cases():
     data = [1, 2, None, 3]
 
     # numerical to other
-    assert_eq(
-        gd.Series(data, dtype="str"),
-        gd.Series(data).astype("str").fillna("None"),
-    )
+    assert_eq(gd.Series(data, dtype="str"), gd.Series(data).astype("str"))
 
     assert_eq(
         gd.Series(data, dtype="category"), gd.Series(data).astype("category")
@@ -3218,7 +3215,7 @@ def test_series_astype_null_cases():
     # categorical to other
     assert_eq(
         gd.Series(data, dtype="str"),
-        gd.Series(data, dtype="category").astype("str").fillna("None"),
+        gd.Series(data, dtype="category").astype("str"),
     )
 
     assert_eq(
@@ -3792,10 +3789,7 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
-    if as_dtype == "str":  # normal constructor results in None -> 'None'
-        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
-    else:
-        insert_data = Series(data, dtype=as_dtype)
+    insert_data = Series(data, dtype=as_dtype)
 
     expect = DataFrame()
     expect["foo"] = insert_data
@@ -3971,24 +3965,66 @@ def test_series_astype_error_handling(errors):
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
-        sr = Series(data, dtype=dtype)
-    elif dtype == "str":
+    elif dtype == "str" or "float" in dtype:
         data = [1, 2, 3, None]
-        sr = Series.from_pandas(pd.Series(data, dtype=dtype))
-    elif "float" in dtype:
-        data = [1, 2, 3, None]
-        sr = Series(data, dtype=dtype)
     else:
         data = [1.0, 0.5, -1.1, np.nan, None]
-        sr = Series(data, dtype=dtype)
+
+    sr = Series(data, dtype=dtype)
 
     expect = DataFrame()
     expect["foo"] = sr
     expect["bar"] = sr
-
     got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
+        ),
+        pytest.param(
+            gd.DataFrame(),
+            marks=[
+                pytest.mark.xfail(
+                    reason="_apply_support_method fails on empty dataframes."
+                )
+            ],
+        ),
+        pytest.param(
+            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Rowwise ops do not currently support nulls."
+                )
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+def test_rowwise_ops(data, op):
+    gdf = data
+    pdf = gdf.to_pandas()
+
+    if op in ("var", "std"):
+        expected = getattr(pdf, op)(axis=1, ddof=0)
+        got = getattr(gdf, op)(axis=1, ddof=0)
+    else:
+        expected = getattr(pdf, op)(axis=1)
+        got = getattr(gdf, op)(axis=1)
+
+    assert_eq(expected, got, check_less_precise=7)
 
 
 @pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
@@ -4014,5 +4050,7 @@ def test_insert(data):
     assert_eq(pdf, gdf)
 
     # pandas insert doesnt support negative indexing
-    pdf.insert(len(pdf.columns) - 1, "qux", data)
+    pdf.insert(len(pdf.columns), "qux", data)
     gdf.insert(-1, "qux", data)
+
+    assert_eq(pdf, gdf)

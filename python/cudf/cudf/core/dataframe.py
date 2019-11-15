@@ -601,7 +601,7 @@ class DataFrame(object):
 
     def astype(self, dtype, errors="raise", **kwargs):
         return self._apply_support_method(
-            "astype", dtype, errors=errors, **kwargs
+            "astype", dtype=dtype, errors=errors, **kwargs
         )
 
     def get_renderable_dataframe(self):
@@ -3681,21 +3681,46 @@ class DataFrame(object):
     #
     # Stats
     #
+    def _prepare_for_rowwise_op(self):
+        """Prepare a DataFrame for CuPy-based row-wise operations.
+        """
+        warnings.warn(
+            "Row-wise operations currently only support int, float, "
+            "and bool dtypes."
+        )
+
+        if any([col.has_null_mask for col in self._columns]):
+            msg = (
+                "Row-wise operations do not currently support columns with "
+                "null values. Consider removing them with .dropna() "
+                "or using .fillna()."
+            )
+            raise ValueError(msg)
+
+        filtered = self.select_dtypes(include=[np.number, np.bool])
+        common_dtype = np.find_common_type(filtered.dtypes, [])
+        coerced = filtered.astype(common_dtype)
+        return coerced
 
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
-    def min(self, **kwargs):
-        return self._apply_support_method("min", **kwargs)
+    def min(self, axis=0, **kwargs):
+        return self._apply_support_method("min", axis=axis, **kwargs)
 
-    def max(self, **kwargs):
-        return self._apply_support_method("max", **kwargs)
+    def max(self, axis=0, **kwargs):
+        return self._apply_support_method("max", axis=axis, **kwargs)
 
-    def sum(self, **kwargs):
-        return self._apply_support_method("sum", **kwargs)
+    def sum(self, axis=0, **kwargs):
+        return self._apply_support_method("sum", axis=axis, **kwargs)
 
-    def product(self, **kwargs):
-        return self._apply_support_method("product", **kwargs)
+    def product(self, axis=0, **kwargs):
+        return self._apply_support_method("prod", axis=axis, **kwargs)
+
+    def prod(self, axis=0, **kwargs):
+        """Alias for product.
+        """
+        return self.product(axis=axis, **kwargs)
 
     def cummin(self, **kwargs):
         return self._apply_support_method("cummin", **kwargs)
@@ -3709,40 +3734,38 @@ class DataFrame(object):
     def cumprod(self, **kwargs):
         return self._apply_support_method("cumprod", **kwargs)
 
-    def mean(self, numeric_only=None, **kwargs):
+    def mean(self, axis=0, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
-
         Parameters
         ----------
         axis : {index (0), columns (1)}
             Axis for the function to be applied on.
-
         skipna : bool, default True
             Exclude NA/null values when computing the result.
-
         level : int or level name, default None
             If the axis is a MultiIndex (hierarchical), count along a
             particular level, collapsing into a Series.
-
         numeric_only : bool, default None
             Include only float, int, boolean columns. If None, will attempt to
             use everything, then use only numeric data. Not implemented for
             Series.
-
         **kwargs
             Additional keyword arguments to be passed to the function.
-
         Returns
         -------
         mean : Series or DataFrame (if level specified)
         """
-        return self._apply_support_method("mean", **kwargs)
+        return self._apply_support_method("mean", axis=axis, **kwargs)
 
-    def std(self, **kwargs):
-        return self._apply_support_method("std", **kwargs)
+    def std(self, axis=0, ddof=1, **kwargs):
+        return self._apply_support_method(
+            "std", axis=axis, ddof=ddof, **kwargs
+        )
 
-    def var(self, **kwargs):
-        return self._apply_support_method("var", **kwargs)
+    def var(self, axis=0, ddof=1, **kwargs):
+        return self._apply_support_method(
+            "var", axis=axis, ddof=ddof, **kwargs
+        )
 
     def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
         if numeric_only not in (None, True):
@@ -3786,20 +3809,46 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(self, method, *args, **kwargs):
-        result = [
-            getattr(self[col], method)(*args, **kwargs)
-            for col in self._cols.keys()
-        ]
-        if isinstance(result[0], Series):
-            support_result = result
-            result = DataFrame()
-            for idx, col in enumerate(self._cols.keys()):
-                result[col] = support_result[idx]
-        else:
-            result = Series(result)
-            result = result.set_index(self._cols.keys())
-        return result
+    def _apply_support_method(self, method, axis=0, *args, **kwargs):
+        assert axis in (None, 0, 1)
+
+        if axis in (None, 0):
+            result = [
+                getattr(self[col], method)(*args, **kwargs)
+                for col in self._cols.keys()
+            ]
+
+            if isinstance(result[0], Series):
+                support_result = result
+                result = DataFrame()
+                for idx, col in enumerate(self._cols.keys()):
+                    result[col] = support_result[idx]
+            else:
+                result = Series(result)
+                result = result.set_index(self._cols.keys())
+            return result
+
+        elif axis == 1:
+            # for dask metadata compatibility
+            skipna = kwargs.pop("skipna", None)
+            if skipna not in (None, True, 1):
+                msg = (
+                    "Row-wise operations do not current support skipna=False."
+                )
+                raise ValueError(msg)
+
+            prepared = self._prepare_for_rowwise_op()
+            arr = cupy.asarray(prepared.as_gpu_matrix())
+            result = getattr(arr, method)(axis=1, **kwargs)
+
+            if len(result.shape) == 1:
+                return Series(result, index=self.index)
+            else:
+                result_df = DataFrame.from_gpu_matrix(result).set_index(
+                    self.index
+                )
+                result_df.columns = prepared.columns
+                return result_df
 
     def _columns_view(self, columns):
         """
