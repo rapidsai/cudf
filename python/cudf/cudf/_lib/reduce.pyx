@@ -141,7 +141,8 @@ def group_std(key_columns, value_columns, ddof=1):
         c_result = cpp_reduce.group_std(
             c_t[0],
             c_val[0],
-            c_ddof)
+            c_ddof
+        )
 
     result_key_cols = columns_from_table(&c_result.first)
     result_val_cols = columns_from_table(&c_result.second)
