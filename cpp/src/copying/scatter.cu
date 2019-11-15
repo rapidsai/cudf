@@ -48,22 +48,6 @@ std::unique_ptr<column> copy_with_policy(column_view const& original,
   return copy;
 }
 
-/*std::unique_ptr<column> copy_with_policy(column_view const& original,
-    mask_allocation_policy policy, rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
-{
-  // TODO this doesn't handle NEVER policy correctly
-  auto copy = std::make_unique<column>(original, stream, mr);
-  if (policy == mask_allocation_policy::ALWAYS and not original.nullable()) {
-    // Create an all-valid null mask if original has none
-    auto contents = copy->release();
-    auto bitmask = create_null_mask(original.size(), mask_state::ALL_VALID, stream, mr);
-    copy = std::make_unique<column>(original.type(), original.size(),
-      std::move(*contents.data), std::move(bitmask), 0, std::move(contents.children));
-  }
-  return copy;
-}*/
-
 template <typename T>
 thrust::device_vector<T> make_gather_map(column_view const& scatter_map,
     size_type rows, cudaStream_t stream)
@@ -145,17 +129,12 @@ __global__ void gather_bitmask_inplace_kernel(table_device_view source_table,
       if (threadIdx.x == 0) {
         atomicAdd(valid_counts + i, valid_count_accumulate);
       }
-    } else {
-      if (threadIdx.x == 0 && blockIdx.x == 0) {
-        valid_counts[i] = destination_col.size();
-      }
     }
   }
 }
 
-template <typename T>
-void gather_bitmask_inplace(
-    table_view const& source, thrust::device_vector<T>& gather_map,
+template <typename MapIterator>
+void gather_bitmask_inplace(table_view const& source, MapIterator gather_map,
     std::vector<std::unique_ptr<column>>& target, cudaStream_t stream)
 {
   auto const device_source = table_device_view::create(source, stream);
@@ -169,18 +148,60 @@ void gather_bitmask_inplace(
 
   // Compute block size
   int grid_size, block_size;
-  auto gather_map_begin = gather_map.begin();
-  auto bitmask_kernel = gather_bitmask_inplace_kernel<true, decltype(gather_map_begin)>;
+  auto bitmask_kernel = gather_bitmask_inplace_kernel<true, decltype(gather_map)>;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, bitmask_kernel));
 
   auto valid_counts = thrust::device_vector<size_type>(target.size());
   bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
-    gather_map_begin, *device_target, valid_counts.data().get());
+    gather_map, *device_target, valid_counts.data().get());
 
   // TODO for_each with a zip iterator?
   auto valid_counts_host = thrust::host_vector<size_type>(valid_counts);
   for (size_t i = 0; i < target.size(); ++i) {
-    target[i]->set_null_count(target[i]->size() - valid_counts_host[i]);
+    auto const& target_col = target[i];
+    if (target_col->nullable()) {
+      target_col->set_null_count(target_col->size() - valid_counts_host[i]);
+    }
+  }
+}
+
+template <typename MapIterator>
+__global__ void scatter_bitmask_kernel(column_device_view source_col,
+    MapIterator scatter_map, size_type scatter_map_size,
+    mutable_column_device_view target_col)
+{
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while (row_number < scatter_map_size) {
+    auto const output_row = scatter_map[row_number];
+    if (source_col.is_valid(row_number)) {
+      target_col.set_valid(output_row);
+    } else {
+      target_col.set_null(output_row);
+    }
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
+template <typename MapIterator>
+void scatter_bitmask(table_view const& source, MapIterator scatter_map,
+    size_type scatter_map_size, std::vector<std::unique_ptr<column>>& target,
+    cudaStream_t stream)
+{
+  constexpr size_type block_size{256};
+  experimental::detail::grid_1d grid(scatter_map_size, block_size);
+
+  for (size_type i = 0; i < source.num_columns(); ++i) {
+    if (target[i]->nullable()) {
+      auto source_col = column_device_view::create(source.column(i), stream);
+      auto target_col = mutable_column_device_view::create(target[i]->mutable_view(), stream);
+      scatter_bitmask_kernel<<<grid.num_blocks, block_size, 0, stream>>>(
+          *source_col, scatter_map, scatter_map_size, *target_col);
+
+      // Recompute the null count
+      target[i]->null_count();
+    }
   }
 }
 
@@ -245,8 +266,17 @@ struct scatter_impl {
           source_col, scatter_map, target_col, mr, stream);
       });
 
-    auto gather_map = make_gather_map<T>(scatter_map, target.num_rows(), stream);
-    gather_bitmask_inplace<T>(source, gather_map, result, stream);
+    constexpr bool use_gather_bitmask = false;
+    if (use_gather_bitmask) {
+      auto gather_map = make_gather_map<T>(scatter_map, target.num_rows(), stream);
+      gather_bitmask_inplace(source, gather_map.begin(), result, stream);
+    }
+    else {
+      // Transform negative indices to index + target size
+      auto scatter_iter = thrust::make_transform_iterator(
+        scatter_map.begin<T>(), index_converter<T>{target.num_rows()});
+      scatter_bitmask(source, scatter_iter, scatter_map.size(), result, stream);
+    }
 
     return std::make_unique<table>(std::move(result));
   }
