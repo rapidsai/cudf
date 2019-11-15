@@ -126,11 +126,16 @@ class groupby {
   groupby& operator=(groupby&&) = delete;
 
   /**
-   * @brief Construct a groupby object with the specified `keys`
+   * @brief Construct a groupby object with the specified @p `keys`
    *
-   * @note This object does *not* maintain the lifetime of `keys`. It is the
-   * user's responsibility to ensure the `groupby` object does not outlive
-   * `keys`.
+   * If the @p `keys` are already sorted, better performance may be achieved by
+   * passing @p `keys_are_sorted == true` and indicating the ascending/descending
+   * order of each column and null order in @p `column_order` and
+   * @p `null_precedence`, respectively.
+   *
+   * @note This object does *not* maintain the lifetime of @p `keys`. It is the
+   * user's responsibility to ensure the `groupby` object does not outlive the
+   * data viewed by the @p `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
    * @param ignore_null_keys Indicates whether rows in `keys` that contain NULL
@@ -159,6 +164,19 @@ class groupby {
    * all other `values[j]` where rows `i` and `j` in `keys` are equivalent.
    *
    * The `size()` of the request column must equal `keys.num_rows()`.
+   *
+   * For every `aggregation_request` an `aggregation_result` will be returned.
+   * The `aggregation_result` holds the resulting column(s) for each requested
+   * aggregation on the `request`s values. The order of the columns in each
+   * result is the same order as was specified in the request.
+   *
+   * The returned `table` contains the group labels for each group, i.e., the
+   * unique rows from `keys`. Element `i` across all aggregation results
+   * belongs to the group at row `i` in the group labels table.
+   *
+   * The order of the rows in the group labels is arbitrary. Furthermore,
+   * successive `groupby::aggregate` calls may return results in different
+   * orders.
    *
    * @throws cudf::logic_error If `requests[i].values.size() !=
    * keys.num_rows()`.
