@@ -130,8 +130,7 @@ class orc_column_view {
    * for building dictionaries for string columns
    **/
   explicit orc_column_view(size_t id, size_t str_id, column_view const &col,
-                           cudaStream_t stream,
-                           rmm::mr::device_memory_resource *mr)
+                           cudaStream_t stream)
       : _id(id),
         _str_id(str_id),
         _string_type(col.type().id() == type_id::STRING),
@@ -148,7 +147,7 @@ class orc_column_view {
           NVStrings::create_from_offsets(view.chars().data<char>(), view.size(),
                                          view.offsets().data<size_type>());
 
-      _indexes = rmm::device_buffer(_data_count * sizeof(str_pair), stream, mr);
+      _indexes = rmm::device_buffer(_data_count * sizeof(str_pair), stream);
       CUDF_EXPECTS(
           _nvstr->create_index(static_cast<str_pair *>(_indexes.data())) == 0,
           "Cannot retrieve string pairs");
@@ -502,7 +501,7 @@ rmm::device_buffer writer::impl::encode_columns(
     }
     str_data_size = (str_data_size + 7) & ~7;
 
-    return rmm::device_buffer(rle_data_size + str_data_size, stream, _mr);
+    return rmm::device_buffer(rle_data_size + str_data_size, stream);
   }();
   auto dst_base = static_cast<uint8_t *>(output.data());
 
@@ -787,7 +786,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     const auto current_str_id = str_col_ids.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    orc_columns.emplace_back(current_id, current_str_id, col, stream, _mr);
+    orc_columns.emplace_back(current_id, current_str_id, col, stream);
     if (orc_columns.back().is_string()) {
       str_col_ids.push_back(current_id);
     }
@@ -900,7 +899,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   }();
 
   // Compress the data streams
-  rmm::device_buffer compressed_data(compressed_bfr_size, stream, _mr);
+  rmm::device_buffer compressed_data(compressed_bfr_size, stream);
   hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
   hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
   if (compression_kind_ != NONE) {

@@ -399,7 +399,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
   }
 
   // Dispatch batches of pages to decompress for each codec
-  rmm::device_buffer decomp_pages(total_decomp_size, stream, _mr);
+  rmm::device_buffer decomp_pages(total_decomp_size, stream);
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages,
                                                       stream);
@@ -632,7 +632,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
                                   : col_meta.data_page_offset;
           auto buffer =
               _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data.emplace_back(buffer->data(), buffer->size(), stream, _mr);
+          page_data.emplace_back(buffer->data(), buffer->size(), stream);
           d_compdata = static_cast<uint8_t *>(page_data.back().data());
         }
         chunks.insert(gpu::ColumnChunkDesc(

@@ -121,7 +121,7 @@ class reader::impl {
       const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream);
 
   /**
-   * @brief Converts the page data and outputs to gdf_columns.
+   * @brief Converts the page data and outputs to columns.
    *
    * @param chunks List of column chunk descriptors
    * @param pages List of page information

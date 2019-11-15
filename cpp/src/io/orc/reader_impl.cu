@@ -438,7 +438,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
-  rmm::device_buffer decomp_data(total_decomp_size, stream, _mr);
+  rmm::device_buffer decomp_data(total_decomp_size, stream);
   rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks +
                                                      num_uncompressed_blocks);
   rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
@@ -659,7 +659,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
                              &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
-      stripe_data.emplace_back(total_data_size, stream, _mr);
+      stripe_data.emplace_back(total_data_size, stream);
       auto dst_base = static_cast<uint8_t *>(stripe_data.back().data());
 
       // Coalesce consecutive streams into one read

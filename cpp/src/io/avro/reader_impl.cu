@@ -174,7 +174,7 @@ rmm::device_buffer reader::impl::decompress_data(
     CUDF_FAIL("Unsupported compression codec\n");
   }
 
-  rmm::device_buffer decomp_block_data(uncompressed_data_size, stream, _mr);
+  rmm::device_buffer decomp_block_data(uncompressed_data_size, stream);
 
   const auto base_offset = _metadata->block_list[0].offset;
   for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
@@ -321,7 +321,7 @@ void reader::impl::decode_data(
   }
   rmm::device_buffer block_list(
       _metadata->block_list.data(),
-      _metadata->block_list.size() * sizeof(block_desc_s), stream, _mr);
+      _metadata->block_list.size() * sizeof(block_desc_s), stream);
   CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(), schema_desc.host_ptr(),
                            schema_desc.memory_size(), cudaMemcpyHostToDevice,
                            stream));
@@ -358,7 +358,7 @@ void reader::impl::decode_data(
 reader::impl::impl(std::unique_ptr<datasource> source,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-    : _source(std::move(source)), _columns(options.columns), _mr(mr) {
+    : _source(std::move(source)), _mr(mr), _columns(options.columns) {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
@@ -387,8 +387,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     if (_metadata->total_data_size > 0) {
       const auto buffer = _source->get_buffer(_metadata->block_list[0].offset,
                                               _metadata->total_data_size);
-      rmm::device_buffer block_data(buffer->data(), buffer->size(), stream,
-                                    _mr);
+      rmm::device_buffer block_data(buffer->data(), buffer->size(), stream);
 
       if (_metadata->codec != "" && _metadata->codec != "null") {
         auto decomp_block_data = decompress_data(block_data, stream);

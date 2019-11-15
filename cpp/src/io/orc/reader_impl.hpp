@@ -103,7 +103,7 @@ class reader::impl {
       cudaStream_t stream);
 
   /**
-   * @brief Converts the stripe column data and outputs to gdf_columns
+   * @brief Converts the stripe column data and outputs to columns
    *
    * @param chunks List of column chunk descriptors
    * @param num_dicts Number of dictionary entries required

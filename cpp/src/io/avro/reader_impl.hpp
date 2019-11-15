@@ -87,13 +87,13 @@ class reader::impl {
                                      cudaStream_t stream);
 
   /**
-   * @brief Convert the avro row-based block data and outputs to gdf_columns
+   * @brief Convert the avro row-based block data and outputs to columns
    *
    * @param block_data Uncompressed block data
    * @param dict Dictionary entries
    * @param global_dictionary Dictionary allocation
    * @param total_dictionary_entries Number of dictionary entries
-   * @param out_buffers List of gdf_columns
+   * @param out_buffers Output columns' device buffers
    * @param stream Stream to use for memory allocation and kernels
    */
   void decode_data(const rmm::device_buffer &block_data,
