@@ -163,6 +163,7 @@ set(LEGACY_SORT_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_quantile.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_median.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_multi_agg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_var_std.cu"
 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/not_ignore_null_keys/legacy/single_column_sum.cu"
 )
@@ -269,6 +270,8 @@ ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 # - reduction tests -------------------------------------------------------------------------------
 
 set(LEGACY_REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_std_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_var_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/reduction_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/scan_tests.cu")
 
@@ -497,6 +500,14 @@ ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 ###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
 
+set(TRANSPOSE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
+
+ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
+
+###################################################################################################
+# - legacy transpose tests -------------------------------------------------------------------------------
+
 set(LEGACY_TRANSPOSE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transpose/legacy/transpose_test.cu")
 
@@ -615,11 +626,11 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
