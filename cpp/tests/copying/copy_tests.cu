@@ -30,7 +30,7 @@
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(CopyTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypes);
 
 // to keep names shorter
 #define wrapper cudf::test::fixed_width_column_wrapper
@@ -143,13 +143,13 @@ TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
    cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseBadInputValidity)
+TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
 { 
    using T = TypeParam;   
          
    int num_els = 4;
 
-   bool mask[]    = { 1, 1, 1, 1 };
+   bool mask[]    = { 1, 0, 1, 1 };
    bool_wrapper mask_w(mask, mask + num_els);
 
    T lhs[]        = { 5, 5, 5, 5 };   
@@ -158,8 +158,7 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputValidity)
    T rhs[]        = { 6, 6, 6, 6 };                      
    wrapper<T> rhs_w(rhs, rhs + num_els, mask);      
 
-   EXPECT_THROW(  cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w),
-                  cudf::logic_error);
+   cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);                  
 }
 
 TYPED_TEST(CopyTest, CopyIfElseBadInputLength)

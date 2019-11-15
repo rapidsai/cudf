@@ -181,8 +181,7 @@ std::vector<column_view> split(column_view const& input,
  *          output[i] = (boolean_mask[i]) ? lhs[i] : rhs[i]
  *          
  * @throws cudf::logic_error if lhs and rhs are not of the same type
- * @throws cudf::logic_error if lhs and rhs are not of the same length
- * @throws cudf::logic_error if lhs and rhs do not have the same nullability
+ * @throws cudf::logic_error if lhs and rhs are not of the same length 
  * @throws cudf::logic_error if boolean_mask contains nulls
  * @throws cudf::logic_error if boolean mask is not of type bool8
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
