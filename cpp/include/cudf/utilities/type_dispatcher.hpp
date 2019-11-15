@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include <string>
 
 /**---------------------------------------------------------------------------*
  * @file type_dispatcher.hpp
@@ -46,6 +47,13 @@ namespace experimental {
 template <typename T>
 inline constexpr type_id type_to_id() {
   return EMPTY;
+};
+
+struct type_to_name {
+  template <typename T>
+  inline std::string operator()() {
+    return "void";
+  }
 };
 
 template <cudf::type_id t>
@@ -76,6 +84,11 @@ using id_to_type = typename id_to_type_impl<Id>::type;
   template <>                                   \
   constexpr inline type_id type_to_id<Type>() { \
     return Id;                                  \
+  }                                             \
+  template <>                                   \
+  inline std::string                            \
+  type_to_name::operator()<Type>() {            \
+    return CUDF_STRINGIFY(Type);                \
   }                                             \
   template <>                                   \
   struct id_to_type_impl<Id> {                  \
