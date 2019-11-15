@@ -40,31 +40,17 @@ namespace { // anonymous
  * @tparam ColumnType  Datatype of values pointed to by the pointers
  * @tparam agg_op  A functor that defines the aggregation operation
  * @tparam average Perform average across all valid elements in the window
- * @param nrows[in]  Number of rows in input table
- * @param out_col[out]  Pointers to pre-allocated output column's data
- * @param out_cols_valid[out]  Pointers to the pre-allocated validity mask of
- * 		  the output column
- * @param in_col[in]  Pointers to input column's data
- * @param in_cols_valid[in]  Pointers to the validity mask of the input column
- * @param window[in]  The static rolling window size, accumulates from
+ * @tparam block_size CUDA block size for the kernel
+ * @tparam WindowIterator iterator type (inferred)
+ * @param input Input column device view
+ * @param output Output column device view
+ * @param window_begin[in] Rolling window size iterator, accumulates from
  *                in_col[i-window+1] to in_col[i] inclusive
- * @param min_periods[in]  Minimum number of observations in window required to
- *                have a value, otherwise 0 is stored in the valid bit mask
- * @param forward_window[in]  The static rolling window size in the forward
+ * @param forward_window_begin[in] Rolling window size iterator in the forward
  *                direction, accumulates from in_col[i] to
  *                in_col[i+forward_window] inclusive
- * @param[in] window_col The window size values, window_col[i] specifies window
- *                size for element i. If window_col = NULL, then window is used as
- *                the static window size for all elements
- * @param[in] min_periods_col The minimum number of observation values,
- *                min_periods_col[i] specifies minimum number of observations for
- *                element i. If min_periods_col = NULL, then min_periods is used as
- *                the static value for all elements
- * @param[in] forward_window_col The forward window size values,
- *                forward_window_col[i] specifies forward window size for element i.
- *                If forward_window_col = NULL, then forward_window is used as the
- *                static forward window size for all elements
-
+ * @param min_periods[in]  Minimum number of observations in window required to
+ *                have a value, otherwise 0 is stored in the valid bit mask
  */
 template <typename T, typename agg_op, bool average, int block_size, typename WindowIterator>
 __launch_bounds__(block_size)
