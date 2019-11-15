@@ -26,7 +26,7 @@ namespace experimental {
 
 class table {
  public:
-  table() = delete;
+  table() = default;
   ~table() = default;
   table(table&&) = default;
   table& operator=(table const&) = delete;
@@ -103,7 +103,7 @@ class table {
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
    *
-   * @throws cudf::logic_error
+   * @throws std::out_of_range
    * If any element in `column_indices` is outside [0, num_columns())
    *
    * @param column_indices Indices of columns in the table

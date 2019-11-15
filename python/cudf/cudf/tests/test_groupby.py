@@ -810,6 +810,25 @@ def test_groupby_quantile(interpolation):
     assert_eq(pdresult, gdresult)
 
 
+def test_groupby_std():
+    raw_data = {
+        "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
+        "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
+    }
+    pdf = pd.DataFrame(raw_data)
+    gdf = DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby("x")
+    gdg = gdf.groupby("x")
+    pdresult = pdg.std()
+    gdresult = gdg.std()
+
+    # There's a lot left to add to python bindings like index name
+    # so this is a temporary workaround
+    pdresult = pdresult["y"].reset_index(drop=True)
+    gdresult = gdresult["y"].reset_index(drop=True)
+    assert_eq(pdresult, gdresult)
+
+
 def test_groupby_size():
     pdf = pd.DataFrame(
         {
