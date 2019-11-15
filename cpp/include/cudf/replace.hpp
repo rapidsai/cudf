@@ -23,20 +23,18 @@
 
 namespace cudf {
 namespace experimental {
-/**
-  * @brief Replaces all null values in a column with corresponding values of another column.
-  *
-  * Returns a column `output` such that if `input[i]` is valid, its value will be copied to
-  * `output[i]`. Otherwise, `replacements[i]` will be copied to `output[i]`.
-  *
-  * The `input` and `replacement` columns must be of same size and have the same
-  * data type.
-  *
-  * @param[in] input A cudf::column containing null values
-  * @param[in] replacement A cudf::column whose values will replace null values in input
-  *
-  * @returns Column with nulls replaced
-  */
+  /**
+   * @brief Replaces all null values in a column with corresponding values of another column
+   *
+   * `input` and `replacement` must be of the same type and size.
+   * must be of the same type and same size as the first.
+   *
+   * @param[in] input A column whose null values will be replaced
+   * @param[in] replacement A cudf::column whose values will replace null values in input
+   * @param[in] mr Optional device_memory_resource to use for allocations.
+   *
+   * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
+   */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -44,15 +42,15 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 /**
   * @brief Replaces all null values in a column with a scalar.
   *
-  * Returns a column `output` such that if `input[i]` is valid, its value will be copied to
-  * `output[i]`. Otherise, `replacement` will be coped to `output[i]`.
+  * `input` and `replacement` must have the same type.
+  * a cudf::scalar of the same data type as the column.
   *
-  * `replacement` must have the same data type as `input`.
   *
-  * @param[in] input A cudf::column containing null values
-  * @param[in] replacement A cudf::scalar whose value will replace null values in input
+  * @param[in] input A column whose null values will be replaced
+  * @param[in] replacement Scalar used to replace null values in `input`.
+  * @param[in] mr Optional device_memory_resource to use for allocations.
   *
-  * @returns Column with nulls replaced
+  * @returns Copy of `input` with null values replaced by `replacement`.
   */
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::scalar const& replacement,
@@ -60,18 +58,16 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 
 /**
- * @brief Finds and replaces values within a column.
- * 
- * Creates a copy of @p input, but replace elements according to the mapping `old_values` to
+ * @brief Replace elements from `input_col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col`
- *        with `new_values[i]` and return a new gdf_column `output`.
+ *        with `new_values[i]`.
  *
- * @param[in] col cudf::column with the data to be modified
- * @param[in] values_to_replace gdf_column with the old values to be replaced
- * @param[in] replacement_values gdf_column with the new replacement values
+ * @param input_col The column to find and replace values in.
+ * @param values_to_replace The values to replace
+ * @param replacement_values The values to replace with
+ * @param mr Optional device_memory_resource to use for allocations.
  *
- * @returns Copy of the input with the specified values replaced
- *
+ * @returns Copy of `input` with specified values replaced.
  */
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
