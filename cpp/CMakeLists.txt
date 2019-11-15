@@ -496,6 +496,7 @@ add_library(cudf
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_floats.cu
             src/strings/copying/copying.cu
+            src/strings/extract.cu
             src/strings/filling/fill.cu
             src/strings/find.cu
             src/strings/regex/regcomp.cpp

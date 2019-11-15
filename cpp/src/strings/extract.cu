@@ -39,9 +39,8 @@ namespace
 {
 
 /**
- * @brief This functor handles both contains_re and match_re to minimize the number
- * of regex calls to find() to be inlined greatly reducing compile time.
- *
+ * @brief This functor handles extracting strings by applying the compiled regex pattern.
+ * 
  * The stack is used to keep progress on evaluating the regex instructions on each string.
  * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
  *
@@ -64,12 +63,11 @@ struct extract_fn
         if( d_strings.is_null(idx) )
             return string_index_pair{nullptr,0};
         string_view d_str = d_strings.element<string_view>(idx);
-        string_index_pair result{nullptr,0}
-        int32_t begin = 0, end = dstr->chars_count();
+        string_index_pair result{nullptr,0};
+        int32_t begin = 0, end = d_str.length();
         int rtn = prog.find(idx,d_str,begin,end);
         if( rtn > 0 )
             rtn = prog.extract(idx,d_str,begin,end,column_index);
-        size_type bytes = 0;
         if( rtn > 0 )
         {
             auto offset = d_str.byte_offset(begin);
@@ -78,6 +76,7 @@ struct extract_fn
         return result;
     }
 };
+
 } // namespace
 
 //
@@ -105,7 +104,7 @@ std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings
     for( int32_t column_index=0; column_index < groups; ++column_index )
     {
         rmm::device_vector<string_index_pair> indices(strings_count);
-        string_index_pair* d_indexes = indices.data().get();
+        string_index_pair* d_indices = indices.data().get();
 
         if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
             thrust::transform(execpol->on(stream),
@@ -123,7 +122,7 @@ std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings
                 thrust::make_counting_iterator<size_type>(strings_count),
                 d_indices, extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
         //
-        auto column = make_strings_column(indexes,stream,mr);
+        auto column = make_strings_column(indices,stream,mr);
         results.emplace_back(std::move(column));
     }
     return results;

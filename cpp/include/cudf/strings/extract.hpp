@@ -24,7 +24,7 @@ namespace strings
 {
 
 /**
- * @brief Returns a list of strings for each group specified in the given regular expression pattern.
+ * @brief Returns a list of strings for each matching group specified in the given regular expression pattern.
  *
  * Any null string entries return corresponding null output column entries.
  *
