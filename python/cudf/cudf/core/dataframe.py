@@ -4167,6 +4167,23 @@ class DataFrame(object):
         else:
             return result
 
+    def cov(self, **kwargs):
+        """Compute the covariance matrix of a DataFrame.
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments to be passed to cupy.cov
+        Returns
+        -------
+        cov : DataFrame
+        """
+        cov = cupy.cov(self.values, rowvar=False)
+        df = DataFrame()
+        for i, col in enumerate(self.columns):
+            df[col] = cov[i]
+        df.index = self.columns
+        return df
+
 
 def from_pandas(obj):
     """
