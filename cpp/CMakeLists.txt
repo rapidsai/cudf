@@ -417,6 +417,7 @@ add_library(cudf
             src/replace/legacy/replace.cu
 	    src/replace/replace.cu
             src/reshape/stack.cu
+            src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
             src/unary/null_ops.cu
