@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf/types.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
