@@ -24,22 +24,25 @@ namespace strings
 {
 namespace detail
 {
-
-#define OPERATOR    0200    /* Bitmask of all operators */
-enum InstType_Internal
+namespace
 {
-    START = 0200, /* Start, used for marker on stack */
-    LBRA_NC = 0203, // non-capturing group
-    CAT = 0205, /* Concatentation, implicit operator */
-    STAR = 0206, /* Closure, * */
-    STAR_LAZY = 0207,
-    PLUS = 0210, /* a+ == aa* */
-    PLUS_LAZY = 0211,
-    QUEST = 0212,  /* a? == a|nothing, i.e. 0 or 1 a's */
-    QUEST_LAZY = 0213,
-    COUNTED = 0214, /* counted repeat a{2} a{3,5} */
+
+// Bitmask of all operators
+#define OPERATOR_MASK    0200  
+enum OperatorType
+{
+    START        = 0200, // Start, used for marker on stack
+    LBRA_NC      = 0203, // non-capturing group
+    CAT          = 0205, // Concatentation, implicit operator
+    STAR         = 0206, // Closure, *
+    STAR_LAZY    = 0207,
+    PLUS         = 0210, // a+ == aa*
+    PLUS_LAZY    = 0211,
+    QUEST        = 0212, // a? == a|nothing, i.e. 0 or 1 a's
+    QUEST_LAZY   = 0213,
+    COUNTED      = 0214, // counted repeat a{2} a{3,5}
     COUNTED_LAZY = 0215,
-    NOP = 0302, /* No operation, internal use only */
+    NOP          = 0302, // No operation, internal use only
 };
 
 static Reclass ccls_w(1); // = { 'a', 'z','A','Z','0','9','_','_' };
@@ -48,9 +51,8 @@ static Reclass ccls_s(2); // = { '\t', '\t', '\n', '\n', '\r', '\r', '\f', '\f',
 static Reclass ccls_S(16);// ccls_S is the same as ccls_s
 static Reclass ccls_d(4); // = { '0', '9' };
 static Reclass ccls_D(32);// = { '\n', '\n', '0', '9' };
-//static Reclass ccls_W_Neg = { 0, 0x9, 0xB, 0x2F, 0x3A, 0x40, 0x5B, 0x5E, 0x60, 0x60, 0x7B, 0xFFFFFFFF };
-//static Reclass ccls_S_Neg = { 0, 0x8, 0xE, 0x1F, 0x21, 0xFFFFFFFF };
-//static Reclass ccls_D_Neg = { 0, 0x9, 0xB, 0x2F, 0x3A, 0xFFFFFFFF };
+
+} // namespace
 
 int32_t Reprog::add_inst(int32_t t)
 {
@@ -787,7 +789,7 @@ class RegCompiler
                     rep_start = lbra_stack[lbra_stack.size() - 1];
                     lbra_stack.pop_back();
                 }
-                else if ((in[i].t & 0300) != OPERATOR)
+                else if ((in[i].t & 0300) != OPERATOR_MASK)
                 {
                     rep_start = i;
                 }
@@ -897,7 +899,6 @@ public:
                 items = parser.m_items;
         }
 
-
         cursubid = 0;
         pushsubid = 0;
 
@@ -927,7 +928,7 @@ public:
                 token = LBRA;
             }
 
-            if ((token & 0300) == OPERATOR)
+            if ((token & 0300) == OPERATOR_MASK)
                 Operator(token);
             else
                 Operand(token);
@@ -948,21 +949,16 @@ public:
     }
 };
 
+// Convert pattern into program
 Reprog Reprog::create_from(const char32_t* pattern)
 {
     Reprog rtn;
-    RegCompiler compiler(pattern, ANY, rtn);
+    RegCompiler compiler(pattern, ANY, rtn); // future feature: ANYNL
     //rtn->print();
     return rtn;
 }
 
-// future
-//Reprog regcompnl(const char32_t* pattern)
-//{
-//	RegCompiler compiler(pattern, ANYNL);
-//	return compiler.m_prog;
-//}
-
+//
 void Reprog::optimize1()
 {
     // Treat non-capturing LBRAs/RBRAs as NOOP

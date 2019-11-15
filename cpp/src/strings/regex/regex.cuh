@@ -21,6 +21,7 @@
 
 namespace cudf
 {
+
 class string_view;
 
 namespace strings

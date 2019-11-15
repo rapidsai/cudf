@@ -24,48 +24,55 @@ namespace strings
 namespace detail
 {
 
-/*
- * Actions and Tokens (Reinst types)
+/**
+ * @brief Actions and Tokens (regex instruction types)
+ * 
+ * ```
  *	02xx are operators, value == precedence
  *	03xx are tokens, i.e. operands for operators
+ * ```
  */
 enum InstType
 {
-    CHAR = 0177,
-    RBRA = 0201,    // Right bracket, )
-    LBRA = 0202,    // Left bracket, (
-    OR = 0204,      // Alternation, |
-    ANY = 0300,     // Any character except newline, .
-    ANYNL = 0301,   // Any character including newline, .
-    BOL = 0303,     // Beginning of line, ^
-    EOL = 0304,     // End of line, $
-    CCLASS = 0305,  // Character class, []
-    NCCLASS = 0306, // Negated character class, []
-    BOW = 0307,     // Boundary of word, /b
-    NBOW = 0310,    // Not boundary of word, /b
-    END = 0377      // Terminate: match found
+    CHAR    = 0177,  // Literal character
+    RBRA    = 0201,  // Right bracket, )
+    LBRA    = 0202,  // Left bracket, (
+    OR      = 0204,  // Alternation, |
+    ANY     = 0300,  // Any character except newline, .
+    ANYNL   = 0301,  // Any character including newline, .
+    BOL     = 0303,  // Beginning of line, ^
+    EOL     = 0304,  // End of line, $
+    CCLASS  = 0305,  // Character class, []
+    NCCLASS = 0306,  // Negated character class, []
+    BOW     = 0307,  // Boundary of word, /b
+    NBOW    = 0310,  // Not boundary of word, /b
+    END     = 0377   // Terminate: match found
 };
 
-// Regex instruction class type for compiler
+/**
+ * @brief Class type for regex compiler instruction.
+ */
 struct Reclass
 {
     int32_t builtins;    // bit mask identifying builtin classes
-    std::u32string chrs; // ranges as pairs of utf-8 characters
+    std::u32string chrs; // ranges as pairs of UTF-8 characters
     Reclass() : builtins(0) {}
     Reclass(int m) : builtins(m) {}
 };
 
-// Encoded regex instruction
+/**
+ * @brief Structure of an encoded regex instruction
+ */
 struct Reinst
 {
-    int32_t	type;
+    int32_t	type;           /* operator type or instruction type */
     union	{
         int32_t	cls_id;     /* class pointer */
-        char32_t c;     /* character */
+        char32_t c;         /* character */
         int32_t	subid;      /* sub-expression id for RBRA and LBRA */
         int32_t	right_id;   /* right child of OR */
     } u1;
-    union {	/* regexp relies on these two being in the same union */
+    union {                 /* regexec relies on these two being in the same union */
         int32_t left_id;    /* left child of OR */
         int32_t next_id;    /* next instruction for CAT & LBRA */
     } u2;
@@ -87,6 +94,10 @@ class Reprog
     Reprog& operator=(const Reprog&) = default;
     Reprog& operator=(Reprog&&) = default;
 
+    /**
+     * @brief Parses the given regex pattern and compiles
+     * into a list of chained instructions.
+     */
     static Reprog create_from(const char32_t* pattern);
 
     int32_t add_inst(int32_t type);
