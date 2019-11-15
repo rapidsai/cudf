@@ -2183,19 +2183,40 @@ class DataFrame(object):
 
         return melt(self, **kwargs)
 
-    def _typecast_before_merge(self, lhs, rhs, left_on, right_on):
+    def _typecast_before_merge(self, lhs, rhs, left_on, right_on, categorical_dtypes, col_with_categories):
         left_on = sorted(left_on)
         right_on = sorted(right_on)
 
         for lcol, rcol in zip(left_on, right_on):
-            # handle if we can join on some casted values, but not others
+            from_dtype = rhs[rcol].dtype
             to_dtype = lhs[lcol].dtype
-            msg = "Not all values can be cast without losing information. Will join on other values"
-            if not (rhs[rcol] == rhs[rcol].astype(to_dtype))[rhs[rcol].notna()].all():
-                warnings.warn(msg)
-            rhs[rcol] = rhs[rcol].astype(to_dtype)
+            
 
-        return lhs, rhs
+            if pd.api.types.is_dtype_equal(from_dtype,to_dtype):
+                continue
+
+            elif is_categorical_dtype(from_dtype):
+                typ = rhs[rcol].cat.categories.dtype
+                rhs[rcol] = rhs[rcol].astype(typ)
+                lhs[lcol] = lhs[lcol].astype(typ)
+                categorical_dtypes.pop(rcol)
+                col_with_categories.pop(rcol)
+                continue
+            elif is_categorical_dtype(to_dtype):
+                typ = lhs[lcol].cat.categories.dtype
+                lhs[rcol] = lhs[lcol].astype(typ)
+                rhs[rcol] = rhs[rcol].astype(typ)
+                categorical_dtypes.pop(lcol)
+                col_with_categories.pop(lcol)
+                continue
+
+            if (np.issubdtype(from_dtype, np.number)) and (np.issubdtype(to_dtype, np.number)):
+                # handle if we can join on some casted values, but not others
+                maybe_warn = "Not all values can be cast without losing information. Will join on other values"
+                if not (rhs[rcol] == rhs[rcol].astype(to_dtype))[rhs[rcol].notna()].all():
+                    warnings.warn(maybe_warn)
+                rhs[rcol] = rhs[rcol].astype(to_dtype)
+        return lhs, rhs, categorical_dtypes, col_with_categories
 
 
     def merge(
@@ -2407,8 +2428,7 @@ class DataFrame(object):
         org_names = list(itertools.chain(lhs._cols.keys(), rhs._cols.keys()))
 
         # potentially do an implicit typecast
-        lhs, rhs = self._typecast_before_merge(lhs, rhs, left_on, right_on)
-
+        lhs, rhs, categorical_dtypes, col_with_categories = self._typecast_before_merge(lhs, rhs, left_on, right_on, categorical_dtypes, col_with_categories)
         # Compute merge
         gdf_result = libcudf.join.join(
             lhs._cols, rhs._cols, left_on, right_on, how, method
