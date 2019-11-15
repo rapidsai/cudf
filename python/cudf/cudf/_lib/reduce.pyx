@@ -15,11 +15,13 @@ from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
+from libcpp.utility cimport pair
 
 import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
+from cudf._lib.utils cimport *
 cimport cudf._lib.includes.reduce as cpp_reduce
 
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
@@ -123,3 +125,29 @@ def scan(col_inp, col_out, scan_op, inclusive):
     free_column(c_col_out)
 
     return
+
+
+def group_std(key_columns, value_columns, ddof=1):
+    """ Calculate the group wise `quant` quantile for the value_columns
+    Returns column of group wise quantile specified by quant
+    """
+
+    cdef cudf_table *c_t = table_from_columns(key_columns)
+    cdef cudf_table *c_val = table_from_columns(value_columns)
+    cdef size_type c_ddof = ddof
+
+    cdef pair[cudf_table, cudf_table] c_result
+    with nogil:
+        c_result = cpp_reduce.group_std(
+            c_t[0],
+            c_val[0],
+            c_ddof
+        )
+
+    result_key_cols = columns_from_table(&c_result.first)
+    result_val_cols = columns_from_table(&c_result.second)
+
+    free(c_t)
+    free(c_val)
+
+    return (result_key_cols, result_val_cols)
