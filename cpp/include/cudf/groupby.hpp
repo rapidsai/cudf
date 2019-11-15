@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -25,60 +26,6 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
-/**
- * @brief Base class for specifying the desired aggregation in an
- * `aggregation_request`.
- *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
- */
-struct aggregation {
-  /**
-   * @brief Possible aggregation operations
-   */
-  enum Kind { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
-
-  aggregation(aggregation::Kind a) : kind{a} {}
-  Kind kind;  ///< The aggregation to perform
-};
-
-/**
- * @brief Derived class for specifying a quantile aggregation
- */
-struct quantile_aggregation : aggregation {
-  quantile_aggregation(std::vector<double> const& q,
-                       experimental::interpolation i)
-      : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
-  std::vector<double> _quantiles;              ///< Desired quantile(s)
-  experimental::interpolation _interpolation;  ///< Desired interpolation
-};
-
-/// Factory to create a SUM aggregation
-std::unique_ptr<aggregation> make_sum_aggregation();
-
-/// Factory to create a MIN aggregation
-std::unique_ptr<aggregation> make_min_aggregation();
-
-/// Factory to create a MAX aggregation
-std::unique_ptr<aggregation> make_max_aggregation();
-
-/// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation> make_count_aggregation();
-
-/// Factory to create a MEAN aggregation
-std::unique_ptr<aggregation> make_mean_aggregation();
-
-/// Factory to create a MEDIAN aggregation
-std::unique_ptr<aggregation> make_median_aggregation();
-
-/**
- * @brief Factory to create a QUANTILE aggregation
- *
- * @param quantiles The desired quantiles
- * @param interpolation The desired interpolation
- */
-std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i);
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
@@ -105,10 +52,8 @@ struct aggregation_request {
  *
  */
 struct aggregation_result {
-  /// Pairs containing columns of aggregation results and their corresponding
-  /// aggregation
-  std::vector<std::pair<std::unique_ptr<column>, std::unique_ptr<aggregation>>>
-      results{};
+  /// Columns of results from an `aggregation_request`
+  std::vector<std::unique_ptr<column>> results{};
 };
 
 /**

@@ -502,7 +502,8 @@ add_library(cudf
             src/scalar/scalar_factories.cpp
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
-            src/groupby/sort/groupby.cu)
+            src/groupby/sort/groupby.cu
+            src/aggregation/aggregation.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")

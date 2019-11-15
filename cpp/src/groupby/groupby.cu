@@ -30,37 +30,6 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 
-/// Factory to create a SUM aggregation
-std::unique_ptr<aggregation> make_sum_aggregation() {
-  return std::make_unique<aggregation>(aggregation::SUM);
-}
-/// Factory to create a MIN aggregation
-std::unique_ptr<aggregation> make_min_aggregation() {
-  return std::make_unique<aggregation>(aggregation::MIN);
-}
-/// Factory to create a MAX aggregation
-std::unique_ptr<aggregation> make_max_aggregation() {
-  return std::make_unique<aggregation>(aggregation::MAX);
-}
-/// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation> make_count_aggregation() {
-  return std::make_unique<aggregation>(aggregation::COUNT);
-}
-/// Factory to create a MEAN aggregation
-std::unique_ptr<aggregation> make_mean_aggregation() {
-  return std::make_unique<aggregation>(aggregation::MEAN);
-}
-/// Factory to create a MEDIAN aggregation
-std::unique_ptr<aggregation> make_median_aggregation() {
-  // TODO I think this should just return a quantile_aggregation?
-  return std::make_unique<aggregation>(aggregation::MEDIAN);
-}
-/// Factory to create a QUANTILE aggregation
-std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i) {
-  aggregation* a = new quantile_aggregation{q, i};
-  return std::unique_ptr<aggregation>(a);
-}
 
 // Constructor
 groupby::groupby(table_view const& keys, bool ignore_null_keys,
