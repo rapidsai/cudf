@@ -1,0 +1,144 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <cudf/null_mask.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/wrappers/bool.hpp>
+#include "./utilities.hpp"
+#include "regex/regex.cuh"
+
+
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+
+using string_index_pair = thrust::pair<const char*,size_type>;
+
+namespace
+{
+
+/**
+ * @brief This functor handles both contains_re and match_re to minimize the number
+ * of regex calls to find() to be inlined greatly reducing compile time.
+ *
+ * The stack is used to keep progress on evaluating the regex instructions on each string.
+ * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
+ *
+ * There are three call types based on the number of regex instructions in the given pattern.
+ * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
+ * Longer patterns require global memory. Shorter patterns are common in data cleaning.
+ *
+ */
+template<size_t stack_size>
+struct extract_fn
+{
+    Reprog_device prog;
+    column_device_view d_strings;
+    size_type column_index;
+
+    __device__ string_index_pair operator()(size_type idx)
+    {
+        u_char data1[stack_size], data2[stack_size];
+        prog.set_stack_mem(data1,data2);
+        if( d_strings.is_null(idx) )
+            return string_index_pair{nullptr,0};
+        string_view d_str = d_strings.element<string_view>(idx);
+        string_index_pair result{nullptr,0}
+        int32_t begin = 0, end = dstr->chars_count();
+        int rtn = prog.find(idx,d_str,begin,end);
+        if( rtn > 0 )
+            rtn = prog.extract(idx,d_str,begin,end,column_index);
+        size_type bytes = 0;
+        if( rtn > 0 )
+        {
+            auto offset = d_str.byte_offset(begin);
+            result = string_index_pair{ d_str.data() + offset, d_str.byte_offset(end)-offset };
+        }
+        return result;
+    }
+};
+} // namespace
+
+//
+std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings,
+                                              std::string const& pattern,
+                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                              cudaStream_t stream = 0)
+{
+    auto strings_count = strings.size();
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_strings = *strings_column;
+
+    auto d_flags = detail::get_character_flags_table();
+    // compile regex into device object
+    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto d_prog = *prog;
+    // extract should include groups
+    int groups = d_prog.group_counts();
+    CUDF_EXPECTS( groups > 0, "Group indicators not found in regex pattern");
+
+    // build a result column for each group
+    std::vector<std::unique_ptr<column>> results;
+    auto execpol = rmm::exec_policy(stream);
+    auto regex_insts = d_prog.insts_counts();
+    for( int32_t column_index=0; column_index < groups; ++column_index )
+    {
+        rmm::device_vector<string_index_pair> indices(strings_count);
+        string_index_pair* d_indexes = indices.data().get();
+
+        if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
+            thrust::transform(execpol->on(stream),
+                thrust::make_counting_iterator<size_type>(0),
+                thrust::make_counting_iterator<size_type>(strings_count),
+                d_indices, extract_fn<RX_STACK_SMALL>{d_prog, d_strings, column_index});
+        else if( regex_insts <= RX_MEDIUM_INSTS )
+            thrust::transform(execpol->on(stream),
+                thrust::make_counting_iterator<size_type>(0),
+                thrust::make_counting_iterator<size_type>(strings_count),
+                d_indices, extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
+        else
+            thrust::transform(execpol->on(stream),
+                thrust::make_counting_iterator<size_type>(0),
+                thrust::make_counting_iterator<size_type>(strings_count),
+                d_indices, extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
+        //
+        auto column = make_strings_column(indexes,stream,mr);
+        results.emplace_back(std::move(column));
+    }
+    return results;
+}
+
+} // namespace detail
+
+// external API
+
+std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings,
+                                              std::string const& pattern,
+                                              rmm::mr::device_memory_resource* mr)
+{
+    return detail::extract(strings, pattern, mr);
+}
+
+} // namespace strings
+} // namespace cudf
