@@ -44,9 +44,9 @@ namespace detail
  * @param stream CUDA stream to use for any kernels in this function.
  * @return New column with concatenated results.
  */
-std::unique_ptr<column> concatenate_vertically( std::vector<strings_column_view> const& strings_columns,
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                cudaStream_t stream = 0 );
+std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& strings_columns,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                     cudaStream_t stream = 0 );
 
 } // namespace detail
 } // namespace strings

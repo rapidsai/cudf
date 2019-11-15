@@ -31,19 +31,20 @@ struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {
-    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h" };
+    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
 
     cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
     cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
+    cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
 
     std::vector<cudf::strings_column_view> strings_columns;
     strings_columns.push_back(cudf::strings_column_view(strings1));
     strings_columns.push_back(cudf::strings_column_view(strings2));
+    strings_columns.push_back(cudf::strings_column_view(strings3));
 
-    auto results = cudf::strings::detail::concatenate_vertically(strings_columns);
+    auto results = cudf::strings::detail::concatenate(strings_columns);
 
-    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end(),
-            thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
     cudf::test::expect_columns_equal(*results,expected);
 }
 
@@ -53,6 +54,7 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
     std::vector<cudf::strings_column_view> strings_columns;
     strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
     strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
-    auto results = cudf::strings::detail::concatenate_vertically(strings_columns);
+    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
+    auto results = cudf::strings::detail::concatenate(strings_columns);
     cudf::test::expect_strings_empty(results->view());
 }
