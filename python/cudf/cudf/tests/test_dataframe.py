@@ -1729,22 +1729,23 @@ def test_dataframe_boolmask(mask_shape):
         )
 
 
-@pytest.mark.parametrize('mask', [
-    [True, False, True],
-    pytest.param(
-        Series([True, False, True]),
-        marks=pytest.mark.xfail(
-            reason="Pandas doesn't support indexing a multiindex with a Series"
+@pytest.mark.parametrize(
+    "mask",
+    [
+        [True, False, True],
+        pytest.param(
+            Series([True, False, True]),
+            marks=pytest.mark.xfail(
+                reason="Pandas doesn't support indexing a multiindex with a Series"
+            ),
         ),
-    ),
-])
+    ],
+)
 def test_dataframe_multiindex_boolmask(mask):
-    gdf = DataFrame({'w': [3, 2, 1],
-                     'x': [1, 2, 3],
-                     'y': [0, 1, 0],
-                     'z': [1, 1, 1],
-                     })
-    gdg = gdf.groupby(['w', 'x']).count()
+    gdf = DataFrame(
+        {"w": [3, 2, 1], "x": [1, 2, 3], "y": [0, 1, 0], "z": [1, 1, 1],}
+    )
+    gdg = gdf.groupby(["w", "x"]).count()
     pdg = gdg.to_pandas()
     assert_eq(gdg[mask], pdg[mask])
 
