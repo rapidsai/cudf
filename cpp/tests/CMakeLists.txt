@@ -163,6 +163,7 @@ set(LEGACY_SORT_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_quantile.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_median.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_multi_agg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_var_std.cu"
 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/not_ignore_null_keys/legacy/single_column_sum.cu"
 )
@@ -269,6 +270,8 @@ ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 # - reduction tests -------------------------------------------------------------------------------
 
 set(LEGACY_REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_std_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_var_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/reduction_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/scan_tests.cu")
 
