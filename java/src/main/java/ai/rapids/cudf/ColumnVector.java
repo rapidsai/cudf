@@ -2578,6 +2578,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  private static native long normalizeNANsAndZeroes(long columnHandle) throws CudfException;
+
+  /**
+   * Create a new vector of normalized values, from the input vector.
+   * Normalization should be equivalent to an identity mapping, except for:
+   *   1. `-0.0f`, which yields `0.0f`
+   *   2. Any Double in the NaN range, which should yield `Double.NaN`
+   */
+  public ColumnVector normalizeNANsAndZeroes() {
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "normalizeNANsAndZeroes")) {
+      return new ColumnVector(normalizeNANsAndZeroes(getNativeCudfColumnAddress()));
+    }
+  }
+
   /**
    * Calculate the quantile of this ColumnVector
    * @param method   the method used to calculate the quantile

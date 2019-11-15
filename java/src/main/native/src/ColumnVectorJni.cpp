@@ -17,6 +17,8 @@
 #include "cudf/legacy/quantiles.hpp"
 #include "cudf/legacy/replace.hpp"
 #include "cudf/legacy/rolling.hpp"
+#include "cudf/legacy/interop.hpp"
+#include "cudf/replace.hpp"
 
 #include "jni_utils.hpp"
 
@@ -455,6 +457,30 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_exactQuantile(JNIEnv 
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeroes(JNIEnv *env,
+                                                                                jclass clazz,
+                                                                                jlong input_column) {
+  using cudf::column;
+  using cudf::mutable_column_view;
+  using cudf::legacy::gdf_column_to_view;
+  using cudf::legacy::view_to_gdf_column;
+
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  try {
+    std::unique_ptr<column> p_normalized_column
+        = cudf::normalize_nans_and_zeros(
+            gdf_column_to_view(*reinterpret_cast<gdf_column*>(input_column)));
+
+    auto ret = reinterpret_cast<jlong>(
+        new gdf_column(view_to_gdf_column(p_normalized_column->mutable_view())));
+
+    p_normalized_column->release();
+
+    return ret;
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_approxQuantile(JNIEnv *env, jclass clazz,
