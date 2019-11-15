@@ -309,6 +309,7 @@ namespace detail {
       output = cudf::experimental::allocate_like(input_col,
                                                  cudf::experimental::mask_allocation_policy::NEVER,
                                                  mr);
+      }
 
     cudf::mutable_column_view outputView = output->mutable_view();
     cudf::experimental::type_dispatcher(input_col.type(),
