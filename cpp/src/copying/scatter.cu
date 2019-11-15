@@ -28,22 +28,21 @@ namespace detail {
 
 namespace {
 
-template <typename T>
-std::unique_ptr<column> copy_with_policy(column_view const& original,
-    mask_allocation_policy policy, rmm::mr::device_memory_resource* mr,
+std::unique_ptr<column> copy_with_nullable(column_view const& original,
+    bool force_mask_allocation, rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
-  std::unique_ptr<column> copy;
-  if (original.nullable() || policy == mask_allocation_policy::RETAIN) {
-    // Copy null mask from the original, if it exists
-    copy = std::make_unique<column>(original, stream, mr);
-  } else {
-    // Original doesn't have a null mask, but we may allocate an empty one
-    copy = allocate_like(original, original.size(), policy, mr, stream);
-    auto copy_view = copy->mutable_view();
-    thrust::copy(rmm::exec_policy(stream)->on(stream),
-      original.begin<T>(), original.end<T>(), copy_view.begin<T>());
-    copy->set_null_count(0);
+  auto copy = std::make_unique<column>(original, stream, mr);
+  if (force_mask_allocation and not original.nullable()) {
+    // Create an all-valid null mask if original has none
+    auto contents = copy->release();
+    auto bitmask = create_null_mask(original.size(), mask_state::ALL_VALID, stream, mr);
+    size_type null_count = 0;
+    copy = std::make_unique<column>(original.type(), original.size(),
+      std::move(*contents.data), std::move(bitmask), null_count, std::move(contents.children));
+    // TODO use this from PR 3172 instead
+    //auto mask = create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
+    //copy->set_null_mask(std::move(mask), null_count);
   }
   return copy;
 }
@@ -111,9 +110,7 @@ struct column_scatterer {
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     // Result column must have a null mask if the source does
-    mask_allocation_policy nullable = source.nullable() ?
-      mask_allocation_policy::ALWAYS : mask_allocation_policy::RETAIN;
-    std::unique_ptr<column> result = copy_with_policy<T>(target, nullable, mr, stream);
+    auto result = copy_with_nullable(target, source.nullable(), mr, stream);
     auto result_view = result->mutable_view();
 
     // Transform negative indices to index + target size
