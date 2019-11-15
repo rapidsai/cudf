@@ -24,10 +24,10 @@ namespace strings
 {
 
 /**
- * @brief Returns a boolean column identifying strings entries which
- * contain a character sequence matching the given regex pattern.
+ * @brief Returns a boolean column identifying rows which
+ * match the given regex pattern.
  *
- * Any null string results in a null entry for that row in the output column.
+ * Any null string entries return corresponding null output column entries.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
@@ -39,11 +39,10 @@ std::unique_ptr<column> contains_re( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns a boolean column identifying strings entries which
- * contain a character sequence matching the given regex pattern
- * only at the beginning of each string.
+ * @brief Returns a boolean column identifying rows which
+ * matching the given regex pattern but only at the beginning the string.
  *
- * Any null string results in a null entry for that row in the output column.
+ * Any null string entries return corresponding null output column entries.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
@@ -58,7 +57,7 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
  * @brief Returns the number of times the given regex pattern
  * matches in each string.
  *
- * Any null string results in a null entry for that row in the output column.
+ * Any null string entries return corresponding null output column entries.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.

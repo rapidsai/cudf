@@ -181,26 +181,6 @@ const character_cases_table_type* get_character_cases_table()
     return d_character_cases_table;
 }
 
-//
-std::vector<char32_t> string_to_char32_vector( std::string const& pattern )
-{
-    size_type size = static_cast<size_type>(pattern.size());
-    size_type count = characters_in_string(pattern.c_str(),size);
-    std::vector<char32_t> result(count+1);
-    char32_t* output_ptr = result.data();
-    const char* input_ptr = pattern.data();
-    for( size_type idx=0; idx < size; ++idx )
-    {
-        char_utf8 output_character = 0;
-        size_type ch_width = to_char_utf8(input_ptr,output_character);
-        input_ptr += ch_width;
-        idx += ch_width - 1;
-        *output_ptr++ = output_character;
-    }
-    result[count] = 0; // last entry set to 0
-    return result;
-}
-
 } // namespace detail
 } // namespace strings
 } // namespace cudf

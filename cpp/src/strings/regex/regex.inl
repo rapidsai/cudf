@@ -128,7 +128,7 @@ __device__ inline bool Reclass_device::is_match(char32_t ch, const uint8_t* code
     int i=0, len = count;
     for( ; i < len; i += 2 )
     {
-        if( (ch >= chrs[i]) && (ch <= chrs[i+1]) )
+        if( (ch >= literals[i]) && (ch <= literals[i+1]) )
             return true;
     }
     if( !builtins )

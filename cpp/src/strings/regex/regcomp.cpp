@@ -283,21 +283,21 @@ class RegParser
         if( cls.size()>=2 )
         {
             int np = 0;
-            yycls.chrs += cls[p++];
-            yycls.chrs += cls[p++];
+            yycls.literals += cls[p++];
+            yycls.literals += cls[p++];
             for (; p < cls.size(); p += 2)
             {
                 /* overlapping or adjacent ranges? */
-                if (cls[p] <= yycls.chrs[np + 1] + 1)
+                if (cls[p] <= yycls.literals[np + 1] + 1)
                 {
-                    if (cls[p + 1] >= yycls.chrs[np + 1])
-                        yycls.chrs.replace(np + 1, 1, 1, cls[p + 1]); /* coalesce */
+                    if (cls[p + 1] >= yycls.literals[np + 1])
+                        yycls.literals.replace(np + 1, 1, 1, cls[p + 1]); /* coalesce */
                 }
                 else
                 {
                     np += 2;
-                    yycls.chrs += cls[p];
-                    yycls.chrs += cls[p+1];
+                    yycls.literals += cls[p];
+                    yycls.literals += cls[p+1];
                 }
             }
         }
@@ -375,8 +375,8 @@ class RegParser
                     if (id_ccls_W < 0)
                     {
                         Reclass cls = ccls_w;
-                        cls.chrs += '\n';
-                        cls.chrs += '\n';
+                        cls.literals += '\n';
+                        cls.literals += '\n';
                         yyclass_id = m_prog.add_class(cls);
                         id_ccls_W = yyclass_id;
                     }
@@ -418,8 +418,8 @@ class RegParser
                     if (id_ccls_D < 0)
                     {
                         Reclass cls = ccls_d;
-                        cls.chrs += '\n';
-                        cls.chrs += '\n';
+                        cls.literals += '\n';
+                        cls.literals += '\n';
                         yyclass_id = m_prog.add_class(cls);
                         id_ccls_D = yyclass_id;
                     }
@@ -1142,12 +1142,12 @@ void Reprog::print()
     for( int i = 0; i < count; i++ )
     {
         const Reclass& cls = _classes[i];
-        int len = (int)cls.chrs.size();
+        int len = (int)cls.literals.size();
         printf("%2d: ", i);
         for( int j=0; j < len; j += 2 )
         {
-            char32_t c1 = cls.chrs[j];
-            char32_t c2 = cls.chrs[j+1];
+            char32_t c1 = cls.literals[j];
+            char32_t c2 = cls.literals[j+1];
             if( c1 <= 32 || c1 >= 127 || c2 <= 32 || c2 >= 127 )
                 printf("0x%02x-0x%02x",(unsigned)c1,(unsigned)c2);
             else
