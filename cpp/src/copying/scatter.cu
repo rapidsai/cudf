@@ -28,6 +28,18 @@ namespace detail {
 
 namespace {
 
+template <typename T>
+struct device_deref_functor {
+  __device__ T operator()(T* ptr) { return *ptr; }
+};
+
+template <typename T>
+auto make_constant_deref_iterator(T* ptr) {
+  return thrust::make_transform_iterator(
+    thrust::constant_iterator<T*>(ptr),
+    device_deref_functor<T>{});
+}
+
 std::unique_ptr<column> copy_with_nullable(column_view const& original,
     bool force_mask_allocation, rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
@@ -156,7 +168,7 @@ struct scatter_impl {
     // TODO create separate streams for each col and then sync with master?
     auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
     std::transform(source.begin(), source.end(), target.begin(), result.begin(),
-      [&scatter_map, mr, stream](auto const& source_col, auto const& target_col) {
+      [=, &scatter_map](auto const& source_col, auto const& target_col) {
         return type_dispatcher(source_col.type(), column_scatterer<T>{},
           source_col, scatter_map, target_col, mr, stream);
       });
@@ -178,6 +190,44 @@ struct scatter_impl {
   }
 };
 
+template <typename index_type>
+struct column_scalar_scatterer {
+  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      column_view const& indices, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    using cudf::detail::fixed_width_scalar;
+
+    // Result column must have a null mask if the source is not valid
+    auto result = copy_with_nullable(target, not source->is_valid(), mr, stream);
+    auto result_view = result->mutable_view();
+
+    // Transform negative indices to index + target size
+    auto scatter_iter = thrust::make_transform_iterator(
+      indices.begin<index_type>(),
+      index_converter<index_type>{target.size()});
+
+    // Make a const iterator that derefs the fixed-width scalar device data
+    auto scalar_impl = static_cast<fixed_width_scalar<T>*>(source.get());
+    auto scalar_iter = make_constant_deref_iterator(scalar_impl->data());
+
+    thrust::scatter(rmm::exec_policy(stream)->on(stream), scalar_iter,
+      scalar_iter + indices.size(), scatter_iter,
+      result_view.begin<T>());
+
+    return result;
+  }
+
+  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      column_view const& scatter_map, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    CUDF_FAIL("Scatter column type must be fixed width");
+  }
+};
+
 struct scatter_scalar_impl {
   template <typename T, std::enable_if_t<std::is_integral<T>::value
       and not std::is_same<T, bool8>::value>* = nullptr>
@@ -195,8 +245,17 @@ struct scatter_scalar_impl {
         "Scatter map index out of bounds");
     }
 
-    // TODO
-    return std::make_unique<table>(target, stream, mr);
+    // TODO create separate streams for each col and then sync with master?
+    auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
+    std::transform(source.begin(), source.end(), target.begin(), result.begin(),
+      [=, &indices](auto const& source_scalar, auto const& target_col) {
+        return type_dispatcher(source_scalar->type(), column_scalar_scatterer<T>{},
+          source_scalar, indices, target_col, mr, stream);
+      });
+
+    // TODO bitmask
+
+    return std::make_unique<table>(std::move(result));
   }
 
   template <typename T, std::enable_if_t<not std::is_integral<T>::value

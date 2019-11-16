@@ -141,4 +141,31 @@ TYPED_TEST(ScatterTests, BasicNullTarget)
   expect_tables_equal(result->view(), expected_table);
 }
 
-// TODO bitmask tests
+TYPED_TEST(ScatterTests, BasicScalar)
+{
+  using cudf::experimental::scalar_type_t;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using scalar_ptr = std::unique_ptr<cudf::scalar>;
+  using scalar_vector = std::vector<scalar_ptr>;
+
+  // Initializers lists can't take move-only types
+  scalar_vector source_vector;
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  source_vector.push_back(std::move(source));
+
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>(
+    {-3, 3, 1, -1});
+  auto const expected = fixed_width_column_wrapper<TypeParam>(
+    {10, 100, 30, 100, 50, 100, 70, 100});
+
+  auto const target_table = cudf::table_view({target});
+  auto const expected_table = cudf::table_view({expected});
+
+  auto const result = cudf::experimental::scatter(source_vector, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
