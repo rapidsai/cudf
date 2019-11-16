@@ -19,7 +19,7 @@
 #include <cudf/types.hpp>
 #include "slice.hpp"
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {

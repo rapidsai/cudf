@@ -15,12 +15,10 @@
  */
 #pragma once
 
-#include <cudf/cudf.h>
-
+#include <cudf/types.hpp>
 #include <vector>
 
 namespace cudf {
-
 namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -158,7 +156,7 @@ class column_view_base {
 
  protected:
   data_type _type{EMPTY};   ///< Element type
-  cudf::size_type _size{};  ///< Number of elements
+  size_type _size{};  ///< Number of elements
   void const* _data{};      ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
@@ -321,8 +319,11 @@ class column_view : public detail::column_view_base {
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
+
   ~mutable_column_view() = default;
+
   mutable_column_view(mutable_column_view const&) = default;
+
   mutable_column_view(mutable_column_view&&) = default;
   mutable_column_view& operator=(mutable_column_view const&) = default;
   mutable_column_view& operator=(mutable_column_view&&) = default;
@@ -473,4 +474,4 @@ class mutable_column_view : public detail::column_view_base {
  *---------------------------------------------------------------------------**/
 size_type count_descendants(column_view parent);
 
-}  // namespace cudf
+}// namespace cudf

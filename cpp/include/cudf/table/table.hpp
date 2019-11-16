@@ -26,7 +26,7 @@ namespace experimental {
 
 class table {
  public:
-  table() = delete;
+  table() = default;
   ~table() = default;
   table(table&&) = default;
   table& operator=(table const&) = delete;
@@ -100,9 +100,58 @@ class table {
    *---------------------------------------------------------------------------**/
   std::vector<std::unique_ptr<column>> release();
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a table_view with set of specified columns.
+   *
+   * @throws std::out_of_range
+   * If any element in `column_indices` is outside [0, num_columns())
+   *
+   * @param column_indices Indices of columns in the table
+   * @return A table_view consisting of columns from the original table
+   * specified by the elements of `column_indices`
+   *---------------------------------------------------------------------------**/
+  table_view select(std::vector<cudf::size_type> const& column_indices) const;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a reference to the specified column
+   *
+   * @throws std::out_of_range
+   * If i is out of the range [0, num_columns)
+   *
+   * @param i Index of the desired column
+   * @return A reference to the desired column
+   *---------------------------------------------------------------------------**/
+  column& get_column(cudf::size_type column_index) { return *(_columns.at(column_index)); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a const reference to the specified column
+   *
+   * @throws std::out_of_range
+   * If i is out of the range [0, num_columns)
+   *
+   * @param i Index of the desired column
+   * @return A const reference to the desired column
+   *---------------------------------------------------------------------------**/
+  column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
+
  private:
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief Elements of `tables_to_concat` are concatenated to return single
+ * table_view
+ *
+ * @throws cudf::logic_error
+ * If number of rows mismatch
+ *
+ * @param tables_to_concat The tables to be concatenated into a single
+ * table_view
+ * @return A single table having all the columns from the elements of
+ * `tables_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+table_view concat(std::vector<table_view> const& tables_to_concat);
+
 }  // namespace experimental
 }  // namespace cudf

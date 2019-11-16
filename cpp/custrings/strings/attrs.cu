@@ -21,7 +21,7 @@
 #include <thrust/transform_scan.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"
 
@@ -31,7 +31,7 @@
 #include "../util.h"
 
 // this will return the number of characters for each string
-unsigned int NVStrings::len(int* lengths, bool todevice)
+unsigned int NVStrings::len(int* lengths, bool todevice) const
 {
     unsigned int count = size();
     if( lengths==0 || count==0 )

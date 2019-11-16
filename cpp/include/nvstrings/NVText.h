@@ -56,6 +56,23 @@ public:
     static NVStrings* unique_tokens(NVStrings& strs, const char* delimiter=nullptr);
 
     /**
+     * @brief Tokenize all input strings into single-character strings.
+     *
+     * Example
+     * ```
+     * s = ['apple','pear']
+     * r = character_tokenize(s)
+     * r is now ['a','p','p','l','e','p','e','a','r']
+     * ```
+     *
+     * Note these are UTF-8 characters and so each string may be one or more bytes.
+     *
+     * @param strings Strings to tokenize
+     * @return Strings with single characters.
+     */
+    static NVStrings* character_tokenize(NVStrings const& strings);
+
+    /**
      * @brief Computes the number of tokens in each string.
      * @param strs Strings to tokenize.
      * @param delimiter String or character used to identify tokens.
@@ -180,6 +197,50 @@ public:
      * @return 0 if successful
      */
     static unsigned int porter_stemmer_measure(NVStrings& strs, const char* vowels, const char* y_char, unsigned int* results, bool devmem=true );
+
+    /**
+     * @brief Vowel/consonant type
+     */
+    enum letter_type {
+        none,     ///< Reserved
+        vowel,    ///< Return true for vowels only
+        consonant ///< Return true for consonants only
+    };
+
+    /**
+     * @brief Returns boolean array indicating whether the specified character index is a consonant or vowel.
+     * False is returned if the index is beyond the end of the string.
+     *
+     * @param strs Words that preprocessed to lowercase with no punctuation and no whitespace.
+     * @param vowels Characters to check as vowels.
+     * @param y_char The 'y' character used for extra vowel checking.
+     * @param ltype Specify letter type
+     * @param character_index The 0-based character position to check in each string.
+     * @param results Array of boolena values.
+     * @param devmem True if results in device memory.
+     * @return 0 if successful
+     */
+    static unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                                  letter_type ltype, int character_index,
+                                  bool* results, bool devmem=true );
+
+    /**
+     * @brief Returns boolean array indicating whether the specified character index is a consonant or vowel.
+     * False is returned if the index is beyond the end of the string.
+     *
+     * @param strs Words that preprocessed to lowercase with no punctuation and no whitespace.
+     * @param vowels Characters to check as vowels.
+     * @param y_char The 'y' character used for extra vowel checking.
+     * @param ltype Specify letter type
+     * @param indices The 0-based character positions to check in each string.
+     *        Must point to device memory with at least strs.size() elements.
+     * @param results Array of boolena values.
+     * @param devmem True if results in device memory.
+     * @return 0 if successful
+     */
+    static unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                                  letter_type ltype, int* indices,
+                                  bool* results, bool devmem=true );
 
      /**
       * @brief Creates a new strings instance duplicating each string by its associated count value.

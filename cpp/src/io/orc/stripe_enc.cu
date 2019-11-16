@@ -228,7 +228,7 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
             if (t < literal_run)
             {
                 uint32_t run_id = t >> 7;
-                uint32_t run = (run_id == num_runs - 1) ? literal_run & 0x7f : 0x80;
+                uint32_t run = min(literal_run - run_id * 128, 128);
                 if (!(t & 0x7f))
                     dst[run_id + t] = 0x100 - run;
                 dst[run_id + t + 1] = (cid == CI_PRESENT) ? __brev(v0) >> 24 : v0;
@@ -254,11 +254,10 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
                 inpos += 130;
                 repeat_run -= 130;
             }
-            if (!flush)
+            if (!flush && repeat_run == numvals)
             {
                 // Wait for more data in case we can continue the run later 
-                if (repeat_run == numvals && !flush)
-                    break;
+                break;
             }
             if (repeat_run >= 3)
             {
@@ -555,9 +554,9 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 // Patched base mode
                 if (!t)
                 {
-                    uint32_t bw, pw = 1, pll, pgw = 1;
+                    uint32_t bw, pw = 1, pll, pgw = 1, bv_scale = (is_signed) ? 0 : 1;
                     vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
-                    bw = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax), 7)) : (4 - min(CountLeadingBytes32(vmax), 3));
+                    bw = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7)) : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
                 #if ZERO_PLL_WAR
                     // Insert a dummy zero patch
                     pll = 1;
@@ -811,7 +810,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 {
                     uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
                     nrows_out = (nrows_out + flush) >> 3;
-                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out, nrows_out, flush, t) * 8;
+                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, (s->chunk.start_row + present_out) >> 3, nrows_out, flush, t) * 8;
                 }
                 __syncthreads();
                 if (!t)

@@ -19,7 +19,10 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 
@@ -161,7 +164,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is null
    *---------------------------------------------------------------------------**/
   __device__ bool is_valid_nocheck(size_type element_index) const noexcept {
-    return bit_is_set(_null_mask, element_index);
+    return bit_is_set(_null_mask, offset()+element_index);
   }
 
   /**---------------------------------------------------------------------------*
@@ -230,6 +233,10 @@ class alignas(16) column_device_view_base {
         _null_count{null_count},
         _offset{offset} {}
 };
+
+//Forward declaration
+template <typename T>
+class value_accessor; 
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
@@ -271,6 +278,38 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T>
   __device__ T const element(size_type element_index) const noexcept {
     return data<T>()[element_index];
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Iterator for navigating this column
+   *---------------------------------------------------------------------------**/
+  using count_it = thrust::counting_iterator<size_type>;
+  template <typename T>
+  using const_iterator =
+      thrust::transform_iterator<detail::value_accessor<T>, count_it>;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return an iterator to the first element of the column.
+   * 
+   * This iterator only supports columns where `has_nulls() == false`. 
+   * For columns with null elements, use `make_null_replacement_iterator`.
+   * @throws `cudf::logic_error` if `has_nulls() == true`
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  const_iterator<T> begin() const {
+    return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return an iterator to the element following the last element of the column. 
+   *
+   * This iterator only supports columns where `has_nulls() == false`.
+   * For columns with null elements, use `make_null_replacement_iterator`.
+   * @throws `cudf::logic_error` if `has_nulls() == true`
+   *---------------------------------------------------------------------------**/
+  template<typename T>
+  const_iterator<T> end() const {
+    return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
 
   /**---------------------------------------------------------------------------*
@@ -401,11 +440,11 @@ class alignas(16) mutable_column_device_view
    *`data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   __host__ __device__ T* head() const noexcept {
-    return const_cast<T*>(detail::column_device_view_base::head());
+    return const_cast<T*>(detail::column_device_view_base::head<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -417,11 +456,11 @@ class alignas(16) mutable_column_device_view
    * @TODO Clarify behavior for variable-width types.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
   __host__ __device__ T* data() const noexcept {
-    return head<T>() + _offset;
+    return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -464,6 +503,11 @@ class alignas(16) mutable_column_device_view
    * @brief Updates the null mask to indicate that the specified element is
    * valid
    *
+   * @note This operation requires a global atomic operation. Therefore, it is
+   * not reccomended to use this function in performance critical regions. When
+   * possible, it is more efficient to compute and update an entire word at
+   * once using `set_mask_word`.
+   * 
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -476,6 +520,11 @@ class alignas(16) mutable_column_device_view
   /**---------------------------------------------------------------------------*
    * @brief Updates the null mask to indicate that the specified element is null
    *
+   * @note This operation requires a global atomic operation. Therefore, it is
+   * not reccomended to use this function in performance critical regions. When
+   * possible, it is more efficient to compute and update an entire word at
+   * once using `set_mask_word`.
+   * 
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -559,4 +608,36 @@ __device__ inline string_view const column_device_view::element<string_view>(
   return string_view{d_strings + offset, d_offsets[index + 1] - offset};
 }
 
+namespace detail {
+/** -------------------------------------------------------------------------*
+ * @brief value accessor of column without null bitmask
+ * A unary functor returns scalar value at `id`.
+ * `operator() (cudf::size_type id)` computes `element`
+ * This functor is only allowed for non-nullable columns.
+ *
+ * the return value for element `i` will return `column[i]`
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ *
+ * @tparam T The type of elements in the column
+ * -------------------------------------------------------------------------**/
+
+template <typename T>
+struct value_accessor {
+  column_device_view const col;  ///< column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  value_accessor(column_device_view const& _col) : col{_col} {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
+                 "the data type mismatch");
+    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
+  }
+
+  __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
+};
+}  // namespace detail
 }  // namespace cudf

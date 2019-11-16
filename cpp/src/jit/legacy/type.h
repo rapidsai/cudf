@@ -20,7 +20,7 @@
 #ifndef GDF_JIT_UTIL_TYPE_H
 #define GDF_JIT_UTIL_TYPE_H
 
-#include <cudf/binaryop.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <string>
 
 namespace cudf {

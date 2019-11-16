@@ -512,12 +512,12 @@ public class JCudfSerialization {
   /////////////////////////////////////////////
   // PADDING FOR ALIGNMENT
   /////////////////////////////////////////////
-  private static long padFor64bitAlignment(long orig) {
-    return ((orig + 7) / 8) * 8;
+  private static long padFor64byteAlignment(long orig) {
+    return ((orig + 63) / 64) * 64;
   }
 
-  private static long padFor64bitAlignment(DataWriter out, long bytes) throws IOException {
-    final long paddedBytes = padFor64bitAlignment(bytes);
+  private static long padFor64byteAlignment(DataWriter out, long bytes) throws IOException {
+    final long paddedBytes = padFor64byteAlignment(bytes);
     while (paddedBytes > bytes) {
       out.writeByte((byte)0);
       bytes++;
@@ -543,18 +543,18 @@ public class JCudfSerialization {
     for (ColumnBufferProvider column: columns) {
       DType type = column.getType();
       if (column.getNullCount() > 0) {
-        totalDataSize += padFor64bitAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
+        totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
       }
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
         // offsets
-        totalDataSize += padFor64bitAlignment((numRows + 1) * 4);
+        totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
 
         // data
         if (numRows > 0) {
-          totalDataSize += padFor64bitAlignment(getRawStringDataLength(column, rowOffset, numRows));
+          totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
         }
       } else {
-        totalDataSize += padFor64bitAlignment(column.getType().sizeInBytes * numRows);
+        totalDataSize += padFor64byteAlignment(column.getType().sizeInBytes * numRows);
       }
     }
     return totalDataSize;
@@ -567,11 +567,11 @@ public class JCudfSerialization {
     for (int col = 0; col < numColumns; col++) {
       DType type = types[col];
       if (nullCounts[col] > 0) {
-        totalDataSize += padFor64bitAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
+        totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
       }
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
         // offsets
-        totalDataSize += padFor64bitAlignment((numRows + 1) * 4);
+        totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
 
         long stringDataLen = 0;
         for (int batchNumber = 0; batchNumber < columnsForEachBatch.length; batchNumber++) {
@@ -579,9 +579,9 @@ public class JCudfSerialization {
           long numRowsInSubColumn = provider.getRowCount();
           stringDataLen += getRawStringDataLength(provider, 0, numRowsInSubColumn);
         }
-        totalDataSize += padFor64bitAlignment(stringDataLen);
+        totalDataSize += padFor64byteAlignment(stringDataLen);
       } else {
-        totalDataSize += padFor64bitAlignment(types[col].sizeInBytes * numRows);
+        totalDataSize += padFor64byteAlignment(types[col].sizeInBytes * numRows);
       }
     }
     return totalDataSize;
@@ -623,23 +623,23 @@ public class JCudfSerialization {
       long data;
       long dataLen;
       if (nullCount > 0) {
-        validityLen = padFor64bitAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
+        validityLen = padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
         validity = bufferOffset;
         bufferOffset += validityLen;
       }
 
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        offsetsLen = padFor64bitAlignment((numRows + 1) * 4);
+        offsetsLen = padFor64byteAlignment((numRows + 1) * 4);
         offsets = bufferOffset;
         int startStringOffset = buffer.getInt(bufferOffset);
         int endStringOffset = buffer.getInt(bufferOffset + (numRows * 4));
         bufferOffset += offsetsLen;
 
-        dataLen = padFor64bitAlignment(endStringOffset - startStringOffset);
+        dataLen = padFor64byteAlignment(endStringOffset - startStringOffset);
         data = bufferOffset;
         bufferOffset += dataLen;
       } else {
-        dataLen = padFor64bitAlignment(type.sizeInBytes * numRows);
+        dataLen = padFor64byteAlignment(type.sizeInBytes * numRows);
         data = bufferOffset;
         bufferOffset += dataLen;
       }
@@ -814,7 +814,7 @@ public class JCudfSerialization {
                                        long offset,
                                        long length) throws IOException {
     out.copyDataFrom(column, buffer, offset, length);
-    return padFor64bitAlignment(out, length);
+    return padFor64byteAlignment(out, length);
   }
 
   /////////////////////////////////////////////
@@ -938,7 +938,7 @@ public class JCudfSerialization {
         out.write(arrayBuffer, 0, (rowsStoredInArray + 7) / 8);
       }
     }
-    return padFor64bitAlignment(out, validityLen);
+    return padFor64byteAlignment(out, validityLen);
   }
 
   // Package private for testing
@@ -999,7 +999,7 @@ public class JCudfSerialization {
       int len = (rowsStoredInArray + 7) / 8;
       out.write(arrayBuffer, 0, len);
     }
-    return padFor64bitAlignment(out, validityLen);
+    return padFor64byteAlignment(out, validityLen);
   }
 
   /////////////////////////////////////////////
@@ -1032,7 +1032,7 @@ public class JCudfSerialization {
       out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
       totalCopied += dataLeft;
     }
-    padFor64bitAlignment(out, totalCopied);
+    padFor64byteAlignment(out, totalCopied);
   }
 
   private static long copySlicedOffsets(DataWriter out, ColumnBufferProvider column, long rowOffset,
@@ -1084,7 +1084,7 @@ public class JCudfSerialization {
       out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
       totalCopied += dataLeft;
     }
-    padFor64bitAlignment(out, totalCopied);
+    padFor64byteAlignment(out, totalCopied);
     return dataLens;
   }
 
@@ -1117,7 +1117,7 @@ public class JCudfSerialization {
       out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
       totalCopied += dataLeft;
     }
-    padFor64bitAlignment(out, totalCopied);
+    padFor64byteAlignment(out, totalCopied);
   }
 
   /////////////////////////////////////////////
@@ -1319,7 +1319,8 @@ public class JCudfSerialization {
     ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
     SerializedTableHeader combined = calcConcatedHeader(providers);
 
-    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+    try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
       try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
         DataWriter writer = writerFrom(hostBuffer);
@@ -1360,7 +1361,8 @@ public class JCudfSerialization {
 
   public static Table readTableFrom(SerializedTableHeader header,
                                     HostMemoryBuffer hostBuffer) {
-    try (DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
+    try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom");
+         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
       if (hostBuffer.length > 0) {
         try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
           devBuffer.copyFromHostBuffer(hostBuffer);

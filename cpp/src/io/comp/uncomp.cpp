@@ -330,8 +330,8 @@ gdf_error io_uncompress_single_h2d(const void *src, cudf::size_type src_size, in
                         // Bad cdir
                         break;
                     }
-                    // For now, only accept with non-zero file sizes and v2.0 DEFLATE
-                    if (cdfh->min_ver <= 20 && cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0)
+                    // For now, only accept with non-zero file sizes and DEFLATE
+                    if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0)
                     {
                         size_t lfh_ofs = cdfh->hdr_ofs;
                         const zip_lfh_s *lfh = (const zip_lfh_s *)(raw + lfh_ofs);
@@ -339,7 +339,7 @@ gdf_error io_uncompress_single_h2d(const void *src, cudf::size_type src_size, in
                          && lfh->sig == 0x04034b50
                          && lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size)
                         {
-                            if (lfh->ver <= 20 && lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0)
+                            if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0)
                             {
                                 size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
                                 size_t file_end = file_start + lfh->comp_size;

@@ -28,7 +28,7 @@
 #include <thrust/unique.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/ipc_transfer.h"
@@ -174,7 +174,7 @@ size_t NVStrings::memsize() const
     return pImpl->getMemorySize() + pImpl->getPointerSize();
 }
 
-NVStrings* NVStrings::copy()
+NVStrings* NVStrings::copy() const
 {
     unsigned int count = size();
     NVStrings* rtn = new NVStrings(count);
@@ -386,7 +386,7 @@ int NVStrings::create_index(std::pair<const char*,size_t>* strs, bool bdevmem )
 }
 
 //
-int NVStrings::create_custring_index( custring_view** strs, bool bdevmem )
+int NVStrings::create_custring_index( custring_view** strs, bool bdevmem ) const
 {
     unsigned int count = size();
     if( count==0 )

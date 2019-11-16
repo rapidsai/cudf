@@ -93,9 +93,9 @@ def test_dataframe_join_how(aa, bb, how, method):
     gotb = got.b
     gota = got.a
     del got["b"]
-    got.add_column("b", gotb.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._cols), "b", gotb.astype(np.float64).fillna(np.nan))
     del got["a"]
-    got.add_column("a", gota.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._cols), "a", gota.astype(np.float64).fillna(np.nan))
     expect.drop(["b"], axis=1)
     expect["b"] = expectb.astype(np.float64).fillna(np.nan)
     expect.drop(["a"], axis=1)
@@ -372,10 +372,10 @@ def test_dataframe_merge_no_common_column():
 
 
 def test_dataframe_empty_merge():
-    gdf1 = DataFrame([("a", []), ("b", [])])
-    gdf2 = DataFrame([("a", []), ("c", [])])
+    gdf1 = DataFrame({"a": [], "b": []})
+    gdf2 = DataFrame({"a": [], "c": []})
 
-    expect = DataFrame([("a", []), ("b", []), ("c", [])])
+    expect = DataFrame({"a": [], "b": [], "c": []})
     got = gdf1.merge(gdf2, how="left", on=["a"])
 
     assert_eq(expect, got)

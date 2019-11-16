@@ -17,8 +17,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
+#include <cassert>
 #include <algorithm>
 #include <vector>
 
@@ -30,19 +31,21 @@ template <typename ColumnView>
 table_view_base<ColumnView>::table_view_base(
     std::vector<ColumnView> const& cols)
     : _columns{cols} {
-  CUDF_EXPECTS(_columns.size() > 0, "Invalid number of columns");
-  _num_rows = _columns[0].size();
-  std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
-    CUDF_EXPECTS(col.size() == _num_rows, "Column size mismatch.");
-  });
+  if(num_columns() > 0)
+  {
+    std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
+      CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
+    });
+    _num_rows = _columns.front().size();
+  } else {
+    _num_rows = 0;
+  }
 }
 
 template <typename ColumnView>
-ColumnView& table_view_base<ColumnView>::column(
-    size_type column_index) noexcept {
-  assert(column_index >= 0);
-  assert(column_index < _columns.size());
-  return _columns[column_index];
+ColumnView const& table_view_base<ColumnView>::column(
+    size_type column_index) const {
+  return _columns.at(column_index);
 }
 
 // Explicit instantiation for a table of `column_view`s
@@ -51,6 +54,14 @@ template class table_view_base<column_view>;
 // Explicit instantiation for a table of `mutable_column_view`s
 template class table_view_base<mutable_column_view>;
 }  // namespace detail
+
+// Returns a table_view with set of specified columns
+table_view table_view::select(std::vector<size_type> const& column_indices) const {
+  std::vector<column_view> columns(column_indices.size());
+  std::transform(column_indices.begin(), column_indices.end(), columns.begin(),
+    [this](auto index) { return this->column(index); });
+  return table_view(columns);
+}
 
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view() {

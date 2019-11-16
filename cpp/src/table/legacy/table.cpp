@@ -20,8 +20,8 @@
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
-#include <utilities/error_utils.hpp>
-#include <utilities/integer_utils.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <algorithm>
 
 namespace cudf {

@@ -159,3 +159,73 @@ def test_reset_index_multiindex():
         .reset_index()
         .merge(ddf_lookup, on="id_1"),
     )
+
+
+@pytest.mark.parametrize("split_out", [1, 2, 3])
+@pytest.mark.parametrize(
+    "column", ["c", "d", "e", ["b", "c"], ["b", "d"], ["b", "e"]]
+)
+def test_groupby_split_out(split_out, column):
+    df = pd.DataFrame(
+        {
+            "a": np.arange(8),
+            "b": [1, 0, 0, 2, 1, 1, 2, 0],
+            "c": [0, 1] * 4,
+            "d": ["dog", "cat", "cat", "dog", "dog", "dog", "cat", "bird"],
+        }
+    )
+    df["e"] = df["d"].astype("category")
+    gdf = cudf.from_pandas(df)
+
+    ddf = dd.from_pandas(df, npartitions=3)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=3)
+
+    ddf_result = (
+        ddf.groupby(column)
+        .a.mean(split_out=split_out)
+        .compute()
+        .sort_values()
+        .dropna()
+    )
+    gddf_result = (
+        gddf.groupby(column)
+        .a.mean(split_out=split_out)
+        .compute()
+        .sort_values()
+    )
+
+    dd.assert_eq(gddf_result, ddf_result, check_index=False)
+
+
+@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.parametrize(
+    "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
+)
+def test_groupby_dropna(dropna, by):
+
+    # NOTE: This test is borrowed from upstream dask
+    #       (dask/dask/dataframe/tests/test_groupby.py)
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, None, 1, 3, None, 3, 1, 3],
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    df["b"] = df["b"].astype("datetime64[ns]")
+    df["d"] = df["c"].astype("category")
+    ddf = dask_cudf.from_cudf(df, npartitions=3)
+
+    if dropna is None:
+        dask_result = ddf.groupby(by).e.sum()
+        cudf_result = df.groupby(by).e.sum()
+    else:
+        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+    if by in ["c", "d"]:
+        # Loose string/category index name in cudf...
+        dask_result = dask_result.compute()
+        dask_result.index.name = cudf_result.index.name
+
+    dd.assert_eq(dask_result, cudf_result)

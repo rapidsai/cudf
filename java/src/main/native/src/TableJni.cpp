@@ -21,12 +21,13 @@
 
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/legacy/copying.hpp"
-#include "cudf/groupby.hpp"
+#include "cudf/legacy/groupby.hpp"
 #include "cudf/legacy/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
-#include "cudf/stream_compaction.hpp"
+#include "cudf/legacy/search.hpp"
+#include "cudf/legacy/stream_compaction.hpp"
 #include "cudf/types.hpp"
-#include "cudf/join.hpp"
+#include "cudf/legacy/join.hpp"
 
 #include "jni_utils.hpp"
 
@@ -315,6 +316,44 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfWriteORC(JNIEnv *env, jclass,
+                                                              jint compression_type,
+                                                              jstring outputfilepath, jlong buffer,
+                                                              jlong buffer_length, jlong table) {
+  bool write_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, outputfilepath, "output file or buffer must be supplied", 0);
+    write_buffer = false;
+  } else if (outputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an outputfilepath", 0);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
+  }
+
+  try {
+    cudf::jni::native_jstring filename(env, outputfilepath);
+    namespace orc = cudf::io::orc;
+    orc::compression_type n_compressionType = static_cast<orc::compression_type>(compression_type);
+    if (write_buffer) {
+      JNI_THROW_NEW(env, "java/lang/UnsupportedOperationException",
+                        "buffers are not supported", 0);
+    } else {
+      cudf::sink_info info(filename.get());
+      cudf::orc_write_arg args(info);
+      auto writer = [&]() {
+
+        orc::writer_options options(n_compressionType);
+        return std::make_unique<orc::writer>(args.sink.filepath, options);
+      }();
+
+      args.table = *reinterpret_cast<cudf::table *>(table);
+      writer->write_all(args.table);
+    }
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
@@ -673,4 +712,34 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadJSON(
   }
   CATCH_STD(env, NULL);
 }
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfBound(JNIEnv *env, jclass,
+    jlong input_jtable, jlong values_jtable, jbooleanArray desc_flags, jboolean are_nulls_smallest,
+    jboolean is_upper_bound) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, values_jtable, "values table is null", 0);
+  gdf_column result;
+  try {
+    cudf::table *input = reinterpret_cast<cudf::table *>(input_jtable);
+    cudf::table *values = reinterpret_cast<cudf::table *>(values_jtable);
+    const cudf::jni::native_jbooleanArray n_desc_flags(env, desc_flags);
+    bool are_nulls_largest = !static_cast<bool>(are_nulls_smallest);
+    std::vector<bool> flags(n_desc_flags.data(), n_desc_flags.data() + n_desc_flags.size());
+
+    std::unique_ptr<gdf_column, decltype(free) *> result(
+      static_cast<gdf_column *>(calloc(1, sizeof(gdf_column))), free);
+    if (result.get() == nullptr) {
+      cudf::jni::throw_java_exception(env, "java/lang/OutOfMemoryError",
+        "Could not allocate native memory");
+    }
+    if (is_upper_bound) {
+      *result.get() = cudf::upper_bound(*input, *values, flags, are_nulls_largest);
+    } else {
+      *result.get() = cudf::lower_bound(*input, *values, flags, are_nulls_largest);
+    }
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"

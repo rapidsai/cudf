@@ -201,6 +201,7 @@ class MultiIndex(Index):
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
+            cats.name = None
             cats = cats.reset_index(drop=True)._copy_construct(name=None)
             levels.append(cats)
 
@@ -437,7 +438,9 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            indices = indices.to_gpu_array()
+            if indices.null_count != 0:
+                raise ValueError("Column must have no nulls.")
+            indices = indices.data.mem
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
