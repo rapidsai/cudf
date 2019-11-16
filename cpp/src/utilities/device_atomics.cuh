@@ -34,8 +34,12 @@
 
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
+#include <cudf/wrappers/bool.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <type_traits>
 #include <utilities/device_operators.cuh>
 
 namespace cudf {
@@ -470,14 +474,23 @@ namespace detail {
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
 template <typename T, typename BinaryOp>
+typename std::enable_if_t<
+        std::is_arithmetic<T>::value ||
+        std::is_same<T, cudf::date32>::value ||
+        std::is_same<T, cudf::date64>::value ||
+        std::is_same<T, cudf::timestamp>::value ||
+        std::is_same<T, cudf::category>::value ||
+        std::is_same<T, cudf::nvstring_category>::value,
+    T>
 __forceinline__  __device__
-T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
+genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
     using T_int = cudf::detail::unwrapped_type_t<T>;
     // unwrap the input type to expect
     // that the native atomic API is used for the underlying type if possible
-    auto ret=  cudf::detail::genericAtomicOperationImpl<T_int, BinaryOp>{}
-        (reinterpret_cast<T_int*>(address), cudf::detail::unwrap(update_value), op);
+    auto fun = cudf::detail::genericAtomicOperationImpl<T_int, BinaryOp>{};
+    auto ret = fun(reinterpret_cast<T_int*>(address), cudf::detail::unwrap(update_value), op);
+
     return T(ret);
 }
 
@@ -488,8 +501,37 @@ cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & upd
 {
     using T = cudf::bool8;
     // don't use underlying type to apply operation for cudf::bool8
-    auto ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>()
-            (address, update_value, op);
+    auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
+    auto ret = fun(address, update_value, op);
+
+    return T(ret);
+}
+
+// specialization for cudf::detail::timestamp types
+template <typename T, typename BinaryOp>
+typename std::enable_if_t<cudf::is_timestamp<T>(), T>
+__forceinline__  __device__
+genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
+{
+    using R = typename T::rep;
+    // Unwrap the input timestamp to its underlying duration value representation.
+    // Use the underlying representation's type to apply operation for the cudf::detail::timestamp
+    auto update_value_rep = update_value.time_since_epoch().count();
+    auto fun = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
+    auto ret = fun(reinterpret_cast<R*>(address), update_value_rep, op);
+
+    return T(ret);
+}
+
+// specialization for cudf::experimental::bool8 types
+template <typename BinaryOp>
+__forceinline__  __device__
+cudf::experimental::bool8 genericAtomicOperation(cudf::experimental::bool8* address, cudf::experimental::bool8 const & update_value, BinaryOp op)
+{
+    using T = cudf::experimental::bool8;
+    // don't use underlying type to apply operation for cudf::experimental::bool8
+    auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
+    auto ret = fun(address, update_value, op);
 
     return T(ret);
 }
