@@ -22,12 +22,13 @@
 //                 The divisor used in calculations is N - ddof, where N
 //                 represents the number of elements.
 
-std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream)
+std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
   using reducer = cudf::experimental::reduction::compound::element_type_dispatcher<cudf::experimental::reduction::op::standard_deviation>;
-  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, ddof, stream);
+  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, ddof, stream, mr);
 #else
   // workaround for bug 200529165 which causes compilation error only at device
   // debug build the bug will be fixed at cuda 10.2

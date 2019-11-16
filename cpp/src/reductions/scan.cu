@@ -22,11 +22,11 @@ template <typename T, typename Op>
 struct Scan {
     static
     void call(const column_view input, mutable_column_view output,
-                  bool inclusive, cudaStream_t stream)
+                  bool inclusive, cudaStream_t stream,
+                  rmm::mr::device_memory_resource* mr)
     {
         size_t size = input.size();
 
-        //TODO use memory device_resource to allocate these memory
         // Prepare temp storage
         void *temp_storage = NULL;
         size_t temp_storage_bytes = 0;
@@ -37,7 +37,8 @@ struct Scan {
           auto scan_function = (inclusive ? inclusive_scan<decltype(it)> : exclusive_scan<decltype(it)>);
           scan_function(temp_storage, temp_storage_bytes,
               it, output.data<T>(), size, stream);
-          RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
+          rmm::device_buffer buff(temp_storage_bytes, stream, mr);
+          temp_storage = buff.data(); 
 
           scan_function(temp_storage, temp_storage_bytes,
               it, output.data<T>(), size, stream);
@@ -46,13 +47,12 @@ struct Scan {
           auto scan_function = (inclusive ? inclusive_scan<decltype(it)> : exclusive_scan<decltype(it)>);
           scan_function(temp_storage, temp_storage_bytes,
               it, output.data<T>(), size, stream);
-          RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
+          rmm::device_buffer buff(temp_storage_bytes, stream, mr);
+          temp_storage = buff.data(); 
+
           scan_function(temp_storage, temp_storage_bytes,
               it, output.data<T>(), size, stream);
         }
-
-        // Cleanup
-        RMM_TRY(RMM_FREE(temp_storage, stream));
     }
 
     template <typename InputIterator>
@@ -88,7 +88,8 @@ struct PrefixSumDispatcher {
   template <typename T,
             typename std::enable_if_t<is_supported<T>(), T> * = nullptr>
   void operator()(const column_view& input, mutable_column_view& output,
-                  bool inclusive, cudaStream_t stream = 0)
+                  bool inclusive, cudaStream_t stream,
+                  rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(input.size() == output.size(),
                  "input and output data size must be same");
@@ -99,7 +100,7 @@ struct PrefixSumDispatcher {
                  "Input column and Output column nullable mismatch (either one "
                  "cannot be nullable)");
 
-    Scan<T, Op>::call(input, output, inclusive, stream);
+    Scan<T, Op>::call(input, output, inclusive, stream, mr);
     CUDF_EXPECTS(input.null_count() == output.null_count(),
                  "Input / output column null count mismatch");
   }
@@ -107,17 +108,16 @@ struct PrefixSumDispatcher {
   template <typename T,
             typename std::enable_if_t<!is_supported<T>(), T> * = nullptr>
   void operator()(const column_view& input, mutable_column_view& output,
-                  bool inclusive, cudaStream_t stream = 0) {
+                  bool inclusive, cudaStream_t stream,
+                  rmm::mr::device_memory_resource* mr) {
     CUDF_FAIL("Non-arithmetic types not supported for `gdf_scan`");
   }
 };
 
-} // namespace detail
-
 std::unique_ptr<column> scan(const column_view& input,
                              scan_op op, bool inclusive,
-                             cudaStream_t stream,
-                             rmm::mr::device_memory_resource* mr)
+                             cudaStream_t stream=0,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
 
@@ -131,24 +131,32 @@ std::unique_ptr<column> scan(const column_view& input,
   switch (op) {
     case SCAN_SUM:
         cudf::experimental::type_dispatcher(input.type(),
-              detail::PrefixSumDispatcher<cudf::DeviceSum>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceSum>(), input, output, inclusive, stream, mr);
         break;
     case SCAN_MIN:
         cudf::experimental::type_dispatcher(input.type(),
-            detail::PrefixSumDispatcher<cudf::DeviceMin>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceMin>(), input, output, inclusive, stream, mr);
         break;
     case SCAN_MAX:
         cudf::experimental::type_dispatcher(input.type(),
-            detail::PrefixSumDispatcher<cudf::DeviceMax>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceMax>(), input, output, inclusive, stream, mr);
         break;
     case SCAN_PRODUCT:
         cudf::experimental::type_dispatcher(input.type(),
-            detail::PrefixSumDispatcher<cudf::DeviceProduct>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceProduct>(), input, output, inclusive, stream, mr);
         break;
     default:
         CUDF_FAIL("The input enum `scan_op` is out of the range");
     }
   return output_column;
+}
+} // namespace detail
+
+std::unique_ptr<column> scan(const column_view& input,
+                             scan_op op, bool inclusive,
+                             rmm::mr::device_memory_resource* mr)
+{
+  return detail::scan(input, op, inclusive, 0, mr);
 }
 
 }  // namespace experimental

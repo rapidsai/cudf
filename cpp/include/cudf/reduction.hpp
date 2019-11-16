@@ -66,10 +66,10 @@ enum operators {
  * @param[in] col Input column view
  * @param[in] op  The operator applied by the reduction
  * @param[in] output_dtype  The computation and output precision.
+ * @params[in] mr The resource to use for all allocations
  *     `dtype` must be a data type that is convertible from the input dtype.
- *     TODO(karthikeyann) update after bool support
- *     If the input column has arithmetic type or cudf::bool8 type,
- *     output_dtype can be any arithmetic type or cudf::bool8 type.
+ *     If the input column has arithmetic type,
+ *     output_dtype can be any arithmetic type.
  *     For `mean`, `var` and `std` ops, a floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (timestamp, string...), the same type must be specified.
@@ -79,9 +79,10 @@ enum operators {
  * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-std::unique_ptr<scalar> reduce(const column_view& col,
-                  reduction::operators op,
-                  data_type output_dtype, cudf::size_type ddof = 1);
+std::unique_ptr<scalar> reduce(
+    const column_view& col, reduction::operators op, data_type output_dtype,
+    cudf::size_type ddof = 1,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.
@@ -91,12 +92,12 @@ std::unique_ptr<scalar> reduce(const column_view& col,
  * @param[in] input The input column view for the scan
  * @param[in] op The operation of the scan
  * @param[in] inclusive The flag for applying an inclusive scan if true,
- * an exclusive scan if false.
+ *            an exclusive scan if false.
+ * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> scan(
     const column_view& input, scan_op op, bool inclusive,
-    cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental

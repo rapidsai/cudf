@@ -39,19 +39,19 @@ namespace simple {
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
  * @tparam Op           the operator of cudf::experimental::reduction::op::
- * @tparam has_nulls    true if column has nulls
  * ----------------------------------------------------------------------------**/
-template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
-std::unique_ptr<scalar> simple_reduction(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+template<typename ElementType, typename ResultType, typename Op>
+std::unique_ptr<scalar> simple_reduction(column_view const& col, data_type const output_dtype, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
 {
     std::unique_ptr<scalar> result;
     if(std::is_same<string_scalar::value_type, ResultType>::value) {
       //TODO cudf::string_view support 
-      result = make_string_scalar("min/max/sum", stream);
+      result = make_string_scalar("min/max/sum", stream, mr);
     } else if(is_numeric<ResultType>()) {
-      result = make_numeric_scalar(output_dtype, stream);
+      result = make_numeric_scalar(output_dtype, stream, mr);
     } else if(is_timestamp<ResultType>()) {
-      result = make_timestamp_scalar(output_dtype, stream);
+      result = make_timestamp_scalar(output_dtype, stream, mr);
     } else {
       CUDF_FAIL("Unexpected type");
     }
@@ -64,7 +64,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col, data_type const
 
     // reduction by iterator
     auto dcol = cudf::column_device_view::create(col, stream);
-    if (col.nullable()) {
+    if (col.has_nulls()) {
       auto it = thrust::make_transform_iterator(
           experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
           typename Op::template transformer<ResultType>{});
@@ -104,17 +104,15 @@ private:
 
 public:
     template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
     {
-        if( col.has_nulls() ){
-          return simple_reduction<ElementType, ResultType, Op, true >(col, output_dtype, stream);
-        }else{
-          return simple_reduction<ElementType, ResultType, Op, false>(col, output_dtype, stream);
-        }
+      return simple_reduction<ElementType, ResultType, Op>(col, output_dtype, stream, mr);
     }
 
     template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
     {
         CUDF_FAIL("input data type is not convertible to output data type");
     }
@@ -139,14 +137,16 @@ private:
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
     {
         return cudf::experimental::type_dispatcher(output_dtype,
-            result_type_dispatcher<ElementType, Op>(), col, output_dtype, stream);
+            result_type_dispatcher<ElementType, Op>(), col, output_dtype, stream, mr);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");

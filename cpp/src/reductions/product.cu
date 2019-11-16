@@ -18,10 +18,11 @@
 #include "reduction_functions.hpp"
 #include "simple.cuh"
 
-std::unique_ptr<cudf::scalar> cudf::experimental::reduction::product(column_view const& col, cudf::data_type const output_dtype, cudaStream_t stream)
+std::unique_ptr<cudf::scalar> cudf::experimental::reduction::product(column_view const& col, cudf::data_type const output_dtype, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
 {
     using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<cudf::experimental::reduction::op::product>;
-    return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, stream);
+    return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, stream, mr);
 }
 
 
