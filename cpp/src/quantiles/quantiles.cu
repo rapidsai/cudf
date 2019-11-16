@@ -99,7 +99,7 @@ namespace{ // anonymous
       rmm::device_vector<ColType> dv(n-col_in->null_count);
       thrust::copy_if(rmm::exec_policy(stream)->on(stream), col_data,
                       col_data + n,
-                      thrust::counting_iterator<gdf_index_type>(0), dv.begin(),
+                      thrust::counting_iterator<cudf::size_type>(0), dv.begin(),
                       [bitmask = col_in->valid] __device__(auto i) {
                         return gdf_is_valid(bitmask, i);
                       });
