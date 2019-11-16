@@ -1245,7 +1245,7 @@ class Series(object):
             else:
                 # pre-determining the dtype to match the pandas's output
                 typ = to_replace.dtype
-                if np.dtype(type(other)).kind in "f" and typ.kind in "i":
+                if np.dtype(type(other)).kind == "f" and typ.kind == "i":
                     typ = np.int64 if other == int(other) else np.float64
 
                 new_value = utils.scalar_broadcast_to(
@@ -1552,6 +1552,7 @@ class Series(object):
     def replace(self, to_replace, replacement):
         """
         Replace values given in *to_replace* with *replacement*.
+
         Parameters
         ----------
         to_replace : numeric, str or list-like
@@ -1563,9 +1564,11 @@ class Series(object):
                   *replacement* must be of same length.
         replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
+
         See also
         --------
         Series.fillna
+
         Returns
         -------
         result : Series

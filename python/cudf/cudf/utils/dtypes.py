@@ -207,7 +207,7 @@ def min_numeric_column_type(x):
     from cudf.core.column import NumericalColumn
 
     if not isinstance(x, NumericalColumn):
-        raise TypeError("Argument x must be of type column.NumericaColumn")
+        raise TypeError("Argument x must be of type column.NumericalColumn")
     if x.valid_count == 0:
         return x.dtype
 
