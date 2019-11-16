@@ -498,6 +498,14 @@ set(LEGACY_DEVICE_ATOMICS_TEST_SRC
 ConfigureTest(LEGACY_DEVICE_ATOMICS_TEST  "${LEGACY_DEVICE_ATOMICS_TEST_SRC}")
 
 ###################################################################################################
+# - device atomics tests --------------------------------------------------------------------------
+
+set(DEVICE_ATOMICS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_atomics/device_atomics_test.cu")
+
+ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
+
+###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
 
 set(TRANSPOSE_TEST_SRC
