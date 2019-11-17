@@ -78,7 +78,7 @@ struct DeviceCount {
 struct DeviceMin {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
-    return lhs <= rhs ? lhs : rhs;
+    return std::min(lhs, rhs);
   }
 
   template <typename T>
@@ -91,7 +91,7 @@ struct DeviceMin {
 struct DeviceMax {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
-    return lhs >= rhs ? lhs : rhs;
+    return std::max(lhs, rhs);
   }
 
   template <typename T>

@@ -489,9 +489,7 @@ genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
     // unwrap the input type to expect
     // that the native atomic API is used for the underlying type if possible
     auto fun = cudf::detail::genericAtomicOperationImpl<T_int, BinaryOp>{};
-    auto ret = fun(reinterpret_cast<T_int*>(address), cudf::detail::unwrap(update_value), op);
-
-    return T(ret);
+    return T(fun(reinterpret_cast<T_int*>(address), cudf::detail::unwrap(update_value), op));
 }
 
 // specialization for cudf::bool8 types
@@ -502,9 +500,7 @@ cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & upd
     using T = cudf::bool8;
     // don't use underlying type to apply operation for cudf::bool8
     auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
-    auto ret = fun(address, update_value, op);
-
-    return T(ret);
+    return T(fun(address, update_value, op));
 }
 
 // specialization for cudf::detail::timestamp types
@@ -518,9 +514,7 @@ genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
     // Use the underlying representation's type to apply operation for the cudf::detail::timestamp
     auto update_value_rep = update_value.time_since_epoch().count();
     auto fun = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
-    auto ret = fun(reinterpret_cast<R*>(address), update_value_rep, op);
-
-    return T(ret);
+    return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
 }
 
 // specialization for cudf::experimental::bool8 types
@@ -531,9 +525,7 @@ cudf::experimental::bool8 genericAtomicOperation(cudf::experimental::bool8* addr
     using T = cudf::experimental::bool8;
     // don't use underlying type to apply operation for cudf::experimental::bool8
     auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
-    auto ret = fun(address, update_value, op);
-
-    return T(ret);
+    return T(fun(address, update_value, op));
 }
 
 } // namespace cudf
