@@ -9,4 +9,4 @@
 [submodule "thirdparty/libcudacxx"]
 	path = thirdparty/libcudacxx
 	url = https://github.com/rapidsai/thirdparty-freestanding.git
-	branch = c++20-to-c++14-backports
+	branch = cudf
