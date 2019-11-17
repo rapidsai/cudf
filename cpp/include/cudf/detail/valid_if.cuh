@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/error.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
