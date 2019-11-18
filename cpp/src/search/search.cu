@@ -69,7 +69,6 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        std::vector<null_order> const& null_precedence,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream = 0)
-                                       rmm::mr::device_memory_resource *mr)
 {
   // Allocate result column
   std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<size_type>()}, values.num_rows(),
@@ -195,7 +194,6 @@ bool contains(column_view const& col,
               scalar const& value,
               rmm::mr::device_memory_resource *mr,
               cudaStream_t stream = 0)
-              rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
 
