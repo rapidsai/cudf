@@ -34,6 +34,7 @@ namespace detail {
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
+ * @param[in] mr A rmm::mr::device_memory_resource pointer to be used for allocations.
  * @param[in] stream Optional stream in which to perform allocations
  *
  * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
@@ -51,7 +52,8 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
   *
   *
   * @param[in] input A column whose null values will be replaced
-  * @param[in] replacement Scalar used to replace null values in `input`. 
+  * @param[in] replacement Scalar used to replace null values in `input`.
+  * @param[in] mr A rmm::mr::device_memory_resource pointer to be used for allocations.
   * @param[in] stream Optional stream in which to perform allocations
   *
   * @returns Copy of `input` with null values replaced by `replacement`.
@@ -68,7 +70,9 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
+ * @param[in] mr A rmm::mr::device_memory_resource pointer to be used for allocations.
  * @param stream The CUDA stream to use for operations
+ *
  * @return Copy of `input` with specified values replaced.
  */
 std::unique_ptr<column> find_and_replace_all(column_view const& input_col,

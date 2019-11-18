@@ -34,8 +34,8 @@ namespace experimental {
    * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
    */
 std::unique_ptr<column> replace_nulls(column_view const& input,
-                                            column_view const& replacement,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                      column_view const& replacement,
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
   * @brief Replaces all null values in a column with a scalar.
@@ -50,9 +50,9 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
   *
   * @returns Copy of `input` with null values replaced by `replacement`.
   */
-std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            cudf::scalar const& replacement,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_nulls(column_view const& input,
+                                      scalar const& replacement,
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 
 /**
@@ -68,9 +68,9 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
  * @returns Copy of `input` with specified values replaced.
  */
 std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
-                                                   column_view const& values_to_replace,
-                                                   column_view const& replacement_values,
-                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                             column_view const& values_to_replace,
+                                             column_view const& replacement_values,
+                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace experimental
 
