@@ -206,7 +206,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Default constructor initializes an empty column with proper dtyp
+   * @brief Default constructor initializes an empty column with proper dtype
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper() : column_wrapper{} {
     std::vector<Element> empty;

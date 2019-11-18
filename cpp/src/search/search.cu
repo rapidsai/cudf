@@ -67,7 +67,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        bool find_first,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
-                                       cudaStream_t stream,
+                                       rmm::mr::device_memory_resource *mr,
+                                       cudaStream_t stream = 0)
                                        rmm::mr::device_memory_resource *mr)
 {
   // Allocate result column
@@ -192,7 +193,8 @@ struct contains_scalar {
 
 bool contains(column_view const& col,
               scalar const& value,
-              cudaStream_t stream,
+              rmm::mr::device_memory_resource *mr,
+              cudaStream_t stream = 0)
               rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
@@ -218,8 +220,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
-  cudaStream_t stream = 0;
-  return detail::search_ordered(t, values, true, column_order, null_precedence, stream, mr);
+  return detail::search_ordered(t, values, true, column_order, null_precedence, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& t,
@@ -228,14 +229,12 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
-  cudaStream_t stream = 0;
-  return detail::search_ordered(t, values, false, column_order, null_precedence, stream, mr);
+  return detail::search_ordered(t, values, false, column_order, null_precedence, mr);
 }
 
 bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
 {
-  cudaStream_t stream = 0;
-  return detail::contains(col, value, stream, mr);
+  return detail::contains(col, value, mr);
 }
 
 } // namespace exp
