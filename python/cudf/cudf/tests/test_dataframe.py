@@ -4127,3 +4127,47 @@ def test_join_on_typecast_numeric(dtype_l, dtype_r):
 
     assert_eq(expect, got)
 
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    [
+        "datetime64[ns]",
+        "datetime64[us]",
+        "datetime64[ms]",
+        "datetime64[s]",
+        "str"
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    [
+        "datetime64[ns]",
+        "datetime64[us]",
+        "datetime64[ms]",
+        "datetime64[s]",
+        "str"
+    ],
+)
+def test_join_on_typecast_datetime(dtype_l, dtype_r):
+    join_data = ["1991-11-20", "2004-12-04", "2016-09-13"]
+    other_data = ['a','b','c']
+
+    pdf_l = pd.DataFrame.from_dict({'join_col':join_data, 'B':other_data})
+    gdf_l = DataFrame.from_pandas(pdf_l)
+    
+    pdf_r = pdf_l.copy()
+    gdf_r = gdf_l.copy()
+
+    pdf_l['join_col'] = pdf_l['join_col'].astype(dtype_l)
+    gdf_l['join_col'] = gdf_l['join_col'].astype(dtype_l)
+
+    pdf_r['join_col'] = pdf_r['join_col'].astype(dtype_r)
+    gdf_r['join_col'] = gdf_r['join_col'].astype(dtype_r)
+
+    try:
+        expect = pdf_l.merge(pdf_r, on='join_col', how='inner')
+    except ValueError:
+        pytest.skip("Pandas does not support this case")
+    got = gdf_l.merge(gdf_r, on='join_col', how='inner')
+
+    assert_eq(expect, got)
