@@ -279,7 +279,7 @@ namespace detail {
                                                      cudf::column_view const& replacement_values,
                                                      rmm::mr::device_memory_resource* mr,
                                                      cudaStream_t stream) {
-    if (0 == input_col.size() )
+    if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size())
     {
       return std::make_unique<cudf::column>(input_col);
     }
