@@ -151,21 +151,24 @@ struct column_gatherer
   }
 
   template <typename Element, typename MapIterator,
-    std::enable_if_t<not is_fixed_width<Element>()>* = nullptr>
+    std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapIterator gather_map_begin,
                                      MapIterator gather_map_end,
                                      bool ignore_out_of_bounds,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
-
-    if (source_column.type().id() == STRING) {
-        return cudf::strings::detail::gather(strings_column_view(source_column),
+      if (true == ignore_out_of_bounds) {
+        return cudf::strings::detail::gather<true>(
+                       strings_column_view(source_column),
                        gather_map_begin, gather_map_end,
-                       ignore_out_of_bounds, mr, stream);
-    } else {
-        CUDF_FAIL("Column type gather is not yet available");
-    }
+                       mr, stream);
+      } else {
+        return cudf::strings::detail::gather<false>(
+                       strings_column_view(source_column),
+                       gather_map_begin, gather_map_end,
+                       mr, stream);
+      }
   }
 
 };

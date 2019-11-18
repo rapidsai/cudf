@@ -135,7 +135,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                   comp,
                                   keep);
   
-    return cudf::detail::slice(column_view(unique_indices), 0,
+    return cudf::experimental::detail::slice(column_view(unique_indices), 0,
             thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
@@ -148,7 +148,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                   comp,
                                   keep);
   
-    return cudf::detail::slice(column_view(unique_indices), 0,
+    return cudf::experimental::detail::slice(column_view(unique_indices), 0,
             thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
   }
   
