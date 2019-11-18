@@ -18,18 +18,10 @@
 #include "reduction_functions.hpp"
 #include "simple.cuh"
 
-namespace cudf {
-namespace experimental {
-namespace reduction {
-std::unique_ptr<cudf::scalar> min(column_view const& col,
-                                  data_type const output_dtype,
-                                  cudaStream_t stream,
-                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::scalar> cudf::experimental::reduction::min(
+    column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<cudf::experimental::reduction::op::min>;
-  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, stream, mr);
+  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher< cudf::experimental::reduction::op::min>;
+  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
 }
-
-}  // namespace reduction
-}  // namespace experimental
-}  // namespace cudf

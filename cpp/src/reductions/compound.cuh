@@ -47,8 +47,10 @@ namespace compound {
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                               data_type const output_dtype,
-                              cudf::size_type ddof, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr ) {
+                              cudf::size_type ddof,
+                              rmm::mr::device_memory_resource* mr,
+                              cudaStream_t stream)
+{
   std::unique_ptr<scalar> result;
   if(std::is_same<string_scalar::value_type, ResultType>::value) {
     //TODO cudf::string_view support 
@@ -79,14 +81,14 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
         typename Op::template transformer<ResultType>{});
 
     detail::reduce(intermediate_result.data(), it, col.size(),
-                   intermediate, typename Op::Op{}, stream);
+                   intermediate, typename Op::Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(),
         typename Op::template transformer<ResultType>{});
 
     detail::reduce(intermediate_result.data(), it, col.size(),
-                   intermediate, typename Op::Op{}, stream);
+                   intermediate, typename Op::Op{}, mr, stream);
   }
 
   // compute the hos_result value from intermediate value.
@@ -117,15 +119,15 @@ private:
 
 public:
     template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr )
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
-      return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
+      return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, mr, stream);
     }
 
     template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr >
-    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr )
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
         CUDF_FAIL("Unsupported output data type");
     }
@@ -144,16 +146,16 @@ private:
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr )
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, 
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
         return cudf::experimental::type_dispatcher(output_dtype,
-            result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
+            result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, mr, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr )
+    std::unique_ptr<scalar> operator()(column_view const& col, cudf::data_type const output_dtype, cudf::size_type ddof,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");

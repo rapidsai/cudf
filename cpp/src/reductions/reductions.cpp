@@ -38,8 +38,9 @@ std::unique_ptr<scalar> make_identity_scalar(
 
 std::unique_ptr<scalar> reduce(
     column_view const& col, reduction::operators op, data_type output_dtype,
-    size_type ddof, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    size_type ddof, 
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0)
 {
   std::unique_ptr<scalar> result = make_identity_scalar(output_dtype, stream, mr);
 
@@ -48,36 +49,36 @@ std::unique_ptr<scalar> reduce(
 
   switch (op) {
     case reduction::operators::SUM:
-      result = reduction::sum(col, output_dtype, stream, mr);
+      result = reduction::sum(col, output_dtype, mr, stream);
       break;
     case reduction::operators::MIN:
-      result = reduction::min(col, output_dtype, stream, mr);
+      result = reduction::min(col, output_dtype, mr, stream);
       break;
     case reduction::operators::MAX:
-      result = reduction::max(col, output_dtype, stream, mr);
+      result = reduction::max(col, output_dtype, mr, stream);
       break;
     case reduction::operators::ANY:
-      result = reduction::any(col, output_dtype, stream, mr);
+      result = reduction::any(col, output_dtype, mr, stream);
       break;
     case reduction::operators::ALL:
-      result = reduction::all(col, output_dtype, stream, mr);
+      result = reduction::all(col, output_dtype, mr, stream);
       break;
     case reduction::operators::PRODUCT:
-      result = reduction::product(col, output_dtype, stream, mr);
+      result = reduction::product(col, output_dtype, mr, stream);
       break;
     case reduction::operators::SUMOFSQUARES:
       result =
-          reduction::sum_of_squares(col, output_dtype, stream, mr);
+          reduction::sum_of_squares(col, output_dtype, mr, stream);
       break;
 
     case reduction::operators::MEAN:
-      result = reduction::mean(col, output_dtype, stream, mr);
+      result = reduction::mean(col, output_dtype, mr, stream);
       break;
     case reduction::operators::VAR:
-      result = reduction::variance(col, output_dtype, ddof, stream, mr);
+      result = reduction::variance(col, output_dtype, ddof, mr, stream);
       break;
     case reduction::operators::STD:
-      result = reduction::standard_deviation(col, output_dtype, ddof, stream, mr);
+      result = reduction::standard_deviation(col, output_dtype, ddof, mr, stream);
       break;
     default:
       CUDF_FAIL("Unsupported reduction operator");
@@ -92,7 +93,7 @@ std::unique_ptr<scalar> reduce(
     size_type ddof,
     rmm::mr::device_memory_resource* mr)
 {
-  return detail::reduce(col, op, output_dtype, ddof, 0, mr);
+  return detail::reduce(col, op, output_dtype, ddof, mr);
 }
 
 }  // namespace experimental

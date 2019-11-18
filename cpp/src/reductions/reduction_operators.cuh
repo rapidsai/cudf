@@ -195,10 +195,6 @@ struct standard_deviation {
 };
 } // namespace op
 
-
-} // namespace reduction
-} // namespace experimental
-
 template <typename ElementType, typename ResultType, typename Op, bool has_nulls>
 auto make_reduction_iterator(column_device_view const& column) {
     return thrust::make_transform_iterator(
@@ -206,4 +202,6 @@ auto make_reduction_iterator(column_device_view const& column) {
         typename Op::template transformer<ResultType>{});
 }
 
+} // namespace reduction
+} // namespace experimental
 } // namespace cudf
