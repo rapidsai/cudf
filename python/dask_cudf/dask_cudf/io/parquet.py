@@ -232,8 +232,6 @@ def read_parquet(
 
     Parameters (cuDF-specific)
     --------------------------
-    split_row_groups : bool
-        Partition the read_parquet tasks by file row-groups
     row_groups_per_part : int
         Number of row-groups to aggregate into each output partition
 
