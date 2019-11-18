@@ -312,7 +312,7 @@ namespace detail {
 
 namespace experimental {
 /* --------------------------------------------------------------------------*/
-/**
+/*
  * @brief Replace elements from `input_col` according to the mapping `values_to_replace` to
  *        `replacement_values`, that is, replace all `values_to_replace[i]` present in `input_col`
  *        with `replacement_values[i]`.
