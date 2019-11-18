@@ -57,7 +57,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col`
+ *  @brief Return a copy of `input_col` replacing all `old_values[i]` present with `new_values[i]`.
  *        with `new_values[i]`.
  *
  * @param input_col The column to find and replace values in.
