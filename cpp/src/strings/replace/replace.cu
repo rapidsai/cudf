@@ -19,8 +19,8 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include "../utilities.hpp"
+#include "../utilities.cuh"
 
 namespace
 {
@@ -49,16 +49,16 @@ namespace
 {
 
 /**
- * @brief Function logic for the substring API.
+ * @brief Function logic for the replace API.
  *
- * This will perform a substring operation on each string
- * using the provided start, stop, and step parameters.
+ * This will perform a replace operation on each string.
  */
 template <TwoPass Pass=SizeOnly>
 struct replace_fn
 {
-    column_device_view d_strings;
-    string_view d_target, d_repl;
+    column_device_view const d_strings;
+    string_view const d_target;
+    string_view const d_repl;
     int32_t max_repl;
     const int32_t* d_offsets{};
     char* d_chars{};
@@ -131,14 +131,12 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets = offsets_view.data<int32_t>();
+    auto d_offsets = offsets_column->view().data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<char>();
+    auto chars_column = create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         replace_fn<ExecuteOp>{d_strings, d_target, d_repl, maxrepl, d_offsets, d_chars} );
     //
@@ -149,16 +147,15 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
 namespace
 {
 /**
- * @brief Function logic for the substring API.
+ * @brief Function logic for the replace_slice API.
  *
- * This will perform a substring operation on each string
- * using the provided start, stop, and step parameters.
+ * This will perform a replace_slice operation on each string.
  */
 template <TwoPass Pass=SizeOnly>
 struct replace_slice_fn
 {
-    column_device_view d_strings;
-    string_view d_repl;
+    column_device_view const d_strings;
+    string_view const d_repl;
     size_type start, stop;
     const int32_t* d_offsets{};
     char* d_chars{};
@@ -222,7 +219,7 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto chars_column = create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
@@ -236,17 +233,16 @@ namespace
 {
 
 /**
- * @brief Function logic for the substring API.
+ * @brief Function logic for the replace_multi API.
  *
- * This will perform a substring operation on each string
- * using the provided start, stop, and step parameters.
+ * This will perform the multi-replace operation on each string.
  */
 template <TwoPass Pass=SizeOnly>
 struct replace_multi_fn
 {
-    column_device_view d_strings;
-    column_device_view d_targets;
-    column_device_view d_repls;
+    column_device_view const d_strings;
+    column_device_view const d_targets;
+    column_device_view const d_repls;
     const int32_t* d_offsets{};
     char* d_chars{};
 
@@ -326,14 +322,12 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets = offsets_view.data<int32_t>();
+    auto d_offsets = offsets_column->view().data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<char>();
+    auto chars_column = create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
+    auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         replace_multi_fn<ExecuteOp>{d_strings, d_targets, d_repls, d_offsets, d_chars} );
     //
@@ -364,14 +358,12 @@ std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets = offsets_view.data<int32_t>();
+    auto d_offsets = offsets_column->view().data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
     auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<char>();
+    auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         [d_strings, d_repl, d_offsets, d_chars] __device__ (size_type idx) {
             string_view d_str = d_repl;
