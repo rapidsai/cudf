@@ -33,6 +33,7 @@
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
+- PR #3396 Update device_atomics with new bool8 and timestamp specializations
 
 ## Improvements
 
@@ -116,6 +117,7 @@
 - PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
+- PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
 - PR #3299 Define and implement new `is_sorted` APIs
 - PR #3328 Partition by stripes in dask_cudf ORC reader
@@ -123,6 +125,7 @@
 - PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
 - PR #3382 Add fill function for strings column
+- PR #3391 Move device_atomics_tests.cu files to legacy
 
 ## Bug Fixes
 
