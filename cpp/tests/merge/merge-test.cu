@@ -16,6 +16,7 @@
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/cudf_gtest.hpp>
 
 #include <cassert>
 #include <vector>
@@ -46,10 +47,6 @@ TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes);
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
-    //TODO: figure out solution around compiler error
-    //when trying to instantiate
-    //fixed_width_column_wrapper<cudf::bool8>
-    //
     columnFactoryT leftColWrap1{{0,1,2,3}}; 
     columnFactoryT rightColWrap1{{0,1,2,3}};
     columnFactoryT rightColWrap2{{0,1,2,3}};
@@ -69,140 +66,166 @@ TYPED_TEST(MergeTest_, MismatchedNumColumns) {
 }
 
 
-/*
+
 TYPED_TEST(MergeTest_, MismatchedColumnDypes) {
-    cudf::size_type inputRows = 4;
+    cudf::test::fixed_width_column_wrapper<int32_t> leftColWrap1{{0,1,2,3}};
+    cudf::test::fixed_width_column_wrapper<double> rightColWrap1{{0,1,2,3}};
 
-    cudf::test::column_wrapper<int32_t> leftColWrap1(inputRows, [](cudf::size_type row) { return row; });
+    std::vector<cudf::size_type> key_cols{0};
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence{};
 
-    cudf::test::column_wrapper<double> rightColWrap1(inputRows, [](cudf::size_type row) { return row; });
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
 
-    std::vector<cudf::size_type> sortByCols = {0};
-    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    EXPECT_THROW(cudf::merge(cudf::table{leftColWrap1.get()},
-                            cudf::table{rightColWrap1.get()},
-                            sortByCols,
-                            orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::merge(left_view,
+                                           right_view,
+                                           key_cols,
+                                           column_order,
+                                           null_precedence), cudf::logic_error);
 }
+
 
 TYPED_TEST(MergeTest_, EmptyKeyColumns) {
-    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    
+    columnFactoryT leftColWrap1{{0,1,2,3}}; 
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
-    cudf::size_type inputRows = 4;
+    std::vector<cudf::size_type> key_cols{}; // empty! this should trigger exception
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence{};
 
-    auto leftColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
 
-    auto rightColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-
-    std::vector<cudf::size_type> sortByCols;
-    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
-
-    EXPECT_THROW(cudf::merge(cudf::table{leftColWrap1.get()},
-                            cudf::table{rightColWrap1.get()},
-                            sortByCols,
-                            orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::merge(left_view,
+                                           right_view,
+                                           key_cols,
+                                           column_order,
+                                           null_precedence), cudf::logic_error);
 }
+
 
 TYPED_TEST(MergeTest_, TooManyKeyColumns) {
-    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    
+    columnFactoryT leftColWrap1{{0,1,2,3}}; 
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
-    cudf::size_type inputRows = 4;
+    std::vector<cudf::size_type> key_cols{0, 1}; // more keys than columns: this should trigger exception
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence{};
 
-    auto leftColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
 
-    auto rightColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-
-    std::vector<cudf::size_type> sortByCols = {0, 1};
-    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
-
-    EXPECT_THROW(cudf::merge(cudf::table{leftColWrap1.get()},
-                            cudf::table{rightColWrap1.get()},
-                            sortByCols,
-                            orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::merge(left_view,
+                                           right_view,
+                                           key_cols,
+                                           column_order,
+                                           null_precedence), cudf::logic_error);
 }
+
 
 TYPED_TEST(MergeTest_, EmptyOrderTypes) {
-    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    
+    columnFactoryT leftColWrap1{{0,1,2,3}}; 
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
-    cudf::size_type inputRows = 4;
+    std::vector<cudf::size_type> key_cols{0};
+    std::vector<cudf::order> column_order {}; // empty! this should trigger exception
+    std::vector<cudf::null_order> null_precedence{};
 
-    auto leftColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
 
-    auto rightColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-
-    std::vector<cudf::size_type> sortByCols = {0};
-    std::vector<order_by_type> orderByTypes;
-
-    EXPECT_THROW(cudf::merge(cudf::table{leftColWrap1.get()},
-                            cudf::table{rightColWrap1.get()},
-                            sortByCols,
-                            orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::merge(left_view,
+                                           right_view,
+                                           key_cols,
+                                           column_order,
+                                           null_precedence), cudf::logic_error);
 }
 
+
 TYPED_TEST(MergeTest_, TooManyOrderTypes) {
-    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    
+    columnFactoryT leftColWrap1{{0,1,2,3}}; 
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
-    cudf::size_type inputRows = 4;
+    std::vector<cudf::size_type> key_cols{0}; 
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING}; // more order types than columns: this should trigger exception
+    std::vector<cudf::null_order> null_precedence{};
 
-    auto leftColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
 
-    auto rightColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-
-    std::vector<cudf::size_type> sortByCols = {0};
-    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
-
-    EXPECT_THROW(cudf::merge(cudf::table{leftColWrap1.get()},
-                            cudf::table{rightColWrap1.get()},
-                            sortByCols,
-                            orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::merge(left_view,
+                                           right_view,
+                                           key_cols,
+                                           column_order,
+                                           null_precedence), cudf::logic_error);
 }
 
 TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes) {
-    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT leftColWrap2{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap2{{0,1,2,3}};
 
-    cudf::size_type inputRows = 4;
-
-    auto leftColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-    auto leftColWrap2 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-
-    auto rightColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
-    auto rightColWrap2 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
+    cudf::table_view left_view{{leftColWrap1, leftColWrap2}};
+    cudf::table_view right_view{{rightColWrap1, rightColWrap2}};
+    
+    std::vector<cudf::size_type> key_cols{0, 1};
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence{};
 
     std::vector<cudf::size_type> sortByCols = {0, 1};
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    EXPECT_THROW(cudf::merge(cudf::table{leftColWrap1.get(), leftColWrap2.get()},
-                            cudf::table{rightColWrap1.get(), rightColWrap2.get()},
-                            sortByCols,
-                            orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::experimental::merge(left_view,
+                                           right_view,
+                                           key_cols,
+                                           column_order,
+                                           null_precedence), cudf::logic_error);
 }
 
 TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
-    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
     cudf::size_type inputRows = 50000;
-    inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 40 : inputRows);
+    //inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 40 : inputRows);// <- TODO
 
-    auto leftColWrap1 = columnFactory.make(inputRows, [](cudf::size_type row) { return row; });
+    auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+    columnFactoryT leftColWrap1(sequence, sequence+inputRows);
+    columnFactoryT rightColWrap1{};
 
-    auto rightColWrap1 = columnFactory.make(0, [](cudf::size_type row) { return 0; });
+    std::vector<cudf::size_type> key_cols{0};
+    std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence{};
 
-    std::vector<cudf::size_type> sortByCols = {0};
-    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
 
-    cudf::table outputTable;
-    EXPECT_NO_THROW(outputTable = cudf::merge(cudf::table{leftColWrap1.get()},
-                                            cudf::table{rightColWrap1.get()},
-                                            sortByCols,
-                                            orderByTypes));
-    
-    const cudf::size_type outputRows = leftColWrap1.size() + rightColWrap1.size();
-    auto expectedDataWrap1 = columnFactory.make(outputRows, [](cudf::size_type row) { return row; });
+    std::unique_ptr<cudf::experimental::table> p_outputTable;
+    EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
+                                                              right_view,
+                                                              key_cols,
+                                                              column_order,
+                                                              null_precedence));
 
-    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
+    //TODO:
+    // const cudf::size_type outputRows = left_view.size() + right_view.size();
+    // auto expectedDataWrap1 = columnFactory.make(outputRows, [](cudf::size_type row) { return row; });
+
+    // EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
 }
-
+/*
 TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
