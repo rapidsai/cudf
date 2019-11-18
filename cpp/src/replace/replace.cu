@@ -295,7 +295,7 @@ namespace detail {
 
     CUDF_EXPECTS(input_col.type() == values_to_replace.type() &&
                  input_col.type() == replacement_values.type(),
-                 "Columns type mismatch.");
+                 "Columns type mismatch");
     CUDF_EXPECTS(values_to_replace.nullable() == false,
                  "Nulls are in values_to_replace column.");
 
