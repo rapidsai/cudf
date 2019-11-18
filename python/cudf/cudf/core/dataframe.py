@@ -2216,6 +2216,11 @@ class DataFrame(object):
                 if not (rhs[rcol] == rhs[rcol].astype(to_dtype))[rhs[rcol].notna()].all():
                     warnings.warn(maybe_warn)
                 rhs[rcol] = rhs[rcol].astype(to_dtype)
+            elif is_datetime_dtype(from_dtype) and is_datetime_dtype(to_dtype):
+                typ = max(from_dtype, to_dtype)
+                lhs[lcol] = lhs[lcol].astype(to_dtype)
+                rhs[rcol] = rhs[rcol].astype(to_dtype)
+
         return lhs, rhs, categorical_dtypes, col_with_categories
 
 
