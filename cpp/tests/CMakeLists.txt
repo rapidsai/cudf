@@ -490,6 +490,14 @@ set(ITERATOR_TEST_SRC
 ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
 
 ###################################################################################################
+# - legacy device atomics tests --------------------------------------------------------------------------
+
+set(LEGACY_DEVICE_ATOMICS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_atomics/legacy/device_atomics_test.cu")
+
+ConfigureTest(LEGACY_DEVICE_ATOMICS_TEST  "${LEGACY_DEVICE_ATOMICS_TEST_SRC}")
+
+###################################################################################################
 # - device atomics tests --------------------------------------------------------------------------
 
 set(DEVICE_ATOMICS_TEST_SRC
