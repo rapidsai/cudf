@@ -39,22 +39,34 @@ namespace detail
   }
 
   // store functor
-  template <typename ColumnType, bool average>
+  template <typename T, bool average, typename Enable = void>
   struct store_output_functor
   {
-    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, size_type count)
+    CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
     {
       out = val;
     }
   };
 
-  // partial specialization for MEAN
-  template <typename ColumnType>
-  struct store_output_functor<ColumnType, true>
+  // partial specialization for MEAN for non-bool types
+  template <typename T>
+  struct store_output_functor<T, true,
+    typename std::enable_if_t<!std::is_same<T, cudf::bool8>::value, std::nullptr_t>>
   {
-    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, size_type count)
+    CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
     {
       out = val / count;
+    }
+  };
+
+  // partial specialization for MEAN for bool types
+  template <typename T>
+  struct store_output_functor<T, true,
+    typename std::enable_if_t<std::is_same<T, cudf::bool8>::value, std::nullptr_t>>
+  {
+    CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+    {
+      out = static_cast<double>(val) / count;
     }
   };
 }  // namespace cudf::detail
