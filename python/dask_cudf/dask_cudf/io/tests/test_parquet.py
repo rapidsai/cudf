@@ -188,3 +188,25 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
         df_read.compute(scheduler=dask.get),
         gdf_read.compute(scheduler=dask.get),
     )
+
+
+@pytest.mark.parametrize("rg_chunk", [1, 2, 3])
+def test_row_groups_per_part(tmpdir, rg_chunk):
+
+    # Write single parquet file with multiple
+    path = os.path.join(str(tmpdir), "test.0.parquet")
+    df.to_parquet(path, chunk_size=6, engine="pyarrow")
+
+    ddf2 = dask_cudf.read_parquet(
+        path, split_row_groups=True, gather_statistics=True
+    )
+    ddf3 = dask_cudf.read_parquet(
+        path, row_groups_per_part=rg_chunk, gather_statistics=True
+    )
+
+    assert_eq(
+        ddf2.compute(scheduler=dask.get), ddf3.compute(scheduler=dask.get)
+    )
+
+    if rg_chunk > 1:
+        assert ddf3.npartitions < ddf2.npartitions
