@@ -635,6 +635,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
