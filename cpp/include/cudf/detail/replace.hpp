@@ -38,7 +38,7 @@ namespace detail {
  *
  * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
  */
-std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
+std::unique_ptr<column> replace_nulls(column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream = 0);
