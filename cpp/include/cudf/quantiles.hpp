@@ -31,7 +31,7 @@ enum class quantile_interpolation {
   ROUND,          ///< a or b, whichever is nearest
 };
 
-/* @brief Computes the exact quantile of any sorted arithmetic column.
+/* @brief Computes the quantile of any sorted arithmetic column.
  *
  * @param[in] in                     Column from which quantile is computed.
  * @param[in] quantile_interpolation Strategy to obtain a quantile which falls
