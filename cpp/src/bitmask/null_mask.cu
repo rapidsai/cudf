@@ -174,7 +174,7 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
     size_type source_word_index =
-        destination_word_index + word_index(source_Begin_bit);
+        destination_word_index + word_index(source_begin_bit);
     bitmask_type curr_word = source[source_word_index];
     bitmask_type next_word = 0;
 

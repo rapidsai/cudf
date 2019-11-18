@@ -34,6 +34,7 @@
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
+- PR #3399 Construct bitmasks from vector of column views
 
 ## Improvements
 
