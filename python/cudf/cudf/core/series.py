@@ -1236,21 +1236,17 @@ class Series(object):
         3
         4
         """
-
+        if not pd.api.types.is_numeric_dtype(self.dtype):
+            raise TypeError(
+                "`Series.where` is only supported for numeric column types."
+            )
         to_replace = self._column.apply_boolean_mask(~cond & self.notna())
         if is_scalar(other):
             all_nan = other is None
             if all_nan:
                 new_value = [other] * len(to_replace)
             else:
-                # pre-determining the dtype to match the pandas's output
-                typ = to_replace.dtype
-                if np.dtype(type(other)).kind == "f" and typ.kind == "i":
-                    typ = np.int64 if other == int(other) else np.float64
-
-                new_value = utils.scalar_broadcast_to(
-                    other, (len(to_replace),), np.dtype(typ)
-                )
+                new_value = [other]
         else:
             raise NotImplementedError(
                 "Replacement arg of {} is not supported.".format(type(other))
@@ -1595,7 +1591,7 @@ class Series(object):
                 # If both are non-scalar
                 if len(to_replace) != len(replacement):
                     raise ValueError(
-                        "Replacement lists must be"
+                        "Replacement lists must be "
                         "of same length."
                         "Expected {}, got {}.".format(
                             len(to_replace), len(replacement)
