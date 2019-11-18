@@ -33,14 +33,16 @@ namespace detail
  * @brief Returns a new strings column using the specified indices to select
  * elements from the `strings` column.
  *
+ * Caller must update the validity mask in the output column.
+ *
  * ```
  * s1 = ["a", "b", "c", "d", "e", "f"]
  * map = [0, 2]
- * s2 = gather( s1, map )
+ * s2 = gather<true>( s1, map.begin(), map.end() )
  * s2 is ["a", "c"]
  * ```
  *
- * @tparam ignore_out_of_bounds If true, indices outside the column's range are ignored.
+ * @tparam IgnoreOutOfBounds If true, indices outside the column's range are ignored.
  * @tparam MapIterator Iterator for retrieving integer indices of the column.
  *
  * @param strings Strings instance for this operation.
@@ -65,7 +67,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
 
-    // create null mask
+    // create null mask -- caller must update this
     rmm::device_buffer null_mask;
     if( strings.null_count() > 0 ) // make output nullable
         null_mask = create_null_mask( output_count, UNINITIALIZED, stream,mr );
@@ -105,6 +107,42 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
     return make_strings_column(output_count, std::move(offsets_column), std::move(chars_column),
                                UNKNOWN_NULL_COUNT, std::move(null_mask), stream, mr);
 }
+
+/**
+ * @brief Returns a new strings column using the specified indices to select
+ * elements from the `strings` column.
+ *
+ * Caller must update the validity mask in the output column.
+ *
+ * ```
+ * s1 = ["a", "b", "c", "d", "e", "f"]
+ * map = [0, 2]
+ * s2 = gather( s1, map.begin(), map.end(), true )
+ * s2 is ["a", "c"]
+ * ```
+ *
+ * @tparam MapIterator Iterator for retrieving integer indices of the column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param begin Start of index iterator.
+ * @param end End of index iterator.
+ * @param ignore_out_of_bounds If true, indices outside the column's range are ignored.
+ * @param mr Resource for allocating device memory.
+ * @param stream CUDA stream to use kernels in this method.
+ * @return New strings column containing the gathered strings.
+ */
+template<typename MapIterator>
+std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
+                                      MapIterator begin, MapIterator end,
+                                      bool ignore_out_of_bounds,
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                      cudaStream_t stream=0 )
+{
+    if( ignore_out_of_bounds )
+        return gather<true>( strings, begin, end, mr, stream );
+    return gather<false>( strings, begin, end, mr, stream );
+}
+
 
 } // namespace detail
 } // namespace strings

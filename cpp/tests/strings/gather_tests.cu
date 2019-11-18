@@ -37,7 +37,30 @@ TEST_F(StringsGatherTest, Gather)
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
     auto strings_view = cudf::strings_column_view(strings);
 
-    std::vector<int32_t> h_map{ 4,1,5,2 };
+    std::vector<int32_t> h_map{ 4,1,5,2,7 };
+    thrust::device_vector<int32_t> d_map(h_map.begin(),h_map.end());
+    auto results = cudf::strings::detail::gather<true>(strings_view,d_map.begin(),d_map.end());
+
+    std::vector<const char*> h_expected;
+    for( auto itr = h_map.begin(); itr != h_map.end(); ++itr )
+    {
+        auto index = *itr;
+        if( (0 <= index) && (index < static_cast<decltype(index)>(h_strings.size())) )
+            h_expected.push_back( h_strings[index] );
+        else
+            h_expected.push_back( "" );
+    }
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end());
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+TEST_F(StringsGatherTest, GatherIgnoreOutOfBounds)
+{
+    std::vector<const char*> h_strings{ "eee", "bb", "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    auto strings_view = cudf::strings_column_view(strings);
+
+    std::vector<int32_t> h_map{ 3,4,0,0 };
     thrust::device_vector<int32_t> d_map(h_map.begin(),h_map.end());
     auto results = cudf::strings::detail::gather<true>(strings_view,d_map.begin(),d_map.end());
 
@@ -47,6 +70,7 @@ TEST_F(StringsGatherTest, Gather)
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end());
     cudf::test::expect_columns_equal(*results,expected);
 }
+
 
 TEST_F(StringsGatherTest, GatherZeroSizeStringsColumn)
 {
