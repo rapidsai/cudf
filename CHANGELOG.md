@@ -2,7 +2,6 @@
 
 ## New Features
 - PR #2905 Added `Series.median()` and null support for `Series.quantile()`
-
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2980 Added nvtext is_vowel/is_consonant functions
