@@ -17,9 +17,9 @@
 #ifndef __IO_PARQUET_GPU_H__
 #define __IO_PARQUET_GPU_H__
 
-#include <cstdint>
 #include <io/comp/gpuinflate.h>
 #include "parquet_common.h"
+#include <io/statistics/column_stats.h>
 
 namespace cudf {
 namespace io {
@@ -122,13 +122,10 @@ struct ColumnChunkDesc {
 /**
  * @brief Struct describing an encoder column
  **/
-struct EncColumnDesc
+struct EncColumnDesc: stats_column_desc
 {
-  const uint32_t *valid_map_base;   //!< base ptr of column valid map (null if not present)
-  const void *column_data_base;     //!< base ptr of column data
   uint32_t *dict_index;             //!< Dictionary index [row]
   uint32_t *dict_data;              //!< Dictionary data (unique row indices)
-  uint32_t num_rows;                //!< number of rows in column
   uint8_t physical_type;            //!< physical data type
   uint8_t converted_type;           //!< logical data type
   uint8_t level_bits;               //!< bits to encode max definition (lower nibble) & repetition (upper nibble) levels
@@ -188,10 +185,12 @@ struct EncColumnChunk
   PageFragment *fragments;          //!< First fragment in chunk
   uint8_t *uncompressed_bfr;        //!< Uncompressed page data
   uint8_t *compressed_bfr;          //!< Compressed page data
+  const statistics_chunk *stats;    //!< Fragment statistics
   uint32_t bfr_size;                //!< Uncompressed buffer size
   uint32_t compressed_size;         //!< Compressed buffer size
   uint32_t start_row;               //!< First row of chunk
   uint32_t num_rows;                //!< Number of rows in chunk
+  uint32_t first_fragment;          //!< First fragment of chunk
   uint32_t first_page;              //!< First page of chunk
   uint32_t num_pages;               //!< Number of pages in chunk
   uint32_t dictionary_id;           //!< Dictionary id for this chunk
@@ -268,6 +267,23 @@ cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
                               cudaStream_t stream = (cudaStream_t)0);
 
 /**
+ * @brief Launches kernel for initializing fragment statistics groups
+ *
+ * @param[out] groups Statistics groups [num_columns x num_fragments]
+ * @param[in] fragments Page fragments [num_columns x num_fragments]
+ * @param[in] col_desc Column description [num_columns]
+ * @param[in] num_fragments Number of fragments
+ * @param[in] num_columns Number of columns
+ * @param[in] fragment_size Max size of each fragment in rows
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitFragmentStatistics(statistics_group *groups, const PageFragment *fragments,
+    const EncColumnDesc *col_desc, int32_t num_fragments,
+    int32_t num_columns, uint32_t fragment_size, cudaStream_t stream = (cudaStream_t)0);
+
+/**
  * @brief Launches kernel for initializing encoder data pages
  *
  * @param[in,out] chunks Column chunks [rowgroup][column]
@@ -275,12 +291,15 @@ cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
+ * @param[in] page_grstats Setup for page-level stats
+ * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc,
                              int32_t num_rowgroups, int32_t num_columns,
+                             statistics_merge_group *page_grstats = nullptr, statistics_merge_group *chunk_grstats = nullptr,
                              cudaStream_t stream = (cudaStream_t)0);
 
 /**

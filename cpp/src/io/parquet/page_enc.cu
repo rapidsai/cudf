@@ -107,19 +107,16 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
     uint32_t t = threadIdx.x;
     uint32_t start_row, nrows, dtype_len, dtype_len_in, dtype;
 
-    if (t < sizeof(EncColumnDesc) / sizeof(uint32_t))
-    {
+    if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&s->col)[t] = reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
     }
-    for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512)
-    {
+    for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512) {
         if (i + t < sizeof(s->map) / sizeof(uint32_t))
             s->map.u32[i + t] = 0;
     }
     __syncthreads();
     start_row = blockIdx.y * fragment_size;
-    if (!t)
-    {
+    if (!t) {
         s->col.num_rows = min(s->col.num_rows, max_num_rows);
         s->frag.num_rows = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
         s->frag.non_nulls = 0;
@@ -382,14 +379,39 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
     }
 }
 
+
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc, int32_t num_rowgroups, int32_t num_columns)
+gpuInitFragmentStats(statistics_group *groups, const PageFragment *fragments, const EncColumnDesc *col_desc, int32_t num_fragments, int32_t num_columns, uint32_t fragment_size)
+{
+    __shared__ __align__(8) statistics_group group_g;
+
+    uint32_t t = threadIdx.x & 0x1f;
+    uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x >> 5);
+    uint32_t column_id = blockIdx.x;
+    if (!t && frag_id < num_fragments) {
+        group_g.col = &col_desc[column_id];
+        group_g.start_row = frag_id * fragment_size;
+        group_g.num_rows = fragments[column_id * num_fragments + frag_id].num_rows;
+    }
+    __syncthreads();
+    if (t < sizeof(statistics_group) / sizeof(uint32_t) && frag_id < num_fragments) {
+        reinterpret_cast<uint32_t *>(&groups[column_id * num_fragments + frag_id])[t] = reinterpret_cast<uint32_t *>(&group_g)[t];
+    }
+}
+
+
+// blockDim {128,1,1}
+__global__ void __launch_bounds__(128)
+gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc,
+             statistics_merge_group *page_grstats, statistics_merge_group *chunk_grstats,
+             int32_t num_rowgroups, int32_t num_columns)
 {
     __shared__ __align__(8) EncColumnDesc col_g;
     __shared__ __align__(8) EncColumnChunk ck_g;
     __shared__ __align__(8) PageFragment frag_g;
     __shared__ __align__(8) EncPage page_g;
+    __shared__ __align__(8) statistics_merge_group pagestats_g;
 
     uint32_t t = threadIdx.x;
     
@@ -411,7 +433,13 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         uint32_t num_dict_entries = 0;
         uint32_t comp_page_offset = 0;
         uint32_t cur_row = ck_g.start_row;
+        uint32_t max_stats_len = 0;
 
+        if (!t) {
+            pagestats_g.col = &col_desc[blockIdx.x];
+            pagestats_g.start_chunk = ck_g.first_fragment;
+            pagestats_g.num_chunks = 0;
+        }
         if (ck_g.has_dictionary) {
             if (!t) {
                 page_g.page_data = ck_g.uncompressed_bfr;
@@ -432,6 +460,9 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
             if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
                 reinterpret_cast<uint32_t *>(&pages[ck_g.first_page])[t] = reinterpret_cast<uint32_t *>(&page_g)[t];
             }
+            if (page_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
+                reinterpret_cast<uint32_t *>(&page_grstats[ck_g.first_page])[t] = reinterpret_cast<uint32_t *>(&pagestats_g)[t];
+            }
             num_pages = 1;
         }
         SYNCWARP();
@@ -441,6 +472,9 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
             if (num_rows < ck_g.num_rows) {
                 if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
                     reinterpret_cast<uint32_t *>(&frag_g)[t] = reinterpret_cast<const uint32_t *>(&ck_g.fragments[fragments_in_chunk])[t];
+                }
+                if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
+                    max_stats_len = max(max(max_stats_len, ck_g.stats[fragments_in_chunk].min_value.str_val.length), ck_g.stats[fragments_in_chunk].max_value.str_val.length);
                 }
             } else if (!t) {
                 frag_g.fragment_data_size = 0;
@@ -494,11 +528,22 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                     page_g.dict_bits_plus1 = dict_bits_plus1;
                     page_g.hdr_size = 0;
                     page_g.max_hdr_size = 32; // Max size excluding statistics
+                    if (ck_g.stats) {
+                        uint32_t stats_hdr_len = 16;
+                        if (col_g.stats_dtype == dtype_string) {
+                            stats_hdr_len += 5 * 3 + 2 * max_stats_len;
+                        }
+                        else {
+                            stats_hdr_len += ((col_g.stats_dtype == dtype_int128) ? 10 : 5) * 3;
+                        }
+                        page_g.max_hdr_size += stats_hdr_len;
+                    }
                     page_g.max_data_size = page_size + def_level_size;
                     page_g.page_data = ck_g.uncompressed_bfr + page_offset;
                     page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
                     page_g.start_row = cur_row;
                     page_g.num_rows = rows_in_page;
+                    pagestats_g.num_chunks = page_g.num_fragments;
                     page_offset += page_g.max_hdr_size + page_g.max_data_size;
                     comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
                     cur_row += rows_in_page;
@@ -507,10 +552,14 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                 if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
                     reinterpret_cast<uint32_t *>(&pages[ck_g.first_page + num_pages])[t] = reinterpret_cast<uint32_t *>(&page_g)[t];
                 }
+                if (page_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
+                    reinterpret_cast<uint32_t *>(&page_grstats[ck_g.first_page + num_pages])[t] = reinterpret_cast<uint32_t *>(&pagestats_g)[t];
+                }
                 num_pages++;
                 page_size = 0;
                 rows_in_page = 0;
                 page_start = fragments_in_chunk;
+                max_stats_len = 0;
             }
             num_dict_entries += frag_g.num_dict_vals;
             page_size += fragment_data_size;
@@ -522,11 +571,16 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
             ck_g.num_pages = num_pages;
             ck_g.bfr_size = page_offset;
             ck_g.compressed_size = comp_page_offset;
+            pagestats_g.start_chunk = ck_g.first_page + ck_g.has_dictionary; // Exclude dictionary
+            pagestats_g.num_chunks = num_pages - ck_g.has_dictionary;
         }
     }
     __syncthreads();
     if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&chunks[blockIdx.y * num_columns + blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&ck_g)[t];
+    }
+    if (chunk_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
+        reinterpret_cast<uint32_t *>(&chunk_grstats[blockIdx.y * num_columns + blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&pagestats_g)[t];
     }
 }
 
@@ -1242,6 +1296,26 @@ cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
     return cudaSuccess;
 }
 
+/**
+ * @brief Launches kernel for initializing fragment statistics groups
+ *
+ * @param[out] groups Statistics groups [num_columns x num_fragments]
+ * @param[in] fragments Page fragments [num_columns x num_fragments]
+ * @param[in] col_desc Column description [num_columns]
+ * @param[in] num_fragments Number of fragments
+ * @param[in] num_columns Number of columns
+ * @param[in] fragment_size Max size of each fragment in rows
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t InitFragmentStatistics(statistics_group *groups, const PageFragment *fragments, const EncColumnDesc *col_desc, int32_t num_fragments,
+                                   int32_t num_columns, uint32_t fragment_size, cudaStream_t stream)
+{
+    dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
+    gpuInitFragmentStats <<< dim_grid, 128, 0, stream >>> (groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
+    return cudaSuccess;
+}
 
 /**
  * @brief Launches kernel for initializing encoder data pages
@@ -1251,14 +1325,17 @@ cudaError_t InitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc,
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
+ * @param[in] page_grstats Setup for page-level stats
+ * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc, int32_t num_rowgroups, int32_t num_columns, cudaStream_t stream)
+cudaError_t InitEncoderPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_desc, int32_t num_rowgroups, int32_t num_columns,
+                             statistics_merge_group *page_grstats, statistics_merge_group *chunk_grstats, cudaStream_t stream)
 {
     dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
-    gpuInitPages <<< dim_grid, 128, 0, stream >>> (chunks, pages, col_desc, num_rowgroups, num_columns);
+    gpuInitPages <<< dim_grid, 128, 0, stream >>> (chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
     return cudaSuccess;
 }
 
