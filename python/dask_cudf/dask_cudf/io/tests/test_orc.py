@@ -69,12 +69,8 @@ def test_to_orc(tmpdir, dtypes, compression):
 
     # Write dask_cudf dataframe as multiple files
     # (preserve index by `write_index=True`)
-    dask_cudf.to_orc(
-        ddf,
-        str(tmpdir),
-        write_index=True,
-        compression=compression,
-        compute=True,
+    ddf.to_orc(
+        str(tmpdir), write_index=True, compression=compression, compute=True
     )
 
     # Read back cudf dataframe
