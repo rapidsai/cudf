@@ -268,7 +268,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
                "window/forward_window must have INT32 type");
 
-  CUDF_EXPECTS(window.size() != input.size() && forward_window.size() != input.size(),
+  CUDF_EXPECTS(window.size() == input.size() && forward_window.size() == input.size(),
                "window/forward_window size must match input size");
 
   return cudf::experimental::detail::rolling_window(input, window.begin<size_type>(),
