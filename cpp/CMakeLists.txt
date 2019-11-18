@@ -400,8 +400,8 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
-            src/quantiles/quantiles.cu
-            src/quantiles/group_quantiles.cu
+            src/quantiles/legacy/quantiles.cu
+            src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
             src/reductions/legacy/max.cu
@@ -487,21 +487,29 @@ add_library(cudf
             src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/column/legacy/interop.cpp
-            src/strings/strings_column_factories.cu
-            src/strings/strings_scalar_factories.cpp
-            src/strings/strings_column_view.cu
-            src/strings/utilities.cu
             src/strings/attributes.cu
             src/strings/copying/copying.cu
+            src/strings/copying/concatenate.cu
             src/strings/sorting/sorting.cu
             src/strings/substring.cu
             src/strings/combine.cu
             src/strings/char_types/char_types.cu
             src/strings/case.cu
-            src/strings/find.cu
+            src/strings/char_types/char_types.cu
+            src/strings/combine.cu
             src/strings/convert/convert_integers.cu
             src/strings/convert/convert_booleans.cu
+            src/strings/convert/convert_floats.cu
+            src/strings/copying/copying.cu
             src/strings/filling/fill.cu
+            src/strings/find.cu
+            src/strings/padding.cu
+            src/strings/strings_column_factories.cu
+            src/strings/strings_column_view.cu
+            src/strings/strings_scalar_factories.cpp
+            src/strings/sorting/sorting.cu
+            src/strings/substring.cu
+            src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 
