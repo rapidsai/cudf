@@ -489,20 +489,20 @@ add_library(cudf
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
-            src/strings/find.cu
-            src/strings/convert/convert_datetime.c
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
-            src/strings/convert/convert_integers.cu
             src/strings/convert/convert_booleans.cu
+            src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_integers.cu
             src/strings/copying/copying.cu
-            src/strings/filling/fill.cu
             src/strings/find.cu
+            src/strings/filling/fill.cu
+            src/strings/padding.cu
+            src/strings/sorting/sorting.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
-            src/strings/sorting/sorting.cu
             src/strings/substring.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
