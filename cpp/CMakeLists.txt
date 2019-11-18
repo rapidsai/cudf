@@ -502,6 +502,8 @@ add_library(cudf
             src/strings/padding.cu
             src/strings/regex/regcomp.cpp
             src/strings/regex/regexec.cu
+            src/strings/replace/replace_re.cu
+            src/strings/replace/multi_re.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
