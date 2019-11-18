@@ -21,6 +21,8 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
+#include <cudf/utilities/bit.hpp>
+
 #include <cudf/rolling.hpp>
 #include <src/rolling/rolling_detail.hpp>
 
@@ -102,6 +104,7 @@ protected:
     std::vector<T> in_col;
     std::vector<bitmask_type> in_valid; 
     std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
+    bitmask_type* valid_mask = in_valid.data();
     
     agg_op op;
     for(size_type i = 0; i < num_rows; i++) {
@@ -118,7 +121,7 @@ protected:
       
       // aggregate
       for (size_type j = start_index; j < end_index; j++) {
-        if (in_valid.size() == 0 || in_valid[j]) {
+        if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
           val = op(in_col[j], val);
           count++;
         }
