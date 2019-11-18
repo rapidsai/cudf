@@ -31,7 +31,7 @@
 #include "../util.h"
 
 // this will return the number of characters for each string
-unsigned int NVStrings::len(int* lengths, bool todevice)
+unsigned int NVStrings::len(int* lengths, bool todevice) const
 {
     unsigned int count = size();
     if( lengths==0 || count==0 )

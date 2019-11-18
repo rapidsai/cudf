@@ -43,12 +43,11 @@ struct Launcher {
         if (input.size() != output.size())
             return GDF_COLUMN_SIZE_MISMATCH;
 
-        F functor;
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           input.begin<T>(),
                           input.end<T>(),
                           output.begin<Tout>(),
-                          functor);
+                          F{});
 
         CUDA_CHECK_LAST();
         return GDF_SUCCESS;

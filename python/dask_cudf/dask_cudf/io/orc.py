@@ -1,62 +1,83 @@
-from glob import glob
+import pyarrow.orc as orc
 
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.bytes import open_files
-from dask.compatibility import apply
+from dask.bytes.core import get_fs_token_paths
+from dask.dataframe.io.utils import _get_pyarrow_dtypes
 
 import cudf
 
 
-def read_orc(path, **kwargs):
-    """ Read ORC files into a Dask DataFrame
+def _read_orc_stripe(fs, path, stripe, columns, kwargs={}):
+    """Pull out specific columns from specific stripe"""
+    with fs.open(path, "rb") as f:
+        df_stripe = cudf.read_orc(f, stripe=stripe, columns=columns, **kwargs)
+    return df_stripe
 
-    This calls the ``cudf.read_orc`` function on many ORC files.
-    See that function for additional details.
 
-    Examples
-    --------
-    >>> import dask_cudf
-    >>> df = dask_cudf.read_orc("/path/to/*.orc")  # doctest: +SKIP
+def read_orc(path, columns=None, storage_options=None, **kwargs):
+    """Read cudf dataframe from ORC file(s).
 
-    See Also
-    --------
-    cudf.read_orc
+    Note that this function is mostly borrowed from upstream Dask.
+
+    Parameters
+    ----------
+    path: str or list(str)
+        Location of file(s), which can be a full URL with protocol specifier,
+        and may include glob character if a single string.
+    columns: None or list(str)
+        Columns to load. If None, loads all.
+    storage_options: None or dict
+        Further parameters to pass to the bytes backend.
+
+    Returns
+    -------
+    cudf.DataFrame
     """
 
-    name = "read-orc-" + tokenize(path, **kwargs)
-    dsk = {}
-    if "://" in str(path):
-        files = open_files(path)
-
-        # An `OpenFile` should be used in a Context
-        with files[0] as f:
-            meta = cudf.read_orc(f, **kwargs)
-
-        dsk = {
-            (name, i): (apply, _read_orc, [f], kwargs)
-            for i, f in enumerate(files)
-        }
+    storage_options = storage_options or {}
+    fs, fs_token, paths = get_fs_token_paths(
+        path, mode="rb", storage_options=storage_options
+    )
+    schema = None
+    nstripes_per_file = []
+    for path in paths:
+        with fs.open(path, "rb") as f:
+            o = orc.ORCFile(f)
+            if schema is None:
+                schema = o.schema
+            elif schema != o.schema:
+                raise ValueError(
+                    "Incompatible schemas while parsing ORC files"
+                )
+            nstripes_per_file.append(o.nstripes)
+    schema = _get_pyarrow_dtypes(schema, categories=None)
+    if columns is not None:
+        ex = set(columns) - set(schema)
+        if ex:
+            raise ValueError(
+                "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
+            )
     else:
-        if isinstance(path, list):
-            filenames = path
-        elif isinstance(path, str):
-            filenames = sorted(glob(path))
-        elif hasattr(path, "__fspath__"):
-            filenames = sorted(glob(path.__fspath__()))
-        else:
-            raise TypeError("Path type not understood:{}".format(type(path)))
+        columns = list(schema)
 
-        meta = cudf.read_orc(filenames[0], **kwargs)
-        dsk = {
-            (name, i): (apply, cudf.read_orc, [fn], kwargs)
-            for i, fn in enumerate(filenames)
-        }
+    with fs.open(paths[0], "rb") as f:
+        meta = cudf.read_orc(f, stripe=0, columns=columns, **kwargs)
+
+    name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
+    dsk = {}
+    N = 0
+    for path, n in zip(paths, nstripes_per_file):
+        for stripe in range(n):
+            dsk[(name, N)] = (
+                _read_orc_stripe,
+                fs,
+                path,
+                stripe,
+                columns,
+                kwargs,
+            )
+            N += 1
 
     divisions = [None] * (len(dsk) + 1)
     return dd.core.new_dd_object(dsk, name, meta, divisions)
-
-
-def _read_orc(file_obj, **kwargs):
-    with file_obj as f:
-        return cudf.read_orc(f, **kwargs)

@@ -84,3 +84,45 @@ TEST_F(TableViewTest, TestLexicographicalComparatorSameTable)
     cudf::test::expect_columns_equal(expected, got->view());
 }
 
+TEST_F(TableViewTest, Select)
+{
+    using cudf::test::fixed_width_column_wrapper;
+    using cudf::test::expect_columns_equal;
+
+    fixed_width_column_wrapper<int8_t>  col1{{1,2,3,4}};
+    fixed_width_column_wrapper<int16_t> col2{{1,2,3,4}};
+    fixed_width_column_wrapper<int32_t> col3{{4,5,6,7}};
+    fixed_width_column_wrapper<int64_t> col4{{4,5,6,7}};
+    cudf::table_view t({col1, col2, col3, col4});
+
+    cudf::table_view selected = t.select({2, 3});
+    expect_columns_equal(t.column(2), selected.column(0));
+    expect_columns_equal(t.column(3), selected.column(1));
+}
+
+TEST_F(TableViewTest, SelectOutOfBounds)
+{
+    using cudf::test::fixed_width_column_wrapper;
+
+    fixed_width_column_wrapper<int8_t>  col1{{1,2,3,4}};
+    fixed_width_column_wrapper<int16_t> col2{{1,2,3,4}};
+    fixed_width_column_wrapper<int32_t> col3{{4,5,6,7}};
+    fixed_width_column_wrapper<int64_t> col4{{4,5,6,7}};
+    cudf::table_view t({col1, col2});
+
+    EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
+}
+
+TEST_F(TableViewTest, SelectNoColumns)
+{
+    using cudf::test::fixed_width_column_wrapper;
+
+    fixed_width_column_wrapper<int8_t>  col1{{1,2,3,4}};
+    fixed_width_column_wrapper<int16_t> col2{{1,2,3,4}};
+    fixed_width_column_wrapper<int32_t> col3{{4,5,6,7}};
+    fixed_width_column_wrapper<int64_t> col4{{4,5,6,7}};
+    cudf::table_view t({col1, col2, col3, col4});
+
+    cudf::table_view selected = t.select({});
+    EXPECT_EQ(selected.num_columns(), 0);
+}

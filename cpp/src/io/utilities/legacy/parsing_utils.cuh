@@ -32,6 +32,7 @@
 #include <thrust/pair.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
 
