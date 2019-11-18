@@ -214,7 +214,14 @@ class CudfEngine(ArrowEngine):
             return []
 
 
-def read_parquet(path, **kwargs):
+def read_parquet(
+    path,
+    columns=None,
+    split_row_groups=True,
+    row_groups_per_part=1,
+    gather_statistics=None,
+    **kwargs,
+):
     """ Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
@@ -222,6 +229,13 @@ def read_parquet(path, **kwargs):
     single Dask dataframe. The Dask version must supply an ``ArrowEngine``
     class to support full functionality.
     See ``cudf.read_parquet`` and Dask documentation for further details.
+
+    Parameters (cuDF-specific)
+    --------------------------
+    split_row_groups : bool
+        Partition the read_parquet tasks by file row-groups
+    row_groups_per_part : int
+        Number of row-groups to aggregate into each output partition
 
     Examples
     --------
@@ -232,11 +246,22 @@ def read_parquet(path, **kwargs):
     --------
     cudf.read_parquet
     """
-
-    columns = kwargs.pop("columns", None)
     if isinstance(columns, str):
         columns = [columns]
-    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)
+    if row_groups_per_part > 1:
+        split_row_groups = True
+        gather_statistics = True
+    elif split_row_groups:
+        gather_statistics = True
+    return dd.read_parquet(
+        path,
+        columns=columns,
+        split_row_groups=split_row_groups,
+        row_groups_per_part=row_groups_per_part,
+        gather_statistics=gather_statistics,
+        engine=CudfEngine,
+        **kwargs,
+    )
 
 
 to_parquet = partial(dd.to_parquet, engine=CudfEngine)

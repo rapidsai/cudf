@@ -190,7 +190,7 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
     )
 
 
-@pytest.mark.parametrize("rg_chunk", [1, 2, 3])
+@pytest.mark.parametrize("rg_chunk", [1, 2, 100])
 def test_row_groups_per_part(tmpdir, rg_chunk):
 
     # Write single parquet file with multiple
