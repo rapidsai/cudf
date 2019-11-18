@@ -29,14 +29,16 @@ namespace reduction {
 namespace compound {
 
 /** --------------------------------------------------------------------------*
- * @brief Reduction for mean, var, std
- * It requires extra step after single step reduction call
+ * @brief Multi-step reduction for operations such as mean and variance, and
+ * standard deviation.
  *
  * @param[in] col    input column view
- * @param[out] scalar  output scalar data
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
- *                   The divisor used in calculations is N - ddof, where N represents the number of elements.
+ *                   The divisor used in calculations is N - ddof, where N
+ * represents the number of elements.
+ * @params[in] mr The resource to use for all allocations
  * @param[in] stream cuda stream
+ * @returns unique_ptr<scalar>  output scalar data
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype

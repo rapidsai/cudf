@@ -110,7 +110,7 @@ struct PrefixSumDispatcher {
   void operator()(const column_view& input, mutable_column_view& output,
                   bool inclusive, cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr) {
-    CUDF_FAIL("Non-arithmetic types not supported for `gdf_scan`");
+    CUDF_FAIL("Non-arithmetic types not supported for `cudf::scan`");
   }
 };
 

@@ -33,8 +33,9 @@ namespace simple {
  * which directly compute the reduction by a single step reduction call
  *
  * @param[in] col    input column view
- * @param[out] scalar  output scalar data
+ * @params[in] mr The resource to use for all allocations
  * @param[in] stream cuda stream
+ * @returns unique_ptr<scalar>  output scalar data
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
