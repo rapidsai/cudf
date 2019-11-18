@@ -309,6 +309,7 @@ namespace detail {
   }
 
 } //end details
+
 namespace experimental {
 /* --------------------------------------------------------------------------*/
 /**
