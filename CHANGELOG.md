@@ -33,6 +33,7 @@
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
+- PR #3396 Update device_atomics with new bool8 and timestamp specializations
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 
 ## Improvements
@@ -83,6 +84,7 @@
 - PR #3171 Move deprecated error macros to legacy
 - PR #3191 Port NVStrings integer convert ops to cudf column
 - PR #3189 Port NVStrings find ops to cudf column
+- PR #3352 Port NVStrings convert float functions to cudf strings column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
@@ -115,6 +117,7 @@
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
+- PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
 - PR #3299 Define and implement new `is_sorted` APIs
 - PR #3328 Partition by stripes in dask_cudf ORC reader
@@ -122,6 +125,7 @@
 - PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
 - PR #3382 Add fill function for strings column
+- PR #3391 Move device_atomics_tests.cu files to legacy
 
 ## Bug Fixes
 
@@ -167,6 +171,7 @@
 - PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
+- PR #3383 Fix : properly compute null counts for rolling_window.
 - PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 
