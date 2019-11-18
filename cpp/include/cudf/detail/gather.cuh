@@ -106,7 +106,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
  * @tparam MapIterator Iterator type for the gather map
  *---------------------------------------------------------------------------**/
 template<typename Element, typename MapIterator>
-struct specailized_column_gatherer
+struct specialized_column_gatherer
 {
   /**---------------------------------------------------------------------------*
    * @brief Type-dispatched function to gather from one column to another based
@@ -158,7 +158,7 @@ struct specailized_column_gatherer
  *---------------------------------------------------------------------------**/
 
 template<typename MapItType>
-struct specailized_column_gatherer<string_view, MapItType>
+struct specialized_column_gatherer<string_view, MapItType>
 {
  /**---------------------------------------------------------------------------*
   * @brief Type-dispatched function to gather from one column to another based
@@ -219,7 +219,7 @@ struct column_gatherer
                                        bool ignore_out_of_bounds,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
-      specailized_column_gatherer<Element, MapIterator> gatherer{}; 
+      specialized_column_gatherer<Element, MapIterator> gatherer{}; 
 
       return gatherer(source_column, gather_map_begin,
                     gather_map_end, ignore_out_of_bounds,
