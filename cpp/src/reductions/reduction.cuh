@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <cudf/utilities/error.hpp> //RMM, error utils
+#include <rmm/device_buffer.hpp>
 
 #include <cub/device/device_reduce.cuh>
 
@@ -42,22 +42,21 @@ namespace detail {
  * ----------------------------------------------------------------------------**/
  template <typename Op, typename InputIterator, typename OutputType>
 void reduce(OutputType* dev_result, InputIterator d_in, cudf::size_type num_items,
-    OutputType init, Op op, cudaStream_t stream)
+    OutputType init, Op op, 
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
 {
-    void     *d_temp_storage = NULL;
-    size_t   temp_storage_bytes = 0;
+    rmm::device_buffer  d_temp_storage;
+    size_t  temp_storage_bytes = 0;
 
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
+    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result, num_items,
         op, init, stream);
     // Allocate temporary storage
-    RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
+    d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
 
     // Run reduction
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
+    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result, num_items,
         op, init, stream);
-
-    // Free temporary storage
-    RMM_TRY(RMM_FREE(d_temp_storage, stream));
 }
 
 } // namespace detail
