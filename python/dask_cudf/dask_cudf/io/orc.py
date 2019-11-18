@@ -118,6 +118,9 @@ def to_orc(
 
     from dask import delayed
 
+    # TODO: Use upstream dask implementation once available
+    #       (see: Dask Issue#5596)
+
     if hasattr(path, "name"):
         path = stringify_path(path)
     fs, _, _ = get_fs_token_paths(

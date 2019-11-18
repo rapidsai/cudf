@@ -33,6 +33,7 @@
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
+- PR #3401 Add dask_cudf ORC writer (to_orc)
 
 ## Improvements
 
