@@ -68,7 +68,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
  * @returns Copy of `input` with specified values replaced.
  */
 std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
-                                                   cudf::column_view const& values_to_replace,
+                                                   column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
                                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
