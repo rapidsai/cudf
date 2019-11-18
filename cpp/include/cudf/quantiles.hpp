@@ -18,6 +18,7 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include "cudf/types.hpp"
 
 namespace cudf {
     
@@ -41,7 +42,10 @@ enum class quantile_interpolation {
  */
 std::unique_ptr<scalar> quantile(column_view const& in,
                                  double quantile,
-                                 quantile_interpolation interpolation = quantile_interpolation::LINEAR);
+                                 quantile_interpolation interpolation = quantile_interpolation::LINEAR,
+                                 cudaStream_t stream = 0,
+                                 rmm::mr::device_memory_resource *mr =
+                                     rmm::mr::get_default_resource());
 
 } // namespace cudf
 
