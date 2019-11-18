@@ -29,7 +29,6 @@ import java.util.PriorityQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
 
 /**
  * This provides a pool of pinned memory similar to what RMM does for device memory.
@@ -99,11 +98,13 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
   }
 
-  private static final class PinnedHostBufferCleaner extends MemoryCleaner.Cleaner {
+  private static final class PinnedHostBufferCleaner extends MemoryBuffer.MemoryBufferCleaner {
     private MemorySection section;
+    private final long origLength;
 
-    PinnedHostBufferCleaner(MemorySection section) {
+    PinnedHostBufferCleaner(MemorySection section, long length) {
       this.section = section;
+      origLength = length;
     }
 
     @Override
@@ -111,6 +112,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
       boolean neededCleanup = false;
       if (section != null) {
         PinnedMemoryPool.freeInternal(section);
+        if (origLength > 0) {
+          MemoryListener.hostDeallocation(origLength, getId());
+        }
         section = null;
         neededCleanup = true;
       }
@@ -260,7 +264,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     availableBytes -= allocated.size;
     log.debug("Allocated {} free {} outstanding {}", allocated, freeHeap, numAllocatedSections);
     return new HostMemoryBuffer(allocated.baseAddress, bytes,
-        new PinnedHostBufferCleaner(allocated));
+        new PinnedHostBufferCleaner(allocated, bytes));
   }
 
   private synchronized void free(MemorySection section) {
