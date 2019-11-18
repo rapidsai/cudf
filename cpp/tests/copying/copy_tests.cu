@@ -88,6 +88,72 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
    cudf::test::expect_columns_equal(out->view(), expected_w);   
 }
 
+struct copy_if_else_tiny_grid_functor {
+   template <typename T, typename Filter>
+   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
+                                          cudf::column_view const& rhs,
+                                          Filter filter,
+                                          rmm::mr::device_memory_resource *mr,
+                                          cudaStream_t stream)
+   {
+      // output
+      std::unique_ptr<cudf::column> out = cudf::experimental::allocate_like(lhs, lhs.size(), cudf::experimental::mask_allocation_policy::RETAIN, mr);
+
+      // device views
+      auto lhs_dv = cudf::column_device_view::create(lhs);
+      auto rhs_dv = cudf::column_device_view::create(rhs);
+      auto out_dv = cudf::mutable_column_device_view::create(*out);
+             
+      // call the kernel with an artificially small grid
+      cudf::experimental::detail::copy_if_else_kernel<32, T, Filter, false><<<1, 32, 0, stream>>>(
+         *lhs_dv, *rhs_dv, filter, *out_dv, nullptr);
+
+      return out;
+   }
+};
+
+std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs, cudf::column_view const& rhs, cudf::column_view const& boolean_mask)
+{
+   auto bool_mask_device_p = cudf::column_device_view::create(boolean_mask);
+   cudf::column_device_view bool_mask_device = *bool_mask_device_p;
+   auto filter = [bool_mask_device] __device__ (cudf::size_type i) { return bool_mask_device.element<cudf::experimental::bool8>(i); };
+   return cudf::experimental::type_dispatcher(lhs.type(),
+                                             copy_if_else_tiny_grid_functor{},
+                                             lhs,
+                                             rhs,
+                                             filter,
+                                             rmm::mr::get_default_resource(),
+                                             (cudaStream_t)0);
+}
+
+TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid) 
+{  
+   using T = TypeParam;
+
+   // make sure we span at least 2 warps      
+   int num_els = 64;
+
+   bool mask[]    = { 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                     0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
+   bool_wrapper mask_w(mask, mask + num_els);
+
+   T lhs[]        = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+                     5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };   
+   wrapper<T> lhs_w(lhs, lhs + num_els);
+
+   T rhs[]        = { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+                     6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 };
+   wrapper<T> rhs_w(rhs, rhs + num_els);
+   
+   T expected[]   = { 5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+                     6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };   
+   wrapper<T> expected_w(expected, expected + num_els);
+
+   auto out = tiny_grid_launch(lhs_w, rhs_w, mask_w);
+     
+   cudf::test::expect_columns_equal(out->view(), expected_w);   
+}
+
 TYPED_TEST(CopyTest, CopyIfElseTestLong) 
 {  
    using T = TypeParam;
@@ -96,7 +162,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
    int num_els = 64;
 
    bool mask[]    = { 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
-                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
+                     0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
    bool_wrapper mask_w(mask, mask + num_els);
 
    T lhs[]        = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
@@ -112,7 +178,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
    wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
    
    T expected[]   = { 5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
-                     5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
+                     6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
    bool exp_v[]   = { 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   
    wrapper<T> expected_w(expected, expected + num_els, exp_v);

@@ -46,32 +46,33 @@ void copy_if_else_kernel(  column_device_view const lhs,
                            size_type * __restrict__ const valid_count)
 {   
    const size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
-   const int w_id = tid / warp_size;
-   const size_type warps_per_grid = gridDim.x * blockDim.x / warp_size;
+   const int warp_id = tid / warp_size;
+   const size_type warps_per_grid = gridDim.x * block_size / warp_size;
+
    // begin/end indices for the column data
    size_type begin = 0;
    size_type end = lhs.size();   
    // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
    // each warp will process one (32 bit) of the validity mask via 
    // __ballot_sync()
-   size_type w_begin = cudf::util::detail::bit_container_index<bit_mask::bit_mask_t>(begin);
-   size_type w_end = cudf::util::detail::bit_container_index<bit_mask::bit_mask_t>(end);
+   size_type warp_begin = cudf::word_index(begin);
+   size_type warp_end = cudf::word_index(end);
 
    // lane id within the current warp
-   constexpr size_type w_leader_lane{0};
-   const int w_lane_id = threadIdx.x % warp_size;
+   constexpr size_type leader_lane{0};
+   const int lane_id = threadIdx.x % warp_size;
 
-   size_type w_valid_count{0};
+   size_type warp_valid_count{0};
   
    // current warp.
-   size_type w_cur = w_begin + w_id;
+   size_type warp_cur = warp_begin + warp_id;
    size_type index = tid;
-   while(w_cur <= w_end){
+   while(warp_cur <= warp_end){
       bool in_range = (index >= begin && index < end);
 
       bool valid = true;
       if(has_validity){
-         valid = in_range && filter(index) ? lhs.is_valid(index) : rhs.is_valid(index);
+         valid = in_range && (filter(index) ? lhs.is_valid(index) : rhs.is_valid(index));
       }
 
       // do the copy if-else
@@ -82,26 +83,26 @@ void copy_if_else_kernel(  column_device_view const lhs,
       // update validity
       if(has_validity){
          // the final validity mask for this warp
-         int w_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
+         int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
          // only one guy in the warp needs to update the mask and count
-         if(w_lane_id == 0){
-            out.set_mask_word(w_cur, w_mask);
-            w_valid_count += __popc(w_mask);
+         if(lane_id == 0){
+            out.set_mask_word(warp_cur, warp_mask);
+            warp_valid_count += __popc(warp_mask);
          }
       }
 
       // next grid
-      w_cur += warps_per_grid;
-      index += blockDim.x * gridDim.x;      
+      warp_cur += warps_per_grid;
+      index += block_size * gridDim.x;       
    }
 
    if(has_validity){
       // sum all null counts across all warps
-      size_type b_valid_count = single_lane_block_sum_reduce<block_size, w_leader_lane>(w_valid_count);
-      // b_null_count will only be valid on thread 0
+      size_type block_valid_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
+      // block_valid_count will only be valid on thread 0
       if(threadIdx.x == 0){
          // using an atomic here because there are multiple blocks doing this work
-         atomicAdd(valid_count, b_valid_count);
+         atomicAdd(valid_count, block_valid_count);
       }      
    }
 }
