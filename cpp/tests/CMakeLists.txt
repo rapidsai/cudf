@@ -574,6 +574,11 @@ ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
 ###################################################################################################
 # - legacy filling test ---------------------------------------------------------------------------
 
+set(FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/tile_tests.cu")
+
+ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+
 set(LEGACY_FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/filling_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu"
@@ -591,6 +596,11 @@ ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
+
+set(RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_tests.cu")
+
+ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
 
 set(LEGACY_RESHAPE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_test.cu")

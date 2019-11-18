@@ -126,6 +126,7 @@
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
 - PR #3398 Move reshape.hpp files to legacy
+- PR #xxxx Define and implement new stack + tile APIs
 
 ## Bug Fixes
 
