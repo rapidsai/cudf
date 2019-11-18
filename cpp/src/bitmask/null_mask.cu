@@ -163,19 +163,24 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
  *---------------------------------------------------------------------------**/
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
-                                    size_type bit_offset,
+                                    size_type source_begin_bit,
+                                    size_type source_end_bit,
                                     size_type number_of_mask_words) {
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
     size_type source_word_index =
-        destination_word_index + word_index(bit_offset);
+        destination_word_index + word_index(source_begin_bit);
     bitmask_type curr_word = source[source_word_index];
     bitmask_type next_word = 0;
-    if ((bit_offset % detail::size_in_bits<bitmask_type>()) != 0) {
+    if ((word_index(source_begin_bit) != 0) &&
+        (word_index(source_end_bit) >
+          word_index(source_begin_bit +
+            destination_word_index * detail::size_in_bits<bitmask_type>()))) {
       next_word = source[source_word_index + 1];
     }
-    bitmask_type write_word = __funnelshift_r(curr_word, next_word, bit_offset);
+    bitmask_type write_word =
+      __funnelshift_r(curr_word, next_word, source_begin_bit);
     destination[destination_word_index] = write_word;
   }
 }
@@ -258,7 +263,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
     cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                           stream>>>(
-        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit,
+        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit,
         number_of_mask_words);
     CUDA_CHECK_LAST()
   }
