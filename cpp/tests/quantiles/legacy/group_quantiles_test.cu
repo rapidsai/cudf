@@ -16,7 +16,7 @@
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <cudf/quantiles.hpp>
+#include <cudf/legacy/quantiles.hpp>
 
 #include <gtest/gtest.h>
 
