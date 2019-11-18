@@ -127,6 +127,7 @@
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
+- PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 
 ## Bug Fixes
 
