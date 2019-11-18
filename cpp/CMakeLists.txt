@@ -497,6 +497,7 @@ add_library(cudf
             src/strings/copying/copying.cu
             src/strings/filling/fill.cu
             src/strings/find.cu
+            src/strings/padding.cu
             src/strings/replace.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
