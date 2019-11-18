@@ -33,7 +33,9 @@ from cudf.utils.utils import (
 
 
 class ColumnBase(Column):
-    def __init__(self, data, size, dtype, mask=None, name=None, children=None):
+    def __init__(
+        self, data, size, dtype, mask=None, offset=None, name=None, children=()
+    ):
         """
         Parameters
         ----------
@@ -42,18 +44,40 @@ class ColumnBase(Column):
             The type associated with the data Buffer
         mask : Buffer, optional
         name : optional
-        children : list, optional
+        children : tuple, optional
         """
-        super().__init__(data, size=size, dtype=dtype, mask=mask)
-        self.data = data
+
+        super().__init__(
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            children=children,
+        )
+        self._data = data
         self.size = size
         self.dtype = dtype
-        self.mask = mask
+        self._mask = mask
+        self.offset = offset
+        self.children = children
         self.name = name
-        self.children = children or []
 
     def __reduce__(self):
-        return (build_column, (self.data, self.dtype, self.mask, self.name))
+        return (
+            build_column,
+            (
+                self.data,
+                self.dtype,
+                self.mask,
+                self.offset,
+                self.children,
+                self.name,
+            ),
+        )
+
+    def data(self):
+        return self._data
 
     @property
     def mask(self):
@@ -861,13 +885,24 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
-    offsets = None
+    children = ()
 
     if is_categorical_dtype(dtype):
         data = Buffer.empty(row_count * dtype.data_dtype.itemsize)
     elif dtype.kind in "OU":
-        data = Buffer.empty(row_count)
-        offsets = Buffer.empty((row_count + 1) * np.dtype("int32").itemsize)
+        data = None
+        children = (
+            build_column(
+                data=Buffer.empty(row_count * np.dtype("int8").itemsize),
+                dtype="int8",
+            ),
+            build_column(
+                data=Buffer.empty(
+                    (row_count + 1) * np.dtype("int32").itemsize
+                ),
+                dtype="int32",
+            ),
+        )
     else:
         data = Buffer.empty(row_count * dtype.itemsize)
 
@@ -876,10 +911,10 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     else:
         mask = None
 
-    return build_column(data, dtype, mask, offsets=offsets, name=name)
+    return build_column(data, dtype, mask=mask, children=children, name=name)
 
 
-def build_column(data, dtype, mask=None, offsets=None, name=None):
+def build_column(data, dtype, mask=None, offset=None, children=(), name=None):
 
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
@@ -889,13 +924,26 @@ def build_column(data, dtype, mask=None, offsets=None, name=None):
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if is_categorical_dtype(dtype):
-        return CategoricalColumn(data=data, dtype=dtype, mask=mask, name=name)
+        return CategoricalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            children=children,
+            name=name,
+        )
     elif dtype.type is np.datetime64:
-        return DatetimeColumn(data=data, dtype=dtype, mask=mask, name=name)
+        return DatetimeColumn(
+            data=data, dtype=dtype, mask=mask, offset=offset, name=name,
+        )
     elif dtype.type in (np.object_, np.str_):
-        return StringColumn(data=data, offsets=offsets, mask=mask, name=name)
+        return StringColumn(
+            mask=mask, offset=offset, children=children, name=name
+        )
     else:
-        return NumericalColumn(data=data, dtype=dtype, mask=mask, name=name)
+        return NumericalColumn(
+            data=data, dtype=dtype, mask=mask, offset=offset, name=name
+        )
 
 
 def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
@@ -948,7 +996,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             nbuf = Buffer.empty(mask_size)
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
-        data = build_column(data=sbuf, dtype="object", offsets=obuf, mask=nbuf)
+        children = (
+            build_column(sbuf, dtype="int8"),
+            build_column(obuf, dtype="int32"),
+        )
+        data = build_column(
+            data=None, dtype="object", mask=nbuf, children=children
+        )
         data._nvstrings = arbitrary
 
     elif isinstance(arbitrary, Buffer):
@@ -1022,7 +1076,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
             nbuf, obuf, sbuf = buffers_from_pyarrow(arbitrary)
-            data = string.StringColumn(data=sbuf, offsets=obuf, mask=nbuf)
+            children = (
+                build_column(data=sbuf, dtype="int8"),
+                build_column(data=obuf, dtype="int32"),
+            )
+
+            data = string.StringColumn(mask=nbuf, children=children)
 
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = pd.api.types.pandas_dtype(dtype)

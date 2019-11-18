@@ -445,45 +445,29 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(
-        self,
-        data,
-        offsets,
-        mask=None,
-        name=None,
-        data_dtype=np.byte,
-        offsets_dtype=np.int32,
-    ):
+    def __init__(self, mask=None, offset=None, children=(), name=None):
         """
         Parameters
         ----------
-        data : Buffer
-            Buffer of character data
-        offsets : Buffer
-            Buffer of offsets
         mask : Buffer
             The validity mask
+        offset : int
+            Data offset
+        children : Tuple[Column]
+            Two non-null columns containing the string data and offsets respectively
         name
             Name of the Column
         """
-        data_dtype = np.dtype(data_dtype)
-        offsets_dtype = np.dtype(offsets_dtype)
 
-        children = (
-            column.build_column(data=data, dtype=data_dtype),
-            column.build_column(data=offsets, dtype=offsets_dtype),
-        )
         data = Buffer.from_device_buffer(rmm.DeviceBuffer(0, 0))
         dtype = np.dtype("object")
-        mask = mask
-        name = name
 
-        if offsets.size == 0:
+        if children[1].size == 0:
             size = 0
         else:
             # one less because the last element of offsets is the number of
             # bytes in the data buffer
-            size = (offsets.size // offsets_dtype.itemsize) - 1
+            size = children[1].size - 1
 
         super().__init__(
             data, size, dtype, mask=mask, name=name, children=children,

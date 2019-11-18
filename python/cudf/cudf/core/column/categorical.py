@@ -230,7 +230,9 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, data, dtype, mask=None, name=None):
+    def __init__(
+        self, data, dtype, mask=None, offset=None, children=(), name=None
+    ):
         """
         Parameters
         ----------
