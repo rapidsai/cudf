@@ -123,8 +123,10 @@
 - PR #3243 Use upstream join code in dask_cudf
 - PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
+- PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
+- PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
 - PR #xxxx Define and implement new stack + tile APIs
 
@@ -175,6 +177,7 @@
 - PR #3383 Fix : properly compute null counts for rolling_window.
 - PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
+- PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 
 
 # cuDF 0.10.0 (16 Oct 2019)
