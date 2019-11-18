@@ -630,7 +630,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
@@ -639,6 +639,9 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu")
