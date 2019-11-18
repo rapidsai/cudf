@@ -151,4 +151,4 @@ def to_orc(
     if compute:
         return dask_compute(*parts)
 
-    return delayed(lambda x: None)(parts)
+    return delayed(list)(parts)
