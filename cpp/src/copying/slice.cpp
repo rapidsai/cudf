@@ -18,6 +18,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <algorithm>
 
 namespace cudf {
@@ -35,7 +36,7 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
     }
 
     for(size_t i = 0; i < indices.size(); i+=2){
-        result.emplace_back(slice(input, indices[i], indices[i+1]));
+        result.emplace_back(detail::slice(input, indices[i], indices[i+1]));
     }
 
     return result;
