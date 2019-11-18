@@ -297,7 +297,7 @@ namespace detail {
                  input_col.type() == replacement_values.type(),
                  "Columns type mismatch");
     CUDF_EXPECTS(values_to_replace.nullable() == false,
-                 "Nulls are in values_to_replace column.");
+                 "values_to_replace must be non-nullable");
 
     return cudf::experimental::type_dispatcher(input_col.type(),
                                                replace_kernel_forwarder { },
