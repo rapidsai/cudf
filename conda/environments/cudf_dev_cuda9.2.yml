@@ -44,6 +44,7 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
+  - librdkafka=1.2.2
   - pip:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git

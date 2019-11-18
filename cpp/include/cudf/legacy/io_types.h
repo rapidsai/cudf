@@ -26,6 +26,7 @@ typedef enum {
   FILE_PATH,                 ///< Source is specified as a file path
   HOST_BUFFER,               ///< Source is specified as a buffer in host memory,
   ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
+  KAFKA_TOPIC,               ///< Source is specified as a RdKafka::Topic
 } gdf_input_type;
 
 

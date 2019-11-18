@@ -8,7 +8,7 @@ from cudf.utils import ioutils
 
 @ioutils.doc_read_csv()
 def read_csv(
-    filepath_or_buffer,
+    filepath_or_buffer=None,
     lineterminator="\n",
     quotechar='"',
     quoting=0,
@@ -40,6 +40,7 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    kafka_configs=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -80,6 +81,7 @@ def read_csv(
         na_filter=na_filter,
         prefix=prefix,
         index_col=index_col,
+        kafka_configs=kafka_configs,
     )
 
 

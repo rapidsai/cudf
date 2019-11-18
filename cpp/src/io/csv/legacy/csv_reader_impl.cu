@@ -194,6 +194,7 @@ void reader::Impl::setColumnNamesFromCsv() {
 table reader::Impl::read(size_t range_offset, size_t range_size,
                          cudf::size_type skip_rows, cudf::size_type skip_end_rows,
                          cudf::size_type num_rows) {
+
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");
@@ -752,6 +753,10 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
     opts.naValuesTrie = d_naTrie.data().get();
   }
 }
+
+reader::reader(RdKafka::Conf *global_configs, std::vector<std::string> kafka_topics, reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(global_configs, kafka_topics), "",
+                                   options)) {}
 
 reader::reader(std::string filepath, reader_options const &options)
     : impl_(std::make_unique<Impl>(nullptr, filepath, options)) {

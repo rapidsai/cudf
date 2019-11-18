@@ -20,6 +20,7 @@
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
+#include <librdkafka/rdkafkacpp.h>
 
 #include <algorithm>
 #include <memory>
@@ -33,6 +34,19 @@ namespace io {
  **/
 class datasource {
  public:
+  /**
+   * Create a source from a Kafka Topic
+   *
+   * @param[in] global_configs Key/Value map of global Kafka consumer
+   * configurations. The number of configurations is quite large so the complete
+   * reference can be found at
+   *                           https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+   * @param[in] list of Kafka topics that the consumer should consume messages
+   * from
+   */
+  static std::unique_ptr<datasource> create(
+      RdKafka::Conf *kafka_configs, std::vector<std::string> kafka_topics);
+
   /**
    * @brief Create a source from a file path
    *

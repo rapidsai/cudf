@@ -167,6 +167,25 @@ else()
 endif(ARROW_FOUND)
 
 ###################################################################################################
+# - find librdkafka ------------------------------------------------------------------------------------
+
+find_path(RDKAFKA_INCLUDE "librdkafka"
+        HINTS "$ENV{RDKAFKA_ROOT}/include")
+find_library(RDKAFKA_LIBRARY "rdkafka"
+        HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+find_library(RDKAFKA++_LIBRARY "rdkafka++"
+        HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+
+message(STATUS "RDKAFKA: RDKAFKA_LIBRARY set to ${RDKAFKA_LIBRARY}")
+message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+
+add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
+if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+    set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
+endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+
+###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
@@ -287,6 +306,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
+                    "${RDKAFKA_INCLUDE}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
@@ -606,7 +626,7 @@ target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
 target_link_libraries(libNVText libNVStrings rmm cudart cuda)
 
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} ${RDKAFKA_LIBRARY} ${RDKAFKA++_LIBRARY} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

@@ -11,6 +11,24 @@ from cudf._lib.includes.io cimport *
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
+cdef extern from "cudf/cudf.h" namespace "RdKafka" nogil:
+
+    cdef cppclass Conf:
+
+        enum ConfType:
+            CONF_GLOBAL "RdKafka::Conf::CONF_GLOBAL",
+            CONF_TOPIC "RdKafka::Conf::CONF_TOPIC",
+
+        enum ConfResult:
+            CONF_UNKNOWN = -2,
+            CONF_INVALID = -1,
+            CONF_OK = 0,
+
+        @staticmethod
+        Conf *create(ConfType) except +
+
+        ConfResult set(string &name, string &value, string &errstr) except +
+
 cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
 
     ctypedef enum quote_style:
@@ -51,6 +69,13 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         gdf_time_unit       out_time_unit
 
     cdef cppclass reader:
+
+        reader(
+            Conf *global_configs,
+            vector[string] topics,
+            const reader_options &options
+        ) except +
+
         reader(
             string filepath,
             const reader_options &options

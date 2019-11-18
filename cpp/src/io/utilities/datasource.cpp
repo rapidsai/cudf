@@ -22,11 +22,156 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <chrono>
+#include <thread>
+
 #include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace io {
+
+class kafka_io_source : public datasource {
+ public:
+  explicit kafka_io_source(RdKafka::Conf *kafka_configs,
+                           std::vector<std::string> kafka_topics)
+      : kafka_conf_(kafka_configs), topics_(kafka_topics) {
+    // Kafka 0.9 > requires at least a group.id in the configuration so lets
+    // make sure that is present.
+    conf_res = kafka_conf_->get("group.id", conf_val);
+    CUDF_EXPECTS(
+        (conf_res == RdKafka::Conf::ConfResult::CONF_OK && !conf_val.empty()),
+        "Kafka requires 'group.id' configuration value be present. Please "
+        "ensure Kafka configuration contains 'group.id'");
+
+    // Create the Rebalance callback.
+    KafkaRebalanceCB rebalance_cb;
+    kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
+
+    consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
+    CUDF_EXPECTS(consumer_, "Failed to create Kafka consumer");
+
+    RdKafka::ErrorCode err = consumer_->subscribe(topics_);
+    CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
+                 "Failed to subscribe to Kafka Topics");
+
+    // The csv_reader implementation will call 'empty()' to determine how maby
+    // bytes are available. With files this works, with Kafka we don't yet have
+    // the messages at this point so we need to get those messages now.
+    consume_messages();
+  }
+
+  virtual ~kafka_io_source() {
+    delete kafka_conf_;
+    delete consumer_;
+  }
+
+  const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
+                                                  size_t size) override {
+    return arrow::Buffer::Wrap(buffer_.c_str(), buffer_.size());
+  }
+
+  size_t size() const override { return buffer_.size(); }
+
+ private:
+  class KafkaRebalanceCB : public RdKafka::RebalanceCb {
+   public:
+    void rebalance_cb(RdKafka::KafkaConsumer *consumer, RdKafka::ErrorCode err,
+                      std::vector<RdKafka::TopicPartition *> &partitions) {
+      if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
+        consumer->assign(partitions);
+      } else {
+        consumer->unassign();
+      }
+    }
+  };
+
+  void consume_messages() {
+    // Kafka messages are already stored in a queue outside of libcudf. Here the
+    // messages will be transferred from the external queue directly to the
+    // arrow::Buffer.
+    RdKafka::Message *msg;
+
+    for (int i = 0; i < batch_size_; i++) {
+      msg = consumer_->consume(default_timeout_);
+      if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
+        buffer_.append(static_cast<char *>(msg->payload()));
+        buffer_.append("\n");
+        msg_count_++;
+      } else {
+        handle_error(msg);
+
+        // handle_error handles specific errors. Any coded logic error case will
+        // generate an exception and cease execution. Kafka has hundreds of
+        // possible exceptions however. To be safe its best to print the generic
+        // error message here and break the consumer loop.
+        printf("Kafka Datasource Error: %s\n", msg->errstr().c_str());
+        break;
+      }
+    }
+
+    delete msg;
+  }
+
+  void handle_error(RdKafka::Message *msg) {
+    err_code_ = msg->err();
+    const std::string err_str = msg->errstr();
+    std::string error_msg;
+
+    if (msg_count_ == 0 &&
+        err_code_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      // The topic was empty and had no data in it. Most likely best to error
+      // here since the most likely cause of this would be a user entering the
+      // wrong topic name.
+      error_msg.append("Kafka Topic '");
+      error_msg.append(topics_.at(0).c_str());
+      error_msg.append("' is empty of does not exist on broker(s)");
+      CUDF_FAIL(error_msg);
+    } else if (msg_count_ == 0 &&
+               err_code_ == RdKafka::ErrorCode::ERR__TIMED_OUT) {
+      // unable to connect to the specified Kafka Broker(s)
+      std::string brokers_val;
+      conf_res = kafka_conf_->get("metadata.broker.list", brokers_val);
+      if (brokers_val.empty()) {
+        // 'bootstrap.servers' is an alias configuration so its valid that
+        // either 'metadata.broker.list' or 'bootstrap.servers' is set
+        conf_res = kafka_conf_->get("bootstrap.servers", brokers_val);
+      }
+
+      if (conf_res == RdKafka::Conf::ConfResult::CONF_OK) {
+        error_msg.append("Connection attempt to Kafka broker(s) '");
+        error_msg.append(brokers_val);
+        error_msg.append("' timed out.");
+        CUDF_FAIL(error_msg);
+      } else {
+        CUDF_FAIL(
+            "No Kafka broker(s) were specified for connection. Connection "
+            "Failed.");
+      }
+    } else if (err_code_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      // Kafka treats PARTITION_EOF as an "error". In our Rapids use case it is
+      // not however and just means all messages have been read.
+      // Just print imformative message and break consume loop.
+      printf("%ld messages read from Kafka\n", msg_count_);
+    }
+  }
+
+ private:
+  RdKafka::Conf *kafka_conf_;
+  RdKafka::KafkaConsumer *consumer_;
+  RdKafka::ErrorCode err_code_;
+
+  std::vector<std::string> topics_;
+  std::string errstr_;
+  RdKafka::Conf::ConfResult conf_res;
+  std::string conf_val;
+  int16_t batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
+  int32_t default_timeout_ = 10000;  // 1 second
+  int64_t msg_count_ =
+      0;  // Running tally of the messages consumed. Useful for retry logic.
+
+  std::string buffer_;
+};  // namespace io
 
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
@@ -134,6 +279,11 @@ class memory_mapped_source : public datasource {
   size_t map_size_ = 0;
   size_t map_offset_ = 0;
 };
+
+std::unique_ptr<datasource> datasource::create(
+    RdKafka::Conf *global_configs, std::vector<std::string> kafka_topics) {
+  return std::make_unique<kafka_io_source>(global_configs, kafka_topics);
+}
 
 std::unique_ptr<datasource> datasource::create(const std::string filepath,
                                                size_t offset, size_t size) {
