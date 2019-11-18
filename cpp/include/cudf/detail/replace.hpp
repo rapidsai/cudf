@@ -62,7 +62,7 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
                                             cudaStream_t stream = 0);
 
 /**
- *        `new_values`, that is, replace all `old_values[i]` present in `col`
+ *  @brief Replace all `old_values[i]` present in `input_col` with `new_values[i]`.
  *        with `new_values[i]`.
  *
  * @param input_col The column to find and replace values in.
