@@ -263,37 +263,34 @@ TYPED_TEST(RollingTest, SimpleDynamic)
   this->run_test_col_agg(input, window, forward_window, 1);
 }
 
-// // this is a special test to check the volatile count variable issue (see rolling.cu for detail)
-// TYPED_TEST(RollingTest, VolatileCount)
-// {
-//   const std::vector<TypeParam> col_data = { 8, 70, 45, 20, 59, 80 };
-//   const std::vector<bool>      col_mask = { 1, 1, 0, 0, 1, 0 };
+// this is a special test to check the volatile count variable issue (see rolling.cu for detail)
+TYPED_TEST(RollingTest, VolatileCount)
+{
+  const std::vector<TypeParam> col_data = { 8, 70, 45, 20, 59, 80 };
+  const std::vector<bool>      col_mask = { 1, 1, 0, 0, 1, 0 };
 
-//   // dynamic sizes
-//   this->run_test_col_agg(col_data, col_mask,
-// 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 5, 9, 4, 8, 3, 3 }),
-// 			 std::vector<cudf::size_type>({ 1, 1, 9, 2, 8, 9 }),
-// 			 std::vector<cudf::size_type>({ 6, 3, 3, 0, 2, 1 }));
-// }
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> window({ 5, 9, 4, 8, 3, 3 });
+  std::vector<cudf::size_type> forward_window({ 1, 1, 9, 2, 8, 9 });
+  
+  // dynamic sizes
+  this->run_test_col_agg(input, window, forward_window, 1);
+}
 
-// // all rows are invalid
-// TYPED_TEST(RollingTest, AllInvalid)
-// {
-//   cudf::size_type num_rows = 1000;
-//   cudf::size_type window = 100;
-//   cudf::size_type periods = window;
+// all rows are invalid
+TYPED_TEST(RollingTest, AllInvalid)
+{
+  cudf::size_type num_rows = 1000;
 
-//   std::vector<TypeParam> col_data(num_rows);
-//   std::vector<bool>      col_mask(num_rows);
-//   std::fill(col_mask.begin(), col_mask.end(), 0);
+  std::vector<TypeParam> col_data(num_rows);
+  std::vector<bool>      col_mask(num_rows);
+  std::fill(col_mask.begin(), col_mask.end(), 0);
 
-//   this->run_test_col_agg(col_data, col_mask,
-// 			 window, periods, window,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>());
-// }
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> window({100});
+
+  this->run_test_col_agg(input, window, window, window[0]);
+}
 
 // // window = forward_window = 0
 // TYPED_TEST(RollingTest, ZeroWindow)
