@@ -292,64 +292,58 @@ TYPED_TEST(RollingTest, AllInvalid)
   this->run_test_col_agg(input, window, window, window[0]);
 }
 
-// // window = forward_window = 0
-// TYPED_TEST(RollingTest, ZeroWindow)
-// {
-//   cudf::size_type num_rows = 1000;
-//   cudf::size_type window = 0;
-//   cudf::size_type periods = num_rows;
+// window = forward_window = 0
+TYPED_TEST(RollingTest, ZeroWindow)
+{
+  cudf::size_type num_rows = 1000;
 
-//   std::vector<TypeParam> col_data(num_rows);
-//   std::vector<bool>      col_mask(num_rows);
-//   std::fill(col_data.begin(), col_data.end(), 1);
-//   std::fill(col_mask.begin(), col_mask.end(), 1);
+  std::vector<TypeParam> col_data(num_rows);
+  std::vector<bool>      col_mask(num_rows);
+  std::fill(col_data.begin(), col_data.end(), 1);
+  std::fill(col_mask.begin(), col_mask.end(), 1);
 
-//   this->run_test_col_agg(col_data, col_mask,
-// 			 window, periods, window,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>());
-// }
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> window({0});
+  cudf::size_type periods = num_rows;
 
-// // min_periods = 0
-// TYPED_TEST(RollingTest, ZeroPeriods)
-// {
-//   cudf::size_type num_rows = 1000;
-//   cudf::size_type window = num_rows;
-//   cudf::size_type periods = 0;
+  this->run_test_col_agg(input, window, window, periods);
+}
 
-//   std::vector<TypeParam> col_data(num_rows);
-//   std::vector<bool>      col_mask(num_rows);
-//   std::fill(col_data.begin(), col_data.end(), 1);
-//   std::fill(col_mask.begin(), col_mask.end(), 1);
+// min_periods = 0
+TYPED_TEST(RollingTest, ZeroPeriods)
+{
+  cudf::size_type num_rows = 1000;
 
-//   this->run_test_col_agg(col_data, col_mask,
-// 			 window, periods, window,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>());
-// }
+  std::vector<TypeParam> col_data(num_rows);
+  std::vector<bool>      col_mask(num_rows);
+  std::fill(col_data.begin(), col_data.end(), 1);
+  std::fill(col_mask.begin(), col_mask.end(), 1);
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
 
-// // window in one direction is not large enough to collect enough samples, 
-// //   but if using both directions we should get == min_periods,
-// // also tests out of boundary accesses
-// TYPED_TEST(RollingTest, BackwardForwardWindow)
-// {
-//   cudf::size_type num_rows = 1000;
-//   cudf::size_type window = num_rows;
-//   cudf::size_type periods = num_rows;
+  std::vector<cudf::size_type> window({num_rows});
+  cudf::size_type periods = 0;
 
-//   std::vector<TypeParam> col_data(num_rows);
-//   std::vector<bool>      col_mask(num_rows);
-//   std::fill(col_data.begin(), col_data.end(), 1);
-//   std::fill(col_mask.begin(), col_mask.end(), 1);
+  this->run_test_col_agg(input, window, window, periods);
+}
 
-//   this->run_test_col_agg(col_data, col_mask,
-// 			 window, periods, window,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>());
-// }
+// window in one direction is not large enough to collect enough samples, 
+//   but if using both directions we should get == min_periods,
+// also tests out of boundary accesses
+TYPED_TEST(RollingTest, BackwardForwardWindow)
+{
+  cudf::size_type num_rows = 1000;
+
+  std::vector<TypeParam> col_data(num_rows);
+  std::vector<bool>      col_mask(num_rows);
+  std::fill(col_data.begin(), col_data.end(), 1);
+  std::fill(col_mask.begin(), col_mask.end(), 1);
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+
+  std::vector<cudf::size_type> window({num_rows});
+  cudf::size_type periods = num_rows;
+
+  this->run_test_col_agg(input, window, window, periods);
+}
 
 // // random input data, static parameters, no nulls
 // TYPED_TEST(RollingTest, RandomStaticAllValid)
