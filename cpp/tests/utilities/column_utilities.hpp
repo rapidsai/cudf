@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/null_mask.hpp>
