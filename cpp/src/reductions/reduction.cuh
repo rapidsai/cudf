@@ -40,7 +40,7 @@ namespace detail {
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
- template <typename Op, typename InputIterator, typename OutputType>
+template <typename Op, typename InputIterator, typename OutputType>
 void reduce(OutputType* dev_result, InputIterator d_in, cudf::size_type num_items,
     OutputType init, Op op, 
     rmm::mr::device_memory_resource* mr,
@@ -49,18 +49,17 @@ void reduce(OutputType* dev_result, InputIterator d_in, cudf::size_type num_item
     rmm::device_buffer  d_temp_storage;
     size_t  temp_storage_bytes = 0;
 
-    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result, num_items,
-        op, init, stream);
     // Allocate temporary storage
+    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in,
+                              dev_result, num_items, op, init, stream);
     d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
 
     // Run reduction
-    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result, num_items,
-        op, init, stream);
+    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in,
+                              dev_result, num_items, op, init, stream);
 }
 
 } // namespace detail
 } // namespace reduction
 } // namespace experimental
 } // namespace cudf
-

@@ -50,15 +50,6 @@ struct var_std
             (this->value_squared + rhs.value_squared)
         );
     };
-
-    CUDA_HOST_DEVICE_CALLABLE
-    bool operator==(this_t const &rhs) const
-    {
-        return (
-            (this->value == rhs.value) &&
-            (this->value_squared == rhs.value_squared)
-        );
-    };
 };
 
 // transformer for `struct var_std` in order to compute `var`, `std`
