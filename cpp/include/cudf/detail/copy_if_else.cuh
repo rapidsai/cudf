@@ -56,7 +56,7 @@ void copy_if_else_kernel(  column_device_view const lhs,
    // each warp will process one (32 bit) of the validity mask via 
    // __ballot_sync()
    size_type warp_begin = cudf::word_index(begin);
-   size_type warp_end = cudf::word_index(end);
+   size_type warp_end = cudf::word_index(end-1);
 
    // lane id within the current warp
    constexpr size_type leader_lane{0};
