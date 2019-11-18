@@ -90,13 +90,9 @@ table_view table::select(std::vector<cudf::size_type> const& column_indices) con
     return table_view(columns);
 }
 
-// Concatenate elements of `tables_to_concat` into a single table_view
-table_view concat(std::vector<table_view> const& tables_to_concat) {
-  std::vector<column_view> concat_cols;
-  for (auto& view : tables_to_concat) {
-    concat_cols.insert(concat_cols.end(), view.begin(), view.end());
-  }
-  return table_view(concat_cols);
+std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat) {
+  //TODO : Remove
+  return std::make_unique<table>(tables_to_concat.front());
 }
 
 }  // namespace experimental

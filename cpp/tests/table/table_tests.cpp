@@ -113,7 +113,7 @@ TEST_F(TableTest, ConcatTables)
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{col1});
   views.emplace_back(std::vector<column_view>{col2});
-  auto concat_view = cudf::experimental::concat(views);
+  TView concat_view{views};
   cudf::test::expect_columns_equal(concat_view.column(0), views[0].column(0));
   cudf::test::expect_columns_equal(concat_view.column(1), views[1].column(0));
 }
@@ -126,7 +126,7 @@ TEST_F(TableTest, ConcatTablesRowsMismatch)
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{col1});
   views.emplace_back(std::vector<column_view>{col2});
-  EXPECT_THROW (cudf::experimental::concat(views), cudf::logic_error);
+  EXPECT_THROW (TView{views}, cudf::logic_error);
 }
 
 TEST_F(TableTest, ConcatEmptyTables)
@@ -134,6 +134,6 @@ TEST_F(TableTest, ConcatEmptyTables)
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{});
   views.emplace_back(std::vector<column_view>{});
-  auto concat_view = cudf::experimental::concat(views);
+  TView concat_view{views};
   EXPECT_EQ(concat_view.num_columns(), 0);
 }

@@ -181,4 +181,9 @@ column::column(column_view view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr) :
 column( *cudf::experimental::type_dispatcher(view.type(), CreateColumnFromView{view, stream, mr})) {}
 
+std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_concat) {
+  //TODO : Remove
+  return std::make_unique<column>(columns_to_concat.front());
+}
+
 }  // namespace cudf
