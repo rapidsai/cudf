@@ -77,7 +77,7 @@ TEST_F(TableTest, GetTableWithSelectedColumns)
   cudf::test::expect_columns_equal(t.view().column(3), selected_tview.column(1));
 }
 
-TEST_F(TableTest, SelectingMoreThanNumberOfColumns)
+TEST_F(TableTest, SelectingOutOfBounds)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
@@ -88,7 +88,7 @@ TEST_F(TableTest, SelectingMoreThanNumberOfColumns)
 
   Table t(std::move(cols));
 
-  EXPECT_THROW (t.select(std::vector<cudf::size_type>{0,1,2}), cudf::logic_error);
+  EXPECT_THROW (t.select(std::vector<cudf::size_type>{0,1,2}), std::out_of_range);
 }
 
 TEST_F(TableTest, SelectingNoColumns)
