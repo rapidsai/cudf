@@ -17,6 +17,7 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include "column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
