@@ -17,11 +17,11 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/cuda.cuh>
 #include <cudf/utilities/error.hpp>
-#include <utilities/release_assert.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include <string>
 
 /**---------------------------------------------------------------------------*
  * @file type_dispatcher.hpp
@@ -47,6 +47,13 @@ namespace experimental {
 template <typename T>
 inline constexpr type_id type_to_id() {
   return EMPTY;
+};
+
+struct type_to_name {
+  template <typename T>
+  inline std::string operator()() {
+    return "void";
+  }
 };
 
 template <cudf::type_id t>
@@ -79,6 +86,11 @@ using id_to_type = typename id_to_type_impl<Id>::type;
     return Id;                                  \
   }                                             \
   template <>                                   \
+  inline std::string                            \
+  type_to_name::operator()<Type>() {            \
+    return CUDF_STRINGIFY(Type);                \
+  }                                             \
+  template <>                                   \
   struct id_to_type_impl<Id> {                  \
     using type = Type;                          \
   }
@@ -101,6 +113,55 @@ CUDF_TYPE_MAPPING(timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
+
+
+template <typename T>
+struct type_to_scalar_type_impl {
+  using ScalarType = cudf::scalar;
+};
+
+#ifndef MAP_NUMERIC_SCALAR
+#define MAP_NUMERIC_SCALAR(Type)                    \
+template <>                                         \
+struct type_to_scalar_type_impl<Type> {             \
+  using ScalarType = cudf::numeric_scalar<Type>;    \
+};
+#endif
+
+MAP_NUMERIC_SCALAR(int8_t)
+MAP_NUMERIC_SCALAR(int16_t)
+MAP_NUMERIC_SCALAR(int32_t)
+MAP_NUMERIC_SCALAR(int64_t)
+MAP_NUMERIC_SCALAR(float)
+MAP_NUMERIC_SCALAR(double)
+MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
+
+template <>
+struct type_to_scalar_type_impl<cudf::string_view> {
+  using ScalarType = cudf::string_scalar;
+};
+
+#ifndef MAP_TIMESTAMP_SCALAR
+#define MAP_TIMESTAMP_SCALAR(Type)                  \
+template <>                                         \
+struct type_to_scalar_type_impl<Type> {             \
+  using ScalarType = cudf::timestamp_scalar<Type>;  \
+};
+#endif
+
+MAP_TIMESTAMP_SCALAR(timestamp_D)
+MAP_TIMESTAMP_SCALAR(timestamp_s)
+MAP_TIMESTAMP_SCALAR(timestamp_ms)
+MAP_TIMESTAMP_SCALAR(timestamp_us)
+MAP_TIMESTAMP_SCALAR(timestamp_ns)
+
+/**
+ * @brief Maps a C++ type to the scalar type required to hold its value
+ * 
+ * @tparam T The concrete C++ type to map
+ */
+template <typename T>
+using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on

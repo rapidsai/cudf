@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
@@ -47,6 +47,21 @@ size_type state_null_count(mask_state state, size_type size);
  *---------------------------------------------------------------------------**/
 std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
                                           std::size_t padding_boundary = 64);
+
+/**
+ * @brief Returns the number of `bitmask_type` words required to represent the
+ * specified number of bits.
+ *
+ * Unlike `bitmask_allocation_size_bytes`, which returns the number of *bytes*
+ * needed for a bitmask allocation (including padding), this function returns
+ * the *actual* number `bitmask_type` elements necessary to represent
+ * `number_of_bits`. This is useful when one wishes to process all of the bits
+ * in a bitmask and ignore the padding/slack bits.
+ *
+ * @param number_of_bits The number of bits that need to be represented
+ * @return size_type The necessary number of `bitmask_type` elements
+ */
+size_type num_bitmask_words(size_type number_of_bits);
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a `device_buffer` for use as a null value indicator bitmask of
@@ -118,7 +133,7 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start,
  * `[begin_bit, end_bit)` from `mask`.
  *---------------------------------------------------------------------------**/
 rmm::device_buffer copy_bitmask(
-    bitmask_type const * mask, size_type begin_bit, size_type end_bit,
+    bitmask_type const* mask, size_type begin_bit, size_type end_bit,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -141,7 +156,8 @@ rmm::device_buffer copy_bitmask(
  * @return rmm::device_buffer A `device_buffer` containing the bits
  * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
  *---------------------------------------------------------------------------**/
-rmm::device_buffer copy_bitmask(column_view const& view, cudaStream_t stream,
-               rmm::mr::device_memory_resource *mr);
+rmm::device_buffer copy_bitmask(column_view const& view,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

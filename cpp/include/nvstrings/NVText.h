@@ -56,6 +56,23 @@ public:
     static NVStrings* unique_tokens(NVStrings& strs, const char* delimiter=nullptr);
 
     /**
+     * @brief Tokenize all input strings into single-character strings.
+     *
+     * Example
+     * ```
+     * s = ['apple','pear']
+     * r = character_tokenize(s)
+     * r is now ['a','p','p','l','e','p','e','a','r']
+     * ```
+     *
+     * Note these are UTF-8 characters and so each string may be one or more bytes.
+     *
+     * @param strings Strings to tokenize
+     * @return Strings with single characters.
+     */
+    static NVStrings* character_tokenize(NVStrings const& strings);
+
+    /**
      * @brief Computes the number of tokens in each string.
      * @param strs Strings to tokenize.
      * @param delimiter String or character used to identify tokens.

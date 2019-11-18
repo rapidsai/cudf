@@ -24,6 +24,7 @@
 #include "cudf/legacy/groupby.hpp"
 #include "cudf/legacy/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
+#include "cudf/legacy/search.hpp"
 #include "cudf/legacy/stream_compaction.hpp"
 #include "cudf/types.hpp"
 #include "cudf/legacy/join.hpp"
@@ -711,4 +712,34 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadJSON(
   }
   CATCH_STD(env, NULL);
 }
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfBound(JNIEnv *env, jclass,
+    jlong input_jtable, jlong values_jtable, jbooleanArray desc_flags, jboolean are_nulls_smallest,
+    jboolean is_upper_bound) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, values_jtable, "values table is null", 0);
+  gdf_column result;
+  try {
+    cudf::table *input = reinterpret_cast<cudf::table *>(input_jtable);
+    cudf::table *values = reinterpret_cast<cudf::table *>(values_jtable);
+    const cudf::jni::native_jbooleanArray n_desc_flags(env, desc_flags);
+    bool are_nulls_largest = !static_cast<bool>(are_nulls_smallest);
+    std::vector<bool> flags(n_desc_flags.data(), n_desc_flags.data() + n_desc_flags.size());
+
+    std::unique_ptr<gdf_column, decltype(free) *> result(
+      static_cast<gdf_column *>(calloc(1, sizeof(gdf_column))), free);
+    if (result.get() == nullptr) {
+      cudf::jni::throw_java_exception(env, "java/lang/OutOfMemoryError",
+        "Could not allocate native memory");
+    }
+    if (is_upper_bound) {
+      *result.get() = cudf::upper_bound(*input, *values, flags, are_nulls_largest);
+    } else {
+      *result.get() = cudf::lower_bound(*input, *values, flags, are_nulls_largest);
+    }
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"

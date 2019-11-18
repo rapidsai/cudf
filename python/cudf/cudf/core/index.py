@@ -124,7 +124,7 @@ class Index(object):
 
     @property
     def gpu_values(self):
-        return self.as_column().to_gpu_array()
+        return self.as_column().data.mem
 
     def min(self):
         return self.as_column().min()
@@ -831,7 +831,6 @@ class DatetimeIndex(GenericIndex):
                 np.array(values, dtype="<M8[ms]")
             )
         super(DatetimeIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     @property
     def year(self):
@@ -947,7 +946,6 @@ class StringIndex(GenericIndex):
                 nvstrings.to_device(values), dtype="object"
             )
         super(StringIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     def to_pandas(self):
         return pd.Index(self.values, name=self.name, dtype="object")
