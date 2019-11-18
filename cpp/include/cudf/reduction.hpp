@@ -26,7 +26,7 @@ namespace experimental {
  * @brief These enums indicate the supported operations of prefix scan that can
  * be performed on a column
  */
-enum scan_op {
+enum class scan_operators {
   SCAN_SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
   SCAN_MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
   SCAN_MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
@@ -38,7 +38,7 @@ namespace reduction {
  * @brief These enums indicate the supported reduction operations that can be
  * performed on a column
  */
-enum operators {
+enum class operators {
   SUM = 0,        ///< Computes the sum of all values in the column
   MIN,            ///< Computes the minimum of all values in the column
   MAX,            ///< Computes the maximum of all values in the column
@@ -101,7 +101,7 @@ std::unique_ptr<scalar> reduce(
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> scan(
-    const column_view& input, scan_op op, bool inclusive,
+    const column_view& input, scan_operators op, bool inclusive,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental

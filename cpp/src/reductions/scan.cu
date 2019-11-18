@@ -115,7 +115,7 @@ struct PrefixSumDispatcher {
 };
 
 std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive,
+                             scan_operators op, bool inclusive,
                              cudaStream_t stream=0,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
@@ -129,31 +129,31 @@ std::unique_ptr<column> scan(const column_view& input,
   mutable_column_view output = output_column->mutable_view();
 
   switch (op) {
-    case SCAN_SUM:
+    case scan_operators::SCAN_SUM:
         cudf::experimental::type_dispatcher(input.type(),
             PrefixSumDispatcher<cudf::DeviceSum>(), input, output, inclusive, stream, mr);
         break;
-    case SCAN_MIN:
+    case scan_operators::SCAN_MIN:
         cudf::experimental::type_dispatcher(input.type(),
             PrefixSumDispatcher<cudf::DeviceMin>(), input, output, inclusive, stream, mr);
         break;
-    case SCAN_MAX:
+    case scan_operators::SCAN_MAX:
         cudf::experimental::type_dispatcher(input.type(),
             PrefixSumDispatcher<cudf::DeviceMax>(), input, output, inclusive, stream, mr);
         break;
-    case SCAN_PRODUCT:
+    case scan_operators::SCAN_PRODUCT:
         cudf::experimental::type_dispatcher(input.type(),
             PrefixSumDispatcher<cudf::DeviceProduct>(), input, output, inclusive, stream, mr);
         break;
     default:
-        CUDF_FAIL("The input enum `scan_op` is out of the range");
+        CUDF_FAIL("The input enum `scan::operators` is out of the range");
     }
   return output_column;
 }
 } // namespace detail
 
 std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive,
+                             scan_operators op, bool inclusive,
                              rmm::mr::device_memory_resource* mr)
 {
   return detail::scan(input, op, inclusive, 0, mr);

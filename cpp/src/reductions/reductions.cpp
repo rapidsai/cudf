@@ -47,36 +47,36 @@ std::unique_ptr<scalar> reduce(
   if (col.size() <= col.null_count()) return result;
 
   switch (op) {
-    case reduction::SUM:
+    case reduction::operators::SUM:
       result = reduction::sum(col, output_dtype, stream, mr);
       break;
-    case reduction::MIN:
+    case reduction::operators::MIN:
       result = reduction::min(col, output_dtype, stream, mr);
       break;
-    case reduction::MAX:
+    case reduction::operators::MAX:
       result = reduction::max(col, output_dtype, stream, mr);
       break;
-    case reduction::ANY:
+    case reduction::operators::ANY:
       result = reduction::any(col, output_dtype, stream, mr);
       break;
-    case reduction::ALL:
+    case reduction::operators::ALL:
       result = reduction::all(col, output_dtype, stream, mr);
       break;
-    case reduction::PRODUCT:
+    case reduction::operators::PRODUCT:
       result = reduction::product(col, output_dtype, stream, mr);
       break;
-    case reduction::SUMOFSQUARES:
+    case reduction::operators::SUMOFSQUARES:
       result =
           reduction::sum_of_squares(col, output_dtype, stream, mr);
       break;
 
-    case reduction::MEAN:
+    case reduction::operators::MEAN:
       result = reduction::mean(col, output_dtype, stream, mr);
       break;
-    case reduction::VAR:
+    case reduction::operators::VAR:
       result = reduction::variance(col, output_dtype, ddof, stream, mr);
       break;
-    case reduction::STD:
+    case reduction::operators::STD:
       result = reduction::standard_deviation(col, output_dtype, ddof, stream, mr);
       break;
     default:
