@@ -398,7 +398,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                index = as_index(self.index.as_column()[mask])
+                index = self.index.take(mask)
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
