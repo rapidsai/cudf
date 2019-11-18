@@ -17,18 +17,15 @@
 #include <iostream>
 #include <vector>
 
-#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/device_vector.h>
-
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 template <typename T>
 std::vector<T> convert_values(std::vector<int> const & int_values)
@@ -65,7 +62,7 @@ std::vector<T> replace_nulls(
 
 // This is the main test feature
 template <typename T>
-struct ReductionTest : public GdfTest
+struct ReductionTest : public cudf::test::BaseFixture
 {
     // Sum/Prod/SumOfSquare never support non arithmetics
     static constexpr bool ret_non_arithmetic =
@@ -434,7 +431,7 @@ TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
 
 // ----------------------------------------------------------------------------
 
-struct ReductionDtypeTest : public GdfTest
+struct ReductionDtypeTest : public cudf::test::BaseFixture
 {
     template <typename T_in, typename T_out>
     void reduction_test(std::vector<int> & int_values,
@@ -565,7 +562,7 @@ TEST_F(ReductionDtypeTest, different_precision)
          cudf::experimental::reduction::SUM, cudf::data_type(cudf::INT64));
 }
 
-struct ReductionErrorTest : public GdfTest{};
+struct ReductionErrorTest : public cudf::test::BaseFixture {};
 
 // test case for empty input cases
 TEST_F(ReductionErrorTest, empty_column)

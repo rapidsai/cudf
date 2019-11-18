@@ -21,25 +21,22 @@
 #include <iterator>
 #include <type_traits>
 
-#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/column_utilities.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
 
 #include <thrust/device_vector.h>
 
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/type_lists.hpp>
-#include <tests/utilities/column_utilities.hpp>
-
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/scalar_wrapper.cuh>
 using scan_op = cudf::experimental::scan_op;
 using cudf::column_view;
 
 // This is the main test feature
 template <typename T>
-struct ScanTest : public GdfTest
+struct ScanTest : public cudf::test::BaseFixture
 {
     void scan_test(
         cudf::test::fixed_width_column_wrapper<T> const col_in,
