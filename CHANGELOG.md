@@ -127,7 +127,7 @@
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
-- PR #xxxx Define and implement new quantiles APIs
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 
