@@ -160,4 +160,28 @@ rmm::device_buffer copy_bitmask(column_view const& view,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**---------------------------------------------------------------------------*
+ * @brief Copies `views[i]`'s bitmask from the bits
+ * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
+ * views[i] in views into a `device_buffer`
+ *
+ * Returns empty `device_buffer` if the column is not nullable
+ *
+ * @throws `cudf::logic_error` if `begin_bit > end_bit`
+ * @throws `cudf::logic_error` if `begin_bit < 0`
+ *
+ * @param views Vectors of column views whose bitmask needs to be copied
+ * @param begin_bit Index of the first bit to be copied (inclusive)
+ * @param end_bit Index of the last bit to be copied (exclusive)
+ * @param stream Optional, stream on which all memory allocations and copies
+ * will be performed
+ * @param mr Optional, the memory resource that will be used for allocating
+ * the device memory for the new device_buffer
+ * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
+ * the column views in the views vector
+ *---------------------------------------------------------------------------**/
+rmm::device_buffer copy_bitmask(std::vector<column_view> const &views,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace cudf
