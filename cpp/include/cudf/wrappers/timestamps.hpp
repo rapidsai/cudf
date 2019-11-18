@@ -39,7 +39,6 @@ struct timestamp : time_point<Duration> {
   constexpr timestamp(Duration d) : time_point<Duration>(d){};
   constexpr timestamp(typename Duration::rep r)
       : time_point<Duration>(Duration(r)){};
-
   /**
    * @brief Constructs a new timestamp by copying the contents of another
    * `time_point` and converting its duration value if necessary.
