@@ -284,8 +284,7 @@ struct replace_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0) {
     CUDF_FAIL("Non fixed-width types are not supported.");
-  }
-  ;
+  };
 };
 } //end anonymous namespace
 
