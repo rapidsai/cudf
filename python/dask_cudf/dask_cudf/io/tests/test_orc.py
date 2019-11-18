@@ -45,17 +45,17 @@ def test_read_orc_cols(engine, columns):
     dd.assert_eq(df1, df2, check_index=False)
 
 
+@pytest.mark.parametrize("compute", [True, False])
 @pytest.mark.parametrize("compression", [None, "snappy"])
 @pytest.mark.parametrize(
     "dtypes",
     [
-        {"index": int, "c": str, "a": int},
         {"index": int, "c": int, "a": str},
         {"index": int, "c": int, "a": str, "b": float},
         {"index": int, "c": str, "a": object},
     ],
 )
-def test_to_orc(tmpdir, dtypes, compression):
+def test_to_orc(tmpdir, dtypes, compression, compute):
 
     # Create cudf and dask_cudf dataframes
     df = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
@@ -69,9 +69,12 @@ def test_to_orc(tmpdir, dtypes, compression):
 
     # Write dask_cudf dataframe as multiple files
     # (preserve index by `write_index=True`)
-    ddf.to_orc(
-        str(tmpdir), write_index=True, compression=compression, compute=True
+    to = ddf.to_orc(
+        str(tmpdir), write_index=True, compression=compression, compute=compute
     )
+
+    if not compute:
+        to.compute()
 
     # Read back cudf dataframe
     df_read = cudf.read_orc(fname).set_index("index")

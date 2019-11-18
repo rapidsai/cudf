@@ -83,10 +83,10 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
     return dd.core.new_dd_object(dsk, name, meta, divisions)
 
 
-def _write_partition(df, path, fs, filename, compression=None):
-    return cudf.io.to_orc(
-        df, fs.sep.join([path, filename]), compression=compression
-    )
+def write_orc_partition(df, path, fs, filename, compression=None):
+    full_path = fs.sep.join([path, filename])
+    cudf.io.to_orc(df, full_path, compression=compression)
+    return full_path
 
 
 def to_orc(
@@ -117,6 +117,7 @@ def to_orc(
     """
 
     from dask import delayed
+    from dask import compute as dask_compute
 
     # TODO: Use upstream dask implementation once available
     #       (see: Dask Issue#5596)
@@ -141,15 +142,13 @@ def to_orc(
     filenames = ["part.%i.orc" % i for i in range(df.npartitions)]
 
     # write parts
-    dwrite = delayed(_write_partition)
+    dwrite = delayed(write_orc_partition)
     parts = [
         dwrite(d, path, fs, filename, compression=compression)
         for d, filename in zip(df.to_delayed(), filenames)
     ]
 
-    # single task to complete
-    out = delayed(lambda x: None)(parts)
-
     if compute:
-        out = out.compute()
-    return out
+        return dask_compute(*parts)
+
+    return delayed(lambda x: None)(parts)
