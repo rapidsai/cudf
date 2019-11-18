@@ -245,23 +245,23 @@ TYPED_TEST(RollingTest, SimpleStatic)
   std::vector<size_type> window{2};
 
   // static sizes
-  this->run_test_col_agg(input, window, window, 0);
+  this->run_test_col_agg(input, window, window, 1);
 }
 
-// // simple example from Pandas docs:
-// TYPED_TEST(RollingTest, SimpleDynamic)
-// {
-//   // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
-//   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
-//   const std::vector<bool>      col_mask = {1, 1, 1, 0, 1};
+// simple example from Pandas docs:
+TYPED_TEST(RollingTest, SimpleDynamic)
+{
+  // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
+  const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
+  const std::vector<bool>      col_mask = {1, 1, 1, 0, 1};
 
-//   // dynamic sizes
-//   this->run_test_col_agg(col_data, col_mask,
-// 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 4, 2 }),
-// 			 std::vector<cudf::size_type>({ 2, 1, 2, 1, 2 }),
-// 			 std::vector<cudf::size_type>({ 1, 0, 1, 0, 1 }));
-// }
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> window({ 1, 2, 3, 4, 2 });
+  std::vector<cudf::size_type> forward_window({ 2, 1, 2, 1, 2 });
+
+  // dynamic sizes
+  this->run_test_col_agg(input, window, forward_window, 1);
+}
 
 // // this is a special test to check the volatile count variable issue (see rolling.cu for detail)
 // TYPED_TEST(RollingTest, VolatileCount)
