@@ -56,7 +56,7 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
   *
   * @returns Copy of `input` with null values replaced by `replacement`.
   */
-std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
+std::unique_ptr<column> replace_nulls(column_view const& input,
                                             cudf::scalar const* replacement,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream = 0);
