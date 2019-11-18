@@ -40,33 +40,15 @@ struct valid_table_filter
     return (count >= keep_threshold);
   }
 
-  static auto create(cudf::table_device_view const& keys,
-                     cudf::size_type keep_threshold,
-                     cudaStream_t stream = 0)
-  {
-    auto deleter = [stream](valid_table_filter* f) { f->destroy(); };
-    std::unique_ptr<valid_table_filter, decltype(deleter)> p {
-      new valid_table_filter(keys, keys.num_columns(), keep_threshold),
-      deleter
-    };
-    
-    return p;
-  }
-
-  __host__ void destroy() {
-    delete this;
-  }
-
   valid_table_filter() = delete;
   ~valid_table_filter() = default;
 
-protected:
   valid_table_filter(cudf::table_device_view const& keys_device_view,
-                     cudf::size_type num_columns,
                      cudf::size_type keep_threshold)
   : keep_threshold(keep_threshold),
-    num_columns(num_columns),
     keys_device_view(keys_device_view) {}
+
+protected:
 
   cudf::size_type keep_threshold;
   cudf::size_type num_columns;
@@ -97,9 +79,8 @@ std::unique_ptr<experimental::table>
                "Column size mismatch");
 
   auto keys_device_view = cudf::table_device_view::create(keys, stream);
-  auto filter = valid_table_filter::create(*keys_device_view, keep_threshold);
 
-  return cudf::experimental::detail::copy_if(input, *filter.get(), mr, stream);
+  return cudf::experimental::detail::copy_if(input, valid_table_filter{*keys_device_view, keep_threshold}, mr, stream);
 }
 
 } //namespace detail
