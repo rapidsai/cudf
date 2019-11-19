@@ -22,6 +22,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
+
 struct ColumnUtilitiesTest
     : public cudf::test::BaseFixture,
       cudf::test::UniformRandomGenerator<cudf::size_type> {
@@ -35,7 +36,11 @@ struct ColumnUtilitiesTest
   }
 };
 
+template <typename T>
+struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {};
+
 TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   auto sequence = cudf::test::make_counting_transform_iterator(
@@ -97,4 +102,59 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
   auto host_data = cudf::test::to_host<std::string>(strings);
   EXPECT_TRUE( host_data.first.empty() );
+}
+
+TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
+  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+
+  std::ostringstream tmp;
+
+  int index = 0;
+  for (auto x : std_col) {
+    tmp << ((index == 0) ? "" : delimiter);
+    tmp << std::to_string(x);
+    ++index;
+  }
+
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
+}
+
+TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
+                                                              {1, 0, 1, 0, 1} };
+  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+
+  std::ostringstream tmp;
+  tmp << std::to_string(std_col[0])
+      << delimiter << "@"
+      << delimiter << std::to_string(std_col[2])
+      << delimiter << "@"
+      << delimiter << std::to_string(std_col[4]);
+  
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
+}
+
+TEST_F(ColumnUtilitiesStringsTest, StringsToString) {
+  const char* delimiter = ",";
+
+  std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+  cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+
+  std::ostringstream tmp;
+  tmp << h_strings[0]
+      << delimiter << h_strings[1]
+      << delimiter << "@"
+      << delimiter << h_strings[3]
+      << delimiter << h_strings[4]
+      << delimiter << h_strings[5]
+      << delimiter << h_strings[6];
+  
+  EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }

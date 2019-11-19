@@ -17,6 +17,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    min_numeric_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
@@ -306,11 +307,21 @@ class NumericalColumn(column.TypedColumnBase):
         """
         Return col with *to_replace* replaced with *value*.
         """
-        to_replace_col = column.as_column(to_replace)
-        replacement_dtype = self.dtype if all_nan else None
-        replacement_col = column.as_column(
-            replacement, dtype=replacement_dtype
+        to_replace_col = _normalize_find_and_replace_input(
+            self.dtype, to_replace
         )
+        if all_nan:
+            replacement_col = column.as_column(replacement, dtype=self.dtype)
+        else:
+            replacement_col = _normalize_find_and_replace_input(
+                self.dtype, replacement
+            )
+        if len(replacement_col) == 1 and len(to_replace_col) > 1:
+            replacement_col = column.as_column(
+                utils.scalar_broadcast_to(
+                    replacement[0], (len(to_replace_col),), self.dtype
+                )
+            )
         replaced = self.copy()
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
@@ -477,6 +488,42 @@ def _safe_cast_to_int(col, dtype):
                 col.dtype.type.__name__, np.dtype(dtype).type.__name__
             )
         )
+
+
+def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
+    normalized_column = column.as_column(col_to_normalize)
+    col_to_normalize_dtype = normalized_column.dtype
+    if isinstance(col_to_normalize, list):
+        col_to_normalize_dtype = min_numeric_column_type(normalized_column)
+        # Scalar case
+        if len(col_to_normalize) == 1:
+            col_to_normalize_casted = input_column_dtype.type(
+                col_to_normalize[0]
+            )
+            if not np.isnan(col_to_normalize_casted) and (
+                col_to_normalize_casted != col_to_normalize[0]
+            ):
+                raise TypeError(
+                    f"Cannot safely cast non-equivalent "
+                    f"{col_to_normalize[0]} "
+                    f"to {input_column_dtype.name}"
+                )
+            else:
+                col_to_normalize_dtype = input_column_dtype
+    elif hasattr(col_to_normalize, "dtype"):
+        col_to_normalize_dtype = col_to_normalize.dtype
+    else:
+        raise TypeError(f"Type {type(col_to_normalize)} not supported")
+
+    if (
+        col_to_normalize_dtype.kind == "f" and input_column_dtype.kind == "i"
+    ) or (col_to_normalize_dtype > input_column_dtype):
+        raise TypeError(
+            f"Potentially unsafe cast for non-equivalent "
+            f"{col_to_normalize_dtype.name} "
+            f"to {input_column_dtype.name}"
+        )
+    return normalized_column.astype(input_column_dtype)
 
 
 def column_hash_values(column0, *other_columns, initial_hash_values=None):
