@@ -55,36 +55,32 @@ template<typename Exec,
                              BinaryPredicate comp,
                              const duplicate_keep_option keep)
 {
-  size_type last_index = thrust::distance(first,last)-1;;
-  if (keep == duplicate_keep_option::KEEP_FIRST) {
-      return thrust::copy_if(exec,
-              first,
-              last,
-              thrust::counting_iterator<size_type>(0),
-              output, 
-              [first, comp, last_index] __device__ (size_type i) {
-              return (i == 0 || !comp(first[i], first[i-1]));
-              }); 
-  } else if (keep == duplicate_keep_option::KEEP_LAST) {
-      return thrust::copy_if(exec,
-              first,
-              last,
-              thrust::counting_iterator<size_type>(0),
-              output, 
-              [first, comp, last_index] __device__ (size_type i) {
-              return (i == last_index || !comp(first[i], first[i+1]));
-              });
+  size_type last_index = thrust::distance(first,last)-1;
+  if (keep == duplicate_keep_option::KEEP_NONE) {
+    return thrust::copy_if(exec,
+               first,
+               last,
+               thrust::counting_iterator<size_type>(0),
+               output,
+               [first, comp, last_index] __device__ (size_type i) {
+               return (i == 0 || !comp(first[i], first[i-1]))
+                   && (i == last_index || !comp(first[i], first[i+1]));
+               });
   } else {
-      return thrust::copy_if(exec,
-              first,
-              last,
-              thrust::counting_iterator<size_type>(0),
-              output, 
-              [first, comp, last_index] __device__ (size_type i) {
-              return (i == 0 || !comp(first[i], first[i-1])) 
-                  && (i == last_index || !comp(first[i], first[i+1]));
-              });
-  }
+    size_type offset = 1;
+    if (keep == duplicate_keep_option::KEEP_FIRST) {
+      last_index = 0;
+      offset = -1;
+    }
+    return thrust::copy_if(exec,
+               first,
+               last,
+               thrust::counting_iterator<size_type>(0),
+               output,
+               [first, comp, last_index, offset] __device__ (size_type i) {
+                 return (i == last_index || !comp(first[i], first[i+offset]));
+               });
+   }
 }
 
 /**
@@ -117,8 +113,8 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
-                                     stream,
-                                     rmm::mr::get_default_resource());
+                                     rmm::mr::get_default_resource(),
+                                     stream);
 
 
   // extract unique indices 
@@ -162,8 +158,8 @@ cudf::size_type unique_count(table_view const& keys,
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
-                                     stream,
-                                     rmm::mr::get_default_resource());
+                                     rmm::mr::get_default_resource(),
+                                     stream);
   
   // count unique elements
   auto sorted_row_index = sorted_indices->view().data<cudf::size_type>();

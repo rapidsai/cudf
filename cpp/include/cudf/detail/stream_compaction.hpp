@@ -27,11 +27,11 @@ namespace detail {
 /**
  * @brief Filters a table to remove null elements.
  *
- * Filters the rows of the `input` considering specified columns from
+ * Filters the rows of the `input` considering specified columns indicated in
  * `keys` for validity / null values.
  *
  * Given an input table_view, row `i` from the input columns is copied to
- * the output if the same row `i` of @p keys has at leaast @p keep_threshold
+ * the output if the same row `i` of @p keys has at least @p keep_threshold
  * non-null fields.
  *
  * This operation is stable: the input order is preserved in the output.
@@ -41,7 +41,7 @@ namespace detail {
  * @example input   {col1: {1, 2,    3,    null},
  *                   col2: {4, 5,    null, null},
  *                   col3: {7, null, null, null}}
- *          keys = input
+ *          keys = {0, 1, 2} // All columns
  *          keep_threshold = 2
  *
  *          output {col1: {1, 2}
@@ -51,11 +51,8 @@ namespace detail {
  * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
  * there is no error, and an empty `table` is returned
  *
- * @throws cudf::logic_error if @p keys is non-empty and keys.num_rows() is less
- * than input.num_rows()
- *
  * @param[in] input The input `table_view` to filter.
- * @param[in] keys The `table_view` to filter `input`.
+ * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
@@ -64,7 +61,7 @@ namespace detail {
  */
 std::unique_ptr<experimental::table>
     drop_nulls(table_view const& input,
-               table_view const& keys,
+               std::vector<size_type> const& keys,
                cudf::size_type keep_threshold,
                rmm::mr::device_memory_resource *mr =
                    rmm::mr::get_default_resource(),

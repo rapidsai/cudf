@@ -66,19 +66,19 @@ namespace detail {
  */
 std::unique_ptr<experimental::table>
   drop_nulls(table_view const& input,
-             table_view const& keys,
+             std::vector<size_type> const& keys,
              cudf::size_type keep_threshold,
              rmm::mr::device_memory_resource *mr,
              cudaStream_t stream) {
-  if (keys.num_columns() == 0 || keys.num_rows() == 0 ||
-      not cudf::has_nulls(keys)) {
+
+  auto keys_view = input.select(keys);
+  if (keys_view.num_columns() == 0 ||
+      keys_view.num_rows() == 0 ||
+      not cudf::has_nulls(keys_view)) {
       return std::make_unique<table>(input, stream, mr);
   }
 
-  CUDF_EXPECTS(keys.num_rows() <= input.num_rows(),
-               "Column size mismatch");
-
-  auto keys_device_view = cudf::table_device_view::create(keys, stream);
+  auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
 
   return cudf::experimental::detail::copy_if(input, valid_table_filter{*keys_device_view, keep_threshold}, mr, stream);
 }
@@ -90,7 +90,7 @@ std::unique_ptr<experimental::table>
  */
 std::unique_ptr<experimental::table>
   drop_nulls(table_view const& input,
-             table_view const& keys,
+             std::vector<size_type> const& keys,
              cudf::size_type keep_threshold,
              rmm::mr::device_memory_resource *mr) {
     return cudf::experimental::detail::drop_nulls(input, keys, keep_threshold, mr);
@@ -100,10 +100,10 @@ std::unique_ptr<experimental::table>
  */
 std::unique_ptr<experimental::table>
   drop_nulls(table_view const &input,
-             table_view const &keys,
+             std::vector<size_type> const& keys,
              rmm::mr::device_memory_resource *mr)
 {
-    return cudf::experimental::detail::drop_nulls(input, keys, keys.num_columns(), mr);
+    return cudf::experimental::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 
 } //namespace experimental
