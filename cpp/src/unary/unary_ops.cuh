@@ -18,7 +18,6 @@
 #define UNARY_OPS_H
 
 #include <utilities/cudf_utils.h>
-#include <cudf/utilities/error.hpp>
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
@@ -31,17 +30,12 @@ namespace unary {
 template<typename T, typename Tout, typename F>
 struct Launcher {
     static
-    gdf_error launch(cudf::column_view const& input,
-                     cudf::mutable_column_view& output,
-                     cudaStream_t stream = 0) {
+    void launch(cudf::column_view const& input,
+                cudf::mutable_column_view& output,
+                cudaStream_t stream = 0) {
 
-        // Return immediately for empty inputs
-        if (input.size() == 0)
-            return GDF_SUCCESS;
-
-        // check for size of the columns
-        if (input.size() != output.size())
-            return GDF_COLUMN_SIZE_MISMATCH;
+        CUDF_EXPECTS(input.size() > 0,              "Launcher requires input size to be non-zero.");
+        CUDF_EXPECTS(input.size() == output.size(), "Launcher requires input and output size to be equal.");
 
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           input.begin<T>(),
@@ -50,7 +44,6 @@ struct Launcher {
                           F{});
 
         CUDA_CHECK_LAST();
-        return GDF_SUCCESS;
     }
 };
 
