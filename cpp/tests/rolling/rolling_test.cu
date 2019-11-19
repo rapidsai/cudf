@@ -41,9 +41,9 @@ class RollingTest : public cudf::test::BaseFixture {
 protected:
   // input as column_wrapper
   void run_test_col(fixed_width_column_wrapper<T> const& input,
-                    const std::vector<cudf::size_type> &window,
-                    const std::vector<cudf::size_type> &forward_window,
-                    cudf::size_type min_periods,
+                    const std::vector<size_type> &window,
+                    const std::vector<size_type> &forward_window,
+                    size_type min_periods,
                     rolling_operator op)
   {
     std::unique_ptr<cudf::column> output;
@@ -71,9 +71,9 @@ protected:
 
   // helper function to test all aggregators
   void run_test_col_agg(fixed_width_column_wrapper<T> const& input,
-                        const std::vector<cudf::size_type> &window,
-                        const std::vector<cudf::size_type> &forward_window,
-                        cudf::size_type min_periods)
+                        const std::vector<size_type> &window,
+                        const std::vector<size_type> &forward_window,
+                        size_type min_periods)
   {
     // test all supported aggregators
     run_test_col(input, window, forward_window, min_periods, rolling_operator::SUM);
@@ -256,8 +256,8 @@ TYPED_TEST(RollingTest, SimpleDynamic)
   const std::vector<bool>      col_mask = {1, 1, 1, 0, 1};
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> window({ 1, 2, 3, 4, 2 });
-  std::vector<cudf::size_type> forward_window({ 2, 1, 2, 1, 2 });
+  std::vector<size_type> window({ 1, 2, 3, 4, 2 });
+  std::vector<size_type> forward_window({ 2, 1, 2, 1, 2 });
 
   // dynamic sizes
   this->run_test_col_agg(input, window, forward_window, 1);
@@ -270,8 +270,8 @@ TYPED_TEST(RollingTest, VolatileCount)
   const std::vector<bool>      col_mask = { 1, 1, 0, 0, 1, 0 };
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> window({ 5, 9, 4, 8, 3, 3 });
-  std::vector<cudf::size_type> forward_window({ 1, 1, 9, 2, 8, 9 });
+  std::vector<size_type> window({ 5, 9, 4, 8, 3, 3 });
+  std::vector<size_type> forward_window({ 1, 1, 9, 2, 8, 9 });
   
   // dynamic sizes
   this->run_test_col_agg(input, window, forward_window, 1);
@@ -280,22 +280,23 @@ TYPED_TEST(RollingTest, VolatileCount)
 // all rows are invalid
 TYPED_TEST(RollingTest, AllInvalid)
 {
-  cudf::size_type num_rows = 1000;
+  size_type num_rows = 1000;
 
   std::vector<TypeParam> col_data(num_rows);
   std::vector<bool>      col_mask(num_rows);
   std::fill(col_mask.begin(), col_mask.end(), 0);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> window({100});
+  std::vector<size_type> window({100});
+  size_type periods = 100;
 
-  this->run_test_col_agg(input, window, window, window[0]);
+  this->run_test_col_agg(input, window, window, periods);
 }
 
 // window = forward_window = 0
 TYPED_TEST(RollingTest, ZeroWindow)
 {
-  cudf::size_type num_rows = 1000;
+  size_type num_rows = 1000;
 
   std::vector<TypeParam> col_data(num_rows);
   std::vector<bool>      col_mask(num_rows);
@@ -303,8 +304,8 @@ TYPED_TEST(RollingTest, ZeroWindow)
   std::fill(col_mask.begin(), col_mask.end(), 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> window({0});
-  cudf::size_type periods = num_rows;
+  std::vector<size_type> window({0});
+  size_type periods = num_rows;
 
   this->run_test_col_agg(input, window, window, periods);
 }
@@ -312,7 +313,7 @@ TYPED_TEST(RollingTest, ZeroWindow)
 // min_periods = 0
 TYPED_TEST(RollingTest, ZeroPeriods)
 {
-  cudf::size_type num_rows = 1000;
+  size_type num_rows = 1000;
 
   std::vector<TypeParam> col_data(num_rows);
   std::vector<bool>      col_mask(num_rows);
@@ -320,8 +321,8 @@ TYPED_TEST(RollingTest, ZeroPeriods)
   std::fill(col_mask.begin(), col_mask.end(), 1);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
 
-  std::vector<cudf::size_type> window({num_rows});
-  cudf::size_type periods = 0;
+  std::vector<size_type> window({num_rows});
+  size_type periods = 0;
 
   this->run_test_col_agg(input, window, window, periods);
 }
@@ -331,7 +332,7 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 // also tests out of boundary accesses
 TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
-  cudf::size_type num_rows = 1000;
+  size_type num_rows = 1000;
 
   std::vector<TypeParam> col_data(num_rows);
   std::vector<bool>      col_mask(num_rows);
@@ -339,74 +340,70 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
   std::fill(col_mask.begin(), col_mask.end(), 1);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
 
-  std::vector<cudf::size_type> window({num_rows});
-  cudf::size_type periods = num_rows;
+  std::vector<size_type> window({num_rows});
+  size_type periods = num_rows;
 
   this->run_test_col_agg(input, window, window, periods);
 }
 
-// // random input data, static parameters, no nulls
-// TYPED_TEST(RollingTest, RandomStaticAllValid)
-// {
-//   cudf::size_type num_rows = 10000;
-//   cudf::size_type window = 50;
-//   cudf::size_type min_periods = 50;
+// random input data, static parameters, no nulls
+TYPED_TEST(RollingTest, RandomStaticAllValid)
+{
+  size_type num_rows = 10000;
+  
+  // random input
+  std::vector<TypeParam> col_data(num_rows);
+  cudf::test::UniformRandomGenerator<TypeParam> rng;
+  std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
 
-//   // random input
-//   std::mt19937 rng(1);
-//   cudf::test::column_wrapper<TypeParam> input{
-// 	num_rows,
-// 	[&](cudf::size_type row) { return this->random_value(rng); }
-//   };
+  std::vector<size_type> window({50});
+  size_type periods = 50;
 
-//   this->run_test_col_agg(input,
-// 			 window, min_periods, 0,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>());
-// }
+  this->run_test_col_agg(input, window, window, periods);
+}
 
 // // random input data, static parameters, with nulls
 // TYPED_TEST(RollingTest, RandomStaticWithInvalid)
 // {
-//   cudf::size_type num_rows = 10000;
-//   cudf::size_type window = 50;
-//   cudf::size_type min_periods = 25;
+//   size_type num_rows = 10000;
+//   size_type window = 50;
+//   size_type min_periods = 25;
 
 //   // random input with nulls
 //   std::mt19937 rng(1);
 //   cudf::test::column_wrapper<TypeParam> input{
 // 	num_rows,
-// 	[&](cudf::size_type row) { return this->random_value(rng); },
-// 	[&](cudf::size_type row) { return static_cast<bool>(rng() % 2); }
+// 	[&](size_type row) { return this->random_value(rng); },
+// 	[&](size_type row) { return static_cast<bool>(rng() % 2); }
 //   };
 
 //   this->run_test_col_agg(input,
 // 			 window, min_periods, window,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>());
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>());
 // }
 
 // // random input data, dynamic parameters, no nulls
 // TYPED_TEST(RollingTest, RandomDynamicAllValid)
 // {
-//   cudf::size_type num_rows = 50000;
-//   cudf::size_type max_window_size = 50;
+//   size_type num_rows = 50000;
+//   size_type max_window_size = 50;
 
 //   // random input
 //   std::mt19937 rng(1);
 //   cudf::test::column_wrapper<TypeParam> input{
 // 	num_rows,
-// 	[&](cudf::size_type row) { return this->random_value(rng); }
+// 	[&](size_type row) { return this->random_value(rng); }
 //   };
 
 //   // random parameters
 //   auto generator = [&](){ return rng() % max_window_size; };
 
-//   std::vector<cudf::size_type> window(num_rows);
-//   std::vector<cudf::size_type> min_periods(num_rows);
-//   std::vector<cudf::size_type> forward_window(num_rows);
+//   std::vector<size_type> window(num_rows);
+//   std::vector<size_type> min_periods(num_rows);
+//   std::vector<size_type> forward_window(num_rows);
 
 //   std::generate(window.begin(), window.end(), generator);
 //   std::generate(min_periods.begin(), min_periods.end(), generator);
@@ -422,23 +419,23 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // // random input data, dynamic parameters, with nulls
 // TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 // {
-//   cudf::size_type num_rows = 50000;
-//   cudf::size_type max_window_size = 50;
+//   size_type num_rows = 50000;
+//   size_type max_window_size = 50;
 
 //   // random input with nulls
 //   std::mt19937 rng(1);
 //   cudf::test::column_wrapper<TypeParam> input{
 // 	num_rows,
-// 	[&](cudf::size_type row) { return this->random_value(rng); },
-// 	[&](cudf::size_type row) { return static_cast<bool>(rng() % 2); }
+// 	[&](size_type row) { return this->random_value(rng); },
+// 	[&](size_type row) { return static_cast<bool>(rng() % 2); }
 //   };
 
 //   // random parameters
 //   auto generator = [&](){ return rng() % max_window_size; };
 
-//   std::vector<cudf::size_type> window(num_rows);
-//   std::vector<cudf::size_type> min_periods(num_rows);
-//   std::vector<cudf::size_type> forward_window(num_rows);
+//   std::vector<size_type> window(num_rows);
+//   std::vector<size_type> min_periods(num_rows);
+//   std::vector<size_type> forward_window(num_rows);
 
 //   std::generate(window.begin(), window.end(), generator);
 //   std::generate(min_periods.begin(), min_periods.end(), generator);
@@ -454,23 +451,23 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // // mix of static and dynamic parameters
 // TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods)
 // {
-//   cudf::size_type num_rows = 50000;
-//   cudf::size_type max_window_size = 50;
-//   cudf::size_type min_periods = 25;
+//   size_type num_rows = 50000;
+//   size_type max_window_size = 50;
+//   size_type min_periods = 25;
 
 //   // random input with nulls
 //   std::mt19937 rng(1);
 //   cudf::test::column_wrapper<TypeParam> input{
 // 	num_rows,
-// 	[&](cudf::size_type row) { return this->random_value(rng); },
-// 	[&](cudf::size_type row) { return static_cast<bool>(rng() % 2); }
+// 	[&](size_type row) { return this->random_value(rng); },
+// 	[&](size_type row) { return static_cast<bool>(rng() % 2); }
 //   };
 
 //   // random parameters
 //   auto generator = [&](){ return rng() % max_window_size; };
 
-//   std::vector<cudf::size_type> window(num_rows);
-//   std::vector<cudf::size_type> forward_window(num_rows);
+//   std::vector<size_type> window(num_rows);
+//   std::vector<size_type> forward_window(num_rows);
 
 //   std::generate(window.begin(), window.end(), generator);
 //   std::generate(forward_window.begin(), forward_window.end(), generator);
@@ -478,7 +475,7 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 //   this->run_test_col_agg(input,
 // 			 0, min_periods, 0,
 // 			 window,
-// 			 std::vector<cudf::size_type>(),
+// 			 std::vector<size_type>(),
 // 			 forward_window);
 // }
 
@@ -492,19 +489,19 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 -2, 2, 2,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>()), cudf::logic_error);
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>()), cudf::logic_error);
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 2, -2, 2,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>()), cudf::logic_error);
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>()), cudf::logic_error);
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 2, 2, -2,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>()), cudf::logic_error);
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>()), cudf::logic_error);
 // }
 
 // // validity size mismatch
@@ -516,9 +513,9 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 //   // validity mask size mismatch
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 2, 3 }),
-// 			 std::vector<cudf::size_type>({ 2, 1, 2, 1, 4 }),
-// 			 std::vector<cudf::size_type>({ 1, 0, 1, 0, 4 })), cudf::logic_error);
+// 			 std::vector<size_type>({ 1, 2, 3, 2, 3 }),
+// 			 std::vector<size_type>({ 2, 1, 2, 1, 4 }),
+// 			 std::vector<size_type>({ 1, 0, 1, 0, 4 })), cudf::logic_error);
 // }
 
 // // window array size mismatch
@@ -530,30 +527,30 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 //   // this runs ok
 //   this->run_test_col_agg(col_data, col_mask,
 // 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 2, 3 }),
-// 			 std::vector<cudf::size_type>({ 2, 1, 2, 1, 4 }),
-// 			 std::vector<cudf::size_type>({ 1, 0, 1, 0, 4 }));
+// 			 std::vector<size_type>({ 1, 2, 3, 2, 3 }),
+// 			 std::vector<size_type>({ 2, 1, 2, 1, 4 }),
+// 			 std::vector<size_type>({ 1, 0, 1, 0, 4 }));
 
 //   // mismatch for the window array
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 2 }),
-// 			 std::vector<cudf::size_type>({ 2, 1, 2, 1, 4 }),
-// 			 std::vector<cudf::size_type>({ 1, 0, 1, 0, 4 })), cudf::logic_error);
+// 			 std::vector<size_type>({ 1, 2, 3, 2 }),
+// 			 std::vector<size_type>({ 2, 1, 2, 1, 4 }),
+// 			 std::vector<size_type>({ 1, 0, 1, 0, 4 })), cudf::logic_error);
 
 //   // mismatch for the periods array
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 4, 3 }),
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 4 }),
-// 			 std::vector<cudf::size_type>({ 2, 1, 2, 1, 4 })), cudf::logic_error);
+// 			 std::vector<size_type>({ 1, 2, 3, 4, 3 }),
+// 			 std::vector<size_type>({ 1, 2, 3, 4 }),
+// 			 std::vector<size_type>({ 2, 1, 2, 1, 4 })), cudf::logic_error);
 
 //   // mismatch for the forward window array
 //   EXPECT_THROW(this->run_test_col_agg(col_data, col_mask,
 // 			 0, 0, 0,
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 4, 3 }),
-// 			 std::vector<cudf::size_type>({ 1, 2, 3, 4, 6 }),
-// 			 std::vector<cudf::size_type>({ 2, 1, 2, 1 })), cudf::logic_error);
+// 			 std::vector<size_type>({ 1, 2, 3, 4, 3 }),
+// 			 std::vector<size_type>({ 1, 2, 3, 4, 6 }),
+// 			 std::vector<size_type>({ 2, 1, 2, 1 })), cudf::logic_error);
 // }
 
 // // ------------- non-arithmetic types --------------------
@@ -569,26 +566,26 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // // incorrect type/aggregation combo: sum or avg for non-arithmetic types
 // TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic)
 // {
-//   constexpr cudf::size_type size{1000};
+//   constexpr size_type size{1000};
 //   cudf::test::column_wrapper<TypeParam> input{
 // 	size,
-// 	[](cudf::size_type row) { return static_cast<TypeParam>(row); },
-// 	[](cudf::size_type row) { return row % 2; }
+// 	[](size_type row) { return static_cast<TypeParam>(row); },
+// 	[](size_type row) { return row % 2; }
 //   };
 //   EXPECT_THROW(this->run_test_col(
 // 			 input,
 // 			 2, 2, 0,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
 // 			 GDF_SUM),
 // 	       cudf::logic_error);
 //   EXPECT_THROW(this->run_test_col(
 // 			 input,
 // 			 2, 2, 0,
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
-// 			 std::vector<cudf::size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
+// 			 std::vector<size_type>(),
 // 			 GDF_AVG),
 // 	       cudf::logic_error);
 // }
@@ -596,29 +593,29 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // // min/max/count should work for non-arithmetic types
 // TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic)
 // {
-//   constexpr cudf::size_type size{1000};
+//   constexpr size_type size{1000};
 //   cudf::test::column_wrapper<TypeParam> input{
 // 	size,
-// 	[](cudf::size_type row) { return static_cast<TypeParam>(row); },
-// 	[](cudf::size_type row) { return row % 2; }
+// 	[](size_type row) { return static_cast<TypeParam>(row); },
+// 	[](size_type row) { return row % 2; }
 //   };
 //   this->run_test_col(input,
 // 		     2, 2, 0,
-// 		     std::vector<cudf::size_type>(),
-// 		     std::vector<cudf::size_type>(),
-// 		     std::vector<cudf::size_type>(),
+// 		     std::vector<size_type>(),
+// 		     std::vector<size_type>(),
+// 		     std::vector<size_type>(),
 // 		     GDF_MIN);
 //   this->run_test_col(input,
 // 		     2, 2, 0,
-// 		     std::vector<cudf::size_type>(),
-// 		     std::vector<cudf::size_type>(),
-// 		     std::vector<cudf::size_type>(),
+// 		     std::vector<size_type>(),
+// 		     std::vector<size_type>(),
+// 		     std::vector<size_type>(),
 // 		     GDF_MAX);
 //   this->run_test_col(input,
 // 		     2, 2, 0,
-// 		     std::vector<cudf::size_type>(),
-// 		     std::vector<cudf::size_type>(),
-// 		     std::vector<cudf::size_type>(),
+// 		     std::vector<size_type>(),
+// 		     std::vector<size_type>(),
+// 		     std::vector<size_type>(),
 // 		     GDF_COUNT);
 // }
 
@@ -692,11 +689,11 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // }
 // )***";
  
-//   constexpr cudf::size_type size{12};
+//   constexpr size_type size{12};
 //   cudf::test::column_wrapper<int> input{
 //     size,
-//     [](cudf::size_type row) { return static_cast<int>(row); },
-//     [](cudf::size_type row) { return true; }
+//     [](size_type row) { return static_cast<int>(row); },
+//     [](size_type row) { return true; }
 //   };
 
 //   gdf_column output;
@@ -707,8 +704,8 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 
 //   cudf::test::column_wrapper<int64_t> expect{
 //     size,
-//     [](cudf::size_type row) { return static_cast<int>(row*4+2); },
-//     [](cudf::size_type row) { return (row != 0 && row != size-2 && row != size-1); }
+//     [](size_type row) { return static_cast<int>(row*4+2); },
+//     [](size_type row) { return (row != 0 && row != size-2 && row != size-1); }
 //   };
 
 //   EXPECT_TRUE(output_wrapper == expect);
