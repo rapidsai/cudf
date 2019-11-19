@@ -15,7 +15,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
