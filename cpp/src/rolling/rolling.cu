@@ -52,7 +52,8 @@ namespace { // anonymous
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
  */
-template <typename T, typename agg_op, bool average, int block_size, typename WindowIterator>
+template <typename T, typename agg_op, bool average, int block_size, bool has_nulls,
+          typename WindowIterator>
 __launch_bounds__(block_size)
 __global__
 void gpu_rolling(column_device_view input,
@@ -86,7 +87,7 @@ void gpu_rolling(column_device_view input,
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
     for (size_type j = start_index; j < end_index; j++) {
-      if (!input.nullable() || input.is_valid(j)) {
+      if (!has_nulls || input.is_valid(j)) {
         val = op(input.element<T>(j), val);
         count++;
       }
@@ -125,17 +126,23 @@ struct rolling_window_launcher
   {
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
+    // output is always nullable
     std::unique_ptr<column> output =
-        allocate_like(input, cudf::experimental::mask_allocation_policy::RETAIN, mr);
+        allocate_like(input, cudf::experimental::mask_allocation_policy::ALWAYS, mr);
 
     constexpr cudf::size_type block_size = 256;
-    cudf::size_type grid = (input.size() + block_size-1) / block_size;
+    cudf::experimental::detail::grid_1d grid(input.size(), block_size);
 
     auto input_device_view = column_device_view::create(input);
     auto output_device_view = mutable_column_device_view::create(*output);
 
-    gpu_rolling<T, agg_op, average, block_size><<<grid, block_size, 0, stream>>>
-      (*input_device_view, *output_device_view, window_begin, forward_window_begin, min_periods);
+    if (input.has_nulls()) {
+      gpu_rolling<T, agg_op, average, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
+        (*input_device_view, *output_device_view, window_begin, forward_window_begin, min_periods);
+    } else {
+      gpu_rolling<T, agg_op, average, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
+        (*input_device_view, *output_device_view, window_begin, forward_window_begin, min_periods);
+    }
 
     // check the stream for debugging
     CHECK_STREAM(stream);
