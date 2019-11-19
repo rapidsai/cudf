@@ -184,6 +184,7 @@
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
+- PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
 
 
 # cuDF 0.10.0 (16 Oct 2019)
