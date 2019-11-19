@@ -494,6 +494,7 @@ add_library(cudf
             src/strings/combine.cu
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
+            src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_integers.cu
             src/strings/convert/convert_floats.cu
             src/strings/copying/concatenate.cu
