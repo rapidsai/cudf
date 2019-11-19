@@ -650,7 +650,7 @@ TEST_P(ReductionParamTest, std_var)
 
 //-------------------------------------------------------------------
 struct StringReductionTest : public cudf::test::BaseFixture {
-  // Min/Max/Sum
+  // Min/Max
   StringReductionTest() {}
 
   ~StringReductionTest() {}
@@ -694,7 +694,6 @@ TEST_F(StringReductionTest, MinMax)
 
   std::string expected_min_result = *( std::min_element(host_strings.begin(), host_strings.end()) );
   std::string expected_max_result = *( std::max_element(host_strings.begin(), host_strings.end()) );
-  std::string expected_sum_result = std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
 
   // string column with nulls
   cudf::test::strings_column_wrapper col_nulls(host_strings.begin(), host_strings.end(), host_bools.begin());
@@ -707,7 +706,6 @@ TEST_F(StringReductionTest, MinMax)
 
   std::string expected_min_null_result = *( std::min_element(r_strings.begin(), r_strings.end()) );
   std::string expected_max_null_result = *( std::max_element(r_strings.begin(), r_strings.end()) );
-  std::string expected_sum_null_result = std::accumulate(r_strings.begin(), r_strings.end(), std::string(""));
 
   //MIN
   std::cout<<"min: "; this->reduction_test(col, expected_min_result, succeed, reduction_operators::MIN);

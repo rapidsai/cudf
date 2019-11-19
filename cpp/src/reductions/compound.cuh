@@ -59,7 +59,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
   } else {
     CUDF_FAIL("Unexpected type");
   }
-  result->set_valid(false);  // the scalar is not valid for error case
+  result->set_valid(false, stream);  // the scalar is not valid for error case
   cudf::size_type valid_count = col.size() - col.null_count();
 
   using intermediateOp = typename Op::template intermediate<ResultType>;
@@ -96,9 +96,9 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 
   // set scalar is valid
   if (col.null_count() < col.size())
-    result->set_valid(true);
+    result->set_valid(true, stream);
   else 
-    result->set_valid(false);
+    result->set_valid(false, stream);
   return result;
 };
 
