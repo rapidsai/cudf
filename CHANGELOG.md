@@ -168,7 +168,7 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
-- PR #3341 Fix `Series` constructor converting NoneType to "None" 
+- PR #3341 Fix `Series` constructor converting NoneType to "None"
 - PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
@@ -179,7 +179,7 @@
 - PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
-
+- PR #3408 Fix String and Column (De-)Serialization
 
 # cuDF 0.10.0 (16 Oct 2019)
 
