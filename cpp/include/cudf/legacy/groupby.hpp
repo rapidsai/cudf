@@ -19,7 +19,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/quantiles.hpp>
+#include <cudf/legacy/quantiles.hpp>
 
 #include <tuple>
 #include <vector>
