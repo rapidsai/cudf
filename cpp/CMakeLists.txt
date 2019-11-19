@@ -489,6 +489,7 @@ add_library(cudf
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/copying/copying.cu
+            src/strings/copying/copy_range.cu
             src/strings/copying/concatenate.cu
             src/strings/sorting/sorting.cu
             src/strings/substring.cu
