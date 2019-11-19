@@ -20,6 +20,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/column/column_view.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cstring>
 #include <thrust/scan.h>
 
