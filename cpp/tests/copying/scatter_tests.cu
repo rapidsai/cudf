@@ -34,9 +34,12 @@ TEST_F(ScatterUntypedTests, ScatterMapTooLong)
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1, 0, 2, 4, 6});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map,
     target_table, true), cudf::logic_error);
@@ -54,9 +57,12 @@ TEST_F(ScatterUntypedTests, ScatterMapNulls)
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1}, {0, 1, 1, 1});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map,
     target_table, true), cudf::logic_error);
@@ -81,7 +87,8 @@ TEST_F(ScatterUntypedTests, ScatterScalarMapNulls)
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1}, {0, 1, 1, 1});
 
-  auto const target_table = cudf::table_view({target});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const target_table = cudf::table_view({target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true), cudf::logic_error);
@@ -99,9 +106,12 @@ TEST_F(ScatterUntypedTests, ScatterColumnNumberMismatch)
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
   
-  auto const source_table = cudf::table_view({source});
-  auto const target_table = cudf::table_view({target, target});
+  auto const source_table = cudf::table_view({source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map,
     target_table, true), cudf::logic_error);
@@ -126,7 +136,8 @@ TEST_F(ScatterUntypedTests, ScatterScalarColumnNumberMismatch)
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1});
 
-  auto const target_table = cudf::table_view({target, target});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true), cudf::logic_error);
@@ -144,9 +155,12 @@ TEST_F(ScatterUntypedTests, ScatterDataTypeMismatch)
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1});
-  
-  auto const source_table = cudf::table_view({source});
-  auto const target_table = cudf::table_view({target});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+
+  auto const source_table = cudf::table_view({source_view});
+  auto const target_table = cudf::table_view({target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map,
     target_table, true), cudf::logic_error);
@@ -171,7 +185,8 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
   auto const scatter_map = fixed_width_column_wrapper<int32_t>(
     {-3, 3, 1, -1});
 
-  auto const target_table = cudf::table_view({target});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const target_table = cudf::table_view({target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true), cudf::logic_error);
@@ -197,9 +212,12 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterOutOfBounds)
     {-3, 3, 1, 8});
   auto const lower_bound = fixed_width_column_wrapper<TypeParam>(
     {-3, 3, 1, -9});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_table, upper_bound,
     target_table, true), cudf::logic_error);
@@ -228,7 +246,8 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
   auto const lower_bound = fixed_width_column_wrapper<TypeParam>(
     {-3, 3, 1, -9});
 
-  auto const target_table = cudf::table_view({target});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const target_table = cudf::table_view({target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_vector, upper_bound,
     target_table, true), cudf::logic_error);
@@ -250,10 +269,14 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterIndexType)
     {-3, 3, 1, -1});
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 3, 30, 2, 50, 1, 70, 4});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
-  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
+  auto const expected_table = cudf::table_view({expected_view, expected_view});
 
   auto const result = cudf::experimental::scatter(source_table, scatter_map,
     target_table, true);
@@ -282,8 +305,11 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 100, 30, 100, 50, 100, 70, 100});
 
-  auto const target_table = cudf::table_view({target});
-  auto const expected_table = cudf::table_view({expected});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const target_table = cudf::table_view({target_view});
+  auto const expected_table = cudf::table_view({expected_view});
 
   auto const result = cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true);
@@ -312,9 +338,12 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterInvalidIndexType)
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<TypeParam>(
     {-3, 3, 1, -1});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map,
     target_table, true), cudf::logic_error);
@@ -339,7 +368,8 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
   auto const scatter_map = fixed_width_column_wrapper<TypeParam>(
     {-3, 3, 1, -1});
 
-  auto const target_table = cudf::table_view({target});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const target_table = cudf::table_view({target_view});
 
   EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true), cudf::logic_error);
@@ -361,9 +391,12 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
   auto const target = fixed_width_column_wrapper<TypeParam>(
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<int32_t>({});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
 
   auto const result = cudf::experimental::scatter(source_table, scatter_map,
     target_table, true);
@@ -390,7 +423,8 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
     {10, 20, 30, 40, 50, 60, 70, 80});
   auto const scatter_map = fixed_width_column_wrapper<int32_t>({});
 
-  auto const target_table = cudf::table_view({target});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const target_table = cudf::table_view({target_view});
 
   auto const result = cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true);
@@ -412,10 +446,14 @@ TYPED_TEST(ScatterDataTypeTests, ScatterNoNulls)
     {-3, 3, 1, -1});
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 3, 30, 2, 50, 1, 70, 4});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
-  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
+  auto const expected_table = cudf::table_view({expected_view, expected_view});
 
   auto const result = cudf::experimental::scatter(source_table, scatter_map,
     target_table, true);
@@ -436,10 +474,14 @@ TYPED_TEST(ScatterDataTypeTests, ScatterBothNulls)
     {1, 3, -3, -1});
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 2, 30, 4, 50, 6, 70, 8}, {0, 1, 0, 1, 1, 0, 1, 0});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
-  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
+  auto const expected_table = cudf::table_view({expected_view, expected_view});
 
   auto const result = cudf::experimental::scatter(source_table, scatter_map,
     target_table, true);
@@ -460,10 +502,14 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNulls)
     {1, 3, -3, -1});
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 2, 30, 4, 50, 6, 70, 8}, {1, 1, 1, 1, 1, 0, 1, 0});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
-  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
+  auto const expected_table = cudf::table_view({expected_view, expected_view});
 
   auto const result = cudf::experimental::scatter(source_table, scatter_map,
     target_table, true);
@@ -484,10 +530,14 @@ TYPED_TEST(ScatterDataTypeTests, ScatterTargetNulls)
     {1, 3, -3, -1});
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 2, 30, 4, 50, 6, 70, 8}, {0, 1, 0, 1, 1, 1, 1, 1});
-  
-  auto const source_table = cudf::table_view({source, source});
-  auto const target_table = cudf::table_view({target, target});
-  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const source_view = static_cast<cudf::column_view>(source);
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const source_table = cudf::table_view({source_view, source_view});
+  auto const target_table = cudf::table_view({target_view, target_view});
+  auto const expected_table = cudf::table_view({expected_view, expected_view});
 
   auto const result = cudf::experimental::scatter(source_table, scatter_map,
     target_table, true);
@@ -515,8 +565,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 100, 30, 100, 50, 100, 70, 100});
 
-  auto const target_table = cudf::table_view({target});
-  auto const expected_table = cudf::table_view({expected});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const target_table = cudf::table_view({target_view});
+  auto const expected_table = cudf::table_view({expected_view});
 
   auto const result = cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true);
@@ -544,8 +597,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 100, 30, 100, 50, 100, 70, 100}, {0, 1, 0, 1, 1, 1, 1, 1});
 
-  auto const target_table = cudf::table_view({target});
-  auto const expected_table = cudf::table_view({expected});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const target_table = cudf::table_view({target_view});
+  auto const expected_table = cudf::table_view({expected_view});
 
   auto const result = cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true);
@@ -574,8 +630,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 100, 30, 100, 50, 100, 70, 100}, {1, 0, 1, 0, 1, 0, 1, 0});
 
-  auto const target_table = cudf::table_view({target});
-  auto const expected_table = cudf::table_view({expected});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const target_table = cudf::table_view({target_view});
+  auto const expected_table = cudf::table_view({expected_view});
 
   auto const result = cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true);
@@ -604,8 +663,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 100, 30, 100, 50, 100, 70, 100}, {0, 0, 0, 0, 1, 0, 1, 0});
 
-  auto const target_table = cudf::table_view({target});
-  auto const expected_table = cudf::table_view({expected});
+  auto const target_view = static_cast<cudf::column_view>(target);
+  auto const expected_view = static_cast<cudf::column_view>(expected);
+
+  auto const target_table = cudf::table_view({target_view});
+  auto const expected_table = cudf::table_view({expected_view});
 
   auto const result = cudf::experimental::scatter(source_vector, scatter_map,
     target_table, true);
