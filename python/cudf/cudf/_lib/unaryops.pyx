@@ -44,11 +44,18 @@ _UNARY_OP = {
 
 def apply_unary_op(Column incol, op):
     """
-    Call Unary ops.
+    Call Unary op on input column 
     """
     from cudf.core.column import build_column
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
+
+    if op in ("sin", "cos", "tam", "asin", "acos",
+              "atan", "exp", "log"):
+        if not np.issubdtype(incol.dtype.type, np.floating):
+            raise TypeError(
+                f"Operation '{op}' not supported on {incol.dtype.type.__name__}"
+            )
 
     cdef gdf_column c_out_col
 

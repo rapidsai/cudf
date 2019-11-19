@@ -16,6 +16,7 @@ import cudf._lib as libcudf
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
+from cudf.core.table import Table
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, numbautils, utils
 from cudf.utils.docutils import copy_docstring
@@ -29,7 +30,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Series(object):
+class Series(Table):
     """
     Data and null-masks.
 
@@ -129,9 +130,17 @@ class Series(object):
         assert isinstance(data, column.ColumnBase)
         if name is None:
             name = data.name
-        self._column = data
+
+        super().__init__([data], [name])
         self._index = RangeIndex(len(data)) if index is None else index
-        self._name = name
+
+    @property
+    def _column(self):
+        return self._data[self.name]
+
+    @_column.setter
+    def _column(self, value):
+        self._data[self.name] = value
 
     def __contains__(self, item):
         return item in self._index
@@ -213,12 +222,12 @@ class Series(object):
     def name(self):
         """Returns name of the Series.
         """
-        return self._name
+        return next(iter(self._data))
 
     @name.setter
-    def name(self, name):
-        self._name = name
-        # self._column.name = name
+    def name(self, value):
+        col = self._data.pop(self.name)
+        self._data[value] = col
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -612,15 +621,6 @@ class Series(object):
         The output dtype is determined by the input operands.
         """
         return self._binaryop(other, fn, reflect=True)
-
-    def _unaryop(self, fn):
-        """
-        Internal util to call a unary operator *fn* on operands *self*.
-        Return the output Series.  The output dtype is determined by the input
-        operand.
-        """
-        outcol = self._column.unary_operator(fn)
-        return self._copy_construct(data=outcol)
 
     def _filled_binaryop(self, other, fn, fill_value=None, reflect=False):
         def func(lhs, rhs):
@@ -2140,44 +2140,6 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop("floor")
-
-    # Math
-    def _float_math(self, op):
-        if np.issubdtype(self.dtype.type, np.floating):
-            return self._unaryop(op)
-        else:
-            raise TypeError(
-                f"Operation '{op}' not supported on {self.dtype.type.__name__}"
-            )
-
-    def sin(self):
-        return self._float_math("sin")
-
-    def cos(self):
-        return self._float_math("cos")
-
-    def tan(self):
-        return self._float_math("tan")
-
-    def asin(self):
-        return self._float_math("asin")
-
-    def acos(self):
-        return self._float_math("acos")
-
-    def atan(self):
-        return self._float_math("atan")
-
-    def exp(self):
-        return self._float_math("exp")
-
-    def log(self):
-        return self._float_math("log")
-
-    def sqrt(self):
-        return self._unaryop("sqrt")
-
-    # Misc
 
     def hash_values(self):
         """Compute the hash of values in this column.

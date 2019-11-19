@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import numpy as np
 
 from libc.stdint cimport uintptr_t
@@ -6,20 +8,21 @@ from cudf._libxx.column cimport *
 from cudf._libxx.lib cimport *
 
 
-cdef class Table:
+cdef class _Table:
 
-    def __init__(self, columns):
-        self.columns = columns
-
-    def __getitem__(self, i):
-        return self.columns[i]
+    def __init__(self, data, names=None):
+        if isinstance(data, OrderedDict):
+            self._data = data
+        else:
+            if names is None:
+                names = range(len(data))
+            self._data = OrderedDict(zip(names, data))
     
     cdef table_view view(self) except *:
         cdef vector[column_view] column_views
 
         cdef Column col
-        for i in range(len(self.columns)):
-            col = self.columns[i]
+        for col in self.columns:
             column_views.push_back(col.view())
         
         return table_view(column_views)
@@ -28,17 +31,16 @@ cdef class Table:
         cdef vector[mutable_column_view] column_views
 
         cdef Column col
-        for i in range(len(self.columns)):
-            col = self.columns[i]
+        for col in self.columns:
             column_views.push_back(col.mutable_view())
         
         return mutable_table_view(column_views)
 
     @staticmethod
-    cdef Table from_ptr(unique_ptr[table] c_tbl):
+    cdef _Table from_ptr(unique_ptr[table] c_tbl, names=None):
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
         result = []
         for i in range(columns.size()):
             result.append(Column.from_ptr(move(columns[i])))
-        return Table(result)
+        return _Table(result)

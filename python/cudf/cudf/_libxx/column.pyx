@@ -46,7 +46,7 @@ cudf_to_np_types = {INT8: np.dtype('int8'),
 @cython.auto_pickle(True)
 cdef class Column:
 
-def __init__(self, data, size, dtype, mask=None, offset=None, children=()):
+    def __init__(self, data, size, dtype, mask=None, offset=None, children=()):
         if not isinstance(data, Buffer):
             raise TypeError("Expected a Buffer for data, got " + type(data).__name__)
         if mask is not None and not isinstance(mask, Buffer):
