@@ -181,6 +181,8 @@
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
+- PR #3413 Fix dask_cudf read_csv file-list bug
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 
