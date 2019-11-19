@@ -206,6 +206,17 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
  public:
   /**---------------------------------------------------------------------------*
+   * @brief Default constructor initializes an empty column with proper dtype
+   *---------------------------------------------------------------------------**/
+  fixed_width_column_wrapper() : column_wrapper{} {
+    std::vector<Element> empty;
+    wrapped.reset(new cudf::column{
+        cudf::data_type{cudf::experimental::type_to_id<Element>()},
+        0,
+        detail::make_elements<Element>(empty.begin(), empty.end())});
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Construct a non-nullable column of the fixed-width elements in the
    * range `[begin,end)`.
    *
