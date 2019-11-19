@@ -102,8 +102,8 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
                              scalar const& value,
-                             cudaStream_t stream,
-                             rmm::mr::device_memory_resource* mr) {
+                             rmm::mr::device_memory_resource* mr,
+                             cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(input.type()) == true,
                "Variable-sized types are not supported yet.");
   CUDF_EXPECTS((begin >= 0) &&
@@ -140,7 +140,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr) {
-  return detail::fill(input, begin, end, value, 0, mr);
+  return detail::fill(input, begin, end, value, mr, 0);
 }
 
 }  // namespace experimental

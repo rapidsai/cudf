@@ -80,14 +80,15 @@ void fill(mutable_column_view& destination, size_type begin, size_type end,
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @param stream CUDA stream to run this function
  * @param mr Memory resource to allocate the result output column
+ * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result output column
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> fill(
     column_view const& input, size_type begin, size_type end,
-    scalar const& value, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    scalar const& value,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
                             
 }  // namespace detail
 }  // namespace experimental

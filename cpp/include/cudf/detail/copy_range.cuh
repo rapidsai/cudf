@@ -273,6 +273,7 @@ void copy_range(column_view const& source, mutable_column_view& target,
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
  * @param mr Memory resource to allocate the result target column.
+ * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(
@@ -280,9 +281,9 @@ std::unique_ptr<column> copy_range(
   column_view const& target,
   size_type source_begin, size_type source_end,
   size_type target_begin,
-  cudaStream_t stream = 0,
   rmm::mr::device_memory_resource* mr =
-    rmm::mr::get_default_resource());
+    rmm::mr::get_default_resource(),
+  cudaStream_t stream = 0);
 
 }  // namespace detail
 }  // namespace experimental

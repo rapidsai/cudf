@@ -55,15 +55,15 @@ namespace detail {
  * @param input_table Input table
  * @param count Non-nullable column of a integral type
  * @param check_count Whether to check count (negative values and overflow)
- * @param stream CUDA stream to run this function
  * @param mr Memory resource to allocate the result output table
+ * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count, bool check_count,
-                              cudaStream_t stream = 0,
                               rmm::mr::device_memory_resource* mr
-                                = rmm::mr::get_default_resource());
+                                = rmm::mr::get_default_resource(),
+                              cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
@@ -82,15 +82,15 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * 
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
- * @param stream CUDA stream to run this function
  * @param mr Memory resource to allocate the result output table
+ * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
-                              cudaStream_t stream = 0,
                               rmm::mr::device_memory_resource* mr =
-                                rmm::mr::get_default_resource());
+                                rmm::mr::get_default_resource(),
+                              cudaStream_t stream = 0);
 
 }  // namespace detail
 }  // namespace experimental

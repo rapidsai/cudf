@@ -113,8 +113,8 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    column_view const& target,
                                    size_type source_begin, size_type source_end,
                                    size_type target_begin,
-                                   cudaStream_t stream,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr,
+                                   cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
                "Variable-sized types are not supported yet.");
   CUDF_EXPECTS((source_begin >= 0) &&
@@ -159,7 +159,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type target_begin,
                                    rmm::mr::device_memory_resource* mr) {
   return detail::copy_range(source, target, source_begin, source_end,
-                            target_begin, 0, mr);
+                            target_begin, mr, 0);
 }
 
 }  // namespace experimental

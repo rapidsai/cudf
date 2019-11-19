@@ -119,8 +119,8 @@ namespace detail {
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                    column_view const& count, bool check_count,
-                   cudaStream_t stream,
-                   rmm::mr::device_memory_resource* mr) {
+                   rmm::mr::device_memory_resource* mr,
+                   cudaStream_t stream) {
   CUDF_EXPECTS(input_table.num_rows() == count.size(),
                "in and count must have equal size");
   CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
@@ -148,8 +148,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
-                              cudaStream_t stream,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr,
+                              cudaStream_t stream) {
   CUDF_EXPECTS(count.is_valid(), "count cannot be null");
   auto stride =
     cudf::experimental::type_dispatcher(
@@ -180,13 +180,13 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
                               rmm::mr::device_memory_resource* mr) {
-  return detail::repeat(input_table, count, check_count, 0, mr);
+  return detail::repeat(input_table, count, check_count, mr, 0);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
                               rmm::mr::device_memory_resource* mr) {
-  return detail::repeat(input_table, count, 0, mr);
+  return detail::repeat(input_table, count, mr, 0);
 }
 
 }  // namespace experimental
