@@ -55,47 +55,61 @@ struct unary_cast {
 template <typename T>
 struct dispatch_unary_cast_to {
   column_view input;
-  mutable_column_view output;
 
-  dispatch_unary_cast_to(column_view inp, mutable_column_view out)
-      : input(inp), output(out) {}
+  dispatch_unary_cast_to(column_view inp) : input(inp) {}
 
   template <typename R,
             typename std::enable_if_t<cudf::is_numeric<R>() ||
                                       cudf::is_timestamp<R>()>* = nullptr>
-  void operator()(cudaStream_t stream) {
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) {
+    auto size = input.size();
+    auto output = std::make_unique<column>(
+        type, size, rmm::device_buffer{size * cudf::size_of(type), 0, mr},
+        copy_bitmask(input, 0, mr), input.null_count());
+
+    mutable_column_view output_mutable = *output;
+
     thrust::transform(rmm::exec_policy(stream)->on(stream), input.begin<T>(),
-                      input.end<T>(), output.begin<R>(), unary_cast<T, R>{});
+                      input.end<T>(), output_mutable.begin<R>(),
+                      unary_cast<T, R>{});
+
+    return output;
   }
 
   template <typename R,
             typename std::enable_if_t<!cudf::is_numeric<R>() &&
                                       !cudf::is_timestamp<R>()>* = nullptr>
-  void operator()(cudaStream_t stream) {
-    CUDF_FAIL("Column type must be numeric");
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) {
+    CUDF_FAIL("Column type must be numeric or timestamp");
   }
 };
 
 struct dispatch_unary_cast_from {
   column_view input;
-  mutable_column_view output;
 
-  dispatch_unary_cast_from(column_view inp, mutable_column_view out)
-      : input(inp), output(out) {}
+  dispatch_unary_cast_from(column_view inp) : input(inp) {}
 
   template <typename T,
             typename std::enable_if_t<cudf::is_numeric<T>() ||
                                       cudf::is_timestamp<T>()>* = nullptr>
-  void operator()(cudaStream_t stream) {
-    experimental::type_dispatcher(
-        output.type(), dispatch_unary_cast_to<T>{input, output}, stream);
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) {
+    return experimental::type_dispatcher(type, dispatch_unary_cast_to<T>{input},
+                                         type, mr, stream);
   }
 
   template <typename T,
             typename std::enable_if_t<!cudf::is_timestamp<T>() &&
                                       !cudf::is_numeric<T>()>* = nullptr>
-  void operator()(cudaStream_t stream) {
-    CUDF_FAIL("Column type must be numeric");
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) {
+    CUDF_FAIL("Column type must be numeric or timestamp");
   }
 };
 }  // namespace detail
@@ -105,18 +119,9 @@ std::unique_ptr<column> cast(column_view const& input,
                              rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  auto size = input.size();
-  auto null_mask = copy_bitmask(input, 0, mr);
-  auto output = std::make_unique<column>(
-      type, size, rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-      null_mask, input.null_count(), std::vector<std::unique_ptr<column>>{});
-
-  auto launch_cast = detail::dispatch_unary_cast_from{input, *output};
-
-  experimental::type_dispatcher(input.type(), launch_cast,
-                                static_cast<cudaStream_t>(0));
-
-  return output;
+  return experimental::type_dispatcher(input.type(),
+                                       detail::dispatch_unary_cast_from{input},
+                                       type, mr, static_cast<cudaStream_t>(0));
 }
 
 }  // namespace experimental

@@ -18,7 +18,6 @@
 
 #include <memory>
 #include <cudf/types.hpp>
-#include <rmm/mr/default_memory_resource.hpp>
 
 namespace cudf {
 namespace experimental {
