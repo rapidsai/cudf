@@ -29,6 +29,7 @@ namespace {
 
 // Returns true if the mask is true and valid (non-null) for index i
 // This is the filter functor for apply_boolean_mask
+template<bool has_nulls = true>
 struct boolean_mask_filter
 {
   boolean_mask_filter(cudf::column_device_view const& boolean_mask) :
@@ -38,10 +39,14 @@ struct boolean_mask_filter
   __device__ inline
   bool operator()(cudf::size_type i)
   {
-    bool valid = boolean_mask.is_valid(i);
-    bool is_true = (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
+    if(true == has_nulls) {
+        bool valid = boolean_mask.is_valid(i);
+        bool is_true = (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
     
-    return is_true && valid;
+        return is_true && valid;
+    } else {
+        return (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
+    }
   }
 
 protected:
@@ -77,9 +82,15 @@ std::unique_ptr<experimental::table>
 
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
   
-  return detail::copy_if(input,
-                         boolean_mask_filter {*device_boolean_mask},
+  if(boolean_mask.has_nulls()){
+      return detail::copy_if(input,
+                         boolean_mask_filter<true> {*device_boolean_mask},
                          mr, stream);
+  } else {
+      return detail::copy_if(input,
+                         boolean_mask_filter<false> {*device_boolean_mask},
+                         mr, stream);
+  }
 }
 
 } // namespace detail

@@ -70,7 +70,7 @@ ColumnView slice(ColumnView const& input,
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> An empty column of same type as `input`
  */
-std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream = 0);
+std::unique_ptr<column> empty_like(column_view const& input, cudaStream_t stream = 0);
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -83,7 +83,7 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream = 0);
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
-std::unique_ptr<column> allocate_like(column_view input, size_type size,
+std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                       mask_allocation_policy mask_alloc = 
                                           mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource *mr =
@@ -100,7 +100,7 @@ std::unique_ptr<column> allocate_like(column_view input, size_type size,
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in `input_table`
  */
-std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream = 0);
+std::unique_ptr<table> empty_like(table_view const& input_table, cudaStream_t stream = 0);
 
 }  // namespace detail
 }  // namespace experimental

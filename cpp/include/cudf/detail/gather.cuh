@@ -1,6 +1,6 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -106,7 +106,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
  * @tparam MapIterator Iterator type for the gather map
  *---------------------------------------------------------------------------**/
 template<typename Element, typename MapIterator>
-struct specialized_column_gatherer
+struct column_gatherer_impl
 {
   /**---------------------------------------------------------------------------*
    * @brief Type-dispatched function to gather from one column to another based
@@ -126,10 +126,10 @@ struct specialized_column_gatherer
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
 
-      auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
+      size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
       std::unique_ptr<column> destination_column = 
-          allocate_like(source_column, num_destination_rows,
-                      cudf::experimental::mask_allocation_policy::RETAIN, mr);
+          cudf::experimental::detail::allocate_like(source_column, num_destination_rows,
+                          cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
       Element const *source_data{source_column.data<Element>()};
       Element *destination_data{destination_column->mutable_view().data<Element>()};
 
@@ -158,7 +158,7 @@ struct specialized_column_gatherer
  *---------------------------------------------------------------------------**/
 
 template<typename MapItType>
-struct specialized_column_gatherer<string_view, MapItType>
+struct column_gatherer_impl<string_view, MapItType>
 {
  /**---------------------------------------------------------------------------*
   * @brief Type-dispatched function to gather from one column to another based
@@ -219,7 +219,7 @@ struct column_gatherer
                                        bool ignore_out_of_bounds,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
-      specialized_column_gatherer<Element, MapIterator> gatherer{}; 
+      column_gatherer_impl<Element, MapIterator> gatherer{};
 
       return gatherer(source_column, gather_map_begin,
                     gather_map_end, ignore_out_of_bounds,

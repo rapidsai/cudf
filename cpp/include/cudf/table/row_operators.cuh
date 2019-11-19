@@ -209,7 +209,7 @@ class row_equality_comparator {
           lhs_row_index, rhs_row_index);
     };
 
-    return thrust::equal(thrust::seq, lhs.cbegin(), lhs.cend(), rhs.cbegin(),
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
                          equal_elements);
   }
 

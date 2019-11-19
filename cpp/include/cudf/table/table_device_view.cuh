@@ -41,12 +41,6 @@ class table_device_view_base {
     return _columns + _num_columns;
   }
 
-  __device__ const ColumnDeviceView* cbegin() const noexcept { return _columns; }
-
-  __device__ const ColumnDeviceView* cend() const noexcept {
-    return _columns + _num_columns;
-  }
-
   __device__ ColumnDeviceView const& column(size_type column_index) const
       noexcept {
     assert(column_index > 0);

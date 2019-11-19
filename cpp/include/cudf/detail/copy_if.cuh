@@ -21,7 +21,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
@@ -195,12 +195,9 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
       __syncthreads(); // wait for warp_valid_counts to be ready
 
       // Compute total null_count for this block and add it to global count
-      if (threadIdx.x < cudf::experimental::detail::warp_size) {
-          cudf::size_type block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
-
-        if (lane == 0) { // one thread computes and adds to null count
+      cudf::size_type block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
+      if (threadIdx.x == 0) { // one thread computes and adds to null count
           atomicAdd(output_null_count, block_sum - block_valid_count);
-        }
       }
     }
 
@@ -213,6 +210,10 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
 template <typename Filter, int block_size>
 struct scatter_gather_functor
 {
+  // There are two operator functions, one for fixed width column type and 
+  // other for columns that can have childrens such as string_view. fixed width
+  // column gatherer is simpler and kernel is specifically designed for only that
+  // to achieve better performance compared to generic gather used for string.
   template <typename T>
   std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& input,
@@ -223,16 +224,17 @@ struct scatter_gather_functor
                       rmm::mr::get_default_resource(),
                   cudaStream_t stream = 0) {
       //Actually we gather here
-      auto indices = cudf::make_numeric_column(cudf::data_type{cudf::INT32},
-                                  output_size, cudf::UNALLOCATED, stream, rmm::mr::get_default_resource());
+      rmm::device_vector<cudf::size_type> indices(output_size, 0);
 
       thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
-                    indices->mutable_view().begin<cudf::size_type>(),
+                    indices.begin(),
                     filter);
 
-      auto output_table = cudf::experimental::detail::gather(cudf::table_view{{input}}, indices->view(), false, false, false, mr, stream);
+      auto output_table = cudf::experimental::detail::gather(cudf::table_view{{input}}, 
+                                         indices.begin(), indices.end(), 
+                                         false, false, false, mr, stream);
 
       // There will be only one column
       return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
