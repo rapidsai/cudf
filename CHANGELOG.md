@@ -133,6 +133,7 @@
 - PR #3391 Move device_atomics_tests.cu files to legacy
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
+- PR #3422 Move utilities to legacy
 
 ## Bug Fixes
 
