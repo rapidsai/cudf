@@ -170,8 +170,7 @@ protected:
   }
 };
 
-using TestTypes = testing::Types<int32_t, int64_t, float, double>;
-TYPED_TEST_CASE(RollingTest, TestTypes);//cudf::test::NumericTypes);
+TYPED_TEST_CASE(RollingTest, cudf::test::NumericTypes);
 
 TYPED_TEST(RollingTest, EmptyInput) {
   using T = TypeParam;
@@ -363,27 +362,25 @@ TYPED_TEST(RollingTest, RandomStaticAllValid)
   this->run_test_col_agg(input, window, window, periods);
 }
 
-// // random input data, static parameters, with nulls
-// TYPED_TEST(RollingTest, RandomStaticWithInvalid)
-// {
-//   size_type num_rows = 10000;
-//   size_type window = 50;
-//   size_type min_periods = 25;
+// random input data, static parameters, with nulls
+TYPED_TEST(RollingTest, RandomStaticWithInvalid)
+{
+  size_type num_rows = 10000;
+  
+  // random input
+  std::vector<TypeParam> col_data(num_rows);
+  std::vector<bool> col_valid(num_rows);
+  cudf::test::UniformRandomGenerator<TypeParam> rng;
+  cudf::test::UniformRandomGenerator<TypeParam> rbg;
+  std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
+  std::generate(col_valid.begin(), col_valid.end(), [&rbg]() { return rbg.generate(); });
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
 
-//   // random input with nulls
-//   std::mt19937 rng(1);
-//   cudf::test::column_wrapper<TypeParam> input{
-// 	num_rows,
-// 	[&](size_type row) { return this->random_value(rng); },
-// 	[&](size_type row) { return static_cast<bool>(rng() % 2); }
-//   };
+  std::vector<size_type> window({50});
+  size_type periods = 50;
 
-//   this->run_test_col_agg(input,
-// 			 window, min_periods, window,
-// 			 std::vector<size_type>(),
-// 			 std::vector<size_type>(),
-// 			 std::vector<size_type>());
-// }
+  this->run_test_col_agg(input, window, window, periods);
+}
 
 // // random input data, dynamic parameters, no nulls
 // TYPED_TEST(RollingTest, RandomDynamicAllValid)

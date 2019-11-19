@@ -575,7 +575,7 @@ ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
 # - rolling tests ---------------------------------------------------------------------------------
 
 set(ROLLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
