@@ -671,7 +671,8 @@ class StringColumn(column.TypedColumnBase):
             ncount=header["null_count"],
             bdevmem=True,
         )
-        return data
+        typ = pickle.loads(header["type"])
+        return typ(data)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":
