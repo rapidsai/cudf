@@ -2,7 +2,7 @@ import pyarrow.orc as orc
 
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.bytes.core import get_fs_token_paths
+from dask.bytes.core import get_fs_token_paths, stringify_path
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
 
 import cudf
@@ -81,3 +81,74 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
 
     divisions = [None] * (len(dsk) + 1)
     return dd.core.new_dd_object(dsk, name, meta, divisions)
+
+
+def write_orc_partition(df, path, fs, filename, compression=None):
+    full_path = fs.sep.join([path, filename])
+    cudf.io.to_orc(df, full_path, compression=compression)
+    return full_path
+
+
+def to_orc(
+    df,
+    path,
+    write_index=True,
+    storage_options=None,
+    compression=None,
+    compute=True,
+    **kwargs,
+):
+    """Write a dask_cudf dataframe to ORC file(s) (one file per partition).
+
+    Parameters
+    ----------
+    df : dask_cudf.DataFrame
+    path: string or pathlib.Path
+        Destination directory for data.  Prepend with protocol like ``s3://``
+        or ``hdfs://`` for remote data.
+    write_index : boolean, optional
+        Whether or not to write the index. Defaults to True.
+    storage_options: None or dict
+        Further parameters to pass to the bytes backend.
+    compression : string or dict, optional
+    compute : bool, optional
+        If True (default) then the result is computed immediately. If False
+        then a ``dask.delayed`` object is returned for future computation.
+    """
+
+    from dask import delayed
+    from dask import compute as dask_compute
+
+    # TODO: Use upstream dask implementation once available
+    #       (see: Dask Issue#5596)
+
+    if hasattr(path, "name"):
+        path = stringify_path(path)
+    fs, _, _ = get_fs_token_paths(
+        path, mode="wb", storage_options=storage_options
+    )
+    # Trim any protocol information from the path before forwarding
+    path = fs._strip_protocol(path)
+
+    if write_index:
+        df = df.reset_index()
+    else:
+        # Not writing index - might as well drop it
+        df = df.reset_index(drop=True)
+
+    fs.mkdirs(path, exist_ok=True)
+
+    # Use i_offset and df.npartitions to define file-name list
+    filenames = ["part.%i.orc" % i for i in range(df.npartitions)]
+
+    # write parts
+    dwrite = delayed(write_orc_partition)
+    parts = [
+        dwrite(d, path, fs, filename, compression=compression)
+        for d, filename in zip(df.to_delayed(), filenames)
+    ]
+
+    if compute:
+        return dask_compute(*parts)
+
+    return delayed(list)(parts)

@@ -1729,6 +1729,27 @@ def test_dataframe_boolmask(mask_shape):
         )
 
 
+@pytest.mark.parametrize(
+    "mask",
+    [
+        [True, False, True],
+        pytest.param(
+            Series([True, False, True]),
+            marks=pytest.mark.xfail(
+                reason="Pandas can't index a multiindex with a Series"
+            ),
+        ),
+    ],
+)
+def test_dataframe_multiindex_boolmask(mask):
+    gdf = DataFrame(
+        {"w": [3, 2, 1], "x": [1, 2, 3], "y": [0, 1, 0], "z": [1, 1, 1]}
+    )
+    gdg = gdf.groupby(["w", "x"]).count()
+    pdg = gdg.to_pandas()
+    assert_eq(gdg[mask], pdg[mask])
+
+
 def test_dataframe_assignment():
     pdf = pd.DataFrame()
     for col in "abc":
@@ -4054,3 +4075,22 @@ def test_insert(data):
     gdf.insert(-1, "qux", data)
 
     assert_eq(pdf, gdf)
+
+
+def test_cov():
+    gdf = gd.datasets.randomdata(10)
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.cov(), gdf.cov())
+
+
+@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+def test_cov_nans():
+    pdf = pd.DataFrame()
+    pdf["a"] = [None, None, None, 2.00758632, None]
+    pdf["b"] = [0.36403686, None, None, None, None]
+    pdf["c"] = [None, None, None, 0.64882227, None]
+    pdf["d"] = [None, -1.46863125, None, 1.22477948, -0.06031689]
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf.cov(), gdf.cov())
