@@ -367,6 +367,7 @@ add_library(cudf
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
+            src/sort/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
@@ -391,6 +392,7 @@ add_library(cudf
             src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
+            src/transform/transform.cpp
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/legacy/apply_boolean_mask.cu
             src/stream_compaction/legacy/drop_nulls.cu
@@ -398,8 +400,8 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
-            src/quantiles/quantiles.cu
-            src/quantiles/group_quantiles.cu
+            src/quantiles/legacy/quantiles.cu
+            src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
             src/reductions/legacy/max.cu
@@ -411,10 +413,12 @@ add_library(cudf
             src/reductions/legacy/mean.cu
             src/reductions/legacy/var.cu
             src/reductions/legacy/std.cu
+            src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
-	    src/replace/replace.cu
-            src/reshape/stack.cu
+            src/replace/replace.cu
+            src/reshape/legacy/stack.cu
+            src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
             src/unary/null_ops.cu
@@ -473,6 +477,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/legacy/tile.cu
             src/search/legacy/search.cu
+            src/search/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
@@ -483,18 +488,30 @@ add_library(cudf
             src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/column/legacy/interop.cpp
-            src/strings/strings_column_factories.cu
-            src/strings/strings_scalar_factories.cpp
-            src/strings/strings_column_view.cu
-            src/strings/utilities.cu
             src/strings/attributes.cu
             src/strings/copying/copying.cu
+            src/strings/copying/concatenate.cu
             src/strings/sorting/sorting.cu
             src/strings/substring.cu
             src/strings/combine.cu
             src/strings/char_types/char_types.cu
             src/strings/case.cu
+            src/strings/char_types/char_types.cu
+            src/strings/combine.cu
+            src/strings/convert/convert_booleans.cu
+            src/strings/convert/convert_datetime.cu
+            src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_integers.cu
+            src/strings/copying/copying.cu
             src/strings/find.cu
+            src/strings/filling/fill.cu
+            src/strings/padding.cu
+            src/strings/sorting/sorting.cu
+            src/strings/strings_column_factories.cu
+            src/strings/strings_column_view.cu
+            src/strings/strings_scalar_factories.cpp
+            src/strings/substring.cu
+            src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp)
 

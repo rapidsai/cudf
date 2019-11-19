@@ -13,29 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include "cudf.h"
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 namespace cudf {
 
 /**
- * @brief Stack rows of a Table into a single column
+ * @brief Returns a new table transposed from the input table
+ *
+ * @throw cudf::logic_error if column types are non-homogenous
+ * @throw cudf::logic_error if column types are non-fixed-width
  * 
- * Converts the column major table @p in into a row major contiguous buffer,
- * which is returned as a `gdf_column`.
- * Example:
- * ```
- * in = [[4,5,6], [1,2,3]]
- * return = [4,1,5,2,6,3]
- * ```
- * 
- * @note: The dtype of all columns in @p input should be the same
- * 
- * @param input Input table
- * @return gdf_column The result stacked buffer as column
+ * @param[in] input Input table of (ncols) number of columns each of size (nrows)
+ * @return Newly allocated output table with (nrows) columns each of size (ncols)
  */
-gdf_column stack(const cudf::table &input);
+std::unique_ptr<experimental::table> transpose(table_view const& input,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}; // namespace cudf
+}  // namespace cudf
