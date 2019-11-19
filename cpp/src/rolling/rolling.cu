@@ -274,6 +274,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
+               "Window size and min periods must be non-negative");
+
   auto window_begin = thrust::make_constant_iterator(window);
   auto forward_window_begin = thrust::make_constant_iterator(forward_window);
 
@@ -313,6 +316,9 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        data_type output_type,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
+               "Window size and min periods must be non-negative");
+
   auto window_begin = thrust::make_constant_iterator(window);
   auto forward_window_begin = thrust::make_constant_iterator(forward_window);
 
