@@ -21,6 +21,7 @@
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
+- PR #3255 Add utility to print column
 - PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
@@ -36,6 +37,7 @@
 - PR #3298 add null replacement iterator for column_device_view
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
+- PR #3401 Add dask_cudf ORC writer (to_orc)
 
 ## Improvements
 
@@ -181,6 +183,7 @@
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
+- PR #3372 Fix dask-distributed scatter_by_map bug
 - PR #3413 Fix dask_cudf read_csv file-list bug
 
 
