@@ -17,7 +17,7 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>
 
-#include <cudf/reshape.hpp>
+#include <cudf/legacy/reshape.hpp>
 #include <cudf/types.h>
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
