@@ -19,9 +19,9 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/column_utils.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 #include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -51,7 +51,7 @@ inline void handleChecksAndValidity(column_view const& input, mutable_column_vie
 
     if (not input.nullable()) {
         if (not output.nullable())
-            CUDA_TRY( cudaMemset(output.null_mask(), 0xff, gdf_num_bitmask_elements(input.size())));
+            CUDA_TRY(cudaMemset(output.null_mask(), 0xff, cudf::num_bitmask_words(input.size())));
 
         output.set_null_count(0);
     }
@@ -59,9 +59,10 @@ inline void handleChecksAndValidity(column_view const& input, mutable_column_vie
         CUDF_EXPECTS(output.nullable(), "Input column has valid mask but output column does not");
 
         // Validity mask transfer
-        CUDA_TRY( cudaMemcpy(output.null_mask(), input.null_mask(),
-                             gdf_num_bitmask_elements(input.size()),
-                             cudaMemcpyDeviceToDevice));
+        CUDA_TRY(cudaMemcpy(output.null_mask(), 
+                            input.null_mask(),
+                            cudf::num_bitmask_words(input.size()),
+                            cudaMemcpyDeviceToDevice));
 
         output.set_null_count(input.null_count());
     }
