@@ -107,7 +107,6 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
-
 # - scalar tests ----------------------------------------------------------------------------------
 
 set(SCALAR_TEST_SRC
@@ -125,8 +124,7 @@ ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
 
 
 ###################################################################################################
-# - timestamps tests ------------------------------------------------------------------------------
-
+# - timestamps tests ----------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
@@ -260,11 +258,11 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 
-set(QUANTILES_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
+set(LEGACY_QUANTILES_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
 
-ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
+ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 ###################################################################################################
 # - reduction tests -------------------------------------------------------------------------------
@@ -590,12 +588,20 @@ set(LEGACY_SEARCH_TEST_SRC
 ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 
 ###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+
+###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
 
-set(RESHAPE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_test.cu")
+set(LEGACY_RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_test.cu")
 
-ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
+ConfigureTest(LEGACY_RESHAPE_TEST "${LEGACY_RESHAPE_TEST_SRC}")
 
 ###################################################################################################
 # - traits test -----------------------------------------------------------------------------------
@@ -634,6 +640,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"

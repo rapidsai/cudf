@@ -26,6 +26,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3229 Define and implement new search APIs
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
@@ -34,6 +35,7 @@
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
+- PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 
 ## Improvements
 
@@ -94,6 +96,7 @@
 - PR #3350 Port NVStrings booleans convert functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3232 Port NVStrings datetime conversion to cudf strings column
 - PR #3136 Define and implement new transpose API
 - PR #3237 Define and implement new transform APIs
 - PR #3245 Move binaryop files to legacy
@@ -126,6 +129,8 @@
 - PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
+- PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
+- PR #3398 Move reshape.hpp files to legacy
 
 ## Bug Fixes
 
@@ -164,7 +169,7 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
-- PR #3341 Fix `Series` constructor converting NoneType to "None" 
+- PR #3341 Fix `Series` constructor converting NoneType to "None"
 - PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
@@ -175,6 +180,7 @@
 - PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
+- PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
 
 
