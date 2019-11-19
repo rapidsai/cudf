@@ -178,6 +178,49 @@ struct scatter_impl {
   }
 };
 
+template <bool mark_true, typename MapIterator>
+__global__ void marking_bitmask_kernel(
+    mutable_column_device_view destination,
+    MapIterator scatter_map,
+    size_type num_scatter_rows)
+{
+  size_type row = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while (row < num_scatter_rows) {
+    size_type const output_row = scatter_map[row];
+
+    if (mark_true){
+      destination.set_valid(output_row);
+    } else {
+      destination.set_null(output_row);
+    }
+
+    row += blockDim.x * gridDim.x;
+  }
+}
+
+template <typename MapIterator>
+void scatter_scalar_bitmask(std::vector<std::unique_ptr<scalar>> const& source,
+    MapIterator scatter_map, size_type num_scatter_rows,
+    std::vector<std::unique_ptr<column>>& target, cudaStream_t stream)
+{
+  constexpr size_type block_size = 256;
+  size_type const grid_size = grid_1d(num_scatter_rows, block_size).num_blocks;
+
+  for (size_t i = 0; i < target.size(); ++i) {
+    if (target[i]->nullable()) {
+      auto target_view = mutable_column_device_view::create(
+        target[i]->mutable_view(), stream);
+
+      auto bitmask_kernel = source[i]->is_valid(stream)
+        ? marking_bitmask_kernel<true, decltype(scatter_map)>
+        : marking_bitmask_kernel<false, decltype(scatter_map)>;
+      bitmask_kernel<<<grid_size, block_size, 0, stream>>>(
+        *target_view, scatter_map, num_scatter_rows);
+    }
+  }
+}
+
 template <typename index_type>
 struct column_scalar_scatterer {
   template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
@@ -242,7 +285,10 @@ struct scatter_scalar_impl {
           source_scalar, indices, target_col, mr, stream);
       });
 
-    // TODO bitmask
+    // Transform negative indices to index + target size
+    auto scatter_iter = thrust::make_transform_iterator(
+      indices.begin<T>(), index_converter<T>{target.num_rows()});
+    scatter_scalar_bitmask(source, scatter_iter, indices.size(), result, stream);
 
     return std::make_unique<table>(std::move(result));
   }
