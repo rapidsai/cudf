@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <simt/chrono>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/sequence.h>

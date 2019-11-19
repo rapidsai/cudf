@@ -131,7 +131,7 @@ class fixed_width_scalar : public scalar {
    * 
    * @param stream The CUDA stream to do the operation in
    */
-  T value(cudaStream_t stream = 0) { return _data.value(stream); }
+  T value(cudaStream_t stream = 0) const { return _data.value(stream); }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
