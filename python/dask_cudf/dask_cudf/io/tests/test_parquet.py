@@ -178,11 +178,12 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
     df["month"] = [1, 2, 3, 3, 3, 2]
     df["day"] = [1, 1, 1, 2, 2, 1]
     df["data"] = [0, 0, 0, 0, 0, 0]
+    df.index.name = "index"
     ddf2 = dd.from_pandas(df, npartitions=2)
 
     ddf2.to_parquet(tmpdir, engine="pyarrow", partition_on=parts)
-    df_read = dd.read_parquet(tmpdir, engine="pyarrow")
-    gdf_read = dask_cudf.read_parquet(tmpdir)
+    df_read = dd.read_parquet(tmpdir, engine="pyarrow", index="index")
+    gdf_read = dask_cudf.read_parquet(tmpdir, index="index")
 
     assert_eq(
         df_read.compute(scheduler=dask.get),
@@ -190,23 +191,29 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
     )
 
 
-@pytest.mark.parametrize("rg_chunk", [1, 2, 100])
+@pytest.mark.parametrize("rg_chunk", [1, 10, 100])
 def test_row_groups_per_part(tmpdir, rg_chunk):
+    from math import ceil
 
-    # Write single parquet file with multiple
-    path = os.path.join(str(tmpdir), "test.0.parquet")
-    df.to_parquet(path, chunk_size=6, engine="pyarrow")
+    nparts = 2
+    row_group_size = 6
+    ddf1 = dd.from_pandas(df, npartitions=nparts)
+    ddf1.to_parquet(
+        str(tmpdir), engine="pyarrow", row_group_size=row_group_size
+    )
 
     ddf2 = dask_cudf.read_parquet(
-        path, split_row_groups=True, gather_statistics=True
-    )
-    ddf3 = dask_cudf.read_parquet(
-        path, row_groups_per_part=rg_chunk, gather_statistics=True
+        str(tmpdir),
+        row_groups_per_part=rg_chunk,
+        gather_statistics=True,
+        index="index",
     )
 
     assert_eq(
-        ddf2.compute(scheduler=dask.get), ddf3.compute(scheduler=dask.get)
+        ddf1.compute(scheduler=dask.get),
+        ddf2.compute(scheduler=dask.get),
+        check_index=False,
     )
 
-    if rg_chunk > 1:
-        assert ddf3.npartitions < ddf2.npartitions
+    n_row_groups = ceil(len(df) / nparts / row_group_size)
+    assert ddf2.npartitions == ceil(n_row_groups / rg_chunk) * nparts

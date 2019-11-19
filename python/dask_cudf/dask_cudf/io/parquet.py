@@ -103,9 +103,9 @@ class CudfEngine(ArrowEngine):
 
             pieces = [
                 pq.ParquetDatasetPiece(
-                    piece[0],
+                    path,
                     row_group=row_group,
-                    partition_keys=piece[2],
+                    partition_keys=partition_keys,
                     open_file_func=partial(fs.open, mode="rb"),
                 )
                 for row_group in row_groups
