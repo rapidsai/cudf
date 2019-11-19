@@ -10,7 +10,7 @@ from cudf._lib.cudf cimport *
 from libcpp.utility cimport pair
 
 
-cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/quantiles.hpp" namespace "cudf" nogil:
 
     ctypedef enum interpolation:
         LINEAR =0,
