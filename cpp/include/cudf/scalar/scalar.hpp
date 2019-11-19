@@ -221,6 +221,21 @@ class string_scalar : public scalar {
   {}
 
   /**
+   * @brief Construct a new string scalar object
+   * 
+   * @param source string_view pointing string value to copy
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  string_scalar(value_type const& source, bool is_valid = true, 
+      cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : scalar(data_type(STRING), is_valid)
+   , _data(source.data(), source.size_bytes(), stream, mr)
+  {}
+
+  /**
    * @brief Get the value of the scalar in a host std::string
    * 
    * @param stream The CUDA stream to do the operation in

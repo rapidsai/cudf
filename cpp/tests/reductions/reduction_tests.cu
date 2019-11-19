@@ -76,14 +76,12 @@ struct ReductionTest : public cudf::test::BaseFixture
     ~ReductionTest(){}
 
     template <typename T_out>
-    void reduction_test(cudf::test::fixed_width_column_wrapper<T> &col,
+    void reduction_test(
+        const cudf::column_view underlying_column,
         T_out expected_value, bool succeeded_condition,
         reduction_operators op, cudf::data_type output_dtype = cudf::data_type{},
         cudf::size_type ddof = 1)
     {
-        const cudf::column_view underlying_column = col;
-        thrust::device_vector<T_out> dev_result(1);
-
         if( cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
 
         auto statement = [&]() {
@@ -648,4 +646,73 @@ TEST_P(ReductionParamTest, std_var)
 
     this->reduction_test(col_nulls, var_nulls, true, reduction_operators::VAR, cudf::data_type(cudf::FLOAT64), ddof);
     this->reduction_test(col_nulls, std_nulls, true, reduction_operators::STD, cudf::data_type(cudf::FLOAT64), ddof);
+}
+
+//-------------------------------------------------------------------
+struct StringReductionTest : public cudf::test::BaseFixture {
+  // Min/Max/Sum
+  StringReductionTest() {}
+
+  ~StringReductionTest() {}
+
+  void reduction_test(const cudf::column_view underlying_column,
+                      std::string expected_value, bool succeeded_condition,
+                      cudf::experimental::reduction::operators op,
+                      cudf::data_type output_dtype = cudf::data_type{},
+                      cudf::size_type ddof = 1)
+  {
+    if (cudf::data_type{} == output_dtype)
+      output_dtype = underlying_column.type();
+
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+          cudf::experimental::reduce(underlying_column, op, output_dtype, ddof);
+      using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+      auto result1 = static_cast<ScalarType*>(result.get());
+      //std::cout<<"e="<<expected_value<<",r="<<result1->value()<<std::endl;
+      EXPECT_EQ(expected_value, result1->value());
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
+};
+
+// ------------------------------------------------------------------------
+TEST_F(StringReductionTest, MinMax)
+{
+  // data and valid arrays
+  std::vector<std::string> host_strings({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+  std::vector<bool> host_bools(         {    1,     0,       1,      1,      1,     1,       0,       0,      1});
+  bool succeed(true);
+
+  // all valid string column
+  cudf::test::strings_column_wrapper col(host_strings.begin(), host_strings.end());
+
+  std::string expected_min_result = *( std::min_element(host_strings.begin(), host_strings.end()) );
+  std::string expected_max_result = *( std::max_element(host_strings.begin(), host_strings.end()) );
+  std::string expected_sum_result = std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
+
+  // string column with nulls
+  cudf::test::strings_column_wrapper col_nulls(host_strings.begin(), host_strings.end(), host_bools.begin());
+  cudf::size_type valid_count = cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
+
+  std::vector<std::string> r_strings;
+  std::copy_if(host_strings.begin(), host_strings.end(), 
+    std::back_inserter(r_strings),
+    [host_bools, i = 0](auto s) mutable { return host_bools[i++]; });
+
+  std::string expected_min_null_result = *( std::min_element(r_strings.begin(), r_strings.end()) );
+  std::string expected_max_null_result = *( std::max_element(r_strings.begin(), r_strings.end()) );
+  std::string expected_sum_null_result = std::accumulate(r_strings.begin(), r_strings.end(), std::string(""));
+
+  //MIN
+  std::cout<<"min: "; this->reduction_test(col, expected_min_result, succeed, reduction_operators::MIN);
+  std::cout<<"min: "; this->reduction_test(col_nulls, expected_min_null_result, succeed, reduction_operators::MIN);
+  //MAX
+  std::cout<<"max: "; this->reduction_test(col, expected_max_result, succeed, reduction_operators::MAX);
+  std::cout<<"max: "; this->reduction_test(col_nulls, expected_max_null_result, succeed, reduction_operators::MAX);
 }

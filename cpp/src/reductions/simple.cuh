@@ -28,6 +28,15 @@ namespace experimental {
 namespace reduction {
 namespace simple {
 
+// @brief identity specialized for string_view 
+// because string_view constructor requires 2 arguments
+template <typename T, typename Op,
+          typename std::enable_if<!std::is_same<string_view, T>::value>::type* = nullptr>
+constexpr T string_supported_identity() { return Op::Op::template identity<T>(); }
+template <typename T, typename Op,
+          typename std::enable_if< std::is_same<string_view, T>::value>::type* = nullptr>
+constexpr T string_supported_identity() { return T{nullptr, 0}; }
+
 /** --------------------------------------------------------------------------*    
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
@@ -47,23 +56,8 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
-  std::unique_ptr<scalar> result;
-  if (std::is_same<string_scalar::value_type, ResultType>::value) {
-    // TODO cudf::string_view support
-    result = make_string_scalar("min/max/sum", stream, mr);
-  } else if (is_numeric<ResultType>()) {
-    result = make_numeric_scalar(output_dtype, stream, mr);
-  } else if (is_timestamp<ResultType>()) {
-    result = make_timestamp_scalar(output_dtype, stream, mr);
-  } else {
-    CUDF_FAIL("Unexpected type");
-  }
-  result->set_valid(false);
-  // TODO cudf::string_view support  string_view{"",0}
-  ResultType identity = Op::Op::template identity<ResultType>();
-
-  using ScalarType = cudf::experimental::scalar_type_t<ResultType>;
-  auto dev_result = static_cast<ScalarType*>(result.get());
+  ResultType identity = string_supported_identity<ResultType, Op>();
+  rmm::device_scalar<ResultType> dev_result{identity, stream, mr}; 
 
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
@@ -72,21 +66,25 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
         experimental::detail::make_null_replacement_iterator(
             *dcol, Op::Op::template identity<ElementType>()),
         typename Op::template transformer<ResultType>{});
-    detail::reduce(dev_result->data(), it, col.size(), identity,
+    detail::reduce(dev_result.data(), it, col.size(), identity,
                    typename Op::Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(),
         typename Op::template transformer<ResultType>{});
-    detail::reduce(dev_result->data(), it, col.size(), identity,
+    detail::reduce(dev_result.data(), it, col.size(), identity,
                    typename Op::Op{}, mr, stream);
   }
 
+  using ScalarType = cudf::experimental::scalar_type_t<ResultType>;
+  auto s = new ScalarType(dev_result.value(), true, stream, mr);
+  std::unique_ptr<scalar> result = std::unique_ptr<scalar>(s);
+
   // set scalar is valid
   if (col.null_count() < col.size())
-    result->set_valid(true);
+    result->set_valid(true, stream);
   else
-    result->set_valid(false);
+    result->set_valid(false, stream);
   return result;
 };
 
@@ -101,7 +99,7 @@ private:
       // the available combination of input and output dtypes are
       //  - same dtypes (including cudf::wrappers)
       //  - any arithmetic dtype to any arithmetic dtype
-      //  - cudf::bool8 to/from any arithmetic dtype
+      //  - cudf::experimental::bool8 to/from any arithmetic dtype
       return std::is_convertible<ElementType, ResultType>::value &&
              (std::is_arithmetic<ResultType>::value ||
               std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
@@ -133,12 +131,10 @@ private:
     template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-      // disable only for string ElementType.
-      return  !( std::is_same<ElementType, cudf::string_view>::value ); 
-      //return  !( std::is_same<ElementType, cudf::string_view>::value &&
-      //        !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-      //           std::is_same<Op, cudf::experimental::reduction::op::max>::value ||
-      //           std::is_same<Op, cudf::experimental::reduction::op::sum>::value ));
+      // disable only for string ElementType except for operators min, max, sum.
+      return  !( std::is_same<ElementType, cudf::string_view>::value &&
+              !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+                 std::is_same<Op, cudf::experimental::reduction::op::max>::value ));
     }
 
 public:

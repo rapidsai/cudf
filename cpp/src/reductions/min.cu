@@ -18,6 +18,25 @@
 #include "reduction_functions.hpp"
 #include "simple.cuh"
 
+namespace cudf {
+// specialization for string_view min operator
+template <>
+CUDA_HOST_DEVICE_CALLABLE string_view DeviceMin::operator()<string_view>(
+    const string_view& lhs, const string_view& rhs) {
+#ifdef __CUDA_ARCH__
+  if (lhs.empty())
+    return rhs;
+  else if (rhs.empty())
+    return lhs;
+  else
+    return lhs <= rhs ? lhs : rhs;
+  //return (rhs.empty() || (!lhs.empty() && lhs <= rhs)) ? lhs : rhs;
+#else
+  CUDF_FAIL("Host min operator on string_view not supported.");
+#endif
+}
+}  // namespace cudf
+
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::min(
     column_view const& col, data_type const output_dtype,
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
