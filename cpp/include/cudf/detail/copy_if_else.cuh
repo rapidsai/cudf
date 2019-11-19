@@ -124,7 +124,7 @@ struct copy_if_else_functor {
                                     cudaStream_t stream)
    {
       // output
-      auto validity_policy = lhs.nullable() or rhs.nullable() ? experimental::mask_allocation_policy::ALWAYS : experimental::mask_allocation_policy::NEVER;
+      auto validity_policy = lhs.has_nulls() or rhs.has_nulls() ? experimental::mask_allocation_policy::ALWAYS : experimental::mask_allocation_policy::NEVER;
       std::unique_ptr<column> out = experimental::allocate_like(lhs, lhs.size(), validity_policy, mr);
 
       cudf::size_type num_els = cudf::util::round_up_safe(lhs.size(), warp_size);

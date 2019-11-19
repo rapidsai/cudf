@@ -55,8 +55,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestShort)
    wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
    
    T expected[]   = { 5, 6, 6, 6 };
-   bool exp_v[]   = { 1, 1, 1, 1 };
-   wrapper<T> expected_w(expected, expected + num_els, exp_v);
+   // bool exp_v[]   = { 1, 1, 1, 1 };
+   wrapper<T> expected_w(expected, expected + num_els);
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
