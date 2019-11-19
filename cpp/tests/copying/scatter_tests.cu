@@ -346,11 +346,60 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
 }
 
 template <typename T>
-class ScatterTests : public cudf::test::BaseFixture {};
+class ScatterDataTypeTests : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(ScatterTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(ScatterTests, Basic)
+// Empty scatter map returns copy of input
+TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
+{
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+
+  auto const source = fixed_width_column_wrapper<TypeParam>(
+    {1, 2, 3, 4, 5, 6});
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>({});
+  
+  auto const source_table = cudf::table_view({source, source});
+  auto const target_table = cudf::table_view({target, target});
+
+  auto const result = cudf::experimental::scatter(source_table, scatter_map,
+    target_table, true);
+
+  // Expect a copy of the input table
+  expect_tables_equal(result->view(), target_table);
+}
+
+// Empty scatter map returns copy of input
+TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
+{
+  using cudf::experimental::scalar_type_t;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using scalar_ptr = std::unique_ptr<cudf::scalar>;
+  using scalar_vector = std::vector<scalar_ptr>;
+
+  // Initializers lists can't take move-only types
+  scalar_vector source_vector;
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  source_vector.push_back(std::move(source));
+
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>({});
+
+  auto const target_table = cudf::table_view({target});
+
+  auto const result = cudf::experimental::scatter(source_vector, scatter_map,
+    target_table, true);
+
+  // Expect a copy of the input table
+  expect_tables_equal(result->view(), target_table);
+}
+
+TYPED_TEST(ScatterDataTypeTests, ScatterNoNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
@@ -374,7 +423,7 @@ TYPED_TEST(ScatterTests, Basic)
   expect_tables_equal(result->view(), expected_table);
 }
 
-TYPED_TEST(ScatterTests, BasicNulls)
+TYPED_TEST(ScatterDataTypeTests, ScatterBothNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
@@ -398,7 +447,7 @@ TYPED_TEST(ScatterTests, BasicNulls)
   expect_tables_equal(result->view(), expected_table);
 }
 
-TYPED_TEST(ScatterTests, BasicNullSource)
+TYPED_TEST(ScatterDataTypeTests, ScatterSourceNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
@@ -422,7 +471,7 @@ TYPED_TEST(ScatterTests, BasicNullSource)
   expect_tables_equal(result->view(), expected_table);
 }
 
-TYPED_TEST(ScatterTests, BasicNullTarget)
+TYPED_TEST(ScatterDataTypeTests, ScatterTargetNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
@@ -446,7 +495,7 @@ TYPED_TEST(ScatterTests, BasicNullTarget)
   expect_tables_equal(result->view(), expected_table);
 }
 
-TYPED_TEST(ScatterTests, BasicScalar)
+TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
 {
   using cudf::experimental::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
@@ -475,7 +524,7 @@ TYPED_TEST(ScatterTests, BasicScalar)
   expect_tables_equal(result->view(), expected_table);
 }
 
-TYPED_TEST(ScatterTests, BasicScalarNulls)
+TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
 {
   using cudf::experimental::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
@@ -504,7 +553,7 @@ TYPED_TEST(ScatterTests, BasicScalarNulls)
   expect_tables_equal(result->view(), expected_table);
 }
 
-TYPED_TEST(ScatterTests, BasicScalarNullSource)
+TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
 {
   using cudf::experimental::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
@@ -524,6 +573,36 @@ TYPED_TEST(ScatterTests, BasicScalarNullSource)
     {-3, 3, 1, -1});
   auto const expected = fixed_width_column_wrapper<TypeParam>(
     {10, 100, 30, 100, 50, 100, 70, 100}, {1, 0, 1, 0, 1, 0, 1, 0});
+
+  auto const target_table = cudf::table_view({target});
+  auto const expected_table = cudf::table_view({expected});
+
+  auto const result = cudf::experimental::scatter(source_vector, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
+
+TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
+{
+  using cudf::experimental::scalar_type_t;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using scalar_ptr = std::unique_ptr<cudf::scalar>;
+  using scalar_vector = std::vector<scalar_ptr>;
+
+  // Initializers lists can't take move-only types
+  scalar_vector source_vector;
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  source->set_valid(false);
+  source_vector.push_back(std::move(source));
+
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80}, {0, 0, 0, 0, 1, 1, 1, 1});
+  auto const scatter_map = fixed_width_column_wrapper<int32_t>(
+    {-3, 3, 1, -1});
+  auto const expected = fixed_width_column_wrapper<TypeParam>(
+    {10, 100, 30, 100, 50, 100, 70, 100}, {0, 0, 0, 0, 1, 0, 1, 0});
 
   auto const target_table = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
