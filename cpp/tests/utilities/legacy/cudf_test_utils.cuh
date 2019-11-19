@@ -19,8 +19,8 @@
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
 
-#include <utilities/cudf_utils.h>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/cudf_utils.h>
+#include <utilities/legacy/bit_util.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 

@@ -18,7 +18,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <utilities/cuda_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
 
 #include <thrust/copy.h>
@@ -202,7 +202,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 
   constexpr size_type block_size{256};
 
-  cudf::util::cuda::grid_config_1d grid(num_words, block_size);
+  cudf::experimental::detail::grid_1d grid(num_words, block_size);
 
   rmm::device_scalar<size_type> non_zero_count(0, stream);
 
@@ -255,7 +255,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
         static_cast<size_t>(end_bit - begin_bit),
         detail::size_in_bits<bitmask_type>());
     dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-    cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
+    cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                           stream>>>(
         static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit,
