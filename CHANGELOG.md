@@ -35,8 +35,10 @@
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
+- PR #3297 Define and implement new groupby API.
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
+- PR #3401 Add dask_cudf ORC writer (to_orc)
 
 ## Improvements
 
@@ -182,6 +184,8 @@
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
+- PR #3372 Fix dask-distributed scatter_by_map bug
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 
