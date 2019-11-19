@@ -131,7 +131,7 @@ private:
     template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-      // disable only for string ElementType except for operators min, max, sum.
+      // disable only for string ElementType except for operators min, max
       return  !( std::is_same<ElementType, cudf::string_view>::value &&
               !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
                  std::is_same<Op, cudf::experimental::reduction::op::max>::value ));

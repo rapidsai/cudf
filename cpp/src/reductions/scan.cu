@@ -108,7 +108,7 @@ struct ScanDispatcher {
 };
 
 std::unique_ptr<column> scan(const column_view& input,
-                             scan_operators op, bool inclusive,
+                             scan_op op, bool inclusive,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream=0)
 {
@@ -122,19 +122,19 @@ std::unique_ptr<column> scan(const column_view& input,
   mutable_column_view output = output_column->mutable_view();
 
   switch (op) {
-    case scan_operators::SCAN_SUM:
+    case scan_op::SCAN_SUM:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceSum>(), input, output, inclusive, mr, stream);
         break;
-    case scan_operators::SCAN_MIN:
+    case scan_op::SCAN_MIN:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceMin>(), input, output, inclusive, mr, stream);
         break;
-    case scan_operators::SCAN_MAX:
+    case scan_op::SCAN_MAX:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceMax>(), input, output, inclusive, mr, stream);
         break;
-    case scan_operators::SCAN_PRODUCT:
+    case scan_op::SCAN_PRODUCT:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceProduct>(), input, output, inclusive, mr, stream);
         break;
@@ -146,7 +146,7 @@ std::unique_ptr<column> scan(const column_view& input,
 } // namespace detail
 
 std::unique_ptr<column> scan(const column_view& input,
-                             scan_operators op, bool inclusive,
+                             scan_op op, bool inclusive,
                              rmm::mr::device_memory_resource* mr)
 {
   return detail::scan(input, op, inclusive, mr);

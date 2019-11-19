@@ -26,19 +26,18 @@ namespace experimental {
  * @brief These enums indicate the supported operations of prefix scan that can
  * be performed on a column
  */
-enum class scan_operators {
+enum class scan_op {
   SCAN_SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
   SCAN_MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
   SCAN_MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
   SCAN_PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
 };
 
-namespace reduction {
 /**
  * @brief These enums indicate the supported reduction operations that can be
  * performed on a column
  */
-enum class operators {
+enum class reduction_op {
   SUM = 0,        ///< Computes the sum of all values in the column
   MIN,            ///< Computes the minimum of all values in the column
   MAX,            ///< Computes the maximum of all values in the column
@@ -50,7 +49,6 @@ enum class operators {
   ANY,            ///< Computes to true if any of the values are non-zero/true
   ALL,            ///< Computes to true if all of the values are non-zero/true
 };
-}  // namespace reduction
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column.
@@ -82,7 +80,7 @@ enum class operators {
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<scalar> reduce(
-    const column_view& col, reduction::operators op, data_type output_dtype,
+    const column_view& col, reduction_op op, data_type output_dtype,
     cudf::size_type ddof = 1,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -101,7 +99,7 @@ std::unique_ptr<scalar> reduce(
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> scan(
-    const column_view& input, scan_operators op, bool inclusive,
+    const column_view& input, scan_op op, bool inclusive,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental

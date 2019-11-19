@@ -37,7 +37,7 @@ std::unique_ptr<scalar> make_identity_scalar(
 }
 
 std::unique_ptr<scalar> reduce(
-    column_view const& col, reduction::operators op, data_type output_dtype,
+    column_view const& col, reduction_op op, data_type output_dtype,
     size_type ddof, 
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0)
@@ -48,36 +48,36 @@ std::unique_ptr<scalar> reduce(
   if (col.size() <= col.null_count()) return result;
 
   switch (op) {
-    case reduction::operators::SUM:
+    case reduction_op::SUM:
       result = reduction::sum(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::MIN:
+    case reduction_op::MIN:
       result = reduction::min(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::MAX:
+    case reduction_op::MAX:
       result = reduction::max(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::ANY:
+    case reduction_op::ANY:
       result = reduction::any(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::ALL:
+    case reduction_op::ALL:
       result = reduction::all(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::PRODUCT:
+    case reduction_op::PRODUCT:
       result = reduction::product(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::SUMOFSQUARES:
+    case reduction_op::SUMOFSQUARES:
       result =
           reduction::sum_of_squares(col, output_dtype, mr, stream);
       break;
 
-    case reduction::operators::MEAN:
+    case reduction_op::MEAN:
       result = reduction::mean(col, output_dtype, mr, stream);
       break;
-    case reduction::operators::VAR:
+    case reduction_op::VAR:
       result = reduction::variance(col, output_dtype, ddof, mr, stream);
       break;
-    case reduction::operators::STD:
+    case reduction_op::STD:
       result = reduction::standard_deviation(col, output_dtype, ddof, mr, stream);
       break;
     default:
@@ -89,7 +89,7 @@ std::unique_ptr<scalar> reduce(
 }  // namespace detail
 
  std::unique_ptr<scalar> reduce(
-    column_view const& col, reduction::operators op, data_type output_dtype,
+    column_view const& col, reduction_op op, data_type output_dtype,
     size_type ddof,
     rmm::mr::device_memory_resource* mr)
 {
