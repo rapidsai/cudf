@@ -23,8 +23,8 @@
 
 #include <utilities/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
-#include <quantiles/quantiles_util.hpp>
-#include <cudf/quantiles.hpp>
+#include <quantiles/legacy/quantiles_util.hpp>
+#include <cudf/legacy/quantiles.hpp>
 #include <cudf/cudf.h>
 
 #include <rmm/thrust_rmm_allocator.h>
