@@ -35,6 +35,7 @@
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
 - PR #3298 add null replacement iterator for column_device_view
+- PR #3297 Define and implement new groupby API.
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
@@ -177,6 +178,7 @@
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 - PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
+- PR #3362 Fix `find_and_replace` upcasting series for python scalars and lists
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
 - PR #3383 Fix : properly compute null counts for rolling_window.
 - PR #3386 Removing external includes from `column_view.hpp`
@@ -185,7 +187,7 @@
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
 - PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
-
+- PR #3413 Fix dask_cudf read_csv file-list bug
 
 # cuDF 0.10.0 (16 Oct 2019)
 
