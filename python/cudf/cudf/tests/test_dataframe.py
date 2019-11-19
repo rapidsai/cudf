@@ -4075,3 +4075,22 @@ def test_insert(data):
     gdf.insert(-1, "qux", data)
 
     assert_eq(pdf, gdf)
+
+
+def test_cov():
+    gdf = gd.datasets.randomdata(10)
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.cov(), gdf.cov())
+
+
+@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+def test_cov_nans():
+    pdf = pd.DataFrame()
+    pdf["a"] = [None, None, None, 2.00758632, None]
+    pdf["b"] = [0.36403686, None, None, None, None]
+    pdf["c"] = [None, None, None, 0.64882227, None]
+    pdf["d"] = [None, -1.46863125, None, 1.22477948, -0.06031689]
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf.cov(), gdf.cov())
