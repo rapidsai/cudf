@@ -477,6 +477,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/legacy/tile.cu
             src/search/legacy/search.cu
+            src/search/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu

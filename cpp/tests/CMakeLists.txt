@@ -107,7 +107,6 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
-
 # - scalar tests ----------------------------------------------------------------------------------
 
 set(SCALAR_TEST_SRC
@@ -125,8 +124,7 @@ ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
 
 
 ###################################################################################################
-# - timestamps tests ------------------------------------------------------------------------------
-
+# - timestamps tests ----------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
@@ -588,6 +586,14 @@ set(LEGACY_SEARCH_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/search/legacy/search_test.cu")
 
 ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
+
+###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
