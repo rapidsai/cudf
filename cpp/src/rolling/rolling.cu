@@ -25,6 +25,8 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/copying.hpp>
 
+#include <rmm/device_scalar.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -58,6 +60,7 @@ __launch_bounds__(block_size)
 __global__
 void gpu_rolling(column_device_view input,
                  mutable_column_device_view output,
+                 size_type * __restrict__ output_valid_count,
                  WindowIterator window_begin,
                  WindowIterator forward_window_begin,
                  size_type min_periods)
@@ -66,6 +69,7 @@ void gpu_rolling(column_device_view input,
   size_type stride = block_size * gridDim.x;
 
   agg_op op;
+  gdf_size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
   while(i < input.size())
@@ -100,8 +104,10 @@ void gpu_rolling(column_device_view input,
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
 
     // only one thread writes the mask
-    if (0 == threadIdx.x % cudf::experimental::detail::warp_size)
+    if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
       output.set_mask_word(cudf::word_index(i), result_mask);
+      warp_valid_count += __popc(result_mask);
+    }
 
     // store the output value, one per thread
     if (output_is_valid)
@@ -110,6 +116,14 @@ void gpu_rolling(column_device_view input,
     // process next element 
     i += stride;
     active_threads = __ballot_sync(active_threads, i < input.size());
+  }
+
+  // sum the valid counts across the whole block  
+  gdf_size_type block_valid_count = 
+    cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+  
+  if(threadIdx.x == 0) {
+    atomicAdd(output_valid_count, block_valid_count);
   }
 }
 
@@ -136,13 +150,19 @@ struct rolling_window_launcher
     auto input_device_view = column_device_view::create(input);
     auto output_device_view = mutable_column_device_view::create(*output);
 
+    rmm::device_scalar<size_type> device_valid_count{0, stream};
+
     if (input.has_nulls()) {
       gpu_rolling<T, agg_op, average, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
-        (*input_device_view, *output_device_view, window_begin, forward_window_begin, min_periods);
+        (*input_device_view, *output_device_view, device_valid_count.data(),
+         window_begin, forward_window_begin, min_periods);
     } else {
       gpu_rolling<T, agg_op, average, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
-        (*input_device_view, *output_device_view, window_begin, forward_window_begin, min_periods);
+        (*input_device_view, *output_device_view, device_valid_count.data(),
+         window_begin, forward_window_begin, min_periods);
     }
+
+    output->set_null_count(output->size() - device_valid_count.value(stream));
 
     // check the stream for debugging
     CHECK_STREAM(stream);
