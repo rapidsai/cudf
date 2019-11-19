@@ -8,7 +8,7 @@
 from cudf._lib.cudf cimport *
 
 
-cdef extern from "cudf/reshape.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/reshape.hpp" namespace "cudf" nogil:
 
     cdef gdf_column stack(
         const cudf_table & input
