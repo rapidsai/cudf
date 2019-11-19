@@ -39,7 +39,8 @@ namespace
 {
 
 /**
- * @brief This functor handles extracting strings by applying the compiled regex pattern.
+ * @brief This functor handles extracting strings by applying the compiled regex pattern
+ * and creating string_index_pairs for all the substrings.
  * 
  * The stack is used to keep progress on evaluating the regex instructions on each string.
  * So the size of the stack is in proportion to the number of instructions in the given regex pattern.

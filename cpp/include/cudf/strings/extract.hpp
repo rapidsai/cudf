@@ -24,9 +24,19 @@ namespace strings
 {
 
 /**
- * @brief Returns a list of strings for each matching group specified in the given regular expression pattern.
+ * @brief Returns a vector of strings columns for each matching group specified in the given regular expression pattern.
+ * 
+ * All the strings for the first group will go in the first output column; the second group
+ * in the second column and so on. Null entries are added if the string does match.
  *
  * Any null string entries return corresponding null output column entries.
+ * 
+ * ```
+ * s = ["a1","b2","c3"]
+ * r = extract(s,"([ab])(\\d)")
+ * r is now [["a","b",null],
+ *           ["1","2",null]]
+ * ```
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.
