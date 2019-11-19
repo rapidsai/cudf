@@ -15,6 +15,7 @@
  */
 
 #include <cudf/null_mask.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -188,33 +189,56 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
-__global__ void
-copy_first_bitmask_word(bitmask_type *__restrict__ destination,
-                        size_type destination_begin_bit,
-                        bitmask_type const *__restrict__ source,
-                        size_type source_begin_bit,
-                        size_type source_end_bit) {
-
-  size_type destination_word_index = word_index(destination_begin_bit);
-  if (source != nullptr) {
-    size_type source_word_index = word_index(source_begin_bit);
-    bitmask_type curr_word = source[source_word_index];
-    bitmask_type next_word = 0;
-    if ((intra_word_index(source_begin_bit) != 0) &&
-        (word_index(source_end_bit) > word_index(source_begin_bit))) {
-      next_word = source[source_word_index + 1];
+__device__
+size_type
+upper_bound_left(size_type* offsets, size_type number_of_views, size_type val) {
+  size_type begin = 0;
+  size_type mid;
+  while(begin < number_of_views) {
+    mid = (begin + number_of_views) / 2;
+    if(val < offsets[mid]) {
+      number_of_views = mid;
+    } else {
+      begin = mid + 1;
     }
-    bitmask_type write_word = __funnelshift_r(curr_word, next_word, source_begin_bit);
-    write_word = __funnelshift_l(bitmask_type{-1}, write_word, destination_begin_bit);
-    bitmask_type masked_destination = destination[destination_word_index] |
-      (bitmask_type{-1} << (destination_begin_bit &31));
-    destination[destination_word_index] = write_word & masked_destination;
-  } else {
-    bitmask_type write_word =
-      __funnelshift_r(bitmask_type{0}, bitmask_type{-1}, destination_begin_bit);
-    destination[destination_word_index] = write_word | destination[destination_word_index];
+  }
+  return begin - 1;
+}
+
+__global__
+void
+concatenate_masks_kernel(
+    column_device_view* views,
+    size_type* output_offsets,
+    size_type number_of_views,
+    bitmask_type* dest_mask,
+    size_type number_of_mask_bits) {
+
+  constexpr size_type warp_size{32};
+  size_type mask_index = threadIdx.x + blockIdx.x * blockDim.x;
+
+  auto active_mask =
+      __ballot_sync(0xFFFF'FFFF, mask_index < number_of_mask_bits);
+
+  while (mask_index < number_of_mask_bits) {
+    size_type source_view_index = upper_bound_left(output_offsets, number_of_views, mask_index);
+    int bit_is_set = 1;
+    if (source_view_index < number_of_views) {
+      size_type column_element_index = mask_index - output_offsets[source_view_index];
+      bit_is_set = views[source_view_index].is_valid(column_element_index);
+    }
+    bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
+
+    if (threadIdx.x % warp_size == 0) {
+      dest_mask[word_index(mask_index)] = new_word;
+    }
+
+    mask_index += blockDim.x * gridDim.x;
+    active_mask =
+        __ballot_sync(active_mask, mask_index < number_of_mask_bits);
   }
 }
+
 
 }  // namespace
 
@@ -256,6 +280,42 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
   }
   auto num_bits = (stop - start);
   return (num_bits - detail::count_set_bits(bitmask, start, stop, stream));
+}
+
+// Create a bitmask from a vector of column views
+void concatenate_masks(std::vector<column_view> const &views,
+    bitmask_type * dest_mask,
+    cudaStream_t stream) {
+  using CDViewPtr =
+    std::unique_ptr<column_device_view,
+                    std::function<void(column_device_view*)>>;
+  std::vector<CDViewPtr> cols;
+  thrust::host_vector<column_device_view> deviceViews;
+
+  thrust::host_vector<size_type> view_offsets(1, 0);
+  for (auto &v : views) {
+    cols.emplace_back(column_device_view::create(v, stream));
+    deviceViews.push_back(*(cols.back()));
+    view_offsets.push_back(v.size());
+  }
+  thrust::inclusive_scan(thrust::host,
+      view_offsets.begin(), view_offsets.end(),
+      view_offsets.begin());
+
+  rmm::device_vector<column_device_view> dViews = deviceViews;
+  rmm::device_vector<size_type> dOffsets = view_offsets;
+
+  column_device_view* dViewsPtr = thrust::raw_pointer_cast(dViews.data());
+  size_type* dOffsetPtr = thrust::raw_pointer_cast(dOffsets.data());
+
+  auto number_of_mask_bits = view_offsets.back();
+  cudf::util::cuda::grid_config_1d config(number_of_mask_bits, 256);
+  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block,
+                             0, stream>>>( 
+    thrust::raw_pointer_cast(dViews.data()),
+    thrust::raw_pointer_cast(dOffsets.data()),
+    static_cast<size_type>(dViews.size()),
+    dest_mask, number_of_mask_bits);
 }
 
 }  // namespace detail
@@ -301,66 +361,6 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
   return dest_mask;
 }
 
-void copy_bitmask(
-    bitmask_type const * mask,
-    size_type source_begin_bit,
-    size_type source_end_bit,
-    bitmask_type * dest_mask,
-    size_type destination_begin_bit,
-    cudaStream_t stream) {
-
-  //If destination_begin_bit is not aligned to bitmask_type word then write
-  //bitmasks to the first few elements till alignment is reached.
-  if (intra_word_index(destination_begin_bit) != 0) {
-    auto offset = detail::size_in_bits<bitmask_type>() -
-      intra_word_index(destination_begin_bit);
-    copy_first_bitmask_word<<<1, 1, 0, stream>>>(
-        dest_mask, destination_begin_bit,
-        mask, source_begin_bit, source_end_bit);
-    CUDA_CHECK_LAST();
-
-    source_begin_bit += offset;
-    destination_begin_bit += offset;
-  }
-
-  //From this point onwards destination_begin_bit should be aligned to
-  //bitmask_type word
-  auto number_of_mask_words = cudf::util::div_rounding_up_safe(
-      static_cast<size_type>(source_end_bit - source_begin_bit),
-      static_cast<size_type>(detail::size_in_bits<bitmask_type>()));
-
-  //If source is nullptr then writing valid bitmasks is sufficient
-  if (mask == nullptr) {
-    thrust::constant_iterator<bitmask_type> src(bitmask_type{-1});
-    thrust::device_ptr<bitmask_type> dst(dest_mask + word_index(destination_begin_bit));
-    thrust::copy(rmm::exec_policy()->on(stream),
-        src, src + number_of_mask_words,
-        dst);
-  }
-  //If source is now aligned to bitmask_type word then a simple copy is
-  //sufficient
-  else if (intra_word_index(source_begin_bit) == 0) {
-    thrust::device_ptr<const bitmask_type> src(mask + word_index(source_begin_bit));
-    thrust::device_ptr<bitmask_type> dst(dest_mask + word_index(destination_begin_bit));
-    thrust::copy(rmm::exec_policy()->on(stream),
-        src, src + number_of_mask_words,
-        dst);
-  }
-  //If source is misaligned then two words are read at a time and shuffled
-  //to destination appropriately. This branch is avoided if
-  //copy_first_bitmask_word has already handled writing appropriate
-  //destination bits
-  else if (number_of_mask_words != 0) {
-    cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
-    copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
-                          stream>>>(
-        dest_mask + word_index(destination_begin_bit), mask,
-        source_begin_bit, source_end_bit,
-        number_of_mask_words);
-    CUDA_CHECK_LAST();
-  }
-}
-
 // Create a bitmask from a column view
 rmm::device_buffer copy_bitmask(column_view const &view, cudaStream_t stream,
                                 rmm::mr::device_memory_resource *mr) {
@@ -373,9 +373,9 @@ rmm::device_buffer copy_bitmask(column_view const &view, cudaStream_t stream,
 }
 
 // Create a bitmask from a vector of column views
-rmm::device_buffer copy_bitmask(std::vector<column_view> const &views,
-                                cudaStream_t stream,
-                                rmm::mr::device_memory_resource *mr) {
+rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource *mr) {
   rmm::device_buffer null_mask{};
   bool has_nulls = std::any_of(views.begin(), views.end(),
                      [](const column_view col) { return col.has_nulls(); });
@@ -384,22 +384,10 @@ rmm::device_buffer copy_bitmask(std::vector<column_view> const &views,
     for (auto &v : views) {
       total_element_count += v.size();
     }
-    null_mask = rmm::device_buffer{
-      bitmask_allocation_size_bytes(total_element_count), stream, mr};
+    null_mask = create_null_mask(total_element_count, UNINITIALIZED, stream, mr);
 
-    size_type destination_begin_bit = 0;
-    for (auto &v : views) {
-      if (v.size() != 0) {
-        copy_bitmask(
-            v.null_mask(),
-            v.offset(),
-            v.offset() + v.size(),
-            static_cast<bitmask_type *>(null_mask.data()),
-            destination_begin_bit,
-            stream);
-      }
-      destination_begin_bit += v.size();
-    }
+    detail::concatenate_masks(
+        views, static_cast<bitmask_type *>(null_mask.data()), stream);
   }
   return null_mask;
 }

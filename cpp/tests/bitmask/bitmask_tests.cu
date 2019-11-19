@@ -317,7 +317,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous) {
     734, 760,
     760, num_elements};
   std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
-  rmm::device_buffer concatenated_bitmask = cudf::copy_bitmask(views);
+  rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   cudf::test::expect_equal_buffers(concatenated_bitmask.data(), gold_mask.data(),
                                    num_elements / CHAR_BIT);
@@ -325,14 +325,25 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous) {
 
 TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous) {
   cudf::data_type t{cudf::type_id::INT32};
-  cudf::size_type num_elements = 64;
+  cudf::size_type num_elements = 1001;
   thrust::host_vector<int> validity_bit(num_elements);
   for (auto &m : validity_bit) {
     m = this->generate();
   }
   auto gold_mask = cudf::test::detail::make_null_mask(validity_bit.begin(),
                                                        validity_bit.end());
-  std::vector<cudf::size_type> split{0, 40, num_elements};
+  std::vector<cudf::size_type> split{
+    0,
+    104,
+    128,
+    152,
+    311,
+    491,
+    583,
+    734,
+    760,
+    num_elements};
+
   std::vector<cudf::column> cols;
   std::vector<cudf::column_view> views;
   for (unsigned i = 0; i < split.size() - 1; i++) {
@@ -344,7 +355,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous) {
         validity_bit.begin() + split[i + 1]));
     views.push_back(cols.back());
   }
-  rmm::device_buffer concatenated_bitmask = cudf::copy_bitmask(views);
+  rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   cudf::test::expect_equal_buffers(concatenated_bitmask.data(), gold_mask.data(),
                                    num_elements / CHAR_BIT);

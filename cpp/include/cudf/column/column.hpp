@@ -288,9 +288,14 @@ class column {
  *
  * @param columns_to_concat The column views to be concatenated into a single
  * column
+ * @param stream Optional The stream on which to execute all allocations and copies
+ * @param mr Optional The resource to use for all allocations
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_concat);
+std::unique_ptr<column>
+concatenate(std::vector<column_view> const& columns_to_concat,
+            cudaStream_t stream = 0,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

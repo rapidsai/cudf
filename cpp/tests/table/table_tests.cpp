@@ -31,6 +31,7 @@
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <random>
@@ -105,7 +106,7 @@ TEST_F(TableTest, SelectingNoColumns)
   EXPECT_EQ(selected_table.num_columns(), 0);
 }
 
-TEST_F(TableTest, ConcatTables)
+TEST_F(TableTest, CreateFromViewVector)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3,4}};
@@ -113,12 +114,12 @@ TEST_F(TableTest, ConcatTables)
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{col1});
   views.emplace_back(std::vector<column_view>{col2});
-  TView concat_view{views};
-  cudf::test::expect_columns_equal(concat_view.column(0), views[0].column(0));
-  cudf::test::expect_columns_equal(concat_view.column(1), views[1].column(0));
+  TView final_view{views};
+  cudf::test::expect_columns_equal(final_view.column(0), views[0].column(0));
+  cudf::test::expect_columns_equal(final_view.column(1), views[1].column(0));
 }
 
-TEST_F(TableTest, ConcatTablesRowsMismatch)
+TEST_F(TableTest, CreateFromViewVectorRowsMismatch)
 {
   column_wrapper <int8_t > col1{{1,2,3,4}};
   column_wrapper <int16_t> col2{{1,2,3}};
@@ -129,11 +130,39 @@ TEST_F(TableTest, ConcatTablesRowsMismatch)
   EXPECT_THROW (TView{views}, cudf::logic_error);
 }
 
-TEST_F(TableTest, ConcatEmptyTables)
+TEST_F(TableTest, CreateFromViewVectorEmptyTables)
 {
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{});
   views.emplace_back(std::vector<column_view>{});
-  TView concat_view{views};
-  EXPECT_EQ(concat_view.num_columns(), 0);
+  TView final_view{views};
+  EXPECT_EQ(final_view.num_columns(), 0);
+}
+
+TEST_F(TableTest, ConcatenateTables)
+{
+  CVector cols_gold;
+  column_wrapper <int8_t > col1_gold{{1,2,3,4,5,6,7,8}};
+  column_wrapper <int16_t> col2_gold{{1,2,3,4,5,6,7,8}};
+  cols_gold.push_back(col1_gold.release());
+  cols_gold.push_back(col2_gold.release());
+  Table gold_table(std::move(cols_gold));
+
+  CVector cols_table1;
+  column_wrapper <int8_t > col1_table1{{1,2,3,4}};
+  column_wrapper <int16_t> col2_table1{{1,2,3,4}};
+  cols_table1.push_back(col1_table1.release());
+  cols_table1.push_back(col2_table1.release());
+  Table t1(std::move(cols_table1));
+
+  CVector cols_table2;
+  column_wrapper <int8_t > col1_table2{{5,6,7,8}};
+  column_wrapper <int16_t> col2_table2{{5,6,7,8}};
+  cols_table2.push_back(col1_table2.release());
+  cols_table2.push_back(col2_table2.release());
+  Table t2(std::move(cols_table2));
+
+  auto concat_table = cudf::experimental::concatenate({t1.view(), t2.view()});
+
+  cudf::test::expect_tables_equal(*concat_table, gold_table);
 }

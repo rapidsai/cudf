@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/copying.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -379,4 +380,18 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
   cudf::column_view copy_view = copy;
   EXPECT_NE(original_view.head(), copy_view.head());
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
+}
+
+TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
+  cudf::column original{this->type(), this->num_elements(), this->data,
+                        this->mask};
+  std::vector<cudf::size_type> indices{
+    0, this->num_elements()/3,
+    this->num_elements()/3, this->num_elements()/2,
+    this->num_elements()/2, this->num_elements()};
+  std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
+
+  auto concatenated_col = cudf::concatenate(views);
+
+  cudf::test::expect_columns_equal(original, *concatenated_col);
 }

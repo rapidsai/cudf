@@ -149,10 +149,14 @@ class table {
  *
  * @param tables_to_concat The table views to be concatenated into a single
  * table
+ * @param stream Optional The stream on which to execute all allocations and copies
+ * @param mr Optional The resource to use for all allocations
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat);
+std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
+            cudaStream_t stream = 0,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
