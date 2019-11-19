@@ -178,6 +178,7 @@
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 - PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
+- PR #3362 Fix `find_and_replace` upcasting series for python scalars and lists
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
 - PR #3383 Fix : properly compute null counts for rolling_window.
 - PR #3386 Removing external includes from `column_view.hpp`
@@ -186,6 +187,7 @@
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
 - PR #3413 Fix dask_cudf read_csv file-list bug
+
 
 
 # cuDF 0.10.0 (16 Oct 2019)
