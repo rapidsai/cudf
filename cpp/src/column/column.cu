@@ -134,8 +134,8 @@ size_type column::null_count() const {
   return _null_count;
 }
 
-void set_null_mask(rmm::device_buffer&& new_null_mask,
-                   size_type new_null_count = UNKNOWN_NULL_COUNT) {
+void column::set_null_mask(rmm::device_buffer&& new_null_mask,
+                   size_type new_null_count) {
   if(new_null_count > 0){
     CUDF_EXPECTS(new_null_mask.size() ==
                    cudf::bitmask_allocation_size_bytes(this->size()),
@@ -146,8 +146,8 @@ void set_null_mask(rmm::device_buffer&& new_null_mask,
     _null_count = new_null_count;
 }
 
-void set_null_mask(rmm::device_buffer const& new_null_mask,
-                   size_type new_null_count = UNKNOWN_NULL_COUNT) {
+void column::set_null_mask(rmm::device_buffer const& new_null_mask,
+                   size_type new_null_count) {
   if(new_null_count > 0){
     CUDF_EXPECTS(new_null_mask.size() ==
                    cudf::bitmask_allocation_size_bytes(this->size()),
