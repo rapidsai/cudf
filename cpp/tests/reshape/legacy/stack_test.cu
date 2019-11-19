@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/reshape.hpp>
+#include <cudf/legacy/reshape.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>

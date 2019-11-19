@@ -592,10 +592,10 @@ ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
 
-set(RESHAPE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_test.cu")
+set(LEGACY_RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_test.cu")
 
-ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
+ConfigureTest(LEGACY_RESHAPE_TEST "${LEGACY_RESHAPE_TEST_SRC}")
 
 ###################################################################################################
 # - traits test -----------------------------------------------------------------------------------
