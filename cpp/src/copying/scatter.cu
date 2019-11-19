@@ -228,8 +228,6 @@ struct column_scalar_scatterer {
       column_view const& indices, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    using cudf::detail::fixed_width_scalar;
-
     // Result column must have a null mask if the source is not valid
     auto result = copy_with_nullable(target, not source->is_valid(), mr, stream);
     auto result_view = result->mutable_view();
@@ -240,7 +238,7 @@ struct column_scalar_scatterer {
       index_converter<index_type>{target.size()});
 
     // Use permutation iterator with constant index to dereference scalar data
-    auto scalar_impl = static_cast<fixed_width_scalar<T>*>(source.get());
+    auto scalar_impl = static_cast<scalar_type_t<T>*>(source.get());
     auto scalar_iter = thrust::make_permutation_iterator(
       scalar_impl->data(), thrust::make_constant_iterator(0));
 
