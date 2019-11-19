@@ -28,18 +28,6 @@ namespace detail {
 
 namespace {
 
-template <typename T>
-struct device_deref_functor {
-  __device__ T operator()(T* ptr) { return *ptr; }
-};
-
-template <typename T>
-auto make_constant_deref_iterator(T* ptr) {
-  return thrust::make_transform_iterator(
-    thrust::constant_iterator<T*>(ptr),
-    device_deref_functor<T>{});
-}
-
 std::unique_ptr<column> copy_with_nullable(column_view const& original,
     bool force_mask_allocation, rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
@@ -208,9 +196,10 @@ struct column_scalar_scatterer {
       indices.begin<index_type>(),
       index_converter<index_type>{target.size()});
 
-    // Make a const iterator that derefs the fixed-width scalar device data
+    // Use permutation iterator with constant index to dereference scalar data
     auto scalar_impl = static_cast<fixed_width_scalar<T>*>(source.get());
-    auto scalar_iter = make_constant_deref_iterator(scalar_impl->data());
+    auto scalar_iter = thrust::make_permutation_iterator(
+      scalar_impl->data(), thrust::make_constant_iterator(0));
 
     thrust::scatter(rmm::exec_policy(stream)->on(stream), scalar_iter,
       scalar_iter + indices.size(), scatter_iter,
