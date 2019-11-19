@@ -90,6 +90,23 @@ std::unique_ptr<column> make_offsets_child_column( InputIterator begin, InputIte
     return offsets_column;
 }
 
+//
+template <typename SizeAndExecuteFunction>
+auto make_strings_children( SizeAndExecuteFunction size_and_exec_fn, size_type strings_count, size_type null_count,
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                            cudaStream_t stream = 0)
+{
+    auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), size_and_exec_fn );
+    auto offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
+    auto d_offsets = offsets_column->view().template data<int32_t>();
+    auto chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
+    size_and_exec_fn.d_offsets = d_offsets; // set the offsets
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>(); // fill in the chars
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, size_and_exec_fn);
+    return std::make_pair(std::move(offsets_column),std::move(chars_column));
+}
+
+
 /**
  * @brief Utility to create a null mask for a strings column using a custom function.
  *

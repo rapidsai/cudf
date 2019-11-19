@@ -45,11 +45,69 @@ TEST_F(StringsReplaceTests, ReplaceRegexTest)
                                 "= fat cat lays next to = other accénted cat",
                                 "a slow moving turtlé cannot catch = bird",
                                 "which can be composéd together to form a more complete",
-                                "thé result does not include = value = = sum =",
+                                "thé result does not include = value in = sum in",
                                 "", nullptr };
 
-    std::string pattern = "(\\bin\\b)|(\\bthe\\b)";
+    std::string pattern = "(\\bthe\\b)";
     auto results = cudf::strings::replace_re(strings_view,pattern,cudf::string_scalar("="));
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
+{
+    std::vector<const char*> h_strings{ "the quick brown fox jumps over the lazy dog",
+                                "the fat cat lays next to the other accénted cat",
+                                "a slow moving turtlé cannot catch the bird",
+                                "which can be composéd together to form a more complete",
+                                "thé result does not include the value in the sum in",
+                                "", nullptr };
+
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
+
+    std::vector<const char*> h_expected{ " quick brown fox jumps over  lazy dog",
+                                " fat cat lays next to  other accénted cat",
+                                "** slow moving turtlé cannot catch  bird",
+                                "which can be composéd together to form ** more complete",
+                                "thé result does not include  value N  sum N",
+                                "", nullptr };
+
+    std::vector<std::string> patterns{"\\bthe\\b","\\bin\\b","\\ba\\b"};
+    std::vector<std::string> h_repls{ "",         "N",       "**"};
+    cudf::test::strings_column_wrapper repls( h_repls.begin(), h_repls.end() );
+    auto repls_view = cudf::strings_column_view(repls);
+    auto results = cudf::strings::replace_re(strings_view,patterns,repls_view);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
+{
+    std::vector<const char*> h_strings{ "the quick brown fox jumps over the lazy dog",
+                                "the fat cat lays next to the other accénted cat",
+                                "a slow moving turtlé cannot catch the bird",
+                                "which can be composéd together to form a more complete",
+                                "thé result does not include the value in the sum in",
+                                "", nullptr };
+
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
+
+    std::vector<const char*> h_expected{ "the-quick-brown-fox-jumps-over-the-lazy-dog",
+                                 "the-fat-cat-lays-next-to-the-other-accénted-cat",
+                                 "a-slow-moving-turtlé-cannot-catch-the-bird",
+                                 "which-can-be-composéd-together-to-form-a more-complete",
+                                 "thé-result-does-not-include-the-value-in-the-sum-in",
+                                 "", nullptr };
+
+    std::string pattern = "(\\w) (\\w)";
+    std::string repl_template = "\\1-\\2";
+    auto results = cudf::strings::replace_with_backrefs(strings_view,pattern,repl_template);
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
@@ -77,7 +135,7 @@ TEST_F(StringsReplaceTests, MediumReplaceRegex)
 
 TEST_F(StringsReplaceTests, LargeReplaceRegex)
 {
-    // This results in 115 regex instructions and falls in the 'large' range.
+    // This results in 117 regex instructions and falls in the 'large' range.
     std::string large_regex = "hello @abc @def world The (quick) brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home zzzz";
 
     std::vector<const char*> h_strings{

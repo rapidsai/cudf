@@ -505,6 +505,7 @@ add_library(cudf
             src/strings/regex/regcomp.cpp
             src/strings/regex/regexec.cu
             src/strings/replace/replace_re.cu
+            src/strings/replace/backref_re.cu
             src/strings/replace/multi_re.cu
             src/strings/sorting/sorting.cu
             src/strings/strings_column_factories.cu

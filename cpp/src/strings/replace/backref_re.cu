@@ -26,6 +26,7 @@
 #include "../utilities.cuh"
 #include "../regex/regex.cuh"
 
+#include <regex>
 
 namespace cudf
 {
@@ -35,6 +36,43 @@ namespace detail
 {
 namespace
 {
+
+/**
+ * @brief Parse the back-ref index and position values from a given replace format.
+ *
+ * Returns a modified string without back-ref indicators.
+ * Example:
+ *    for input string:    'hello \2 and \1'
+ *    the returned pairs:  (2,6),(1,11)
+ *    returned string is:  'hello  and '
+ */
+std::string parse_backrefs( std::string const& repl, std::vector<thrust::pair<size_type,size_type> >& backrefs )
+{
+    std::string str = repl; // make a modifiable copy
+    std::smatch m;
+    std::regex ex("(\\\\\\d+)"); // this searches for backslash-number(s)
+    std::string rtn;             // result without refs
+    size_type byte_offset = 0;
+    while( std::regex_search( str, m, ex ) )
+    {
+        if( m.size()==0 )
+            break;
+        std::pair<size_type,size_type> item;
+        std::string bref = m[0];
+        size_type position = static_cast<size_type>(m.position(0));
+        size_type length = static_cast<size_type>(bref.length());
+        byte_offset += position;
+        item.first = std::atoi(bref.c_str()+1); // back-ref index number
+        item.second = byte_offset;              // position within the string
+        rtn += str.substr(0,position);
+        str = str.substr(position + length);
+        backrefs.push_back(item);
+    }
+    if( !str.empty() ) // add the remainder
+        rtn += str;    // of the string
+    return rtn;
+}
+
 
 /**
  * @brief This functor handles replacing strings by applying the compiled regex pattern
@@ -55,8 +93,8 @@ struct backrefs_fn
 {
     column_device_view const d_strings;
     Reprog_device prog;
-    string_view const d_repl;
-    thrust::pair<size_type,size_type>* d_backrefs;
+    string_view const d_repl;   // string replacement template
+    thrust::pair<size_type,size_type>* d_backrefs; // ref/pos pairs
     size_type backref_count;
     const int32_t* d_offsets{}; // these are null when
     char* d_chars{};            // only computing size
@@ -76,47 +114,44 @@ struct backrefs_fn
             out_ptr = d_chars + d_offsets[idx];
         size_type lpos = 0, begin = 0, end = nchars;  // working vars
         // copy input to output replacing strings as we go
-        while( prog.find(idx,d_str,begin,end) > 0 ) // inits the begin/end properly
+        while( prog.find(idx,d_str,begin,end) > 0 ) // inits the begin/end vars
         {
             auto spos = d_str.byte_offset(begin); // get offset for these
             auto epos = d_str.byte_offset(end);   // character position values
             nbytes += d_repl.size_bytes() - (epos - spos); // compute new size
             if( out_ptr )
-                out_ptr = copy_and_increment(out_ptr,in_ptr,spos-lpos);
-            size_type lpos_template = 0;   // last end pos of replace temlate
+                out_ptr = copy_and_increment(out_ptr,in_ptr+lpos,spos-lpos);
+            size_type lpos_template = 0;   // last end pos of replace template
             auto repl_ptr = d_repl.data(); // replace template pointer
             for( size_type ridx=0; ridx < backref_count; ++ridx )
             {
-                size_type backref_index = d_backrefs[ridx].first; // backref number
+                auto backref_index = d_backrefs[ridx].first; // backref number
                 if( out_ptr )
                 {
-                    auto ref_length = d_backrefs[ridx].second - lpos_template;
-                    out_ptr = copy_and_increment(out_ptr, repl_ptr, ref_length );
-                    repl_ptr += ref_length;
-                    lpos_template += ref_length;
+                    auto copy_length = d_backrefs[ridx].second - lpos_template;
+                    out_ptr = copy_and_increment(out_ptr, repl_ptr, copy_length );
+                    repl_ptr += copy_length;
+                    lpos_template += copy_length;
                 }
-                size_type spos = begin, epos = end; // modified by extract()
-                if( prog.extract(idx,d_str,spos,epos,backref_index-1)<=0 ) ||
-                    (epose <= spos) )
-                    continue;
-                spos = d_str.byte_offset(spos);
-                epos = d_str.byte_offset(epos);
+                // extract the specific group's string for the backref_index
+                size_type spos = begin, epos = end; // these are modified by extract()
+                if( (prog.extract(idx,d_str,spos,epos,backref_index-1)<=0 ) ||
+                    (epos <= spos) )
+                    continue; // no value for this backref number; that is ok
+                spos = d_str.byte_offset(spos); // convert
+                epos = d_str.byte_offset(epos); // to bytes
                 nbytes += epos - spos;
                 if( out_ptr )
                     out_ptr = copy_and_increment(out_ptr, d_str.data()+spos, (epos-spos));
             }
-            if( out_ptr )
-            {
-                if( repl_ptr < (d_repl.data() + d_repl.size_bytes()) )
-                    out_ptr = copy_and_increment(out_ptr, repl_ptr, static_cast<size_type>((d_repl.data()+d_repl.size()) - repl_ptr));
-                lpos = epos;
-                in_ptr = d_str.data() + lpos;
-            }
+            if( out_ptr && (lpos_template < d_repl.size_bytes()) )// copy remainder of template
+                out_ptr = copy_and_increment(out_ptr, repl_ptr+lpos_template, d_repl.size_bytes() - lpos_template);
+            lpos = epos;
             begin = end;
             end = nchars;
         }
-        if( out_ptr && (in_ptr < (d_str.data() + d_str.size())) )
-            memcpy(out_ptr, in_ptr, static_cast<size_type>( (d_str.data() + d_str.size()) - in_ptr) );
+        if( out_ptr && (lpos < d_str.size_bytes()) ) // copy remainder of input string
+            memcpy(out_ptr, in_ptr+lpos, d_str.size_bytes()-lpos );
         return nbytes;
     }
 };
@@ -124,21 +159,22 @@ struct backrefs_fn
 } // namespace
 
 //
-std::unique_ptr<column> replace_re( strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    std::string const& repl,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                    cudaStream_t stream = 0)
+std::unique_ptr<column> replace_with_backrefs( strings_column_view const& strings,
+                                               std::string const& pattern,
+                                               std::string const& repl,
+                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                               cudaStream_t stream = 0)
 {
     auto strings_count = strings.size();
     if( strings_count==0 )
         return make_empty_strings_column(mr,stream);
-    CUDF_EXPECTS( !repl.empty(), "Parameter repl must not be empty");
 
+    CUDF_EXPECTS( !pattern.empty(), "Parameter pattern must not be empty");
+    CUDF_EXPECTS( !repl.empty(), "Parameter repl must not be empty");
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
-    auto d_flags = detail::get_character_flags_table();
+    auto d_flags = get_character_flags_table();
     // compile regex into device object
     auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
     auto d_prog = *prog;
@@ -146,57 +182,32 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
 
     // parse the repl string for backref indicators
     std::vector<thrust::pair<size_type,size_type> > h_backrefs;
-    std::string repl_str = parse_backrefs(repl,h_backrefs);
+    std::string repl_template = parse_backrefs(repl,h_backrefs);
     rmm::device_vector<thrust::pair<size_type,size_type> > backrefs(h_backrefs);
     auto d_backrefs = backrefs.data().get();
     size_type backref_count = static_cast<size_type>(backrefs.size());
-//    CUDF_EXPECTS( backref_count == d_prog.group_counts(), "Not all backrefs are accounted by groups");
-
-    auto execpol = rmm::exec_policy(stream);
+    //    CUDF_EXPECTS( backref_count == d_prog.group_counts(), "Not all backrefs are accounted by groups");
+    string_scalar repl_scalar(repl_template);
+    string_view d_repl_template{ repl_scalar.data(), repl_scalar.size() };
 
     // copy null mask
     auto null_mask = copy_bitmask(strings.parent());
     auto null_count = strings.null_count();
 
-    // child columns
-    std::unique_ptr<column> offsets_column = nullptr;
-    std::unique_ptr<column> chars_column = nullptr;
+    // create child columns
+    std::pair< std::unique_ptr<column>, std::unique_ptr<column> > children(nullptr,nullptr);
     // Each invocation is predicated on the stack size which is dependent on the number of regex instructions
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
-    {
-        auto replacer = replace_regex_fn<RX_STACK_SMALL>{d_strings,d_prog,d_repl,maxrepl};
-        auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), replacer );
-        offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-        auto d_offsets = offsets_column->view().data<int32_t>();
-        chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
-        replacer.d_offsets = d_offsets; // set the offsets
-        replacer.d_chars = chars_column->mutable_view().data<char>(); // fill in the chars
-        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, replacer);
-    }
+        children = make_strings_children(backrefs_fn<RX_STACK_SMALL>{d_strings,d_prog,d_repl_template,d_backrefs,backref_count},
+                                         strings_count, null_count, mr, stream);
     else if( regex_insts <= RX_MEDIUM_INSTS )
-    {
-        auto replacer = replace_regex_fn<RX_STACK_MEDIUM>{d_strings,d_prog,d_repl,maxrepl};
-        auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), replacer );
-        offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-        auto d_offsets = offsets_column->view().data<int32_t>();
-        cudaStreamSynchronize(stream);
-        chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
-        replacer.d_offsets = d_offsets; // set the offsets
-        replacer.d_chars = chars_column->mutable_view().data<char>(); // fill in the chars
-        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, replacer );
-    }
+        children = make_strings_children(backrefs_fn<RX_STACK_MEDIUM>{d_strings,d_prog,d_repl_template,d_backrefs,backref_count},
+                                         strings_count, null_count, mr, stream);
     else
-    {
-        auto replacer = replace_regex_fn<RX_STACK_LARGE>{d_strings,d_prog,d_repl,maxrepl};
-        auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), replacer );
-        offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-        auto d_offsets = offsets_column->view().data<int32_t>();
-        chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
-        replacer.d_offsets = d_offsets; // set the offsets
-        replacer.d_chars = chars_column->mutable_view().data<char>(); // fill in the chars
-        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, replacer);
-    }
-    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+        children = make_strings_children(backrefs_fn<RX_STACK_LARGE>{d_strings,d_prog,d_repl_template,d_backrefs,backref_count},
+                                         strings_count, null_count, mr, stream);
+    //
+    return make_strings_column(strings_count, std::move(children.first), std::move(children.second),
                                null_count, std::move(null_mask), stream, mr);
 }
 
@@ -204,13 +215,12 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
 
 // external API
 
-std::unique_ptr<column> replace_re( strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    string_scalar const& repl,
-                                    size_type maxrepl,
-                                    rmm::mr::device_memory_resource* mr )
+std::unique_ptr<column> replace_with_backrefs( strings_column_view const& strings,
+                                               std::string const& pattern,
+                                               std::string const& repl,
+                                               rmm::mr::device_memory_resource* mr )
 {
-    return detail::replace_re(strings, pattern, repl, maxrepl, mr);
+    return detail::replace_with_backrefs(strings, pattern, repl, mr);
 }
 
 } // namespace strings

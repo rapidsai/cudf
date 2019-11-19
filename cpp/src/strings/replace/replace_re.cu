@@ -114,61 +114,36 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
     auto strings_count = strings.size();
     if( strings_count==0 )
         return make_empty_strings_column(mr,stream);
+
     CUDF_EXPECTS( repl.is_valid(), "Parameter repl must be valid");
     string_view d_repl( repl.data(), repl.size() );
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
-    auto d_flags = detail::get_character_flags_table();
+    auto d_flags = get_character_flags_table();
     // compile regex into device object
     auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
     auto d_prog = *prog;
     auto regex_insts = d_prog.insts_counts();
-    auto execpol = rmm::exec_policy(stream);
 
     // copy null mask
     auto null_mask = copy_bitmask(strings.parent());
     auto null_count = strings.null_count();
 
-    // child columns
-    std::unique_ptr<column> offsets_column = nullptr;
-    std::unique_ptr<column> chars_column = nullptr;
+    // create child columns
+    std::pair< std::unique_ptr<column>, std::unique_ptr<column> > children(nullptr,nullptr);
     // Each invocation is predicated on the stack size which is dependent on the number of regex instructions
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
-    {
-        auto replacer = replace_regex_fn<RX_STACK_SMALL>{d_strings,d_prog,d_repl,maxrepl};
-        auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), replacer );
-        offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-        auto d_offsets = offsets_column->view().data<int32_t>();
-        chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
-        replacer.d_offsets = d_offsets; // set the offsets
-        replacer.d_chars = chars_column->mutable_view().data<char>(); // fill in the chars
-        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, replacer);
-    }
+        children = make_strings_children(replace_regex_fn<RX_STACK_SMALL>{d_strings,d_prog,d_repl,maxrepl},
+                                         strings_count, null_count, mr, stream);
     else if( regex_insts <= RX_MEDIUM_INSTS )
-    {
-        auto replacer = replace_regex_fn<RX_STACK_MEDIUM>{d_strings,d_prog,d_repl,maxrepl};
-        auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), replacer );
-        offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-        auto d_offsets = offsets_column->view().data<int32_t>();
-        cudaStreamSynchronize(stream);
-        chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
-        replacer.d_offsets = d_offsets; // set the offsets
-        replacer.d_chars = chars_column->mutable_view().data<char>(); // fill in the chars
-        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, replacer );
-    }
+        children = make_strings_children(replace_regex_fn<RX_STACK_MEDIUM>{d_strings,d_prog,d_repl,maxrepl},
+                                         strings_count, null_count, mr, stream);
     else
-    {
-        auto replacer = replace_regex_fn<RX_STACK_LARGE>{d_strings,d_prog,d_repl,maxrepl};
-        auto transformer = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), replacer );
-        offsets_column = make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-        auto d_offsets = offsets_column->view().data<int32_t>();
-        chars_column = create_chars_child_column( strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream );
-        replacer.d_offsets = d_offsets; // set the offsets
-        replacer.d_chars = chars_column->mutable_view().data<char>(); // fill in the chars
-        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, replacer);
-    }
-    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+        children = make_strings_children(replace_regex_fn<RX_STACK_LARGE>{d_strings,d_prog,d_repl,maxrepl},
+                                         strings_count, null_count, mr, stream);
+    //
+    return make_strings_column(strings_count, std::move(children.first), std::move(children.second),
                                null_count, std::move(null_mask), stream, mr);
 }
 

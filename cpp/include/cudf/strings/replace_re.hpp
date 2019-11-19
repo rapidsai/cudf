@@ -61,5 +61,22 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
                                     strings_column_view const& repls,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief For each string, replaces any character sequence matching the given pattern
+ * using the repl template for back-references.
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * @param strings Strings instance for this operation.
+ * @param pattern The regular expression patterns to search within each string.
+ * @param repl The replacement template for creating the output string.
+ * @param mr Resource for allocating device memory.
+ * @return New strings column.
+ */
+std::unique_ptr<column> replace_with_backrefs( strings_column_view const& strings,
+                                               std::string const& pattern,
+                                               std::string const& repl,
+                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 } // namespace strings
 } // namespace cudf
