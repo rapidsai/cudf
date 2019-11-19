@@ -4078,96 +4078,72 @@ def test_insert(data):
 
 
 @pytest.mark.parametrize(
-    "dtype_l",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "str",
-        "category"
-    ],
+    "dtype_l", ["int8", "int16", "int32", "int64",],
 )
 @pytest.mark.parametrize(
-    "dtype_r",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "str",
-        "category"
-    ],
+    "dtype_r", ["int8", "int16", "int32", "int64",],
 )
-def test_join_on_typecast_numeric(dtype_l, dtype_r):
-    join_data = [1,2,3]
-    other_data = ['a','b','c']
+def test_join_on_typecast_int_to_int(dtype_l, dtype_r):
+    other_data = ["a", "b", "c"]
 
-    pdf_l = pd.DataFrame.from_dict({'join_col':join_data, 'B':other_data})
-    gdf_l = DataFrame.from_pandas(pdf_l)
-    
-    pdf_r = pdf_l.copy()
-    gdf_r = gdf_l.copy()
+    join_data_l = Series([1, 2, 3], dtype=dtype_l)
+    join_data_r = Series([1, 2, 4], dtype=dtype_r)
 
-    pdf_l['join_col'] = pdf_l['join_col'].astype(dtype_l)
-    gdf_l['join_col'] = gdf_l['join_col'].astype(dtype_l)
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
 
-    pdf_r['join_col'] = pdf_r['join_col'].astype(dtype_r)
-    gdf_r['join_col'] = gdf_r['join_col'].astype(dtype_r)
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
 
-    try:
-        expect = pdf_l.merge(pdf_r, on='join_col', how='inner')
-    except ValueError:
-        pytest.skip("Pandas does not support this case")
-    got = gdf_l.merge(gdf_r, on='join_col', how='inner')
+    exp_join_data = [1, 2]
+    exp_other_data = ["a", "b"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
 
     assert_eq(expect, got)
 
-
 @pytest.mark.parametrize(
-    "dtype_l",
-    [
-        "datetime64[ns]",
-        "datetime64[us]",
-        "datetime64[ms]",
-        "datetime64[s]",
-        "str"
-    ],
+    "dtype_l", ["float32", "float64"]
 )
 @pytest.mark.parametrize(
-    "dtype_r",
-    [
-        "datetime64[ns]",
-        "datetime64[us]",
-        "datetime64[ms]",
-        "datetime64[s]",
-        "str"
-    ],
+    "dtype_r", ["float32", "float64"]
 )
-def test_join_on_typecast_datetime(dtype_l, dtype_r):
-    join_data = ["1991-11-20", "2004-12-04", "2016-09-13"]
-    other_data = ['a','b','c']
+def test_join_on_typecast_float_to_float(dtype_l, dtype_r):
+    other_data = ['a','b','c','d','e','f']
 
-    pdf_l = pd.DataFrame.from_dict({'join_col':join_data, 'B':other_data})
-    gdf_l = DataFrame.from_pandas(pdf_l)
+    join_data_l = Series([1,2,3,0.9,4.5,6], dtype=dtype_l)
+    join_data_r = Series([1,2,3,0.9,4.5,7], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
     
-    pdf_r = pdf_l.copy()
-    gdf_r = gdf_l.copy()
+    if dtype_l != dtype_r:
+        exp_join_data = [1,2,3,4.5]
+        exp_other_data = ['a','b','c','e']
+    else:
+        exp_join_data = [1,2,3,0.9,4.5]
+        exp_other_data = ['a','b','c','d','e']
 
-    pdf_l['join_col'] = pdf_l['join_col'].astype(dtype_l)
-    gdf_l['join_col'] = gdf_l['join_col'].astype(dtype_l)
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
 
-    pdf_r['join_col'] = pdf_r['join_col'].astype(dtype_r)
-    gdf_r['join_col'] = gdf_r['join_col'].astype(dtype_r)
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
 
-    try:
-        expect = pdf_l.merge(pdf_r, on='join_col', how='inner')
-    except ValueError:
-        pytest.skip("Pandas does not support this case")
-    got = gdf_l.merge(gdf_r, on='join_col', how='inner')
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
 
     assert_eq(expect, got)
