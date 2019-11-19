@@ -34,15 +34,3 @@ from cudf.utils.utils import set_allocator
 
 __version__ = get_versions()["version"]
 del get_versions
-
-
-# Import dask_cudf dispatch functions
-# (In case they are not correctly imported in distributed)
-try:
-    from dask_cudf.backends import (
-        hash_object_cudf,
-        hash_object_cudf_index,
-        group_split_cudf,
-    )
-except ImportError:
-    pass
