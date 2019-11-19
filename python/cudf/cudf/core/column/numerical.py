@@ -349,7 +349,9 @@ class NumericalColumn(column.TypedColumnBase):
         Returns offset of first value that matches. For monotonic
         columns, returns the offset of the first larger value.
         """
-        found = cudautils.find_first(self.data.mem, value)
+        found = 0
+        if len(self):
+            found = cudautils.find_first(self.data.mem, value)
         if found == -1 and self.is_monotonic:
             if value < self.min():
                 found = 0
@@ -370,7 +372,9 @@ class NumericalColumn(column.TypedColumnBase):
         Returns offset of last value that matches. For monotonic
         columns, returns the offset of the last smaller value.
         """
-        found = cudautils.find_last(self.data.mem, value)
+        found = 0
+        if len(self):
+            found = cudautils.find_last(self.data.mem, value)
         if found == -1 and self.is_monotonic:
             if value < self.min():
                 found = -1

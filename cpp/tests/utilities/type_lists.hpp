@@ -20,6 +20,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
+#include <cudf/wrappers/bool.hpp>
 
 #include <array>
 #include <tuple>
@@ -72,8 +73,8 @@ constexpr auto types_to_ids() {
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using NumericTypes =
-    cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
+                                       double, cudf::experimental::bool8>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all timestamp types supported in libcudf for use
@@ -89,6 +90,18 @@ using TimestampTypes = cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms,
                                          timestamp_us, timestamp_ns>;
 
 /**---------------------------------------------------------------------------*
+ * @brief Provides a list of all string types supported in libcudf for use in a
+ * GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all string types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using StringTypes = cudf::test::Types<string_view>;
+
+/**---------------------------------------------------------------------------*
  * @brief Provides a list of all fixed-width element types for use in GTest
  * typed tests.
  * 
@@ -101,10 +114,21 @@ using TimestampTypes = cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms,
 using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
+ * @brief Provides a list of sortable types for use in GTest typed tests.
+ * 
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all sortable types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
+
+/**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
  * typed test.
  *
- * @note Currently does not provide any of the "wrapped" types, e.g., timestamp,
+ * @note Currently does not provide any of the "wrapped" types, e.g.,
  * category, etc.
  *
  * Example:
@@ -148,7 +172,6 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
  *---------------------------------------------------------------------------**/
 static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
     cudf::EMPTY,
-    cudf::BOOL8,
     cudf::TIMESTAMP_DAYS,
     cudf::TIMESTAMP_SECONDS,
     cudf::TIMESTAMP_MILLISECONDS,

@@ -33,94 +33,182 @@ namespace detail {
 // trig functions
 
 struct DeviceSin {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::sin(data);
     }
+
+    template <typename T,
+              typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::sin(static_cast<float>(data)));
+    }
 };
 
 struct DeviceCos {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::cos(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::cos(static_cast<float>(data)));
+    }
 };
 
 struct DeviceTan {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::tan(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::tan(static_cast<float>(data)));
+    }
 };
 
 struct DeviceArcSin {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::asin(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::asin(static_cast<float>(data)));
+    }
 };
 
 struct DeviceArcCos {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::acos(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::acos(static_cast<float>(data)));
+    }
 };
 
 struct DeviceArcTan {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::atan(data);
+    }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::atan(static_cast<float>(data)));
     }
 };
 
 // exponential functions
 
 struct DeviceExp {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::exp(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::exp(static_cast<float>(data)));
+    }
 };
 
 struct DeviceLog {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::log(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::log(static_cast<float>(data)));
+    }
 };
 
 struct DeviceSqrt {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::sqrt(data);
+    }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::sqrt(static_cast<float>(data)));
     }
 };
 
 // rounding functions
 
 struct DeviceCeil {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::ceil(data);
     }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::ceil(static_cast<float>(data)));
+    }
 };
 
 struct DeviceFloor {
-    template<typename T>
+    template<typename T,
+             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
     __device__
     T operator()(T data) {
         return std::floor(data);
+    }
+
+    template<typename T,
+             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    __device__
+    T operator()(T data) {
+        return static_cast<T>(std::floor(static_cast<float>(data)));
     }
 };
 
@@ -220,11 +308,11 @@ public:
 
 } // namespace detail
 
-std::unique_ptr<cudf::column> 
-unary_operation(cudf::column_view const& input, 
-                cudf::unary_op op, 
-                cudaStream_t stream = 0, 
-                rmm::mr::device_memory_resource* mr = 
+std::unique_ptr<cudf::column>
+unary_operation(cudf::column_view const& input,
+                cudf::unary_op op,
+                cudaStream_t stream = 0,
+                rmm::mr::device_memory_resource* mr =
                 rmm::mr::get_default_resource()) {
 
     std::unique_ptr<cudf::column> output = [&] {
@@ -232,10 +320,10 @@ unary_operation(cudf::column_view const& input,
             auto mask_state = input.null_mask() ? cudf::UNINITIALIZED
                                                 : cudf::UNALLOCATED;
 
-            return cudf::make_numeric_column(cudf::data_type(cudf::BOOL8), 
-                                             input.size(), 
+            return cudf::make_numeric_column(cudf::data_type(cudf::BOOL8),
+                                             input.size(),
                                              mask_state,
-                                             stream, 
+                                             stream,
                                              mr);
         } else {
             return cudf::experimental::allocate_like(input);

@@ -47,18 +47,6 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
-### test sources ##################################################################################
-###################################################################################################
-
-###################################################################################################
-# - test benchmark --------------------------------------------------------------------------------
-
-set(TEST_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/test/test_benchmark.cpp")
-
-ConfigureBench(TEST_BENCH "${TEST_BENCH_SRC}")
-
-###################################################################################################
 # - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
@@ -108,10 +96,10 @@ ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 ###################################################################################################
 # - quantiles benchmark ---------------------------------------------------------------------------
 
-set(QUANTILES_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_benchmark.cu")
+set(LEGACY_QUANTILES_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_benchmark.cu")
 
-ConfigureBench(QUANTILES_BENCH "${QUANTILES_BENCH_SRC}")
+ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 
 ###################################################################################################
 # - stack benchmark -------------------------------------------------------------------------------

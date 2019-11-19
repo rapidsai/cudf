@@ -43,17 +43,19 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
     cudf::test::fixed_width_column_wrapper<double> input {{0, NAN, -1, 7, std::numeric_limits<double>::infinity(), 1, -1*std::numeric_limits<double>::infinity()}, {1, 1, 1, 0, 1, 1, 1, 1}};
     cudf::test::fixed_width_column_wrapper<int32_t> expected1 {{3, 6, 2, 0, 5, 4, 1}};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+    std::vector<cudf::null_order> null_precedence_1 {cudf::null_order::BEFORE};
     cudf::table_view input_table {{input}};
 
-    auto got1 = cudf::experimental::sorted_order(input_table, column_order, cudf::null_order::BEFORE);
+    auto got1 = cudf::experimental::sorted_order(input_table, column_order, null_precedence_1);
 
     cudf::test::expect_columns_equal(expected1, got1->view());
 
     // NULL After
 
+    std::vector<cudf::null_order> null_precedence_2 {cudf::null_order::AFTER};
     cudf::test::fixed_width_column_wrapper<int32_t> expected2 {{6, 2, 0, 5, 4, 1, 3}};
     
-    auto got2 = cudf::experimental::sorted_order(input_table, column_order, cudf::null_order::AFTER);
+    auto got2 = cudf::experimental::sorted_order(input_table, column_order, null_precedence_2);
 
     cudf::test::expect_columns_equal(expected2, got2->view());
 }

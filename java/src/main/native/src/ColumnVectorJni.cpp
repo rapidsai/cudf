@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include "cudf/legacy/copying.hpp"
-#include "cudf/quantiles.hpp"
+#include "cudf/legacy/quantiles.hpp"
 #include "cudf/legacy/replace.hpp"
-#include "cudf/rolling.hpp"
+#include "cudf/legacy/rolling.hpp"
 
 #include "jni_utils.hpp"
 
@@ -517,6 +517,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_split(JNIEnv *env, jclass clazz,
+                                                                    jlong input_column,
+                                                                    jlong slice_indices) {
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  JNI_NULL_CHECK(env, slice_indices, "slice indices are null", 0);
+
+  gdf_column *n_column = reinterpret_cast<gdf_column *>(input_column);
+  gdf_column *n_slice_indices = reinterpret_cast<gdf_column *>(slice_indices);
+
+  try {
+    std::vector<gdf_column *> result = cudf::split(
+        *n_column, static_cast<cudf::size_type *>(n_slice_indices->data), n_slice_indices->size);
+    cudf::jni::native_jlongArray n_result(env, reinterpret_cast<jlong *>(result.data()),
+                                          result.size());
+    return n_result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfLengths(JNIEnv *env, jclass clazz,
                                                                      jlong column_handle) {
   JNI_NULL_CHECK(env, column_handle, "input column is null", 0);
@@ -572,9 +591,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemoryStringSi
     gdf_dtype dtype = column->dtype;
     if (dtype == GDF_STRING) {
       NVStrings *nvstr = static_cast<NVStrings *>(column->data);
+      if (nvstr == nullptr) {
+        // This can happen on an empty column.
+        return 0;
+      }
       return static_cast<jlong>(nvstr->memsize());
     } else if (dtype == GDF_STRING_CATEGORY) {
       NVCategory *cats = static_cast<NVCategory *>(column->dtype_info.category);
+      if (cats == nullptr) {
+        // This can happen on an empty column.
+        return 0;
+      }
       unsigned long dict_size = cats->keys_size();
       unsigned long dict_size_total = dict_size * GDF_INT32;
       // NOTE: Assumption being made that strings in each row is of 10 chars. So the result would be approximate.
