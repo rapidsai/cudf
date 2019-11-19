@@ -17,7 +17,6 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 #include "column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
@@ -138,25 +137,31 @@ class column {
    * @throws cudf::logic_error if new_null_count is larger than 0 and the size
    * of `new_null_mask` does not match the size of this column.
    *
-   * @param new_null_mask New null value indicator bitmask to set the column's
-   * null value indicator mask. May be empty if `new_null_count` is 0 or
-   * `UNKOWN_NULL_COUNT`.
+   * @param new_null_mask New null value indicator bitmask (rvalue overload &
+   * moved) to set the column's null value indicator mask. May be empty if
+   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
    * @param new_null_count Optional, the count of null elements. If unknown,
    * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
    * computed on the first invocation of `null_count()`.
    *---------------------------------------------------------------------------**/
-  template <typename B = rmm::device_buffer>
-  void set_null_mask(
-      B&& new_null_mask, size_type new_null_count = UNKNOWN_NULL_COUNT) {
-    if(new_null_count > 0){
-      CUDF_EXPECTS(new_null_mask.size() ==
-                     cudf::bitmask_allocation_size_bytes(this->size()),
-                   "Column with null values must be nullable and the null mask \
-                    buffer size should match the size of the column.");
-    }
-    _null_mask = std::forward<B>(new_null_mask);
-    _null_count = new_null_count;
-  }
+  void set_null_mask(rmm::device_buffer&& new_null_mask,
+                     size_type new_null_count = UNKNOWN_NULL_COUNT);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
+   *
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
+   * of `new_null_mask` does not match the size of this column.
+   *
+   * @param new_null_mask New null value indicator bitmask (lvalue overload &
+   * copied) to set the column's null value indicator mask. May be empty if
+   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown,
+   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
+   * computed on the first invocation of `null_count()`.
+   *---------------------------------------------------------------------------**/
+  void set_null_mask(rmm::device_buffer const& new_null_mask,
+                     size_type new_null_count = UNKNOWN_NULL_COUNT);
 
   /**---------------------------------------------------------------------------*
    * @brief Updates the count of null elements.
