@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "cudf/legacy/copying.hpp"
-#include "cudf/quantiles.hpp"
+#include "cudf/legacy/quantiles.hpp"
 #include "cudf/legacy/replace.hpp"
 #include "cudf/legacy/rolling.hpp"
 
