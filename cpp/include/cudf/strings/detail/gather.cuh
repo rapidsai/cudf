@@ -19,8 +19,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 
 namespace cudf
 {
@@ -69,7 +69,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 
     // create null mask -- caller must update this
     rmm::device_buffer null_mask;
-    if( strings.null_count() > 0 ) // make output nullable
+    if( strings.has_nulls() ) // make output nullable
         null_mask = create_null_mask( output_count, UNINITIALIZED, stream,mr );
 
     // build offsets column
