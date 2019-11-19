@@ -52,10 +52,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
                               cudaStream_t stream)
 {
   std::unique_ptr<scalar> result;
-  if(std::is_same<string_scalar::value_type, ResultType>::value) {
-    //TODO cudf::string_view support 
-    result = make_string_scalar("min/max/sum", stream, mr);
-  } else if(is_numeric<ResultType>()) {
+  if(is_numeric<ResultType>()) {
     result = make_numeric_scalar(output_dtype, stream, mr);
   } else if(is_timestamp<ResultType>()) {
     result = make_timestamp_scalar(output_dtype, stream, mr);
