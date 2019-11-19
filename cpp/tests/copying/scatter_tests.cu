@@ -178,14 +178,123 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
 }
 
 template <typename T>
+class ScatterIndexTypeTests : public cudf::test::BaseFixture {};
+
+using IndexTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+TYPED_TEST_CASE(ScatterIndexTypeTests, IndexTypes);
+
+// Throw logic error if check_bounds is set and index is out of bounds
+TYPED_TEST(ScatterIndexTypeTests, ScatterOutOfBounds)
+{
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+
+  auto const source = fixed_width_column_wrapper<TypeParam>(
+    {1, 2, 3, 4, 5, 6});
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const upper_bound = fixed_width_column_wrapper<TypeParam>(
+    {-3, 3, 1, 8});
+  auto const lower_bound = fixed_width_column_wrapper<TypeParam>(
+    {-3, 3, 1, -9});
+  
+  auto const source_table = cudf::table_view({source, source});
+  auto const target_table = cudf::table_view({target, target});
+
+  EXPECT_THROW(cudf::experimental::scatter(source_table, upper_bound,
+    target_table, true), cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::scatter(source_table, lower_bound,
+    target_table, true), cudf::logic_error);
+}
+
+// Throw logic error if check_bounds is set and index is out of bounds
+TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
+{
+  using cudf::experimental::scalar_type_t;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using scalar_ptr = std::unique_ptr<cudf::scalar>;
+  using scalar_vector = std::vector<scalar_ptr>;
+
+  // Initializers lists can't take move-only types
+  scalar_vector source_vector;
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  source_vector.push_back(std::move(source));
+
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const upper_bound = fixed_width_column_wrapper<TypeParam>(
+    {-3, 3, 1, 8});
+  auto const lower_bound = fixed_width_column_wrapper<TypeParam>(
+    {-3, 3, 1, -9});
+
+  auto const target_table = cudf::table_view({target});
+
+  EXPECT_THROW(cudf::experimental::scatter(source_vector, upper_bound,
+    target_table, true), cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::scatter(source_vector, lower_bound,
+    target_table, true), cudf::logic_error);
+}
+
+// Validate that each of the index types work
+TYPED_TEST(ScatterIndexTypeTests, ScatterIndexType)
+{
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+
+  auto const source = fixed_width_column_wrapper<TypeParam>(
+    {1, 2, 3, 4, 5, 6});
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const scatter_map = fixed_width_column_wrapper<TypeParam>(
+    {-3, 3, 1, -1});
+  auto const expected = fixed_width_column_wrapper<TypeParam>(
+    {10, 3, 30, 2, 50, 1, 70, 4});
+  
+  auto const source_table = cudf::table_view({source, source});
+  auto const target_table = cudf::table_view({target, target});
+  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const result = cudf::experimental::scatter(source_table, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
+
+// Validate that each of the index types work
+TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
+{
+  using cudf::experimental::scalar_type_t;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using scalar_ptr = std::unique_ptr<cudf::scalar>;
+  using scalar_vector = std::vector<scalar_ptr>;
+
+  // Initializers lists can't take move-only types
+  scalar_vector source_vector;
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  source_vector.push_back(std::move(source));
+
+  auto const target = fixed_width_column_wrapper<TypeParam>(
+    {10, 20, 30, 40, 50, 60, 70, 80});
+  auto const scatter_map = fixed_width_column_wrapper<TypeParam>(
+    {-3, 3, 1, -1});
+  auto const expected = fixed_width_column_wrapper<TypeParam>(
+    {10, 100, 30, 100, 50, 100, 70, 100});
+
+  auto const target_table = cudf::table_view({target});
+  auto const expected_table = cudf::table_view({expected});
+
+  auto const result = cudf::experimental::scatter(source_vector, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
+
+template <typename T>
 class ScatterTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(ScatterTests, cudf::test::FixedWidthTypes);
-
-/*TYPED_TEST(ScatterTests, ScatterMapOutOfBounds)
-{
-  // TODO
-}*/
 
 TYPED_TEST(ScatterTests, Basic)
 {
