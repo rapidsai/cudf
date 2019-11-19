@@ -45,7 +45,7 @@ void copy_if_else_kernel(  column_device_view const lhs,
                            mutable_column_device_view out,
                            size_type * __restrict__ const valid_count)
 {   
-   const size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+   const size_type tid = threadIdx.x + blockIdx.x * block_size;
    const int warp_id = tid / warp_size;
    const size_type warps_per_grid = gridDim.x * block_size / warp_size;
 
@@ -124,7 +124,8 @@ struct copy_if_else_functor {
                                     cudaStream_t stream)
    {
       // output
-      std::unique_ptr<column> out = experimental::allocate_like(lhs, lhs.size(), experimental::mask_allocation_policy::RETAIN, mr);
+      auto validity_policy = lhs.nullable() or rhs.nullable() ? experimental::mask_allocation_policy::ALWAYS : experimental::mask_allocation_policy::NEVER;
+      std::unique_ptr<column> out = experimental::allocate_like(lhs, lhs.size(), validity_policy, mr);
 
       cudf::size_type num_els = cudf::util::round_up_safe(lhs.size(), warp_size);
       constexpr int block_size = 256;
@@ -135,7 +136,8 @@ struct copy_if_else_functor {
       auto rhs_dv = column_device_view::create(rhs);
       auto out_dv = mutable_column_device_view::create(*out);
       
-      if(lhs.nullable()){                           
+      // if we have validity in the output
+      if(validity_policy == experimental::mask_allocation_policy::ALWAYS){
          rmm::device_scalar<cudf::size_type> valid_count{0, stream, mr};
          
          // call the kernel

@@ -224,7 +224,11 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
    T rhs[]        = { 6, 6, 6, 6 };                      
    wrapper<T> rhs_w(rhs, rhs + num_els, mask);      
 
-   cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);                  
+   T expected[]   = { 5, 6, 5, 5 };                      
+   wrapper<T> expected_w(expected, expected + num_els, mask);      
+
+   auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);     
+   cudf::test::expect_columns_equal(out->view(), expected_w);             
 }
 
 TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
