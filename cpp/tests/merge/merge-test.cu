@@ -17,6 +17,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <cassert>
 #include <vector>
@@ -199,11 +200,12 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
     cudf::size_type inputRows = 50000;
-    //inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 40 : inputRows);// <- TODO
+    auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
+    inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
 
     auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
     columnFactoryT leftColWrap1(sequence, sequence+inputRows);
-    columnFactoryT rightColWrap1{};
+    columnFactoryT rightColWrap1{};//wrapper of empty column <- this might require a (sequence, sequence) generator 
 
     std::vector<cudf::size_type> key_cols{0};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
@@ -219,11 +221,15 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
                                                               column_order,
                                                               null_precedence));
 
-    //TODO:
-    // const cudf::size_type outputRows = left_view.size() + right_view.size();
-    // auto expectedDataWrap1 = columnFactory.make(outputRows, [](cudf::size_type row) { return row; });
+    const cudf::size_type outputRows = left_view.num_columns() +
+      right_view.num_columns();
+    
+    columnFactoryT expectedDataWrap1(sequence, sequence+outputRows);
 
-    // EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
+    auto expected_column_view{static_cast<cudf::column_view const&>(expectedDataWrap1)};
+    auto output_column_view{p_outputTable->view().column(0)};
+    
+    cudf::test::expect_columns_equal(expected_column_view, output_column_view);
 }
 /*
 TYPED_TEST(MergeTest_, Merge1KeyColumns) {
