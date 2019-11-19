@@ -56,8 +56,8 @@ enum class rolling_operator {
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise 0 is stored in the valid bit mask for element i.
  * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
- * @returns   gdf_column The output column
  *
+ * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
@@ -93,8 +93,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *                otherwise 0 is stored in the valid bit mask for element i.
  * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
  *
- * @returns   gdf_column The output column
- *
+ * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& window,
@@ -135,8 +134,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @param[in] op The user-defined rolling window aggregation type:  NUMBA_UDF (PTX string compiled
  *               by numba) or CUDA_UDF (CUDA string)
  * @param[in] output_type Output type of the user-defined aggregator (only used for NUMBA_UDF)
- * @returns   gdf_column The output column
- *
+ * 
+ * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type window,
@@ -174,18 +173,17 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @param[in] input_col The input column
  * @param[in] window A non-nullable column of INT32 window sizes. window[i] specifies window size
  *                   for element i.
-* @param[in] forward_window A non-nullable column of INT32 window sizes in the forward direction.
-                            forward_window[i] specifies window size for element i.
+ * @param[in] forward_window A non-nullable column of INT32 window sizes in the forward direction.
+ *                           forward_window[i] specifies window size for element i.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise 0 is stored in the valid bit mask for element i.
- 
  * @param[in] udf A CUDA string or a PTX string compiled by numba that contains the implementation
  *                of the user defined aggregator function
  * @param[in] op The user-defined rolling window aggregation type:  NUMBA_UDF (PTX string compiled
  *               by numba) or CUDA_UDF (CUDA string)
  * @param[in] output_type Output type of the user-defined aggregator (only used for NUMBA_UDF)
- * @returns   gdf_column The output column
- *
+ * 
+ * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& window,
