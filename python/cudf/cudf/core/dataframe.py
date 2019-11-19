@@ -251,7 +251,8 @@ class DataFrame(object):
         frames.extend(index_frames)
 
         # Use the column directly to avoid duplicating the index
-        header["column_names"] = tuple(self._cols.keys())
+        # need to pickle column names to handle numpy integer columns
+        header["column_names"] = pickle.dumps(tuple(self._cols.keys()))
         column_header, column_frames = column.serialize_columns(self._columns)
         header["columns"] = column_header
         frames.extend(column_frames)
@@ -269,7 +270,7 @@ class DataFrame(object):
         # Reconstruct the columns
         column_frames = frames[header["index_frame_count"] :]
 
-        column_names = header["column_names"]
+        column_names = pickle.loads(header["column_names"])
         columns = column.deserialize_columns(header["columns"], column_frames)
 
         return cls(dict(zip(column_names, columns)), index=index)
@@ -398,7 +399,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                index = as_index(self.index.as_column()[mask])
+                index = self.index.take(mask)
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
