@@ -36,6 +36,7 @@
 - PR #3298 add null replacement iterator for column_device_view
 - PR #3297 Define and implement new groupby API.
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
+- PR #3411 Java host memory management API
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
