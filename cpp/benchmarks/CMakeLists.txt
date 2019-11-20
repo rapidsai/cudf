@@ -26,16 +26,15 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${GBENCH_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
-)
+                    "${CMAKE_CURRENT_SOURCE_DIR}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
