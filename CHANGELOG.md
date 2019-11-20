@@ -121,6 +121,7 @@
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3292 Port NVStrings regex contains function
+- PR #3409 Port NVStrings regex extract function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
 - PR #3322 Port NVStrings pad operations to cudf strings column
