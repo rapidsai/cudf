@@ -170,7 +170,6 @@ def read_parquet(
         split_row_groups=split_row_groups,
         gather_statistics=gather_statistics,
         engine=CudfEngine,
-        concat_func=cudf.concat,
         **kwargs,
     )
 
