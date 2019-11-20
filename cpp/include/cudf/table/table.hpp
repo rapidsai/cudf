@@ -141,7 +141,7 @@ class table {
 
 
 /**---------------------------------------------------------------------------*
- * @brief Columns of `tables_to_concat` are concatenated vertically to return
+ * @brief Columns of `tables_to_concat` are concatenated vertically to return a
  * single table_view
  *
  * @throws cudf::logic_error
@@ -149,14 +149,14 @@ class table {
  *
  * @param tables_to_concat The table views to be concatenated into a single
  * table
- * @param stream Optional The stream on which to execute all allocations and copies
  * @param mr Optional The resource to use for all allocations
+ * @param stream Optional The stream on which to execute all allocations and copies
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-            cudaStream_t stream = 0,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+            cudaStream_t stream = 0);
 
 }  // namespace experimental
 }  // namespace cudf

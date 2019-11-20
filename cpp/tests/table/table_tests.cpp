@@ -40,6 +40,8 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
+using s_col_wrapper  = cudf::test::strings_column_wrapper;
+
 using CVector     = std::vector<std::unique_ptr<cudf::column>>;
 using column      = cudf::column;
 using column_view = cudf::column_view;
@@ -141,25 +143,34 @@ TEST_F(TableTest, CreateFromViewVectorEmptyTables)
 
 TEST_F(TableTest, ConcatenateTables)
 {
+  std::vector<const char*> h_strings{
+    "Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit" };
+
   CVector cols_gold;
   column_wrapper <int8_t > col1_gold{{1,2,3,4,5,6,7,8}};
   column_wrapper <int16_t> col2_gold{{1,2,3,4,5,6,7,8}};
+  s_col_wrapper            col3_gold(h_strings.data(), h_strings.data() + h_strings.size());
   cols_gold.push_back(col1_gold.release());
   cols_gold.push_back(col2_gold.release());
+  cols_gold.push_back(col3_gold.release());
   Table gold_table(std::move(cols_gold));
 
   CVector cols_table1;
   column_wrapper <int8_t > col1_table1{{1,2,3,4}};
   column_wrapper <int16_t> col2_table1{{1,2,3,4}};
+  s_col_wrapper            col3_table1(h_strings.data(), h_strings.data() + 4);
   cols_table1.push_back(col1_table1.release());
   cols_table1.push_back(col2_table1.release());
+  cols_table1.push_back(col3_table1.release());
   Table t1(std::move(cols_table1));
 
   CVector cols_table2;
   column_wrapper <int8_t > col1_table2{{5,6,7,8}};
   column_wrapper <int16_t> col2_table2{{5,6,7,8}};
+  s_col_wrapper            col3_table2(h_strings.data() + 4, h_strings.data() + h_strings.size());
   cols_table2.push_back(col1_table2.release());
   cols_table2.push_back(col2_table2.release());
+  cols_table2.push_back(col3_table2.release());
   Table t2(std::move(cols_table2));
 
   auto concat_table = cudf::experimental::concatenate({t1.view(), t2.view()});

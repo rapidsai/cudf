@@ -157,7 +157,8 @@ public:
    * ```
    * table_view t0, t1, t2;
    * ...
-   * table_view t{{t0,t1,t2}}; // Creates a `table` from t0, t1, t2
+   * table_view t{{t0,t1,t2}}; // Creates a `table` from the columns of
+   * t0, t1, t2
    * ```
    *
    * @throws cudf::logic_error
@@ -209,7 +210,8 @@ public:
    * ```
    * table_view t0, t1, t2;
    * ...
-   * table_view t{{t0,t1,t2}}; // Creates a `table` from t0, t1, t2
+   * table_view t{{t0,t1,t2}}; // Creates a `table` from the columns of
+   * t0, t1, t2
    * ```
    *
    * @throws cudf::logic_error

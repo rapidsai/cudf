@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
@@ -394,4 +395,23 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
   auto concatenated_col = cudf::concatenate(views);
 
   cudf::test::expect_columns_equal(original, *concatenated_col);
+}
+
+struct StringColumnTest : public cudf::test::BaseFixture {};
+
+TEST_F(StringColumnTest, ConcatenateColumnView) {
+    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
+    cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
+    cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
+    cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
+
+    std::vector<cudf::column_view> strings_columns;
+    strings_columns.push_back(strings1);
+    strings_columns.push_back(strings2);
+    strings_columns.push_back(strings3);
+
+    auto results = cudf::concatenate(strings_columns);
+
+    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
+    cudf::test::expect_columns_equal(*results,expected);
 }

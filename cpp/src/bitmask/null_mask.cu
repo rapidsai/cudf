@@ -15,16 +15,19 @@
  */
 
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <utilities/cuda_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
 
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/extrema.h>
+#include <thrust/binary_search.h>
 #include <cub/cub.cuh>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -189,22 +192,6 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
-__device__
-size_type
-upper_bound_left(size_type* offsets, size_type number_of_views, size_type val) {
-  size_type begin = 0;
-  size_type mid;
-  while(begin < number_of_views) {
-    mid = (begin + number_of_views) / 2;
-    if(val < offsets[mid]) {
-      number_of_views = mid;
-    } else {
-      begin = mid + 1;
-    }
-  }
-  return begin - 1;
-}
-
 __global__
 void
 concatenate_masks_kernel(
@@ -214,14 +201,15 @@ concatenate_masks_kernel(
     bitmask_type* dest_mask,
     size_type number_of_mask_bits) {
 
-  constexpr size_type warp_size{32};
   size_type mask_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto active_mask =
       __ballot_sync(0xFFFF'FFFF, mask_index < number_of_mask_bits);
 
   while (mask_index < number_of_mask_bits) {
-    size_type source_view_index = upper_bound_left(output_offsets, number_of_views, mask_index);
+    size_type source_view_index = thrust::upper_bound(thrust::seq,
+        output_offsets, output_offsets + number_of_views,
+        mask_index) - output_offsets - 1;
     int bit_is_set = 1;
     if (source_view_index < number_of_views) {
       size_type column_element_index = mask_index - output_offsets[source_view_index];
@@ -229,7 +217,7 @@ concatenate_masks_kernel(
     }
     bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
-    if (threadIdx.x % warp_size == 0) {
+    if (threadIdx.x % experimental::detail::warp_size == 0) {
       dest_mask[word_index(mask_index)] = new_word;
     }
 
@@ -290,28 +278,26 @@ void concatenate_masks(std::vector<column_view> const &views,
     std::unique_ptr<column_device_view,
                     std::function<void(column_device_view*)>>;
   std::vector<CDViewPtr> cols;
-  thrust::host_vector<column_device_view> deviceViews;
+  thrust::host_vector<column_device_view> device_views;
 
   thrust::host_vector<size_type> view_offsets(1, 0);
   for (auto &v : views) {
     cols.emplace_back(column_device_view::create(v, stream));
-    deviceViews.push_back(*(cols.back()));
+    device_views.push_back(*(cols.back()));
     view_offsets.push_back(v.size());
   }
   thrust::inclusive_scan(thrust::host,
       view_offsets.begin(), view_offsets.end(),
       view_offsets.begin());
 
-  rmm::device_vector<column_device_view> dViews = deviceViews;
+  rmm::device_vector<column_device_view> dViews = device_views;
   rmm::device_vector<size_type> dOffsets = view_offsets;
 
-  column_device_view* dViewsPtr = thrust::raw_pointer_cast(dViews.data());
-  size_type* dOffsetPtr = thrust::raw_pointer_cast(dOffsets.data());
-
   auto number_of_mask_bits = view_offsets.back();
-  cudf::util::cuda::grid_config_1d config(number_of_mask_bits, 256);
-  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block,
-                             0, stream>>>( 
+  constexpr size_type block_size{256};
+  cudf::util::cuda::grid_config_1d config(number_of_mask_bits, block_size);
+  concatenate_masks_kernel<<<config.num_blocks, block_size,
+                             0, stream>>>(
     thrust::raw_pointer_cast(dViews.data()),
     thrust::raw_pointer_cast(dOffsets.data()),
     static_cast<size_type>(dViews.size()),
@@ -374,8 +360,8 @@ rmm::device_buffer copy_bitmask(column_view const &view, cudaStream_t stream,
 
 // Create a bitmask from a vector of column views
 rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource *mr) {
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
   rmm::device_buffer null_mask{};
   bool has_nulls = std::any_of(views.begin(), views.end(),
                      [](const column_view col) { return col.has_nulls(); });

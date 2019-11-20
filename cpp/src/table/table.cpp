@@ -90,15 +90,13 @@ table_view table::select(std::vector<cudf::size_type> const& column_indices) con
 
 std::unique_ptr<table>
 concatenate(std::vector<table_view> const& tables_to_concat,
-            cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
-  auto tbl = std::make_unique<table>(std::vector<std::unique_ptr<column>>{});
-  if (tables_to_concat.size() == 0) { return tbl; }
+            rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
+  if (tables_to_concat.size() == 0) { return std::make_unique<table>(); }
 
   size_type number_of_cols = tables_to_concat.front().num_columns();
-  for (auto &t : tables_to_concat) {
-    CUDF_EXPECTS(t.num_columns() == number_of_cols,
-        "Mismatch in table number of columns to concatenate.");
-  }
+  CUDF_EXPECTS(std::all_of(tables_to_concat.begin(), tables_to_concat.end(),
+        [number_of_cols](auto const& t) { return t.num_columns() == number_of_cols; }),
+      "Mismatch in table number of columns to concatenate.");
 
   std::vector<std::unique_ptr<column>> concat_columns;
   for (size_type i = 0; i < number_of_cols; ++i) {
@@ -106,7 +104,7 @@ concatenate(std::vector<table_view> const& tables_to_concat,
     for (auto &t : tables_to_concat) {
       cols.emplace_back(t.column(i));
     }
-    concat_columns.emplace_back(concatenate(cols, stream, mr));
+    concat_columns.emplace_back(concatenate(cols, mr, stream));
   }
   return std::make_unique<table>(std::move(concat_columns));
 }

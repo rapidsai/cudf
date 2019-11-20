@@ -143,12 +143,7 @@ rmm::device_buffer copy_bitmask(
  *
  * Returns empty `device_buffer` if the column is not nullable
  *
- * @throws `cudf::logic_error` if `begin_bit > end_bit`
- * @throws `cudf::logic_error` if `begin_bit < 0`
- *
  * @param view Column view whose bitmask needs to be copied
- * @param begin_bit Index of the first bit to be copied (inclusive)
- * @param end_bit Index of the last bit to be copied (exclusive)
  * @param stream Optional, stream on which all memory allocations and copies
  * will be performed
  * @param mr Optional, the memory resource that will be used for allocating
@@ -167,36 +162,16 @@ rmm::device_buffer copy_bitmask(column_view const& view,
  *
  * Returns empty `device_buffer` if the column is not nullable
  *
- * @param views Vectors of column views whose bitmask needs to be copied
- * @param begin_bit Index of the first bit to be copied (inclusive)
- * @param end_bit Index of the last bit to be copied (exclusive)
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param views Vector of column views whose bitmask will to be concatenated
  * @param mr Optional, the memory resource that will be used for allocating
  * the device memory for the new device_buffer
+ * @param stream Optional, stream on which all memory allocations and copies
+ * will be performed
  * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
  * the column views in the views vector
  *---------------------------------------------------------------------------**/
 rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-namespace detail
-{
-/**---------------------------------------------------------------------------*
- * @brief Concatenates `views[i]`'s bitmask from the bits
- * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
- * views[i] in views into an array
- *
- * @param views Vectors of column views whose bitmask needs to be copied
- * @param dest_mask Pointer to array that contains the combined bitmask
- * of the column views
- * @param stream stream on which all memory allocations and copies
- * will be performed
- *---------------------------------------------------------------------------**/
-void concatenate_masks(std::vector<column_view> const &views,
-    bitmask_type * dest_mask,
-    cudaStream_t stream);
-}
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
 
 }  // namespace cudf
