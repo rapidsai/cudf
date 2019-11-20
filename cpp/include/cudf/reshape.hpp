@@ -24,16 +24,38 @@ namespace cudf {
 
 namespace experimental {
 
-/*
- * @brief Stacks rows of a table in to a single column.
- *
- * Interlaces all columns of a table in to a single column.
-
- * @note: The dtypeof all columns of @p in should be compatible, if not identical.
- * @param[in] table containing the columns to be stacked.
- * @return column containing all values from all input columns, interlaced.
+/**
+ * @brief Stack rows of a Table into a single column
+ * 
+ * Converts the column major table @p in into a row major contiguous buffer,
+ * which is returned as a `gdf_column`.
+ * Example:
+ * ```
+ * in = [[4,5,6], [1,2,3]]
+ * return = [4,1,5,2,6,3]
+ * ```
+ * 
+ * @note: The dtype of all columns in @p input should be the same
+ * 
+ * @param input Input table
+ * @return gdf_column The result stacked buffer as column
  */
 std::unique_ptr<column> stack(table_view const& in);
+
+/*
+ * @brief Constructs a new table with "rows" from @in stacked @p count times.
+ *
+ * When @p count = 0, the returned table is `empty_like(in)`.
+ *
+ * in     = [8, 5, 7]
+ * count  = 3
+ * return = [8, 5, 7, 8, 5, 7, 8, 5, 7]
+ *
+ * @param[in] in     Table containing "rows" columns to tile in to new table.
+ * @param[in] count  Number of times to tile "rows". Must be non-negative.
+ * @return           The table containing the tiled "rows".
+ */
+std::unique_ptr<table> tile(table_view const& in, size_type count);
 
 } // namespace experimental
 
