@@ -25,58 +25,6 @@ class CudfEngine(ArrowEngine):
         for col, dtype in dtypes.items():
             meta[col] = meta[col].astype(dtype)
 
-        # Aggregate parts and statistics if desired
-        split_row_groups = kwargs.get("split_row_groups", True)
-        row_groups_per_part = kwargs.get("row_groups_per_part", 1)
-        if split_row_groups and row_groups_per_part > 1:
-
-            def _init_piece(part, stat):
-                piece = [
-                    part["piece"][0],
-                    [part["piece"][1]],
-                    part["piece"][2],
-                ]
-                new_part = {"piece": piece, "kwargs": part["kwargs"]}
-                new_stat = stat.copy()
-                return new_part, new_stat
-
-            def _add_piece(part, part_list, stat, stat_list):
-                part["piece"] = tuple(part["piece"])
-                part_list.append(part)
-                stat_list.append(stat)
-
-            def _update_piece(part, next_part, stat, next_stat):
-                row_group = part["piece"][1]
-                next_part["piece"][1].append(row_group)
-
-                # Update Statistics
-                next_stat["num-rows"] += stat["num-rows"]
-                for col, col_add in zip(next_stat["columns"], stat["columns"]):
-                    if col["name"] != col_add["name"]:
-                        raise ValueError("Columns are different!!")
-                    col["null_count"] += col_add["null_count"]
-                    col["min"] = min(col["min"], col_add["min"])
-                    col["max"] = max(col["max"], col_add["max"])
-
-            parts_agg = []
-            stats_agg = []
-            next_part, next_stat = _init_piece(parts[0], stats[0])
-            for i in range(1, len(parts)):
-                stat, part = stats[i], parts[i]
-                path = part["piece"][0]
-                if (
-                    path == next_part["piece"][0]
-                    and len(next_part["piece"][1]) < row_groups_per_part
-                ):
-                    _update_piece(part, next_part, stat, next_stat)
-                else:
-                    _add_piece(next_part, parts_agg, next_stat, stats_agg)
-                    next_part, next_stat = _init_piece(part, stat)
-
-            _add_piece(next_part, parts_agg, next_stat, stats_agg)
-
-            return (meta, stats_agg, parts_agg)
-
         return (meta, stats, parts)
 
     @staticmethod
@@ -96,8 +44,8 @@ class CudfEngine(ArrowEngine):
                 )
             ]
         else:
-            # `piece` contains (path, row_group, partition_keys)
-            (path, row_groups, partition_keys) = piece
+            # `piece` = (path, row_group, partition_keys, piece_size)
+            (path, row_groups, partition_keys, piece_size) = piece
             if not isinstance(row_groups, list):
                 row_groups = [row_groups]
 
@@ -215,12 +163,7 @@ class CudfEngine(ArrowEngine):
 
 
 def read_parquet(
-    path,
-    columns=None,
-    split_row_groups=True,
-    row_groups_per_part=1,
-    gather_statistics=None,
-    **kwargs,
+    path, columns=None, split_row_groups=True, gather_statistics=None, **kwargs
 ):
     """ Read parquet files into a Dask DataFrame
 
@@ -229,11 +172,6 @@ def read_parquet(
     single Dask dataframe. The Dask version must supply an ``ArrowEngine``
     class to support full functionality.
     See ``cudf.read_parquet`` and Dask documentation for further details.
-
-    Parameters (cuDF-specific)
-    --------------------------
-    row_groups_per_part : int
-        Number of row-groups to aggregate into each output partition
 
     Examples
     --------
@@ -246,16 +184,12 @@ def read_parquet(
     """
     if isinstance(columns, str):
         columns = [columns]
-    if row_groups_per_part > 1:
-        split_row_groups = True
-        gather_statistics = True
-    elif split_row_groups:
+    if split_row_groups:
         gather_statistics = True
     return dd.read_parquet(
         path,
         columns=columns,
         split_row_groups=split_row_groups,
-        row_groups_per_part=row_groups_per_part,
         gather_statistics=gather_statistics,
         engine=CudfEngine,
         **kwargs,
