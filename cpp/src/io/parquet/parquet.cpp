@@ -378,6 +378,12 @@ int CompactProtocolReader::WalkSchema(std::vector<SchemaElement> &schema,
         }                                               \
         cur_fld = id;                                   \
 
+#define CPW_FLD_STRUCT_BLOB(id, m)                      \
+        put_fldh(id, cur_fld, ST_FLD_STRUCT);           \
+        putb(s->m.data(), (uint32_t)s->m.size());       \
+        putb(0);                                        \
+        cur_fld = id;                                   \
+
 #define CPW_FLD_STRING(id, m)                           \
         put_fldh(id, cur_fld, ST_FLD_BINARY);           \
         put_uint(s->m.size());                          \
@@ -397,6 +403,17 @@ CPW_BEGIN_STRUCT(FileMetaData)
     CPW_FLD_STRUCT_LIST(4, row_groups)
     if (s->key_value_metadata.size() != 0) { CPW_FLD_STRUCT_LIST(5, key_value_metadata) }
     if (s->created_by.size() != 0) { CPW_FLD_STRING(6, created_by) }
+    if (s->column_order_listsize != 0) {
+        // Dummy list of struct containing an empty field1 struct
+        put_fldh(7, cur_fld, ST_FLD_LIST);
+        putb((uint8_t)((std::min(s->column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
+        if (s->column_order_listsize >= 0xf) put_uint(s->column_order_listsize);
+        for (uint32_t i = 0; i < s->column_order_listsize; i++) {
+            put_fldh(1, 0, ST_FLD_STRUCT);
+            putb(0);
+        }
+        cur_fld = 7;
+    }
 CPW_END_STRUCT()
 
 CPW_BEGIN_STRUCT(SchemaElement)
@@ -457,6 +474,7 @@ CPW_BEGIN_STRUCT(ColumnMetaData)
     CPW_FLD_INT64(9, data_page_offset)
     if (s->index_page_offset != 0) { CPW_FLD_INT64(10, index_page_offset) }
     if (s->dictionary_page_offset != 0) { CPW_FLD_INT64(11, dictionary_page_offset) }
+    if (s->statistics_blob.size() != 0) { CPW_FLD_STRUCT_BLOB(12, statistics_blob); }
 CPW_END_STRUCT()
 
 } // namespace parquet

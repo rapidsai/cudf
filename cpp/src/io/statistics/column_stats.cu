@@ -16,7 +16,7 @@
 #include "column_stats.h"
 #include <math_constants.h>
 #include <io/utilities/block_utils.cuh>
-#include <stdio.h>
+
 namespace cudf {
 namespace io {
 
@@ -384,19 +384,25 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t)
     has_minmax = __syncthreads_or(smin != nullptr);
     if (t < 32 * 1) {
         minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
-        s->ck.min_value.str_val.ptr = minval.ptr;
-        s->ck.min_value.str_val.length = minval.length;
-        s->ck.has_minmax = has_minmax;
+        if (!(t & 0x1f)) {
+            s->ck.min_value.str_val.ptr = minval.ptr;
+            s->ck.min_value.str_val.length = minval.length;
+            s->ck.has_minmax = has_minmax;
+        }
     }
     else if (t < 32 * 2) {
         maxval = WarpReduceMaxString(s->warp_max[t & 0x1f].str_val.ptr, s->warp_max[t & 0x1f].str_val.length);
-        s->ck.max_value.str_val.ptr = maxval.ptr;
-        s->ck.max_value.str_val.length = maxval.length;
+        if (!(t & 0x1f)) {
+            s->ck.max_value.str_val.ptr = maxval.ptr;
+            s->ck.max_value.str_val.length = maxval.length;
+        }
     }
     else if (t < 32 * 3) {
         len_sum = WarpReduceSum32(s->warp_sum[t & 0x1f].str_val.length);
-        s->ck.sum.i_val = len_sum;
-        s->ck.has_sum = has_minmax;
+        if (!(t & 0x1f)) {
+            s->ck.sum.i_val = len_sum;
+            s->ck.has_sum = has_minmax;
+        }
     }
 }
 
@@ -634,19 +640,25 @@ void __device__ mergeStringColumnStats(merge_state_s *s, const statistics_chunk 
     has_minmax = __syncthreads_or(smin != nullptr);
     if (t < 32 * 1) {
         minval = WarpReduceMinString(s->warp_min[t].str_val.ptr, s->warp_min[t].str_val.length);
-        s->ck.min_value.str_val.ptr = minval.ptr;
-        s->ck.min_value.str_val.length = minval.length;
-        s->ck.has_minmax = has_minmax;
+        if (!(t & 0x1f)) {
+            s->ck.min_value.str_val.ptr = minval.ptr;
+            s->ck.min_value.str_val.length = minval.length;
+            s->ck.has_minmax = has_minmax;
+        }
     }
     else if (t < 32 * 2) {
         maxval = WarpReduceMaxString(s->warp_max[t & 0x1f].str_val.ptr, s->warp_max[t & 0x1f].str_val.length);
-        s->ck.max_value.str_val.ptr = maxval.ptr;
-        s->ck.max_value.str_val.length = maxval.length;
+        if (!(t & 0x1f)) {
+            s->ck.max_value.str_val.ptr = maxval.ptr;
+            s->ck.max_value.str_val.length = maxval.length;
+        }
     }
     else if (t < 32 * 3) {
         len_sum = WarpReduceSum32(s->warp_sum[t & 0x1f].str_val.length);
-        s->ck.sum.i_val = len_sum;
-        s->ck.has_sum = has_minmax;
+        if (!(t & 0x1f)) {
+            s->ck.sum.i_val = len_sum;
+            s->ck.has_sum = has_minmax;
+        }
     }
     else if (t < 32 * 4) {
         non_nulls = WarpReduceSum32(s->warp_non_nulls[t & 0x1f]);

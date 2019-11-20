@@ -199,6 +199,7 @@ struct EncColumnChunk
   uint16_t num_dict_fragments;      //!< Number of fragments using dictionary
   uint32_t dictionary_size;         //!< Size of dictionary
   uint32_t total_dict_entries;      //!< Total number of entries in dictionary
+  uint32_t ck_stat_size;            //!< Size of chunk-level statistics (included in 1st page header)
 };
 
 /**
@@ -337,16 +338,19 @@ cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] chunks Column chunks
+ * @param[in,out] chunks Column chunks
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] page_stats Optional page-level statistics to be included in page header
+ * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t EncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages,
+cudaError_t EncodePageHeaders(EncPage *pages, EncColumnChunk *chunks, uint32_t num_pages,
                               uint32_t start_page = 0, const gpu_inflate_status_s *comp_out = nullptr,
+                              const statistics_chunk *page_stats = nullptr, const statistics_chunk *chunk_stats = nullptr,
                               cudaStream_t stream = (cudaStream_t)0);
 
 /**

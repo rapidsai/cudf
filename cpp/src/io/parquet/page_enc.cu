@@ -384,19 +384,20 @@ gpuInitPageFragments(PageFragment *frag, const EncColumnDesc *col_desc, int32_t 
 __global__ void __launch_bounds__(128)
 gpuInitFragmentStats(statistics_group *groups, const PageFragment *fragments, const EncColumnDesc *col_desc, int32_t num_fragments, int32_t num_columns, uint32_t fragment_size)
 {
-    __shared__ __align__(8) statistics_group group_g;
+    __shared__ __align__(8) statistics_group group_g[4];
 
     uint32_t t = threadIdx.x & 0x1f;
     uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x >> 5);
     uint32_t column_id = blockIdx.x;
+    statistics_group * const g = &group_g[threadIdx.x >> 5];
     if (!t && frag_id < num_fragments) {
-        group_g.col = &col_desc[column_id];
-        group_g.start_row = frag_id * fragment_size;
-        group_g.num_rows = fragments[column_id * num_fragments + frag_id].num_rows;
+        g->col = &col_desc[column_id];
+        g->start_row = frag_id * fragment_size;
+        g->num_rows = fragments[column_id * num_fragments + frag_id].num_rows;
     }
     __syncthreads();
     if (t < sizeof(statistics_group) / sizeof(uint32_t) && frag_id < num_fragments) {
-        reinterpret_cast<uint32_t *>(&groups[column_id * num_fragments + frag_id])[t] = reinterpret_cast<uint32_t *>(&group_g)[t];
+        reinterpret_cast<uint32_t *>(&groups[column_id * num_fragments + frag_id])[t] = reinterpret_cast<uint32_t *>(g)[t];
     }
 }
 
@@ -429,10 +430,11 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         uint32_t num_pages = 0;
         uint32_t num_rows = 0;
         uint32_t page_start = 0;
-        uint32_t page_offset = 0;
+        uint32_t page_offset = ck_g.ck_stat_size;
         uint32_t num_dict_entries = 0;
-        uint32_t comp_page_offset = 0;
+        uint32_t comp_page_offset = ck_g.ck_stat_size;
         uint32_t cur_row = ck_g.start_row;
+        uint32_t ck_max_stats_len = 0;
         uint32_t max_stats_len = 0;
 
         if (!t) {
@@ -442,8 +444,8 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         }
         if (ck_g.has_dictionary) {
             if (!t) {
-                page_g.page_data = ck_g.uncompressed_bfr;
-                page_g.compressed_data = ck_g.compressed_bfr;
+                page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+                page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
                 page_g.num_fragments = 0;
                 page_g.page_type = DICTIONARY_PAGE;
                 page_g.dict_bits_plus1 = 0;
@@ -467,14 +469,14 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
         }
         SYNCWARP();
         do {
-            uint32_t fragment_data_size, max_page_size;
+            uint32_t fragment_data_size, max_page_size, minmax_len = 0;
             SYNCWARP();
             if (num_rows < ck_g.num_rows) {
                 if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
                     reinterpret_cast<uint32_t *>(&frag_g)[t] = reinterpret_cast<const uint32_t *>(&ck_g.fragments[fragments_in_chunk])[t];
                 }
                 if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
-                    max_stats_len = max(max(max_stats_len, ck_g.stats[fragments_in_chunk].min_value.str_val.length), ck_g.stats[fragments_in_chunk].max_value.str_val.length);
+                    minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length, ck_g.stats[fragments_in_chunk].max_value.str_val.length);
                 }
             } else if (!t) {
                 frag_g.fragment_data_size = 0;
@@ -543,10 +545,12 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                     page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
                     page_g.start_row = cur_row;
                     page_g.num_rows = rows_in_page;
+                    pagestats_g.start_chunk = ck_g.first_fragment + page_start;
                     pagestats_g.num_chunks = page_g.num_fragments;
                     page_offset += page_g.max_hdr_size + page_g.max_data_size;
                     comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
                     cur_row += rows_in_page;
+                    ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
                 }
                 SYNCWARP();
                 if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
@@ -561,13 +565,21 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                 page_start = fragments_in_chunk;
                 max_stats_len = 0;
             }
+            max_stats_len = max(max_stats_len, minmax_len);
             num_dict_entries += frag_g.num_dict_vals;
             page_size += fragment_data_size;
             rows_in_page += frag_g.num_rows;
             num_rows += frag_g.num_rows;
             fragments_in_chunk++;
         } while (frag_g.num_rows != 0);
+        SYNCWARP();
         if (!t) {
+            if (ck_g.ck_stat_size == 0 && ck_g.stats) {
+                uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
+                page_offset += ck_stat_size;
+                comp_page_offset += ck_stat_size;
+                ck_g.ck_stat_size = ck_stat_size;
+            }
             ck_g.num_pages = num_pages;
             ck_g.bfr_size = page_offset;
             ck_g.compressed_size = comp_page_offset;
@@ -1144,18 +1156,93 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t) {
     p = cpw_put_int64(p, v);                        \
     cur_fld = f;                                    \
 
+#define CPW_FLD_BINARY(f, v, l)                     \
+    p = cpw_put_fldh(p, f, cur_fld, ST_FLD_BINARY); \
+    p = cpw_put_uint32(p, l);                       \
+    memcpy(p, v, l);                                \
+    p += l;                                         \
+    cur_fld = f;                                    \
+
 #define CPW_END_STRUCT(hdr_end)                     \
     *p++ = 0;                                       \
     hdr_end = p;                                    \
     }                                               \
 
+#define CPW_END_STRUCT_NOTERMINATION(hdr_end)       \
+    hdr_end = p;                                    \
+    }                                               \
+
+
+__device__ uint8_t *EncodeStatistics(uint8_t *start, const statistics_chunk *s, const EncColumnDesc *col, float *fp_scratch)
+{
+    uint8_t *end, dtype, dtype_len;
+    dtype = col->stats_dtype;
+    switch (dtype) {
+    case dtype_bool8:
+    case dtype_int8:
+        dtype_len = 1;
+        break;
+    case dtype_int16:
+        dtype_len = 2;
+        break;
+    case dtype_int32:
+    case dtype_float32:
+        dtype_len = 4;
+        break;
+    case dtype_int64:
+    case dtype_timestamp64:
+    case dtype_float64:
+        dtype_len = 8;
+        break;
+    case dtype_int128:
+        dtype_len = 16;
+        break;
+    case dtype_string:
+    default:
+        dtype_len = 0;
+        break;
+    }
+    CPW_BEGIN_STRUCT(start)
+        CPW_FLD_INT64(3, s->null_count)
+        if (s->has_minmax) {
+            const void *vmin, *vmax;
+            uint32_t lmin, lmax;
+
+            if (dtype == dtype_string) {
+                lmin = s->min_value.str_val.length;
+                vmin = s->min_value.str_val.ptr;
+                lmax = s->max_value.str_val.length;
+                vmax = s->max_value.str_val.ptr;
+            }
+            else {
+                lmin = lmax = dtype_len;
+                if (dtype == dtype_float32) { // Convert from double to float32
+                    fp_scratch[0] = s->min_value.fp_val;
+                    fp_scratch[1] = s->max_value.fp_val;
+                    vmin = &fp_scratch[0];
+                    vmax = &fp_scratch[1];
+                }
+                else {
+                    vmin = &s->min_value;
+                    vmax = &s->max_value;
+                }
+            }
+            CPW_FLD_BINARY(5, vmin, lmin);
+            CPW_FLD_BINARY(6, vmax, lmax);
+        }
+    CPW_END_STRUCT_NOTERMINATION(end);
+    return end;
+}
+
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
-gpuEncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, const gpu_inflate_status_s *comp_out, uint32_t start_page)
+gpuEncodePageHeaders(EncPage *pages, EncColumnChunk *chunks, const gpu_inflate_status_s *comp_out,
+                     const statistics_chunk *page_stats, const statistics_chunk *chunk_stats, uint32_t start_page)
 {
-    //__shared__ __align__(8) EncColumnDesc col_g;
+    __shared__ __align__(8) EncColumnDesc col_g;
     __shared__ __align__(8) EncColumnChunk ck_g;
     __shared__ __align__(8) EncPage page_g;
+    __shared__ __align__(8) float fp_scratch[2];
 
     uint32_t t = threadIdx.x;
 
@@ -1166,15 +1253,20 @@ gpuEncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, const gpu_inf
     if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&ck_g)[t] = reinterpret_cast<const uint32_t *>(&chunks[page_g.chunk_id])[t];
     }
-    /*__syncthreads();
+    __syncthreads();
     if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&col_g)[t] = reinterpret_cast<const uint32_t *>(ck_g.col_desc)[t];
-    }*/
+    }
     __syncthreads();
     if (!t) {
         uint8_t *hdr_start, *hdr_end;
         uint32_t compressed_page_size, uncompressed_page_size;
 
+        if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
+            hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
+            hdr_end = EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], &col_g, fp_scratch);
+            chunks[page_g.chunk_id].ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
+        }
         uncompressed_page_size = page_g.max_data_size;
         if (ck_g.is_compressed) {
             hdr_start = page_g.compressed_data;
@@ -1200,7 +1292,12 @@ gpuEncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, const gpu_inf
                     CPW_FLD_INT32(2, encoding)          // encoding
                     CPW_FLD_INT32(3, RLE)               // definition_level_encoding
                     CPW_FLD_INT32(4, RLE)               // repetition_level_encoding
-                    // TODO: page-level statistics
+                    // Optionally encode page-level statistics
+                    if (page_stats) {
+                        CPW_FLD_STRUCT_BEGIN(5)
+                        p = EncodeStatistics(p, &page_stats[start_page + blockIdx.x], &col_g, fp_scratch);
+                        CPW_FLD_STRUCT_END(5)
+                    }
                 CPW_FLD_STRUCT_END(5)
             }
             else {
@@ -1239,9 +1336,9 @@ gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
     first_page = &pages[ck_g.first_page];
     num_pages = ck_g.num_pages;
     dst = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
+    dst += ck_g.ck_stat_size; // Skip over chunk statistics
     dst_base = dst;
     uncompressed_size = ck_g.bfr_size;
-
     for (uint32_t page = 0; page < num_pages; page++) {
         const uint8_t *src;
         uint32_t hdr_len, data_len;
@@ -1275,7 +1372,6 @@ gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
         }
     }
 }
-
 
 
 /**
@@ -1384,18 +1480,22 @@ cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] chunks Column chunks
+ * @param[in,out] chunks Column chunks
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] page_stats Optional page-level statistics to be included in page header
+ * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t EncodePageHeaders(EncPage *pages, const EncColumnChunk *chunks, uint32_t num_pages,
-                              uint32_t start_page, const gpu_inflate_status_s *comp_out, cudaStream_t stream)
+cudaError_t EncodePageHeaders(EncPage *pages, EncColumnChunk *chunks, uint32_t num_pages,
+                              uint32_t start_page, const gpu_inflate_status_s *comp_out,
+                              const statistics_chunk *page_stats, const statistics_chunk *chunk_stats,
+                              cudaStream_t stream)
 {
-    gpuEncodePageHeaders <<< num_pages, 128, 0, stream >>> (pages, chunks, comp_out, start_page);
+    gpuEncodePageHeaders <<< num_pages, 128, 0, stream >>> (pages, chunks, comp_out, page_stats, chunk_stats, start_page);
     return cudaSuccess;
 }
 

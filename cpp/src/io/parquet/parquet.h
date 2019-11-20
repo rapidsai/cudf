@@ -82,6 +82,7 @@ struct ColumnMetaData {
   int64_t data_page_offset = 0;           // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;          // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset = 0;     // Byte offset from the beginning of file to first (only) dictionary page
+  std::vector<uint8_t> statistics_blob;   // Encoded chunk-level statistics as binary blob
 };
 
 /**
@@ -139,6 +140,7 @@ struct FileMetaData {
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
   std::string created_by = "";
+  uint32_t column_order_listsize = 0;
 };
 
 /**
@@ -216,7 +218,8 @@ class CompactProtocolReader
   static const uint8_t g_list2struct[16];
 
  public:
-  explicit CompactProtocolReader(const uint8_t *base, size_t len) {
+  explicit CompactProtocolReader(const uint8_t *base = nullptr, size_t len = 0) { init(base, len); }
+  void init(const uint8_t *base, size_t len) {
     m_base = m_cur = base;
     m_end = base + len;
   }
