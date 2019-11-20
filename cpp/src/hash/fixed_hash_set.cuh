@@ -64,7 +64,6 @@ public:
    * @brief Factory to construct a new fixed_device_set
    *---------------------------------------------------------------------------**/
   static fixed_hash_set<Element> create(column_view const& col,
-                                        rmm::mr::device_memory_resource *mr,
                                         cudaStream_t stream) {
 
     auto d_column = column_device_view::create(col);
