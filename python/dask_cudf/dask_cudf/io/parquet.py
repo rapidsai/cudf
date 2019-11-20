@@ -38,78 +38,56 @@ class CudfEngine(ArrowEngine):
 
         if isinstance(piece, str):
             # `piece` is a file-path string
-            pieces = [
-                pq.ParquetDatasetPiece(
-                    piece, open_file_func=partial(fs.open, mode="rb")
-                )
-            ]
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
+            )
         else:
-            # `piece` = (path, row_group, partition_keys, piece_size)
-            (path, row_groups, partition_keys, piece_size) = piece
-            if not isinstance(row_groups, list):
-                row_groups = [row_groups]
+            # `piece` = (path, row_group, partition_keys)
+            (path, row_group, partition_keys) = piece
+            piece = pq.ParquetDatasetPiece(
+                path,
+                row_group=row_group,
+                partition_keys=partition_keys,
+                open_file_func=partial(fs.open, mode="rb"),
+            )
 
-            pieces = [
-                pq.ParquetDatasetPiece(
-                    path,
-                    row_group=row_group,
-                    partition_keys=partition_keys,
-                    open_file_func=partial(fs.open, mode="rb"),
-                )
-                for row_group in row_groups
-            ]
-
-        dfs = []
-        for piece in pieces:
-
-            strings_to_cats = kwargs.get("strings_to_categorical", False)
-            if cudf.utils.ioutils._is_local_filesystem(fs):
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
+        if cudf.utils.ioutils._is_local_filesystem(fs):
+            df = cudf.read_parquet(
+                piece.path,
+                engine="cudf",
+                columns=columns,
+                row_group=piece.row_group,
+                strings_to_categorical=strings_to_cats,
+                **kwargs.get("read", {}),
+            )
+        else:
+            with fs.open(piece.path, mode="rb") as f:
                 df = cudf.read_parquet(
-                    piece.path,
+                    f,
                     engine="cudf",
                     columns=columns,
                     row_group=piece.row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
-            else:
-                with fs.open(piece.path, mode="rb") as f:
-                    df = cudf.read_parquet(
-                        f,
-                        engine="cudf",
-                        columns=columns,
-                        row_group=piece.row_group,
-                        strings_to_categorical=strings_to_cats,
-                        **kwargs.get("read", {}),
-                    )
 
-            if index and index[0] in df.columns:
-                df = df.set_index(index[0])
+        if index and index[0] in df.columns:
+            df = df.set_index(index[0])
 
-            if len(piece.partition_keys) > 0:
-                if partitions is None:
-                    raise ValueError("Must pass partition sets")
-                for i, (name, index2) in enumerate(piece.partition_keys):
-                    categories = [
-                        val.as_py() for val in partitions.levels[i].dictionary
-                    ]
-                    sr = (
-                        cudf.Series(index2)
-                        .astype(type(index2))
-                        .repeat(len(df))
-                    )
-                    df[name] = CategoricalColumn(
-                        data=sr._column.data,
-                        categories=categories,
-                        ordered=False,
-                    )
+        if len(piece.partition_keys) > 0:
+            if partitions is None:
+                raise ValueError("Must pass partition sets")
+            for i, (name, index2) in enumerate(piece.partition_keys):
+                categories = [
+                    val.as_py() for val in partitions.levels[i].dictionary
+                ]
+                sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
+                df[name] = CategoricalColumn(
+                    data=sr._column.data, categories=categories, ordered=False
+                )
 
-            if len(pieces) == 1:
-                return df
-
-            dfs.append(df)
-
-        return cudf.concat(dfs, axis=0)
+        return df
 
     @staticmethod
     def write_partition(
@@ -192,6 +170,7 @@ def read_parquet(
         split_row_groups=split_row_groups,
         gather_statistics=gather_statistics,
         engine=CudfEngine,
+        concat_func=cudf.concat,
         **kwargs,
     )
 

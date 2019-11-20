@@ -7,7 +7,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 import dask_cudf
 
@@ -193,7 +193,7 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
 
 
 @pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("chunksize", [None, 0, 1024, 4096])
+@pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, metadata):
     df = pd.DataFrame(
         {
@@ -234,6 +234,5 @@ def test_chunksize(tmpdir, chunksize, metadata):
 
     for df_part in ddf2.partitions:
         if chunksize and len(df_part) > row_group_size:
-            assert (
-                df_part.compute().to_pandas().memory_usage().sum() <= chunksize
-            )
+            part_size = df_part.compute().to_pandas().memory_usage().sum()
+            assert part_size <= parse_bytes(chunksize)
