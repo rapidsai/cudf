@@ -290,8 +290,8 @@ void concatenate_masks(std::vector<column_view> const &views,
       view_offsets.begin(), view_offsets.end(),
       view_offsets.begin());
 
-  rmm::device_vector<column_device_view> dViews = device_views;
-  rmm::device_vector<size_type> d_offsets = view_offsets;
+  rmm::device_vector<column_device_view> dViews{device_views};
+  rmm::device_vector<size_type> d_offsets{view_offsets};
 
   auto number_of_mask_bits = view_offsets.back();
   constexpr size_type block_size{256};
