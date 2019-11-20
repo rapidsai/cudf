@@ -115,7 +115,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
     uint32_t num_dict_entries = 0;
     for (uint32_t i = 0; i < s->row_cnt; i += 1024) {
         uint32_t row = s->ck.start_row + i + t;
-        uint32_t is_valid = (row < s->col.num_rows) ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
+        uint32_t is_valid = (i + t < s->row_cnt && row < s->col.num_rows) ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
         uint32_t dict_idx = (is_valid) ? dict_index[row] : 0;
         uint32_t is_unique = (is_valid && dict_idx == row); // Any value that doesn't have bit31 set should have dict_idx=row at this point
         uint32_t umask = BALLOT(is_unique);
