@@ -240,6 +240,21 @@ TEST_F(DropDuplicate, WithNull)
     cudf::test::expect_tables_equal(expected_unique, got_unique->view());
 }
 
+TEST_F(DropDuplicate, StringKeyColumn)
+{
+    cudf::test::fixed_width_column_wrapper<int32_t> col{{      5,      4,     3,     5,     8,         1}, {1, 0, 1, 1, 1, 1}};
+    cudf::test::strings_column_wrapper key_col         {{  "all",  "new", "all", "new", "the", "strings"}, {1, 1, 1, 0, 1, 1}};
+    cudf::table_view input {{col, key_col}};
+    std::vector<cudf::size_type> keys{1};
+    cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last{{    5,     3,     4,         1,     8}, {1, 1, 0, 1, 1}};
+    cudf::test::strings_column_wrapper          exp_key_col_last{{"new", "all", "new", "strings", "the"}, {0, 1, 1, 1, 1}};
+    cudf::table_view expected_last {{exp_col_last, exp_key_col_last}};
+
+    auto got_last = drop_duplicates(input, keys, cudf::experimental::duplicate_keep_option::KEEP_LAST);
+
+    cudf::test::expect_tables_equal(expected_last, got_last->view());
+}
+
 TEST_F(DropDuplicate, EmptyInputTable)
 {
     cudf::test::fixed_width_column_wrapper<int32_t> col{std::initializer_list<int32_t>{}};
