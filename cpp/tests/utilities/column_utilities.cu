@@ -33,16 +33,31 @@
 namespace cudf {
 namespace test {
 
-// Property equality
-void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs) {
+namespace {   // anonymous
+
+// check for semantic property equality.  the difference between this and 
+// expect_column_properties_equal() is that the nullability of columns doesn't
+// affect their effective equality for the purposes of expect_columns_equal().
+//
+// expect_column_properties_equal() adds on the additional nullable() check
+// for cases where explicit full equality checking is desired.
+void expect_column_properties_equal_semantic(cudf::column_view lhs, cudf::column_view rhs)
+{
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
-  if (lhs.size() > 0) {
-     EXPECT_EQ(lhs.nullable(), rhs.nullable());
-  }
+  EXPECT_EQ(lhs.null_count(), rhs.null_count()); 
   EXPECT_EQ(lhs.has_nulls(), rhs.has_nulls());
   EXPECT_EQ(lhs.num_children(), rhs.num_children());
+}
+
+}; // anonymous
+
+// Property equality
+void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs) {
+  expect_column_properties_equal_semantic(lhs, rhs);
+  if (lhs.size() > 0) {
+     EXPECT_EQ(lhs.nullable(), rhs.nullable());
+  }  
 }
 
 class corresponding_rows_unequal {
@@ -58,7 +73,7 @@ public:
 };
 
 void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool print_all_differences) {
-  expect_column_properties_equal(lhs, rhs);
+  expect_column_properties_equal_semantic(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
