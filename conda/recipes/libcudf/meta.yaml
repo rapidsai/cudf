@@ -49,6 +49,7 @@ test:
     - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
     - test -f $PREFIX/include/cudf/legacy/column.hpp
     - test -f $PREFIX/include/cudf/legacy/reshape.hpp
+    - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/legacy/table.hpp
     - test -f $PREFIX/include/cudf/utilities/legacy/nvcategory_util.hpp
     - test -f $PREFIX/include/cudf/utilities/legacy/type_dispatcher.hpp
