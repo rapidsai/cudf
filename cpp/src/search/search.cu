@@ -21,8 +21,10 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <hash/fixed_hash_set.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <strings/utilities.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
@@ -210,6 +212,91 @@ bool contains(column_view const& col,
                                              col, value,
                                              stream, mr);
 }
+
+template <typename Element>
+void multi_contains_compute(column_view const& col,
+                            column_view const& in_col,
+                            mutable_column_view &result_view,
+                            rmm::mr::device_memory_resource *mr,
+                            cudaStream_t stream = 0) {
+
+  auto hash_set = fixed_hash_set<Element>::create(in_col, mr, stream);
+  auto device_hash_set = hash_set.to_device();
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    col.begin<Element>(),
+                    col.end<Element>(),
+                    result_view.begin<bool8>(),
+                    [device_hash_set] __device__ (Element e) {
+                      return device_hash_set.contains(e);
+                    });
+}
+
+template <>
+void multi_contains_compute<string_view>(column_view const& col,
+                                         column_view const& in_col,
+                                         mutable_column_view &result_view,
+                                         rmm::mr::device_memory_resource *mr,
+                                         cudaStream_t stream) {
+
+  auto hash_set = cudf::fixed_hash_set<string_view>::create(in_col, mr, stream);
+  auto device_hash_set = hash_set.to_device();
+
+  auto scv = strings_column_view(col);
+  auto col_dev = cudf::strings::detail::create_string_vector_from_column(scv, stream);
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    col_dev.begin(),
+                    col_dev.end(),
+                    result_view.begin<bool8>(),
+                    [device_hash_set] __device__ (string_view e) {
+                      return device_hash_set.contains(e);
+                    });
+}
+
+struct multi_contains_dispatch {
+  template <typename Element>
+  void operator()(column_view const& col,
+                  column_view const& in_col,
+                  mutable_column_view &result_view,
+                  cudaStream_t stream,
+                  rmm::mr::device_memory_resource *mr) {
+    multi_contains_compute<Element>(col, in_col, result_view, mr, stream);
+  }
+};
+
+std::unique_ptr<column> contains(column_view const& col,
+                                 column_view const& in_col,
+                                 cudaStream_t stream,
+                                 rmm::mr::device_memory_resource* mr) {
+
+  CUDF_EXPECTS(col.type() == in_col.type(), "DTYPE mismatch");
+
+  std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
+                                                       col.size(),
+                                                       copy_bitmask(col),
+                                                       col.null_count(),
+                                                       stream, mr);
+  
+  if (col.size() == 0) {
+    return result;
+  }
+
+  mutable_column_view result_view = result.get()->mutable_view();
+
+  if (in_col.size() == 0) {
+    bool8 f = false;
+    thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool8>(), result_view.end<bool8>(), f);
+    return result;
+  }
+
+  cudf::experimental::type_dispatcher(col.type(),
+                                      multi_contains_dispatch{},
+                                      col, in_col, result_view,
+                                      stream, mr);
+
+  return result;
+}
 } // namespace detail
 
 std::unique_ptr<column> lower_bound(table_view const& t,
@@ -236,6 +323,12 @@ bool contains(column_view const& col, scalar const& value, rmm::mr::device_memor
 {
   cudaStream_t stream = 0;
   return detail::contains(col, value, stream, mr);
+}
+
+std::unique_ptr<column> contains(column_view const& col, column_view const& in_col,
+                                       rmm::mr::device_memory_resource* mr) {
+  cudaStream_t stream = 0;
+  return detail::contains(col, in_col, stream, mr);
 }
 
 } // namespace exp

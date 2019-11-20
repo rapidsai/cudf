@@ -21,7 +21,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/strings/datetime.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -108,8 +108,8 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool pri
       //
       int index = differences[0];
 
-      auto diff_lhs = slice(lhs, index, index+1);
-      auto diff_rhs = slice(rhs, index, index+1);
+      auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index+1);
+      auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index+1);
 
       std::vector<std::string> h_left_strings = to_strings(diff_lhs);
       std::vector<std::string> h_right_strings = to_strings(diff_rhs);

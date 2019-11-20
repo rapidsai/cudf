@@ -129,6 +129,32 @@ std::unique_ptr<column> upper_bound(table_view const& t,
 bool contains(column_view const& col, scalar const& value,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**---------------------------------------------------------------------------*
+ * @brief Identify if elements in the column are contained in elements of a second column.
+ *
+ * For each element of col, identify if that element is contained in in_col
+ *
+ * @throws cudf::logic_error
+ * If `col.type() != in_col.type()`
+ *
+ * @example:
+ *
+ *      col = { 10, 20, 30, 40, 50 }
+ *   in_col = { 20, 40, 60, 80 }
+ *
+ *   result = { false, true, false, true, false }
+ *
+ * @param col      A column object
+ * @param in_col   A scalar value to search for in `col`
+ * @param mr       Device memory resource to use for device memory allocation
+ *
+ * @return std::unique_ptr<column> A column of bool8 elements containing
+ * true if the corresponding entry in col is contained in in_col and false
+ * if it is not.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<column> contains(column_view const& col, column_view const& in_col,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 } // namespace experimental
 } // namespace cudf
 
