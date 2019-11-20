@@ -107,7 +107,6 @@ set(COLUMN_TEST_SRC
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
-
 # - scalar tests ----------------------------------------------------------------------------------
 
 set(SCALAR_TEST_SRC
@@ -125,8 +124,7 @@ ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
 
 
 ###################################################################################################
-# - timestamps tests ------------------------------------------------------------------------------
-
+# - timestamps tests ----------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
@@ -428,7 +426,8 @@ set(COPYING_TEST_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -590,12 +589,20 @@ set(LEGACY_SEARCH_TEST_SRC
 ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 
 ###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+
+###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
 
-set(RESHAPE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_test.cu")
+set(LEGACY_RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_test.cu")
 
-ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
+ConfigureTest(LEGACY_RESHAPE_TEST "${LEGACY_RESHAPE_TEST_SRC}")
 
 ###################################################################################################
 # - traits test -----------------------------------------------------------------------------------
@@ -630,18 +637,18 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu")
 

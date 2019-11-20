@@ -195,3 +195,33 @@ def min_signed_type(x, min_size=8):
                 return int_dtype
     # resort to using `int64` and let numpy raise appropriate exception:
     return np.int64(x).dtype
+
+
+def min_numeric_column_type(x):
+    """
+    Return the smallest dtype which can represent all
+    elements of the `NumericalColumn` `x`
+    If the column is not a subtype of `np.signedinteger` or `np.floating`
+    returns the same dtype as the dtype of `x` without modification
+    """
+    from cudf.core.column import NumericalColumn
+
+    if not isinstance(x, NumericalColumn):
+        raise TypeError("Argument x must be of type column.NumericalColumn")
+    if x.valid_count == 0:
+        return x.dtype
+
+    if np.issubdtype(x.dtype, np.floating):
+        max_bound_dtype = np.min_scalar_type(x.max())
+        min_bound_dtype = np.min_scalar_type(x.min())
+        result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+        if result_type == np.dtype("float16"):
+            # cuDF does not support float16 dtype
+            result_type = np.dtype("float32")
+        return result_type
+    if np.issubdtype(x.dtype, np.signedinteger):
+        max_bound_dtype = np.dtype(min_signed_type(x.max()))
+        min_bound_dtype = np.dtype(min_signed_type(x.min()))
+        return np.promote_types(max_bound_dtype, min_bound_dtype)
+
+    return x.dtype
