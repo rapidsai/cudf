@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/utilities/chrono.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/device_vector.h>
