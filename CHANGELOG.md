@@ -39,6 +39,7 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3421 Port NVStrings find_multiple to cudf strings column
 
 ## Improvements
 
