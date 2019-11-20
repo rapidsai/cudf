@@ -35,7 +35,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-// TODO: should this go to copying.cu?
 std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    strings_column_view const& target,
                                    // TODO: first & last are used for the fill
@@ -43,8 +42,8 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    // end)
                                    size_type source_begin, size_type source_end,
                                    size_type target_begin,
-                                   cudaStream_t stream,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr,
+                                   cudaStream_t stream) {
   CUDF_EXPECTS((source_begin >= 0) &&
                  (source_begin <= source_end) &&
                  (source_begin < source.size()) &&
