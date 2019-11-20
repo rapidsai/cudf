@@ -32,7 +32,7 @@ namespace detail
 /**
  * @brief Returns a new strings column using the specified Filter to select
  * strings from the lhs column or the rhs column.
- * 
+ *
  * ```
  * output[i] = filter_fn(i) ? lhs(i) : rhs(i)
  * ```
@@ -52,7 +52,7 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream=0 )
 {
-    CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be the same size");   
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be the same size");
     auto strings_count = lhs.size();
     if( strings_count == 0 )
         return make_empty_strings_column(mr,stream);
@@ -62,14 +62,13 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
     auto d_lhs = *lhs_column;
     auto rhs_column = column_device_view::create(rhs.parent(),stream);
     auto d_rhs = *rhs_column;
-
-    // create null mask 
+    // create null mask
     rmm::device_buffer null_mask;
     size_type null_count = 0;
     if( lhs.has_nulls() || rhs.has_nulls() )
     {
         // Should we make the caller do this?
-        auto valid_mask = cudf::experimental::detail::valid_if( 
+        auto valid_mask = cudf::experimental::detail::valid_if(
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
             [d_lhs, d_rhs, filter_fn] __device__ (size_type idx) { return filter_fn(idx) ? d_lhs.is_valid(idx) : d_rhs.is_valid(idx); },
@@ -80,7 +79,7 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
 
     // build offsets column
     auto offsets_transformer = [d_lhs, d_rhs, filter_fn] __device__ (size_type idx) {
-            auto bfilter = filter_fn(idx);
+            bool bfilter = filter_fn(idx);
             size_type bytes = 0;
             if( bfilter ? d_lhs.is_valid(idx) : d_rhs.is_valid(idx) )
                bytes = bfilter ? d_lhs.element<string_view>(idx).size_bytes() :
