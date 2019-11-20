@@ -190,7 +190,7 @@
 - PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
 - PR #3413 Fix dask_cudf read_csv file-list bug
 - PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
-
+- PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
 
 # cuDF 0.10.0 (16 Oct 2019)
 
