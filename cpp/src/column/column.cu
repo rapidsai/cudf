@@ -30,6 +30,7 @@
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <algorithm>
+#include <numeric>
 #include <vector>
 
 namespace cudf {
@@ -207,8 +208,9 @@ struct create_column_from_view_vector {
  std::unique_ptr<column> operator()() {
 
    auto type = views.front().type();
-   size_type total_element_count = 0;
-   for (auto &v : views) { total_element_count += v.size(); }
+   size_type total_element_count =
+     std::accumulate(views.begin(), views.end(), 0,
+         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
 
    bool has_nulls = std::any_of(views.begin(), views.end(),
                       [](const column_view col) { return col.has_nulls(); });

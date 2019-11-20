@@ -35,6 +35,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <algorithm>
+#include <numeric>
 
 namespace cudf {
 
@@ -366,10 +367,9 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
   bool has_nulls = std::any_of(views.begin(), views.end(),
                      [](const column_view col) { return col.has_nulls(); });
   if (has_nulls) {
-    size_type total_element_count = 0;
-    for (auto &v : views) {
-      total_element_count += v.size();
-    }
+   size_type total_element_count =
+     std::accumulate(views.begin(), views.end(), 0,
+         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
     null_mask = create_null_mask(total_element_count, UNINITIALIZED, stream, mr);
 
     detail::concatenate_masks(
