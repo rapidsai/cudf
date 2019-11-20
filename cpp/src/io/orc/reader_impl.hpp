@@ -74,7 +74,7 @@ class reader::impl {
    * @param stripe Stripe index to select
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return std::unique_ptr<table> The set of columns
+   * @return The set of columns
    */
   std::unique_ptr<table> read(int skip_rows, int num_rows, int stripe,
                               cudaStream_t stream);
@@ -92,7 +92,7 @@ class reader::impl {
    * @param row_index_stride Distance between each row index
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return rmm::device_buffer Device buffer to decompressed page data
+   * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_stripe_data(
       const hostdevice_vector<gpu::ColumnDesc> &chunks,

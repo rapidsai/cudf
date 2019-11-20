@@ -66,7 +66,7 @@ class reader::impl {
   /**
    * @brief Returns the PANDAS-specific index column derived from the metadata.
    *
-   * @return std::string Name of the column
+   * @return Name of the column
    */
   std::string get_pandas_index() const { return _pandas_index; }
 
@@ -78,7 +78,7 @@ class reader::impl {
    * @param row_group Row group index to select
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return std::unique_ptr<table> The set of columns
+   * @return The set of columns
    */
   std::unique_ptr<table> read(int skip_rows, int num_rows, int row_group,
                               cudaStream_t stream);
@@ -90,7 +90,7 @@ class reader::impl {
    * @param chunks List of column chunk descriptors
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return size_t The total number of pages
+   * @return The total number of pages
    */
   size_t count_page_headers(
       const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
@@ -114,7 +114,7 @@ class reader::impl {
    * @param pages List of page information
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return rmm::device_buffer Device buffer to decompressed page data
+   * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_page_data(
       const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,

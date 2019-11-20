@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_CSV_GPU_H__
-#define __IO_CSV_GPU_H__
+#pragma once
 
 #include <cudf/types.hpp>
 
@@ -74,5 +73,3 @@ cudaError_t DecodeRowColumnData(const char *data, const uint64_t *row_starts,
 }  // namespace csv
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_CSV_GPU_H__

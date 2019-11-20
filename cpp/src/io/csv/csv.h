@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#ifndef __IO_CSV_H__
-#define __IO_CSV_H__
+#pragma once
 
 #include "csv_common.h"
-
-#endif  // __IO_CSV_H__

@@ -428,7 +428,8 @@ std::unique_ptr<table> reader::impl::read(size_t range_offset,
         make_column(column_types[i], num_records, out_buffers[i]));
   }
 
-  // Perform any final column preparation (may reference decoded data)
+  // TODO: String columns need to be reworked to actually copy characters in
+  // kernel to allow skipping quotation characters
   /*for (auto &column : columns) {
     column.finalize();
 
@@ -479,7 +480,7 @@ void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
 
   // Sort the row info according to ascending start offset
   // Subsequent processing (filtering, etc.) may require row order
-  thrust::sort(rmm::exec_policy()->on(0), ptr_first, ptr_last);
+  thrust::sort(rmm::exec_policy(stream)->on(stream), ptr_first, ptr_last);
 }
 
 std::pair<uint64_t, uint64_t> reader::impl::select_rows(

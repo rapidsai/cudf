@@ -16,7 +16,7 @@
 
 /**
  * @file reader_impl.hpp
- * @brief cuDF-IO csv reader class implementation header
+ * @brief cuDF-IO CSV reader class implementation header
  */
 
 #pragma once
@@ -54,7 +54,7 @@ class reader::impl {
    * @brief Constructor from a dataset source with reader options.
    *
    * @param source Dataset source
-   * @param filepath Path to the file if filepath source
+   * @param filepath Filepath if reading dataset from a file
    * @param options Settings for controlling reading behavior
    * @param mr Resource to use for device memory allocation
    */
@@ -72,7 +72,7 @@ class reader::impl {
    * @param num_rows Number of rows to read
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return `std::unique_ptr<table>` The set of columns
+   * @return The set of columns
    */
   std::unique_ptr<table> read(size_t range_offset, size_t range_size,
                               int skip_rows, int skip_end_rows, int num_rows,

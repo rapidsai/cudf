@@ -70,7 +70,7 @@ class reader::impl {
    * @param num_rows Number of rows to read
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return std::unique_ptr<table> The set of columns
+   * @return The set of columns
    */
   std::unique_ptr<table> read(int skip_rows, int num_rows, cudaStream_t stream);
 
@@ -81,7 +81,7 @@ class reader::impl {
    * @param comp_block_data Compressed block data
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return rmm::device_buffer Device buffer to decompressed block data
+   * @return Device buffer to decompressed block data
    */
   rmm::device_buffer decompress_data(const rmm::device_buffer &comp_block_data,
                                      cudaStream_t stream);

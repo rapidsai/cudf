@@ -19,6 +19,8 @@
  * @brief cuDF-IO freeform API
  */
 
+#pragma once
+
 #include "types.hpp"
 
 #include <cudf/table/table_view.hpp>
@@ -69,7 +71,7 @@ struct read_avro_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `std::unique_ptr<table>` The set of columns
+ * @return The set of columns
  */
 std::unique_ptr<table> read_avro(
     read_avro_args const& args,
@@ -180,7 +182,7 @@ struct read_csv_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `std::unique_ptr<table>` The set of columns
+ * @return The set of columns
  */
 std::unique_ptr<table> read_csv(
     read_csv_args const& args,
@@ -229,7 +231,7 @@ struct read_orc_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `std::unique_ptr<table>` The set of columns
+ * @return The set of columns
  */
 std::unique_ptr<table> read_orc(
     read_orc_args const& args,
@@ -247,7 +249,7 @@ struct write_orc_args {
   table_view table;
 
   explicit write_orc_args(sink_info const& snk, table_view const& table)
-      : sink(snk), table(std::move(table)) {}
+      : sink(snk), table(table) {}
 };
 
 /**
@@ -311,7 +313,7 @@ struct read_parquet_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return `std::unique_ptr<table>` The set of columns
+ * @return The set of columns
  */
 std::unique_ptr<table> read_parquet(
     read_parquet_args const& args,

@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_CSV_COMMON_H__
-#define __IO_CSV_COMMON_H__
+#pragma once
 
 class SerialTrieNode;
 
@@ -77,5 +76,3 @@ struct ParseOptions {
 }  // namespace csv
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_CSV_COMMON_H__

@@ -26,10 +26,10 @@
 
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <fstream>
 #include <memory>
@@ -55,7 +55,7 @@ class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 
-  // ORC datasets are divided into fixed size, independent stripes
+  // ORC datasets are divided into fixed-size, independent stripes
   static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 64;
 
   // ORC rows are divided into groups and assigned indexes for faster seeking
@@ -67,7 +67,8 @@ class writer::impl {
  public:
   /**
    * @brief Constructor with writer options.
-   * 
+   *
+   * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
@@ -94,7 +95,7 @@ class writer::impl {
    * @param dict List of dictionary chunks
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void init_dictionaries(orc_column_view* orc_columns, size_t num_rows,
+  void init_dictionaries(orc_column_view* columns, size_t num_rows,
                          std::vector<int> const& str_col_ids,
                          uint32_t* dict_data, uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>& dict,
@@ -129,7 +130,7 @@ class writer::impl {
    * @param stripe_list List of stripe boundaries
    * @param strm_ids List of unique stream identifiers
    *
-   * @return List of streams
+   * @return The streams
    **/
   std::vector<Stream> gather_streams(orc_column_view* columns,
                                      size_t num_columns, size_t num_rows,
@@ -149,7 +150,7 @@ class writer::impl {
    * @param chunks List of column data chunks
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return rmm::device_buffer Device buffer containing encoded data
+   * @return Device buffer containing encoded data
    **/
   rmm::device_buffer encode_columns(
       orc_column_view* columns, size_t num_columns, size_t num_rows,
@@ -171,7 +172,7 @@ class writer::impl {
    * @param strm_desc List of stream descriptors
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return List of stripes
+   * @return The stripes' information
    **/
   std::vector<StripeInformation> gather_stripes(
       size_t num_columns, size_t num_rows, size_t num_index_streams,
@@ -224,6 +225,7 @@ class writer::impl {
   /**
    * @brief Returns the number of row groups for holding the specified rows
    *
+   * @tparam T Optional type
    * @param num_rows Number of rows
    **/
   template <typename T = size_t>
@@ -235,6 +237,7 @@ class writer::impl {
   /**
    * @brief Returns the row index stride divided by the specified number
    *
+   * @tparam T Optional type
    * @param modulus Number to use for division
    **/
   template <typename T = size_t>
