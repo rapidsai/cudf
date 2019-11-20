@@ -426,7 +426,8 @@ set(COPYING_TEST_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -646,6 +647,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
