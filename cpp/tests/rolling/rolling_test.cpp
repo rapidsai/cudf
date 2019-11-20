@@ -437,12 +437,14 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 
 // // ------------- expected failures --------------------
 
+class RollingErrorTest : public cudf::test::BaseFixture {};
+
 // negative sizes
-TYPED_TEST(RollingTest, NegativeSizes)
+TEST_F(RollingErrorTest, NegativeSizes)
 {
-  const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
+  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
+  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
 
   EXPECT_THROW(cudf::experimental::rolling_window(input, -2,  2,  2, rolling_operator::SUM),
                cudf::logic_error);
@@ -453,24 +455,29 @@ TYPED_TEST(RollingTest, NegativeSizes)
 }
 
 // window array size mismatch
-TYPED_TEST(RollingTest, WindowArraySizeMismatch)
+TEST_F(RollingErrorTest, WindowArraySizeMismatch)
 {
-  const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
+  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
+  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
+
+  std::vector<size_type> five({ 2, 1, 2, 1, 4 });
+  std::vector<size_type> four({ 1, 2, 3, 4 });
+  fixed_width_column_wrapper<size_type> five_elements(five.begin(), five.end());
+  fixed_width_column_wrapper<size_type> four_elements(four.begin(), four.end());
 
   // this runs ok
-  EXPECT_NO_THROW(this->run_test_col_agg(input, std::vector<size_type>({ 1, 2, 3, 2, 3 }),
-                                         std::vector<size_type>({ 2, 1, 2, 1, 4 }), 1));
+  EXPECT_NO_THROW(cudf::experimental::rolling_window(input, five_elements, five_elements, 1,
+                                                     rolling_operator::SUM));
 
   // mismatch for the window array
-  EXPECT_THROW(this->run_test_col_agg(input, std::vector<size_type>({ 1, 2, 3, 2 }),
-                                      std::vector<size_type>({ 2, 1, 2, 1, 4 }), 1),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, four_elements, five_elements, 1,
+                                                  rolling_operator::SUM),
                cudf::logic_error);
 
   // mismatch for the forward window array
-  EXPECT_THROW(this->run_test_col_agg(input, std::vector<size_type>({ 1, 2, 3, 4, 3 }),
-                                      std::vector<size_type>({ 1, 2, 3, 4 }), 1),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, five_elements, four_elements, 1,
+                                                  rolling_operator::SUM),
                cudf::logic_error);
 }
 

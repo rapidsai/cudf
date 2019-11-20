@@ -138,6 +138,8 @@ struct rolling_window_launcher
                                                     rmm::mr::device_memory_resource *mr,
                                                     cudaStream_t stream)
   {
+    if (input.size() == 0) return empty_like(input);
+
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
     // output is always nullable
@@ -292,9 +294,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (input.size() == 0 || window.size() == 0)
-    return cudf::make_numeric_column(data_type{INT32}, 0);
-  
+  if (window.size() == 0 || forward_window.size() == 0) return empty_like(input);
+
   CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
                "window/forward_window must have INT32 type");
 
@@ -337,9 +338,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        data_type output_type,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (input.size() == 0 || window.size() == 0)
-    return cudf::make_numeric_column(data_type{INT32}, 0); // TODO fix this for other types   
-  
+  if (window.size() == 0 || forward_window.size() == 0) return empty_like(input);
+
   CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
                "window/forward_window must have INT32 type");
 
