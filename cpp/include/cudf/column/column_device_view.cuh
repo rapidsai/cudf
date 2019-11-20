@@ -74,30 +74,6 @@ class alignas(16) column_device_view_base {
   __host__ __device__ T const* data() const noexcept {
     return head<T>() + _offset;
   }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Return first element (accounting for offset) after underlying data
-   * is casted to the specified type.
-   *
-   * @tparam T The desired type
-   * @return T const* Pointer to the first element after casting
-   *---------------------------------------------------------------------------**/
-   template <typename T>
-   __host__ __device__ T const* begin() const noexcept {
-     return data<T>();
-   }
- 
-   /**---------------------------------------------------------------------------*
-    * @brief Return one past the last element after underlying data is casted to
-    * the specified type.
-    *
-    * @tparam T The desired type
-    * @return T const* Pointer to one past the last element after casting
-    *---------------------------------------------------------------------------**/
-   template <typename T>
-   __host__ __device__ T const* end() const noexcept {
-     return begin<T>() + size();
-   }
  
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
@@ -487,30 +463,6 @@ class alignas(16) mutable_column_device_view
     return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
 
-  /**---------------------------------------------------------------------------*
-   * @brief Return first element (accounting for offset) when underlying data is
-   * casted to the specified type.
-   *
-   * @tparam T The desired type
-   * @return T* Pointer to the first element after casting
-   *---------------------------------------------------------------------------**/
-   template <typename T>
-   __host__ __device__ T* begin() const noexcept {
-     return const_cast<T*>(detail::column_device_view_base::begin<T>());
-   }
- 
-   /**---------------------------------------------------------------------------*
-    * @brief Return one past the last element after underlying data is casted to
-    * the specified type.
-    *
-    * @tparam T The desired type
-    * @return T* Pointer to one past the last element after casting
-    *---------------------------------------------------------------------------**/
-   template <typename T>
-   __host__ __device__ T* end() const noexcept {
-     return const_cast<T*>(detail::column_device_view_base::end<T>());
-   }
- 
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
    *
