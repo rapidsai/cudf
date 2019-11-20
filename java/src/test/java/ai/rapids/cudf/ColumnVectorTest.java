@@ -646,7 +646,8 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(-1, index.getInt());
 
       try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
-        Table filtered = new Table(cv).filter(mask)) {
+           Table input = new Table(cv);
+           Table filtered = input.filter(mask)) {
         assertEquals(0, filtered.getColumn(0).getRowCount());
       }
 
