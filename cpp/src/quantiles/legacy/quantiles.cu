@@ -22,6 +22,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/device_vector.h>
@@ -83,8 +84,11 @@ namespace{ // anonymous
     
     if( ctxt->flag_sort_inplace  && ctxt->flag_sorted )
     {
-      return select_quantile(col_data,
-                             n,
+      auto data_begin = ctxt->flag_null_sort_behavior == GDF_NULL_AS_LARGEST
+                            ? col_data
+                            : col_data + col_in->null_count;
+      return select_quantile(data_begin,
+                             n-col_in->null_count,
                              quant, 
                              interpolation,
                              *ptr_res,
@@ -92,12 +96,17 @@ namespace{ // anonymous
                              stream);
     }else{
       // create a clone of col_data if sort is required but sort_inplace is not allowed.
-      rmm::device_vector<ColType> dv(n);
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream), col_data, n, dv.begin());
+      rmm::device_vector<ColType> dv(n-col_in->null_count);
+      thrust::copy_if(rmm::exec_policy(stream)->on(stream), col_data,
+                      col_data + n,
+                      thrust::counting_iterator<cudf::size_type>(0), dv.begin(),
+                      [bitmask = col_in->valid] __device__(auto i) {
+                        return gdf_is_valid(bitmask, i);
+                      });
       ColType* clone_data = dv.data().get();
 
       return select_quantile(clone_data,
-                             n,
+                             dv.size(),
                              quant, 
                              interpolation,
                              *ptr_res,
@@ -172,14 +181,13 @@ gdf_error quantile_exact( gdf_column*         col_in,       // input column
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
 
-  if (col_in->size == 0) {
+  if (col_in->size == col_in->null_count) {
      result->is_valid = false;
      return GDF_SUCCESS;
   }
 
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   gdf_error ret = GDF_SUCCESS;
   result->dtype = GDF_FLOAT64;
@@ -200,14 +208,13 @@ gdf_error quantile_approx(	gdf_column*  col_in,       // input column
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
   
-  if (col_in->size == 0) {
+  if (col_in->size == col_in->null_count) {
      result->is_valid = false;
      return GDF_SUCCESS;
   }
 
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   gdf_error ret = GDF_SUCCESS;
   result->dtype = col_in->dtype;
