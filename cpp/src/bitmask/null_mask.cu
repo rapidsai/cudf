@@ -291,7 +291,7 @@ void concatenate_masks(std::vector<column_view> const &views,
       view_offsets.begin());
 
   rmm::device_vector<column_device_view> dViews = device_views;
-  rmm::device_vector<size_type> dOffsets = view_offsets;
+  rmm::device_vector<size_type> d_offsets = view_offsets;
 
   auto number_of_mask_bits = view_offsets.back();
   constexpr size_type block_size{256};
@@ -299,7 +299,7 @@ void concatenate_masks(std::vector<column_view> const &views,
   concatenate_masks_kernel<<<config.num_blocks, block_size,
                              0, stream>>>(
     thrust::raw_pointer_cast(dViews.data()),
-    thrust::raw_pointer_cast(dOffsets.data()),
+    thrust::raw_pointer_cast(d_offsets.data()),
     static_cast<size_type>(dViews.size()),
     dest_mask, number_of_mask_bits);
 }
