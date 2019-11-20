@@ -144,6 +144,18 @@ class table {
  * @brief Columns of `tables_to_concat` are concatenated vertically to return a
  * single table_view
  *
+ * example:
+ * ```
+ * column_view c0; //Contains {0,1,2,3}
+ * column_view c1; //Contains {4,5,6,7}
+ * table_view t0{{c0, c0}};
+ * table_view t1{{c1, c1}};
+ * ...
+ * auto t = concatenate({t0.view(), t1.view()});
+ * column_view tc0 = (t->view()).column(0); //Contains {0,1,2,3,4,5,6,7}
+ * column_view tc1 = (t->view()).column(1); //Contains {0,1,2,3,4,5,6,7}
+ * ```
+ *
  * @throws cudf::logic_error
  * If number of columns mismatch
  *
