@@ -213,52 +213,26 @@ bool contains(column_view const& col,
                                              stream, mr);
 }
 
-template <typename Element>
-void multi_contains_compute(column_view const& col,
-                            column_view const& in_col,
-                            mutable_column_view &result_view,
-                            cudaStream_t stream = 0) {
-
-  auto hash_set = fixed_hash_set<Element>::create(in_col, stream);
-  auto device_hash_set = hash_set.to_device();
-
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    col.begin<Element>(),
-                    col.end<Element>(),
-                    result_view.begin<bool8>(),
-                    [device_hash_set] __device__ (Element e) {
-                      return device_hash_set.contains(e);
-                    });
-}
-
-template <>
-void multi_contains_compute<string_view>(column_view const& col,
-                                         column_view const& in_col,
-                                         mutable_column_view &result_view,
-                                         cudaStream_t stream) {
-
-  auto hash_set = cudf::fixed_hash_set<string_view>::create(in_col, stream);
-  auto device_hash_set = hash_set.to_device();
-
-  auto scv = strings_column_view(col);
-  auto col_dev = cudf::strings::detail::create_string_vector_from_column(scv, stream);
-
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    col_dev.begin(),
-                    col_dev.end(),
-                    result_view.begin<bool8>(),
-                    [device_hash_set] __device__ (string_view e) {
-                      return device_hash_set.contains(e);
-                    });
-}
-
 struct multi_contains_dispatch {
   template <typename Element>
   void operator()(column_view const& col,
                   column_view const& in_col,
                   mutable_column_view &result_view,
                   cudaStream_t stream) {
-    multi_contains_compute<Element>(col, in_col, result_view, stream);
+
+    auto hash_set = fixed_hash_set<Element>::create(in_col, stream);
+    auto device_hash_set = hash_set.to_device();
+
+    auto d_col_ptr = column_device_view::create(col, stream);
+    auto d_col = *d_col_ptr;
+
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(col.size()),
+                      result_view.begin<bool8>(),
+                      [device_hash_set, d_col] __device__ (size_t index) {
+                        return d_col.is_null(index) || device_hash_set.contains(d_col.element<Element>(index));
+                      });
   }
 };
 
