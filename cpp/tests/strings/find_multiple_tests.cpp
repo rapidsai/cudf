@@ -22,8 +22,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
-#include "./utilities.h"
 
 #include <vector>
 #include <gmock/gmock.h>

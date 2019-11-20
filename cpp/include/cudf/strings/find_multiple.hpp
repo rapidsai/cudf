@@ -24,12 +24,11 @@ namespace strings
 {
 
 /**
- * @brief Returns a column with position values where each
+ * @brief Returns a column with character position values where each
  * of the target strings are found in each string.
  *
- * If the string is not found, -1 is returned for that entry.
- *
- * Any null string entries return corresponding null output column entries.
+ * The size of the output column is targets.size() * strings.size().
+ * output[i] contains the position of target[i % targets.size()] in string[i/targets.size()]
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *

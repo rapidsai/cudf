@@ -56,7 +56,7 @@ std::unique_ptr<column> find_multiple( strings_column_view const& strings,
         rmm::device_buffer{0,stream,mr}, 0, stream, mr ); // no nulls
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int32_t>();
-    //
+    // fill output column with position values
     thrust::transform( rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(total_count),
