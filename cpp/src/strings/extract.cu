@@ -21,7 +21,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include "./utilities.hpp"
 #include "regex/regex.cuh"
 
@@ -41,7 +40,7 @@ namespace
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
- * 
+ *
  * The stack is used to keep progress on evaluating the regex instructions on each string.
  * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
  *
@@ -90,9 +89,8 @@ std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
 
-    auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
     // extract should include groups
     int groups = d_prog.group_counts();

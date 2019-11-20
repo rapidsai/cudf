@@ -137,6 +137,7 @@
 - PR #3387 Strings column gather function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
+- PR #3395 Port NVStrings regex extract to cudf strings column
 
 ## Bug Fixes
 
