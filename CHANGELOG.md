@@ -188,7 +188,7 @@
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
 - PR #3413 Fix dask_cudf read_csv file-list bug
-
+- PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
 
 
 # cuDF 0.10.0 (16 Oct 2019)
