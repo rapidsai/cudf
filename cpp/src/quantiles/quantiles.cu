@@ -14,38 +14,47 @@
  * limitations under the License.
  */
 
- #pragma once
+#pragma once
 
- #include <cudf/table/table.hpp>
- #include <cudf/table/table_view.hpp>
- #include <cudf/quantiles.hpp>
- #include <cudf/scalar/scalar.hpp>
- #include <cudf/scalar/scalar_factories.hpp>
- 
- namespace cudf {
-     
- namespace experimental {
- 
- /* @brief Computes the quantile of any sorted arithmetic column.
-  *
-  * @param[in] in                     Column from which quantile is computed.
-  * @param[in] quantile_interpolation Strategy to obtain a quantile which falls
-                                      between two points.
-  *
-  * @returns The quantile within range [0, 1]
-  */
- std::unique_ptr<scalar> quantile(column_view const& in,
-                                  double quantile,
-                                  quantile_interpolation interpolation,
-                                  cudaStream_t stream,
-                                  rmm::mr::device_memory_resource *mr)
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+
+namespace cudf {
+
+namespace experimental {
+
+std::unique_ptr<scalar>
+quantile(column_view const& in,
+         double quantile,
+         interpolation interpolation,
+         rmm::mr::device_memory_resource *mr,
+         cudaStream_t stream)
 {
     if (in.size() == 0) {
         return make_numeric_scalar(in.type(), stream, mr);
     }
+
+    throw new std::runtime_error("not implemented");
 }
- 
+
+std::vector<std::unique_ptr<scalar>>
+quantiles(table_view const& in,
+          double quantile,
+          interpolation interpolation,
+          rmm::mr::device_memory_resource *mr,
+          cudaStream_t stream)
+{
+    std::vector<std::unique_ptr<scalar>> out(in.num_columns());
+
+    std::transform(in.begin(), in.end(), out.begin(), [&](column_view const& in_column) {
+        return experimental::quantile(in_column, quantile, interpolation, mr, stream);
+    });
+
+    return out;
+}
+
  } // namespace cudf
- 
+
  } // namespace experimental
- 
