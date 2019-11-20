@@ -40,17 +40,21 @@ namespace
 /**
  * @brief Parse the back-ref index and position values from a given replace format.
  *
+ * The backref numbers are expected to be 1-based.
+ *
  * Returns a modified string without back-ref indicators.
+ * ```
  * Example:
  *    for input string:    'hello \2 and \1'
  *    the returned pairs:  (2,6),(1,11)
  *    returned string is:  'hello  and '
+ * ```
  */
 std::string parse_backrefs( std::string const& repl, std::vector<thrust::pair<size_type,size_type> >& backrefs )
 {
     std::string str = repl; // make a modifiable copy
     std::smatch m;
-    std::regex ex("(\\\\\\d+)"); // this searches for backslash-number(s)
+    std::regex ex("(\\\\\\d+)"); // this searches for backslash-number(s); example "\1"
     std::string rtn;             // result without refs
     size_type byte_offset = 0;
     while( std::regex_search( str, m, ex ) )
@@ -63,6 +67,7 @@ std::string parse_backrefs( std::string const& repl, std::vector<thrust::pair<si
         size_type length = static_cast<size_type>(bref.length());
         byte_offset += position;
         item.first = std::atoi(bref.c_str()+1); // back-ref index number
+        CUDF_EXPECTS( item.first > 0, "Back-reference numbers must be greater than 0");
         item.second = byte_offset;              // position within the string
         rtn += str.substr(0,position);
         str = str.substr(position + length);
@@ -174,9 +179,8 @@ std::unique_ptr<column> replace_with_backrefs( strings_column_view const& string
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
-    auto d_flags = get_character_flags_table();
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
     auto regex_insts = d_prog.insts_counts();
 

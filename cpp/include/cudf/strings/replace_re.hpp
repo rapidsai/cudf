@@ -52,7 +52,7 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
- * @param repls The strings used to for replacement.
+ * @param repls The strings used for replacement.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */

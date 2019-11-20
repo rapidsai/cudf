@@ -120,9 +120,8 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
-    auto d_flags = get_character_flags_table();
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
     auto regex_insts = d_prog.insts_counts();
 

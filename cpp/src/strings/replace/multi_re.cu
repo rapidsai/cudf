@@ -127,7 +127,7 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
     auto d_strings = *strings_column;
     auto repls_column = column_device_view::create(repls.parent(),stream);
     auto d_repls = *repls_column;
-    auto d_flags = detail::get_character_flags_table();
+    auto d_flags = get_character_flags_table();
     // compile regexes into device objects
     size_type regex_insts = 0;
     std::vector<std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)> > > h_progs;
