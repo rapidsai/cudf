@@ -4070,6 +4070,10 @@ class DataFrame(object):
         else:
             index = None
 
+        # Make sure every column has the correct name
+        for col, name in zip(self._columns, self.columns):
+            col.name = name
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
             self._columns, map_index._column, index
@@ -4167,6 +4171,23 @@ class DataFrame(object):
             return result.dropna()
         else:
             return result
+
+    def cov(self, **kwargs):
+        """Compute the covariance matrix of a DataFrame.
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments to be passed to cupy.cov
+        Returns
+        -------
+        cov : DataFrame
+        """
+        cov = cupy.cov(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
 
 
 def from_pandas(obj):

@@ -15,13 +15,11 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/column/column_view.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 
 #include <cstring>
-#include <thrust/scan.h>
 
 namespace cudf
 {
@@ -90,7 +88,22 @@ std::unique_ptr<column> make_offsets_child_column( InputIterator begin, InputIte
     return offsets_column;
 }
 
-//
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the chars memory.
+ * @param strings_count Number of strings.
+ * @param null_count Number of nulls in the strings column.
+ * @param mr Memory resource to use.
+ * @param stream Stream to use for any kernel calls.
+ * @return offsets child column and chars child column for a strings column
+ */
 template <typename SizeAndExecuteFunction>
 auto make_strings_children( SizeAndExecuteFunction size_and_exec_fn, size_type strings_count, size_type null_count,
                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

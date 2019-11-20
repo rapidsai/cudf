@@ -78,9 +78,8 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
-    auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
 
     // create the output column
@@ -89,7 +88,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<cudf::experimental::bool8>();
 
-    //
+    // fill the output column
     auto execpol = rmm::exec_policy(stream);
     int regex_insts = d_prog.insts_counts();
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
@@ -153,6 +152,11 @@ namespace detail
 
 namespace
 {
+
+/**
+ * @brief This counts the number of times the regex pattern matches in each string.
+ *
+ */
 template<size_t stack_size>
 struct count_fn
 {
@@ -192,9 +196,8 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
-    auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
 
     // create the output column
@@ -203,7 +206,7 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int32_t>();
 
-    //
+    // fill the output column
     auto execpol = rmm::exec_policy(stream);
     int regex_insts = d_prog.insts_counts();
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )

@@ -464,6 +464,7 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/legacy/copy.cpp
@@ -495,8 +496,8 @@ add_library(cudf
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
-            src/strings/convert/convert_integers.cu
             src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_integers.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
@@ -514,7 +515,11 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
-            src/scalar/scalar_factories.cpp)
+            src/scalar/scalar_factories.cpp
+            src/groupby/groupby.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/sort/groupby.cu
+            src/aggregation/aggregation.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
