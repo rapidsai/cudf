@@ -270,6 +270,34 @@ def test_skew(data, null_flag):
     np.testing.assert_array_almost_equal(got, expected)
 
 
+@pytest.mark.parametrize("dtype", params_dtypes)
+@pytest.mark.parametrize("num_na", [0, 1, 50, 99, 100])
+def test_series_median(dtype, num_na):
+    np.random.seed(0)
+    arr = np.random.random(100)
+    if np.issubdtype(dtype, np.integer):
+        arr *= 100
+    mask = np.arange(100) >= num_na
+
+    arr = arr.astype(dtype)
+    sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    arr2 = arr[mask]
+    ps = pd.Series(arr2, dtype=dtype)
+
+    actual = sr.median(skipna=True)
+    desired = ps.median(skipna=True)
+    print(actual, desired)
+    np.testing.assert_approx_equal(actual, desired)
+
+    # only for float until integer null supported convert to pandas in cudf
+    # eg. pd.Int64Dtype
+    if np.issubdtype(dtype, np.floating):
+        ps = sr.to_pandas()
+        actual = sr.median(skipna=False)
+        desired = ps.median(skipna=False)
+        np.testing.assert_approx_equal(actual, desired)
+
+
 @pytest.mark.parametrize(
     "data1",
     [

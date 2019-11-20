@@ -481,6 +481,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       MemoryListener.deviceDeallocation(amount, internalId);
       // Just do it to make sure the cache is updated
       offHeap.getDeviceMemoryLength(type, true);
+      // We have to free the cudf column to handle Strings properly
+      if (offHeap.nativeCudfColumnHandle != 0) {
+        freeCudfColumn(offHeap.nativeCudfColumnHandle, false);
+        offHeap.nativeCudfColumnHandle = 0;
+      }
+
     }
   }
 
