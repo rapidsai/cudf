@@ -135,6 +135,7 @@
 - PR #3387 Strings column gather function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
+- PR #3425 Strings column copy_if_else implementation
 
 ## Bug Fixes
 
