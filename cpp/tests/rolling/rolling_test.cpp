@@ -456,7 +456,7 @@ TYPED_TEST(RollingTest, NegativeSizes)
 TYPED_TEST(RollingTest, WindowArraySizeMismatch)
 {
   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
-  const std::vector<bool>      col_mask = {1, 1, 1, 0, 1};
+  const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
 
   // this runs ok
