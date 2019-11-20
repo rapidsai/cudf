@@ -25,22 +25,21 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Stack rows of a Table into a single column
+ * @brief Interleave columns of a table in to a single column.
  *
- * Converts the column major table @p in into a row major contiguous buffer,
- * which is returned as a `gdf_column`.
+ * Converts the column major table @p in into a row major column.
  * Example:
  * ```
- * in = [[4,5,6], [1,2,3]]
- * return = [4,1,5,2,6,3]
+ * in = [[A1, A2, A3], [B1, B2, B3]]
+ * return = [A1, B1, A2, B2, A3, B3]
  * ```
  *
- * @note: The dtype of all columns in @p input should be the same
+ * @note: The dtype of all columns in @p in should be the same.
  *
- * @param input Input table
- * @return gdf_column The result stacked buffer as column
+ * @param[i] in table containing columns to interleave.
+ * @return The interleaved columns as a single column
  */
-std::unique_ptr<column> stack(table_view const& in);
+std::unique_ptr<column> interleave_columns(table_view const& in);
 
 /*
  * @brief Constructs a new table with "rows" from @in stacked @p count times.
