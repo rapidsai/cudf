@@ -1,7 +1,7 @@
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
-
+- PR #2905 Added `Series.median()` and null support for `Series.quantile()`
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2980 Added nvtext is_vowel/is_consonant functions
@@ -21,7 +21,6 @@
 - PR #3192 Add dtype param to cast `DataFrame` on init
 - PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
-- PR #3255 Add utility to print column
 - PR #3300 Add `DataFrame.insert`
 - PR #3263 Define and implement new `valid_if`
 - PR #3278 Add `to_host` utility to copy `column_view` to host
@@ -39,6 +38,7 @@
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
+- PR #3331 Add copy_if_else
 
 ## Improvements
 
@@ -132,6 +132,7 @@
 - PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
+- PR #3387 Strings column gather function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
 
@@ -186,6 +187,7 @@
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
+- PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
 - PR #3413 Fix dask_cudf read_csv file-list bug
 - PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
 
