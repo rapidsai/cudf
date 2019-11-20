@@ -215,6 +215,9 @@ struct parse_datetime
             DTFormatItem item = items[idx];
             int slen = (int)item.length;
             //printf("%d:%c=%d\n",(int)fmt.ftype,ch,(int)slen);
+            if( length < slen ){
+                return 1;
+            }
             if(item.item_type==false)
             {
                 // consume fmt.len bytes from datetime
@@ -223,8 +226,6 @@ struct parse_datetime
                 length -= slen;
                 continue;
             }
-            if( length < slen )
-                return 1;
 
             // special logic for each specifier
             switch(item.specifier)
