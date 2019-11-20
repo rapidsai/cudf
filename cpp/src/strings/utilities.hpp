@@ -15,9 +15,9 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -82,34 +82,6 @@ std::unique_ptr<cudf::column> chars_from_string_vector(
     const int32_t* d_offsets, cudf::size_type null_count,
     cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
-/**
- * @brief Create a chars column to be a child of a strings column.
- * This will return the properly sized column to be filled in by the caller.
- *
- * @param strings_count Number of strings in the column.
- * @param null_count Number of null string entries in the column.
- * @param total_bytes Number of bytes for the chars column.
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
- * @return chars child column for strings column
- */
-std::unique_ptr<column> create_chars_child_column( cudf::size_type strings_count,
-    cudf::size_type null_count, cudf::size_type total_bytes,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-
-/**
- * @brief Create a strings column with no data for response to operations
- * invoked with an empty column.
- *
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
- * @return Empty strings column
- */
-std::unique_ptr<column> make_empty_strings_column(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
 
 // Type for the character flags table.
 using character_flags_table_type = uint8_t;
