@@ -190,7 +190,6 @@
 - PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
 
 
-
 # cuDF 0.10.0 (16 Oct 2019)
 
 ## New Features
