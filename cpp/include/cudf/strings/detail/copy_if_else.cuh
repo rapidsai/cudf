@@ -32,6 +32,10 @@ namespace detail
 /**
  * @brief Returns a new strings column using the specified Filter to select
  * strings from the lhs column or the rhs column.
+ * 
+ * ```
+ * output[i] = filter_fn(i) ? lhs(i) : rhs(i)
+ * ```
  *
  * @tparam Filter Functor that takes an index and returns a boolean.
  *
@@ -83,7 +87,7 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
                                  d_rhs.element<string_view>(idx).size_bytes();
             return bytes;
         };
-    auto offsets_transformer_itr = thrust::make_transform_iterator( begin, offsets_transformer );
+    auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                                     offsets_transformer_itr+strings_count,
                                                     mr, stream);
@@ -95,7 +99,7 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
     auto d_chars = chars_column->mutable_view().template data<char>();
     // fill in chars
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        [d_strings, begin, strings_count, d_offsets, d_chars] __device__(size_type idx){
+        [d_lhs, d_rhs, filter_fn, d_offsets, d_chars] __device__(size_type idx){
             auto bfilter = filter_fn(idx);
             if( bfilter ? d_lhs.is_null(idx) : d_rhs.is_null(idx) )
                return;
@@ -103,7 +107,7 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
             memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 
-    return make_strings_column(output_count, std::move(offsets_column), std::move(chars_column),
+    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
 
