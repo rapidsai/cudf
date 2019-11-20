@@ -19,7 +19,7 @@
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <utilities/legacy/device_atomics.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/timestamp_utilities.cuh>

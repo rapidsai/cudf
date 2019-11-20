@@ -34,7 +34,7 @@
 
 #include <cudf/legacy/unary.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/legacy/trie.cuh>
+#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/legacy/cudf_utils.h> 
 
