@@ -489,12 +489,6 @@ add_library(cudf
             src/sort/sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
-            src/strings/copying/copying.cu
-            src/strings/copying/concatenate.cu
-            src/strings/sorting/sorting.cu
-            src/strings/substring.cu
-            src/strings/combine.cu
-            src/strings/char_types/char_types.cu
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
@@ -502,6 +496,7 @@ add_library(cudf
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_integers.cu
+            src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
             src/strings/filling/fill.cu
