@@ -93,7 +93,7 @@ public abstract class MemoryListener {
       new AtomicReference<>(new HashSet<>());
 
   /**
-   * Holds the set of pinned memory listeners. An <code>AtomicReference&lt;HashSet&gt;</code> is
+   * Holds the set of host memory listeners. An <code>AtomicReference&lt;HashSet&gt;</code> is
    * used here to optimize the common read path over the less common write path (add/remove
    * listeners). Other data structures like a ConcurrentHashMap still involve a lock on the read
    * path where as this eliminates any locking on reads.
@@ -116,7 +116,7 @@ public abstract class MemoryListener {
   }
 
   /**
-   * Register a pinned memory listener. If the memory listener is already registered it will not
+   * Register a host memory listener. If the memory listener is already registered it will not
    * install duplicates. This should be done before any column operations happen or you risk
    * missing those operations.
    * @param listener the listener to start sending events to.
@@ -139,7 +139,7 @@ public abstract class MemoryListener {
   }
 
   /**
-   * Memory was actually allocated.  This should typically be done on a per column basis and the id
+   * Device memory was actually allocated.  This should typically be done on a per column basis and the id
    * should be the internal id of the column. For most operations this should automatically be done
    * for you unless you are adding in a new way to allocate the device data for a column.
    * @param amount the number of bytes allocated.
@@ -158,7 +158,7 @@ public abstract class MemoryListener {
   }
 
   /**
-   * Memory was actually deallocated.  This should typically be done on a per column basis and the
+   * Device memory was actually deallocated.  This should typically be done on a per column basis and the
    * id should be the internal id of the column. For most operations this should automatically be
    * done for you unless you are manually freeing the device data for a column.
    * @param amount the number of bytes released.
@@ -178,9 +178,7 @@ public abstract class MemoryListener {
   }
 
   /**
-   * Memory was actually allocated.  This should typically be done on a per column basis and the id
-   * should be the internal id of the column. For most operations this should automatically be done
-   * for you unless you are adding in a new way to allocate the device data for a column.
+   * Host memory was actually allocated.
    * @param amount the number of bytes allocated.
    * @param id the id of the column.
    */
@@ -197,9 +195,7 @@ public abstract class MemoryListener {
   }
 
   /**
-   * Memory was actually deallocated.  This should typically be done on a per column basis and the
-   * id should be the internal id of the column. For most operations this should automatically be
-   * done for you unless you are manually freeing the device data for a column.
+   * Host memory was actually deallocated.
    * @param amount the number of bytes released.
    * @param id the id of the column.
    */

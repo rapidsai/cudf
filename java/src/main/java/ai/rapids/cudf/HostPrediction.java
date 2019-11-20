@@ -20,7 +20,7 @@ package ai.rapids.cudf;
 
 /**
  * Provides a convenient way to setup a prediction for a pinned data operation. The prediction
- * should by part of a try with resources block so that close is guaranteed to be called and
+ * should be used in a try-with-resources block so that close is guaranteed to be called and
  * end the prediction. Do not nest these. Make sure that the prediction is as close to the actual
  * memory allocation as possible to avoid the possibility of nesting. This will typically be right
  * around the JNI call that does the operation.

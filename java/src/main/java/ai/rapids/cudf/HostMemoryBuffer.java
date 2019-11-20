@@ -110,10 +110,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   HostMemoryBuffer(long address, long length) {
-    super(address, length, new HostBufferCleaner(address, length));
-    if (length > 0) {
-      MemoryListener.hostAllocation(length, id);
-    }
+    this(address, length, new HostBufferCleaner(address, length));
   }
 
   HostMemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {

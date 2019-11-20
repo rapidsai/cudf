@@ -2188,7 +2188,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         if (hostData.data != null) {
           total += hostData.data.length;
         }
-
         if (hostData.offsets != null) {
           total += hostData.offsets.length;
         }
@@ -2673,10 +2672,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           // We need at least one byte or we will get NULL back for data
           stringBufferSize = 1;
         }
+        // The offsets are ints and there is 1 more than the number of rows.
         long offsetsLen = (rows + 1) * OFFSET_SIZE;
         try (HostPrediction prediction = new HostPrediction(stringBufferSize + offsetsLen, "stringBuilder")) {
           this.data = HostMemoryBuffer.allocate(stringBufferSize);
-          // The offsets are ints and there is 1 more than the number of rows.
           this.offsets = HostMemoryBuffer.allocate(offsetsLen);
         }
         // The first offset is always 0
@@ -2791,10 +2790,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
       long oldLen = data.getLength();
-      long newLen = oldLen;
-      if (newLen <= 0) {
-        newLen = 1;
-      }
+      long newLen = Math.max(oldLen, 1);
       while (currentStringByteIndex + length > newLen) {
         newLen *= 2;
       }
