@@ -20,7 +20,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/strings/datetime.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/detail/copy.hpp>
 
 #include <tests/utilities/cudf_gtest.hpp>

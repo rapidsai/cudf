@@ -40,8 +40,7 @@ namespace strings
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
  * @param strings Strings instance for this operation.
- * @param timestamps Timestamp values to convert.
- * @param output_type The timestamp type used for creating the output column.
+ * @param timestamp_type The timestamp type used for creating the output column.
  * @param format String specifying the timestamp format in strings.
  * @param mr Resource for allocating device memory.
  * @return New datetime column.

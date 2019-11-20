@@ -400,8 +400,8 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
-            src/quantiles/quantiles.cu
-            src/quantiles/group_quantiles.cu
+            src/quantiles/legacy/quantiles.cu
+            src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
             src/reductions/legacy/max.cu
@@ -416,8 +416,8 @@ add_library(cudf
             src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
-	    src/replace/replace.cu
-            src/reshape/stack.cu
+            src/replace/replace.cu
+            src/reshape/legacy/stack.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -464,6 +464,7 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/legacy/copy.cpp
@@ -492,24 +493,27 @@ add_library(cudf
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
-            src/strings/convert/convert_integers.cu
             src/strings/convert/convert_booleans.cu
+            src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_integers.cu
+            src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
-            src/strings/filling/fill.cu
             src/strings/find.cu
+            src/strings/filling/fill.cu
+            src/strings/padding.cu
+            src/strings/sorting/sorting.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
-            src/strings/sorting/sorting.cu
-            src/strings/datetime.cu
-            src/strings/combine.cu
-            src/strings/char_types/char_types.cu
-            src/strings/case.cu
             src/strings/substring.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
-            src/scalar/scalar_factories.cpp)
+            src/scalar/scalar_factories.cpp
+            src/groupby/groupby.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/sort/groupby.cu
+            src/aggregation/aggregation.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")

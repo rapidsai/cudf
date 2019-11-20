@@ -15,7 +15,7 @@
  */
 
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/datetime.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/utilities/base_fixture.hpp>

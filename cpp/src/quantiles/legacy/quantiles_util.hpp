@@ -19,7 +19,7 @@
 //Quantile (percentile) functionality
 
 #include <cudf/cudf.h>
-#include <cudf/quantiles.hpp>
+#include <cudf/legacy/quantiles.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
 

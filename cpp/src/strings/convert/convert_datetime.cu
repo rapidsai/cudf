@@ -19,12 +19,12 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf/strings/datetime.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include "../utilities.hpp"
+#include "../utilities.cuh"
 
 #include <vector>
 #include <map>
@@ -77,6 +77,11 @@ enum class format_char_type : int8_t
     specifier  // timestamp format specifier
 };
 
+/**
+ * @brief Represents a format specifier or literal from a timestamp format string.
+ * 
+ * Created by the format_compiler when parsing a format string.
+ */
 struct alignas(4) format_item
 {
     format_char_type item_type;    // specifier or literal indicator
@@ -93,7 +98,13 @@ struct alignas(4) format_item
     }
 };
 
-//
+/**
+ * @brief The format_compiler parses a timestamp format string into a vector of
+ * format_items.
+ * 
+ * The vector of format_items are used when parsing a string into timestamp
+ * components and when formatting a string from timestamp components.
+ */
 struct format_compiler
 {
     std::string format;
@@ -362,7 +373,7 @@ struct dispatch_to_timestamps_fn
                      mutable_column_view& results_view,
                      cudaStream_t stream ) const
     {
-        CUDF_EXPECTS( cudf::is_timestamp<T>(), "Unexpected timestamp type" );
+        CUDF_EXPECTS( cudf::is_timestamp<T>(), "Expecting timestamp type" );
         format_compiler compiler(format.c_str(),units);
         auto d_items = compiler.compile_to_device();
         auto d_results = results_view.data<T>();
@@ -707,7 +718,7 @@ std::unique_ptr<column> from_timestamps( column_view const& timestamps,
 {
     size_type strings_count = timestamps.size();
     if( strings_count == 0 )
-        return detail::make_empty_strings_column(mr,stream);
+        return make_empty_strings_column(mr,stream);
 
     CUDF_EXPECTS( !format.empty(), "Format parameter must not be empty.");
     timestamp_units units = cudf::experimental::type_dispatcher( timestamps.type(), dispatch_timestamp_to_units_fn() );
@@ -726,15 +737,15 @@ std::unique_ptr<column> from_timestamps( column_view const& timestamps,
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0),
         [d_column, d_str_bytes] __device__ (size_type idx) { return ( d_column.is_null(idx) ? 0 : d_str_bytes ); });
-    auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
-                                                            offsets_transformer_itr+strings_count,
-                                                            mr, stream);
+    auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
+                                                    offsets_transformer_itr+strings_count,
+                                                    mr, stream);
     auto offsets_view = offsets_column->view();
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column = detail::create_chars_child_column( strings_count, timestamps.null_count(), bytes, mr, stream );
+    auto chars_column = create_chars_child_column( strings_count, timestamps.null_count(), bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.template data<char>();
     // fill in chars column with timestamps
