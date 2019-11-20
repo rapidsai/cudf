@@ -63,15 +63,15 @@ inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
             if (ofs) {
                 v = __funnelshift_r(v, *p32, ofs);
             }
-            hash = __funnelshift_l(hash, hash, 1) + v;
+            hash = __funnelshift_l(hash, hash, 5) + v;
             len -= 4;
         }
         v = *p32;
         if (ofs) {
-            v = __funnelshift_r(v, (ofs + len > 4) ? *p32 : 0, ofs);
+            v = __funnelshift_r(v, (ofs + len > 4) ? p32[1] : 0, ofs);
         }
-        v = (*p32) & ((2 << (len * 8 - 1)) - 1);
-        hash = __funnelshift_l(hash, hash, 1) + v;
+        v &= ((2 << (len * 8 - 1)) - 1);
+        hash = __funnelshift_l(hash, hash, 5) + v;
     }
     return uint32_hash16(hash);
 }
@@ -214,8 +214,8 @@ gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
                     next_addr = &s->hashmap[hash];
                     while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
                         const char *ptr2 = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
-                        uint32_t len2 = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
-                        if (len2 == len && nvstr_is_equal(ptr, count, ptr2, len2)) {
+                        uint32_t count2 = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
+                        if (count2 == count && nvstr_is_equal(ptr, count, ptr2, count2)) {
                             is_dupe = 1;
                             break;
                         }

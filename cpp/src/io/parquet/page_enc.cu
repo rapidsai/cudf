@@ -636,7 +636,7 @@ inline __device__ void PackLiterals(uint8_t *dst, uint32_t v, uint32_t count, ui
                 mask = 0x3;
             }
             else { // w=4
-                v = (v << 4) | (SHFL_XOR(v, 1) & 0xf);
+                v |= SHFL_XOR(v, 1) << 4;
                 mask = 0x1;
             }
             if (t < count && !(t & mask)) {
