@@ -41,6 +41,7 @@ namespace detail
  *
  * @param lhs Strings instance to copy if Filter is true
  * @param rhs Strings instance to copy if Filter is false
+ * @param filter_fn Called to determine which column to retrieve an entry for a specific row.
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column.
@@ -67,7 +68,6 @@ std::unique_ptr<cudf::column> copy_if_else( strings_column_view const& lhs,
     size_type null_count = 0;
     if( lhs.has_nulls() || rhs.has_nulls() )
     {
-        // Should we make the caller do this?
         auto valid_mask = cudf::experimental::detail::valid_if(
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(strings_count),
