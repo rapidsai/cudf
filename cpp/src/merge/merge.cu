@@ -392,10 +392,12 @@ private:
       return cudf::experimental::empty_like(left_table);
     }
 
-    CUDF_EXPECTS(cudf::have_same_types(left_table, right_table), "Mismatched column dtypes");
-    
-    CUDF_EXPECTS(key_cols.size() > 0, "Empty key_cols");
-    CUDF_EXPECTS(key_cols.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
+    CUDF_EXPECTS(cudf::have_same_types(left_table, right_table), "Mismatched column types");
+
+    auto keys_sz = key_cols.size(); 
+    CUDF_EXPECTS( keys_sz > 0, "Empty key_cols");
+    CUDF_EXPECTS( keys_sz <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
+    CUDF_EXPECTS( keys_sz == column_order.size(), "Mismatched number of index columns and order specifiers");
     
     if (not column_order.empty())
       {
