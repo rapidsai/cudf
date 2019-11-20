@@ -45,7 +45,8 @@
 template<typename VType>
 void f_quantile_tester(
   gdf_column* col_in,                           ///< input column
-  std::vector<VType>& v_appox,                  ///< expected result for quantile_approx
+  bool is_sorted,                               ///< input column sorted?
+  std::vector<VType>& v_approx,                 ///< expected result for quantile_approx
   std::vector<std::vector<double>>& v_exact,    ///< expected result for quantile_exact
   const gdf_error expected_error = GDF_SUCCESS) ///< expected returned state for quantiles
 {
@@ -59,7 +60,7 @@ void f_quantile_tester(
   size_t n_qs = qvals.size();
   
   assert( n_methods == methods.size() );
-  gdf_context ctxt{0, static_cast<gdf_method>(0), 0, 1};
+  gdf_context ctxt{is_sorted, static_cast<gdf_method>(0), 0, 1};
   
   for(size_t j = 0; j<n_qs; ++j)
     {
@@ -68,10 +69,10 @@ void f_quantile_tester(
       EXPECT_EQ( ret, expected_error) << "approx " << " returns unexpected failure\n";
       
       if( ret == GDF_SUCCESS ){
-        double delta = std::abs(static_cast<double>(result_approx.value() - v_appox[j]));
+        double delta = std::abs(static_cast<double>(result_approx.value() - v_approx[j]));
         bool flag = delta < 1.0e-8;
-        EXPECT_EQ( flag, true ) << " " << q << " appox quantile "
-          << " val = " << result_approx.value() << ", " <<  v_appox[j];
+        EXPECT_EQ( flag, true ) << " " << q << " approx quantile "
+          << " val = " << result_approx.value() << ", " <<  v_approx[j];
       }
 
       for(size_t i = 0;i<n_methods;++i)
@@ -105,7 +106,7 @@ TEST_F(gdf_quantile, DoubleVector)
     {-1.01,   0.8,  0.955,  2.13,   6.8},
     {-1.01,   0.8,  1.11,   2.13,   6.8}};
 
-  f_quantile_tester<VType>(col.get(), v_baseline_approx, v_baseline_exact);
+  f_quantile_tester<VType>(col.get(), false, v_baseline_approx, v_baseline_exact);
 }
 
 TEST_F(gdf_quantile, IntegerVector)
@@ -122,15 +123,14 @@ TEST_F(gdf_quantile, IntegerVector)
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7}};
 
-  f_quantile_tester<VType>(col.get(), v_baseline_approx, v_baseline_exact);
+  f_quantile_tester<VType>(col.get(), false, v_baseline_approx, v_baseline_exact);
 }
 
-TEST_F(gdf_quantile, ReportValidMaskError)
+TEST_F(gdf_quantile, SortedVector)
 {
   using VType = int32_t;
-  std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};
-  std::vector<cudf::valid_type> bitmask(gdf_valid_allocation_size(v.size()), 0xF3);
-  cudf::test::column_wrapper<VType> col(v, bitmask);
+  std::vector<VType> v{-1, 0, 1, 1, 2, 3, 4, 6, 7};
+  cudf::test::column_wrapper<VType> col(v);
 
   std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
@@ -139,8 +139,47 @@ TEST_F(gdf_quantile, ReportValidMaskError)
     {-1,     1,     1,     2,     7},
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7}};
-  
-  f_quantile_tester<VType>(col.get(), v_baseline_approx, v_baseline_exact, GDF_VALIDITY_UNSUPPORTED);
+
+  f_quantile_tester<VType>(col.get(), true, v_baseline_approx, v_baseline_exact);
+}
+
+TEST_F(gdf_quantile, VectorWithNulls)
+{
+  using VType = int32_t;
+  std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};
+  std::vector<gdf_valid_type> bitmask(gdf_valid_allocation_size(v.size()), 0xF3);
+  cudf::test::column_wrapper<VType> col(v, bitmask);
+  //col.print(); //7 0 @ @ 2 1 -1 1 6 
+
+  std::vector<VType> v_baseline_approx{-1,     0,     0,     1,     7};
+  std::vector<std::vector<double>> v_baseline_exact{
+    {-1.,   0.5,  0.98,  1.,   7.},
+    {-1.,   0.,   0.,    1.,   7.},
+    {-1.,   1.,   1.,    1.,   7.},
+    {-1.,   0.5,  0.5,   1.,   7.},
+    {-1.,   1.,   1.,    1.,   7.}};
+
+  f_quantile_tester<VType>(col.get(), false, v_baseline_approx, v_baseline_exact);
+}
+
+TEST_F(gdf_quantile, SortedVectorWithNulls)
+{
+  using VType = int32_t;
+  std::vector<VType> v{-1, 0, 1, 1, 2, 6, 7, 3, 4};
+  std::vector<gdf_valid_type> bitmask(gdf_valid_allocation_size(v.size()), 0x7F);
+  bitmask[1]=0xFE;
+  cudf::test::column_wrapper<VType> col(v, bitmask);
+  //col.print(); //-1 0 1 1 2 6 7 @ @
+
+  std::vector<VType> v_baseline_approx{-1,     0,     0,     1,     7};
+  std::vector<std::vector<double>> v_baseline_exact{
+    {-1.,   0.5,  0.98,  1.,   7.},
+    {-1.,   0.,   0.,    1.,   7.},
+    {-1.,   1.,   1.,    1.,   7.},
+    {-1.,   0.5,  0.5,   1.,   7.},
+    {-1.,   1.,   1.,    1.,   7.}};
+
+  f_quantile_tester<VType>(col.get(), true, v_baseline_approx, v_baseline_exact);
 }
 
 
