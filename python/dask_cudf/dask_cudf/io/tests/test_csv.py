@@ -1,3 +1,4 @@
+import gzip
 import os
 import warnings
 
@@ -96,3 +97,21 @@ def test_read_csv_compression(tmp_path):
         )
 
         assert not record
+
+
+def test_read_csv_compression_file_list(tmp_path):
+    # Repro from Issue#3412
+    lines = """col1,col2
+    0,1
+    2,3"""
+
+    files = [tmp_path / "test1.csv", tmp_path / "test2.csv"]
+
+    for fn in files:
+        with gzip.open(fn, "wb") as fp:
+            fp.write(lines.encode("utf-8"))
+
+    ddf_cpu = dd.read_csv(files, compression="gzip").compute()
+    ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
