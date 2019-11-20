@@ -338,7 +338,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        rmm::mr::device_memory_resource* mr)
 {
   if (input.size() == 0 || window.size() == 0)
-    return cudf::make_numeric_column(data_type{INT32}, 0);
+    return cudf::make_numeric_column(data_type{INT32}, 0); // TODO fix this for other types   
   
   CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
                "window/forward_window must have INT32 type");
