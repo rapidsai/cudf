@@ -137,6 +137,7 @@
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
 - PR #3422 Move utilities to legacy
+- PR #3441 Port NVStrings url encode/decode to cudf strings column
 
 ## Bug Fixes
 
