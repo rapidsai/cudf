@@ -28,7 +28,6 @@
 #define CUDF_TRANSFORM_UNARY_FUNCTIONS_CUH
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>

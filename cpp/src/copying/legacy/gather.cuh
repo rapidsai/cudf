@@ -1,7 +1,7 @@
 #include <cudf/legacy/copying.hpp>
 #include <cudf/cudf.h>
-#include <utilities/bit_util.cuh>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/bit_util.cuh>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/legacy/table.hpp>
@@ -20,8 +20,8 @@
 #include <cub/cub.cuh>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
-#include <utilities/column_utils.hpp>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 
 #include <bitmask/legacy/valid_if.cuh>
 

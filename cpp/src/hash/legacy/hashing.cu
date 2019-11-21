@@ -22,7 +22,7 @@
 #include <join/legacy/joining.h>
 #include <table/legacy/device_table.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <utilities/int_fastdiv.h>
+#include <cudf/detail/utilities/int_fastdiv.h>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <copying/legacy/scatter.hpp>
 #include <cudf/types.hpp>
