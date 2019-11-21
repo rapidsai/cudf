@@ -134,6 +134,7 @@
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
 - PR #3387 Strings column gather function
+- PR #3440 Strings column scatter function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
 - PR #3422 Move utilities to legacy
