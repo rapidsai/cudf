@@ -73,12 +73,12 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
 
   auto const device_source = table_device_view::create(source, stream);
 
-  // Make mutable table view from columns
-  auto target_views = std::vector<mutable_column_view>(target.size());
-  std::transform(target.begin(), target.end(), target_views.begin(),
-    [](auto const& col) { return static_cast<mutable_column_view>(*col); });
-  auto target_table = mutable_table_view(target_views);
-  auto device_target = mutable_table_device_view::create(target_table, stream);
+  // Make device array of target bitmask pointers
+  thrust::host_vector<bitmask_type*> target_masks(target.size());
+  std::transform(target.begin(), target.end(), target_masks.begin(),
+    [](auto const& col) { return col->mutable_view().null_mask(); });
+  rmm::device_vector<bitmask_type*> d_target_masks(target_masks);
+  auto target_rows = target.front()->size();
 
   // Compute block size
   int grid_size, block_size;
@@ -87,7 +87,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
 
   auto d_valid_counts = thrust::device_vector<size_type>(target.size());
   bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
-    gather_map, *device_target, d_valid_counts.data().get());
+    gather_map, d_target_masks.data().get(), target_rows, d_valid_counts.data().get());
 
   // Copy the valid counts into each column
   auto valid_counts = thrust::host_vector<size_type>(d_valid_counts);
@@ -95,11 +95,11 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto end = thrust::make_tuple(target.end(), valid_counts.end());
   thrust::for_each(thrust::host,
     thrust::make_zip_iterator(begin), thrust::make_zip_iterator(end),
-    [](thrust::tuple<std::unique_ptr<column>&, size_type> tuple) {
+    [target_rows](thrust::tuple<std::unique_ptr<column>&, size_type> tuple) {
       auto& target_col = thrust::get<0>(tuple);
       auto const valid_count = thrust::get<1>(tuple);
       if (target_col->nullable()) {
-        auto const null_count = target_col->size() - valid_count;
+        auto const null_count = target_rows - valid_count;
         target_col->set_null_count(null_count);
       }
     });

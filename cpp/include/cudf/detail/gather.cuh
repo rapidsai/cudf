@@ -59,7 +59,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
 
     column_device_view source_col = source_table.column(i);
 
-    if (destination_col.nullable()) {
+    if (masks[i] != nullptr) {
       size_type destination_row_base = blockIdx.x * blockDim.x;
       cudf::size_type valid_count_accumulate = 0;
 
@@ -72,7 +72,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
 
         bool bit_is_valid;
         if (ignore_out_of_bounds && (source_row < 0 || source_row >= source_col.size())) {
-          bit_is_valid = thread_active && destination_col.is_valid_nocheck(destination_row);
+          bit_is_valid = thread_active && bit_is_set(masks[i], destination_row);
         } else {
           bit_is_valid = source_col.is_valid(source_row);
         }
