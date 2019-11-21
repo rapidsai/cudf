@@ -194,6 +194,7 @@
 - PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
 - PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
 - PR #3435 Fix diff and shift for empty series
+- PR #3439 Fix index-name bug in StringColumn concat
 
 # cuDF 0.10.0 (16 Oct 2019)
 
