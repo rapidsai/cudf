@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <type_traits>
 
 namespace cudf {
 
@@ -168,13 +169,14 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
  * @param source The mask to copy from
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
- * @param number_of_mask_words The number of words of type bitmask_type to copy
  *---------------------------------------------------------------------------**/
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
                                     size_type source_begin_bit,
-                                    size_type source_end_bit,
-                                    size_type number_of_mask_words) {
+                                    size_type source_end_bit) {
+  auto number_of_mask_words = cudf::util::div_rounding_up_safe(
+      static_cast<size_t>(source_end_bit - source_begin_bit),
+      detail::size_in_bits<bitmask_type>());
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
@@ -193,6 +195,19 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Concatenates the null mask bits of all the column device views in the
+ * `views` array to the destination bitmask.
+ *
+ * Bit `i` in `destination` will be equal to bit `i + offset` from `source`.
+ *
+ * @param views Array of column_device_view
+ * @param output_offsets Prefix sum of sizes of elements of `views`
+ * @param number_of_views Size of `views` array
+ * @param dest_mask The output buffer to copy null masks into
+ * @param number_of_mask_bits The total number of null masks bits that are being
+ * copied
+ *---------------------------------------------------------------------------**/
 __global__
 void
 concatenate_masks_kernel(
@@ -211,7 +226,7 @@ concatenate_masks_kernel(
     size_type source_view_index = thrust::upper_bound(thrust::seq,
         output_offsets, output_offsets + number_of_views,
         mask_index) - output_offsets - 1;
-    int bit_is_set = 1;
+    bool bit_is_set = 1;
     if (source_view_index < number_of_views) {
       size_type column_element_index = mask_index - output_offsets[source_view_index];
       bit_is_set = views[source_view_index].is_valid(column_element_index);
@@ -291,17 +306,17 @@ void concatenate_masks(std::vector<column_view> const &views,
       view_offsets.begin(), view_offsets.end(),
       view_offsets.begin());
 
-  rmm::device_vector<column_device_view> dViews{device_views};
+  rmm::device_vector<column_device_view> d_views{device_views};
   rmm::device_vector<size_type> d_offsets{view_offsets};
 
   auto number_of_mask_bits = view_offsets.back();
   constexpr size_type block_size{256};
-  cudf::util::cuda::grid_config_1d config(number_of_mask_bits, block_size);
-  concatenate_masks_kernel<<<config.num_blocks, block_size,
+  cudf::experimental::detail::grid_1d config(number_of_mask_bits, block_size);
+  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block,
                              0, stream>>>(
-    thrust::raw_pointer_cast(dViews.data()),
-    thrust::raw_pointer_cast(d_offsets.data()),
-    static_cast<size_type>(dViews.size()),
+    d_views.data().get(),
+    d_offsets.data().get(),
+    static_cast<size_type>(d_views.size()),
     dest_mask, number_of_mask_bits);
 }
 
@@ -338,12 +353,12 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
         static_cast<size_t>(end_bit - begin_bit),
         detail::size_in_bits<bitmask_type>());
     dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-    cudf::util::cuda::grid_config_1d config(number_of_mask_words, 256);
+    constexpr size_type block_size{256};
+    cudf::experimental::detail::grid_1d config(number_of_mask_words, block_size);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                           stream>>>(
-        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit,
-        number_of_mask_words);
-    CUDA_CHECK_LAST()
+        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit);
+    CUDA_CHECK_LAST();
   }
   return dest_mask;
 }
