@@ -28,43 +28,31 @@ namespace detail {
 
 namespace {
 
-std::unique_ptr<column> copy_with_nullable(column_view const& original,
-    bool force_mask_allocation, rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+void set_null_mask(std::unique_ptr<column>& col, rmm::device_buffer&& bitmask,
+    size_type null_count)
 {
-  auto copy = std::make_unique<column>(original, stream, mr);
-  if (force_mask_allocation and not original.nullable()) {
-    // Create an all-valid null mask if original has none
-    auto contents = copy->release();
-    auto bitmask = create_null_mask(original.size(), mask_state::ALL_VALID, stream, mr);
-    size_type null_count = 0;
-    copy = std::make_unique<column>(original.type(), original.size(),
-      std::move(*contents.data), std::move(bitmask), null_count, std::move(contents.children));
-    // TODO use this from PR 3172 instead
-    //auto mask = create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
-    //copy->set_null_mask(std::move(mask), null_count);
-  }
-  return copy;
+  auto const size = col->size();
+  auto const type = col->type();
+  auto contents = col->release();
+  col = std::make_unique<column>(type, size, std::move(*contents.data),
+    std::move(bitmask), null_count, std::move(contents.children));
+  // TODO use this from PR 3172 instead
+  //copy->set_null_mask(std::move(mask), null_count);
 }
 
-template <typename T>
-thrust::device_vector<T> make_gather_map(column_view const& scatter_map,
-    size_type rows, cudaStream_t stream)
+template <typename T, typename MapIterator>
+thrust::device_vector<T> make_gather_map(MapIterator scatter_iter,
+    size_type scatter_rows, size_type gather_rows, cudaStream_t stream)
 {
-  // Transform negative indices to index + rows
-  auto scatter_iter = thrust::make_transform_iterator(
-    scatter_map.begin<T>(),
-    index_converter<T>{rows});
-
   static_assert(std::is_signed<T>::value,
     "Need different invalid index if unsigned index types are added");
   auto const invalid_index = static_cast<T>(-1);
 
   // Convert scatter map to a gather map
-  auto gather_map = thrust::device_vector<T>(rows, invalid_index);
+  auto gather_map = thrust::device_vector<T>(gather_rows, invalid_index);
   thrust::scatter(rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<T>(0),
-    thrust::make_counting_iterator<T>(scatter_map.size()),
+    thrust::make_counting_iterator<T>(scatter_rows),
     scatter_iter, gather_map.begin());
 
   return gather_map;
@@ -72,8 +60,17 @@ thrust::device_vector<T> make_gather_map(column_view const& scatter_map,
 
 template <typename MapIterator>
 void gather_bitmask(table_view const& source, MapIterator gather_map,
-    std::vector<std::unique_ptr<column>>& target, cudaStream_t stream)
+    std::vector<std::unique_ptr<column>>& target,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
+  // Create null mask if source is nullable but target is not
+  for (size_t i = 0; i < target.size(); ++i) {
+    if (source.column(i).nullable() and not target[i]->nullable()) {
+      auto mask = create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
+      set_null_mask(target[i], std::move(mask), 0);
+    }
+  }
+
   auto const device_source = table_device_view::create(source, stream);
 
   // Make mutable table view from columns
@@ -109,8 +106,7 @@ struct column_scatterer {
       column_view const& scatter_map, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    // Result column must have a null mask if the source does
-    auto result = copy_with_nullable(target, source.nullable(), mr, stream);
+    auto result = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
     // Transform negative indices to index + target size
@@ -118,7 +114,7 @@ struct column_scatterer {
       scatter_map.begin<index_type>(),
       index_converter<index_type>{target.size()});
 
-    // NOTE use source.begin + scatter_map.size rather than end in case the
+    // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
     thrust::scatter(rmm::exec_policy(stream)->on(stream), source.begin<T>(),
       source.begin<T>() + scatter_map.size(), scatter_iter,
@@ -153,6 +149,12 @@ struct scatter_impl {
         "Scatter map index out of bounds");
     }
 
+    // TODO figure out how to get column_scatterer to take this
+    // Transform negative indices to index + target size
+    auto scatter_rows = scatter_map.size();
+    auto scatter_iter = thrust::make_transform_iterator(
+      scatter_map.begin<T>(), index_converter<T>{target.num_rows()});
+
     // TODO create separate streams for each col and then sync with master?
     auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
     std::transform(source.begin(), source.end(), target.begin(), result.begin(),
@@ -161,8 +163,9 @@ struct scatter_impl {
           source_col, scatter_map, target_col, mr, stream);
       });
 
-    auto gather_map = make_gather_map<T>(scatter_map, target.num_rows(), stream);
-    gather_bitmask(source, gather_map.begin(), result, stream);
+    auto gather_map = make_gather_map<T>(scatter_iter, scatter_rows,
+      target.num_rows(), stream);
+    gather_bitmask(source, gather_map.begin(), result, mr, stream);
 
     return std::make_unique<table>(std::move(result));
   }
@@ -202,17 +205,25 @@ __global__ void marking_bitmask_kernel(
 template <typename MapIterator>
 void scatter_scalar_bitmask(std::vector<std::unique_ptr<scalar>> const& source,
     MapIterator scatter_map, size_type num_scatter_rows,
-    std::vector<std::unique_ptr<column>>& target, cudaStream_t stream)
+    std::vector<std::unique_ptr<column>>& target,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   constexpr size_type block_size = 256;
   size_type const grid_size = grid_1d(num_scatter_rows, block_size).num_blocks;
 
   for (size_t i = 0; i < target.size(); ++i) {
-    if (target[i]->nullable()) {
+    auto const source_is_valid = source[i]->is_valid(stream);
+    if (target[i]->nullable() or not source_is_valid) {
+      if (not target[i]->nullable()) {
+        // Target must have a null mask if the source is not valid
+        auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
+        set_null_mask(target[i], std::move(mask), 0);
+      }
+
       auto target_view = mutable_column_device_view::create(
         target[i]->mutable_view(), stream);
 
-      auto bitmask_kernel = source[i]->is_valid(stream)
+      auto bitmask_kernel = source_is_valid
         ? marking_bitmask_kernel<true, decltype(scatter_map)>
         : marking_bitmask_kernel<false, decltype(scatter_map)>;
       bitmask_kernel<<<grid_size, block_size, 0, stream>>>(
@@ -228,8 +239,7 @@ struct column_scalar_scatterer {
       column_view const& indices, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    // Result column must have a null mask if the source is not valid
-    auto result = copy_with_nullable(target, not source->is_valid(), mr, stream);
+    auto result = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
     // Transform negative indices to index + target size
@@ -275,6 +285,11 @@ struct scatter_scalar_impl {
         "Scatter map index out of bounds");
     }
 
+    // TODO figure out how to get column_scalar_scatterer to take this
+    // Transform negative indices to index + target size
+    auto scatter_iter = thrust::make_transform_iterator(
+      indices.begin<T>(), index_converter<T>{target.num_rows()});
+
     // TODO create separate streams for each col and then sync with master?
     auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
     std::transform(source.begin(), source.end(), target.begin(), result.begin(),
@@ -283,10 +298,7 @@ struct scatter_scalar_impl {
           source_scalar, indices, target_col, mr, stream);
       });
 
-    // Transform negative indices to index + target size
-    auto scatter_iter = thrust::make_transform_iterator(
-      indices.begin<T>(), index_converter<T>{target.num_rows()});
-    scatter_scalar_bitmask(source, scatter_iter, indices.size(), result, stream);
+    scatter_scalar_bitmask(source, scatter_iter, indices.size(), result, mr, stream);
 
     return std::make_unique<table>(std::move(result));
   }
