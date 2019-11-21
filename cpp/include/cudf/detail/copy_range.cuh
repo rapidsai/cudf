@@ -151,26 +151,12 @@ void copy_range(SourceValueIterator source_value_begin,
   // this code assumes that source and target have the same type.
   CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
 
-#if 1
   auto warp_aligned_begin_lower_bound =
     cudf::util::round_down_safe(target_begin, warp_size);
   auto warp_aligned_end_upper_bound =
     cudf::util::round_up_safe(target_end, warp_size);
   auto num_items =
     warp_aligned_end_upper_bound - warp_aligned_begin_lower_bound;
-#else
-  // This one results in a compiler internal error! TODO: file NVIDIA bug
-  // size_type num_items =
-  //   cudf::util::round_up_safe(target_end - target_begin, warp_size);
-  // number threads to cover range, rounded to nearest warp
-  // this code runs for one additional round if target_begin is not warp
-  // aligned, and target_end is block_size + 1
-  auto num_items =
-    size_type{
-      warp_size *
-        cudf::util::div_rounding_up_safe(target_end - target_begin, warp_size)
-    };
-#endif
 
   constexpr size_type block_size{256};
 
