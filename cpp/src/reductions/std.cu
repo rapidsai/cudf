@@ -15,7 +15,7 @@
  */
 // The translation unit for reduction `standard deviation`
 
-#include "reduction_functions.hpp"
+#include <cudf/detail/reduction_functions.hpp>
 #include "compound.cuh"
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.

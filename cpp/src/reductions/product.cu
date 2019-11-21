@@ -15,7 +15,7 @@
  */
  // The translation unit for reduction `product`
 
-#include "reduction_functions.hpp"
+#include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::product(

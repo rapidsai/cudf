@@ -122,19 +122,19 @@ std::unique_ptr<column> scan(const column_view& input,
   mutable_column_view output = output_column->mutable_view();
 
   switch (op) {
-    case scan_op::SCAN_SUM:
+    case scan_op::SUM:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceSum>(), input, output, inclusive, mr, stream);
         break;
-    case scan_op::SCAN_MIN:
+    case scan_op::MIN:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceMin>(), input, output, inclusive, mr, stream);
         break;
-    case scan_op::SCAN_MAX:
+    case scan_op::MAX:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceMax>(), input, output, inclusive, mr, stream);
         break;
-    case scan_op::SCAN_PRODUCT:
+    case scan_op::PRODUCT:
         cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceProduct>(), input, output, inclusive, mr, stream);
         break;

@@ -16,7 +16,7 @@
 
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include "reduction_functions.hpp"
+#include <cudf/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace experimental {

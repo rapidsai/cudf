@@ -27,10 +27,10 @@ namespace experimental {
  * be performed on a column
  */
 enum class scan_op {
-  SCAN_SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
-  SCAN_MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
-  SCAN_MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
-  SCAN_PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
+  SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
+  MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
+  MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
+  PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
 };
 
 /**

@@ -15,7 +15,7 @@
  */
 // The translation unit for reduction `sum`
 
-#include "reduction_functions.hpp"
+#include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::sum(

@@ -104,7 +104,7 @@ TYPED_TEST(ScanTest, Min)
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
-                    scan_op::SCAN_MIN, true);
+                    scan_op::MIN, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
@@ -113,7 +113,7 @@ TYPED_TEST(ScanTest, Min)
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
-                    scan_op::SCAN_MIN, true);
+                    scan_op::MIN, true);
 }
 
 TYPED_TEST(ScanTest, Max)
@@ -129,7 +129,7 @@ TYPED_TEST(ScanTest, Max)
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
-                    scan_op::SCAN_MAX, true);
+                    scan_op::MAX, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
@@ -138,7 +138,7 @@ TYPED_TEST(ScanTest, Max)
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
-                    scan_op::SCAN_MAX, true);
+                    scan_op::MAX, true);
 }
 
 
@@ -155,7 +155,7 @@ TYPED_TEST(ScanTest, Product)
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
-                    scan_op::SCAN_PRODUCT, true);
+                    scan_op::PRODUCT, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
@@ -164,7 +164,7 @@ TYPED_TEST(ScanTest, Product)
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
-                    scan_op::SCAN_PRODUCT, true);
+                    scan_op::PRODUCT, true);
 }
 
 TYPED_TEST(ScanTest, Sum)
@@ -180,7 +180,7 @@ TYPED_TEST(ScanTest, Sum)
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
-                    scan_op::SCAN_SUM, true);
+                    scan_op::SUM, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
@@ -189,5 +189,5 @@ TYPED_TEST(ScanTest, Sum)
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
-                    scan_op::SCAN_SUM, true);
+                    scan_op::SUM, true);
 }

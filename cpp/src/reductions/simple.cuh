@@ -56,7 +56,8 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
-  ResultType identity = string_supported_identity<ResultType, Op>();
+  ResultType identity =  Op::Op::template identity<ResultType>();
+  //  string_supported_identity<ResultType, Op>();
   rmm::device_scalar<ResultType> dev_result{identity, stream, mr}; 
 
   // reduction by iterator

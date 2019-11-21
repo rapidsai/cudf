@@ -76,14 +76,34 @@ struct DeviceCount {
 
 /* @brief binary `min` operator */
 struct DeviceMin {
-  template <typename T>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
     return std::min(lhs, rhs);
   }
 
-  template <typename T>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     return std::numeric_limits<T>::max();
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+    if (lhs.empty())
+      return rhs;
+    else if (rhs.empty())
+      return lhs;
+    else
+      return std::min(lhs, rhs);
+    //return lhs <= rhs ? lhs : rhs;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  static constexpr T identity() {
+    return T{nullptr, 0};
   }
 };
 
@@ -94,10 +114,17 @@ struct DeviceMax {
     return std::max(lhs, rhs);
   }
 
-  template <typename T>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     return std::numeric_limits<T>::lowest();
   }
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  static constexpr T identity() {
+    return T{nullptr, 0};
+  }
+
 };
 
 /* @brief binary `product` operator */

@@ -15,7 +15,7 @@
  */
 // The translation unit for reduction `mean`
 
-#include "reduction_functions.hpp"
+#include <cudf/detail/reduction_functions.hpp>
 #include "compound.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::mean(

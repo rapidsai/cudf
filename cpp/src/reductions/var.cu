@@ -17,7 +17,7 @@
 // The translation unit for reduction `variance`
 
 #include "compound.cuh"
-#include "reduction_functions.hpp"
+#include <cudf/detail/reduction_functions.hpp>
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
 //                 The divisor used in calculations is N - ddof, where N
