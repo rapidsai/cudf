@@ -497,6 +497,7 @@ add_library(cudf
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
