@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <utilities/cuda_utils.hpp>
-#include <utilities/column_utils.hpp>
-
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
