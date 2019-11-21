@@ -37,7 +37,8 @@ namespace detail {
  *
  * Creates a new column as if an in-place copy was performed into @p target.
  * The elements indicated by the indices [@p target_begin, @p target_end) were
- * replaced with the elements retrieved from source iterators;                         * *(@p source_value_begin + idx) if *(@p source_validity_begin + idx) is true,
+ * replaced with the elements retrieved from source iterators;
+ * *(@p source_value_begin + idx) if *(@p source_validity_begin + idx) is true,
  * invalidate otherwise (where idx = [0, @p target_end - @p target_begin)).
  * Elements outside the range are copied from @p target into the new target
  * column to return.
