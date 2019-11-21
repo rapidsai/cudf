@@ -17,7 +17,7 @@
 #pragma once
 
 #include <limits>
-#include <simt/../details/iterator>
+#include <details/iterator>
 #include <simt/chrono>
 
 /**---------------------------------------------------------------------------*
