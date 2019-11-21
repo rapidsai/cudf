@@ -42,9 +42,6 @@
 #include <cudf/types.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/cuda_utils.hpp>
-#include <utilities/column_utils.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
@@ -53,6 +50,10 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace { //anonymous
 
