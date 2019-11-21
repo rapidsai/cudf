@@ -17,7 +17,7 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
-#include <utilities/device_atomics.cuh>
+#include <utilities/legacy/device_atomics.cuh>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

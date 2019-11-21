@@ -24,7 +24,6 @@
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <utilities/cuda_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
