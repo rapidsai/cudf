@@ -58,20 +58,6 @@ namespace { //anonymous
 
 static constexpr int BLOCK_SIZE = 256;
 
-// returns the block_sum using the given shared array of warp sums.
-template<typename T>
-__device__ T sum_warps(T* warp_smem)
-                       {
-  T block_sum = 0;
-
-  if (threadIdx.x < cudf::experimental::detail::warp_size) {
-    T my_warp_sum = warp_smem[threadIdx.x];
-    __shared__ typename cub::WarpReduce<T>::TempStorage temp_storage;
-    block_sum = cub::WarpReduce<T>(temp_storage).Sum(my_warp_sum);
-  }
-  return block_sum;
-}
-
 // return the new_value for output column at index `idx`
 template<class T, bool replacement_has_nulls>
 __device__ auto get_new_value(cudf::size_type idx,
