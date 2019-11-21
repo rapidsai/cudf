@@ -66,14 +66,16 @@ struct transformer_var_std
 };
 
 // ------------------------------------------------------------------------
-// difinitions of device struct for reduction operation
-// all `op::xxx` must have `Op` and `make_iterator`
+// definitions of device struct for reduction operation
+// all `op::xxx` must have `Op` and `transformer`
 // `Op`  is used to compute the reduction at device
-// `make_iterator` is used to make a iterator to be used to compute the reduction at device
+// `transformer` is used to convert elements to be used to compute the reduction at device
+// By default `transformer` is type conversion to ResultType
+// In some cases, it could be square or abs or complex operations
 
 namespace op {
 
-// `product`, `product`, `sum_of_squares`, `min`, `max`
+// `sum`, `product`, `sum_of_squares`, `min`, `max`
 // are used at simple_reduction
 
 struct sum {

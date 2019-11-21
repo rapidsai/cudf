@@ -287,15 +287,6 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a non-nullable column of fixed-width elements from a vector
-   *
-   * @param element_list The vector of elements
-   *---------------------------------------------------------------------------**/
-  fixed_width_column_wrapper(std::vector<Element> elements)
-      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
-  }
-
-  /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements
    * using another list to indicate the validity of each element.
    *
@@ -314,21 +305,6 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::initializer_list<Element> elements,
                              std::initializer_list<bool> validity)
-      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
-                                   std::cbegin(validity)) {}
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a nullable column from a vector of fixed-width elements
-   * using another vector to indicate the validity of each element.
-   *
-   * The validity of each element is determined by an `vector` of
-   * booleans where `true` indicates the element is valid, and `false` indicates
-   * the element is null.
-   *
-   * @param elements The vector of elements
-   * @param validity The vector of validity indicator booleans
-   *---------------------------------------------------------------------------**/
-  fixed_width_column_wrapper(std::vector<Element> elements,
-                             std::vector<bool> validity)
       : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
                                    std::cbegin(validity)) {}
 

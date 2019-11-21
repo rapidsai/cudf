@@ -45,7 +45,7 @@ cudf::test::fixed_width_column_wrapper<T> construct_null_column(std::vector<T> c
     if( values.size() > bools.size() ){
         throw std::logic_error("input vector size mismatch.");
     }
-    return cudf::test::fixed_width_column_wrapper<T>(values, bools);
+    return cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end(), bools.begin());
 }
 
 template <typename T>
@@ -119,7 +119,7 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
    bool result_error(true);
 
    // test without nulls
-   cudf::test::fixed_width_column_wrapper<T> col(v);
+   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
    T expected_min_result = *( std::min_element(v.begin(), v.end()) );
    T expected_max_result = *( std::max_element(v.begin(), v.end()) );
@@ -156,7 +156,7 @@ TYPED_TEST(ReductionTest, Product)
     };
 
     // test without nulls
-    cudf::test::fixed_width_column_wrapper<T> col(v);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     TypeParam expected_value = calc_prod(v);
 
     this->reduction_test(col, expected_value, this->ret_non_arithmetic,
@@ -181,7 +181,7 @@ TYPED_TEST(ReductionTest, Sum)
     std::vector<T> v = convert_values<T>(int_values);
 
     // test without nulls
-    cudf::test::fixed_width_column_wrapper<T> col(v);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     T expected_value = std::accumulate(v.begin(), v.end(), T{0});
     this->reduction_test(col, expected_value, this->ret_non_arithmetic, reduction_op::SUM);
 
@@ -209,7 +209,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
     };
 
     // test without nulls
-    cudf::test::fixed_width_column_wrapper<T> col(v);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     T expected_value = calc_reduction(v);
 
     this->reduction_test(col, expected_value, this->ret_non_arithmetic,
@@ -244,7 +244,7 @@ TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
    T expected = true;
 
    // test without nulls
-   cudf::test::fixed_width_column_wrapper<T> col(v);
+   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
    this->reduction_test(col, expected, result_error, reduction_op::ANY);
    this->reduction_test(col, expected, result_error, reduction_op::ALL);
@@ -269,7 +269,7 @@ TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
    T expected = false;
 
    // test without nulls
-   cudf::test::fixed_width_column_wrapper<T> col(v);
+   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
    this->reduction_test(col, expected, result_error, reduction_op::ANY);
    this->reduction_test(col, expected, result_error, reduction_op::ALL);
@@ -306,7 +306,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
 
     // test without nulls
     std::vector<T> v = convert_values<T>(int_values);
-    cudf::test::fixed_width_column_wrapper<T> col(v);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     double expected_value = calc_mean(v, v.size());
     this->reduction_test(col, expected_value, true,
         reduction_op::MEAN, cudf::data_type(cudf::FLOAT64));
@@ -344,7 +344,7 @@ TYPED_TEST(MultiStepReductionTest, var_std)
 
     // test without nulls
     std::vector<T> v = convert_values<T>(int_values);
-    cudf::test::fixed_width_column_wrapper<T> col(v);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
     double var = calc_var(v, v.size());
     double std = std::sqrt(var);
@@ -398,7 +398,7 @@ TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
     std::vector<bool> host_bools({1, 0});
 
     std::vector<T> v = convert_values<T>(int_values);
-    cudf::test::fixed_width_column_wrapper<T> col(v);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
 
     bool is_input_accpetable = this->ret_non_arithmetic;
@@ -440,7 +440,7 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture
         bool expected_overflow = false)
     {
         std::vector<T_in> input_values = convert_values<T_in>(int_values);
-        cudf::test::fixed_width_column_wrapper<T_in> const col(input_values);
+        cudf::test::fixed_width_column_wrapper<T_in> const col(input_values.begin(), input_values.end());
 
         auto statement = [&]() {
             std::unique_ptr<cudf::scalar> result = 
@@ -581,7 +581,7 @@ TEST_F(ReductionErrorTest, empty_column)
     // test if the size of input column is zero
     // expect result.is_valid() is false
     std::vector<T> empty_data(0);
-    cudf::test::fixed_width_column_wrapper<T> const col0(empty_data);
+    cudf::test::fixed_width_column_wrapper<T> const col0(empty_data.begin(), empty_data.end());
     CUDF_EXPECT_NO_THROW(statement(col0));
 
     // test if null count is equal or greater than size of input
@@ -590,7 +590,7 @@ TEST_F(ReductionErrorTest, empty_column)
     std::vector<T> col_data(col_size);
     std::vector<bool> valids(col_size, 0);
 
-    cudf::test::fixed_width_column_wrapper<T> col_empty(col_data, valids);
+    cudf::test::fixed_width_column_wrapper<T> col_empty = construct_null_column(col_data, valids);
     CUDF_EXPECT_NO_THROW(statement(col_empty));
 }
 
@@ -628,7 +628,7 @@ TEST_P(ReductionParamTest, std_var)
     };
 
     // test without nulls
-    cudf::test::fixed_width_column_wrapper<double> col(int_values);
+    cudf::test::fixed_width_column_wrapper<double> col(int_values.begin(), int_values.end());
 
     double var = calc_var(int_values, int_values.size());
     double std = std::sqrt(var);

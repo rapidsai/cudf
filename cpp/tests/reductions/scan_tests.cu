@@ -102,14 +102,18 @@ TYPED_TEST(ScanTest, Min)
         [acc=v[0]](auto i) mutable { acc = std::min(acc, i); return acc; }
         );
 
-    this->scan_test(v, exact, scan_op::SCAN_MIN, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::SCAN_MIN, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
         [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
         );
 
-    this->scan_test({v, b}, {exact, b}, scan_op::SCAN_MIN, true);
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::SCAN_MIN, true);
 }
 
 TYPED_TEST(ScanTest, Max)
@@ -123,14 +127,18 @@ TYPED_TEST(ScanTest, Max)
         [acc=v[0]](auto i) mutable { acc = std::max(acc, i); return acc; }
         );
 
-    this->scan_test(v, exact, scan_op::SCAN_MAX, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::SCAN_MAX, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
         [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
         );
 
-    this->scan_test({v, b}, {exact, b}, scan_op::SCAN_MAX, true);
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::SCAN_MAX, true);
 }
 
 
@@ -145,14 +153,18 @@ TYPED_TEST(ScanTest, Product)
         [acc=1](auto i) mutable { acc *= i; return acc; }
         );
 
-    this->scan_test(v, exact, scan_op::SCAN_PRODUCT, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::SCAN_PRODUCT, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
         [acc=1](auto i, bool b) mutable { if(b) acc *= i; return acc; }
         );
 
-    this->scan_test({v, b}, {exact, b}, scan_op::SCAN_PRODUCT, true);
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::SCAN_PRODUCT, true);
 }
 
 TYPED_TEST(ScanTest, Sum)
@@ -166,12 +178,16 @@ TYPED_TEST(ScanTest, Sum)
         [acc=0](auto i) mutable { acc += i; return acc; }
         );
 
-    this->scan_test(v, exact, scan_op::SCAN_SUM, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::SCAN_SUM, true);
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
         [acc=0](auto i, bool b) mutable { if(b) acc += i; return acc; }
         );
 
-    this->scan_test({v, b}, {exact, b}, scan_op::SCAN_SUM, true);
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::SCAN_SUM, true);
 }
