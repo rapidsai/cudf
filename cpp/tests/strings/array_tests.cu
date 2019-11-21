@@ -19,6 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/sorting.hpp>
 #include <cudf/strings/copying.hpp>
+#include <cudf/strings/detail/scatter.cuh>
 #include <cudf/utilities/error.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -158,15 +159,17 @@ TEST_F(StringsColumnTest, Scatter)
     std::vector<const char*> h_strings1{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
     cudf::test::strings_column_wrapper strings1( h_strings1.begin(), h_strings1.end(),
         thrust::make_transform_iterator( h_strings1.begin(), [] (auto str) { return str!=nullptr; }));
+    auto target = cudf::strings_column_view(strings1);
     std::vector<const char*> h_strings2{ "1", "22" };
     cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end(),
         thrust::make_transform_iterator( h_strings2.begin(), [] (auto str) { return str!=nullptr; }));
+    auto source = cudf::strings_column_view(strings2);
 
-    auto view1 = cudf::strings_column_view(strings1);
-    auto view2 = cudf::strings_column_view(strings2);
-
-    cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{{4,1}};
-    auto results = cudf::strings::detail::scatter(view1,view2,scatter_map);
+    rmm::device_vector<int32_t> scatter_map;
+    scatter_map.push_back(4);
+    scatter_map.push_back(1);
+    
+    auto results = cudf::strings::detail::scatter(source,scatter_map.begin(),target);
 
     std::vector<const char*> h_expected{ "eee", "22", nullptr, "", "1", "bbb", "ééé" };
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
@@ -177,35 +180,11 @@ TEST_F(StringsColumnTest, Scatter)
 TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    cudf::column_view map_view( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
+    auto source = cudf::strings_column_view(zero_size_strings_column);
     cudf::column_view values( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    auto values_view = cudf::strings_column_view(values);
-    auto results = cudf::strings::detail::scatter(strings_view,values_view,map_view);
-    cudf::test::expect_strings_empty(results->view());
-}
+    auto target = cudf::strings_column_view(values);
 
-TEST_F(StringsColumnTest, ScatterScalar)
-{
-    std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
-        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-    auto view = cudf::strings_column_view(strings);
-
-    cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{{4,1}};
-    auto results = cudf::strings::detail::scatter(view,"---",scatter_map);
-
-    std::vector<const char*> h_expected{ "eee", "---", nullptr, "", "---", "bbb", "ééé" };
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
-        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*results,expected);
-}
-
-TEST_F(StringsColumnTest, ScatterScalarZeroSizeStringsColumn)
-{
-    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-    cudf::column_view map_view( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-    auto results = cudf::strings::detail::scatter(strings_view,nullptr,map_view);
+    rmm::device_vector<int32_t> scatter_map;
+    auto results = cudf::strings::detail::scatter(source,scatter_map.begin(),target);
     cudf::test::expect_strings_empty(results->view());
 }
