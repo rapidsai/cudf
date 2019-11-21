@@ -120,72 +120,29 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
-template <typename Element, bool nullable = true>
-struct compare_with_value{
-  compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
-
-    : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
-
-  __device__ bool operator()(size_type i) noexcept {
-    if (nullable) {
-      bool const col_is_null{col.nullable() and col.is_null(i)};
-      if (col_is_null and not val_is_valid)
-        return nulls_are_equal;
-      else if (col_is_null == val_is_valid)
-        return false;
-    }
-    
-    return equality_compare<Element>(col.element<Element>(i), value);
-  }
-
-  column_device_view        col;
-  Element                   value;
-  bool val_is_valid;
-  bool nulls_are_equal;
-};
-
-template <typename Element>
-void populate_element(scalar const& value, Element &e) {
-  using ScalarType = cudf::experimental::scalar_type_t<Element>;
-  auto s1 = static_cast<const ScalarType *>(&value);
-
-  e = s1->value();
-}
-
-template <>
-void populate_element<string_view>(scalar const& value, string_view &e) {
-  using ScalarType = cudf::experimental::scalar_type_t<string_view>;
-  auto s1 = static_cast<const ScalarType *>(&value);
-
-  e = string_view{s1->data(), s1->size()};
-}
-  
 struct contains_scalar {
   template <typename Element>
-  bool operator()(column_view const& col, scalar const& value,
-                  cudaStream_t stream,
-                  rmm::mr::device_memory_resource *mr) {
+  bool operator()(column_device_view d_col, const scalar &value,
+                           cudaStream_t stream) {
 
-    auto d_col = column_device_view::create(col, stream);
+    using ScalarType = cudf::experimental::scalar_type_t<Element>;
+    
+    auto s1 = static_cast<const ScalarType *>(&value);
     auto data_it = thrust::make_counting_iterator<size_type>(0);
+    auto s2 = get_scalar_device_view(*s1);
 
-    bool    element_is_valid{value.is_valid()};
-    Element element;
+    if (d_col.has_nulls()) {
+      auto eq_op = compare_with_value<Element, true>(d_col, s2, true);
 
-    populate_element(value, element);
-
-    if (col.has_nulls()) {
-      auto eq_op = compare_with_value<Element, true>(*d_col, element, element_is_valid, true);
-
-      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                            data_it, data_it + col.size(),
-                            eq_op);
+      return thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                              data_it, data_it + d_col.size(),
+                              eq_op) > 0;
     } else {
-      auto eq_op = compare_with_value<Element, false>(*d_col, element, element_is_valid, true);
+      auto eq_op = compare_with_value<Element, false>(d_col, s2, true);
 
-      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                            data_it, data_it + col.size(),
-                            eq_op);
+      return thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                              data_it, data_it + d_col.size(),
+                              eq_op) > 0;
     }
   }
 };
@@ -205,10 +162,12 @@ bool contains(column_view const& col,
     return col.has_nulls();
   }
 
+  auto d_col = column_device_view::create(col, stream);
+
   return cudf::experimental::type_dispatcher(col.type(),
                                              contains_scalar{},
-                                             col, value,
-                                             stream, mr);
+                                             *d_col, value,
+                                             stream);
 }
 } // namespace detail
 

@@ -17,6 +17,7 @@
 
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 
@@ -45,21 +46,12 @@ class scalar_device_view_base {
     return *_is_valid;
   }
 
-  /**
-   * @brief Updates the validity of the value
-   * 
-   * @param is_valid true: set the value to valid. false: set it to null
-   */
-  __device__ void set_valid(bool is_valid) noexcept {
-    *_is_valid = is_valid;
-  }
-
  protected:
   data_type _type{EMPTY};   ///< Value data type
-  bool * _is_valid{};       ///< Pointer to device memory containing
-                            ///< boolean representing validity of the value.
+  bool const* _is_valid{}; 
+  
 
-  scalar_device_view_base(data_type type, bool* is_valid)
+  scalar_device_view_base(data_type type, bool const* is_valid)
     : _type(type), _is_valid(is_valid) 
   {}
 
@@ -76,29 +68,12 @@ class fixed_width_scalar_device_view
   using value_type = T;
 
   /**
-   * @brief Returns reference to stored value.
-   */
-  __device__ T& value() noexcept {
-    return *data();
-  }
-
-  /**
    * @brief Returns const reference to stored value.
    */
   __device__ T const& value() const noexcept {
     return *data();
   }
 
-  __device__ void set_value(T value) {
-    *_data = value;
-  }
-
-  /**
-   * @brief Returns a raw pointer to the value in device memory
-   */
-  __device__ T* data() noexcept {
-    return static_cast<T*>(_data);
-  }
   /**
    * @brief Returns a const raw pointer to the value in device memory
    */
@@ -107,7 +82,7 @@ class fixed_width_scalar_device_view
   }
 
  protected:
-  T * _data{};      ///< Pointer to device memory containing the value
+  T const * _data{};      ///< Pointer to device memory containing the value
 
   /**
    * @brief Construct a new fixed width scalar device view object
@@ -120,7 +95,7 @@ class fixed_width_scalar_device_view
    * @param is_valid The pointer to the bool in device memory that indicates the
    * validity of the stored value
    */
-  fixed_width_scalar_device_view(data_type type, T* data, bool* is_valid)
+  fixed_width_scalar_device_view(data_type type, T const* data, bool const* is_valid)
    : detail::scalar_device_view_base(type, is_valid)
    , _data(data)
   {}
@@ -136,7 +111,7 @@ class numeric_scalar_device_view
     : public detail::fixed_width_scalar_device_view<T>
 {
  public:
-  numeric_scalar_device_view(data_type type, T* data, bool* is_valid) 
+  numeric_scalar_device_view(data_type type, T const* data, bool const* is_valid) 
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {}
 };
@@ -149,7 +124,7 @@ class string_scalar_device_view
  public:
   using ValueType = cudf::string_view;
 
-  string_scalar_device_view(data_type type, const char* data, bool* is_valid,
+  string_scalar_device_view(data_type type, char const* data, bool const* is_valid,
                             size_type size) 
     : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
   {}
@@ -181,7 +156,7 @@ class timestamp_scalar_device_view
     : public detail::fixed_width_scalar_device_view<T>
 {
  public:
-  timestamp_scalar_device_view(data_type type, T* data, bool* is_valid) 
+  timestamp_scalar_device_view(data_type type, T const* data, bool const* is_valid) 
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {}
 };
@@ -190,14 +165,14 @@ class timestamp_scalar_device_view
  * @brief Get the device view of a numeric_scalar
  */
 template <typename T>
-auto get_scalar_device_view(numeric_scalar<T>& s) {
+auto get_scalar_device_view(numeric_scalar<T> const& s) {
   return numeric_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
 /**
  * @brief Get the device view of a string_scalar
  */
-auto get_scalar_device_view(string_scalar& s) {
+inline auto get_scalar_device_view(string_scalar const& s) {
   return string_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size());
 }
 
@@ -205,7 +180,7 @@ auto get_scalar_device_view(string_scalar& s) {
  * @brief Get the device view of a timestamp_scalar
  */
 template <typename T>
-auto get_scalar_device_view(timestamp_scalar<T>& s) {
+auto get_scalar_device_view(timestamp_scalar<T> const& s) {
   return timestamp_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 

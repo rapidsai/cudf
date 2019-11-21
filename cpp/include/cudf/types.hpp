@@ -68,6 +68,10 @@ template <typename T> class numeric_scalar;
 class string_scalar;
 template <typename T> class timestamp_scalar;
 
+namespace detail {
+  class scalar_device_view_base;
+}
+  
 template <typename T> class numeric_scalar_device_view;
 class string_scalar_device_view;
 template <typename T> class timestamp_scalar_device_view;
