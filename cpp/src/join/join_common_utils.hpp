@@ -17,7 +17,6 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-#include <utilities/cuda_utils.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 
@@ -136,7 +135,7 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
   std::vector <size_type> right_non_common_indices =
     non_common_column_indices(right.num_columns(), right_columns_in_common);
   table_view tmp_right_table = (*empty_right).select(right_non_common_indices);
-  table_view tmp_table = experimental::concat({{*empty_left, tmp_right_table}});
+  table_view tmp_table{{*empty_left, tmp_right_table}};
   return std::make_unique<experimental::table>(tmp_table);
 }
 

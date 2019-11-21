@@ -21,6 +21,7 @@
 #include <hash/concurrent_unordered_multimap.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include "join_common_utils.hpp"
 #include "join_kernels.cuh"
@@ -220,7 +221,7 @@ get_hash_join_indices(
     experimental::scalar_type_t<int> f(0, true, stream, mr);
     auto failure = get_scalar_device_view(f);
     constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-    util::cuda::grid_config_1d config(build_table_num_rows, block_size);
+    experimental::detail::grid_1d config(build_table_num_rows, block_size);
     build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         *hash_table,
         *build_table,
@@ -259,7 +260,7 @@ get_hash_join_indices(
       stream, mr};
 
     constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-    util::cuda::grid_config_1d config(probe_table->num_rows(), block_size);
+    experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
     global_write_index.set_value(0);
     auto write_index = get_scalar_device_view(global_write_index);
 

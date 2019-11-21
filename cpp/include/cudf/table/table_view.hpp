@@ -60,7 +60,7 @@ class table_view_base {
   using const_iterator = decltype(std::cbegin(_columns));
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a table from a vector of views
+   * @brief Construct a table from a vector of column views
    *
    * @note Because a `std::vector` is constructible from a
    * `std::initializer_list`, this constructor also supports the following
@@ -106,10 +106,13 @@ class table_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Returns a reference to the view of the specified column
    *
+   * @throws std::out_of_range
+   * If `column_index` is out of the range [0, num_columns)
+   * 
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
-  ColumnView const& column(size_type column_index) const noexcept;
+  ColumnView const& column(size_type column_index) const;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of columns
@@ -142,18 +145,40 @@ class table_view_base {
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
 
-  public:
+public:
+  using ColumnView = column_view;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a table from a vector of table views
+   *
+   * @note Because a `std::vector` is constructible from a
+   * `std::initializer_list`, this constructor also supports the following
+   * usage:
+   * ```
+   * table_view t0, t1, t2;
+   * ...
+   * table_view t{{t0,t1,t2}}; // Creates a `table` from the columns of
+   * t0, t1, t2
+   * ```
+   *
+   * @throws cudf::logic_error
+   * If number of rows mismatch
+   *
+   * @param views The vector of table views to construct the table from
+   *---------------------------------------------------------------------------**/
+  table_view(std::vector<table_view> const &views);
+
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
    *
-   * @throws cudf::logic_error
+   * @throws std::out_of_range
    * If any element in `column_indices` is outside [0, num_columns())
    *
    * @param column_indices Indices of columns in the table
-   * @return A table_view consisting of columns from the original table_view
+   * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
    *---------------------------------------------------------------------------**/
-  table_view select(std::vector<cudf::size_type> const& column_indices) const;
+  table_view select(std::vector<size_type> const& column_indices) const;
 };
 
 /**---------------------------------------------------------------------------*
@@ -166,7 +191,9 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
 public:
-  mutable_column_view& column(size_type column_index) const noexcept {
+  using ColumnView = mutable_column_view;
+
+  mutable_column_view& column(size_type column_index) const {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
   /**---------------------------------------------------------------------------*
@@ -175,16 +202,24 @@ public:
   operator table_view();
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns a table_view with set of specified columns.
+   * @brief Construct a table from a vector of table views
+   *
+   * @note Because a `std::vector` is constructible from a
+   * `std::initializer_list`, this constructor also supports the following
+   * usage:
+   * ```
+   * table_view t0, t1, t2;
+   * ...
+   * table_view t{{t0,t1,t2}}; // Creates a `table` from the columns of
+   * t0, t1, t2
+   * ```
    *
    * @throws cudf::logic_error
-   * If any element in `column_indices` is outside [0, num_columns())
+   * If number of rows mismatch
    *
-   * @param column_indices Indices of columns in the table
-   * @return A mutable_table_view consisting of columns from the original
-   * mutable_table_view specified by the elements of `column_indices`
+   * @param views The vector of table views to construct the table from
    *---------------------------------------------------------------------------**/
-  mutable_table_view select(std::vector<cudf::size_type> const& column_indices);
+  mutable_table_view(std::vector<mutable_table_view> const &views);
 };
 
 inline bool has_nulls(table_view view) {

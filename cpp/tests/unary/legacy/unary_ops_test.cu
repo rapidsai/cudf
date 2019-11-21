@@ -2,7 +2,7 @@
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
 #include <cudf/legacy/unary.hpp>
