@@ -20,7 +20,7 @@
 #include <tests/utilities/legacy/tuple_vectors.h>
 #include <tests/utilities/legacy/valid_vectors.h>
 
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 
 #include <memory>
 #include <vector>
