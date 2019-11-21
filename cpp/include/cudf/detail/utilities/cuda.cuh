@@ -18,9 +18,10 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <cub/cub.cuh>
-#include <utilities/cuda_utils.hpp>
+//#include <utilities/cuda_utils.hpp>
 
 #include <type_traits>
 #include <assert.h>

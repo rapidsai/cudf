@@ -22,17 +22,14 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
-#include <utilities/device_atomics.cuh>
-#include <utilities/cudf_utils.h>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>
-#include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 
-#include <utilities/column_utils.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 
@@ -110,9 +107,6 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
   __shared__ bool temp_valids[has_validity ? block_size+cudf::experimental::detail::warp_size : 1];
   __shared__ T    temp_data[block_size];
 
-  // each warp shares its total valid count to shared memory to ease
-  // computing the total number of valid / non-null elements written out.
-  // note maximum block size is limited to 1024 by this, but that's OK
   cudf::size_type warp_valid_counts{0};
   cudf::size_type block_sum = 0;
 
