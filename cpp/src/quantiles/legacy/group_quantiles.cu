@@ -16,7 +16,7 @@
 
 #include <quantiles/legacy/group_quantiles.hpp>
 
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 #include <quantiles/legacy/quantiles_util.hpp>
 #include <groupby/sort/legacy/sort_helper.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>

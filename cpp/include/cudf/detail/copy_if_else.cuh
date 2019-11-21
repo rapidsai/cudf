@@ -23,8 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <utilities/bit_util.cuh>
-#include <utilities/cuda_utils.hpp>
 
 #include <rmm/device_scalar.hpp>
 #include <cub/cub.cuh>
