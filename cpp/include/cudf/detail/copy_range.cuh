@@ -119,20 +119,23 @@ namespace experimental {
 namespace detail {
 
 /**
- * @brief Internal API to copy a range of values from a functor to a column.
+ * @brief Internal API to copy a range of values from source iterators to a
+ * target column.
  *
- * Copies N values from @p source to the range [@p begin, @p end)
- * of @p target. @p target is modified in place.
+ * The elements indicated by the indices [@p target_begin, @p target_end) were
+ * replaced with the elements retrieved from source iterators;
+ * *(@p source_value_begin + idx) if *(@p source_validity_begin + idx) is true,
+ * invalidate otherwise (where idx = [0, @p target_end - @p target_begin)).
+ * @p target is modified in place.
  *
- * SourceFunctor must have these accessors:
- * __device__ T data(cudf::size_type index);
- * __device__ bool valid(cudf::size_type index);
- *
- * @tparam SourceFunctor the type of the source function object
- * @param source An instance of SourceFunctor that provides data and valid mask
+ * @tparam SourceValueIterator Iterator for retrieving source values
+ * @tparam SourceValidityIterator Iterator for retrieving source validities
+ * @param source_value_begin Start of source value iterator
+ * @param source_validity_begin Start of source validity iterator
  * @param target the column to copy into
- * @param begin The beginning of the target range to write to
- * @param end The index after the last element of the target range to write to
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param target_end The index of the last element in the target range
+ * (exclusive)
  * @param stream CUDA stream to run this function
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>
