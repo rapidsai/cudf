@@ -26,8 +26,8 @@
 #include <hash/concurrent_unordered_map.cuh>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
-#include <utilities/column_utils.hpp>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "groupby_kernels.cuh"
 #include "groupby/common/legacy/aggregation_requests.hpp"

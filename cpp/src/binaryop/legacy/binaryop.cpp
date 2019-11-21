@@ -19,7 +19,7 @@
 
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>

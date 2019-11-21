@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
-
+#include <cudf/types.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
