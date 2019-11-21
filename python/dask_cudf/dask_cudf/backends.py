@@ -30,9 +30,8 @@ def make_meta_cudf_index(x, index=None):
 def concat_cudf(
     dfs, axis=0, join="outer", uniform=False, filter_warning=True, sort=None
 ):
-    assert axis == 0
     assert join == "outer"
-    return cudf.concat(dfs)
+    return cudf.concat(dfs, axis=axis)
 
 
 try:

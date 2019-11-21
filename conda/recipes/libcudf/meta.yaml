@@ -48,6 +48,7 @@ test:
     - test -f $PREFIX/lib/libcudftestutil.a
     - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
     - test -f $PREFIX/include/cudf/legacy/column.hpp
+    - test -f $PREFIX/include/cudf/legacy/reshape.hpp
     - test -f $PREFIX/include/cudf/legacy/table.hpp
     - test -f $PREFIX/include/cudf/utilities/legacy/nvcategory_util.hpp
     - test -f $PREFIX/include/cudf/utilities/legacy/type_dispatcher.hpp
@@ -72,6 +73,7 @@ test:
     - test -f $PREFIX/include/cudf/legacy/merge.hpp
     - test -f $PREFIX/include/cudf/legacy/join.hpp
     - test -f $PREFIX/include/cudf/legacy/predicates.hpp
+    - test -f $PREFIX/include/cudf/legacy/quantiles.hpp
     - test -f $PREFIX/include/cudf/legacy/reduction.hpp
     - test -f $PREFIX/include/cudf/legacy/replace.hpp
     - test -f $PREFIX/include/cudf/legacy/rolling.hpp

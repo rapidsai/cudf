@@ -269,6 +269,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         return to_parquet(self, path, *args, **kwargs)
 
+    def to_orc(self, path, **kwargs):
+        """ Calls dask_cudf.io.to_orc """
+        from dask_cudf.io import to_orc
+
+        return to_orc(self, path, **kwargs)
+
     @derived_from(pd.DataFrame)
     def var(
         self,

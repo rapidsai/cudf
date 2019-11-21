@@ -39,10 +39,12 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  *
  * Treats null elements as equivalent.
  *
- * @param lhs The first column
- * @param rhs The second column
- */
-void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
+ * @param lhs                   The first column
+ * @param rhs                   The second column
+ * @param print_all_differences If true display all differences
+ *---------------------------------------------------------------------------**/
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences = false);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -53,6 +55,30 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
  */
 void expect_equal_buffers(void const* lhs, void const* rhs,
                           std::size_t size_bytes);
+
+/**---------------------------------------------------------------------------*
+ * @brief Displays a column view as a string
+ *
+ * @param col The column view
+ * @param delimiter The delimiter to put between strings
+ *---------------------------------------------------------------------------**/
+std::string to_string(cudf::column_view const& col, std::string const& delimiter);
+
+/**---------------------------------------------------------------------------*
+ * @brief Convert column values to a host vector of strings
+ *
+ * @param col The column view
+ *---------------------------------------------------------------------------**/
+std::vector<std::string> to_strings(cudf::column_view const& col);
+
+/**---------------------------------------------------------------------------*
+ * @brief Print a column view to an ostream
+ *
+ * @param os        The output stream
+ * @param col       The column view
+ * @param delimiter The delimiter to put between strings
+ *---------------------------------------------------------------------------**/
+void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::string const& delimiter=",");
 
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
