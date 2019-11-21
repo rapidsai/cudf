@@ -110,14 +110,20 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
   __shared__ bool temp_valids[has_validity ? block_size+cudf::experimental::detail::warp_size : 1];
   __shared__ T    temp_data[block_size];
 
+  // each warp shares its total valid count to shared memory to ease
+  // computing the total number of valid / non-null elements written out.
+  // note maximum block size is limited to 1024 by this, but that's OK
+  cudf::size_type warp_valid_counts{0};
+  cudf::size_type block_sum = 0;
+
   // Note that since the maximum gridDim.x on all supported GPUs is as big as
   // cudf::size_type, this loop is sufficient to cover our maximum column size
   // regardless of the value of block_size and per_thread.
   for (int i = 0; i < per_thread; i++) {
     bool mask_true = (tid < size) && filter(tid);
 
+    block_sum = 0;
     // get output location using a scan of the mask result
-    cudf::size_type block_sum = 0;
     const cudf::size_type local_index = block_scan_mask<block_size>(mask_true,
                                                                    block_sum);
 
@@ -138,10 +144,6 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
       }
     }
 
-    // each warp shares its total valid count to shared memory to ease
-    // computing the total number of valid / non-null elements written out.
-    // note maximum block size is limited to 1024 by this, but that's OK
-    cudf::size_type warp_valid_counts{0};
 
     __syncthreads(); // wait for shared data and validity mask to be complete
 
@@ -192,17 +194,15 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
         }
       }
 
-      __syncthreads(); // wait for warp_valid_counts to be ready
-
-      // Compute total null_count for this block and add it to global count
-      cudf::size_type block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
-      if (threadIdx.x == 0) { // one thread computes and adds to null count
-          atomicAdd(output_null_count, block_sum - block_valid_count);
-      }
     }
 
     block_offset += block_sum;
     tid += block_size;
+  }
+  // Compute total null_count for this block and add it to global count
+  cudf::size_type block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
+  if (threadIdx.x == 0) { // one thread computes and adds to null count
+    atomicAdd(output_null_count, block_sum-block_valid_count);
   }
 }
 
