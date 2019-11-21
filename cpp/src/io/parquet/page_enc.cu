@@ -999,6 +999,27 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
                     }
                     break;
                 case INT64:
+                    {
+                        int64_t v = *reinterpret_cast<const int64_t *>(src8);
+                        int32_t ts_scale = s->col.ts_scale;
+                        if (ts_scale != 0) {
+                            if (ts_scale < 0) {
+                                v /= -ts_scale;
+                            }
+                            else {
+                                v *= ts_scale;
+                            }
+                        }
+                        dst[pos + 0] = v;
+                        dst[pos + 1] = v >> 8;
+                        dst[pos + 2] = v >> 16;
+                        dst[pos + 3] = v >> 24;
+                        dst[pos + 4] = v >> 32;
+                        dst[pos + 5] = v >> 40;
+                        dst[pos + 6] = v >> 48;
+                        dst[pos + 7] = v >> 56;
+                    }
+                    break;
                 case DOUBLE:
                     memcpy(dst + pos, src8, 8);
                     break;

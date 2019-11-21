@@ -40,7 +40,7 @@ struct stats_column_desc
     uint32_t num_rows;      //!< number of rows in column
     const uint32_t *valid_map_base; //!< base of valid bit map for this column (null if not present)
     const void *column_data_base;  //!< base ptr to column data
-    int32_t ts_scale;       //!< timestamp scale (divide by this value)
+    int32_t ts_scale;       //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
 };
 
 struct string_stats

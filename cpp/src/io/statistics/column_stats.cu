@@ -212,8 +212,11 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
                 break;
             case dtype_timestamp64:
                 v = reinterpret_cast<const int64_t *>(s->col.column_data_base)[row];
-                if (s->col.ts_scale > 1) {
-                    v /= s->col.ts_scale;
+                if (s->col.ts_scale < -1) {
+                    v /= -s->col.ts_scale;
+                }
+                else if (s->col.ts_scale > 1) {
+                    v *= s->col.ts_scale;
                 }
                 break;
             default:
