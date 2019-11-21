@@ -19,7 +19,7 @@
 #include <cudf/legacy/groupby.hpp>
 #include "groupby/common/legacy/type_info.hpp"
 #include "groupby/common/legacy/kernel_utils.hpp"
-#include "utilities/device_atomics.cuh"
+#include "utilities/legacy/device_atomics.cuh"
 
 namespace cudf {
 namespace groupby {
