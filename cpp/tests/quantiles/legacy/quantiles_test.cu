@@ -21,7 +21,7 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 #include <quantiles/legacy/quantiles_util.hpp>
 #include <cudf/legacy/quantiles.hpp>
