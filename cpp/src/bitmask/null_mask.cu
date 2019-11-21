@@ -172,10 +172,8 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
                                     size_type source_begin_bit,
-                                    size_type source_end_bit) {
-  auto number_of_mask_words = cudf::util::div_rounding_up_safe(
-      static_cast<size_t>(source_end_bit - source_begin_bit),
-      detail::size_in_bits<bitmask_type>());
+                                    size_type source_end_bit,
+                                    size_type number_of_mask_words) {
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
@@ -197,8 +195,6 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
 /**---------------------------------------------------------------------------*
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
- *
- * Bit `i` in `destination` will be equal to bit `i + offset` from `source`.
  *
  * @param views Array of column_device_view
  * @param output_offsets Prefix sum of sizes of elements of `views`
@@ -355,7 +351,8 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
     cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                           stream>>>(
-        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit);
+        static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit,
+        number_of_mask_words);
     CUDA_CHECK_LAST();
   }
   return dest_mask;
