@@ -20,7 +20,6 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/cuda_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
