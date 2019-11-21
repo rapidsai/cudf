@@ -286,8 +286,7 @@ void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream) {
   using CDViewPtr =
-    std::unique_ptr<column_device_view,
-                    std::function<void(column_device_view*)>>;
+    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
   std::vector<CDViewPtr> cols;
   thrust::host_vector<column_device_view> device_views;
 
