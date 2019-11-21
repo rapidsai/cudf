@@ -138,7 +138,7 @@ public class ColumnVectorTest extends CudfTestBase {
         }
       }
     }
-  }
+  } 
 
   @Test
   void testConcaCategories() {
