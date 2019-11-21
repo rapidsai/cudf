@@ -2601,40 +2601,56 @@ def test_get_numeric_data():
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-def test_shift(dtype, period):
-    if dtype == np.int8:
-        # to keep data in range
-        data = gen_rand(dtype, 100000, low=-2, high=2)
-    else:
-        data = gen_rand(dtype, 100000)
+@pytest.mark.parametrize("data_empty", [False, True])
+def test_shift(dtype, period, data_empty):
 
-    gdf = DataFrame({"a": data})
-    pdf = pd.DataFrame({"a": data})
+    if data_empty:
+        data = None
+    else:
+        if dtype == np.int8:
+            # to keep data in range
+            data = gen_rand(dtype, 100000, low=-2, high=2)
+        else:
+            data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({"a": Series(data, dtype=dtype)})
+    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
     shifted_outcome = gdf.a.shift(period)
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
-    assert_eq(shifted_outcome, expected_outcome)
+    if data_empty:
+        assert_eq(shifted_outcome, expected_outcome, check_index_type=False)
+    else:
+        assert_eq(shifted_outcome, expected_outcome)
+
 
 
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-def test_diff(dtype, period):
-    if dtype == np.int8:
-        # to keep data in range
-        data = gen_rand(dtype, 100000, low=-2, high=2)
+@pytest.mark.parametrize("data_empty", [False, True])
+def test_diff(dtype, period, data_empty):
+    if data_empty:
+        data = None
     else:
-        data = gen_rand(dtype, 100000)
+        if dtype == np.int8:
+            # to keep data in range
+            data = gen_rand(dtype, 100000, low=-2, high=2)
+        else:
+            data = gen_rand(dtype, 100000)
 
-    gdf = DataFrame({"a": data})
-    pdf = pd.DataFrame({"a": data})
+    gdf = DataFrame({"a": Series(data, dtype=dtype)})
+    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
     diffed_outcome = gdf.a.diff(period)
     expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
-    assert_eq(diffed_outcome, expected_outcome)
 
+    if data_empty:
+        assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
+    else:
+        assert_eq(diffed_outcome, expected_outcome)
 
 def test_isnull_isna():
     # float & strings some missing
