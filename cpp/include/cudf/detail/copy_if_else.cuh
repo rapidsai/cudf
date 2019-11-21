@@ -24,8 +24,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/copy_if_else.cuh>
-#include <utilities/bit_util.cuh>
-#include <utilities/cuda_utils.hpp>
 
 #include <rmm/device_scalar.hpp>
 #include <cub/cub.cuh>
@@ -157,12 +155,12 @@ struct copy_if_else_functor_impl
  * @brief Specialization functor for strings column to perform a copy if/else
  *        using a filter function to select from lhs/rhs columns.
  */
-template<typename FilterType>
-struct copy_if_else_functor_impl<string_view, FilterType>
+template<typename FilterFn>
+struct copy_if_else_functor_impl<string_view, FilterFn>
 {
   std::unique_ptr<column> operator()(column_view const& lhs,
                                      column_view const& rhs,
-                                     FilterType filter,
+                                     FilterFn filter,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream)
    {
@@ -180,14 +178,14 @@ struct copy_if_else_functor_impl<string_view, FilterType>
  */
 struct copy_if_else_functor
 {
-   template <typename Element, typename Filter>
+   template <typename Element, typename FilterFn>
    std::unique_ptr<column> operator()(column_view const& lhs,
                                       column_view const& rhs,
-                                      Filter filter,
+                                      FilterFn filter,
                                       rmm::mr::device_memory_resource *mr,
                                       cudaStream_t stream)
    {
-      copy_if_else_functor_impl<Element, Filter> copier{};
+      copy_if_else_functor_impl<Element, FilterFn> copier{};
       return copier(lhs,rhs,filter,mr,stream);
    }
 };
@@ -218,12 +216,12 @@ std::unique_ptr<column> copy_if_else( column_view const& lhs, column_view const&
                                     cudaStream_t stream = 0)
 {
    return cudf::experimental::type_dispatcher(lhs.type(),
-                                             copy_if_else_functor{},
-                                             lhs,
-                                             rhs,
-                                             filter,
-                                             mr,
-                                             stream);
+                                              copy_if_else_functor{},
+                                              lhs,
+                                              rhs,
+                                              filter,
+                                              mr,
+                                              stream);
 }
 
 }  // namespace detail

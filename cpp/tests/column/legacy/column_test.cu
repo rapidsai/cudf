@@ -2,8 +2,8 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/base_fixture.hpp>
 
-#include <utilities/cudf_utils.h>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/cudf_utils.h>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>

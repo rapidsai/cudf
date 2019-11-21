@@ -23,7 +23,7 @@
 #include <thrust/iterator/iterator_adaptor.h>
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 

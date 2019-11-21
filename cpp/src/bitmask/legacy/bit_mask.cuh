@@ -18,9 +18,9 @@
 #define CUDF_BIT_MASK_CUH
 
 #include <cuda_runtime.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/types.hpp>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/bit_util.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 

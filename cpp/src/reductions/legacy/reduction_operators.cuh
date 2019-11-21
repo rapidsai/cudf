@@ -18,12 +18,12 @@
 #define CUDF_REDUCTION_OPERATORS_CUH
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <iterator/legacy/iterator.cuh>
 
-#include <utilities/device_operators.cuh>
+#include <utilities/legacy/device_operators.cuh>
 
 #include <cmath>
 
