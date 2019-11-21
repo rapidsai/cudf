@@ -24,15 +24,15 @@ namespace cudf {
 namespace datetime {
 namespace detail {
 
-enum class DATETIME_COMPONENT {
-  invalid = 0,
-  year,
-  month,
-  day,
-  weekday,
-  hour,
-  minute,
-  second,
+enum class datetime_component {
+  INVALID = 0,
+  YEAR,
+  MONTH,
+  DAY,
+  WEEKDAY,
+  HOUR,
+  MINUTE,
+  SECOND,
 };
 
 /**
@@ -44,7 +44,7 @@ enum class DATETIME_COMPONENT {
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 
-template <DATETIME_COMPONENT Component>
+template <datetime_component Component>
 std::unique_ptr<column> extract_component(
     column_view const& column,
     cudaStream_t stream = 0,
