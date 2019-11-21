@@ -85,18 +85,24 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto bitmask_kernel = gather_bitmask_kernel<true, decltype(gather_map)>;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, bitmask_kernel));
 
-  auto valid_counts = thrust::device_vector<size_type>(target.size());
+  auto d_valid_counts = thrust::device_vector<size_type>(target.size());
   bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
-    gather_map, *device_target, valid_counts.data().get());
+    gather_map, *device_target, d_valid_counts.data().get());
 
-  // TODO for_each with a zip iterator?
-  auto valid_counts_host = thrust::host_vector<size_type>(valid_counts);
-  for (size_t i = 0; i < target.size(); ++i) {
-    auto const& target_col = target[i];
-    if (target_col->nullable()) {
-      target_col->set_null_count(target_col->size() - valid_counts_host[i]);
-    }
-  }
+  // Copy the valid counts into each column
+  auto valid_counts = thrust::host_vector<size_type>(d_valid_counts);
+  auto begin = thrust::make_tuple(target.begin(), valid_counts.begin());
+  auto end = thrust::make_tuple(target.end(), valid_counts.end());
+  thrust::for_each(thrust::host,
+    thrust::make_zip_iterator(begin), thrust::make_zip_iterator(end),
+    [](thrust::tuple<std::unique_ptr<column>&, size_type> tuple) {
+      auto& target_col = thrust::get<0>(tuple);
+      auto const valid_count = thrust::get<1>(tuple);
+      if (target_col->nullable()) {
+        auto const null_count = target_col->size() - valid_count;
+        target_col->set_null_count(null_count);
+      }
+    });
 }
 
 template <typename MapIterator>
