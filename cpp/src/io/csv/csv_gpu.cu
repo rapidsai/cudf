@@ -696,8 +696,8 @@ cudaError_t __host__ DetectColumnTypes(
     size_t num_columns, const ParseOptions &options, column_parse::flags *flags,
     column_parse::stats *stats, cudaStream_t stream) {
   // Calculate actual block count to use based on records count
-  int blockSize;    // suggested thread count to use
-  int minGridSize;  // minimum block count required
+  int blockSize = 0;    // suggested thread count to use
+  int minGridSize = 0;  // minimum block count required
   cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
                                      dataTypeDetection);
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
@@ -714,8 +714,8 @@ cudaError_t __host__ DecodeRowColumnData(
     const column_parse::flags *flags, cudf::data_type *dtypes, void **columns,
     cudf::bitmask_type **valids, cudaStream_t stream) {
   // Calculate actual block count to use based on records count
-  int blockSize;    // suggested thread count to use
-  int minGridSize;  // minimum block count required
+  int blockSize = 0;    // suggested thread count to use
+  int minGridSize = 0;  // minimum block count required
   cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf);
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
