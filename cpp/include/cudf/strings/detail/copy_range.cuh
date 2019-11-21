@@ -36,11 +36,11 @@ namespace detail {
  * source iterators to a target column.
  *
  * Creates a new column as if an in-place copy was performed into @p target.
- * The elements indicated by the indices [@p target_begin, @p target_begin + N)
- * (where N = @p target_end - @p target_begin) were copied from the elements
- * retrieved by *(@p source_value_begin + idx) (where idx = [0, N)) if valid
- * (i.e. *(@p source_validity_begin + idx) is true). Elements outside the range
- * are copied from @p target into the new target column to return.
+ * The elements indicated by the indices [@p target_begin, @p target_end) were
+ * replaced with the elements retrieved from source iterators;                         * *(@p source_value_begin + idx) if *(@p source_validity_begin + idx) is true,
+ * invalidate otherwise (where idx = [0, @p target_end - @p target_begin)).
+ * Elements outside the range are copied from @p target into the new target
+ * column to return.
  *
  * @throws `cudf::logic_error` for invalid range (if @p target_begin < 0,
  * target_begin >= @p target.size(), or @p target_end > @p target.size()).
