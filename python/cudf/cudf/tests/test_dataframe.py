@@ -4110,29 +4110,26 @@ def test_join_on_typecast_int_to_int(dtype_l, dtype_r):
 
     assert_eq(expect, got)
 
-@pytest.mark.parametrize(
-    "dtype_l", ["float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "dtype_r", ["float32", "float64"]
-)
-def test_join_on_typecast_float_to_float(dtype_l, dtype_r):
-    other_data = ['a','b','c','d','e','f']
 
-    join_data_l = Series([1,2,3,0.9,4.5,6], dtype=dtype_l)
-    join_data_r = Series([1,2,3,0.9,4.5,7], dtype=dtype_r)
+@pytest.mark.parametrize("dtype_l", ["float32", "float64"])
+@pytest.mark.parametrize("dtype_r", ["float32", "float64"])
+def test_join_on_typecast_float_to_float(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d", "e", "f"]
+
+    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
 
     gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
-    
+
     if dtype_l != dtype_r:
-        exp_join_data = [1,2,3,4.5]
-        exp_other_data = ['a','b','c','e']
+        exp_join_data = [1, 2, 3, 4.5]
+        exp_other_data = ["a", "b", "c", "e"]
     else:
-        exp_join_data = [1,2,3,0.9,4.5]
-        exp_other_data = ['a','b','c','d','e']
+        exp_join_data = [1, 2, 3, 0.9, 4.5]
+        exp_other_data = ["a", "b", "c", "d", "e"]
 
     exp_join_col = Series(exp_join_data, dtype=exp_dtype)
 
@@ -4148,6 +4145,7 @@ def test_join_on_typecast_float_to_float(dtype_l, dtype_r):
 
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "dtype_l", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
@@ -4155,23 +4153,93 @@ def test_join_on_typecast_float_to_float(dtype_l, dtype_r):
     "dtype_r", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_join_on_typecast_mixed_int_float(dtype_l, dtype_r):
-    if ("int" in dtype_l and "int" in dtype_r) or ("float" in dtype_l and "float" in dtype_r):
+    if ("int" in dtype_l and "int" in dtype_r) or (
+        "float" in dtype_l and "float" in dtype_r
+    ):
         pytest.skip("like types not tested in this function")
-    
-    other_data = ['a','b','c','d','e','f']
 
-    join_data_l = Series([1,2,3,0.9,4.5,6], dtype=dtype_l)
-    join_data_r = Series([1,2,3,0.9,4.5,7], dtype=dtype_r)
+    other_data = ["a", "b", "c", "d", "e", "f"]
+
+    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
 
     gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
-    
-    exp_join_data = [1,2,3]
-    exp_other_data = ['a','b','c']
+
+    exp_join_data = [1, 2, 3]
+    exp_other_data = ["a", "b", "c"]
     exp_join_col = Series(exp_join_data, dtype=exp_dtype)
 
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_join_on_typecast_dt_to_dt(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d", "e"]
+    join_data_l = Series(
+        ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-15"]
+    ).astype(dtype_l)
+    join_data_r = Series(
+        ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-16"]
+    ).astype(dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = max(np.dtype(dtype_l), np.dtype(dtype_r))
+
+    exp_join_data = ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01"]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype_l", ["category", "str", "int32", "float32"])
+@pytest.mark.parametrize("dtype_r", ["category", "str", "int32", "float32"])
+def test_join_on_typecast_categorical(dtype_l, dtype_r):
+    if not (dtype_l == "category" or dtype_r == "category"):
+        pytest.skip("at least one side must be category for this set of tests")
+
+    other_data = ["a", "b", "c", "d", "e"]
+    join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = [1, 2, 3, 4]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype="category")
 
     expect = DataFrame(
         {
