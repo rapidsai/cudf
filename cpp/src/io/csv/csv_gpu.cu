@@ -23,7 +23,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/trie.cuh>
+#include <cudf/detail/utilities/trie.cuh>
 
 #include <cuda_runtime.h>
 
