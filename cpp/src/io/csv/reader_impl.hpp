@@ -27,7 +27,7 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
-#include <utilities/trie.cuh>
+#include <cudf/detail/utilities/trie.cuh>
 
 #include <cudf/io/readers.hpp>
 
