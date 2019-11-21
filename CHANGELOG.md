@@ -36,6 +36,7 @@
 - PR #3298 add null replacement iterator for column_device_view
 - PR #3297 Define and implement new groupby API.
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
+- PR #3411 Java host memory management API
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
@@ -136,6 +137,7 @@
 - PR #3387 Strings column gather function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
+- PR #3422 Move utilities to legacy
 
 ## Bug Fixes
 
@@ -188,9 +190,11 @@
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
+- PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
 - PR #3413 Fix dask_cudf read_csv file-list bug
-
-
+- PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
+- PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
+- PR #3435 Fix diff and shift for empty series
 
 # cuDF 0.10.0 (16 Oct 2019)
 
