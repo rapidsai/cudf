@@ -2625,7 +2625,6 @@ def test_shift(dtype, period, data_empty):
         assert_eq(shifted_outcome, expected_outcome)
 
 
-
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
@@ -2651,6 +2650,7 @@ def test_diff(dtype, period, data_empty):
         assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
     else:
         assert_eq(diffed_outcome, expected_outcome)
+
 
 def test_isnull_isna():
     # float & strings some missing
