@@ -504,7 +504,6 @@ add_library(cudf
             src/sort/sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
-            src/strings/copying/copy_range.cu
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
