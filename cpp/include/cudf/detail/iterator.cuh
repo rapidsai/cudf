@@ -80,6 +80,34 @@ struct null_replaced_value_accessor
   }
 };
 
+/** -------------------------------------------------------------------------*
+ * @brief validity accessor of column with null bitmask
+ * A unary functor returns validity at `id`.
+ * `operator() (cudf::size_type id)` computes validity flag at `id`
+ * This functor is only allowed for nullable columns.
+ *
+ * @throws `cudf::logic_error` if the column is not nullable.
+ * -------------------------------------------------------------------------**/
+struct validity_accessor {
+  column_device_view const col;
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  validity_accessor(column_device_view const& _col)
+    : col{_col}
+  {
+    // verify valid is non-null, otherwise, is_valid() will crash
+    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+  }
+
+  CUDA_DEVICE_CALLABLE
+  bool operator()(cudf::size_type i) const {
+    return col.is_valid_nocheck(i);
+  }
+};
+
 /**
  * @brief Constructs an iterator over a column's values that replaces null
  * elements with a specified value.
@@ -104,6 +132,25 @@ auto make_null_replacement_iterator(column_device_view const& column,
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
       null_replaced_value_accessor<Element>{column, null_replacement});
+}
+
+/**
+ * @brief Constructs an iterator over a column's validities.
+ *
+ * Dereferencing the returned iterator for element `i` will return the validity
+ * of `column[i]`
+ * This iterator is only allowed for nullable columns.
+ *
+ * @throws `cudf::logic_error` if the column is not nullable.
+ *
+ * @param column The column to iterate
+ * @return auto Iterator that returns validities of column elements.
+ */
+auto make_validity_iterator(column_device_view const& column)
+{
+  return thrust::make_transform_iterator(
+      thrust::counting_iterator<cudf::size_type>{0},
+      validity_accessor{column});
 }
 
 } //namespace detail
