@@ -21,7 +21,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <hash/fixed_hash_set.cuh>
+#include <hash/unordered_multiset.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <strings/utilities.hpp>
@@ -162,7 +162,7 @@ void populate_element<string_view>(scalar const& value, string_view &e) {
   e = string_view{s1->data(), s1->size()};
 }
   
-struct contains_scalar {
+struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_view const& col, scalar const& value,
                   cudaStream_t stream,
@@ -208,65 +208,74 @@ bool contains(column_view const& col,
   }
 
   return cudf::experimental::type_dispatcher(col.type(),
-                                             contains_scalar{},
+                                             contains_scalar_dispatch{},
                                              col, value,
                                              stream, mr);
 }
 
 struct multi_contains_dispatch {
   template <typename Element>
-  void operator()(column_view const& col,
-                  column_view const& in_col,
-                  mutable_column_view &result_view,
-                  cudaStream_t stream) {
+  std::unique_ptr<column> operator()(column_view const& haystack,
+                                     column_view const& needles,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
 
-    auto hash_set = fixed_hash_set<Element>::create(in_col, stream);
+    std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
+                                                         haystack.size(),
+                                                         copy_bitmask(haystack),
+                                                         haystack.null_count(),
+                                                         stream, mr);
+  
+    if (haystack.size() == 0) {
+      return result;
+    }
+
+    mutable_column_view result_view = result.get()->mutable_view();
+
+    if (needles.size() == 0) {
+      bool8 f = false;
+      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool8>(), result_view.end<bool8>(), f);
+      return result;
+    }
+
+    auto hash_set = cudf::detail::unordered_multiset<Element>::create(needles, stream);
     auto device_hash_set = hash_set.to_device();
 
-    auto d_col_ptr = column_device_view::create(col, stream);
-    auto d_col = *d_col_ptr;
+    auto d_haystack_ptr = column_device_view::create(haystack, stream);
+    auto d_haystack = *d_haystack_ptr;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(col.size()),
-                      result_view.begin<bool8>(),
-                      [device_hash_set, d_col] __device__ (size_t index) {
-                        return d_col.is_null(index) || device_hash_set.contains(d_col.element<Element>(index));
-                      });
+    if (haystack.has_nulls()) {
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        result_view.begin<bool8>(),
+                        [device_hash_set, d_haystack] __device__ (size_t index) {
+                          return d_haystack.is_null_nocheck(index) || device_hash_set.contains(d_haystack.element<Element>(index));
+                        });
+    } else {
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        result_view.begin<bool8>(),
+                        [device_hash_set, d_haystack] __device__ (size_t index) {
+                          return device_hash_set.contains(d_haystack.element<Element>(index));
+                        });
+    }
+
+    return result;
   }
 };
 
-std::unique_ptr<column> contains(column_view const& col,
-                                 column_view const& in_col,
+std::unique_ptr<column> contains(column_view const& haystack,
+                                 column_view const& needles,
                                  rmm::mr::device_memory_resource* mr,
                                  cudaStream_t stream = 0) {
 
-  CUDF_EXPECTS(col.type() == in_col.type(), "DTYPE mismatch");
+  CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
-  std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
-                                                       col.size(),
-                                                       copy_bitmask(col),
-                                                       col.null_count(),
-                                                       stream, mr);
-  
-  if (col.size() == 0) {
-    return result;
-  }
-
-  mutable_column_view result_view = result.get()->mutable_view();
-
-  if (in_col.size() == 0) {
-    bool8 f = false;
-    thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool8>(), result_view.end<bool8>(), f);
-    return result;
-  }
-
-  cudf::experimental::type_dispatcher(col.type(),
-                                      multi_contains_dispatch{},
-                                      col, in_col, result_view,
-                                      stream);
-
-  return result;
+  return cudf::experimental::type_dispatcher(haystack.type(),
+                                             multi_contains_dispatch{},
+                                             haystack, needles, mr, stream);
 }
 } // namespace detail
 
@@ -293,9 +302,9 @@ bool contains(column_view const& col, scalar const& value, rmm::mr::device_memor
   return detail::contains(col, value, mr);
 }
 
-std::unique_ptr<column> contains(column_view const& col, column_view const& in_col,
+std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
                                        rmm::mr::device_memory_resource* mr) {
-  return detail::contains(col, in_col, mr);
+  return detail::contains(haystack, needles, mr);
 }
 
 } // namespace exp

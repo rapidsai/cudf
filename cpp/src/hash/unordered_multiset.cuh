@@ -21,15 +21,16 @@
 #include <hash/helper_functions.cuh>
 
 namespace cudf {
+namespace detail {
 
 /*
- *  fixed set on a device
+ *  Device view of the unordered multiset
  */
 template <typename Element, typename Hasher = default_hash<Element>,
           typename Equality = equal_to<Element>>
-class device_fixed_hash_set {
+class unordered_multiset_device_view {
 public:
-  device_fixed_hash_set(size_type hash_size, const size_type *hash_begin, const Element *hash_data)
+  unordered_multiset_device_view(size_type hash_size, const size_type *hash_begin, const Element *hash_data)
     : hash_size{hash_size}, hash_begin{hash_begin}, hash_data{hash_data}, hasher(), equals() {
   }
 
@@ -58,15 +59,15 @@ private:
  */
 template <typename Element, typename Hasher = default_hash<Element>,
           typename Equality = equal_to<Element>>
-class fixed_hash_set {
+class unordered_multiset {
 public:
   /**---------------------------------------------------------------------------*
-   * @brief Factory to construct a new fixed_device_set
+   * @brief Factory to construct a new unordered_multiset
    *---------------------------------------------------------------------------**/
-  static fixed_hash_set<Element> create(column_view const& col,
-                                        cudaStream_t stream) {
+  static unordered_multiset<Element> create(column_view const& col,
+                                            cudaStream_t stream) {
 
-    auto d_column = column_device_view::create(col);
+    auto d_column = column_device_view::create(col, stream);
     auto d_col = *d_column;
 
     rmm::device_vector<size_type> hash_bins_start(2 * d_col.size() + 1, size_type{0});
@@ -74,9 +75,9 @@ public:
     rmm::device_vector<Element>   hash_data(d_col.size());
 
     Hasher hasher;
-    size_type *d_hash_bins_start = thrust::raw_pointer_cast(hash_bins_start.data());
-    size_type *d_hash_bins_end = thrust::raw_pointer_cast(hash_bins_end.data());
-    Element *d_hash_data = thrust::raw_pointer_cast(hash_data.data());
+    size_type *d_hash_bins_start = hash_bins_start.data().get();
+    size_type *d_hash_bins_end = hash_bins_end.data().get();
+    Element *d_hash_data = hash_data.data().get();
 
     thrust::for_each(rmm::exec_policy(stream)->on(stream),
                      thrust::make_counting_iterator<size_type>(0),
@@ -111,17 +112,17 @@ public:
                        }
                      });
 
-    return fixed_hash_set(d_col.size(), std::move(hash_bins_start), std::move(hash_data));
+    return unordered_multiset(d_col.size(), std::move(hash_bins_start), std::move(hash_data));
   }
 
-  device_fixed_hash_set<Element, Hasher, Equality> to_device() {
-    return device_fixed_hash_set<Element, Hasher, Equality>(size,
-                                                       thrust::raw_pointer_cast(hash_bins.data()),
-                                                       thrust::raw_pointer_cast(hash_data.data()));
+  unordered_multiset_device_view<Element, Hasher, Equality> to_device() {
+    return unordered_multiset_device_view<Element, Hasher, Equality>(size,
+                                                                     hash_bins.data().get(),
+                                                                     hash_data.data().get());
   }
 
 private:
-  fixed_hash_set(size_type size, rmm::device_vector<size_type> &&hash_bins, rmm::device_vector<Element> &&hash_data)
+  unordered_multiset(size_type size, rmm::device_vector<size_type> &&hash_bins, rmm::device_vector<Element> &&hash_data)
     : size{size}, hash_bins{std::move(hash_bins)}, hash_data{std::move(hash_data)} {}
   
   size_type size;
@@ -129,4 +130,5 @@ private:
   rmm::device_vector<Element> hash_data;
 };
 
+}
 }
