@@ -19,7 +19,7 @@
 
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
@@ -36,7 +36,7 @@
 #include "jit/util/type.h"
 #include "jit/util/operator.h"
 #include <nvstrings/NVCategory.h>
-#include <cudf/datetime.hpp>
+#include <cudf/legacy/datetime.hpp>
 
 #include <types.h.jit>
 #include <types.hpp.jit>

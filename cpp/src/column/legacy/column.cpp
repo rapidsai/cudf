@@ -20,11 +20,11 @@
  * ---------------------------------------------------------------------------**/
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/error_utils.hpp>
 #include <rmm/rmm.h>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>

@@ -1583,7 +1583,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
  **/
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS)
-gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, RowGroup *row_groups, size_t max_num_rows, size_t first_row, uint32_t num_columns, uint32_t tz_len, uint32_t num_rowgroups, uint32_t rowidx_stride)
+gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, const RowGroup *row_groups, size_t max_num_rows, size_t first_row, uint32_t num_columns, uint32_t tz_len, uint32_t num_rowgroups, uint32_t rowidx_stride)
 {
     __shared__ __align__(16) orcdec_state_s state_g;
 
@@ -2079,7 +2079,7 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks, Dictio
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row,
-    int64_t *tz_table, size_t tz_len, RowGroup *row_groups, uint32_t num_rowgroups, uint32_t rowidx_stride,
+    int64_t *tz_table, size_t tz_len, const RowGroup *row_groups, uint32_t num_rowgroups, uint32_t rowidx_stride,
     cudaStream_t stream)
 {
     uint32_t num_chunks = num_columns * num_stripes;
