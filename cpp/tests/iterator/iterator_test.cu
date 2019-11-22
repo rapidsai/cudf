@@ -28,7 +28,7 @@
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.hpp>
-#include <utilities/device_operators.cuh>
+#include <utilities/legacy/device_operators.cuh>
 
 #include <thrust/equal.h>
 #include <thrust/transform.h>

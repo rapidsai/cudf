@@ -76,21 +76,13 @@ struct alignas(8) Relist
 
     __device__ inline bool activate(int32_t i, int32_t begin, int32_t end)
     {
-        //if ( i >= listsize || i<0 )
-        //    printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-        //if ( size >= listsize || size<0 )
-        //    printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
-        {
-            if (!readMask(i))
-            {
-                writeMask(true, i);
-                inst_ids[size] = (short)i;
-                ranges[size] = int2{begin,end};
-                ++size;
-                return true;
-            }
-        }
-        return false;
+        if(readMask(i))
+            return false;
+        writeMask(true, i);
+        inst_ids[size] = static_cast<int64_t>(i);
+        ranges[size] = int2{begin,end};
+        ++size;
+        return true;
     }
 
     __device__ inline void writeMask(bool v, int32_t pos)
@@ -396,7 +388,7 @@ __device__ inline int32_t Reprog_device::extract( int32_t idx, string_view const
     return call_regexec(idx,dstr,begin,end,col+1);
 }
 
-__device__ inline int Reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
+__device__ inline int32_t Reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
 {
     Reljunk jnk;
     jnk.starttype = 0;
@@ -413,8 +405,8 @@ __device__ inline int Reprog_device::call_regexec( int32_t idx, string_view cons
         Relist relist1, relist2;
         jnk.list1 = &relist1;
         jnk.list2 = &relist2;
-        jnk.list1->set_data((short)_insts_count,_stack_mem1);
-        jnk.list2->set_data((short)_insts_count,_stack_mem2);
+        jnk.list1->set_data(static_cast<int16_t>(_insts_count),_stack_mem1);
+        jnk.list2->set_data(static_cast<int16_t>(_insts_count),_stack_mem2);
         return regexec(dstr,jnk,begin,end,groupid);
     }
 

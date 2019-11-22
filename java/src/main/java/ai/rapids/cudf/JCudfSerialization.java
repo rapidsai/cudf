@@ -1320,6 +1320,7 @@ public class JCudfSerialization {
     SerializedTableHeader combined = calcConcatedHeader(providers);
 
     try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
+         HostPrediction hostPrediction = new HostPrediction(combined.dataLen, "readAndConcat");
          HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
       try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
@@ -1393,7 +1394,8 @@ public class JCudfSerialization {
       return null;
     }
 
-    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
+    try (HostPrediction prediction = new HostPrediction(header.dataLen, "readTableFrom");
+        HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
       if (header.dataLen > 0) {
         readTableIntoBuffer(din, header, hostBuffer);
       }
