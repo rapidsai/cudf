@@ -30,8 +30,8 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
-#include <utilities/column_utils.hpp>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 
 #include "groupby/common/legacy/aggregation_requests.hpp"
 #include "groupby/common/legacy/type_info.hpp"

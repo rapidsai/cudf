@@ -44,7 +44,7 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <iterator/legacy/iterator.cuh>  // include iterator header
-#include <utilities/device_atomics.cuh>  // need for atomics and device operator
+#include <utilities/legacy/device_atomics.cuh>  // need for atomics and device operator
 
 // for reduction tests
 #include <cub/device/device_reduce.cuh>

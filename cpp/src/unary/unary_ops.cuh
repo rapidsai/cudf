@@ -17,9 +17,9 @@
 #ifndef UNARY_OPS_H
 #define UNARY_OPS_H
 
-#include <utilities/cudf_utils.h>
-#include <utilities/column_utils.hpp>
 #include <cudf/cudf.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/error.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 

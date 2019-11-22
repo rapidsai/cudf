@@ -4070,6 +4070,10 @@ class DataFrame(object):
         else:
             index = None
 
+        # Make sure every column has the correct name
+        for col, name in zip(self._columns, self.columns):
+            col.name = name
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
             self._columns, map_index._column, index

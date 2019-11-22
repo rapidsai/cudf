@@ -223,7 +223,7 @@ struct DeviceAbs {
 // bitwise op
 
 struct DeviceInvert {
-    // TODO: maybe sfinae overload this for cudf::bool8
+    // TODO: maybe sfinae overload this for cudf::experimental::bool8
     template<typename T>
     __device__
     T operator()(T data) {
@@ -236,8 +236,8 @@ struct DeviceInvert {
 struct DeviceNot {
     template<typename T>
     __device__
-    cudf::bool8 operator()(T data) {
-        return static_cast<cudf::bool8>( !data );
+    cudf::experimental::bool8 operator()(T data) {
+        return static_cast<cudf::experimental::bool8>( !data );
     }
 };
 
@@ -286,7 +286,7 @@ private:
     template <typename T>
     static constexpr bool is_supported() {
         return std::is_arithmetic<T>::value ||
-               std::is_same<T, cudf::bool8>::value;
+               std::is_same<T, cudf::experimental::bool8>::value;
 
         // TODO: try using member detector
         // std::is_member_function_pointer<decltype(&T::operator!)>::value;
@@ -296,7 +296,7 @@ public:
     template <typename T>
     typename std::enable_if_t<is_supported<T>(), void>
     operator()(cudf::column_view const& input, cudf::mutable_column_view& output) {
-        cudf::experimental::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
+        cudf::experimental::unary::Launcher<T, cudf::experimental::bool8, F>::launch(input, output);
     }
 
     template <typename T>
@@ -320,7 +320,7 @@ unary_operation(cudf::column_view const& input,
             auto mask_state = input.null_mask() ? cudf::UNINITIALIZED
                                                 : cudf::UNALLOCATED;
 
-            return cudf::make_numeric_column(cudf::data_type(cudf::BOOL8),
+            return cudf::make_numeric_column(cudf::data_type(BOOL8),
                                              input.size(),
                                              mask_state,
                                              stream,
