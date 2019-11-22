@@ -24,6 +24,8 @@
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 
+#include <thrust/iterator/discard_iterator.h>
+
 namespace cudf {
 namespace experimental {
 namespace detail {
@@ -81,17 +83,14 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
 
   // Copy the valid counts into each column
   auto valid_counts = thrust::host_vector<size_type>(d_valid_counts);
-  auto begin = thrust::make_tuple(target.begin(), valid_counts.begin());
-  auto end = thrust::make_tuple(target.end(), valid_counts.end());
-  thrust::for_each(thrust::host,
-    thrust::make_zip_iterator(begin), thrust::make_zip_iterator(end),
-    [target_rows](thrust::tuple<std::unique_ptr<column>&, size_type> tuple) {
-      auto& target_col = thrust::get<0>(tuple);
-      auto const valid_count = thrust::get<1>(tuple);
+  std::transform(target.begin(), target.end(), valid_counts.begin(),
+    thrust::make_discard_iterator(),
+    [target_rows](auto& target_col, auto const valid_count) {
       if (target_col->nullable()) {
         auto const null_count = target_rows - valid_count;
         target_col->set_null_count(null_count);
       }
+      return 0;
     });
 }
 
