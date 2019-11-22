@@ -4334,7 +4334,7 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
         :param mask: boolean mask in case of masked replacing
     """
 
-    if not input_cols:
+    if input_cols is None:
         input_cols = input_df.columns
 
     if len(input_cols) != len(replace_df.columns):
