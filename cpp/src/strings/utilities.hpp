@@ -38,51 +38,6 @@ namespace detail
 std::unique_ptr<string_view, std::function<void(string_view*)>>
     string_from_host( const char* str, cudaStream_t stream=0 );
 
-/**
- * @brief Creates a string_view vector from a strings column.
- * This is useful for doing some intermediate vector operations.
- *
- * @param strings Strings column instance.
- * @param stream Stream to execute any device code against.
- * @return string_view vector
- */
-rmm::device_vector<string_view> create_string_vector_from_column(
-    cudf::strings_column_view strings,
-    cudaStream_t stream=0 );
-
-/**
- * @brief Creates an offsets column from a string_view vector.
- * This can be used to recreate the offsets child of a new
- * strings column from an intermediate strings vector.
- *
- * @param strings Strings column
- * @param stream Stream to execute any device code against.
- * @param mr Memory resource to use.
- * @return Offsets column
- */
-std::unique_ptr<cudf::column> offsets_from_string_vector(
-    const rmm::device_vector<string_view>& strings,
-    cudaStream_t stream=0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
-/**
- * @brief Creates a chars column from a string_view vector.
- * This can be used to recreate the chars child of a new
- * strings column from an intermediate strings vector.
- *
- * @param strings Strings vector
- * @param d_offsets Offsets vector for placing strings into column's memory.
- * @param null_count Number of null strings.
- * @param stream Stream to execute any device code against.
- * @param mr Memory resource to use.
- * @return chars column
- */
-std::unique_ptr<cudf::column> chars_from_string_vector(
-    const rmm::device_vector<string_view>& strings,
-    const int32_t* d_offsets, cudf::size_type null_count,
-    cudaStream_t stream=0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
 // Type for the character flags table.
 using character_flags_table_type = uint8_t;
 

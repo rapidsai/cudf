@@ -36,7 +36,7 @@
 #include "jit/util/type.h"
 #include "jit/util/operator.h"
 #include <nvstrings/NVCategory.h>
-#include <cudf/datetime.hpp>
+#include <cudf/legacy/datetime.hpp>
 
 #include <types.h.jit>
 #include <types.hpp.jit>
