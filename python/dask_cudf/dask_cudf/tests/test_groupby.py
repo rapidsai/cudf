@@ -229,3 +229,14 @@ def test_groupby_dropna(dropna, by):
         dask_result.index.name = cudf_result.index.name
 
     dd.assert_eq(dask_result, cudf_result)
+
+
+@pytest.mark.parametrize("myindex", [[1, 2] * 4, ["s1", "s2"] * 4])
+def test_groupby_string_index_name(myindex):
+    # GH-Issue #3420
+    data = {"index": myindex, "data": [0, 1] * 4}
+    df = cudf.DataFrame(data=data)
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+    gdf = ddf.groupby("index").agg({"data": "count"})
+
+    assert gdf.compute().index.name == gdf.index.name
