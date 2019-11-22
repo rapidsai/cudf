@@ -476,7 +476,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeroes(
     auto ret = reinterpret_cast<jlong>(
         new gdf_column(view_to_gdf_column(p_normalized_column->mutable_view())));
 
-    p_normalized_column->release();
+    auto contents = p_normalized_column->release();
+    (void)contents.data.release();      // Data-buffer contents have been adopted already
+    (void)contents.null_mask.release(); // by the gdf_column being returned. Relinquish ownership.
 
     return ret;
   }
