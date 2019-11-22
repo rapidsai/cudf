@@ -13,14 +13,8 @@ from cudf.tests.utils import assert_eq
 def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
     gdf = DataFrame.from_pandas(df)
 
-    cudf_replace_value = value
-    if isinstance(cudf_replace_value, pd.DataFrame):
-        cudf_replace_value = DataFrame.from_pandas(value)
-    elif isinstance(cudf_replace_value, pd.Series):
-        cudf_replace_value = Series.from_pandas(value)
-
     df[arg] = value
-    gdf[arg] = cudf_replace_value
+    gdf[arg] = value
     assert_eq(df, gdf)
 
 

@@ -437,8 +437,8 @@ class DataFrame(object):
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             for col_name in self._cols:
-                mask = arg[col_name]
-                self._cols[col_name][mask] = value
+                scatter_map = arg[col_name]
+                self._cols[col_name][scatter_map] = value
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -4352,14 +4352,7 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
                 )
         else:
             if mask is not None:
-                raise ValueError("Can not insert ")
+                raise ValueError("Can not insert new column with a bool mask")
             else:
-                if col_1 in input_df.columns:
-                    input_df._cols[col_1] = input_df._prepare_series_for_add(
-                        replace_df[col_2]
-                    )
-                else:
-                    # handle append case
-                    input_df.insert(
-                        len(input_df._cols), col_1, replace_df[col_2]
-                    )
+                # handle append case
+                input_df.insert(len(input_df._cols), col_1, replace_df[col_2])
