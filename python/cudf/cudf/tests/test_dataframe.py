@@ -4078,10 +4078,10 @@ def test_insert(data):
 
 
 @pytest.mark.parametrize(
-    "dtype_l", ["int8", "int16", "int32", "int64",],
+    "dtype_l", ["int8", "int16", "int32", "int64"],
 )
 @pytest.mark.parametrize(
-    "dtype_r", ["int8", "int16", "int32", "int64",],
+    "dtype_r", ["int8", "int16", "int32", "int64"],
 )
 def test_join_on_typecast_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
@@ -4233,13 +4233,19 @@ def test_join_on_typecast_categorical(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d", "e"]
     join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)
     join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
+    if dtype_l == "category":
+        exp_dtype = join_data_l.dtype
+        exp_categories = join_data_l.astype(int)._column
+    elif dtype_r == "category":
+        exp_dtype = join_data_r.dtype
+        exp_categories = join_data_r.astype(int)._column
 
     gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
 
     exp_join_data = [1, 2, 3, 4]
     exp_other_data = ["a", "b", "c", "d"]
-    exp_join_col = Series(exp_join_data, dtype="category")
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
 
     expect = DataFrame(
         {
@@ -4248,7 +4254,7 @@ def test_join_on_typecast_categorical(dtype_l, dtype_r):
             "B_y": exp_other_data,
         }
     )
+    expect["join_col"] = expect["join_col"].cat.set_categories(exp_categories)
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
-
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)

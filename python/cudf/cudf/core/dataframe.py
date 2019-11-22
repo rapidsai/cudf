@@ -2186,7 +2186,7 @@ class DataFrame(object):
     def _typecast_before_merge(self, lhs, rhs, left_on, right_on, how):
         left_on = sorted(left_on)
         right_on = sorted(right_on)
-
+        cats_to_adjust = []
         for lcol, rcol in zip(left_on, right_on):
             dtype_l = lhs[lcol].dtype
             dtype_r = rhs[rcol].dtype
@@ -2208,6 +2208,7 @@ class DataFrame(object):
                             )
                         )
                     rtn = lhs[lcol].cat.categories.dtype
+                    cats_to_adjust.append(lcol)
                 elif is_categorical_dtype(dtype_r):
                     if how == "left":
                         raise ValueError(
@@ -2217,6 +2218,7 @@ class DataFrame(object):
                             )
                         )
                     rtn = rhs[rcol].cat.categories.dtype
+                    cats_to_adjust.append(rcol)
                 elif how in ["inner", "outer"]:
                     if (np.issubdtype(dtype_l, np.number)) and (
                         np.issubdtype(dtype_r, np.number)
@@ -2237,7 +2239,7 @@ class DataFrame(object):
             lhs[lcol] = lhs[lcol].astype(to_dtype)
             rhs[rcol] = rhs[rcol].astype(to_dtype)
 
-        return lhs, rhs
+        return lhs, rhs, cats_to_adjust
 
     def merge(
         self,
@@ -2449,7 +2451,7 @@ class DataFrame(object):
 
         # potentially do an implicit typecast
 
-        (lhs, rhs) = self._typecast_before_merge(
+        (lhs, rhs, cats_to_adjust) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, how
         )
 
@@ -2457,7 +2459,7 @@ class DataFrame(object):
         gdf_result = libcudf.join.join(
             lhs._cols, rhs._cols, left_on, right_on, how, method
         )
-
+  
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
         result = []
@@ -2499,11 +2501,17 @@ class DataFrame(object):
             assert len(gdf_result) == 0
 
         # Build a new data frame based on the merged columns from GDF
+
         df = DataFrame()
         for col, name in result:
             if isinstance(col, nvstrings.nvstrings):
                 df[name] = col
             else:
+                if name in cats_to_adjust: 
+                    col = col.astype(categorical_dtypes[name])
+                    categorical_dtypes[name] = col.dtype
+                    col_with_categories[name] = col.cat.categores
+
                 df[name] = column.build_column(
                     col.data,
                     dtype=categorical_dtypes.get(name, col.dtype),
@@ -2511,6 +2519,7 @@ class DataFrame(object):
                     categories=col_with_categories.get(name, None),
                 )
 
+    
         # Let's make the "index as column" back into an index
         if left_index and right_index:
             df.index = df[merge_index_name]
