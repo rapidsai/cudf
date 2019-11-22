@@ -93,7 +93,7 @@ TEST_F(TableViewTest, Select)
     fixed_width_column_wrapper<int16_t> col2{{1,2,3,4}};
     fixed_width_column_wrapper<int32_t> col3{{4,5,6,7}};
     fixed_width_column_wrapper<int64_t> col4{{4,5,6,7}};
-    cudf::table_view t({col1, col2, col3, col4});
+    cudf::table_view t{{col1, col2, col3, col4}};
 
     cudf::table_view selected = t.select({2, 3});
     expect_columns_equal(t.column(2), selected.column(0));
@@ -108,7 +108,7 @@ TEST_F(TableViewTest, SelectOutOfBounds)
     fixed_width_column_wrapper<int16_t> col2{{1,2,3,4}};
     fixed_width_column_wrapper<int32_t> col3{{4,5,6,7}};
     fixed_width_column_wrapper<int64_t> col4{{4,5,6,7}};
-    cudf::table_view t({col1, col2});
+    cudf::table_view t{{col1, col2}};
 
     EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
 }
@@ -121,7 +121,7 @@ TEST_F(TableViewTest, SelectNoColumns)
     fixed_width_column_wrapper<int16_t> col2{{1,2,3,4}};
     fixed_width_column_wrapper<int32_t> col3{{4,5,6,7}};
     fixed_width_column_wrapper<int64_t> col4{{4,5,6,7}};
-    cudf::table_view t({col1, col2, col3, col4});
+    cudf::table_view t{{col1, col2, col3, col4}};
 
     cudf::table_view selected = t.select({});
     EXPECT_EQ(selected.num_columns(), 0);
