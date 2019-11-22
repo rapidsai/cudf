@@ -60,7 +60,6 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
  *  @brief Return a copy of `input_col` replacing all `old_values[i]` present with `new_values[i]`.
- *        with `new_values[i]`.
  *
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
