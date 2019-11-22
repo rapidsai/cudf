@@ -123,15 +123,7 @@ void replace_kernel(cudf::column_device_view input,
                     cudf::column_device_view values_to_replace,
                     cudf::column_device_view replacement)
                     {
-  const T* __restrict__ input_data = input.data<T>();
-  cudf::bitmask_type const * __restrict__ input_valid = input.null_mask();
   T * __restrict__ output_data = output.data<T>();
-  cudf::bitmask_type * __restrict__ output_valid = output.null_mask();
-  const T* __restrict__ values_to_replace_begin = values_to_replace.data<T>();
-  const T* __restrict__ values_to_replace_end = values_to_replace.data<T>()
-      + values_to_replace.size();
-  const T* __restrict__ d_replacement_values = replacement.data<T>();
-  cudf::bitmask_type const * __restrict__ replacement_valid = replacement.null_mask();
 
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -144,37 +136,25 @@ void replace_kernel(cudf::column_device_view input,
     bool output_is_valid = true;
     uint32_t bitmask = 0xffffffff;
 
+    bool input_is_valid{true};
     if (input_has_nulls) {
-      bool const input_is_valid { cudf::bit_is_set(input_valid, i) };
+      input_is_valid = input.is_valid_nocheck(i);
       output_is_valid = input_is_valid;
-
-      bitmask = __ballot_sync(active_mask, input_is_valid);
-
-      if (input_is_valid) {
-        thrust::tie(output_data[i], output_is_valid) =
-            get_new_value<T, replacement_has_nulls>(i, input_data,
-                                                    values_to_replace_begin,
-                                                    values_to_replace_end,
-                                                    d_replacement_values,
-                                                    replacement_valid);
-      }
-
-    } else {
-      thrust::tie(output_data[i], output_is_valid) =
-          get_new_value<T, replacement_has_nulls>(i, input_data,
-                                                  values_to_replace_begin,
-                                                  values_to_replace_end,
-                                                  d_replacement_values,
-                                                  replacement_valid);
     }
+    if (input_is_valid)
+      thrust::tie(output_data[i], output_is_valid) =
+          get_new_value<T, replacement_has_nulls>(i,
+                                                  input.data<T>(),
+                                                  values_to_replace.data<T>(),
+                                                  values_to_replace.data<T>() + values_to_replace.size(),
+                                                  replacement.data<T>(),
+                                                  replacement.null_mask());
 
     /* output valid counts calculations*/
     if (input_has_nulls or replacement_has_nulls) {
-
-      bitmask &= __ballot_sync(active_mask, output_is_valid);
-
+      bitmask = __ballot_sync(active_mask, output_is_valid);
       if (0 == lane_id) {
-        output_valid[cudf::word_index(i)] = bitmask;
+        output.set_mask_word(cudf::word_index(i), bitmask);
         valid_sum += __popc(bitmask);
       }
     }
@@ -183,8 +163,6 @@ void replace_kernel(cudf::column_device_view input,
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
   if (input_has_nulls or replacement_has_nulls) {
-    __syncthreads(); // waiting for the valid counts of each warp to be ready
-
     // Compute total valid count for this block and add it to global count
     uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<
         BLOCK_SIZE, 0>(valid_sum);
@@ -282,18 +260,12 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& replacement_values,
                                                    rmm::mr::device_memory_resource* mr,
                                                    cudaStream_t stream) {
-  if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size())
-      {
+  if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size()) {
     return std::make_unique < cudf::column > (input_col);
   }
 
   CUDF_EXPECTS(values_to_replace.size() == replacement_values.size(),
                "values_to_replace and replacement_values size mismatch.");
-
-  if (0 == values_to_replace.size())
-      {
-    return std::make_unique < cudf::column > (input_col);
-  }
 
   CUDF_EXPECTS(input_col.type() == values_to_replace.type() &&
                    input_col.type() == replacement_values.type(),
@@ -337,26 +309,55 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 
 namespace { //anonymous
 
-template<typename Type, typename iter>
-__global__
-void replace_nulls(cudf::size_type size,
-                   const Type* __restrict__ in_data,
-                   const cudf::bitmask_type* __restrict__ in_valid,
-                   iter replacement,
-                   Type* __restrict__ out_data)
-                   {
-  int tid = threadIdx.x;
-  int blkid = blockIdx.x;
-  int blksz = blockDim.x;
-  int gridsz = gridDim.x;
+//template<typename Type, typename iter>
+//__global__
+//void replace_nulls(cudf::size_type size,
+//                   const Type* __restrict__ in_data,
+//                   const cudf::bitmask_type* __restrict__ in_valid,
+//                   iter replacement,
+//                   Type* __restrict__ out_data)
+//                   {
+//  int tid = threadIdx.x;
+//  int blkid = blockIdx.x;
+//  int blksz = blockDim.x;
+//  int gridsz = gridDim.x;
+//
+//  int start = tid + blkid * blksz;
+//  int step = blksz * gridsz;
+//
+//  for (int i = start; i < size; i += step) {
+//    out_data[i] = cudf::bit_is_set(in_valid, i) ? in_data[i] : replacement[i];
+//  }
+//}
 
-  int start = tid + blkid * blksz;
-  int step = blksz * gridsz;
+template<typename T>
+struct device_constant_iterator {
+  const T* ptr;
+  device_constant_iterator(const T* _ptr): ptr(_ptr){}
+  __host__ __device__
+  T operator[](int x) {return *ptr;}
+};
 
-  for (int i = start; i < size; i += step) {
-    out_data[i] = cudf::bit_is_set(in_valid, i) ? in_data[i] : replacement[i];
+template<typename T, typename iter>
+struct replace_nulls_functor {
+  T* output;
+  const T* input;
+  const cudf::bitmask_type* input_valid;
+  iter replacement;
+
+  replace_nulls_functor(T* _output,
+                        const T* _input,
+                        const cudf::bitmask_type* _input_valid,
+                        iter _replacement) :
+      output(_output), input(_input), input_valid(_input_valid), replacement(_replacement) {
   }
-}
+  __host__ __device__
+  void operator()(int i) {
+    bool input_is_valid = cudf::bit_is_set(input_valid, i);
+    output[i] = input_is_valid ? input[i] : replacement[i];
+  }
+};
+
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -381,12 +382,12 @@ struct replace_nulls_column_kernel_forwarder {
                                           mr);
     auto output_view = output->mutable_view();
 
-    replace_nulls<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
-                                                              input.data<col_type>(),
-                                                              input.null_mask(),
-                                                              replacement.data<col_type>(),
-                                                              output_view.data<col_type>());
-    cudaStreamSynchronize(stream);
+    replace_nulls_functor<col_type, const col_type*> func(output_view.data<col_type>(),
+                                                          input.data<col_type>(),
+                                                          input.null_mask(),
+                                                          replacement.data<col_type>());
+    thrust::for_each_n(thrust::make_counting_iterator(0), input.size(), func);
+
     return output;
   }
   template<typename col_type,
@@ -424,13 +425,12 @@ struct replace_nulls_scalar_kernel_forwarder {
 
     using ScalarType = cudf::experimental::scalar_type_t<col_type>;
     auto s1 = static_cast<ScalarType const&>(replacement);
-
-    replace_nulls<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
-                                                              input.data<col_type>(),
-                                                              input.null_mask(),
-                                                              thrust::make_constant_iterator(s1.value()),
-                                                              output_view.data<col_type>());
-    cudaStreamSynchronize(stream);
+    device_constant_iterator<col_type> iter(s1.data());
+    replace_nulls_functor<col_type, device_constant_iterator<col_type>> func(output_view.data<col_type>(),
+                                                                             input.data<col_type>(),
+                                                                             input.null_mask(),
+                                                                             iter);
+    thrust::for_each_n(thrust::make_counting_iterator(0), input.size(), func);
     return output;
   }
 
