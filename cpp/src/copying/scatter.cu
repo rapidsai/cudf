@@ -30,18 +30,6 @@ namespace detail {
 
 namespace {
 
-void set_null_mask(std::unique_ptr<column>& col, rmm::device_buffer&& bitmask,
-    size_type null_count)
-{
-  auto const size = col->size();
-  auto const type = col->type();
-  auto contents = col->release();
-  col = std::make_unique<column>(type, size, std::move(*contents.data),
-    std::move(bitmask), null_count, std::move(contents.children));
-  // TODO use this from PR 3172 instead
-  //copy->set_null_mask(std::move(mask), null_count);
-}
-
 template <typename T, typename MapIterator>
 rmm::device_vector<T> make_gather_map(MapIterator scatter_iter,
     size_type scatter_rows, size_type gather_rows, cudaStream_t stream)
@@ -69,7 +57,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   for (size_t i = 0; i < target.size(); ++i) {
     if (source.column(i).nullable() and not target[i]->nullable()) {
       auto mask = create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
-      set_null_mask(target[i], std::move(mask), 0);
+      target[i]->set_null_mask(std::move(mask), 0);
     }
   }
 
@@ -224,7 +212,7 @@ void scatter_scalar_bitmask(std::vector<std::unique_ptr<scalar>> const& source,
       if (not target[i]->nullable()) {
         // Target must have a null mask if the source is not valid
         auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
-        set_null_mask(target[i], std::move(mask), 0);
+        target[i]->set_null_mask(std::move(mask), 0);
       }
 
       auto target_view = mutable_column_device_view::create(
