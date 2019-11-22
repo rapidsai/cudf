@@ -2426,9 +2426,10 @@ class Series(object):
 
         input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_shift.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
+        if output_dary.size > 0:
+            cudautils.gpu_shift.forall(output_dary.size)(
+                input_dary, output_dary, periods
+            )
         return Series(output_dary, name=self.name, index=self.index)
 
     def diff(self, periods=1):
@@ -2452,9 +2453,10 @@ class Series(object):
 
         input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_diff.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
+        if output_dary.size > 0:
+            cudautils.gpu_diff.forall(output_dary.size)(
+                input_dary, output_dary, periods
+            )
         return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(

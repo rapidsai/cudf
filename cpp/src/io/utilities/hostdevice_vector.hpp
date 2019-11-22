@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
@@ -18,7 +17,6 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
-#include <cudf/cudf.h>
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -34,19 +32,20 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  explicit hostdevice_vector(size_t max_size)
-      : hostdevice_vector(max_size, max_size) {}
+  explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
+      : hostdevice_vector(max_size, max_size, stream) {}
 
-  explicit hostdevice_vector(size_t initial_size, size_t max_size)
+  explicit hostdevice_vector(size_t initial_size, size_t max_size,
+                             cudaStream_t stream = 0)
       : num_elements(initial_size), max_elements(max_size) {
     if (max_elements != 0) {
       CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
-      RMM_ALLOC(&d_data, sizeof(T) * max_elements, 0);
+      RMM_ALLOC(&d_data, sizeof(T) * max_elements, stream);
     }
   }
 
   ~hostdevice_vector() {
-    RMM_FREE(d_data, 0);
+    RMM_FREE(d_data, stream);
     cudaFreeHost(h_data);
   }
 
@@ -68,6 +67,7 @@ class hostdevice_vector {
   T *device_ptr(size_t offset = 0) const { return d_data + offset; }
 
  private:
+  cudaStream_t stream = 0;
   size_t max_elements = 0;
   size_t num_elements = 0;
   T *h_data = nullptr;

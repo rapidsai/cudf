@@ -20,7 +20,7 @@
 #include <cudf/cudf.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <rmm/rmm.h>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/bit_util.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
