@@ -17,8 +17,8 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/cuda_utils.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/legacy/filling.hpp>
 

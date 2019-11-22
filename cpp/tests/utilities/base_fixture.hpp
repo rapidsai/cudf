@@ -23,6 +23,7 @@
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <ftw.h>
 #include <random>
 
 namespace cudf {
@@ -98,6 +99,52 @@ class UniformRandomGenerator {
  private:
   uniform_distribution dist{};         ///< Distribution
   Engine rng{std::random_device{}()};  ///< Random generator
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Provides temporary directory for temporary test files.
+ *
+ * Example:
+ * ```c++
+ * ::testing::Environment* const temp_env =
+ *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
+ * ```
+ *---------------------------------------------------------------------------**/
+class TempDirTestEnvironment : public ::testing::Environment {
+ public:
+  std::string tmpdir;
+
+  void SetUp() {
+    char tmp_format[] = "/tmp/gtest.XXXXXX";
+    tmpdir = mkdtemp(tmp_format);
+    tmpdir += "/";
+  }
+
+  void TearDown() {
+    // TODO: should use std::filesystem instead, once C++17 support added
+    nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+  }
+
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type,
+                      struct FTW *ftwb) {
+    return remove(pathname);
+  }
+
+  /**
+   * @brief Get directory path to use for temporary files
+   *
+   * @return std::string The temporary directory path
+   */
+  std::string get_temp_dir() { return tmpdir; }
+
+  /**
+   * @brief Get a temporary filepath to use for the specified filename
+   *
+   * @return std::string The temporary filepath
+   */
+  std::string get_temp_filepath(std::string filename) {
+    return tmpdir + filename;
+  }
 };
 
 }  // namespace test
