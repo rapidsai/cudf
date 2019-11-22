@@ -401,6 +401,7 @@ add_library(cudf
             src/stream_compaction/legacy/drop_nulls.cu
             src/stream_compaction/legacy/drop_duplicates.cu
             src/datetime/legacy/datetime_ops.cu
+            src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu

@@ -237,6 +237,11 @@ set(LEGACY_DATETIME_TEST_SRC
 
 ConfigureTest(LEGACY_DATETIME_TEST "${LEGACY_DATETIME_TEST_SRC}")
 
+set(DATETIME_OPS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/datetime/datetime_ops_test.cu")
+
+ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
+
 ###################################################################################################
 # - hashing tests ---------------------------------------------------------------------------------
 
