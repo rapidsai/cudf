@@ -4347,7 +4347,6 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
             if mask is not None:
                 input_df._cols[col_1][mask] = replace_df[col_2]
             else:
-                print(replace_df[col_2])
                 input_df._cols[col_1] = input_df._prepare_series_for_add(
                     replace_df[col_2]
                 )
