@@ -2510,9 +2510,6 @@ class DataFrame(object):
                 if name in cats_to_adjust:
                     col = col.astype(categorical_dtypes[name])
                     categorical_dtypes[name] = col.dtype
-                    # import pdb
-                    # pdb.set_trace()
-                    # col_with_categories[name] = col.cat().categories
 
                 df[name] = column.build_column(
                     col.data,
