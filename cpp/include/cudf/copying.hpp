@@ -129,6 +129,46 @@ std::unique_ptr<table> scatter(
     table_view const& target, bool check_bounds = false,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Scatters the rows of a table to `n` tables according to a scatter map
+ *
+ * Copies the rows from the input table to new tables according to the table
+ * indices given by scatter map. The number of output tables is one more than
+ * the maximum value in `scatter_map`.
+ * 
+ * If a value in [0, n] does not appear in scatter_map, then the corresponding
+ * output table will be empty.
+ *
+ * `scatter_map` is a non-nullable column of integers whose `size`
+ * equals `input.num_rows()` and contains numbers in range of [0, n].
+ *
+ * @throw cudf::logic_error when scatter map is a non-integer type
+ * @throw cudf::logic_error when scatter map is larger than input
+ * @throw cudf::logic_error when scatter map has nulls
+ *
+ * Example:
+ * input:       [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *               { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * scatter_map:  { 3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
+ * output:     {[{22}, {2}], 
+ *              [{16, 24, 26, 28}, {4, 4, 6, 2}],
+ *              [{}, {}],
+ *              [{10, 14}, {1, 3}],
+ *              [{12, 18, 20}, {2, null, 0}]}
+ *
+ * @param input Table whose rows will be partitioned into a set of
+ * tables according to `scatter_map`
+ * @param scatter_map  Non-nullable column of integer values that map
+ * each row in `input` table into one of the output tables
+ * @param mr The resource to use for all allocations
+ *
+ * @return A vector of tables containing the scattered rows of `input`.
+ * `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`.
+ */
+std::vector<std::unique_ptr<table>> scatter_to_tables(
+    table_view const& input, column_view const& scatter_map,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
