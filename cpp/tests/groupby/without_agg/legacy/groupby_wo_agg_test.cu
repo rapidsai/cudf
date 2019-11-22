@@ -29,7 +29,7 @@
 #include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
@@ -41,8 +41,8 @@
 // See this header for all valid handling
 #include <bitmask/legacy/legacy_bitmask.hpp>
 
-#include <utilities/cudf_utils.h>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/cudf_utils.h>
+#include <utilities/legacy/bit_util.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace without_agg {

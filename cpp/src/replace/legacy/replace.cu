@@ -28,9 +28,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/cuda_utils.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/cudf_utils.h>
+#include <utilities/legacy/cuda_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 
