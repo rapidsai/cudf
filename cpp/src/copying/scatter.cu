@@ -43,7 +43,7 @@ void set_null_mask(std::unique_ptr<column>& col, rmm::device_buffer&& bitmask,
 }
 
 template <typename T, typename MapIterator>
-thrust::device_vector<T> make_gather_map(MapIterator scatter_iter,
+rmm::device_vector<T> make_gather_map(MapIterator scatter_iter,
     size_type scatter_rows, size_type gather_rows, cudaStream_t stream)
 {
   static_assert(std::is_signed<T>::value,
@@ -51,7 +51,7 @@ thrust::device_vector<T> make_gather_map(MapIterator scatter_iter,
   auto const invalid_index = static_cast<T>(-1);
 
   // Convert scatter map to a gather map
-  auto gather_map = thrust::device_vector<T>(gather_rows, invalid_index);
+  auto gather_map = rmm::device_vector<T>(gather_rows, invalid_index);
   thrust::scatter(rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<T>(0),
     thrust::make_counting_iterator<T>(scatter_rows),
@@ -87,7 +87,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto bitmask_kernel = gather_bitmask_kernel<true, decltype(gather_map)>;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, bitmask_kernel));
 
-  auto d_valid_counts = thrust::device_vector<size_type>(target.size());
+  auto d_valid_counts = rmm::device_vector<size_type>(target.size());
   bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
     gather_map, d_target_masks.data().get(), target_rows, d_valid_counts.data().get());
 
