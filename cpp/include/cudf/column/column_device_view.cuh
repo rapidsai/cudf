@@ -74,7 +74,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ T const* data() const noexcept {
     return head<T>() + _offset;
   }
-
+ 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
    *---------------------------------------------------------------------------**/
@@ -236,7 +236,7 @@ class alignas(16) column_device_view_base {
 
 //Forward declaration
 template <typename T>
-class value_accessor; 
+struct value_accessor; 
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
