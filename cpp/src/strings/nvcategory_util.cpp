@@ -1,5 +1,5 @@
 #include <utility>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/legacy/replace.hpp>
 #include <cudf/types.hpp>

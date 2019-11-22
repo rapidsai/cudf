@@ -304,3 +304,21 @@ TYPED_TEST(GatherTest, MultiColNulls) {
   }
 
 }
+
+class GatherTestStr : public cudf::test::BaseFixture {};
+
+TEST_F(GatherTestStr, StringColumn) {
+    cudf::test::fixed_width_column_wrapper<int16_t> col1{{     1,    2,     3,   4,        5,      6}, {1, 1, 0, 1, 0, 1}};
+    cudf::test::strings_column_wrapper col2             {{"This", "is", "not", "a", "string", "type"}, {1, 1, 1, 1, 1, 0}};
+    cudf::table_view source_table {{col1, col2}};
+
+    cudf::test::fixed_width_column_wrapper<int16_t> gather_map{{0, 1, 3, 4}};
+
+    cudf::test::fixed_width_column_wrapper<int16_t> exp_col1{{     1,    2,   4,        5}, {1, 1, 1, 0}};
+    cudf::test::strings_column_wrapper exp_col2             {{"This", "is", "a", "string"}, {1, 1, 1, 1}};
+    cudf::table_view expected {{exp_col1, exp_col2}};
+
+    auto got = cudf::experimental::gather(source_table, gather_map);
+
+    cudf::test::expect_tables_equal(expected, got->view());
+}

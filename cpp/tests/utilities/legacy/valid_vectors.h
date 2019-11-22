@@ -25,8 +25,8 @@
 #include <iterator>
 #include <string>
 
-#include <utilities/cudf_utils.h>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/cudf_utils.h>
+#include <utilities/legacy/bit_util.cuh>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 
 // host_valid_pointer is a wrapper for cudf::valid_type* with custom deleter

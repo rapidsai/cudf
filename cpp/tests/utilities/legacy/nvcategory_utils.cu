@@ -21,8 +21,8 @@
 #include <cudf/legacy/functions.h>
 #include <cudf/types.h>
 #include <bitmask/legacy/bit_mask.cuh>
-#include <utilities/cudf_utils.h>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/cudf_utils.h>
+#include <utilities/legacy/column_utils.hpp>
 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
