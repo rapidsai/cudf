@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <hash/helper_functions.cuh>
 
