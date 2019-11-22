@@ -268,7 +268,7 @@ TEST_F(DropDuplicate, EmptyInputTable)
 
 TEST_F(DropDuplicate, NoColumnInputTable)
 {
-    cudf::table_view input {{}};
+    cudf::table_view input {std::vector<cudf::column_view>()};
     std::vector<cudf::size_type> keys{1, 2};
 
     auto got = drop_duplicates(input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, true);

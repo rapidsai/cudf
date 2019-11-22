@@ -41,6 +41,7 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3172 Define and implement new fill/repeat/copy_range APIs
 
 ## Improvements
 

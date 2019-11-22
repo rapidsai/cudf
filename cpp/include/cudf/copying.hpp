@@ -115,6 +115,79 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
 std::unique_ptr<table> empty_like(table_view const& input_table);
 
 /**
+ * @brief Copies a range of elements in-place from one column to another.
+ *
+ * Overwrites the range of elements in @p target indicated by the indices
+ * [@p target_begin, @p target_begin + N) with the elements from @p source
+ * indicated by the indices [@p source_begin, @p source_end) (where N =
+ * (@p source_end - @p source_begin)). Use the out-of-place copy function
+ * returning std::unique_ptr<column> for uses cases requiring memory
+ * reallocation. For example for strings columns and other variable-width types.
+ *
+ * If @p source and @p target refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
+ *
+ * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
+ * variable width types).
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ * @throws `cudf::logic_error` if @p source has null values and @p target is not
+ * nullable.
+ *
+ * @param source The column to copy from
+ * @param target The preallocated column to copy into
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param source_end The index of the last element in the source range
+ * (exclusive)
+ * @param target_begin The starting index of the target range (inclusive)
+ * @return void
+ */
+void copy_range(column_view const& source,
+                mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin);
+
+/**
+ * @brief Copies a range of elements out-of-place from one column to another.
+ *
+ * Creates a new column as if an in-place copy was performed into @p target.
+ * A copy of @p target is created first and then the elements indicated by the
+ * indices [@p target_begin, @p target_begin + N) were copied from the elements
+ * indicated by the indices [@p source_begin, @p source_end) of @p source
+ * (where N = (@p source_end - @p source_begin)). Elements outside the range are
+ * copied from @p target into the returned new column target.
+ *
+ * If @p source and @p target refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
+ *
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ *
+ * @param source The column to copy from inside the range.
+ * @param target The column to copy from outside the range.
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param source_end The index of the last element in the source range
+ * (exclusive)
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param mr Memory resource to allocate the result target column.
+ * @return std::unique_ptr<column> The result target column
+ */
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
+                                   rmm::mr::device_memory_resource* mr =
+                                       rmm::mr::get_default_resource());
+
+/**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
  * The returned views of `input` are constructed from an even number indices where
  * the `i`th returned `column_view` views the elements in `input` indicated by the range
