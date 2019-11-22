@@ -123,7 +123,9 @@ class Column(object):
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             objs = [o._data for o in objs]
-            return StringColumn(data=nvstrings.from_strings(*objs))
+            return StringColumn(
+                data=nvstrings.from_strings(*objs), name=head.name
+            )
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
@@ -515,9 +517,7 @@ class Column(object):
                     data_size = self.data.size()
                 else:
                     data_size = self.data.size
-                bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask.to_gpu_array()
-                )
+                bytemask = cudautils.expand_mask_bits(data_size, self.mask.mem)
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
                 return col
@@ -612,9 +612,7 @@ class Column(object):
         if not self.has_null_mask:
             return self
         out = cudautils.fillna(
-            data=self.data.to_gpu_array(),
-            mask=self.mask.to_gpu_array(),
-            value=value,
+            data=self.data.mem, mask=self.mask.mem, value=value
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
@@ -678,14 +676,15 @@ class Column(object):
         DeviceNDArray
            logical inverted mask
         """
-
-        gpu_mask = self.to_gpu_array()
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+        gpu_mask = self.data.mem
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
     def _copy_to_dense_buffer(self):
-        data = self.data.to_gpu_array()
-        mask = self.mask.to_gpu_array()
+        data = self.data.mem
+        mask = self.mask.mem
         nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
         return Buffer(mem, size=nnz, capacity=mem.size)
 
@@ -753,7 +752,11 @@ class Column(object):
         -------
         device array
         """
-        return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+        if self.null_count != 0:
+            raise ValueError("Column must have no nulls.")
+
+        return cudautils.compact_mask_bytes(self.data.mem)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -1402,10 +1405,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    data = as_column(
-                        pd.Series(arbitrary, dtype="category"),
-                        nan_as_null=nan_as_null,
-                    )
+                    sr = pd.Series(arbitrary, dtype="category")
+                    data = as_column(sr, nan_as_null=nan_as_null)
+                elif np_type == np.str_:
+                    sr = pd.Series(arbitrary, dtype="str")
+                    data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
                         np.array(arbitrary, dtype=np_type),
@@ -1434,7 +1438,7 @@ def column_applymap(udf, column, out_dtype):
     """
     core = njit(udf)
     results = rmm.device_array(shape=len(column), dtype=out_dtype)
-    values = column.data.to_gpu_array()
+    values = column.data.mem
     if column.mask:
         # For masked columns
         @cuda.jit
@@ -1447,7 +1451,7 @@ def column_applymap(udf, column, out_dtype):
                     # call udf
                     results[i] = core(values[i])
 
-        masks = column.mask.to_gpu_array()
+        masks = column.mask.mem
         kernel_masked.forall(len(column))(values, masks, results)
     else:
         # For non-masked columns

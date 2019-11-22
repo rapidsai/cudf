@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <iterator/iterator.cuh>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <cudf/legacy/search.hpp>

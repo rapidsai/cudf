@@ -20,7 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_buffer.hpp>
@@ -206,6 +206,17 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
  public:
   /**---------------------------------------------------------------------------*
+   * @brief Default constructor initializes an empty column with proper dtype
+   *---------------------------------------------------------------------------**/
+  fixed_width_column_wrapper() : column_wrapper{} {
+    std::vector<Element> empty;
+    wrapped.reset(new cudf::column{
+        cudf::data_type{cudf::experimental::type_to_id<Element>()},
+        0,
+        detail::make_elements<Element>(empty.begin(), empty.end())});
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Construct a non-nullable column of the fixed-width elements in the
    * range `[begin,end)`.
    *
@@ -272,7 +283,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param element_list The list of elements
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::initializer_list<Element> elements)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements)} {
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
   }
 
   /**---------------------------------------------------------------------------*
@@ -294,8 +305,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper(std::initializer_list<Element> elements,
                              std::initializer_list<bool> validity)
-      : fixed_width_column_wrapper{std::cbegin(elements), std::cend(elements),
-                                   std::cbegin(validity)} {}
+      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
+                                   std::cbegin(validity)) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements and
@@ -317,8 +328,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename ValidityIterator>
   fixed_width_column_wrapper(std::initializer_list<Element> element_list,
                              ValidityIterator v)
-      : fixed_width_column_wrapper{std::cbegin(element_list),
-                                   std::cend(element_list), v} {}
+      : fixed_width_column_wrapper(std::cbegin(element_list),
+                                   std::cend(element_list), v) {}
 };
 
 /**---------------------------------------------------------------------------*

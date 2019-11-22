@@ -16,11 +16,11 @@
 #include "aggregation_requests.hpp"
 
 #include <cudf/cudf.h>
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "type_info.hpp"

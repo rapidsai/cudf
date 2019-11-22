@@ -1,5 +1,5 @@
 #include <utility>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/legacy/replace.hpp>
 #include <cudf/types.hpp>
@@ -9,7 +9,7 @@
 #include <rmm/rmm.h>
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/error_utils.hpp>
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/legacy/copying.hpp>
 
 namespace {

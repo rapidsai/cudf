@@ -19,7 +19,7 @@
 #include <algorithm>
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 
 #include <table/legacy/device_table.cuh>

@@ -17,8 +17,8 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/cuda_utils.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/legacy/filling.hpp>
 
@@ -37,9 +37,8 @@ gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStr
 	cudf::fill(&output, value, 0, output.size);
     } else {
         const bit_mask_t* __restrict__ typed_input_valid = reinterpret_cast<bit_mask_t*>(input.valid);
-        auto exec = rmm::exec_policy(stream)->on(stream);
 
-        thrust::transform(exec,
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
                           thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
                           thrust::make_counting_iterator(static_cast<gdf_size_type>(input.size)),
                           static_cast<bool*>(output.data),

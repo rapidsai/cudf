@@ -148,3 +148,14 @@ def test_concat_columns(axis):
     got = gd.concat([gdf1, gdf2], axis=axis)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("myindex", ["a", "b"])
+def test_concat_string_index_name(myindex):
+    # GH-Issue #3420
+    data = {"a": [123, 456], "b": ["s1", "s2"]}
+    df1 = gd.DataFrame(data).set_index(myindex)
+    df2 = df1.copy()
+    df3 = gd.concat([df1, df2])
+
+    assert df3.index.name == myindex

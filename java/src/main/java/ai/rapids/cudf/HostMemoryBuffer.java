@@ -54,11 +54,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   private static native ByteBuffer wrapRangeInBuffer(long address, long len);
 
-  private static final class HostBufferCleaner extends MemoryCleaner.Cleaner {
+  private static final class HostBufferCleaner extends MemoryBufferCleaner {
     private long address;
+    private final long length;
 
-    HostBufferCleaner(long address) {
+    HostBufferCleaner(long address, long length) {
       this.address = address;
+      this.length = length;
     }
 
     @Override
@@ -66,6 +68,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
       boolean neededCleanup = false;
       if (address != 0) {
         UnsafeMemoryAccessor.free(address);
+        MemoryListener.hostDeallocation(length, getId());
         address = 0;
         neededCleanup = true;
       }
@@ -107,15 +110,19 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   HostMemoryBuffer(long address, long length) {
-    super(address, length, new HostBufferCleaner(address));
+    this(address, length, new HostBufferCleaner(address, length));
   }
 
-  HostMemoryBuffer(long address, long length, MemoryCleaner.Cleaner cleaner) {
+  HostMemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {
     super(address, length, cleaner);
+    if (length > 0) {
+      MemoryListener.hostAllocation(length, id);
+    }
   }
 
   private HostMemoryBuffer(long address, long lengthInBytes, HostMemoryBuffer parent) {
     super(address, lengthInBytes, parent);
+    // This is a slice so we are not going to mark it as allocated
   }
 
   /**

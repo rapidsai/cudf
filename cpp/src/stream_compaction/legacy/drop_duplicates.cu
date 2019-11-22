@@ -43,13 +43,13 @@ namespace detail {
  * one is copied or neither is copied. The return value is the end of the range
  * to which the elements are copied.
  */
-template<typename DerivedPolicy,
+template<typename Exec,
          typename InputIterator,
          typename OutputIterator,
          typename BinaryPredicate,
     typename IndexType = typename
   thrust::iterator_difference<InputIterator>::type>
-  OutputIterator unique_copy(thrust::execution_policy<DerivedPolicy> &exec,
+  OutputIterator unique_copy(Exec&& exec,
                              InputIterator first,
                              InputIterator last,
                              OutputIterator output,
@@ -111,14 +111,13 @@ get_unique_ordered_indices(const cudf::table& keys,
 
   // extract unique indices 
   rmm::device_vector<cudf::size_type> unique_indices(nrows);
-  auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(keys, stream);
   rmm::device_vector<cudf::size_type>::iterator result_end;
 
   if(cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
-    result_end = unique_copy(exec,
+    result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
         sorted_indices.begin(),
         sorted_indices.end(),
         unique_indices.begin(),
@@ -127,7 +126,7 @@ get_unique_ordered_indices(const cudf::table& keys,
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
         nulls_are_equal);
-    result_end = unique_copy(exec,
+    result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
         sorted_indices.begin(),
         sorted_indices.end(),
         unique_indices.begin(),
@@ -161,13 +160,12 @@ cudf::size_type unique_count(const cudf::table& keys,
 
   // count unique elements
   auto sorted_row_index = sorted_indices.begin();
-  auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(keys, stream);
 
   if(cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
-    return thrust::count_if(exec,
+    return thrust::count_if(rmm::exec_policy(stream)->on(stream),
               thrust::counting_iterator<cudf::size_type>(0),
               thrust::counting_iterator<cudf::size_type>(nrows),
               [sorted_row_index, comp] 
@@ -177,7 +175,7 @@ cudf::size_type unique_count(const cudf::table& keys,
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
         nulls_are_equal);
-    return thrust::count_if(exec,
+    return thrust::count_if(rmm::exec_policy(stream)->on(stream),
               thrust::counting_iterator<cudf::size_type>(0),
               thrust::counting_iterator<cudf::size_type>(nrows),
               [sorted_row_index, comp]

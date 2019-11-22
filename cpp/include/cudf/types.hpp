@@ -63,6 +63,17 @@ class column_view;
 class mutable_column_view;
 class string_view;
 
+class scalar;
+template <typename T> class numeric_scalar;
+class string_scalar;
+template <typename T> class timestamp_scalar;
+
+template <typename T> class numeric_scalar_device_view;
+class string_scalar_device_view;
+template <typename T> class timestamp_scalar_device_view;
+
+
+
 namespace experimental {
 class table;
 }
@@ -107,6 +118,20 @@ enum mask_state {
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
+namespace experimental{
+/**
+ * @brief Interpolation method to use when the desired quantile lies between
+ * two data points i and j
+ *
+ */
+enum class interpolation {
+    LINEAR,  ///< Linear interpolation between i and j
+    LOWER,       ///< Lower data point (i)
+    HIGHER,      ///< Higher data point (j)
+    MIDPOINT,    ///< (i + j)/2
+    NEAREST      ///< i or j, whichever is nearest
+};
+}
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/

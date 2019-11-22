@@ -15,9 +15,9 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -83,33 +83,36 @@ std::unique_ptr<cudf::column> chars_from_string_vector(
     cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
-/**
- * @brief Create a chars column to be a child of a strings column.
- * This will return the properly sized column to be filled in by the caller.
- *
- * @param strings_count Number of strings in the column.
- * @param null_count Number of null string entries in the column.
- * @param total_bytes Number of bytes for the chars column.
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
- * @return chars child column for strings column
- */
-std::unique_ptr<column> create_chars_child_column( cudf::size_type strings_count,
-    cudf::size_type null_count, cudf::size_type total_bytes,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+// Type for the character flags table.
+using character_flags_table_type = uint8_t;
 
 /**
- * @brief Create a strings column with no data for response to operations
- * invoked with an empty column.
+ * @brief Returns pointer to device memory that contains the static
+ * characters flags table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
  *
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
- * @return Empty strings column
+ * This table is used to check the type of character like
+ * alphanumeric, decimal, etc.
+ *
+ * @return Device memory pointer to character flags table.
  */
-std::unique_ptr<column> make_empty_strings_column(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+const character_flags_table_type* get_character_flags_table();
+
+// Type for the character cases table.
+using character_cases_table_type = uint16_t;
+
+/**
+ * @brief Returns pointer to device memory that contains the static
+ * characters case table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * This table is used to map upper and lower case characters with
+ * their counterpart.
+ *
+ * @return Device memory pointer to character cases table.
+ */
+const character_cases_table_type* get_character_cases_table();
+
 
 } // namespace detail
 } // namespace strings

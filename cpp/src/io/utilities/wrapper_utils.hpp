@@ -19,7 +19,7 @@
 #include "hostdevice_vector.hpp"
 
 #include <cudf/cudf.h>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvstrings/NVStrings.h>
