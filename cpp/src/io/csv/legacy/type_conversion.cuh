@@ -21,7 +21,7 @@
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cuda_runtime_api.h>
 
-#include <utilities/trie.cuh>
+#include <cudf/detail/utilities/trie.cuh>
 
 /**---------------------------------------------------------------------------*
  * @brief Checks whether the given character is a whitespace character.

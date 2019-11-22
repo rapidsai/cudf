@@ -394,10 +394,14 @@ add_library(cudf
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
             src/bitmask/legacy/bitmask_ops.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/stream_compaction/legacy/apply_boolean_mask.cu
             src/stream_compaction/legacy/drop_nulls.cu
             src/stream_compaction/legacy/drop_duplicates.cu
             src/datetime/legacy/datetime_ops.cu
+            src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
@@ -458,8 +462,8 @@ add_library(cudf
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
-            src/utilities/column_utils.cpp
-	    src/copying/gather.cu
+            src/utilities/legacy/column_utils.cpp
+	        src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
@@ -474,8 +478,11 @@ add_library(cudf
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/copying/legacy/copy_range.cu
+            src/copying/copy_range.cu
             src/filling/legacy/fill.cu
+            src/filling/fill.cu
             src/filling/legacy/repeat.cu
+            src/filling/repeat.cu
             src/filling/legacy/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
