@@ -75,7 +75,7 @@
 #include <iterator/transform_unary_functions.cuh>
 
 #include <bitmask/legacy/bit_mask.cuh>         // need for bit_mask::bit_mask_t
-#include <utilities/cudf_utils.h>       // need for CUDA_DEVICE_CALLABLE
+#include <utilities/legacy/cudf_utils.h>       // need for CUDA_DEVICE_CALLABLE
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 

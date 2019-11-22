@@ -123,7 +123,9 @@ class Column(object):
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             objs = [o._data for o in objs]
-            return StringColumn(data=nvstrings.from_strings(*objs))
+            return StringColumn(
+                data=nvstrings.from_strings(*objs), name=head.name
+            )
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]

@@ -22,13 +22,13 @@
 
 #include <cudf/legacy/binaryop.hpp>
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/legacy/join.hpp>
 
 #include <cudf/legacy/functions.h>
 #include <cudf/types.h>
 #include <cudf/legacy/copying.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <iostream>
 #include <random>
 
