@@ -5,7 +5,7 @@
 #include <cudf/legacy/functions.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>

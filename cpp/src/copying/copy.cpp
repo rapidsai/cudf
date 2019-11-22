@@ -43,7 +43,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
 /*
  * Initializes and returns an empty column of the same type as the `input`.
  */
-std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
+std::unique_ptr<column> empty_like(column_view const& input, cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> children {};
   children.reserve(input.num_children());
@@ -59,11 +59,11 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
  * Creates an uninitialized new column of the specified size and same type as the `input`.
  * Supports only fixed-width types.
  */
-std::unique_ptr<column> allocate_like(column_view input,
-   		                      size_type size,
+std::unique_ptr<column> allocate_like(column_view const& input,
+                                      size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr,
-				      cudaStream_t stream)
+				                      cudaStream_t stream)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
@@ -85,7 +85,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 /*
  * Creates a table of empty columns with the same types as the `input_table`
  */
-std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream) {
+std::unique_ptr<table> empty_like(table_view const& input_table, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> columns(input_table.num_columns());
   std::transform(input_table.begin(), input_table.end(), columns.begin(),
     [&](column_view in_col) {
@@ -97,24 +97,24 @@ std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream) {
 
 } // namespace detail
 
-std::unique_ptr<column> empty_like(column_view input){
+std::unique_ptr<column> empty_like(column_view const& input){
   return detail::empty_like(input);
 }
 
-std::unique_ptr<column> allocate_like(column_view input,
+std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr) {
   return detail::allocate_like(input, input.size(), mask_alloc, mr);
 }
 
-std::unique_ptr<column> allocate_like(column_view input,
-		                      size_type size,
+std::unique_ptr<column> allocate_like(column_view const& input,
+		                              size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr) {
   return detail::allocate_like(input, size, mask_alloc, mr);
 }
 
-std::unique_ptr<table> empty_like(table_view input_table) {
+std::unique_ptr<table> empty_like(table_view const& input_table) {
   return detail::empty_like(input_table);
 }
 

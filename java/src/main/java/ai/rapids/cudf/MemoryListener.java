@@ -84,22 +84,45 @@ public abstract class MemoryListener {
   public abstract void deallocation(long amount, long id);
 
   /**
-   * Holds the set of all listeners. An <code>AtomicReference&lt;HashSet&gt;</code> is used here to
-   * optimize the common read path over the less common write path (add/remove listeners). Other
-   * data structures like a ConcurrentHashMap still involve a lock on the read path where as this
-   * eliminates any locking on reads.
+   * Holds the set of all device listeners. An <code>AtomicReference&lt;HashSet&gt;</code> is used
+   * here to optimize the common read path over the less common write path (add/remove listeners).
+   * Other data structures like a ConcurrentHashMap still involve a lock on the read path where as
+   * this eliminates any locking on reads.
    */
-  private static final AtomicReference<HashSet<MemoryListener>> listeners =
+  private static final AtomicReference<HashSet<MemoryListener>> deviceListeners =
       new AtomicReference<>(new HashSet<>());
 
   /**
-   * Register a memory listener. If the memory listener is already registered it will not install
-   * duplicates. This should be done before any column operations happen or you risk missing those
-   * operations.
+   * Holds the set of host memory listeners. An <code>AtomicReference&lt;HashSet&gt;</code> is
+   * used here to optimize the common read path over the less common write path (add/remove
+   * listeners). Other data structures like a ConcurrentHashMap still involve a lock on the read
+   * path where as this eliminates any locking on reads.
+   */
+  private static final AtomicReference<HashSet<MemoryListener>> hostListeners =
+      new AtomicReference<>(new HashSet<>());
+
+  /**
+   * Register a memory listener for device memory. If the memory listener is already registered it
+   * will not install duplicates. This should be done before any column operations happen or you
+   * risk missing those operations.
    * @param listener the listener to start sending events to.
    */
   public static void registerDeviceListener(final MemoryListener listener) {
-    listeners.getAndUpdate((orig) -> {
+    deviceListeners.getAndUpdate((orig) -> {
+      HashSet<MemoryListener> ret = new HashSet<>(orig);
+      ret.add(listener);
+      return ret;
+    });
+  }
+
+  /**
+   * Register a host memory listener. If the memory listener is already registered it will not
+   * install duplicates. This should be done before any column operations happen or you risk
+   * missing those operations.
+   * @param listener the listener to start sending events to.
+   */
+  public static void registerHostListener(final MemoryListener listener) {
+    hostListeners.getAndUpdate((orig) -> {
       HashSet<MemoryListener> ret = new HashSet<>(orig);
       ret.add(listener);
       return ret;
@@ -112,18 +135,18 @@ public abstract class MemoryListener {
    * @param note what is the prediction for.
    */
   static void devicePrediction(final long amount, String note) {
-    listeners.get().forEach((l) -> l.prediction(amount, note));
+    deviceListeners.get().forEach((l) -> l.prediction(amount, note));
   }
 
   /**
-   * Memory was actually allocated.  This should typically be done on a per column basis and the id
+   * Device memory was actually allocated.  This should typically be done on a per column basis and the id
    * should be the internal id of the column. For most operations this should automatically be done
    * for you unless you are adding in a new way to allocate the device data for a column.
    * @param amount the number of bytes allocated.
    * @param id the id of the column.
    */
   static void deviceAllocation(final long amount, final long id) {
-    listeners.get().forEach((l) -> l.allocation(amount, id));
+    deviceListeners.get().forEach((l) -> l.allocation(amount, id));
   }
 
   /**
@@ -131,17 +154,53 @@ public abstract class MemoryListener {
    * @param note what is the prediction for.
    */
   static void deviceEndPrediction(String note) {
-    listeners.get().forEach((l) -> l.endPrediction(note));
+    deviceListeners.get().forEach((l) -> l.endPrediction(note));
   }
 
   /**
-   * Memory was actually deallocated.  This should typically be done on a per column basis and the
+   * Device memory was actually deallocated.  This should typically be done on a per column basis and the
    * id should be the internal id of the column. For most operations this should automatically be
    * done for you unless you are manually freeing the device data for a column.
    * @param amount the number of bytes released.
    * @param id the id of the column.
    */
   static void deviceDeallocation(final long amount, final long id) {
-    listeners.get().forEach((l) -> l.deallocation(amount, id));
+    deviceListeners.get().forEach((l) -> l.deallocation(amount, id));
   }
+
+  /**
+   * Start a prediction.  Don't call this directly please use the HostPrediction class instead.
+   * @param amount number of bytes predicted.
+   * @param note what is the prediction for.
+   */
+  static void hostPrediction(final long amount, String note) {
+    hostListeners.get().forEach((l) -> l.prediction(amount, note));
+  }
+
+  /**
+   * Host memory was actually allocated.
+   * @param amount the number of bytes allocated.
+   * @param id the id of the column.
+   */
+  static void hostAllocation(final long amount, final long id) {
+    hostListeners.get().forEach((l) -> l.allocation(amount, id));
+  }
+
+  /**
+   * End a prediction.  Don't call this directly please use the HostPrediction class instead.
+   * @param note what is the prediction for.
+   */
+  static void hostEndPrediction(String note) {
+    hostListeners.get().forEach((l) -> l.endPrediction(note));
+  }
+
+  /**
+   * Host memory was actually deallocated.
+   * @param amount the number of bytes released.
+   * @param id the id of the column.
+   */
+  static void hostDeallocation(final long amount, final long id) {
+    hostListeners.get().forEach((l) -> l.deallocation(amount, id));
+  }
+
 }

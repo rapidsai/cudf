@@ -42,6 +42,7 @@ public:
     using column_view::size;
     using column_view::null_mask;
     using column_view::null_count;
+    using column_view::has_nulls;
     using column_view::offset;
 
     /**---------------------------------------------------------------------------*
