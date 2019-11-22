@@ -24,6 +24,7 @@ namespace experimental {
   /**
    * @brief Replaces all null values in a column with corresponding values of another column
    *
+   * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`. 
    * `input` and `replacement` must be of the same type and size.
    * must be of the same type and same size as the first.
    *
