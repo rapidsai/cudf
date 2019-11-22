@@ -20,8 +20,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/translate.hpp>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <algorithm>
 
@@ -81,7 +81,7 @@ struct translate_fn
 
 //
 std::unique_ptr<column> translate( strings_column_view const& strings,
-                                   std::vector<std::pair<char_utf8,char_utf8>> chars_table,
+                                   std::vector<std::pair<char_utf8,char_utf8>> const& chars_table,
                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                    cudaStream_t stream = 0 )
 {
@@ -128,7 +128,7 @@ std::unique_ptr<column> translate( strings_column_view const& strings,
 // external APIs
 
 std::unique_ptr<column> translate( strings_column_view const& strings,
-                                   std::vector<std::pair<uint32_t,uint32_t>> chars_table,
+                                   std::vector<std::pair<uint32_t,uint32_t>> const& chars_table,
                                    rmm::mr::device_memory_resource* mr )
 {
     return detail::translate(strings,chars_table);
