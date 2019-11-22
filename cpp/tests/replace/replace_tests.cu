@@ -80,6 +80,25 @@ TEST_F(ReplaceErrorTest, NullInOldValues)
                cudf::logic_error);
 }
 
+// Strings test
+TEST_F(ReplaceErrorTest, StringsOne) {
+  std::vector<std::string> input{"a","b","c","d","e","f","g","h"};
+  std::vector<std::string> values_to_replace{"a"};
+  std::vector<std::string> replacement{"z"};
+
+  cudf::test::strings_column_wrapper input_wrapper{input.begin(), input.end()};
+  cudf::test::strings_column_wrapper values_to_replace_wrapper{values_to_replace.begin(), values_to_replace.end()};
+  cudf::test::strings_column_wrapper replacement_wrapper{replacement.begin(), replacement.end()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(input_wrapper,
+                                                           values_to_replace_wrapper,
+                                                           replacement_wrapper,
+                                                           mr()));
+
+  cudf::test::print(*result);
+}
+
 
 //// This is the main test feature
 template <class T>

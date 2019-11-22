@@ -89,7 +89,7 @@ __device__ int get_new_string_value(cudf::size_type idx,
                                      cudf::column_device_view& input,
                                      cudf::column_device_view& values_to_replace,
                                      cudf::column_device_view& replacement_values) {
-  cudf::string_view inputString = input.element<string_view>(idx);
+  cudf::string_view inputString = input.element<cudf::string_view>(idx);
   int match = -1;
   for (int i = 0; i < values_to_replace.size(); i++) {
     cudf::string_view valueString = values_to_replace.element<cudf::string_view>(i);
@@ -112,14 +112,14 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
       bool input_is_valid = input.is_valid_nocheck(i);
       if (input_is_valid) {
         int result = get_new_string_value(i, input, values_to_replace, replacement);
-        if (result = -1) {
+        if (result == -1) {
           cudf::string_view output = input.element<cudf::string_view>(i);
-          offsets.data<cudf::size_type>()[i] = output.bytes();
+          offsets.data<cudf::size_type>()[i] = output.size_bytes();
           indices.data<cudf::size_type>()[i] = -1;
         }
         else {
           cudf::string_view output = replacement.element<cudf::string_view> (result);
-          offsets.data<cudf::size_type>()[i] = output.bytes();
+          offsets.data<cudf::size_type>()[i] = output.size_bytes();
           indices.data<cudf::size_type>()[i] = result;
         }
       }
@@ -130,14 +130,14 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
     }
     else {
       int result = get_new_string_value(i, input, values_to_replace, replacement);
-      if (result = -1) {
-        cudf::string_view output = input.element<string_view>(i);
-        offsets.data<cudf::size_type>()[i] = output.bytes();
+      if (result == -1) {
+        cudf::string_view output = input.element<cudf::string_view>(i);
+        offsets.data<cudf::size_type>()[i] = output.size_bytes();
         indices.data<cudf::size_type>()[i] = -1;
       }
       else {
         cudf::string_view output = replacement.element<cudf::string_view>(result);
-        offsets.data<cudf::size_type>()[i] = output.bytes();
+        offsets.data<cudf::size_type>()[i] = output.size_bytes();
         indices.data<cudf::size_type>()[i] = result;
       }
     }
@@ -171,7 +171,7 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
         cudf::size_type match = indices.data<cudf::size_type>()[i];
         if (match == -1) {
           cudf::string_view output = input.element<cudf::string_view>(i);
-          std::memcpy(strings.data<char>()[offsets.data<cudf::size_type>()[i]],
+          std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
                       output.data(),
                       output.size_bytes());
         }
@@ -180,14 +180,14 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
             output_is_valid = replacement.is_valid_nocheck(match);
             if (output_is_valid) {
               cudf::string_view output = replacement.element<cudf::string_view>(match);
-              std::memcpy(strings.data<char>()[offsets.data<cudf::size_type>()[i]],
+              std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
                           output.data(),
                           output.size_bytes());
             }
           }
           else {
             cudf::string_view output = replacement.element<cudf::string_view>(match);
-            std::memcpy(strings.data<char>()[offsets.data<cudf::size_type>()[i]]),
+            std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
                         output.data(),
                         output.size_bytes());
           }
@@ -198,25 +198,25 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
       cudf::size_type match = indices.data<cudf::size_type>()[i];
       if (match == -1) {
         cudf::string_view output = input.element<cudf::string_view>(i);
-        std::memcpy(strings.data<char>()[offsets.data<cudf::size_type>()[i]],
+        std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
                     output.data(),
                     output.size_bytes());
       }
       else {
         if (replacement_has_nulls) {
-          output_is_valid = replacement.is_valid_nocheck();
+          output_is_valid = replacement.is_valid_nocheck(match);
           if (output_is_valid) {
             cudf::string_view output = replacement.element < cudf::string_view > (match);
-            std::memcpy(strings.data<char>()[offsets.data<cudf::size_type>()[i]],
+            std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
                         output.data(),
                         output.size_bytes());
           }
         }
         else {
           cudf::string_view output = replacement.element < cudf::string_view > (match);
-          std::memcpy(strings.data<char>()[offsets.data<cudf::size_type>()[i]]),
-              output.data(),
-              output.size_bytes());
+          std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
+                      output.data(),
+                      output.size_bytes());
         }
       }
     }
@@ -372,18 +372,18 @@ struct replace_kernel_forwarder {
     rmm::device_scalar<cudf::size_type> valid_counter(0);
     cudf::size_type *valid_count = valid_counter.data();
 
-    auto replace = replace_kernel<true, true>;
+    auto replace = replace_kernel<col_type, true, true>;
     if (input_col.has_nulls()) {
       if (replacement_values.has_nulls()) {
-        replace = replace_kernel<true, true>;
+        replace = replace_kernel<col_type, true, true>;
       } else {
-        replace = replace_kernel<true, false>;
+        replace = replace_kernel<col_type, true, false>;
       }
     } else {
       if (replacement_values.has_nulls()) {
-        replace = replace_kernel<false, true>;
+        replace = replace_kernel<col_type, false, true>;
       } else {
-        replace = replace_kernel<false, false>;
+        replace = replace_kernel<col_type, false, false>;
       }
     }
 
@@ -454,9 +454,9 @@ struct replace_kernel_forwarder {
     }
 
     // Create new offsets column to use in kernel
-    std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(cudf::data_type(INT32),
+    std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
                                                                       input_col.size() + 1);
-    std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(cudf::data_type(INT32),
+    std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
                                                                       input_col.size());
 
     auto offsets_view = offsets->mutable_view();
@@ -469,12 +469,12 @@ struct replace_kernel_forwarder {
     auto device_indices = cudf::mutable_column_device_view::create(indices_view);
 
     // Call first pass kernel to get sizes in offsets
-    cudf::experimental::detail::grid_1d grid { outputView.size(), BLOCK_SIZE, 1 };
-    replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(device_in,
-                                                        device_values_to_replace,
-                                                        device_replacement,
-                                                        device_offsets,
-                                                        device_indices);
+    cudf::experimental::detail::grid_1d grid { input_col.size(), BLOCK_SIZE, 1 };
+    replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                              *device_values_to_replace,
+                                                              *device_replacement,
+                                                              *device_offsets,
+                                                              *device_indices);
     cudaStreamSynchronize(stream);
 
     // Compute the offsets from the sizes
@@ -487,12 +487,29 @@ struct replace_kernel_forwarder {
     CUDA_TRY(cudaMemcpy(&size, offsets_data + offsets_view.size(), sizeof(int32_t), cudaMemcpyDefault));
 
     // Allocate chars array and output null mask
-    std::unique_ptr<cudf::column> output_chars = cudf::make_numeric_column(cudf::data_type(INT8), size);
+    std::unique_ptr<cudf::column> output_chars = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT8), size);
     int valid_chars = cudf::bitmask_allocation_size_bytes(input_col.size());
     rmm::device_buffer valid_bits(valid_chars, stream, mr);
+    auto output_chars_view = output_chars->mutable_view();
+    auto device_chars = cudf::mutable_column_device_view::create(output_chars_view);
 
+    replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                               *device_replacement,
+                                                               *device_offsets,
+                                                               *device_chars,
+                                                               *device_indices,
+                                                               reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
+                                                               valid_count);
+    cudaStreamSynchronize(stream);
 
-
+    std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
+                                                                     std::move(offsets),
+                                                                     std::move(output_chars),
+                                                                     valid_counter.value(),
+                                                                     std::move(valid_bits),
+                                                                     stream,
+                                                                     mr);
+    return output;
   };
 };
 } //end anonymous namespace
