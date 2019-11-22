@@ -4229,6 +4229,8 @@ def test_join_on_typecast_dt_to_dt(dtype_l, dtype_r):
 def test_join_on_typecast_categorical(dtype_l, dtype_r):
     if not (dtype_l == "category" or dtype_r == "category"):
         pytest.skip("at least one side must be category for this set of tests")
+    if dtype_l == "category" and dtype_r == "category":
+        pytest.skip("Can't determine which categorical to use")
 
     other_data = ["a", "b", "c", "d", "e"]
     join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)

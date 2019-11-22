@@ -2188,8 +2188,10 @@ class DataFrame(object):
         right_on = sorted(right_on)
         cats_to_adjust = []
         for lcol, rcol in zip(left_on, right_on):
-            dtype_l = lhs[lcol].dtype
-            dtype_r = rhs[rcol].dtype
+            dtype_l = lhs._cols[lcol].dtype
+            dtype_r = rhs._cols[rcol].dtype
+            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
+                continue
 
             def casting_rules(dtype_l, dtype_r, how):
                 if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
@@ -2450,16 +2452,14 @@ class DataFrame(object):
         org_names = list(itertools.chain(lhs._cols.keys(), rhs._cols.keys()))
 
         # potentially do an implicit typecast
-
         (lhs, rhs, cats_to_adjust) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, how
         )
-
         # Compute merge
         gdf_result = libcudf.join.join(
             lhs._cols, rhs._cols, left_on, right_on, how, method
         )
-  
+
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
         result = []
@@ -2507,10 +2507,12 @@ class DataFrame(object):
             if isinstance(col, nvstrings.nvstrings):
                 df[name] = col
             else:
-                if name in cats_to_adjust: 
+                if name in cats_to_adjust:
                     col = col.astype(categorical_dtypes[name])
                     categorical_dtypes[name] = col.dtype
-                    col_with_categories[name] = col.cat.categores
+                    # import pdb
+                    # pdb.set_trace()
+                    # col_with_categories[name] = col.cat().categories
 
                 df[name] = column.build_column(
                     col.data,
@@ -2519,7 +2521,6 @@ class DataFrame(object):
                     categories=col_with_categories.get(name, None),
                 )
 
-    
         # Let's make the "index as column" back into an index
         if left_index and right_index:
             df.index = df[merge_index_name]
