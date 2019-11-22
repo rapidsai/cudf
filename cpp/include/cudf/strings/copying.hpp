@@ -26,7 +26,7 @@ namespace strings
 namespace detail
 {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a new strings column created from a subset of
  * of the strings column. The subset of strings selected is between
  * start (inclusive) and end (exclusive) with incrememnts of step.
@@ -48,14 +48,14 @@ namespace detail
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New strings column of size (end-start)/step.
- *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> slice( strings_column_view strings,
+ */
+std::unique_ptr<cudf::column> slice( strings_column_view const& strings,
                                      size_type start, size_type end=-1,
                                      size_type step=1,
                                      cudaStream_t stream=0,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a new strings column using the specified indices to select
  * elements from the `strings` column.
  *
@@ -72,90 +72,12 @@ std::unique_ptr<cudf::column> slice( strings_column_view strings,
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New strings column of size indices.size()
- *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> gather( strings_column_view strings,
+ */
+std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
                                       cudf::column_view gather_map,
                                       cudaStream_t stream=0,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
-/**
- * @brief Creates a new strings column as if an in-place scatter from the source
- * `strings` column was performed on that column.
- *
- * The size of the `values` must match the size of the `scatter_map`.
- * The values in `scatter_map` must be in the range [0,strings.size()).
- *
- * If the same index appears more than once in `scatter_map` the result is undefined.
- *
- * This operation basically pre-fills the output column with elements from `strings`. 
- * Then, for each value `i` in range `[0,values.size())`, the `values[i]` element is
- * assigned to `output[scatter_map[i]]`.
- *
- * The output column will have null entries at the `scatter_map` indices if the
- * `values` element at the corresponding entry is null. Also, any values from the
- * original `strings` that are null and not included in the `scatter_map` will
- * remain null.
- *
- * ```
- * s1 = ["a", "b", "c", "d"]
- * s2 = ["e", "f"]
- * map = [1, 3]
- * s3 = scatter( s1, s2, m1 )
- * s3 is ["a", "e", "c", "f"]
- * ```
- *
- * @param strings Strings instance for this operation.
- * @param values The instance for which to retrieve the strings
- *        specified in map column.
- * @param scatter_map The 0-based index values to retrieve from the
- *        strings parameter. Number of values must equal the number
- *        of elements in values pararameter: `values.size()`.
- * @param stream CUDA stream to use kernels in this method.
- * @param mr Resource for allocating device memory.
- * @return New instance with the specified strings.
- */
-std::unique_ptr<cudf::column> scatter( strings_column_view strings,
-                                       strings_column_view values,
-                                       cudf::column_view scatter_map,
-                                       cudaStream_t stream=0,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-/**
- * @brief Creates a new strings column as if an in-place scatter from the source
- * `strings` column was performed using the same string `value` for each index
- * in `scatter_map`.
- *
- * If the same index appears more than once in `scatter_map` the result is undefined.
- *
- * The values in `scatter_map` must be in the range [0,strings.size()).
- * 
- * This operation basically pre-fills the output column with elements from `strings`. 
- * Then, for each value `i` in range `[0,values.size())`, the `value` element is
- * assigned to `output[scatter_map[i]]`.
- *
- * The output column will have null entries at the `scatter_map` indices if the
- * `value` parameter is null. Also, any values from the original `strings` that
- * are null and not included in the `scatter_map` will remain null.
- *
- * ```
- * s1 = ["a", "b", "c", "d"]
- * map = [1, 3]
- * s2 = scatter( s1, "e", m1 )
- * s2 is ["a", "e", "c", "e"]
- * ```
- *
- * @param strings Strings instance for this operation.
- * @param value Null-terminated encoded string in host memory to use with
- *        the scatter_map. Pass nullptr to specify a null entry be created.
- * @param scatter_map The 0-based index values to place the given string.
- * @param stream CUDA stream to use kernels in this method.
- * @param mr Resource for allocating device memory.
- * @return New instance with the specified strings.
- */
-std::unique_ptr<cudf::column> scatter( strings_column_view strings,
-                                       const char* value,
-                                       cudf::column_view scatter_map,
-                                       cudaStream_t stream=0,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 } // namespace detail
 } // namespace strings

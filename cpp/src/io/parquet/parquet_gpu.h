@@ -20,6 +20,7 @@
 #include <io/comp/gpuinflate.h>
 #include "parquet_common.h"
 #include <io/statistics/column_stats.h>
+#include <cuda_runtime.h>
 
 namespace cudf {
 namespace io {

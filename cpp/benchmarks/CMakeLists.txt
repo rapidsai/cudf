@@ -26,8 +26,9 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${GBENCH_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
@@ -104,7 +105,7 @@ ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 ###################################################################################################
 # - stack benchmark -------------------------------------------------------------------------------
 
-set(STACK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_benchmark.cu")
+set(LEGACY_STACK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_benchmark.cu")
 
-ConfigureBench(STACK_BENCH "${STACK_BENCH_SRC}")
+ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")

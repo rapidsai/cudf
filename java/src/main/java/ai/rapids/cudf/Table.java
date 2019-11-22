@@ -441,7 +441,8 @@ public final class Table implements AutoCloseable {
     assert len > 0 : "Invalid buffer range size";
     assert len <= buffer.length - offset : "Buffer range size greater than buffer";
     assert offset >= 0 && offset < len : "Buffer offset out of range";
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readJSON");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       // using default ranges but keeping the included column names
       return readJSON(schema, opts, newBuf, 0, 0);
@@ -552,7 +553,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readCSV");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
@@ -647,7 +649,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readParquet");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
@@ -731,7 +734,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readORC");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
