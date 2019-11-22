@@ -104,7 +104,6 @@ struct min {
 
     template<typename ResultType>
     using transformer = thrust::identity<ResultType>;
-
 };
 
 struct max {
@@ -133,6 +132,7 @@ struct mean {
         using IntermediateType = ResultType;
 
         // compute `mean` from intermediate type `IntermediateType`
+        CUDA_HOST_DEVICE_CALLABLE
         static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
             return (input / count);
@@ -153,6 +153,7 @@ struct variance {
         using IntermediateType = var_std<ResultType>;
 
         // compute `variance` from intermediate type `IntermediateType`
+        CUDA_HOST_DEVICE_CALLABLE
         static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
             ResultType mean = input.value / count;
@@ -177,6 +178,7 @@ struct standard_deviation {
         using IntermediateType = var_std<ResultType>;
 
         // compute `standard deviation` from intermediate type `IntermediateType`
+        CUDA_HOST_DEVICE_CALLABLE
         static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
         {
             using intermediateOp = typename variance::template intermediate<ResultType>;
@@ -188,7 +190,7 @@ struct standard_deviation {
 };
 } // namespace op
 
-template <typename ElementType, typename ResultType, typename Op, bool has_nulls>
+template <typename ElementType, typename ResultType, typename Op>
 auto make_reduction_iterator(column_device_view const& column) {
     return thrust::make_transform_iterator(
         experimental::detail::make_null_replacement_iterator( column, Op::Op::template identity<ElementType>()),

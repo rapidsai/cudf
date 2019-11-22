@@ -46,58 +46,35 @@ namespace compound {
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
-                              data_type const output_dtype,
-                              cudf::size_type ddof,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
+                                           data_type const output_dtype,
+                                           cudf::size_type ddof,
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream)
 {
-  std::unique_ptr<scalar> result;
-  if(is_numeric<ResultType>()) {
-    result = make_numeric_scalar(output_dtype, stream, mr);
-  } else if(is_timestamp<ResultType>()) {
-    result = make_timestamp_scalar(output_dtype, stream, mr);
-  } else {
-    CUDF_FAIL("Unexpected type");
-  }
-  result->set_valid(false, stream);  // the scalar is not valid for error case
-  cudf::size_type valid_count = col.size() - col.null_count();
-
-  using intermediateOp = typename Op::template intermediate<ResultType>;
   // IntermediateType: intermediate structure, output type of `reduction_op` and
   // input type of `intermediateOp::ComputeResult`
-  using IntermediateType = typename intermediateOp::IntermediateType;
-
-  rmm::device_scalar<IntermediateType> intermediate_result;
-  IntermediateType intermediate{0};
+  cudf::size_type valid_count = col.size() - col.null_count();
+  using intermediateOp        = typename Op::template intermediate<ResultType>;
 
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
+  std::unique_ptr<scalar> result;
+
   if (col.has_nulls()) {
     auto it = thrust::make_transform_iterator(
-        experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
-        typename Op::template transformer<ResultType>{});
-
-    detail::reduce(intermediate_result.data(), it, col.size(),
-                   intermediate, typename Op::Op{}, mr, stream);
+      experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
+      typename Op::template transformer<ResultType>{});
+    result = detail::reduce(it, col.size(), typename Op::Op{}, intermediateOp{}, valid_count, ddof, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
-        dcol->begin<ElementType>(),
+        dcol->begin<ElementType>(), 
         typename Op::template transformer<ResultType>{});
-
-    detail::reduce(intermediate_result.data(), it, col.size(),
-                   intermediate, typename Op::Op{}, mr, stream);
+    result = detail::reduce(it, col.size(), typename Op::Op{}, intermediateOp{}, valid_count, ddof, mr, stream);
   }
-
-  // compute the hos_result value from intermediate value.
-  ResultType hos_result = intermediateOp::compute_result(intermediate_result.value(stream), valid_count, ddof);
-  using ScalarResultType = cudf::experimental::scalar_type_t<ResultType>;
-  auto dev_result = static_cast<ScalarResultType *>(result.get());
-  dev_result->set_value(hos_result);
-
   // set scalar is valid
   if (col.null_count() < col.size())
     result->set_valid(true, stream);
-  else 
+  else
     result->set_valid(false, stream);
   return result;
 };

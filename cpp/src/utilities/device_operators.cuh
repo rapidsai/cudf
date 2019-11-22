@@ -88,18 +88,22 @@ struct DeviceMin {
     return std::numeric_limits<T>::max();
   }
 
+  // @brief min op specialized for string_view (with null string_view as identity)
+  // because min op identity should const largest string, which does not exist
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
-    if (lhs.empty())
+    if (lhs.is_null())
       return rhs;
-    else if (rhs.empty())
+    else if (rhs.is_null())
       return lhs;
     else
       return std::min(lhs, rhs);
     //return lhs <= rhs ? lhs : rhs;
   }
 
+  // @brief identity specialized for string_view 
+  // because string_view constructor requires 2 arguments
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
