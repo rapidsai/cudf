@@ -28,6 +28,11 @@
 namespace cudf {
 namespace util {
 
+/**
+* Finds the smallest integer not less than `number_to_round` and modulo `S` is
+* zero. This function assumes that `number_to_round` is non-negative and
+* `modulus` is positive.
+*/
 template <typename S>
 inline S round_up_safe(S number_to_round, S modulus) {
     auto remainder = number_to_round % modulus;
@@ -37,6 +42,18 @@ inline S round_up_safe(S number_to_round, S modulus) {
         throw std::invalid_argument("Attempt to round up beyond the type's maximum value");
     }
     return rounded_up;
+}
+
+/**
+* Finds the largest integer not greater than `number_to_round` and modulo `S` is
+* zero. This function assumes that `number_to_round` is non-negative and
+* `modulus` is positive.
+*/
+template <typename S>
+inline S round_down_safe(S number_to_round, S modulus) {
+    auto remainder = number_to_round % modulus;
+    auto rounded_down = number_to_round - remainder;
+    return rounded_down;
 }
 
 

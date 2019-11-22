@@ -152,7 +152,7 @@ struct bool8 {
   }
 
 private:
-  value_type value{0};
+  value_type value;
 };
 
 // This is necessary for global, constant, non-fundamental types

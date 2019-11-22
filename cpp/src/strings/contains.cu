@@ -44,7 +44,7 @@ namespace
  *
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
+ * Longer patterns require global memory.
  *
  */
 template<size_t stack_size>
@@ -85,8 +85,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     // create the output column
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
-    auto results_view = results->mutable_view();
-    auto d_results = results_view.data<cudf::experimental::bool8>();
+    auto d_results = results->mutable_view().data<cudf::experimental::bool8>();
 
     // fill the output column
     auto execpol = rmm::exec_policy(stream);
@@ -203,8 +202,7 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
     // create the output column
     auto results = make_numeric_column( data_type{INT32}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
-    auto results_view = results->mutable_view();
-    auto d_results = results_view.data<int32_t>();
+    auto d_results = results->mutable_view().data<int32_t>();
 
     // fill the output column
     auto execpol = rmm::exec_policy(stream);
