@@ -48,7 +48,7 @@ struct bounds_checker {
 
 
 
-template <bool ignore_out_of_bounds, typename MapIterator>
+template <typename MapIterator>
 __global__ void gather_bitmask_kernel(table_device_view source_table,
                                       MapIterator gather_map,
                                       bitmask_type * masks[],
@@ -319,8 +319,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
 
-  auto bitmask_kernel =
-    ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> : gather_bitmask_kernel<false, decltype(gather_map_begin)>;
+  auto bitmask_kernel = gather_bitmask_kernel<decltype(gather_map_begin)>;
 
   int gather_grid_size;
   int gather_block_size;
