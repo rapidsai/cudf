@@ -71,9 +71,9 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto target_rows = target.front()->size();
 
   // Compute block size
-  int grid_size, block_size;
   auto bitmask_kernel = gather_bitmask_kernel<true, decltype(gather_map)>;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, bitmask_kernel));
+  constexpr size_type block_size = 256;
+  size_type const grid_size = grid_1d(target_rows, block_size).num_blocks;
 
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
   bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
