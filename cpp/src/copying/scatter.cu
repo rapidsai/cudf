@@ -82,16 +82,14 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
     gather_map, d_target_masks.data().get(), target_rows, d_valid_counts.data().get());
 
   // Copy the valid counts into each column
-  auto valid_counts = thrust::host_vector<size_type>(d_valid_counts);
-  std::transform(target.begin(), target.end(), valid_counts.begin(),
-    thrust::make_discard_iterator(),
-    [target_rows](auto& target_col, auto const valid_count) {
-      if (target_col->nullable()) {
-        auto const null_count = target_rows - valid_count;
-        target_col->set_null_count(null_count);
-      }
-      return 0;
-    });
+  auto const valid_counts = thrust::host_vector<size_type>(d_valid_counts);
+  size_t index = 0;
+  for (auto& target_col : target) {
+    if (target_col->nullable()) {
+      auto const null_count = target_rows - valid_counts[index++];
+      target_col->set_null_count(null_count);
+    }
+  }
 }
 
 template <typename MapIterator>
