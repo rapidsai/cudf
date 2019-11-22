@@ -147,7 +147,7 @@ __device__ bool equality_compare(Element const lhs, Element const rhs) {
  *---------------------------------------------------------------------------**/
 template <typename Element, bool has_nulls = true>
 struct compare_with_value {
-  using ScalarType = cudf::experimental::scalar_device_type_t<Element>;
+  using ScalarDeviceType = cudf::experimental::scalar_device_type_t<Element>;
   /**---------------------------------------------------------------------------*
    * @brief Construct a function object for comparing an element of a column
    * to a scalar
@@ -157,7 +157,7 @@ struct compare_with_value {
    * @param nulls_are_equal Indicates if two null elements are treated as
    *equivalent
    *---------------------------------------------------------------------------**/
-  compare_with_value(column_device_view col, const ScalarType val, bool nulls_are_equal)
+  compare_with_value(column_device_view col, const ScalarDeviceType val, bool nulls_are_equal)
     : col{col}, val{val}, nulls_are_equal{nulls_are_equal} {}
 
   /**---------------------------------------------------------------------------*
@@ -181,7 +181,7 @@ struct compare_with_value {
   }
 
   column_device_view   col;
-  ScalarType           val;
+  ScalarDeviceType     val;
   bool                 nulls_are_equal;
 };
 
