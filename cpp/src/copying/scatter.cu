@@ -309,6 +309,26 @@ struct scatter_scalar_impl {
   }
 };
 
+struct scatter_to_tables_impl {
+  template <typename T, std::enable_if_t<std::is_integral<T>::value
+      and not std::is_same<T, bool8>::value>* = nullptr>
+  std::vector<std::unique_ptr<table>> operator()(
+      table_view const& input, column_view const& scatter_map,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    return std::vector<std::unique_ptr<table>>{empty_like(input, stream)};
+  }
+
+  template <typename T, std::enable_if_t<not std::is_integral<T>::value
+      or std::is_same<T, bool8>::value>* = nullptr>
+  std::vector<std::unique_ptr<table>> operator()(
+      table_view const& input, column_view const& scatter_map,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    CUDF_FAIL("Scatter index column must be an integral, non-boolean type");
+  }
+};
+
 }  // namespace
 
 std::unique_ptr<table> scatter(
@@ -359,6 +379,23 @@ std::unique_ptr<table> scatter(
     indices, target, check_bounds, mr, stream);
 }
 
+std::vector<std::unique_ptr<table>> scatter_to_tables(
+    table_view const& input, column_view const& scatter_map,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0)
+{
+  CUDF_EXPECTS(scatter_map.size() <= input.num_rows(), "scatter map larger than input");
+  CUDF_EXPECTS(scatter_map.has_nulls() == false, "scatter map contains nulls");
+
+  if (scatter_map.size() == 0 || input.num_rows() == 0) {
+    return std::vector<std::unique_ptr<table>>{empty_like(input, stream)};
+  }
+
+  // First dispatch for scatter index type
+  return type_dispatcher(scatter_map.type(), scatter_to_tables_impl{},
+    input, scatter_map, mr, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> scatter(
@@ -375,6 +412,13 @@ std::unique_ptr<table> scatter(
     rmm::mr::device_memory_resource* mr)
 {
   return detail::scatter(source, indices, target, check_bounds, mr);
+}
+
+std::vector<std::unique_ptr<table>> scatter_to_tables(
+    table_view const& input, column_view const& scatter_map,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
+  return detail::scatter_to_tables(input, scatter_map, mr);
 }
 
 }  // namespace experimental
