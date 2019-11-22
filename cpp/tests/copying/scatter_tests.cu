@@ -544,3 +544,68 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 
   expect_tables_equal(result->view(), expected_table);
 }
+
+class ScatterStringsTests : public cudf::test::BaseFixture {};
+
+TEST_F(ScatterStringsTests, ScatterNoNulls)
+{
+  using cudf::test::strings_column_wrapper;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+
+  std::vector<const char*> h_source
+    { "dog", "the", "jumps", "brown", "the" };
+  strings_column_wrapper source(h_source.begin(), h_source.end());
+
+  std::vector<const char*> h_target
+    { "a", "quick", "fire", "fox", "browses", "over", "a", "lazy", "web" };
+  strings_column_wrapper target(h_target.begin(), h_target.end());
+
+  fixed_width_column_wrapper<int32_t> scatter_map({-1, -3, -5, 2, 0});
+
+  std::vector<const char*> h_expected
+    { "the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog" };
+  strings_column_wrapper expected(h_expected.begin(), h_expected.end());
+
+  auto const source_table = cudf::table_view({source, source});
+  auto const target_table = cudf::table_view({target, target});
+  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const result = cudf::experimental::scatter(source_table, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
+
+TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
+{
+  using cudf::string_scalar;
+  using cudf::test::strings_column_wrapper;
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using scalar_ptr = std::unique_ptr<cudf::scalar>;
+  using scalar_vector = std::vector<scalar_ptr>;
+
+  // Initializers lists can't take move-only types
+  scalar_vector source_vector;
+  auto source = scalar_ptr(new string_scalar{"buffalo"});
+  source_vector.push_back(std::move(source));
+
+  std::vector<const char*> h_target
+    { "Buffalo", "bison", "Buffalo", "bison", "bully", "bully", "Buffalo", "bison" };
+  strings_column_wrapper target(h_target.begin(), h_target.end());
+
+  fixed_width_column_wrapper<int32_t> scatter_map({1, 3, -4, -3, -1});
+
+  std::vector<const char*> h_expected
+    { "Buffalo", "buffalo", "Buffalo", "buffalo", "buffalo", "buffalo", "Buffalo", "buffalo" };
+  strings_column_wrapper expected(h_expected.begin(), h_expected.end());
+
+  auto const target_table = cudf::table_view({target});
+  auto const expected_table = cudf::table_view({expected});
+
+  auto const result = cudf::experimental::scatter(source_vector, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}

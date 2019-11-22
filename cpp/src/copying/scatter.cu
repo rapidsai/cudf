@@ -21,6 +21,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/strings/detail/scatter.cuh>
+#include <cudf/strings/string_view.cuh>
 
 namespace cudf {
 namespace experimental {
@@ -129,7 +131,11 @@ struct column_scatterer {
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    CUDF_FAIL("Scatter column type must be fixed width");
+    using strings::detail::create_string_vector_from_column;
+    auto const source_vector = create_string_vector_from_column(source, stream);
+    auto const begin = source_vector.begin();
+    auto const end = begin + scatter_rows;
+    return strings::detail::scatter(begin, end, scatter_iter, target, mr, stream);
   }
 };
 
@@ -260,7 +266,11 @@ struct column_scalar_scatterer {
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    CUDF_FAIL("Scatter column type must be fixed width");
+    auto const scalar_impl = static_cast<string_scalar*>(source.get());
+    auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
+    auto const begin = thrust::make_constant_iterator(source_view);
+    auto const end = begin + scatter_rows;
+    return strings::detail::scatter(begin, end, scatter_iter, target, mr, stream);
   }
 };
 
