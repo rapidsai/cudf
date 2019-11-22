@@ -237,6 +237,11 @@ set(LEGACY_DATETIME_TEST_SRC
 
 ConfigureTest(LEGACY_DATETIME_TEST "${LEGACY_DATETIME_TEST_SRC}")
 
+set(DATETIME_OPS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/datetime/datetime_ops_test.cu")
+
+ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
+
 ###################################################################################################
 # - hashing tests ---------------------------------------------------------------------------------
 
@@ -423,12 +428,13 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -580,6 +586,15 @@ set(LEGACY_ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/legacy/rolling_test.cu")
 
 ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - filling test ----------------------------------------------------------------------------------
+
+set(FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu")
+
+ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy filling test ---------------------------------------------------------------------------

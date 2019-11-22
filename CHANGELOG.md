@@ -30,6 +30,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3356 Add vertical concatenation for table/columns
 - PR #3344 java split API
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
@@ -40,6 +41,7 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3172 Define and implement new fill/repeat/copy_range APIs
 
 ## Improvements
 
@@ -142,6 +144,7 @@
 - PR #3398 Move reshape.hpp files to legacy
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
+- PR #3201 Define and implement new datetime_ops APIs
 
 ## Bug Fixes
 
