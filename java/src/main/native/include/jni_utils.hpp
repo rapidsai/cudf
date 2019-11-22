@@ -26,7 +26,7 @@
 
 #include "cudf/cudf.h"
 #include "cudf/legacy/table.hpp"
-#include "utilities/column_utils.hpp"
+#include "utilities/legacy/column_utils.hpp"
 #include "cudf/utilities/error.hpp"
 #include "utilities/legacy/error_utils.hpp"
 
