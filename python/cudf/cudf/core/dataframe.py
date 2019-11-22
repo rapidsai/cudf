@@ -189,7 +189,7 @@ class DataFrame(object):
             self._cols[col]._index = self._index
 
         # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
-        self._allow_setattr_to_is_scalar = True
+        self._allow_setattr_to_setitem = True
 
         if dtype:
             self._cols = self.astype(dtype)._cols
