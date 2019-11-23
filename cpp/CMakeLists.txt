@@ -422,7 +422,7 @@ add_library(cudf
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reshape/legacy/stack.cu
-            src/reshape/stack.cu
+            src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu

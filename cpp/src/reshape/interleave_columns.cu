@@ -79,7 +79,7 @@ struct interleave_columns_functor
 } // namespace detail
 
 std::unique_ptr<column>
-stack(table_view const& in,
+interleave_columns(table_view const& in,
                    rmm::mr::device_memory_resource *mr,
                    cudaStream_t stream)
 {

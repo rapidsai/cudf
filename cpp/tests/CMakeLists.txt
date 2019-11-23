@@ -634,7 +634,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 # - reshape test ----------------------------------------------------------------------------------
 
 set(RESHAPE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cu")
 
 ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
 
