@@ -104,7 +104,8 @@ class MergeTest_ : public cudf::test::BaseFixture {};
 //TYPED_TEST_CASE(MergeTest_, test_types);
 //}
 
-TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes);
+//TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes); // <- TODO: put me back!
+TYPED_TEST_CASE(MergeTest_, cudf::test::Types<int32_t>); // for now debug one type at a time...
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
