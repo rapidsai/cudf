@@ -186,6 +186,17 @@
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
+<<<<<<< HEAD
+=======
+- PR #3372 Fix dask-distributed scatter_by_map bug
+- PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
+- PR #3413 Fix dask_cudf read_csv file-list bug
+- PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
+- PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
+- PR #3435 Fix diff and shift for empty series
+- PR #3439 Fix index-name bug in StringColumn concat
+- PR #3445 Fix ORC Writer default stripe size
+>>>>>>> branch-0.11
 
 # cuDF 0.10.0 (16 Oct 2019)
 
