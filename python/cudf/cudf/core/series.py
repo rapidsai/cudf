@@ -1882,6 +1882,14 @@ class Series(object):
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
 
+    def median(self, skipna=True):
+        """Compute the median of the series
+        """
+        if not skipna and self.null_count > 0:
+            return np.nan
+        # enforce linear in case the default ever changes
+        return self.quantile(0.5, interpolation="linear", exact=True)
+
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
         """
@@ -2418,9 +2426,10 @@ class Series(object):
 
         input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_shift.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
+        if output_dary.size > 0:
+            cudautils.gpu_shift.forall(output_dary.size)(
+                input_dary, output_dary, periods
+            )
         return Series(output_dary, name=self.name, index=self.index)
 
     def diff(self, periods=1):
@@ -2444,9 +2453,10 @@ class Series(object):
 
         input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_diff.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
+        if output_dary.size > 0:
+            cudautils.gpu_diff.forall(output_dary.size)(
+                input_dary, output_dary, periods
+            )
         return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(

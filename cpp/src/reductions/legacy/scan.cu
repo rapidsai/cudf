@@ -1,11 +1,11 @@
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 
-#include <utilities/device_atomics.cuh>
+#include <utilities/legacy/device_atomics.cuh>
 #include <cub/device/device_scan.cuh>
 #include <cudf/legacy/reduction.hpp>
 
