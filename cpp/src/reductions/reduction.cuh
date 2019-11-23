@@ -23,6 +23,8 @@
 
 #include <cub/device/device_reduce.cuh>
 #include <thrust/iterator/iterator_traits.h>
+#include <thrust/for_each.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace experimental {
@@ -60,8 +62,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
   cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, op, identity, stream);
 
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
-  //TODO full device initialize (pass device_scalar<OutputType>)
-  auto s = new ScalarType(dev_result.value(), true, stream, mr);
+  auto s = new ScalarType(std::move(dev_result), true, stream, mr); //only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
 
@@ -93,28 +94,26 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
 {
   using intermediateOp = intermediate<OutputType>; 
   IntermediateType identity = Op::template identity<IntermediateType>();
-  rmm::device_scalar<IntermediateType> dev_iresult{identity, stream, mr};
+  rmm::device_scalar<IntermediateType> intermediate_result{identity, stream, mr};
 
   rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
 
   // Allocate temporary storage
-  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_iresult.data(), num_items, op, identity, stream);
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, intermediate_result.data(), num_items, op, identity, stream);
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
 
   // Run reduction
-  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_iresult.data(), num_items, op, identity, stream);
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, intermediate_result.data(), num_items, op, identity, stream);
 
   // compute the result value from intermediate value in device
-  //TODO add to intermediateOp, cudf::size_type valid_count = col.size() - col.null_count();
-  OutputType host_result = intermediateOp::compute_result(dev_iresult.value(stream), valid_count, ddof);
-
-  //dev_result.value()
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
-  //TODO full device initialize (pass device_scalar<OutputType>)
-  auto s = new ScalarType(host_result, true, stream, mr);
-  return std::unique_ptr<scalar>(s);
-  //return dev_result;
+  auto result = new ScalarType(OutputType{0}, true, stream, mr);
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+   intermediate_result.data(), 1,
+   [dres=result->data(), valid_count, ddof] __device__ (auto i)
+   { *dres = intermediateOp::compute_result(i, valid_count, ddof); } );
+  return std::unique_ptr<scalar>(result);
 }
 
 } // namespace detail
