@@ -17,6 +17,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -313,7 +314,53 @@ struct scatter_to_tables_impl {
       table_view const& input, column_view const& partition_map,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    return std::vector<std::unique_ptr<table>>{empty_like(input, stream)};
+    // Make a mutable copy of the partition map
+    auto d_partitions = rmm::device_vector<T>(
+      partition_map.begin<T>(), partition_map.end<T>());
+
+    // Initialize gather maps and offsets to sequence
+    auto d_gather_maps = rmm::device_vector<size_type>(partition_map.size());
+    auto d_offsets = rmm::device_vector<size_type>(partition_map.size());
+    thrust::sequence(rmm::exec_policy(stream)->on(stream),
+      d_gather_maps.begin(), d_gather_maps.end());
+    thrust::sequence(rmm::exec_policy(stream)->on(stream),
+      d_offsets.begin(), d_offsets.end());
+
+    // Sort sequence using partition map as key to generate gather maps
+    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
+      d_partitions.begin(), d_partitions.end(), d_gather_maps.begin());
+
+    // Reduce unique partitions to extract gather map offsets from sequence
+    auto end = thrust::unique_by_key(rmm::exec_policy(stream)->on(stream),
+      d_partitions.begin(), d_partitions.end(), d_offsets.begin());
+
+    // Copy partition indices and gather map offsets to host
+    auto partitions = thrust::host_vector<T>(d_partitions.begin(), end.first);
+    auto offsets = thrust::host_vector<size_type>(d_offsets.begin(), end.second);
+    offsets.push_back(partition_map.size());
+
+    CUDF_EXPECTS(partitions.front() >= 0, "Invalid negative partition index");
+    auto output = std::vector<std::unique_ptr<table>>(partitions.back() + 1);
+
+    size_t next_partition = 0;
+    for (size_t index = 0; index < partitions.size(); ++index) {
+      auto const partition = static_cast<size_t>(partitions[index]);
+
+      // Create empty tables for unused partitions
+      for (; next_partition < partition; ++next_partition) {
+        output[next_partition] = empty_like(input, stream);
+      }
+
+      // Gather input rows for the current partition
+      auto const data = d_gather_maps.data().get() + offsets[index];
+      auto const size = offsets[index + 1] - offsets[index];
+      auto const gather_map = column_view(data_type(INT32), size, data);
+      output[partition] = gather(input, gather_map, false, false, false, mr, stream);
+
+      next_partition = partition + 1;
+    }
+
+    return output;
   }
 
   template <typename T, std::enable_if_t<not std::is_integral<T>::value
@@ -378,14 +425,14 @@ std::unique_ptr<table> scatter(
 
 std::vector<std::unique_ptr<table>> scatter_to_tables(
     table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0)
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
 {
   CUDF_EXPECTS(partition_map.size() <= input.num_rows(), "scatter map larger than input");
   CUDF_EXPECTS(partition_map.has_nulls() == false, "scatter map contains nulls");
 
   if (partition_map.size() == 0 || input.num_rows() == 0) {
-    return std::vector<std::unique_ptr<table>>{empty_like(input, stream)};
+    return std::vector<std::unique_ptr<table>>{};
   }
 
   // First dispatch for scatter index type
@@ -413,7 +460,7 @@ std::unique_ptr<table> scatter(
 
 std::vector<std::unique_ptr<table>> scatter_to_tables(
     table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource* mr)
 {
   return detail::scatter_to_tables(input, partition_map, mr);
 }
