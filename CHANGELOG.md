@@ -19,6 +19,7 @@
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3213 Port cuIO to libcudf++
 - PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
 - PR #3300 Add `DataFrame.insert`
@@ -204,6 +205,7 @@
 - PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
 - PR #3435 Fix diff and shift for empty series
 - PR #3439 Fix index-name bug in StringColumn concat
+- PR #3445 Fix ORC Writer default stripe size
 
 # cuDF 0.10.0 (16 Oct 2019)
 
