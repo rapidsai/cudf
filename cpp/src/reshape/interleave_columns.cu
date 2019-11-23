@@ -14,20 +14,9 @@
  * limitations under the License.
  */
 
-// #include <thrust/iterator/counting_iterator.h>
-// #include <thrust/iterator/transform_iterator.h>
-// #include <cudf/table/table_view.hpp>
-// #include <cudf/utilities/traits.hpp>
-// #include <type_traits>
-// #include <cudf/copying.hpp>
-// #include <thrust/transform.h>
-// #include <rmm/thrust_rmm_allocator.h>
-// #include <cudf/column/column_device_view.cuh>
-
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/table/table_device_view.cuh>
-
 
 namespace cudf {
 
@@ -83,10 +72,7 @@ interleave_columns(table_view const& in,
                    rmm::mr::device_memory_resource *mr,
                    cudaStream_t stream)
 {
-    if (in.num_columns() == 0)
-    {
-        return std::make_unique<column>();
-    }
+    CUDF_EXPECTS(in.num_columns() > 0, "input must have at least one column to determine dtype.");
 
     auto arch_column = in.column(0);
 

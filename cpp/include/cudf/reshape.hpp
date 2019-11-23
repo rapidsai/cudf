@@ -36,25 +36,38 @@ namespace experimental {
  *
  * @note: The dtype of all columns in @p in should be the same.
  *
- * @param[i] in table containing columns to interleave.
+ * @param[in]        in table containing columns to interleave.
+ * @param[in] mr     Optional resource to use for device memory
+ * @param[in] stream Optional CUDA stream on which to execute kernels.
+ *
  * @return The interleaved columns as a single column
  */
-std::unique_ptr<column> interleave_columns(table_view const& in);
+std::unique_ptr<column>
+interleave_columns(table_view const& in,
+                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                   cudaStream_t stream = 0);
 
 /*
  * @brief Constructs a new table with "rows" from @in stacked @p count times.
  *
  * When @p count = 0, the returned table is `empty_like(in)`.
  *
- * in     = [8, 5, 7]
- * count  = 3
- * return = [8, 5, 7, 8, 5, 7, 8, 5, 7]
+ * in     = [[8, 4, 7], [5, 2, 3]]
+ * count  = 2
+ * return = [[8, 4, 7, 8, 4, 7], [5, 2, 3, 5, 2, 3]]
  *
  * @param[in] in     Table containing "rows" columns to tile in to new table.
  * @param[in] count  Number of times to tile "rows". Must be non-negative.
+ * @param[in] mr     Optional resource to use for device memory
+ * @param[in] stream Optional CUDA stream on which to execute kernels.
+ *
  * @return           The table containing the tiled "rows".
  */
-std::unique_ptr<table> tile(table_view const& in, size_type count);
+std::unique_ptr<table>
+tile(table_view const& in,
+     size_type count,
+     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+     cudaStream_t stream = 0);
 
 } // namespace experimental
 
