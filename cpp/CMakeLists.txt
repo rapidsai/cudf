@@ -492,7 +492,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
-            src/filling/tile.cu
+            src/reshape/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
             src/column/column.cu
