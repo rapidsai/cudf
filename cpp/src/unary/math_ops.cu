@@ -15,9 +15,7 @@
  */
 
 #include "unary_ops.cuh"
-#include <cudf/legacy/unary.hpp>
-#include <cudf/legacy/copying.hpp>
-
+#include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -310,13 +308,13 @@ public:
 
 std::unique_ptr<cudf::column>
 unary_operation(cudf::column_view const& input,
-                cudf::unary_op op,
+                cudf::experimental::unary_op op,
                 cudaStream_t stream = 0,
                 rmm::mr::device_memory_resource* mr =
                 rmm::mr::get_default_resource()) {
 
     std::unique_ptr<cudf::column> output = [&] {
-        if (op == cudf::unary_op::NOT) {
+        if (op == cudf::experimental::unary_op::NOT) {
             auto mask_state = input.null_mask() ? cudf::UNINITIALIZED
                                                 : cudf::UNALLOCATED;
 
@@ -337,85 +335,85 @@ unary_operation(cudf::column_view const& input,
     cudf::experimental::unary::handleChecksAndValidity(input, output_view);
 
     switch(op){
-        case unary_op::SIN:
+        case cudf::experimental::unary_op::SIN:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceSin>{},
                 input, output_view);
             break;
-        case unary_op::COS:
+        case cudf::experimental::unary_op::COS:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceCos>{},
                 input, output_view);
             break;
-        case unary_op::TAN:
+        case cudf::experimental::unary_op::TAN:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceTan>{},
                 input, output_view);
             break;
-        case unary_op::ARCSIN:
+        case cudf::experimental::unary_op::ARCSIN:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcSin>{},
                 input, output_view);
             break;
-        case unary_op::ARCCOS:
+        case cudf::experimental::unary_op::ARCCOS:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcCos>{},
                 input, output_view);
             break;
-        case unary_op::ARCTAN:
+        case cudf::experimental::unary_op::ARCTAN:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcTan>{},
                 input, output_view);
             break;
-        case unary_op::EXP:
+        case cudf::experimental::unary_op::EXP:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceExp>{},
                 input, output_view);
             break;
-        case unary_op::LOG:
+        case cudf::experimental::unary_op::LOG:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceLog>{},
                 input, output_view);
             break;
-        case unary_op::SQRT:
+        case cudf::experimental::unary_op::SQRT:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceSqrt>{},
                 input, output_view);
             break;
-        case unary_op::CEIL:
+        case cudf::experimental::unary_op::CEIL:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceCeil>{},
                 input, output_view);
             break;
-        case unary_op::FLOOR:
+        case cudf::experimental::unary_op::FLOOR:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceFloor>{},
                 input, output_view);
             break;
-        case unary_op::ABS:
+        case cudf::experimental::unary_op::ABS:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceAbs>{},
                 input, output_view);
             break;
-        case unary_op::BIT_INVERT:
+        case cudf::experimental::unary_op::BIT_INVERT:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::BitwiseOpDispatcher<detail::DeviceInvert>{},
                 input, output_view);
             break;
-        case unary_op::NOT:
+        case cudf::experimental::unary_op::NOT:
             cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::LogicalOpDispatcher<detail::DeviceNot>{},
