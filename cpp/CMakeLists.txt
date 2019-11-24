@@ -460,6 +460,7 @@ add_library(cudf
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/parquet/reader_impl.cu
+            src/io/parquet/writer_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp

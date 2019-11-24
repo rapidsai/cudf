@@ -319,6 +319,41 @@ std::unique_ptr<table> read_parquet(
     read_parquet_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Settings to use for `write_parquet()`
+ */
+struct write_parquet_args {
+  sink_info sink;
+
+  /// Specify the compression format to use
+  compression_type compression = compression_type::AUTO;
+  /// Set of columns to output
+  table_view table;
+
+  explicit write_parquet_args(sink_info const& snk, table_view const& table)
+      : sink(snk), table(table) {}
+};
+
+/**
+ * @brief Writes a set of columns to ORC format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::write_parquet_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  cudf::write_parquet(args);
+ * @endcode
+ *
+ * @param args Settings for controlling writing behavior
+ * @param mr Optional resource to use for device memory allocation
+ */
+void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resource* mr =
+                                               rmm::mr::get_default_resource());
+
+
 }  // namespace io
 }  // namespace experimental
 }  // namespace cudf
