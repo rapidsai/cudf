@@ -17,12 +17,12 @@ namespace {
 
 struct tile_functor {
     size_type count;
-    size_type operator()(size_type i)
+    size_type __device__ operator()(size_type i)
     {
         return i % count;
     }
 };
-    
+
 } // anonymous namespace
 
 std::unique_ptr<table>
