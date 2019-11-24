@@ -242,7 +242,7 @@ struct DeviceNot {
 
 template<typename T, typename F>
 static void launch(cudf::column_view const& input, cudf::mutable_column_view& output) {
-    cudf::experimental::unary::Launcher<T, T, F>::launch(input, output);
+    cudf::experimental::unary::launcher<T, T, F>::launch(input, output);
 }
 
 
@@ -294,7 +294,7 @@ public:
     template <typename T>
     typename std::enable_if_t<is_supported<T>(), void>
     operator()(cudf::column_view const& input, cudf::mutable_column_view& output) {
-        cudf::experimental::unary::Launcher<T, cudf::experimental::bool8, F>::launch(input, output);
+        cudf::experimental::unary::launcher<T, cudf::experimental::bool8, F>::launch(input, output);
     }
 
     template <typename T>
@@ -332,7 +332,7 @@ unary_operation(cudf::column_view const& input,
 
     auto output_view = output->mutable_view();;
 
-    cudf::experimental::unary::handleChecksAndValidity(input, output_view);
+    cudf::experimental::unary::handle_checks_and_validity(input, output_view);
 
     switch(op){
         case cudf::experimental::unary_op::SIN:

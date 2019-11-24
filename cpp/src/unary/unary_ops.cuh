@@ -28,7 +28,7 @@ namespace experimental {
 namespace unary {
 
 template<typename T, typename Tout, typename F>
-struct Launcher {
+struct launcher {
     static
     void launch(cudf::column_view const& input,
                 cudf::mutable_column_view& output,
@@ -47,7 +47,7 @@ struct Launcher {
     }
 };
 
-inline void handleChecksAndValidity(column_view const& input, mutable_column_view& output) {
+inline void handle_checks_and_validity(column_view const& input, mutable_column_view& output) {
 
     if (not input.nullable()) {
         if (not output.nullable())
