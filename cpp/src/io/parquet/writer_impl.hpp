@@ -53,7 +53,8 @@ using namespace cudf::io;
  **/
 class writer::impl {
   // Parquet datasets are divided into fixed-size, independent rowgroups
-  static constexpr uint32_t DEFAULT_ROWGROUP_SIZE = 128 * 1024 * 1024;
+  static constexpr uint32_t DEFAULT_ROWGROUP_MAXSIZE = 128 * 1024 * 1024; // 128MB
+  static constexpr uint32_t DEFAULT_ROWGROUP_MAXROWS = 1000000; // Or at most 1M rows
 
   // rowgroups are divided into pages
   static constexpr uint32_t DEFAULT_TARGET_PAGE_SIZE = 512 * 1024;
@@ -78,9 +79,28 @@ class writer::impl {
   void write(table_view const& table, cudaStream_t stream);
 
  private:
+  /**
+   * @brief Gather page fragments
+   *
+   * @param frag Destination page fragments
+   * @param col_desc column description array
+   * @param num_columns Total number of columns
+   * @param num_fragments Total number of fragments per column
+   * @param num_rows Total number of rows
+   * @param fragment_size Number of rows per fragment
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
+                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                           uint32_t num_columns, uint32_t num_fragments,
+                           uint32_t num_rows, uint32_t fragment_size,
+                           cudaStream_t stream);
+
+ private:
   rmm::mr::device_memory_resource* _mr = nullptr;
 
-  size_t max_rowgroup_size_ = DEFAULT_ROWGROUP_SIZE;
+  size_t max_rowgroup_size_ = DEFAULT_ROWGROUP_MAXSIZE;
+  size_t max_rowgroup_rows_ = DEFAULT_ROWGROUP_MAXROWS;
   size_t target_page_size_ = DEFAULT_TARGET_PAGE_SIZE;
   Compression compression_kind_ = Compression::UNCOMPRESSED;
 

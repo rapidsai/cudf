@@ -387,9 +387,12 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")
 set(ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
+set(PARQUET_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
+ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------

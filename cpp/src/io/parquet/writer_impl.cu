@@ -178,11 +178,29 @@ class parquet_column_view {
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
 
-  auto parquet_name() const noexcept { return _name; }
+  auto name() const noexcept { return _name; }
   auto physical_type() const noexcept { return _physical_type; }
   auto converted_type() const noexcept { return _converted_type; }
   auto stats_type() const noexcept { return _stats_dtype; }
   int32_t ts_scale() const noexcept { return _ts_scale; }
+
+  // Dictionary management
+  uint32_t *get_dict_data() { return _dict_data.data().get(); }
+  uint32_t *get_dict_index() { return _dict_index.data().get(); }
+  void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
+  void alloc_dictionary(size_t max_num_rows) {
+    _dict_data.resize(max_num_rows);
+    _dict_index.resize(max_num_rows);
+  }
+  bool check_dictionary_used() {
+    if (!_dictionary_used) {
+      _dict_data.resize(0);
+      _dict_data.shrink_to_fit();
+      _dict_index.resize(0);
+      _dict_index.shrink_to_fit();
+    }
+    return _dictionary_used;
+  }
 
  private:
   // Identifier within set of columns
@@ -202,10 +220,35 @@ class parquet_column_view {
   statistics_dtype _stats_dtype;
   int32_t _ts_scale;
 
+  // Dictionary-related members
+  bool _dictionary_used = false;
+  rmm::device_vector<uint32_t> _dict_data;
+  rmm::device_vector<uint32_t> _dict_index;
+
   // String-related members
   NVStrings *_nvstr = nullptr;
   rmm::device_buffer _indexes;
 };
+
+
+void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
+                                       hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                                       uint32_t num_columns, uint32_t num_fragments,
+                                       uint32_t num_rows, uint32_t fragment_size,
+                                       cudaStream_t stream) {
+
+  CUDA_TRY(cudaMemcpyAsync(col_desc.device_ptr(), col_desc.host_ptr(),
+                           col_desc.memory_size(), cudaMemcpyHostToDevice,
+                           stream));
+  CUDA_TRY(gpu::InitPageFragments(frag.device_ptr(), col_desc.device_ptr(),
+                                  num_fragments, num_columns, fragment_size,
+                                  num_rows, stream));
+  CUDA_TRY(cudaMemcpyAsync(frag.host_ptr(), frag.device_ptr(),
+                           frag.memory_size(), cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+}
+
 
 
 writer::impl::impl(std::string filepath, writer_options const &options,
@@ -231,7 +274,87 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     parquet_columns.emplace_back(current_id, col, stream);
   }
 
+  // Initialize column description
+  FileMetaData md;
+  hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
+  md.version = 1;
+  md.num_rows = num_rows;
+  md.schema.resize(1 + num_columns);
+  md.schema[0].type = UNDEFINED_TYPE;
+  md.schema[0].repetition_type = NO_REPETITION_TYPE;
+  md.schema[0].name = "schema";
+  md.schema[0].num_children = num_columns;
+  for (auto i = 0; i < num_columns; i++) {
+    auto& col = parquet_columns[i];
+    // Column metadata
+    md.schema[1 + i].type = col.physical_type();
+    md.schema[1 + i].converted_type = col.converted_type();
+    md.schema[1 + i].repetition_type = (col.null_count() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
+    md.schema[1 + i].name = col.name();
+    md.schema[1 + i].num_children = 0; // Leaf node
+    // GPU column description
+    auto *desc = &col_desc[i];
+    desc->column_data_base = col.data();
+    desc->valid_map_base = col.nulls();
+    desc->stats_dtype = col.stats_type();
+    desc->ts_scale = col.ts_scale();
+    if (md.schema[1 + i].type != BOOLEAN && md.schema[1 + i].type != UNDEFINED_TYPE) {
+      col.alloc_dictionary(num_rows);
+      desc->dict_index = col.get_dict_index();
+      desc->dict_data = col.get_dict_data();
+    }
+    else {
+      desc->dict_data = nullptr;
+      desc->dict_index = nullptr;
+    }
+    desc->num_rows = col.data_count();
+    desc->physical_type = static_cast<uint8_t>(md.schema[1 + i].type);
+    desc->converted_type = static_cast<uint8_t>(md.schema[1 + i].converted_type);
+    desc->level_bits = (md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
+  }
+  // Init page fragments
+  // 5000 is good enough for up to ~200-character strings. Longer strings will start producing fragments larger than the
+  // desired page size -> TODO: keep track of the max fragment size, and iteratively reduce this value if the largest
+  // fragment exceeds the max page size limit (we ideally want the page size to be below 1MB so as to have enough pages
+  // to get good compression/decompression performance).
+  uint32_t fragment_size = 5000;
+  uint32_t num_fragments = (uint32_t)((md.num_rows + fragment_size - 1) / fragment_size);
+  hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
+  init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, stream);
+
+  // Decide row group boundaries based on uncompressed data size
+  size_t rowgroup_size = 0;
+  uint32_t num_rowgroups = 0;
+  for (uint32_t f = 0, rowgroup_start = 0; f < num_fragments; f++) {
+    size_t fragment_data_size = 0;
+    for (auto i = 0; i < num_columns; i++) {
+      fragment_data_size += fragments[i * num_fragments + f].fragment_data_size;
+    }
+    if (f > rowgroup_start && (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
+                               (f + 1 - rowgroup_start) * fragment_size > max_rowgroup_rows_)) {
+      md.row_groups.resize(num_rowgroups + 1);
+      md.row_groups[num_rowgroups++].num_rows = (f - rowgroup_start) * fragment_size;
+      rowgroup_start = f;
+      rowgroup_size = 0;
+    }
+    rowgroup_size += fragment_data_size;
+    if (f + 1 == num_fragments) {
+      md.row_groups.resize(num_rowgroups + 1);
+      md.row_groups[num_rowgroups++].num_rows = md.num_rows - rowgroup_start * fragment_size;
+    }
+  }
+
+  // Write file header
+  file_header_s fhdr;
+  fhdr.magic = PARQUET_MAGIC;
+  outfile_.write(reinterpret_cast<char *>(&fhdr), sizeof(fhdr));
+
+  CompactProtocolWriter cpw(&buffer_);
+  file_ender_s fendr;
+  fendr.footer_len = (uint32_t)cpw.write(&md);
+  fendr.magic = PARQUET_MAGIC;
   outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
+  outfile_.write(reinterpret_cast<char *>(&fendr), sizeof(fendr));
   outfile_.flush();
 }
 
