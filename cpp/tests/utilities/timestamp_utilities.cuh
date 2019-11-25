@@ -70,8 +70,9 @@ generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
     auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count, mask);
   }
-
-  return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
+  else {
+    return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
+  }
 }
 
 }  // namespace test
