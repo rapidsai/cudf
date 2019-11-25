@@ -31,7 +31,7 @@ namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
 using time_point =
-    simt::std::chrono::time_point<simt::std::chrono::steady_clock, Duration>;
+    simt::std::chrono::time_point<simt::std::chrono::system_clock, Duration>;
 
 template <class Duration>
 struct timestamp : time_point<Duration> {
