@@ -2241,7 +2241,6 @@ class DataFrame(object):
                     rtn = max(dtype_l, dtype_r)
             return rtn
 
-
         left_on = sorted(left_on)
         right_on = sorted(right_on)
         cats_to_adjust = []

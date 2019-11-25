@@ -4300,6 +4300,8 @@ def test_join_on_typecast_categorical(dtype_l, dtype_r):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
     assert_eq(expect, got, check_dtype=False)
+
+
 def test_cov():
     gdf = gd.datasets.randomdata(10)
     pdf = gdf.to_pandas()
