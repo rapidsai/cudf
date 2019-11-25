@@ -36,7 +36,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/copying.hpp>
@@ -45,53 +45,6 @@
 #include <cudf/merge.hpp>
 
 namespace { // anonym.
-using index_type = thrust::tuple<side, cudf::size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
-
-
-/**
- * @brief Extractor is the primary template for "tagged-index" data extraction (side and index).
- *
- * It serves as an interface to adhere to and a uniform way of accessing the "tagged-index" abstraction. 
- * Hence, it is purposely implementation-free 
- * because different tagged index types may have different representations, getters, etc.;
- * e.g., index_type::get_side/get_index;
- * or
- * get<0>(tuple<side, size_t>), get<1>(tuple<side, size_t>).
- *
- * This class is meant to to be fully specialized for different "tagged-index" classes.
- */
-template<typename TaggedIndexT>
-struct Extractor
-{
-  __device__
-  side            get_side(TaggedIndexT const& tagged_index) const;
-
-  __device__
-  cudf::size_type get_index(TaggedIndexT const& tagged_index) const;
-};
-
-/**
- * @brief Full `Extractor` specialization for `index_type`
- *
-*/
-template<>
-struct Extractor<index_type>
-{
-  __device__
-  Extractor(void){}
-  
-  __device__
-  side get_side(index_type const& tagged_index) const
-  {
-    return thrust::get<0>(tagged_index);
-  }
-
-  __device__
-  cudf::size_type get_index(index_type const& tagged_index) const
-  {
-    return thrust::get<1>(tagged_index);
-  }
-};  
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -270,10 +223,10 @@ generate_merged_indices(cudf::table_view const& left_table,
       rmm::device_vector<cudf::null_order> d_null_precedence(null_precedence);
       
       auto ineq_op =
-        cudf::experimental::row_lexicographic_tagged_comparator<index_type, Extractor<index_type>, true>(*lhs_device_view,
-                                                                                                         *rhs_device_view,
-                                                                                                         d_column_order.data().get(),
-                                                                                                         d_null_precedence.data().get());
+        cudf::experimental::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+                                                                      *rhs_device_view,
+                                                                      d_column_order.data().get(),
+                                                                      d_null_precedence.data().get());
       
         thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
@@ -283,14 +236,13 @@ generate_merged_indices(cudf::table_view const& left_table,
                     merged_indices.begin(),
                       [ineq_op] __device__ (index_type const & left_tuple,
                                             index_type const & right_tuple) {
-                        // return ineq_op(thrust::get<1>(left_tuple), thrust::get<1>(right_tuple));
                         return ineq_op(left_tuple, right_tuple);
                     });			        
     } else {
       auto ineq_op =
-        cudf::experimental::row_lexicographic_tagged_comparator<index_type, Extractor<index_type>, false>(*lhs_device_view,
-                                                                                                          *rhs_device_view,
-                                                                                                          d_column_order.data().get()); 
+        cudf::experimental::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
+                                                                       *rhs_device_view,
+                                                                       d_column_order.data().get()); 
         thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
@@ -299,7 +251,6 @@ generate_merged_indices(cudf::table_view const& left_table,
                     merged_indices.begin(),
                       [ineq_op] __device__ (index_type const & left_tuple,
                                             index_type const & right_tuple) {
-                        //return ineq_op(thrust::get<1>(left_tuple), thrust::get<1>(right_tuple));
                         return ineq_op(left_tuple, right_tuple);
                           
                     });					        

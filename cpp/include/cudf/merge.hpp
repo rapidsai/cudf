@@ -29,6 +29,13 @@ namespace { // anonym.
  */
 enum class side : bool { LEFT, RIGHT };
 
+/**
+ * @brief Tagged index type: `thrust::get<0>` indicates left/right side, 
+ * `thrust::get<1>` indicates the row index
+ */  
+using index_type = thrust::tuple<side, cudf::size_type>;
+
+
   struct X{};
 
   template<typename T>
@@ -81,8 +88,7 @@ namespace experimental {
  * on these tagged indices rather than on raw indices.
  *  
  */
-template <typename ExtractorT,
-          bool has_nulls = true>
+template <bool has_nulls = true>
 struct tagged_element_relational_comparator {
 
   __host__ __device__
@@ -95,67 +101,36 @@ struct tagged_element_relational_comparator {
 
 
   template <typename Element,
-            typename TaggedIndexT,
             std::enable_if_t<cudf::is_relationally_comparable<
                                Element, Element>()>* = nullptr>
   __device__
-  weak_ordering operator()(TaggedIndexT lhs_tagged_index,
-                           TaggedIndexT rhs_tagged_index) const noexcept {
-    ExtractorT extractor{};
+  weak_ordering operator()(index_type lhs_tagged_index,
+                           index_type rhs_tagged_index) const noexcept {
 
-    cudf::size_type l_indx = extractor.get_index(lhs_tagged_index);
-    cudf::size_type r_indx = extractor.get_index(rhs_tagged_index);
+    side l_side = thrust::get<0>(lhs_tagged_index);
+    side r_side = thrust::get<0>(rhs_tagged_index);
 
-    side l_side = extractor.get_side(lhs_tagged_index);
-    side r_side = extractor.get_side(rhs_tagged_index);
+    cudf::size_type l_indx = thrust::get<1>(lhs_tagged_index);
+    cudf::size_type r_indx = thrust::get<1>(rhs_tagged_index);
 
-    column_device_view const* ptr_left_dview{nullptr};
-    if( l_side == side::LEFT )
-      {
-        ptr_left_dview = &lhs;
-      }
-    else
-      {
-        ptr_left_dview = &rhs;
-      }
-
-    column_device_view const* ptr_right_dview{nullptr};
-    if( r_side == side::LEFT )
-      {
-        ptr_right_dview = &lhs;
-      }
-    else
-      {
-        ptr_right_dview = &rhs;
-      }
-
+    column_device_view const* ptr_left_dview{l_side == side::LEFT ? &lhs : &rhs };
+    
+    column_device_view const* ptr_right_dview{r_side == side::LEFT ? &lhs : &rhs };
+ 
     auto erl_comparator = element_relational_comparator<has_nulls>(*ptr_left_dview, *ptr_right_dview, null_precedence);
 
-    // this should be obvious,
-    // but out of desperation...
-    //
-    // static_assert(cudf::is_relationally_comparable<Element, Element>(),
-    //               "ERROR: Element is not relationally comparable.");
-
-    // compile_time_printer<Element> c;//error should tell what Element is!
-    
-    //auto ret = erl_comparator(l_indx, r_indx);//no, must type-dispatch it...
-
-    auto ret = cudf::experimental::type_dispatcher(lhs.type(),
-                                                   erl_comparator,
-                                                   l_indx, r_indx);
-
-    return ret;
+    return cudf::experimental::type_dispatcher(lhs.type(),
+                                               erl_comparator,
+                                               l_indx, r_indx);
     
   }
 
   template <typename Element,
-            typename TaggedIndexT,
             std::enable_if_t<not cudf::is_relationally_comparable<
                 Element, Element>()>* = nullptr>
   __device__
-  weak_ordering operator()(TaggedIndexT lhs_tagged_index,
-                           TaggedIndexT rhs_tagged_index) const noexcept {
+  weak_ordering operator()(index_type lhs_tagged_index,
+                           index_type rhs_tagged_index) const noexcept {
     release_assert(false &&
                    "Attempted to compare elements of uncomparable types.");
   }
@@ -168,9 +143,7 @@ private:
 /**
  * @brief The equivalent of `row_lexicographic_comparator` for tagged indices.
  */
-template <typename TaggedIndexT,
-          typename ExtractorT,
-          bool has_nulls = true>
+template <bool has_nulls = true>
 struct row_lexicographic_tagged_comparator { 
   row_lexicographic_tagged_comparator(table_device_view lhs, table_device_view rhs,
                                       order const* column_order = nullptr,
@@ -185,8 +158,8 @@ struct row_lexicographic_tagged_comparator {
   }
 
   __device__
-  bool operator()(TaggedIndexT lhs_tagged_index,
-                  TaggedIndexT rhs_tagged_index) const noexcept {
+  bool operator()(index_type lhs_tagged_index,
+                  index_type rhs_tagged_index) const noexcept {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending =
           (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
@@ -195,7 +168,7 @@ struct row_lexicographic_tagged_comparator {
       null_order null_precedence = _null_precedence == nullptr ?
                                      null_order::BEFORE: _null_precedence[i];
 
-      auto comparator = tagged_element_relational_comparator<ExtractorT, has_nulls>{
+      auto comparator = tagged_element_relational_comparator<has_nulls>{
           _lhs.column(i), _rhs.column(i), null_precedence};
 
       state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,

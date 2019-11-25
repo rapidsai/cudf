@@ -1,6 +1,3 @@
-//#include <nvstrings/NVCategory.h>
-//#include <nvstrings/NVStrings.h>
-
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -91,18 +88,6 @@ void print_v(const Vector<T, Args...>& v, size_t n, std::ostream& os)
 
 template <typename T>
 class MergeTest_ : public cudf::test::BaseFixture {};
-
-//TODO: confirm if the legacy test_types below can be replaced
-//just by cudf::test::NumericTypes
-//
-//legacy:
-//{
-///using test_types =
-///  ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>
-//,cudf::bool8>; //column_wrapper failure //, cudf::nvstring_category>; //string not ready
-
-//TYPED_TEST_CASE(MergeTest_, test_types);
-//}
 
 //TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes); // <- TODO: put me back!
 TYPED_TEST_CASE(MergeTest_, cudf::test::Types<int32_t>); // for now debug one type at a time...
@@ -409,8 +394,6 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
 #endif
     
 
-    //PROBLEM: columns don't get lex-sorted!
-    //
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
     cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
 }
