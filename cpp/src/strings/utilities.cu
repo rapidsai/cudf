@@ -80,9 +80,9 @@ rmm::device_vector<string_view> create_string_vector_from_column(
 }
 
 // build a strings offsets column from a vector of string_views
-std::unique_ptr<cudf::column> offsets_from_string_vector(
+std::unique_ptr<cudf::column> child_offsets_from_string_vector(
     const rmm::device_vector<string_view>& strings,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr )
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
     auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
     auto begin = thrust::make_transform_iterator(strings.begin(), transformer);
@@ -90,10 +90,10 @@ std::unique_ptr<cudf::column> offsets_from_string_vector(
 }
 
 // build a strings chars column from an vector of string_views
-std::unique_ptr<cudf::column> chars_from_string_vector(
+std::unique_ptr<cudf::column> child_chars_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     const int32_t* d_offsets, cudf::size_type null_count,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr )
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream )
 {
     size_type count = strings.size();
     auto d_strings = strings.data().get();
@@ -107,8 +107,7 @@ std::unique_ptr<cudf::column> chars_from_string_vector(
                                              mask_state::UNALLOCATED,
                                              stream, mr );
     // get it's view
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<int8_t>();
+    auto d_chars = chars_column->mutable_view().data<int8_t>();
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, d_offsets, d_chars] __device__(size_type idx){

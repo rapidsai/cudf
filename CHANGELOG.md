@@ -19,6 +19,7 @@
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3213 Port cuIO to libcudf++
 - PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
 - PR #3300 Add `DataFrame.insert`
@@ -41,6 +42,7 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3172 Define and implement new fill/repeat/copy_range APIs
 
 ## Improvements
 
@@ -135,10 +137,15 @@
 - PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
+- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`, 
+           `apply_boolean_mask`, `drop_duplicate` and `unique_count`.
 - PR #3387 Strings column gather function
+- PR #3440 Strings column scatter function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3398 Move reshape.hpp files to legacy
+- PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
+- PR #3201 Define and implement new datetime_ops APIs
 
 ## Bug Fixes
 
@@ -195,6 +202,9 @@
 - PR #3413 Fix dask_cudf read_csv file-list bug
 - PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
 - PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
+- PR #3435 Fix diff and shift for empty series
+- PR #3439 Fix index-name bug in StringColumn concat
+- PR #3445 Fix ORC Writer default stripe size
 
 # cuDF 0.10.0 (16 Oct 2019)
 
