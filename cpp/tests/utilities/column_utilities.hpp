@@ -32,7 +32,7 @@ namespace test {
  * @param lhs The first column
  * @param rhs The second column
  */
-void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs);
+void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
