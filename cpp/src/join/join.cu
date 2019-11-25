@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/gather.hpp>
 
 #include "hash_join.cuh"
 
@@ -100,7 +101,7 @@ get_trivial_full_join_indices(
 
 template <JoinType join_type, typename index_type>
 std::unique_ptr<experimental::table>
-get_join_indices(
+get_base_join_indices(
     table_view const& left,
     table_view const& right,
     cudaStream_t stream,
@@ -114,24 +115,124 @@ get_join_indices(
       return l.type() == r.type(); }),
       "Mismatch in joining column data types");
 
+  //TODO : This can probably be removed since get_trivial_full_join_indices is split between
+  //get_base_hash_join_indices and get_join_indices_complement
   bool is_trivial_full_join =
     (JoinType::FULL_JOIN == join_type) &&
     ((0 == left.num_rows()) || (0 == right.num_rows()));
   if (is_trivial_full_join) { return get_trivial_full_join_indices<index_type>(left, right, stream, mr); }
 
-  if((join_type == JoinType::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_hash_join_indices<join_type, index_type>(right, left,  true, stream, mr);
-  } else {
-    return get_hash_join_indices<join_type, index_type>(left, right, false, stream, mr);
+  constexpr JoinType base_join_type = (join_type == JoinType::FULL_JOIN)? JoinType::LEFT_JOIN : join_type;
+  return get_base_hash_join_indices<base_join_type, index_type>(left, right, false, stream, mr);
+}
+
+std::vector<std::unique_ptr<column>>
+combine_join_columns(
+    std::unique_ptr<experimental::table> left_table,
+    std::vector<size_type>& left_noncommon_col,
+    std::unique_ptr<experimental::table> common_table,
+    std::vector<size_type>& left_common_col,
+    std::unique_ptr<experimental::table> right_table,
+    std::vector<size_type>& right_noncommon_col) {
+  std::vector<std::unique_ptr<column>> left_cols;
+  std::vector<std::unique_ptr<column>> common_cols;
+  std::vector<std::unique_ptr<column>> right_cols;
+  if (left_table != nullptr) {
+    left_cols = std::move(left_table->release());
+  }
+  if (common_table != nullptr) {
+    common_cols = std::move(common_table->release());
+  }
+  if (right_table != nullptr) {
+    right_cols = std::move(right_table->release());
+  }
+  std::vector<std::unique_ptr<column>> combined_cols(
+      left_cols.size() + right_cols.size() + common_cols.size());
+  for(size_t i = 0; i < left_cols.size(); ++i) {
+    combined_cols.at(left_noncommon_col.at(i)) = std::move(left_cols.at(i));
+  }
+  for(size_t i = 0; i < common_cols.size(); ++i) {
+    combined_cols.at(left_common_col.at(i)) = std::move(common_cols.at(i));
+  }
+  for(size_t i = 0; i < right_cols.size(); ++i) {
+    combined_cols.at(right_noncommon_col.at(i)) = std::move(right_cols.at(i));
+  }
+  return std::move(combined_cols);
+}
+
+template <JoinType join_type, typename index_type>
+std::unique_ptr<experimental::table>
+construct_join_output_df(
+    table_view const& left,
+    table_view const& right,
+    std::unique_ptr<experimental::table> joined_indices,
+    std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream) {
+  std::vector<size_type> left_common_col;
+  left_common_col.reserve(columns_in_common.size());
+  std::vector<size_type> right_common_col;
+  right_common_col.reserve(columns_in_common.size());
+  for (const auto c : columns_in_common) {
+    left_common_col.push_back(c.first);
+    right_common_col.push_back(c.second);
+  }
+  std::vector<size_type> left_noncommon_col =
+    non_common_column_indices(left.num_columns(), left_common_col);
+  std::vector<size_type> right_noncommon_col =
+    non_common_column_indices(right.num_columns(), right_common_col);
+
+  bool const ignore_out_of_bounds{ join_type != JoinType::INNER_JOIN };
+
+  std::unique_ptr<experimental::table> common_table;
+  // Construct the joined columns
+  if (not columns_in_common.empty()) {
+    if (JoinType::FULL_JOIN == join_type) {
+      auto complement_indices =
+        get_join_indices_complement<index_type>(joined_indices->get_column(1),
+            left.num_rows(), right.num_rows(), mr, stream);
+      auto common_from_right = experimental::detail::gather(
+          right.select(right_common_col),
+          complement_indices->get_column(1),
+          false, ignore_out_of_bounds);
+      auto common_from_left = experimental::detail::gather(
+          left.select(left_common_col),
+          joined_indices->get_column(0),
+          false, ignore_out_of_bounds);
+      common_table = experimental::concatenate(
+          {common_from_right->view(), common_from_left->view()});
+      joined_indices = experimental::concatenate(
+          {complement_indices->view(), joined_indices->view()});
+    } else {
+      common_table = experimental::detail::gather(
+          left.select(left_common_col),
+          joined_indices->get_column(0),
+          false, ignore_out_of_bounds);
+    }
   }
 
-  //TODO :
-  /*
-     + Implement get_trivial_full_join_indices
-     + Check if std::equal over data_type works
-     - join_hash
-     - construct_join_output_df
-     */
+  std::unique_ptr<experimental::table> left_table;
+  // Construct the left non common columns
+  if (not left_noncommon_col.empty()) {
+    left_table = experimental::detail::gather(
+        left.select(left_noncommon_col),
+        joined_indices->get_column(0),
+        false, ignore_out_of_bounds);
+  }
+
+  std::unique_ptr<experimental::table> right_table;
+  // Construct the right non common columns
+  if (not right_noncommon_col.empty()) {
+    right_table = experimental::detail::gather(
+        right.select(right_noncommon_col),
+        joined_indices->get_column(1),
+        false, ignore_out_of_bounds);
+  }
+  return std::make_unique<experimental::table>(
+      combine_join_columns(
+      std::move(left_table), left_noncommon_col,
+      std::move(common_table), left_common_col,
+      std::move(right_table), right_noncommon_col));
 }
 
 template <JoinType join_type, typename index_type>
@@ -150,69 +251,18 @@ join_call_compute_df(
   CUDF_EXPECTS( left.num_rows() < MAX_JOIN_SIZE, "Left column size is too big");
   CUDF_EXPECTS( right.num_rows() < MAX_JOIN_SIZE, "Right column size is too big");
 
-  CUDF_EXPECTS (left_on.size() != right_on.size(), "Mismatch in number of columns to be joined on");
-
-  //CUDF_EXPECTS(std::none_of(std::cbegin(left), std::cend(left), [](auto col) { return col->data_type() == GDF_invalid; }), "Unsupported left column dtype");
-  //CUDF_EXPECTS(std::none_of(std::cbegin(right), std::cend(right), [](auto col) { return col->data_type() == GDF_invalid; }), "Unsupported right column dtype");
+  CUDF_EXPECTS (left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
+  //TODO : return empty table if left_on or right_on empty or their sizes mismatch
 
   if (is_trivial_join(left, right, left_on, right_on, join_type)) {
     return get_empty_joined_table(left, right, columns_in_common);
   }
 
-#if 0
   std::unique_ptr<cudf::experimental::table> joined_indices =
-    get_join_indices<join_type, index_type>(left.select(left_on), right.select(right_on), stream, mr);
+    get_base_join_indices<join_type, index_type>(left.select(left_on), right.select(right_on), stream, mr);
 
-  //TODO : Implement
-  return construct_join_output<join_type, index_type>(left, right, *joined_indices, columns_in_common);
-
-#else
-  //TODO : Remove. Returning just indices and not join output for successful compilation
-  return get_join_indices<join_type, index_type>(left.select(left_on), right.select(right_on), stream, mr);
-#endif
+  return construct_join_output_df<join_type, index_type>(left, right, std::move(joined_indices), columns_in_common, mr, stream);
 }
-
-//template <JoinType join_type, typename index_type>
-//std::unique_ptr<experimental::table>
-//construct_join_output_df(
-//    table_view const& left,
-//    table_view const& right,
-//    table_view const& joined_indices,
-//    std::vector<std::pair<size_type, size_type>> const& columns_in_common) {
-//  std::vector<size_type> left_common_col;
-//  left_common_col.reserve(columns_in_common.size());
-//  std::vector<size_type> right_common_col;
-//  right_common_col.reserve(columns_in_common.size());
-//  for (const auto c : columns_in_common) {
-//    left_common_col.push_back(c.first);
-//    right_common_col.push_back(c.second);
-//  }
-//  std::vector<size_type> left_noncommon_col =
-//    non_common_column_indices(left.num_columns(), left_common_col);
-//  std::vector<size_type> right_noncommon_col =
-//    non_common_column_indices(right.num_columns(), right_common_col);
-//
-//  bool const ignore_out_of_bounds{ join_type != JoinType::INNER_JOIN };
-//
-//  // Construct the left non common columns
-//  if (not left_noncommon_col.empty()) {
-//    auto left_table = experimental::detail::gather(
-//        left.select(left_noncommon_col),
-//        joined_indices.get_column(0),
-//        false, ignore_out_of_bounds);
-//  }
-//
-//  // Construct the right non common columns
-//  if (not right_noncommon_col.empty()) {
-//    auto right_table = experimental::detail::gather(
-//        right.select(right_noncommon_col),
-//        joined_indices.get_column(1),
-//        false, ignore_out_of_bounds);
-//  }
-//
-//  if (not columns_in_common.empty()) {
-//  }
-//}
 
 }
 

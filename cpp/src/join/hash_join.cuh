@@ -186,18 +186,45 @@ estimate_join_output_size(
 }
 
 template <JoinType join_type, typename index_type>
-std::unique_ptr<experimental::table>
-get_hash_join_indices(
+std::enable_if_t<(join_type != JoinType::FULL_JOIN),
+std::unique_ptr<experimental::table>>
+get_base_hash_join_indices(
     table_view const& left,
     table_view const& right,
     bool flip_join_indices,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
 
-  using multimap_type = multimap_T<index_type>;
+  if ((join_type == JoinType::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
+    return get_base_hash_join_indices<join_type, index_type>(right, left,  true, stream, mr);
+  }
+  if ((join_type == JoinType::LEFT_JOIN) && (right.num_rows() == 0)) {
+    rmm::device_buffer sequence_indices{
+      sizeof(index_type)*left.num_rows(), stream, mr};
+    thrust::device_ptr<index_type> sequence_indices_ptr(
+        static_cast<index_type*>(sequence_indices.data()));
+    thrust::sequence(
+        rmm::exec_policy(stream)->on(stream),
+        sequence_indices_ptr,
+        sequence_indices_ptr + left.num_rows(),
+        0);
+    rmm::device_buffer invalid_indices{
+      sizeof(index_type)*left.num_rows(), stream, mr};
+    thrust::device_ptr<index_type> inv_index_ptr(
+        static_cast<index_type*>(invalid_indices.data()));
+    thrust::fill(
+        rmm::exec_policy(stream)->on(stream),
+        inv_index_ptr,
+        inv_index_ptr + left.num_rows(),
+        JoinNoneValue);
+    return get_indices_table<index_type>(
+        std::move(sequence_indices), std::move(invalid_indices),
+        left.num_rows(), stream, mr);
+  }
 
-  ////If FULL_JOIN is selected then we process as LEFT_JOIN till we need to take care of unmatched indices
-  constexpr JoinType base_join_type = (join_type == JoinType::FULL_JOIN)? JoinType::LEFT_JOIN : join_type;
+  //TODO : Add trivial left join case and exit early
+
+  using multimap_type = multimap_T<index_type>;
 
   //TODO : attach stream to hash map class according to PR discussion #3272
 
@@ -233,7 +260,7 @@ get_hash_join_indices(
   }
 
   auto estimated_join_output_size =
-    estimate_join_output_size<base_join_type, multimap_type>(
+    estimate_join_output_size<join_type, multimap_type>(
         *build_table, *probe_table, *hash_table, stream, mr);
 
   size_type estimated_size = estimated_join_output_size->value();
@@ -266,7 +293,7 @@ get_hash_join_indices(
 
     RowHash hash_probe{*probe_table};
     row_equality equality{*probe_table, *build_table};
-    probe_hash_table<base_join_type,
+    probe_hash_table<join_type,
                      multimap_type,
                      hash_value_type,
                      output_index_type,
@@ -295,16 +322,12 @@ get_hash_join_indices(
     }
   }
 
-  if (join_type == JoinType::FULL_JOIN) {
-    return get_full_join_indices_table<index_type>(
-        std::move(left_indices), std::move(right_indices),
-        join_size, build_table_num_rows,
-        stream, mr);
-  } else {
-    return get_indices_table<index_type>(
-        std::move(left_indices), std::move(right_indices),
-        join_size, stream, mr);
-  }
+  left_indices.resize(sizeof(index_type)*join_size, stream);
+  right_indices.resize(sizeof(index_type)*join_size, stream);
+
+  return get_indices_table<index_type>(
+      std::move(left_indices), std::move(right_indices),
+      join_size, stream, mr);
 
 }
 

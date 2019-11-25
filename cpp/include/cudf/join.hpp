@@ -105,8 +105,8 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
- * from intersection of respective columns in `left_on` and `right_on`. Else, for every column
- * in `left_on` and `right_on`, an output column will be produced.
+ * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
+ * an output column will be produced.
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of

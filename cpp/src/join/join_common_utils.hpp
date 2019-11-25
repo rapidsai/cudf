@@ -151,8 +151,8 @@ get_indices_table(
   rmm::device_buffer r{std::forward<B>(right_indices)};
   l.resize(sizeof(index_type)*join_size, stream);
   r.resize(sizeof(index_type)*join_size, stream);
-  l.shrink_to_fit(stream);
-  r.shrink_to_fit(stream);
+  //l.shrink_to_fit(stream);//TODO : probably not needed since indices are temp for the duration of join
+  //r.shrink_to_fit(stream);//TODO : probably not needed since indices are temp for the duration of join
   std::vector<std::unique_ptr<column>> columns;
   columns.emplace_back(
       std::make_unique<column>(
