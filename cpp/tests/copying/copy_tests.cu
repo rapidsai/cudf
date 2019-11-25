@@ -99,6 +99,7 @@ struct copy_if_else_tiny_grid_functor {
       // output
       std::unique_ptr<cudf::column> out = cudf::experimental::allocate_like(lhs, lhs.size(), cudf::experimental::mask_allocation_policy::RETAIN, mr);
 
+/*
       // device views
       auto lhs_dv = cudf::column_device_view::create(lhs);
       auto rhs_dv = cudf::column_device_view::create(rhs);
@@ -107,6 +108,7 @@ struct copy_if_else_tiny_grid_functor {
       // call the kernel with an artificially small grid
       cudf::experimental::detail::copy_if_else_kernel<32, T, Filter, false><<<1, 32, 0, stream>>>(
          *lhs_dv, *rhs_dv, filter, *out_dv, nullptr);
+         */
 
       return out;
    }
