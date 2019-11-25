@@ -20,30 +20,24 @@
 #include <new>
 
 #include <rmm/rmm.h>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
 
 template <class T>
 struct managed_allocator {
       typedef T value_type;
-      
+      rmm::mr::device_memory_resource* mr = new rmm::mr::managed_memory_resource;
+
       managed_allocator() = default;
-      
+
       template <class U> constexpr managed_allocator(const managed_allocator<U>&) noexcept {}
       
       T* allocate(std::size_t n, cudaStream_t stream = 0) const {
-          T* ptr = 0;
-          cudaError_t result = cudaMallocManaged( &ptr, n*sizeof(T) );
-          if( cudaSuccess != result || nullptr == ptr )
-          {
-            std::cerr << "ERROR: CUDA Runtime call in line " << __LINE__ << "of file " 
-                      << __FILE__ << " failed with " << cudaGetErrorString(result) 
-                      << " (" << result << ") "
-                      << " Attempted to allocate: " << n * sizeof(T) << " bytes.\n";
-            throw std::bad_alloc();
-          } 
-          return ptr;
+          return (T*)mr->allocate( n*sizeof(T), stream );
       }
-      void deallocate(T* p, std::size_t, cudaStream_t stream = 0) const {
-        cudaFree(p);
+
+      void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
+          mr->deallocate( p, n*sizeof(T), stream );
       }
 };
 
@@ -74,6 +68,7 @@ struct legacy_allocator {
 
           return ptr;
       }
+
       void deallocate(T* p, std::size_t, cudaStream_t stream = 0) const {
           rmmError_t result = RMM_FREE(p, stream);
           if ( RMM_SUCCESS != result) throw std::runtime_error("legacy_allocator: RMM Memory Manager Error");
