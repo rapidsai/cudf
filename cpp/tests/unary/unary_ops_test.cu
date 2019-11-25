@@ -26,6 +26,7 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <vector>
 
+
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start, cudf::size_type size, bool nullable) {
     auto iter = cudf::test::make_counting_transform_iterator(start, [](auto i) { return T(i);});
@@ -49,6 +50,42 @@ cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_typ
         auto iter = cudf::test::make_counting_transform_iterator(0, [nulls_to_be](auto i) { return i%2==0? not nulls_to_be: nulls_to_be; });
         return cudf::test::fixed_width_column_wrapper<T> (iter, iter + size);
     }
+}
+
+template <typename T>
+struct cudf_logical_test : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypes);
+
+TYPED_TEST(cudf_logical_test, LogicalNot)
+{
+    cudf::size_type colSize = 1000;
+	std::vector<TypeParam> h_input_v(colSize, false);
+
+	std::vector<cudf::experimental::bool8> h_expect_v(colSize);
+
+	std::transform(
+		std::begin(h_input_v),
+		std::end(h_input_v),
+		std::begin(h_expect_v),
+		[] (TypeParam e) -> cudf::bool8 {
+			return static_cast<cudf::bool8>(!e);
+		});
+
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected(std::begin(h_expect_v), std::end(h_expect_v));
+    cudf::test::fixed_width_column_wrapper<TypeParam>                 inputCol(std::begin(h_input_v),  std::end(h_input_v));
+
+	auto output = cudf::experimental::unary_operation(inputCol, cudf::experimental::unary_op::NOT);
+
+	cudf::test::expect_columns_equal(expected, output->view());
+}
+
+TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
+{
+    cudf::test::fixed_width_column_wrapper<TypeParam>                 input    {{ true,  true,  true,  true  }};
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {{ false, false, false, false }};
+	auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
+	cudf::test::expect_columns_equal(expected, output->view());
 }
 
 template <typename T>

@@ -49,8 +49,9 @@ enum class unary_op {
  */
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               cudf::experimental::unary_op op,
-                                              cudaStream_t stream,
-                                              rmm::mr::device_memory_resource* mr);
+                                              cudaStream_t stream = 0,
+                                              rmm::mr::device_memory_resource* mr =
+                                              rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`

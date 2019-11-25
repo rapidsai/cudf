@@ -309,9 +309,8 @@ public:
 std::unique_ptr<cudf::column>
 unary_operation(cudf::column_view const& input,
                 cudf::experimental::unary_op op,
-                cudaStream_t stream = 0,
-                rmm::mr::device_memory_resource* mr =
-                rmm::mr::get_default_resource()) {
+                cudaStream_t stream,
+                rmm::mr::device_memory_resource* mr) {
 
     std::unique_ptr<cudf::column> output = [&] {
         if (op == cudf::experimental::unary_op::NOT) {
@@ -330,7 +329,7 @@ unary_operation(cudf::column_view const& input,
 
     if (input.size() == 0) return output;
 
-    auto output_view = output->mutable_view();;
+    auto output_view = output->mutable_view();
 
     cudf::experimental::unary::handle_checks_and_validity(input, output_view);
 

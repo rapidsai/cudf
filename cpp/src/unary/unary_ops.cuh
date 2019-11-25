@@ -50,7 +50,7 @@ struct launcher {
 inline void handle_checks_and_validity(column_view const& input, mutable_column_view& output) {
 
     if (not input.nullable()) {
-        if (not output.nullable())
+        if (not output.nullable() && output.null_mask())
             CUDA_TRY(cudaMemset(output.null_mask(), 0xff, cudf::num_bitmask_words(input.size())));
 
         output.set_null_count(0);
