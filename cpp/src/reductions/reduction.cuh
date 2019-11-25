@@ -51,7 +51,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   typename Op::Op binary_op{};
-  OutputType identity = Op::template identity<OutputType>();
+  OutputType identity = Op::Op::template identity<OutputType>();
   rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
 
   // Allocate temporary storage
