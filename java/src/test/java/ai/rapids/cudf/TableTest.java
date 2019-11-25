@@ -1598,7 +1598,8 @@ public class TableTest extends CudfTestBase {
         }
       }
       try (ColumnVector mask = builder.build();
-           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+           Table input = new Table(fromInts);
            Table filteredTable = input.filter(mask)) {
         ColumnVector filtered = filteredTable.getColumn(0);
         filtered.ensureOnHost();
@@ -1615,7 +1616,8 @@ public class TableTest extends CudfTestBase {
   void testMaskDataOnly() {
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
-         Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
+         ColumnVector fromBytes = ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null);
+         Table input = new Table(fromBytes);
          Table filteredTable = input.filter(mask)) {
       ColumnVector filtered = filteredTable.getColumn(0);
       filtered.ensureOnHost();
@@ -1627,12 +1629,14 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+
   @Test
   void testAllFilteredFromData() {
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, false);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+         ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+         Table input = new Table(fromInts);
          Table filteredTable = input.filter(mask)) {
       ColumnVector filtered = filteredTable.getColumn(0);
       assertEquals(DType.INT32, filtered.getType());
@@ -1649,7 +1653,8 @@ public class TableTest extends CudfTestBase {
         builder.setNullAt(i);
       }
       try (ColumnVector mask = builder.build();
-           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+           Table input = new Table(fromInts);
            Table filteredTable = input.filter(mask)) {
         ColumnVector filtered = filteredTable.getColumn(0);
         assertEquals(DType.INT32, filtered.getType());
@@ -1663,7 +1668,8 @@ public class TableTest extends CudfTestBase {
     Boolean[] maskVals = new Boolean[3];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null))) {
+         ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+         Table input = new Table(fromInts)) {
       assertThrows(AssertionError.class, () -> input.filter(mask).close());
     }
   }
@@ -1672,13 +1678,13 @@ public class TableTest extends CudfTestBase {
   void testTableBasedFilter() {
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
-         Table input = new Table(
-             ColumnVector.fromBoxedInts(1, null, 2, 3, null),
-             ColumnVector.categoryFromStrings("one", "two", "three", null, "five"));
+         ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+         ColumnVector fromStrings = ColumnVector.categoryFromStrings("one", "two", "three", null, "five");
+         Table input = new Table(fromInts, fromStrings);
          Table filtered = input.filter(mask);
-         Table expected = new Table(
-             ColumnVector.fromBoxedInts(null, 3, null),
-             ColumnVector.categoryFromStrings("two", null, "five"))) {
+         ColumnVector expectedFromInts = ColumnVector.fromBoxedInts(null, 3, null);
+         ColumnVector expectedFromStrings = ColumnVector.categoryFromStrings("two", null, "five");
+         Table expected = new Table(expectedFromInts, expectedFromStrings)) {
       assertTablesAreEqual(filtered, expected);
     }
   }
@@ -1688,7 +1694,8 @@ public class TableTest extends CudfTestBase {
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
+         ColumnVector fromStrings = ColumnVector.fromStrings("1","2","3","4","5");
+         Table input = new Table(fromStrings)) {
       assertThrows(AssertionError.class, () -> input.filter(mask).close());
     }
   }
