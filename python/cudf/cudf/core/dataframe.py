@@ -436,9 +436,14 @@ class DataFrame(object):
 
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
-            for col_name in self._cols:
-                scatter_map = arg[col_name]
-                self._cols[col_name][scatter_map] = value
+            if isinstance(value, DataFrame):
+                msg = "__setitem__ with arg = {!r} and " \
+                      "value = {!r} is not supported"
+                raise TypeError(msg.format(type(value), type(arg)))
+            else:
+                for col_name in self._cols:
+                    scatter_map = arg[col_name]
+                    self._cols[col_name][scatter_map] = value
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
