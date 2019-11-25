@@ -159,3 +159,24 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
+TYPED_TEST(AllocateLikeTest, ColumnNumericTestRawInput) {
+    // For same size as input
+    cudf::size_type size = 10;
+    cudf::mask_state state = cudf::ALL_VALID;
+    auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
+    // make a column using the raw values overload
+    auto got = cudf::experimental::allocate_like(expected->type(), expected->size(), cudf::ALL_VALID);            
+    cudf::test::expect_column_properties_equal(*expected, *got);
+}
+
+TYPED_TEST(AllocateLikeTest, ColumnNumericTestRawInputNoValidity) {
+    // For same size as input
+    cudf::size_type size = 10;
+    cudf::mask_state state = cudf::UNINITIALIZED;
+    auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
+    // make a column using the raw values overload
+    auto got = cudf::experimental::allocate_like(expected->type(), expected->size(), cudf::UNINITIALIZED);            
+    cudf::test::expect_column_properties_equal(*expected, *got);
+}
+
+

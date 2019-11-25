@@ -104,6 +104,21 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                           rmm::mr::get_default_resource());
 
 /**
+ * @brief Creates an uninitialized new column of the specified `size` and `type`
+ * Supports only fixed-width types.
+ *
+ * @param[in] type The type of elements in the new column
+ * @param[in] size The desired number of elements that the new column should have capacity for
+ * @param[in] state Optional, whether or not the output column should be nullable and what state it should be in
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
+ */
+std::unique_ptr<column> allocate_like(data_type type, size_type size,
+                                      mask_state state = UNALLOCATED,
+                                      rmm::mr::device_memory_resource *mr =
+                                          rmm::mr::get_default_resource());
+
+/**
  * @brief Creates a table of empty columns with the same types as the `input_table`
  *
  * Creates the `cudf::column` objects, but does not allocate any underlying device
