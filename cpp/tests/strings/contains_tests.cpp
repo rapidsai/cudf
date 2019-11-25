@@ -19,7 +19,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <gmock/gmock.h>
 #include <vector>
