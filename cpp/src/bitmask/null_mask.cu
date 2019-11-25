@@ -181,13 +181,14 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
         destination_word_index + word_index(source_begin_bit);
     bitmask_type curr_word = source[source_word_index];
     bitmask_type next_word = 0;
-
-    //Read next word if needed
-    if ((intra_word_index(source_begin_bit) != 0) &&
-        (word_index(source_end_bit) > word_index(source_begin_bit))) {
+    if ((word_index(source_begin_bit) != 0) &&
+        (word_index(source_end_bit) >
+          word_index(source_begin_bit +
+            destination_word_index * detail::size_in_bits<bitmask_type>()))) {
       next_word = source[source_word_index + 1];
     }
-    bitmask_type write_word = __funnelshift_r(curr_word, next_word, source_begin_bit);
+    bitmask_type write_word =
+      __funnelshift_r(curr_word, next_word, source_begin_bit);
     destination[destination_word_index] = write_word;
   }
 }

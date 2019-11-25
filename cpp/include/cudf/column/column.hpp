@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include "column_view.hpp"
 
@@ -129,6 +130,38 @@ class column {
    * elements indicated by the `null_mask` (if it exists).
    *---------------------------------------------------------------------------**/
   size_type null_count() const;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
+   *
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
+   * of `new_null_mask` does not match the size of this column.
+   *
+   * @param new_null_mask New null value indicator bitmask (rvalue overload &
+   * moved) to set the column's null value indicator mask. May be empty if
+   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown,
+   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
+   * computed on the first invocation of `null_count()`.
+   *---------------------------------------------------------------------------**/
+  void set_null_mask(rmm::device_buffer&& new_null_mask,
+                     size_type new_null_count = UNKNOWN_NULL_COUNT);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
+   *
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
+   * of `new_null_mask` does not match the size of this column.
+   *
+   * @param new_null_mask New null value indicator bitmask (lvalue overload &
+   * copied) to set the column's null value indicator mask. May be empty if
+   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown,
+   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
+   * computed on the first invocation of `null_count()`.
+   *---------------------------------------------------------------------------**/
+  void set_null_mask(rmm::device_buffer const& new_null_mask,
+                     size_type new_null_count = UNKNOWN_NULL_COUNT);
 
   /**---------------------------------------------------------------------------*
    * @brief Updates the count of null elements.

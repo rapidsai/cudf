@@ -88,8 +88,8 @@ TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold) {
 }
 
 TEST_F(DropNullsTest, EmptyTable) {
-    cudf::table_view input{{}};
-    cudf::table_view expected{{}};
+    cudf::table_view input{std::vector<cudf::column_view>()};
+    cudf::table_view expected{std::vector<cudf::column_view>()};
     std::vector<cudf::size_type> keys {};
 
     auto got = cudf::experimental::drop_nulls(input, keys);
