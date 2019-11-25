@@ -19,7 +19,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/utilities/table_utilities.hpp>
+#include <tests/strings/utilities.h>
 
 #include <gmock/gmock.h>
 #include <vector>
@@ -41,12 +42,16 @@ TEST_F(StringsExtractTests, ExtractTest)
 
     std::string pattern = "(\\w+) (\\w+)";
     auto results = cudf::strings::extract(strings_view,pattern);
+
     cudf::test::strings_column_wrapper expected1( h_expecteds.data(), h_expecteds.data() + h_strings.size(),
         thrust::make_transform_iterator( h_expecteds.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[0]),expected1);
     cudf::test::strings_column_wrapper expected2( h_expecteds.data()+h_strings.size(), h_expecteds.data() + h_expecteds.size(),
         thrust::make_transform_iterator( h_expecteds.data()+h_strings.size(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[1]),expected2);
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(expected1.release());
+    columns.push_back(expected2.release());
+    cudf::experimental::table expected(std::move(columns));
+    cudf::test::expect_tables_equal(*results,expected);
 }
 
 
@@ -68,7 +73,7 @@ TEST_F(StringsExtractTests, MediumRegex)
     std::vector<const char*> h_expected{"world", nullptr, nullptr };
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[0]),expected);
+    cudf::test::expect_columns_equal(results->get_column(0),expected);
 }
 
 TEST_F(StringsExtractTests, LargeRegex)
@@ -89,5 +94,5 @@ TEST_F(StringsExtractTests, LargeRegex)
     std::vector<const char*> h_expected{"quick", nullptr, nullptr };
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[0]),expected);
+    cudf::test::expect_columns_equal(results->get_column(0),expected);
 }

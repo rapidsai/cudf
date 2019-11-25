@@ -18,11 +18,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/extract.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include "./utilities.hpp"
-#include "regex/regex.cuh"
+#include <strings/utilities.hpp>
+#include <strings/regex/regex.cuh>
 
 
 namespace cudf
@@ -41,13 +42,8 @@ namespace
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
  *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
- *
+ * @tparam stack_size Correlates to the regex instructions state to maintain for each string.
+ *         Each instruction requires a fixed amount of overhead data.
  */
 template<size_t stack_size>
 struct extract_fn
@@ -80,7 +76,7 @@ struct extract_fn
 } // namespace
 
 //
-std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings,
+std::unique_ptr<experimental::table> extract( strings_column_view const& strings,
                                               std::string const& pattern,
                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                               cudaStream_t stream = 0)
@@ -124,14 +120,14 @@ std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings
         auto column = make_strings_column(indices,stream,mr);
         results.emplace_back(std::move(column));
     }
-    return results;
+    return std::make_unique<experimental::table>(std::move(results));
 }
 
 } // namespace detail
 
 // external API
 
-std::vector<std::unique_ptr<column>> extract( strings_column_view const& strings,
+std::unique_ptr<experimental::table> extract( strings_column_view const& strings,
                                               std::string const& pattern,
                                               rmm::mr::device_memory_resource* mr)
 {
