@@ -309,26 +309,58 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 
 namespace { //anonymous
 
-//template<typename Type, typename iter>
-//__global__
-//void replace_nulls(cudf::size_type size,
-//                   const Type* __restrict__ in_data,
-//                   const cudf::bitmask_type* __restrict__ in_valid,
-//                   iter replacement,
-//                   Type* __restrict__ out_data)
-//                   {
-//  int tid = threadIdx.x;
-//  int blkid = blockIdx.x;
-//  int blksz = blockDim.x;
-//  int gridsz = gridDim.x;
-//
-//  int start = tid + blkid * blksz;
-//  int step = blksz * gridsz;
-//
-//  for (int i = start; i < size; i += step) {
-//    out_data[i] = cudf::bit_is_set(in_valid, i) ? in_data[i] : replacement[i];
-//  }
-//}
+template<typename Type, bool replacement_has_nulls>
+__global__
+void replace_nulls(cudf::column_device_view input,
+                   cudf::column_device_view replacement,
+                   cudf::mutable_column_device_view output,
+                   cudf::size_type* output_valid_count) {
+
+  cudf::size_type nrows = input.size();
+  cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
+
+  uint32_t active_mask = 0xffffffff;
+  active_mask = __ballot_sync(active_mask, i < nrows);
+  auto const lane_id { threadIdx.x % cudf::experimental::detail::warp_size };
+  uint32_t valid_sum { 0 };
+
+  while (i < nrows) {
+    uint32_t bitmask = 0xffffffff;
+
+    bool input_is_valid = input.is_valid_nocheck(i);
+    bool output_is_valid = true;
+    if (input_is_valid) {
+      output.data<Type>()[i] = input.element<Type>(i);
+    }
+    else {
+      if (replacement_has_nulls) {
+        output_is_valid = replacement.is_valid_nocheck(i);
+      }
+      output.data<Type>()[i] = replacement.element<Type>(i);
+    }
+
+    /* output valid counts calculations*/
+    if (replacement_has_nulls) {
+      bitmask = __ballot_sync(active_mask, output_is_valid);
+      if (0 == lane_id) {
+        output.set_mask_word(cudf::word_index(i), bitmask);
+        valid_sum += __popc(bitmask);
+      }
+    }
+
+    i += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, i < nrows);
+  }
+  if (replacement_has_nulls) {
+    // Compute total valid count for this block and add it to global count
+    uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<
+        BLOCK_SIZE, 0>(valid_sum);
+    // one thread computes and adds to output_valid_count
+    if (threadIdx.x == 0) {
+      atomicAdd(output_valid_count, block_valid_count);
+    }
+  }
+}
 
 template<typename T>
 struct device_constant_iterator {
@@ -376,17 +408,38 @@ struct replace_nulls_column_kernel_forwarder {
     cudf::size_type nrows = input.size();
     cudf::experimental::detail::grid_1d grid { nrows, BLOCK_SIZE };
 
-    std::unique_ptr<cudf::column> output =
-        cudf::experimental::allocate_like(input,
-                                          cudf::experimental::mask_allocation_policy::NEVER,
-                                          mr);
+    std::unique_ptr<cudf::column> output;
+    if (replacement.has_nulls())
+      output = cudf::experimental::allocate_like(input,
+                                                 cudf::experimental::mask_allocation_policy::ALWAYS,
+                                                 mr);
+    else
+      output = cudf::experimental::allocate_like(input,
+                                                 cudf::experimental::mask_allocation_policy::NEVER,
+                                                 mr);
     auto output_view = output->mutable_view();
 
-    replace_nulls_functor<col_type, const col_type*> func(output_view.data<col_type>(),
-                                                          input.data<col_type>(),
-                                                          input.null_mask(),
-                                                          replacement.data<col_type>());
-    thrust::for_each_n(thrust::make_counting_iterator(0), input.size(), func);
+    auto replace = replace_nulls<col_type, false>;
+    if (output_view.nullable())
+      replace = replace_nulls<col_type, true>;
+
+    auto device_in = cudf::column_device_view::create(input);
+    auto device_out = cudf::mutable_column_device_view::create(output_view);
+    auto device_replacement = cudf::column_device_view::create(replacement);
+
+    rmm::device_scalar<cudf::size_type> valid_counter(0);
+    cudf::size_type *valid_count = valid_counter.data();
+
+    replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                        *device_replacement,
+                                                        *device_out,
+                                                        valid_count);
+
+    cudaStreamSynchronize(stream);
+
+    if (output_view.nullable()) {
+      output->set_null_count(output->size() - valid_counter.value());
+    }
 
     return output;
   }
@@ -414,9 +467,6 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
                                            {
-    cudf::size_type nrows = input.size();
-    cudf::experimental::detail::grid_1d grid { nrows, BLOCK_SIZE };
-
     std::unique_ptr<cudf::column> output =
         cudf::experimental::allocate_like(input,
                                           cudf::experimental::mask_allocation_policy::NEVER,
@@ -464,7 +514,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
   CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
-  CUDF_EXPECTS(!replacement.has_nulls(), "Invalid replacement data");
 
   return cudf::experimental::type_dispatcher(input.type(),
                                              replace_nulls_column_kernel_forwarder { },
@@ -483,12 +532,11 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
     return cudf::experimental::empty_like(input);
   }
 
-  if (!input.has_nulls()) {
+  if (!input.has_nulls() || !replacement.is_valid()) {
     return std::make_unique < cudf::column > (input, stream, mr);
   }
 
   CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
-  CUDF_EXPECTS(true == replacement.is_valid(stream), "Invalid replacement data");
 
   return cudf::experimental::type_dispatcher(input.type(),
                                              replace_nulls_scalar_kernel_forwarder { },
