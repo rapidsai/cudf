@@ -41,7 +41,7 @@ namespace { // anonymous
  *
  * @tparam ColumnType  Datatype of values pointed to by the pointers
  * @tparam agg_op  A functor that defines the aggregation operation
- * @tparam average Perform average across all valid elements in the window
+ * @tparam is_mean Compute mean=sum/count across all valid elements in the window
  * @tparam block_size CUDA block size for the kernel
  * @tparam WindowIterator iterator type (inferred)
  * @param input Input column device view
@@ -54,7 +54,7 @@ namespace { // anonymous
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
  */
-template <typename T, typename agg_op, bool average, int block_size, bool has_nulls,
+template <typename T, typename agg_op, bool is_mean, int block_size, bool has_nulls,
           typename WindowIterator>
 __launch_bounds__(block_size)
 __global__
@@ -84,7 +84,7 @@ void gpu_rolling(column_device_view input,
 
     // compute bounds
     size_type start_index = max(0, i - window + 1);
-    size_type end_index = min(input.size(), i + forward_window + 1);       // exclusive
+    size_type end_index = min(input.size(), i + forward_window + 1); // exclusive
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -111,7 +111,7 @@ void gpu_rolling(column_device_view input,
 
     // store the output value, one per thread
     if (output_is_valid)
-      cudf::detail::store_output_functor<T, average>{}(output.element<T>(i), val, count);
+      cudf::detail::store_output_functor<T, is_mean>{}(output.element<T>(i), val, count);
 
     // process next element 
     i += stride;
@@ -129,8 +129,8 @@ void gpu_rolling(column_device_view input,
 
 struct rolling_window_launcher
 {
-  template<typename T, typename agg_op, bool average, typename WindowIterator,
-      typename std::enable_if_t<cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+  template<typename T, typename agg_op, bool is_mean, typename WindowIterator,
+           std::enable_if_t<cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
   std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
                                                     WindowIterator window_begin,
                                                     WindowIterator forward_window_begin,
@@ -155,11 +155,11 @@ struct rolling_window_launcher
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
     if (input.has_nulls()) {
-      gpu_rolling<T, agg_op, average, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
+      gpu_rolling<T, agg_op, is_mean, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
         (*input_device_view, *output_device_view, device_valid_count.data(),
          window_begin, forward_window_begin, min_periods);
     } else {
-      gpu_rolling<T, agg_op, average, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
+      gpu_rolling<T, agg_op, is_mean, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
         (*input_device_view, *output_device_view, device_valid_count.data(),
          window_begin, forward_window_begin, min_periods);
     }
@@ -177,8 +177,8 @@ struct rolling_window_launcher
   /**
    * @brief If we cannot perform aggregation on this type then throw an error
    */
-  template<typename T, typename agg_op, bool average, typename WindowIterator,
-     typename std::enable_if_t<!cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+  template<typename T, typename agg_op, bool is_mean, typename WindowIterator,
+           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
   std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
                                                     WindowIterator window_begin,
                                                     WindowIterator forward_window_begin,
