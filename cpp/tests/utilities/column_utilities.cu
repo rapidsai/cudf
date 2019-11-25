@@ -136,6 +136,19 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
                             typed_rhs));
 }
 
+// copy column bitmask to host (used by to_host())
+std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
+  std::vector<bitmask_type> host_bitmask;
+  if (c.nullable()) {
+    auto num_bitmasks = num_bitmask_words(c.size());
+    host_bitmask.resize(num_bitmasks);
+    CUDA_TRY(cudaMemcpy(host_bitmask.data(), c.null_mask(), num_bitmasks * sizeof(bitmask_type),
+                        cudaMemcpyDeviceToHost));
+  }
+  return host_bitmask;
+}
+
+
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
@@ -143,7 +156,7 @@ struct column_view_printer {
 
     out.resize(col.size());
 
-    if (col.nullable()) {
+    if (col.has_nulls()) {
       size_type index = 0;
       std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [&h_data, &index](Element el) {
           return (bit_is_set(h_data.second.data(), index++)) ? std::to_string(el) : std::string("@");
@@ -175,7 +188,7 @@ struct column_view_printer {
 
     out.resize(col.size());
 
-    if (col.nullable()) {
+    if (col.has_nulls()) {
       size_type index = 0;
       std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [&h_data, &index](std::string el) {
           return (bit_is_set(h_data.second.data(), index++)) ? el : std::string("@");
