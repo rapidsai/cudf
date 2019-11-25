@@ -148,3 +148,67 @@ def test_concat_columns(axis):
     got = gd.concat([gdf1, gdf2], axis=axis)
 
     assert_eq(expect, got)
+
+
+def test_concat_multiindex_dataframe():
+    gdf = gd.DataFrame({'w': np.arange(4),
+                        'x': np.arange(4),
+                        'y': np.arange(4),
+                        'z': np.arange(4),
+                        })
+    gdg = gdf.groupby(['w', 'x']).min()
+    pdg = gdg.to_pandas()
+    pdg1 = pdg.iloc[:, :1]
+    pdg2 = pdg.iloc[:, 1:]
+    gdg1 = gd.from_pandas(pdg1)
+    gdg2 = gd.from_pandas(pdg2)
+    assert_eq(gd.concat([gdg1, gdg2]).astype('float64'), pd.concat([pdg1, pdg2]))
+    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+
+
+def test_concat_multiindex_series():
+    gdf = gd.DataFrame({'w': np.arange(4),
+                        'x': np.arange(4),
+                        'y': np.arange(4),
+                        'z': np.arange(4),
+                        })
+    gdg = gdf.groupby(['w', 'x']).min()
+    pdg = gdg.to_pandas()
+    pdg1 = pdg['y']
+    pdg2 = pdg['z']
+    gdg1 = gd.from_pandas(pdg1)
+    gdg2 = gd.from_pandas(pdg2)
+    assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
+    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+
+
+def test_concat_multiindex_dataframe_and_series():
+    gdf = gd.DataFrame({'w': np.arange(4),
+                        'x': np.arange(4),
+                        'y': np.arange(4),
+                        'z': np.arange(4),
+                        })
+    gdg = gdf.groupby(['w', 'x']).min()
+    pdg = gdg.to_pandas()
+    pdg1 = pdg[['y', 'z']]
+    pdg2 = pdg['z']
+    pdg2.name = 'a'
+    gdg1 = gd.from_pandas(pdg1)
+    gdg2 = gd.from_pandas(pdg2)
+    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+
+
+def test_concat_multiindex_series_and_dataframe():
+    gdf = gd.DataFrame({'w': np.arange(4),
+                        'x': np.arange(4),
+                        'y': np.arange(4),
+                        'z': np.arange(4),
+                        })
+    gdg = gdf.groupby(['w', 'x']).min()
+    pdg = gdg.to_pandas()
+    pdg1 = pdg['z']
+    pdg2 = pdg[['y', 'z']]
+    pdg1.name = 'a'
+    gdg1 = gd.from_pandas(pdg1)
+    gdg2 = gd.from_pandas(pdg2)
+    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
