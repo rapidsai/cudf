@@ -335,7 +335,7 @@ struct write_parquet_args {
 };
 
 /**
- * @brief Writes a set of columns to ORC format
+ * @brief Writes a set of columns to parquet format
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code

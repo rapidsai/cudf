@@ -80,10 +80,81 @@ class parquet_column_view {
       : _id(id),
         _string_type(col.type().id() == type_id::STRING),
         _type_width(_string_type ? 0 : cudf::size_of(col.type())),
+        _converted_type(ConvertedType::UNKNOWN),
+        _ts_scale(0),
         _data_count(col.size()),
         _null_count(col.null_count()),
         _data(col.data<uint8_t>()),
         _nulls(col.has_nulls() ? col.null_mask() : nullptr) {
+    switch(col.type().id()) {
+      case cudf::type_id::INT8:
+        _physical_type = Type::INT32;
+        _converted_type = ConvertedType::INT_8;
+        _stats_dtype = statistics_dtype::dtype_int8;
+        break;
+      case cudf::type_id::INT16:
+        _physical_type = Type::INT32;
+        _converted_type = ConvertedType::INT_16;
+        _stats_dtype = statistics_dtype::dtype_int16;
+        break;
+      case cudf::type_id::INT32:
+      case cudf::type_id::CATEGORY:
+        _physical_type = Type::INT32;
+        _stats_dtype = statistics_dtype::dtype_int32;
+        break;
+      case cudf::type_id::INT64:
+        _physical_type = Type::INT64;
+        _stats_dtype = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::FLOAT32:
+        _physical_type = Type::FLOAT;
+        _stats_dtype = statistics_dtype::dtype_float32;
+        break;
+      case cudf::type_id::FLOAT64:
+        _physical_type = Type::DOUBLE;
+        _stats_dtype = statistics_dtype::dtype_float64;
+        break;
+      case cudf::type_id::BOOL8:
+        _physical_type = Type::BOOLEAN;
+        _stats_dtype = statistics_dtype::dtype_bool8;
+        break;
+      case cudf::type_id::TIMESTAMP_DAYS:
+        _physical_type = Type::INT32;
+        _converted_type = ConvertedType::DATE;
+        _stats_dtype = statistics_dtype::dtype_int32;
+        break;
+      case cudf::type_id::TIMESTAMP_SECONDS:
+        _physical_type = Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        _ts_scale = 1000;
+        break;
+      case cudf::type_id::TIMESTAMP_MILLISECONDS:
+        _physical_type = Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        break;
+      case cudf::type_id::TIMESTAMP_MICROSECONDS:
+        _physical_type = Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MICROS;
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        break;
+      case cudf::type_id::TIMESTAMP_NANOSECONDS:
+        _physical_type = Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MICROS;
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        _ts_scale = -1000;
+        break;
+    case cudf::type_id::STRING:
+        _physical_type = Type::BYTE_ARRAY;
+        //_converted_type = ConvertedType::UTF8; // TBD
+        _stats_dtype = statistics_dtype::dtype_string;
+        break;
+    default:
+        _physical_type = UNDEFINED_TYPE;
+        _stats_dtype = dtype_none;
+        break;
+    }
     if (_string_type) {
       // FIXME: Use thrust to generate index without creating a NVStrings instance
       strings_column_view view{col};
@@ -108,6 +179,10 @@ class parquet_column_view {
   uint32_t const *nulls() const noexcept { return _nulls; }
 
   auto parquet_name() const noexcept { return _name; }
+  auto physical_type() const noexcept { return _physical_type; }
+  auto converted_type() const noexcept { return _converted_type; }
+  auto stats_type() const noexcept { return _stats_dtype; }
+  int32_t ts_scale() const noexcept { return _ts_scale; }
 
  private:
   // Identifier within set of columns
@@ -122,6 +197,10 @@ class parquet_column_view {
 
   // parquet-related members
   std::string _name{};
+  Type _physical_type;
+  ConvertedType _converted_type;
+  statistics_dtype _stats_dtype;
+  int32_t _ts_scale;
 
   // String-related members
   NVStrings *_nvstr = nullptr;
