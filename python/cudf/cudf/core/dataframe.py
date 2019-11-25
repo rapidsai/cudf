@@ -437,8 +437,10 @@ class DataFrame(object):
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
-                msg = "__setitem__ with arg = {!r} and " \
-                      "value = {!r} is not supported"
+                msg = (
+                    "__setitem__ with arg = {!r} and "
+                    "value = {!r} is not supported"
+                )
                 raise TypeError(msg.format(type(value), type(arg)))
             else:
                 for col_name in self._cols:
