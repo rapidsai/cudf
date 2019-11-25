@@ -60,32 +60,32 @@ TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypes);
 TYPED_TEST(cudf_logical_test, LogicalNot)
 {
     cudf::size_type colSize = 1000;
-	std::vector<TypeParam> h_input_v(colSize, false);
+    std::vector<TypeParam> h_input_v(colSize, false);
 
-	std::vector<cudf::experimental::bool8> h_expect_v(colSize);
+    std::vector<cudf::experimental::bool8> h_expect_v(colSize);
 
-	std::transform(
-		std::begin(h_input_v),
-		std::end(h_input_v),
-		std::begin(h_expect_v),
-		[] (TypeParam e) -> cudf::bool8 {
-			return static_cast<cudf::bool8>(!e);
-		});
+    std::transform(
+        std::cbegin(h_input_v),
+        std::cend(h_input_v),
+        std::begin(h_expect_v),
+        [] (TypeParam e) -> cudf::bool8 {
+            return static_cast<cudf::bool8>(!e);
+        });
 
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected(std::begin(h_expect_v), std::end(h_expect_v));
-    cudf::test::fixed_width_column_wrapper<TypeParam>                 inputCol(std::begin(h_input_v),  std::end(h_input_v));
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected(std::cbegin(h_expect_v), std::cend(h_expect_v));
+    cudf::test::fixed_width_column_wrapper<TypeParam>                 inputCol(std::cbegin(h_input_v),  std::cend(h_input_v));
 
-	auto output = cudf::experimental::unary_operation(inputCol, cudf::experimental::unary_op::NOT);
+    auto output = cudf::experimental::unary_operation(inputCol, cudf::experimental::unary_op::NOT);
 
-	cudf::test::expect_columns_equal(expected, output->view());
+    cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
 {
     cudf::test::fixed_width_column_wrapper<TypeParam>                 input    {{ true,  true,  true,  true  }};
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {{ false, false, false, false }};
-	auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
-	cudf::test::expect_columns_equal(expected, output->view());
+    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
+    cudf::test::expect_columns_equal(expected, output->view());
 }
 
 template <typename T>
