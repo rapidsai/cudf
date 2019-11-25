@@ -26,8 +26,7 @@
 #include <cudf/rolling.hpp>
 #include <src/rolling/rolling_detail.hpp>
 
-//#include <cudf/utilities/error.hpp>
-//#include <utilities/cudf_utils.h>
+#include <cudf/strings/convert/convert_datetime.hpp>
 
 #include <vector>
 
@@ -66,6 +65,19 @@ protected:
 
     auto reference = create_reference_output(op, input, window, forward_window, min_periods);
 
+#if 0
+    std::cout << "input:\n";
+    cudf::test::print(input, std::cout, ", ");
+    std::cout << "\n";
+    std::cout << "output:\n";
+    cudf::test::print(*output, std::cout, ", ");
+    std::cout << "\n";
+    std::cout << "reference:\n";
+    cudf::test::print(reference, std::cout, ", ");
+    std::cout << "\n";
+    std::cout << "\n";
+#endif
+
     cudf::test::expect_columns_equal(*output, reference);
   }
 
@@ -89,8 +101,8 @@ protected:
   private:
 
   // use SFINAE to only instantiate for supported combinations
-  template<class agg_op, bool average,
-    typename std::enable_if_t<cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+  template<class agg_op, bool is_mean,
+           std::enable_if_t<cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
   fixed_width_column_wrapper<T> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& window_col,
                                                         std::vector<size_type> const& forward_window_col,
@@ -129,15 +141,15 @@ protected:
 
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i]) {
-        cudf::detail::store_output_functor<T, average>{}(ref_data[i], val, count);
+        cudf::detail::store_output_functor<T, is_mean>{}(ref_data[i], val, count);
       }
     }
 
     return fixed_width_column_wrapper<T>(ref_data.begin(), ref_data.end(), ref_valid.begin());
   }
 
-  template<class agg_op, bool average,
-    typename std::enable_if_t<!cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+  template<class agg_op, bool is_mean,
+           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
   fixed_width_column_wrapper<T> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& window_col,
                                                         std::vector<size_type> const& forward_window_col,
@@ -481,71 +493,66 @@ TEST_F(RollingErrorTest, WindowArraySizeMismatch)
                cudf::logic_error);
 }
 
-// // ------------- non-arithmetic types --------------------
+// ------------- non-arithmetic types --------------------
 
-// using NonArithmeticTypes = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
-//                                   	    cudf::date64, cudf::bool8>;
+template<typename T>
+using RollingTestTimestamp = RollingTest<T>;
 
-// template<typename T>
-// using RollingTestNonArithmetic = RollingTest<T>;
+TYPED_TEST_CASE(RollingTestTimestamp, cudf::test::TimestampTypes);
 
-// TYPED_TEST_CASE(RollingTestNonArithmetic, NonArithmeticTypes);
+// incorrect type/aggregation combo: sum / mean for non-arithmetic types
+TYPED_TEST(RollingTestTimestamp, SumTimestampNotSupported)
+{
+  constexpr size_type size{10};
+  fixed_width_column_wrapper<TypeParam> input(thrust::make_counting_iterator(0),
+                                              thrust::make_counting_iterator(size));
 
-// // incorrect type/aggregation combo: sum or avg for non-arithmetic types
-// TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic)
-// {
-//   constexpr size_type size{1000};
-//   cudf::test::column_wrapper<TypeParam> input{
-// 	size,
-// 	[](size_type row) { return static_cast<TypeParam>(row); },
-// 	[](size_type row) { return row % 2; }
-//   };
-//   EXPECT_THROW(this->run_test_col(
-// 			 input,
-// 			 2, 2, 0,
-// 			 std::vector<size_type>(),
-// 			 std::vector<size_type>(),
-// 			 std::vector<size_type>(),
-// 			 GDF_SUM),
-// 	       cudf::logic_error);
-//   EXPECT_THROW(this->run_test_col(
-// 			 input,
-// 			 2, 2, 0,
-// 			 std::vector<size_type>(),
-// 			 std::vector<size_type>(),
-// 			 std::vector<size_type>(),
-// 			 GDF_AVG),
-// 	       cudf::logic_error);
-// }
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+}
 
-// // min/max/count should work for non-arithmetic types
-// TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic)
-// {
-//   constexpr size_type size{1000};
-//   cudf::test::column_wrapper<TypeParam> input{
-// 	size,
-// 	[](size_type row) { return static_cast<TypeParam>(row); },
-// 	[](size_type row) { return row % 2; }
-//   };
-//   this->run_test_col(input,
-// 		     2, 2, 0,
-// 		     std::vector<size_type>(),
-// 		     std::vector<size_type>(),
-// 		     std::vector<size_type>(),
-// 		     GDF_MIN);
-//   this->run_test_col(input,
-// 		     2, 2, 0,
-// 		     std::vector<size_type>(),
-// 		     std::vector<size_type>(),
-// 		     std::vector<size_type>(),
-// 		     GDF_MAX);
-//   this->run_test_col(input,
-// 		     2, 2, 0,
-// 		     std::vector<size_type>(),
-// 		     std::vector<size_type>(),
-// 		     std::vector<size_type>(),
-// 		     GDF_COUNT);
-// }
+// min/max/count should work for non-arithmetic types
+TYPED_TEST(RollingTestTimestamp, TimestampNoNulls)
+{
+  constexpr size_type size{1000};
+  fixed_width_column_wrapper<TypeParam> input(thrust::make_counting_iterator(0),
+                                              thrust::make_counting_iterator(size));
+  std::vector<size_type> window{2};
+
+  std::cout << "MIN\n";
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
+  std::cout << "MAX\n";
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
+  std::cout << "COUNT\n";
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MEAN));
+}
+
+using RollingTestSeconds = RollingTest<cudf::timestamp_s>;
+
+/*TEST_F(RollingTestSeconds, Foo)
+{
+  std::vector<cudf::timestamp_s> h_timestamps{ 131246625 , 1563399277, 1553085296, 1582934400 };
+  //  std::vector<const char*> h_expected{ "1974-02-28T01:23:45Z", "2019-07-17T21:34:37Z", nullptr, "2019-03-20T12:34:56Z", "2020-02-29T00:00:00Z" };
+
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_s> input( h_timestamps.begin(), h_timestamps.end());
+        //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+
+  auto results = cudf::strings::from_timestamps(input);
+  cudf::test::print(*results);
+   
+  std::vector<size_type> window{1};
+
+  std::cout << "MIN\n";
+  //EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
+  std::cout << "MAX\n";
+  //EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
+  std::cout << "COUNT\n";
+  //EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
+  std::cout << "MEAN\n";
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MEAN));
+}*/
+
 
 // class RollingTestNumba : public GdfTest {};
 // TEST_F(RollingTestNumba, NumbaGeneric)
