@@ -4185,6 +4185,30 @@ def test_join_on_typecast_mixed_int_float(dtype_l, dtype_r):
     assert_eq(expect, got)
 
 
+def test_implicit_join_no_float_round():
+
+    other_data = ["a", "b", "c", "d", "e"]
+
+    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = Series([1, 2, 3, 4.01, 4.99], dtype="float32")
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = [1, 2, 3, 4, 5]
+    exp_Bx = ["a", "b", "c", "d", "e"]
+    exp_By = ["a", "b", "c", None, None]
+    exp_join_col = Series(exp_join_data, dtype="float32")
+
+    expect = DataFrame(
+        {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="left")
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "dtype_l",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],

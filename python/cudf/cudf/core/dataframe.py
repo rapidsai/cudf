@@ -2184,6 +2184,61 @@ class DataFrame(object):
         return melt(self, **kwargs)
 
     def _typecast_before_merge(self, lhs, rhs, left_on, right_on, how):
+        def casting_rules(dtype_l, dtype_r, how):
+            cast_warn = "can't safely cast column {} from {} with type \
+                         {} to {}, upcasting to {}"
+            ctgry_err = "can't implicitly cast column {} to categories \
+                         from right during left join"
+
+            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
+                rtn = dtype_l
+            elif how == "left":
+
+                check_col = rhs._cols[rcol][rhs._cols[rcol].notna()]
+                if not (
+                    Series(check_col) == Series(check_col).astype(dtype_l)
+                ).all():
+                    rtn = casting_rules(dtype_l, dtype_r, "inner")
+                    warnings.warn(
+                        cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
+                    )
+                else:
+                    rtn = dtype_l
+            elif how == "right":
+                check_col = lhs._cols[lcol][lhs._cols[lcol].notna()]
+                if not (
+                    Series(check_col) == Series(check_col).astype(dtype_r)
+                ).all():
+                    rtn = casting_rules(dtype_l, dtype_r, "inner")
+                    warnings.warn(
+                        cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
+                    )
+                else:
+                    rtn = dtype_r
+
+            elif is_categorical_dtype(dtype_l):
+                if how == "right":
+                    raise ValueError(ctgry_err.format(rcol))
+                rtn = lhs[lcol].cat.categories.dtype
+                cats_to_adjust.append(lcol)
+            elif is_categorical_dtype(dtype_r):
+                if how == "left":
+                    raise ValueError(ctgry_err.format(lcol))
+                rtn = rhs[rcol].cat.categories.dtype
+                cats_to_adjust.append(rcol)
+            elif how in ["inner", "outer"]:
+                if (np.issubdtype(dtype_l, np.number)) and (
+                    np.issubdtype(dtype_r, np.number)
+                ):
+                    if dtype_l.kind == dtype_r.kind:
+                        # both ints or both floats
+                        rtn = max(dtype_l, dtype_r)
+                    else:
+                        rtn = np.find_common_type([], [dtype_l, dtype_r])
+                elif is_datetime_dtype(dtype_l) and is_datetime_dtype(dtype_r):
+                    rtn = max(dtype_l, dtype_r)
+            return rtn
+
         left_on = sorted(left_on)
         right_on = sorted(right_on)
         cats_to_adjust = []
@@ -2192,49 +2247,6 @@ class DataFrame(object):
             dtype_r = rhs._cols[rcol].dtype
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 continue
-
-            def casting_rules(dtype_l, dtype_r, how):
-                if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                    rtn = dtype_l
-                elif how == "left":
-                    rtn = dtype_l
-                elif how == "right":
-                    rtn = dtype_r
-
-                elif is_categorical_dtype(dtype_l):
-                    if how == "right":
-                        raise ValueError(
-                            "Can't implicitly cast column {} to \
-                             categories from left during right join".format(
-                                rcol
-                            )
-                        )
-                    rtn = lhs[lcol].cat.categories.dtype
-                    cats_to_adjust.append(lcol)
-                elif is_categorical_dtype(dtype_r):
-                    if how == "left":
-                        raise ValueError(
-                            "Can't implicitly cast column {} to \
-                            categories from right during left join".format(
-                                lcol
-                            )
-                        )
-                    rtn = rhs[rcol].cat.categories.dtype
-                    cats_to_adjust.append(rcol)
-                elif how in ["inner", "outer"]:
-                    if (np.issubdtype(dtype_l, np.number)) and (
-                        np.issubdtype(dtype_r, np.number)
-                    ):
-                        if dtype_l.kind == dtype_r.kind:
-                            # both ints or both floats
-                            rtn = max(dtype_l, dtype_r)
-                        else:
-                            rtn = np.find_common_type([], [dtype_l, dtype_r])
-                    elif is_datetime_dtype(dtype_l) and is_datetime_dtype(
-                        dtype_r
-                    ):
-                        rtn = max(dtype_l, dtype_r)
-                return rtn
 
             to_dtype = casting_rules(dtype_l, dtype_r, how)
 
