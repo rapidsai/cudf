@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/column/column.hpp>
+#include <cudf/table/table.hpp>
 
 namespace cudf
 {
@@ -37,7 +37,7 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column of strings.
  */
-std::vector<std::unique_ptr<column>> findall_re( strings_column_view const& strings,
+std::unique_ptr<experimental::table> findall_re( strings_column_view const& strings,
                                                  std::string const& pattern,
                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
