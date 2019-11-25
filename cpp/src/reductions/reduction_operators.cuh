@@ -66,11 +66,11 @@ struct transformer_var_std
 };
 
 // ------------------------------------------------------------------------
-// definitions of device struct for reduction operation
+// Definitions of device struct for reduction operation
 // all `op::xxx` must have `Op` and `transformer`
 // `Op`  is used to compute the reduction at device
-// `transformer` is used to convert elements to be used to compute the reduction at device
-// By default `transformer` is type conversion to ResultType
+// `transformer` is used to convert elements for computing the reduction at device
+// By default `transformer` is static type conversion to ResultType
 // In some cases, it could be square or abs or complex operations
 
 namespace op {
@@ -121,13 +121,14 @@ struct max {
  */
 template <typename Derived>
 struct CompoundOp {
-  //Call this using Derived::template compute_result<T>(...);
 
+  //Call this using Derived::template compute_result<T>(...);
   template<typename ResultType, typename IntermediateType>
   CUDA_HOST_DEVICE_CALLABLE static ResultType
   compute_result(IntermediateType& input, 
                  cudf::size_type count,
                  cudf::size_type ddof) {
+    //Enforced interface
     return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
   }
 
@@ -141,6 +142,7 @@ struct CompoundOp {
 // IntermediateType is the intermediate data structure type of a single reduction call,
 // it is also used as OutputType of cudf::reduction::detail::reduce at compound_reduction.
 // compute_result computes the final ResultType from the IntermediateType.
+// intemediate::compute_result method is enforced by CRTP base class CompoundOp<>
 
 // operator for `mean`
 struct mean : public CompoundOp<mean> {
@@ -151,7 +153,7 @@ struct mean : public CompoundOp<mean> {
 
     template<typename ResultType>
     struct intermediate{
-        using IntermediateType = ResultType;
+        using IntermediateType = ResultType;  // sum value
 
         // compute `mean` from intermediate type `IntermediateType`
         CUDA_HOST_DEVICE_CALLABLE
@@ -172,7 +174,7 @@ struct variance : public CompoundOp<variance> {
 
     template<typename ResultType>
     struct intermediate{
-        using IntermediateType = var_std<ResultType>;
+        using IntermediateType = var_std<ResultType>; //with sum of value, and sum of squared value
 
         // compute `variance` from intermediate type `IntermediateType`
         CUDA_HOST_DEVICE_CALLABLE
@@ -197,7 +199,7 @@ struct standard_deviation : public CompoundOp<standard_deviation> {
 
     template<typename ResultType>
     struct intermediate{
-        using IntermediateType = var_std<ResultType>;
+        using IntermediateType = var_std<ResultType>; //with sum of value, and sum of squared value
 
         // compute `standard deviation` from intermediate type `IntermediateType`
         CUDA_HOST_DEVICE_CALLABLE

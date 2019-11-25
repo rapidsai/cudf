@@ -18,6 +18,12 @@ namespace experimental {
 
 namespace detail {
 
+  /**
+   * @brief Dispatcher for running Scan operation on input column
+   * Dispatches scan operartion on `Op` and creates output column
+   *
+   * @tparam Op device binary operator
+   */
 template <typename Op>
 struct ScanDispatcher {
   private:
@@ -31,7 +37,6 @@ struct ScanDispatcher {
   void exclusive_scan(const InputIterator input, T* output, size_t size,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    // TODO benchmark between thrust and cub reduce and scan
     rmm::device_buffer temp_storage;
     size_t temp_storage_bytes = 0;
     cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
@@ -62,22 +67,30 @@ struct ScanDispatcher {
   }
 
   public:
+  /**
+   * @brief creates new column from input column by applying scan operation
+   *
+   * @param input     input column view
+   * @param inclusive inclusive or exclusive scan
+   * @param mr The resource to use for all allocations
+   * @param stream The stream on which to execute all allocations and copies
+   * @return 
+   *
+   * @tparam T type of input column
+   */
   template <typename T,
             typename std::enable_if_t<is_supported<T>(), T>* = nullptr>
-  void operator()(const column_view& input, mutable_column_view& output,
+  std::unique_ptr<column> operator()(const column_view& input, 
                   bool inclusive, 
                   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    CUDF_EXPECTS(input.size() == output.size(),
-                 "input and output data size must be same");
-    CUDF_EXPECTS(input.type() == output.type(),
-                 "input and output data types must be same");
+    std::unique_ptr<column> output_column = make_numeric_column(
+        input.type(), input.size(), 
+        copy_bitmask(input, stream, mr), //copy bit mask
+        input.null_count(), stream, mr);
 
-    CUDF_EXPECTS(input.nullable() == output.nullable(),
-                 "Input column and Output column nullable mismatch (either one "
-                 "cannot be nullable)");
-
-    size_t size = input.size();
+    mutable_column_view output = output_column->mutable_view();
+    const size_t size = input.size();
 
     if (input.has_nulls()) {
       auto d_input = column_device_view::create(input, stream);
@@ -94,12 +107,13 @@ struct ScanDispatcher {
         exclusive_scan(it, output.data<T>(), size, mr, stream);
     }
     CUDF_EXPECTS(input.null_count() == output.null_count(),
-                 "Input / output column null count mismatch");
+        "Input / output column null count mismatch");
+    return output_column;
   }
 
   template <typename T,
             typename std::enable_if_t<!is_supported<T>(), T>* = nullptr>
-  void operator()(const column_view& input, mutable_column_view& output,
+  std::unique_ptr<column> operator()(const column_view& input,
                   bool inclusive, 
                   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
@@ -114,34 +128,22 @@ std::unique_ptr<column> scan(const column_view& input,
 {
   CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
 
-  std::unique_ptr<column> output_column = make_numeric_column(
-      input.type(), input.size(), 
-      copy_bitmask(input, stream, mr), //copy bit mask
-      input.null_count(), stream, mr);
-
-  mutable_column_view output = output_column->mutable_view();
-
   switch (op) {
     case scan_op::SUM:
-        cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceSum>(), input, output, inclusive, mr, stream);
-        break;
+        return cudf::experimental::type_dispatcher(input.type(),
+            ScanDispatcher<cudf::DeviceSum>(), input, inclusive, mr, stream);
     case scan_op::MIN:
-        cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceMin>(), input, output, inclusive, mr, stream);
-        break;
+        return cudf::experimental::type_dispatcher(input.type(),
+            ScanDispatcher<cudf::DeviceMin>(), input, inclusive, mr, stream);
     case scan_op::MAX:
-        cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceMax>(), input, output, inclusive, mr, stream);
-        break;
+        return cudf::experimental::type_dispatcher(input.type(),
+            ScanDispatcher<cudf::DeviceMax>(), input, inclusive, mr, stream);
     case scan_op::PRODUCT:
-        cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceProduct>(), input, output, inclusive, mr, stream);
-        break;
+        return cudf::experimental::type_dispatcher(input.type(),
+            ScanDispatcher<cudf::DeviceProduct>(), input, inclusive, mr, stream);
     default:
         CUDF_FAIL("The input enum `scan::operators` is out of the range");
     }
-  return output_column;
 }
 } // namespace detail
 

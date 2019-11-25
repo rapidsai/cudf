@@ -36,13 +36,13 @@ namespace compound {
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
  *                   The divisor used in calculations is N - ddof, where N
  * represents the number of elements.
- * @params[in] mr The resource to use for all allocations
+ * @params[in] mr    The resource to use for all allocations
  * @param[in] stream cuda stream
  * @returns unique_ptr<scalar>  output scalar data
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
- * @tparam Op           the operator of cudf::experimental::reduction::op::
+ * @tparam Op           the compound operator derived from `cudf::experimental::reduction::op::CompoundOp`
  * ----------------------------------------------------------------------------**/
 template <
   typename ElementType, typename ResultType, typename Op,
