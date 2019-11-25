@@ -177,7 +177,7 @@ void write_parquet(write_parquet_args const& args,
                rmm::mr::device_memory_resource* mr) {
   namespace parquet = cudf::experimental::io::detail::parquet;
 
-  parquet::writer_options options{args.compression};
+  parquet::writer_options options{args.compression, args.stats_level};
   auto writer = make_writer<parquet::writer>(args.sink, options, mr);
 
   writer->write_all(args.table);

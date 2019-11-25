@@ -250,11 +250,29 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment>& fra
 }
 
 
+void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk,
+                                              hostdevice_vector<gpu::PageFragment>& frag,
+                                              hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                                              uint32_t num_columns, uint32_t num_fragments,
+                                              uint32_t fragment_size, cudaStream_t stream)
+{
+  rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
+
+  CUDA_TRY(gpu::InitFragmentStatistics(frag_stats_group.data().get(), frag.device_ptr(),
+                                       col_desc.device_ptr(), num_fragments, num_columns,
+                                       fragment_size, stream));
+  CUDA_TRY(GatherColumnStatistics(frag_stats_chunk, frag_stats_group.data().get(),
+                                  num_fragments * num_columns, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+}
+
+
 
 writer::impl::impl(std::string filepath, writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
     : _mr(mr) {
   compression_kind_ = to_parquet_compression(options.compression);
+  stats_granularity_ = options.stats_granularity;
 
   outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
   CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
@@ -342,6 +360,16 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
       md.row_groups.resize(num_rowgroups + 1);
       md.row_groups[num_rowgroups++].num_rows = md.num_rows - rowgroup_start * fragment_size;
     }
+  }
+
+  // Allocate column chunks and gather fragment statistics
+  uint32_t num_chunks = num_rowgroups * num_columns;
+  hostdevice_vector<gpu::EncColumnChunk> chunks(num_columns * num_fragments);
+  rmm::device_vector<statistics_chunk> frag_stats_chunk;
+  if (stats_granularity_ > statistics_freq::statistics_none) {
+    frag_stats_chunk.resize(num_fragments * num_columns);
+    gather_fragment_statistics(frag_stats_chunk.data().get(), fragments, col_desc,
+                               num_columns, num_fragments, fragment_size, stream);
   }
 
   // Write file header
