@@ -33,14 +33,14 @@
  * ---------------------------------------------------------------------------**/
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <type_traits>
-#include <utilities/device_operators.cuh>
+#include <utilities/legacy/device_operators.cuh>
 
 namespace cudf {
 namespace detail {

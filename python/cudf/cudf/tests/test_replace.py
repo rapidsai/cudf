@@ -27,9 +27,8 @@ def test_series_replace():
     sr6 = sr1.replace([0, 1], [5, 6])
     np.testing.assert_equal(sr6.to_array(), a6)
 
-    a7 = np.array([5.5, 6.5, 2, 3, 4])
-    sr7 = sr1.replace([0, 1], [5.5, 6.5])
-    np.testing.assert_equal(sr7.to_array(), a7)
+    with pytest.raises(TypeError):
+        sr1.replace([0, 1], [5.5, 6.5])
 
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
@@ -71,18 +70,17 @@ def test_series_replace_with_nulls():
     sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
     np.testing.assert_equal(sr6.to_array(), a6)
 
-    a7 = np.array([5.5, 6.5, 2, 3, 4, -10])
     sr1 = Series([0, 1, 2, 3, 4, None])
-    sr7 = sr1.replace([0, 1], [5.5, 6.5]).fillna(-10)
-    np.testing.assert_equal(sr7.to_array(), a7)
+    with pytest.raises(TypeError):
+        sr1.replace([0, 1], [5.5, 6.5]).fillna(-10)
 
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
     sr8 = sr1.replace(sr1[:3], None).fillna(-10)
     np.testing.assert_equal(sr8.to_array(), a8)
 
-    a9 = np.array([-10, 6.5, 2, 3, 4, -10])
-    sr9 = sr1.replace([0, 1], [None, 6.5]).fillna(-10)
+    a9 = np.array([-10, 6, 2, 3, 4, -10])
+    sr9 = sr1.replace([0, 1], [None, 6]).fillna(-10)
     np.testing.assert_equal(sr9.to_array(), a9)
 
 
@@ -317,22 +315,35 @@ def test_series_fillna_invalid_dtype(data_dtype):
 @pytest.mark.parametrize(
     "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])
+@pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
     sr = Series.from_pandas(psr)
 
-    expect = psr.where(psr > 0, fill_value)
-    got = sr.where(sr > 0, fill_value)
-    assert_eq(expect, got)
+    if sr.dtype.type(fill_value) != fill_value:
+        with pytest.raises(TypeError):
+            sr.where(sr > 0, fill_value)
+    else:
+        # Cast back to original dtype as pandas automatically upcasts
+        expect = psr.where(psr > 0, fill_value).astype(psr.dtype)
+        got = sr.where(sr > 0, fill_value)
+        assert_eq(expect, got)
 
-    expect = psr.where(psr < 0, fill_value)
-    got = sr.where(sr < 0, fill_value)
-    assert_eq(expect, got)
+    if sr.dtype.type(fill_value) != fill_value:
+        with pytest.raises(TypeError):
+            sr.where(sr < 0, fill_value)
+    else:
+        expect = psr.where(psr < 0, fill_value).astype(psr.dtype)
+        got = sr.where(sr < 0, fill_value)
+        assert_eq(expect, got)
 
-    expect = psr.where(psr == 0, fill_value)
-    got = sr.where(sr == 0, fill_value)
-    assert_eq(expect, got)
+    if sr.dtype.type(fill_value) != fill_value:
+        with pytest.raises(TypeError):
+            sr.where(sr == 0, fill_value)
+    else:
+        expect = psr.where(psr == 0, fill_value).astype(psr.dtype)
+        got = sr.where(sr == 0, fill_value)
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])
@@ -368,3 +379,53 @@ def test_series_multiple_times_with_nulls():
         # So, if it is not updated properly, the result would be wrong.
         # So, this will help verify that scenario.
         Series([1, 1, 1, None])
+
+
+@pytest.mark.parametrize(
+    "series_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "replacement", [128, 128.0, 128.5, -32769, -32769.0, -32769.5]
+)
+def test_numeric_series_replace_dtype(series_dtype, replacement):
+    psr = pd.Series([-2, -1, 0, 1, 2], dtype=series_dtype)
+    sr = Series.from_pandas(psr)
+
+    # Both Scalar
+    if sr.dtype.type(replacement) != replacement:
+        with pytest.raises(TypeError):
+            sr.replace(1, replacement)
+    else:
+        expect = psr.replace(1, replacement).astype(psr.dtype)
+        got = sr.replace(1, replacement)
+        assert_eq(expect, got)
+
+    # to_replace is a list, replacement is a scalar
+    if sr.dtype.type(replacement) != replacement:
+        with pytest.raises(TypeError):
+            sr.replace([-1, 1], replacement)
+    else:
+        expect = psr.replace([-1, 1], replacement).astype(psr.dtype)
+        got = sr.replace([-1, 1], replacement)
+        assert_eq(expect, got)
+
+    # If to_replace is a scalar and replacement is a list
+    with pytest.raises(TypeError):
+        sr.replace(0, [replacement, 2])
+
+    # Both list of uneqal length
+    with pytest.raises(ValueError):
+        sr.replace([0, 1], [replacement])
+
+    # Both lists of equal length
+    if (np.dtype(type(replacement)).kind == "f" and sr.dtype.kind == "i") or (
+        sr.dtype.type(replacement) != replacement
+    ):
+        with pytest.raises(TypeError):
+            sr.replace([-1, 1], [replacement, replacement])
+    else:
+        expect = psr.replace([-1, 1], [replacement, replacement]).astype(
+            psr.dtype
+        )
+        got = sr.replace([-1, 1], [replacement, replacement])
+        assert_eq(expect, got)

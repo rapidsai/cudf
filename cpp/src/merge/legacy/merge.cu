@@ -21,7 +21,7 @@
 #include "bitmask/legacy/bit_mask.cuh"
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/cuda_utils.hpp"
+#include "utilities/legacy/cuda_utils.hpp"
 
 namespace {
 

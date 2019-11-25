@@ -23,7 +23,7 @@
 // See this header for all of the recursive handling of tuples of vectors
 #include <tests/utilities/legacy/tuple_vectors.h>
 
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/bit_util.cuh>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
