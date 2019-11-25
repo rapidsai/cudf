@@ -131,9 +131,10 @@ bool contains(column_view const& col, scalar const& value,
 
 /**
  * @brief  Returns a new column of type bool8 identifying for each element of @p haystack column,
- *         if that element is contained in @p needles column.  The new column will have the same
- *         dimension and null status as the @p haystack column.  That is, any element that is
- *         invalid in the @p haystack column will be invalid in the returned column.
+ *         if that element is contained in @p needles column.
+ *
+ * The new column will have the same dimension and null status as the @p haystack column.  That is,
+ * any element that is invalid in the @p haystack column will be invalid in the returned column.
  *
  * @throws cudf::logic_error
  * If `haystack.type() != needles.type()`
