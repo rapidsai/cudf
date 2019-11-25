@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/table/table.hpp>
 
 namespace cudf
 {
@@ -44,9 +44,9 @@ namespace strings
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
  * @param mr Resource for allocating device memory.
- * @return New strings columns.
+ * @return New table of strings columns.
  */
-std::vector<std::unique_ptr<column>> split( strings_column_view const& strings,
+std::unique_ptr<experimental::table> split( strings_column_view const& strings,
                                             string_scalar const& delimiter = string_scalar(""),
                                             size_type maxsplit=-1,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -73,11 +73,10 @@ std::vector<std::unique_ptr<column>> split( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings columns.
  */
-std::vector<std::unique_ptr<column>> rsplit( strings_column_view const& strings,
+std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
                                              string_scalar const& delimiter = string_scalar(""),
                                              size_type maxsplit=-1,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 
 } // namespace strings
 } // namespace cudf

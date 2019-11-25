@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include "../utilities.hpp"
+#include <strings/utilities.hpp>
 
+#include <vector>
 #include <thrust/transform.h>
 #include <thrust/extrema.h>
 
@@ -387,7 +389,7 @@ struct whitespace_rsplit_tokenizer_fn
 
 // Generic split function used by split and rsplit
 template<typename TokenCounter, typename Tokenizer>
-std::vector<std::unique_ptr<column>> split_fn( size_type strings_count,
+std::unique_ptr<experimental::table> split_fn( size_type strings_count,
                                                TokenCounter counter,
                                                Tokenizer tokenizer,
                                                rmm::mr::device_memory_resource* mr,
@@ -397,17 +399,19 @@ std::vector<std::unique_ptr<column>> split_fn( size_type strings_count,
 
     auto execpol = rmm::exec_policy(stream);
     // compute the number of tokens per string
+    size_type columns_count = 0;
     rmm::device_vector<size_type> token_counts(strings_count);
     auto d_token_counts = token_counts.data().get();
-    thrust::transform( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count),
-        d_token_counts, counter );
-
-    // column count is the maximum number of tokens for any string
-    size_type columns_count = *thrust::max_element(execpol->on(stream),
-        token_counts.begin(), token_counts.end() );
-
+    if( strings_count > 0 )
+    {
+        thrust::transform( execpol->on(stream),
+            thrust::make_counting_iterator<size_type>(0),
+            thrust::make_counting_iterator<size_type>(strings_count),
+            d_token_counts, counter );
+        // column count is the maximum number of tokens for any string
+        columns_count = *thrust::max_element(execpol->on(stream),
+                                             token_counts.begin(), token_counts.end() );
+    }
     // boundary case: if no columns, return one null column (issue #119)
     if( columns_count==0 )
     {
@@ -434,26 +438,19 @@ std::vector<std::unique_ptr<column>> split_fn( size_type strings_count,
         auto column = make_strings_column(indexes,stream,mr);
         results.emplace_back(std::move(column));
     }
-    return results;
+    return std::make_unique<experimental::table>(std::move(results));
 }
 
 } // namespace
 
-std::vector<std::unique_ptr<column>> split( strings_column_view const& strings,
+
+std::unique_ptr<experimental::table> split( strings_column_view const& strings,
                                             string_scalar const& delimiter = string_scalar(""),
                                             size_type maxsplit=-1,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                             cudaStream_t stream = 0 )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
-
-    auto strings_count = strings.size();
-    if( strings_count==0 )
-    {
-        std::vector<std::unique_ptr<column>> results;
-        results.push_back( make_empty_strings_column(mr,stream) );
-        return results;
-    }
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     column_device_view d_strings = *strings_column;
@@ -476,22 +473,13 @@ std::vector<std::unique_ptr<column>> split( strings_column_view const& strings,
                      mr, stream);
 }
 
-std::vector<std::unique_ptr<column>> rsplit( strings_column_view const& strings,
+std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
                                              string_scalar const& delimiter = string_scalar(""),
                                              size_type maxsplit=-1,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                              cudaStream_t stream = 0 )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
-    std::vector<std::unique_ptr<column>> results;
-
-    auto strings_count = strings.size();
-    if( strings_count==0 )
-    {
-        std::vector<std::unique_ptr<column>> results;
-        results.push_back( make_empty_strings_column(mr,stream) );
-        return results;
-    }
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     column_device_view d_strings = *strings_column;
@@ -518,7 +506,7 @@ std::vector<std::unique_ptr<column>> rsplit( strings_column_view const& strings,
 
 // external APIs
 
-std::vector<std::unique_ptr<column>> split( strings_column_view const& strings,
+std::unique_ptr<experimental::table> split( strings_column_view const& strings,
                                             string_scalar const& delimiter,
                                             size_type maxsplit,
                                             rmm::mr::device_memory_resource* mr )
@@ -526,7 +514,7 @@ std::vector<std::unique_ptr<column>> split( strings_column_view const& strings,
     return detail::split( strings, delimiter, maxsplit, mr );
 }
 
-std::vector<std::unique_ptr<column>> rsplit( strings_column_view const& strings,
+std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
                                              string_scalar const& delimiter,
                                              size_type maxsplit,
                                              rmm::mr::device_memory_resource* mr)
