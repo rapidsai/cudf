@@ -79,6 +79,14 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
  *---------------------------------------------------------------------------**/
 void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::string const& delimiter=",");
 
+/**---------------------------------------------------------------------------*
+ * @brief Copy the null bitmask from a column view to a host vector
+ *
+ * @param c      The column view
+ * @returns      Vector of bitmask_type elements
+ *---------------------------------------------------------------------------**/
+std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
+
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -90,26 +98,14 @@ void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::str
 template <typename T>
 std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
   std::vector<T> host_data;
-  std::vector<bitmask_type> host_bitmask;
 
-  auto col = column(c);
-
-  if (col.size() > 0) {
-    host_data.resize(col.size());
-    CUDA_TRY(cudaMemcpy(host_data.data(), col.view().head<T>(),
-                        col.size() * sizeof(T),
+  if (c.size() > 0) {
+    host_data.resize(c.size());
+    CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T),
                         cudaMemcpyDeviceToHost));
   }
 
-  if (col.nullable()) {
-    size_t mask_allocation_bytes = bitmask_allocation_size_bytes(c.size());
-    host_bitmask.resize(mask_allocation_bytes);
-    size_t num_mask_elements = num_bitmask_words(c.size());
-    CUDA_TRY(cudaMemcpy(host_bitmask.data(), col.view().null_mask(),
-                        num_mask_elements * sizeof(bitmask_type),
-                        cudaMemcpyDeviceToHost));
-  }
-
+  std::vector<bitmask_type> host_bitmask = bitmask_to_host(c);
   return std::make_pair(host_data, host_bitmask);
 }
 
@@ -126,21 +122,11 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
 template <>
 inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
   std::vector<std::string> host_data;
-  std::vector<bitmask_type> host_bitmask;
 
   auto strings = strings_column_view(c);
   auto strings_data = cudf::strings::create_offsets(strings);
   thrust::host_vector<char> h_chars(strings_data.first);         // copies vectors to
   thrust::host_vector<size_type> h_offsets(strings_data.second); // host automatically
-
-  // copy nulls to host bitmask
-  if( c.has_nulls() )
-  {
-    auto num_bitmasks = num_bitmask_words(c.size());
-    host_bitmask.resize(num_bitmasks);
-    CUDA_TRY(cudaMemcpy(host_bitmask.data(), c.null_mask(),
-                        num_bitmasks*sizeof(bitmask_type), cudaMemcpyDeviceToHost));
-  }
 
   // build std::string vector from chars and offsets
   if( !h_chars.empty() ) // check for all nulls case
@@ -153,6 +139,7 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
     }
   }
 
+  std::vector<bitmask_type> host_bitmask = bitmask_to_host(c);
   return std::make_pair(host_data, host_bitmask);
 }
 
