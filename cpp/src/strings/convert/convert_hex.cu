@@ -21,8 +21,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
