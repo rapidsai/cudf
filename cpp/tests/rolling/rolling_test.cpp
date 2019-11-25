@@ -519,11 +519,9 @@ TYPED_TEST(RollingTestTimestamp, TimestampNoNulls)
                                               thrust::make_counting_iterator(size));
   std::vector<size_type> window{2};
 
-  std::cout << "MIN\n";
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
-  std::cout << "MAX\n";
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
-  std::cout << "COUNT\n";
+
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MEAN));
 }
