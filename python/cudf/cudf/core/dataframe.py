@@ -2191,6 +2191,7 @@ class DataFrame(object):
             ctgry_err = "can't implicitly cast column {} to categories \
                          from right during left join"
 
+            rtn = None
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 rtn = dtype_l
             elif how == "left":
@@ -2240,6 +2241,7 @@ class DataFrame(object):
                     rtn = max(dtype_l, dtype_r)
             return rtn
 
+
         left_on = sorted(left_on)
         right_on = sorted(right_on)
         cats_to_adjust = []
@@ -2251,8 +2253,9 @@ class DataFrame(object):
 
             to_dtype = casting_rules(dtype_l, dtype_r, how)
 
-            lhs[lcol] = lhs[lcol].astype(to_dtype)
-            rhs[rcol] = rhs[rcol].astype(to_dtype)
+            if to_dtype is not None:
+                lhs[lcol] = lhs[lcol].astype(to_dtype)
+                rhs[rcol] = rhs[rcol].astype(to_dtype)
 
         return lhs, rhs, cats_to_adjust
 
