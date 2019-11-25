@@ -51,10 +51,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
 {
-  // IntermediateType: intermediate structure, output type of `reduction_op` and
-  // input type of `intermediateOp::ComputeResult`
   cudf::size_type valid_count = col.size() - col.null_count();
-  using intermediateOp        = typename Op::template intermediate<ResultType>;
 
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
@@ -64,12 +61,12 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
     auto it = thrust::make_transform_iterator(
       experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
       typename Op::template transformer<ResultType>{});
-    result = detail::reduce(it, col.size(), typename Op::Op{}, intermediateOp{}, valid_count, ddof, mr, stream);
+    result = detail::reduce<Op, decltype(it), ResultType>(it, col.size(), Op{}, valid_count, ddof, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), 
         typename Op::template transformer<ResultType>{});
-    result = detail::reduce(it, col.size(), typename Op::Op{}, intermediateOp{}, valid_count, ddof, mr, stream);
+    result = detail::reduce<Op, decltype(it), ResultType>(it, col.size(), Op{}, valid_count, ddof, mr, stream);
   }
   // set scalar is valid
   if (col.null_count() < col.size())

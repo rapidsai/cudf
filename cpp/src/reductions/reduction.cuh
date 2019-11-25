@@ -25,6 +25,8 @@
 #include <thrust/iterator/iterator_traits.h>
 #include <thrust/for_each.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include "reduction_operators.cuh"
+
 
 namespace cudf {
 namespace experimental {
@@ -36,7 +38,7 @@ namespace detail {
  *
  * @param[in] d_in      the begin iterator
  * @param[in] num_items the number of items
- * @param[in] op        the device binary operator
+ * @param[in] op        the reduction operator
  * @param[in] stream    cuda stream
  * @returns   scalar    output scalar in device memory
  *
@@ -48,18 +50,18 @@ template <typename Op, typename InputIterator, typename OutputType=typename thru
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op op,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
+  typename Op::Op binary_op{};
   OutputType identity = Op::template identity<OutputType>();
   rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
 
+  // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
-
-  // Allocate temporary storage
-  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, op, identity, stream);
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
 
   // Run reduction
-  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, op, identity, stream);
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
 
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
   auto s = new ScalarType(std::move(dev_result), true, stream, mr); //only for string_view, data is copied
@@ -71,40 +73,41 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
  *
  * @param[in] d_in      the begin iterator
  * @param[in] num_items the number of items
- * @param[in] op        the device binary operator
- * @param[in] iop       the intermediate operator
+ * @param[in] op        the reduction operator 
  * @param[in] valid_count   the intermediate operator argument 1
  * @param[in] ddof      the intermediate operator argument 2
  * @param[in] stream    cuda stream
  * @returns   scalar    output scalar in device memory
  *
- * @tparam Op               the device binary operator
+ * The reduction operator must have intermediate::compute_result() method.
+ * This method performs reduction using binary operator `Op::Op` and transforms the
+ * result to `OutputType` using `compute_result()` transform method.
+ *
+ * @tparam Op               the reduction operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
 template <typename Op, typename InputIterator, typename OutputType, 
-  template<typename> class intermediate, 
   typename IntermediateType=typename thrust::iterator_value<InputIterator>::type>
-//  typename std::enable_if_t<!std::is_base_of<compound, Op>, int> = 0
+  //FIXME: adding this causes reduction.cuh:118:401:   error : ‘__T290’ was not declared in this scope
+  //typename std::enable_if_t< std::is_base_of<cudf::experimental::reduction::op::CompoundOp<Op>, Op>::value, int> = 0>
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op op, 
-  intermediate<OutputType> iop,
   cudf::size_type valid_count,
   cudf::size_type ddof,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  using intermediateOp = intermediate<OutputType>; 
-  IntermediateType identity = Op::template identity<IntermediateType>();
+  typename Op::Op binary_op{};
+  IntermediateType identity = Op::Op::template identity<IntermediateType>();
   rmm::device_scalar<IntermediateType> intermediate_result{identity, stream, mr};
 
+  // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
-
-  // Allocate temporary storage
-  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, intermediate_result.data(), num_items, op, identity, stream);
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, intermediate_result.data(), num_items, binary_op, identity, stream);
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
 
   // Run reduction
-  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, intermediate_result.data(), num_items, op, identity, stream);
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, intermediate_result.data(), num_items, binary_op, identity, stream);
 
   // compute the result value from intermediate value in device
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
@@ -112,7 +115,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
    intermediate_result.data(), 1,
    [dres=result->data(), valid_count, ddof] __device__ (auto i)
-   { *dres = intermediateOp::compute_result(i, valid_count, ddof); } );
+   { *dres = Op::template compute_result<OutputType>(i, valid_count, ddof); } );
   return std::unique_ptr<scalar>(result);
 }
 

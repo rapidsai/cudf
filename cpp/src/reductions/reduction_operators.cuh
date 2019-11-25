@@ -113,6 +113,28 @@ struct max {
     using transformer = thrust::identity<ResultType>;
 };
 
+/**
+ * @brief  Compound Operator CRTP Base class
+ * This template class defines the interface for compound operators
+ *
+ * @tparam Derived compound operators derived from CompoundOp
+ */
+template <typename Derived>
+struct CompoundOp {
+  //Call this using Derived::template compute_result<T>(...);
+
+  template<typename ResultType, typename IntermediateType>
+  CUDA_HOST_DEVICE_CALLABLE static ResultType
+  compute_result(IntermediateType& input, 
+                 cudf::size_type count,
+                 cudf::size_type ddof) {
+    return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
+  }
+
+  private:
+    CompoundOp(){};
+    friend Derived;
+};
 
 // `mean`, `variance`, `standard_deviation` are used at compound_reduction
 // compound_reduction requires intermediate::IntermediateType and intermediate::compute_result
@@ -121,7 +143,7 @@ struct max {
 // compute_result computes the final ResultType from the IntermediateType.
 
 // operator for `mean`
-struct mean {
+struct mean : public CompoundOp<mean> {
     using Op = cudf::DeviceSum;
 
     template<typename ResultType>
@@ -142,7 +164,7 @@ struct mean {
 };
 
 // operator for `variance`
-struct variance {
+struct variance : public CompoundOp<variance> {
     using Op = cudf::DeviceSum;
 
     template<typename ResultType>
@@ -167,7 +189,7 @@ struct variance {
 };
 
 // operator for `standard deviation`
-struct standard_deviation {
+struct standard_deviation : public CompoundOp<standard_deviation> {
     using Op = cudf::DeviceSum;
 
     template<typename ResultType>
@@ -188,6 +210,7 @@ struct standard_deviation {
         };
     };
 };
+
 } // namespace op
 
 template <typename ElementType, typename ResultType, typename Op>

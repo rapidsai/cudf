@@ -56,12 +56,12 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
     auto it = thrust::make_transform_iterator(
       experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
       typename Op::template transformer<ResultType>{});
-    result = detail::reduce(it, col.size(), typename Op::Op{}, mr, stream);
+    result = detail::reduce(it, col.size(), Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), 
         typename Op::template transformer<ResultType>{});
-    result = detail::reduce(it, col.size(), typename Op::Op{}, mr, stream);
+    result = detail::reduce(it, col.size(), Op{}, mr, stream);
   }
   // set scalar is valid
   if (col.null_count() < col.size())
