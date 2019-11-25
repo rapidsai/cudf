@@ -43,7 +43,8 @@ std::unique_ptr<cudf::column> is_null(cudf::column_view const& input);
 std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input);
 
 /**
- * @brief  Casts data from dtype specified in input to dtype specified in output
+ * @brief  Casts data from dtype specified in input to dtype specified in output.
+ * Supports only fixed-width types.
  *
  * @param column_view Input column
  * @param out_type Desired datatype of output column
