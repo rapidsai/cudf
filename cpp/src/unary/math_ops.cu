@@ -314,14 +314,16 @@ unary_operation(cudf::column_view const& input,
 
     std::unique_ptr<cudf::column> output = [&] {
         if (op == cudf::experimental::unary_op::NOT) {
-            auto mask_state = input.null_mask() ? cudf::UNINITIALIZED
-                                                : cudf::UNALLOCATED;
 
-            return cudf::make_numeric_column(cudf::data_type(BOOL8),
-                                             input.size(),
-                                             mask_state,
-                                             stream,
-                                             mr);
+            auto type = cudf::data_type{cudf::BOOL8};
+            auto size = input.size();
+
+            return std::make_unique<column>(
+                type, size,
+                rmm::device_buffer{size * cudf::size_of(type), 0, mr},
+                copy_bitmask(input, 0, mr),
+                input.null_count());
+
         } else {
             return cudf::experimental::allocate_like(input);
         }
@@ -330,8 +332,6 @@ unary_operation(cudf::column_view const& input,
     if (input.size() == 0) return output;
 
     auto output_view = output->mutable_view();
-
-    cudf::experimental::unary::handle_checks_and_validity(input, output_view);
 
     switch(op){
         case cudf::experimental::unary_op::SIN:

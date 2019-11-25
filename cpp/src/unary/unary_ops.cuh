@@ -47,27 +47,6 @@ struct launcher {
     }
 };
 
-inline void handle_checks_and_validity(column_view const& input, mutable_column_view& output) {
-
-    if (not input.nullable()) {
-        if (not output.nullable() && output.null_mask())
-            CUDA_TRY(cudaMemset(output.null_mask(), 0xff, cudf::num_bitmask_words(input.size())));
-
-        output.set_null_count(0);
-    }
-    else { // input.valid != nullptr
-        CUDF_EXPECTS(output.nullable(), "Input column has valid mask but output column does not");
-
-        // Validity mask transfer
-        CUDA_TRY(cudaMemcpy(output.null_mask(), 
-                            input.null_mask(),
-                            cudf::num_bitmask_words(input.size()),
-                            cudaMemcpyDeviceToDevice));
-
-        output.set_null_count(input.null_count());
-    }
-}
-
 } // unary
 } // namespace experimental
 } // cudf

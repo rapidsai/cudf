@@ -74,7 +74,7 @@ TYPED_TEST(cudf_logical_test, LogicalNot)
     cudf::test::fixed_width_column_wrapper<TypeParam>                 input    (std::cbegin(h_input_v),  std::cend(h_input_v));
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
 
-    auto output = cudf::experimental::unary_operation(inputCol, cudf::experimental::unary_op::NOT);
+    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
 
     cudf::test::expect_columns_equal(expected, output->view());
 }
