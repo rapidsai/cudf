@@ -168,13 +168,11 @@ struct compare_with_value {
    * @return `true` if element from the column compares equal to the scalar value
    *---------------------------------------------------------------------------**/
   __device__ bool operator()(size_type index) noexcept {
-    if (has_nulls) {
-      if (col.is_null_nocheck(index)) {
-        if (val.is_valid())
-          return false;
-        else
-          return nulls_are_equal;
-      }
+    if (has_nulls && col.is_null_nocheck(index)) {
+      if (val.is_valid())
+        return false;
+      else
+        return nulls_are_equal;
     }
 
     return equality_compare<Element>(col.element<Element>(index), val.value());
