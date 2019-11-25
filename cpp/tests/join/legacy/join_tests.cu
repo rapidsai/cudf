@@ -23,7 +23,7 @@
 
 #include <join/legacy/joining.h>
 #include <join/legacy/join_compute_api.h>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/bit_util.cuh>
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/join.hpp>

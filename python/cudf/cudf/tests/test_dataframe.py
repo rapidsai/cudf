@@ -3,6 +3,7 @@
 import array as arr
 import operator
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -15,7 +16,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
-from cudf.utils.utils import _have_cupy
 
 
 def test_init_via_list_of_tuples():
@@ -1595,9 +1595,6 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
-    import cupy
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
@@ -1730,6 +1727,27 @@ def test_dataframe_boolmask(mask_shape):
         assert np.array_equal(
             gdf[col].fillna(-1).to_pandas().values, pdf[col].fillna(-1).values
         )
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        [True, False, True],
+        pytest.param(
+            Series([True, False, True]),
+            marks=pytest.mark.xfail(
+                reason="Pandas can't index a multiindex with a Series"
+            ),
+        ),
+    ],
+)
+def test_dataframe_multiindex_boolmask(mask):
+    gdf = DataFrame(
+        {"w": [3, 2, 1], "x": [1, 2, 3], "y": [0, 1, 0], "z": [1, 1, 1]}
+    )
+    gdg = gdf.groupby(["w", "x"]).count()
+    pdg = gdg.to_pandas()
+    assert_eq(gdg[mask], pdg[mask])
 
 
 def test_dataframe_assignment():
@@ -2583,39 +2601,55 @@ def test_get_numeric_data():
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-def test_shift(dtype, period):
-    if dtype == np.int8:
-        # to keep data in range
-        data = gen_rand(dtype, 100000, low=-2, high=2)
-    else:
-        data = gen_rand(dtype, 100000)
+@pytest.mark.parametrize("data_empty", [False, True])
+def test_shift(dtype, period, data_empty):
 
-    gdf = DataFrame({"a": data})
-    pdf = pd.DataFrame({"a": data})
+    if data_empty:
+        data = None
+    else:
+        if dtype == np.int8:
+            # to keep data in range
+            data = gen_rand(dtype, 100000, low=-2, high=2)
+        else:
+            data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({"a": Series(data, dtype=dtype)})
+    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
     shifted_outcome = gdf.a.shift(period)
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
-    assert_eq(shifted_outcome, expected_outcome)
+    if data_empty:
+        assert_eq(shifted_outcome, expected_outcome, check_index_type=False)
+    else:
+        assert_eq(shifted_outcome, expected_outcome)
 
 
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-def test_diff(dtype, period):
-    if dtype == np.int8:
-        # to keep data in range
-        data = gen_rand(dtype, 100000, low=-2, high=2)
+@pytest.mark.parametrize("data_empty", [False, True])
+def test_diff(dtype, period, data_empty):
+    if data_empty:
+        data = None
     else:
-        data = gen_rand(dtype, 100000)
+        if dtype == np.int8:
+            # to keep data in range
+            data = gen_rand(dtype, 100000, low=-2, high=2)
+        else:
+            data = gen_rand(dtype, 100000)
 
-    gdf = DataFrame({"a": data})
-    pdf = pd.DataFrame({"a": data})
+    gdf = DataFrame({"a": Series(data, dtype=dtype)})
+    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
     diffed_outcome = gdf.a.diff(period)
     expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
-    assert_eq(diffed_outcome, expected_outcome)
+
+    if data_empty:
+        assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
+    else:
+        assert_eq(diffed_outcome, expected_outcome)
 
 
 def test_isnull_isna():
@@ -3199,10 +3233,7 @@ def test_series_astype_null_cases():
     data = [1, 2, None, 3]
 
     # numerical to other
-    assert_eq(
-        gd.Series(data, dtype="str"),
-        gd.Series(data).astype("str").fillna("None"),
-    )
+    assert_eq(gd.Series(data, dtype="str"), gd.Series(data).astype("str"))
 
     assert_eq(
         gd.Series(data, dtype="category"), gd.Series(data).astype("category")
@@ -3221,7 +3252,7 @@ def test_series_astype_null_cases():
     # categorical to other
     assert_eq(
         gd.Series(data, dtype="str"),
-        gd.Series(data, dtype="category").astype("str").fillna("None"),
+        gd.Series(data, dtype="category").astype("str"),
     )
 
     assert_eq(
@@ -3364,10 +3395,6 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
-    import cupy
-
     pds = pd.Series(data)
     gds = Series(data)
     gds_vals = gds.values
@@ -3413,8 +3440,6 @@ def test_series_values_property(data):
     ],
 )
 def test_df_values_property(data):
-    if not _have_cupy:
-        pytest.skip("CuPy is not installed")
     pdf = pd.DataFrame.from_dict(data)
     gdf = DataFrame.from_pandas(pdf)
 
@@ -3801,10 +3826,7 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
-    if as_dtype == "str":  # normal constructor results in None -> 'None'
-        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
-    else:
-        insert_data = Series(data, dtype=as_dtype)
+    insert_data = Series(data, dtype=as_dtype)
 
     expect = DataFrame()
     expect["foo"] = insert_data
@@ -3980,21 +4002,111 @@ def test_series_astype_error_handling(errors):
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
-        sr = Series(data, dtype=dtype)
-    elif dtype == "str":
+    elif dtype == "str" or "float" in dtype:
         data = [1, 2, 3, None]
-        sr = Series.from_pandas(pd.Series(data, dtype=dtype))
-    elif "float" in dtype:
-        data = [1, 2, 3, None]
-        sr = Series(data, dtype=dtype)
     else:
         data = [1.0, 0.5, -1.1, np.nan, None]
-        sr = Series(data, dtype=dtype)
+
+    sr = Series(data, dtype=dtype)
 
     expect = DataFrame()
     expect["foo"] = sr
     expect["bar"] = sr
-
     got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
+        ),
+        pytest.param(
+            gd.DataFrame(),
+            marks=[
+                pytest.mark.xfail(
+                    reason="_apply_support_method fails on empty dataframes."
+                )
+            ],
+        ),
+        pytest.param(
+            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Rowwise ops do not currently support nulls."
+                )
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+def test_rowwise_ops(data, op):
+    gdf = data
+    pdf = gdf.to_pandas()
+
+    if op in ("var", "std"):
+        expected = getattr(pdf, op)(axis=1, ddof=0)
+        got = getattr(gdf, op)(axis=1, ddof=0)
+    else:
+        expected = getattr(pdf, op)(axis=1)
+        got = getattr(gdf, op)(axis=1)
+
+    assert_eq(expected, got, check_less_precise=7)
+
+
+@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+def test_insert(data):
+    pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    # insertion by index
+
+    pdf.insert(0, "foo", data)
+    gdf.insert(0, "foo", data)
+
+    assert_eq(pdf, gdf)
+
+    pdf.insert(3, "bar", data)
+    gdf.insert(3, "bar", data)
+
+    assert_eq(pdf, gdf)
+
+    pdf.insert(1, "baz", data)
+    gdf.insert(1, "baz", data)
+
+    assert_eq(pdf, gdf)
+
+    # pandas insert doesnt support negative indexing
+    pdf.insert(len(pdf.columns), "qux", data)
+    gdf.insert(-1, "qux", data)
+
+    assert_eq(pdf, gdf)
+
+
+def test_cov():
+    gdf = gd.datasets.randomdata(10)
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.cov(), gdf.cov())
+
+
+@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+def test_cov_nans():
+    pdf = pd.DataFrame()
+    pdf["a"] = [None, None, None, 2.00758632, None]
+    pdf["b"] = [0.36403686, None, None, None, None]
+    pdf["c"] = [None, None, None, 0.64882227, None]
+    pdf["d"] = [None, -1.46863125, None, 1.22477948, -0.06031689]
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf.cov(), gdf.cov())

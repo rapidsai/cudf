@@ -19,7 +19,7 @@
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/transform.hpp>
-#include "../assert-unary.h"
+#include "assert-unary.h"
 #include <cudf/types.h>
 
 #include <cctype>
