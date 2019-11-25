@@ -18,6 +18,7 @@
 #define ROLLING_DETAIL_HPP
 
 #include <utilities/device_operators.cuh>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf
 {
@@ -27,46 +28,52 @@ namespace detail
 {
   // return true if ColumnType is arithmetic type or
   // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
-  template <typename ColumnType, class AggOp>
+  template <typename ColumnType, class AggOp, bool is_mean>
   static constexpr bool is_supported()
   {
-    return !(std::is_same<ColumnType, cudf::bool8>::value ||
-             std::is_same<ColumnType, cudf::string_view>::value) && 
-            (std::is_arithmetic<ColumnType>::value ||
-             std::is_same<AggOp, DeviceMin>::value ||
-             std::is_same<AggOp, DeviceMax>::value ||
-             std::is_same<AggOp, DeviceCount>::value);
+    return  !std::is_same<ColumnType, cudf::string_view>::value && 
+             (cudf::is_numeric<ColumnType>() ||
+              std::is_same<AggOp, DeviceMin>::value ||
+              std::is_same<AggOp, DeviceMax>::value ||
+              std::is_same<AggOp, DeviceCount>::value ||
+              (is_mean && std::is_same<AggOp, DeviceSum>::value &&
+               cudf::is_timestamp<ColumnType>()));
   }
 
   // store functor
-  template <typename T, bool average, typename Enable = void>
+  template <typename T, bool is_mean>
   struct store_output_functor
   {
     CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
     {
-      out = val;
+      out = val;  
     }
   };
 
-  // partial specialization for MEAN for non-bool types
-  template <typename T>
-  struct store_output_functor<T, true,
-    typename std::enable_if_t<!std::is_same<T, cudf::bool8>::value, std::nullptr_t>>
+  // Specialization for MEAN
+  template <typename _T>
+  struct store_output_functor<_T, true>
   {
+    // SFINAE for non-bool types
+    template <typename T = _T,
+      std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
     CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
     {
       out = val / count;
     }
-  };
 
-  // partial specialization for MEAN for bool types
-  template <typename T>
-  struct store_output_functor<T, true,
-    typename std::enable_if_t<std::is_same<T, cudf::bool8>::value, std::nullptr_t>>
-  {
+    // SFINAE for bool type
+    template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()>* = nullptr>
     CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
     {
-      out = static_cast<double>(val) / count;
+      out = static_cast<int32_t>(val) / count;
+    }
+
+    // SFINAE for timestamp types
+    template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+    CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+    {
+      out = val.time_since_epoch() / count;
     }
   };
 }  // namespace cudf::detail
