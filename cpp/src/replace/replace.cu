@@ -54,6 +54,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/detail/iterator.cuh>
 
 namespace { //anonymous
 
@@ -133,9 +134,7 @@ void replace_kernel(cudf::column_device_view input,
   uint32_t valid_sum { 0 };
 
   while (i < nrows) {
-    bool output_is_valid = true;
-    uint32_t bitmask = 0xffffffff;
-
+    bool output_is_valid{true};
     bool input_is_valid{true};
     if (input_has_nulls) {
       input_is_valid = input.is_valid_nocheck(i);
@@ -152,7 +151,7 @@ void replace_kernel(cudf::column_device_view input,
 
     /* output valid counts calculations*/
     if (input_has_nulls or replacement_has_nulls) {
-      bitmask = __ballot_sync(active_mask, output_is_valid);
+      uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
       if (0 == lane_id) {
         output.set_mask_word(cudf::word_index(i), bitmask);
         valid_sum += __popc(bitmask);
@@ -325,8 +324,6 @@ void replace_nulls(cudf::column_device_view input,
   uint32_t valid_sum { 0 };
 
   while (i < nrows) {
-    uint32_t bitmask = 0xffffffff;
-
     bool input_is_valid = input.is_valid_nocheck(i);
     bool output_is_valid = true;
     if (input_is_valid) {
@@ -341,7 +338,7 @@ void replace_nulls(cudf::column_device_view input,
 
     /* output valid counts calculations*/
     if (replacement_has_nulls) {
-      bitmask = __ballot_sync(active_mask, output_is_valid);
+      uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
       if (0 == lane_id) {
         output.set_mask_word(cudf::word_index(i), bitmask);
         valid_sum += __popc(bitmask);
@@ -361,35 +358,6 @@ void replace_nulls(cudf::column_device_view input,
     }
   }
 }
-
-template<typename T>
-struct device_constant_iterator {
-  const T* ptr;
-  device_constant_iterator(const T* _ptr): ptr(_ptr){}
-  __host__ __device__
-  T operator[](int x) {return *ptr;}
-};
-
-template<typename T, typename iter>
-struct replace_nulls_functor {
-  T* output;
-  const T* input;
-  const cudf::bitmask_type* input_valid;
-  iter replacement;
-
-  replace_nulls_functor(T* _output,
-                        const T* _input,
-                        const cudf::bitmask_type* _input_valid,
-                        iter _replacement) :
-      output(_output), input(_input), input_valid(_input_valid), replacement(_replacement) {
-  }
-  __host__ __device__
-  void operator()(int i) {
-    bool input_is_valid = cudf::bit_is_set(input_valid, i);
-    output[i] = input_is_valid ? input[i] : replacement[i];
-  }
-};
-
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -453,6 +421,16 @@ struct replace_nulls_column_kernel_forwarder {
   }
 };
 
+template<typename T>
+struct replace_nulls_functor {
+  T* value_it;
+  replace_nulls_functor(T* _value_it):value_it(_value_it) {}
+  __device__
+  T operator()(T input, bool is_valid) {
+    return is_valid ? input : *value_it;
+  }
+};
+
 /* --------------------------------------------------------------------------*/
 /**
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
@@ -467,20 +445,22 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
                                            {
-    std::unique_ptr<cudf::column> output =
-        cudf::experimental::allocate_like(input,
-                                          cudf::experimental::mask_allocation_policy::NEVER,
-                                          mr);
+    std::unique_ptr<cudf::column> output = cudf::experimental::allocate_like(input,
+                                                                             cudf::experimental::mask_allocation_policy::NEVER,
+                                                                             mr);
     auto output_view = output->mutable_view();
 
     using ScalarType = cudf::experimental::scalar_type_t<col_type>;
     auto s1 = static_cast<ScalarType const&>(replacement);
-    device_constant_iterator<col_type> iter(s1.data());
-    replace_nulls_functor<col_type, device_constant_iterator<col_type>> func(output_view.data<col_type>(),
-                                                                             input.data<col_type>(),
-                                                                             input.null_mask(),
-                                                                             iter);
-    thrust::for_each_n(thrust::make_counting_iterator(0), input.size(), func);
+    auto device_in = cudf::column_device_view::create(input);
+
+    replace_nulls_functor<col_type> func(s1.data());
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      input.data<col_type>(),
+                      input.data<col_type>() + input.size(),
+                      cudf::experimental::detail::make_validity_iterator(*device_in),
+                      output_view.data<col_type>(),
+                      func);
     return output;
   }
 

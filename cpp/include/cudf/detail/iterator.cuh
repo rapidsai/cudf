@@ -146,7 +146,7 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
  */
-auto make_validity_iterator(column_device_view const& column)
+auto inline make_validity_iterator(column_device_view const& column)
 {
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
