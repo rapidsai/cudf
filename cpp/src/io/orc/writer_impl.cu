@@ -780,6 +780,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
 
   // Wrapper around cudf columns to attach ORC-specific type info
   std::vector<orc_column_view> orc_columns;
+  orc_columns.reserve(num_columns); // Avoids unnecessary re-allocation
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col = *it;
     const auto current_id = orc_columns.size();

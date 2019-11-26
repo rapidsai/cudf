@@ -111,6 +111,41 @@ class writer::impl {
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
                            uint32_t num_columns, uint32_t num_fragments,
                            uint32_t fragment_size, cudaStream_t stream);
+  /**
+   * @brief Build per-chunk dictionaries and count data pages
+   *
+   * @param chunks column chunk array
+   * @param col_desc column description array
+   * @param num_rowgroups Total number of rowgroups
+   * @param num_columns Total number of columns
+   * @param num_dictionaries Total number of dictionaries
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+                                hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                                uint32_t num_rowgroups, uint32_t num_columns,
+                                uint32_t num_dictionaries, cudaStream_t stream);
+  /**
+   * @brief Initialize encoder pages
+   *
+   * @param chunks column chunk array
+   * @param col_desc column description array
+   * @param pages column description array
+   * @param num_rowgroups Total number of rowgroups
+   * @param num_columns Total number of columns
+   * @param num_pages Total number of pages
+   * @param num_stats_bfr Number of statistics buffers
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+                          hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                          gpu::EncPage *pages,
+                          statistics_chunk *page_stats,
+                          statistics_chunk *frag_stats,
+                          uint32_t num_rowgroups, uint32_t num_columns,
+                          uint32_t num_pages, uint32_t num_stats_bfr,
+                          cudaStream_t stream);
+
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
@@ -118,7 +153,7 @@ class writer::impl {
   size_t max_rowgroup_size_ = DEFAULT_ROWGROUP_MAXSIZE;
   size_t max_rowgroup_rows_ = DEFAULT_ROWGROUP_MAXROWS;
   size_t target_page_size_ = DEFAULT_TARGET_PAGE_SIZE;
-  Compression compression_kind_ = Compression::UNCOMPRESSED;
+  Compression compression_ = Compression::UNCOMPRESSED;
   int stats_granularity_ = statistics_freq::statistics_none;
 
   std::vector<uint8_t> buffer_;
