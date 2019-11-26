@@ -62,4 +62,26 @@ std::unique_ptr<scalar> make_timestamp_scalar(
                                        stream, mr);
 }
 
+namespace {
+
+struct scalar_default_construction_helper {
+  template <typename T, typename ScalarType = experimental::scalar_type_t<T>>
+  std::unique_ptr<scalar> 
+  operator()() const {
+    return std::unique_ptr<scalar>(new ScalarType);
+  }
+
+  template <typename T, typename... Args>
+  std::unique_ptr<scalar> operator()(Args... args) const {
+    CUDF_FAIL("Invalid type.");
+  }
+};
+}  // namespace
+
+// Allocate storage for a single element and is_valid
+std::unique_ptr<scalar> make_default_constructed_scalar(data_type type)
+{
+  return experimental::type_dispatcher(type, scalar_default_construction_helper{});
+}
+
 }  // namespace cudf

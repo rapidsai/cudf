@@ -22,27 +22,14 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-// Allocate storage for a single identity scalar
-std::unique_ptr<scalar> make_identity_scalar(
-    data_type type, cudaStream_t stream=0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
-  if(is_numeric(type))
-    return  make_numeric_scalar(type, stream, mr);
-  else if(is_timestamp(type))
-    return make_timestamp_scalar(type, stream, mr);
-  else if(type == data_type(STRING))
-    return make_string_scalar("", stream, mr);
-  else 
-    CUDF_FAIL("Invalid type.");
-}
-
 std::unique_ptr<scalar> reduce(
     column_view const& col, reduction_op op, data_type output_dtype,
     size_type ddof, 
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0)
 {
-  std::unique_ptr<scalar> result = make_identity_scalar(output_dtype, stream, mr);
+  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype);
+  result->set_valid(false, stream);
 
   // check if input column is empty
   if (col.size() <= col.null_count()) return result;
