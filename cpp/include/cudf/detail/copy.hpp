@@ -90,6 +90,7 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                           rmm::mr::get_default_resource(),
                                       cudaStream_t stream = 0);
 
+
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`
  *
