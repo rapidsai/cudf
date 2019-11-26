@@ -75,7 +75,9 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
                "Range is out of bounds.");
 
   if (target_end != target_begin) {
-    auto&& d_target = *column_device_view::create(target.parent(), stream);
+    auto p_target_device_view =
+      column_device_view::create(target.parent(), stream);
+    auto d_target = *p_target_device_view;
 
     // create resulting null mask
 
@@ -120,7 +122,8 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
     // create the chars column
 
     auto p_offsets =
-      thrust::device_pointer_cast(p_offsets_column->view().template data<size_type>());
+      thrust::device_pointer_cast(
+        p_offsets_column->view().template data<size_type>());
     auto chars_bytes = p_offsets[target.size()];
 
     auto p_chars_column =

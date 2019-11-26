@@ -44,13 +44,14 @@ struct inplace_copy_range_dispatch {
   std::enable_if_t<cudf::is_fixed_width<T>(), void>
   operator()(cudf::size_type source_begin, cudf::size_type source_end,
              cudf::size_type target_begin, cudaStream_t stream = 0) {
+    auto p_source_device_view =
+      cudf::column_device_view::create(source, stream);
     if (target.nullable()) {
-      auto p_device_view =
-        cudf::column_device_view::create(source, stream);
       cudf::experimental::detail::copy_range(
-        source.begin<T>() + source_begin,
-        cudf::experimental::detail::make_validity_iterator(*p_device_view) +
-          source_begin,
+        cudf::experimental::detail::make_null_replacement_iterator<T>(
+          *p_source_device_view, T()) + source_begin,
+        cudf::experimental::detail::make_validity_iterator(
+          *p_source_device_view) + source_begin,
         target, target_begin, target_begin + (source_end - source_begin),
         stream);
     }
@@ -58,7 +59,7 @@ struct inplace_copy_range_dispatch {
       CUDF_EXPECTS(source.has_nulls() == false,
                    "target should be nullable if source has null values.");
       cudf::experimental::detail::copy_range(
-        source.begin<T>() + source_begin,
+        p_source_device_view->begin<T>() + source_begin,
         thrust::make_constant_iterator(true),  // dummy
         target, target_begin, target_begin + (source_end - source_begin),
         stream);
@@ -147,18 +148,20 @@ std::unique_ptr<column> copy_range(column_view const& source,
                  "Unsupported variable-width type.");
 
     auto target_end = target_begin + (source_end - source_begin);
-    auto d_source = *column_device_view::create(source, stream);
-    if (source.nullable()) {
+    auto p_source_device_view = column_device_view::create(source, stream);
+    if (source.has_nulls()) {
       return cudf::strings::detail::copy_range(
-        d_source.begin<string_view>() + source_begin,
-        cudf::experimental::detail::make_validity_iterator(d_source) +
-          source_begin,
+        cudf::experimental::detail::
+          make_null_replacement_iterator<string_view>(
+            *p_source_device_view, string_view()) + source_begin,
+        cudf::experimental::detail::make_validity_iterator(
+          *p_source_device_view) + source_begin,
         strings_column_view(target), target_begin, target_end,
         mr, stream);
     }
     else {
       return cudf::strings::detail::copy_range(
-        d_source.begin<string_view>() + source_begin,
+        p_source_device_view->begin<string_view>() + source_begin,
         thrust::make_constant_iterator(true),
         strings_column_view(target), target_begin, target_end,
         mr, stream);
