@@ -74,7 +74,10 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
                  (target_end <= target.size()),
                "Range is out of bounds.");
 
-  if (target_end != target_begin) {
+  if (target_end == target_begin) {
+    return std::make_unique<column>(target.parent(), stream, mr);
+  }
+  else {
     auto p_target_device_view =
       column_device_view::create(target.parent(), stream);
     auto d_target = *p_target_device_view;
@@ -90,7 +93,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
             (size_type idx) {
           return (idx >= target_begin && idx < target_end) ?
             *(source_validity_begin + (idx - target_begin)) :
-            d_target.is_valid(idx);
+            d_target.is_valid_nocheck(idx);
         },
         stream, mr);
     }
@@ -127,7 +130,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
                 (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
             }
             else {
-              return d_target.is_valid(idx) ?
+              return d_target.is_valid_nocheck(idx) ?
                 d_target.element<string_view>(idx).size_bytes() : 0;
             }
         });
@@ -206,9 +209,6 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
     return make_strings_column(
       target.size(), std::move(p_offsets_column), std::move(p_chars_column),
       null_count, std::move(null_mask), stream, mr);
-  }
-  else {
-    return std::make_unique<column>(target.parent(), stream, mr);
   }
 }
 
