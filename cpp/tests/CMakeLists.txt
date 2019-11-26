@@ -626,7 +626,7 @@ ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 # - search test -----------------------------------------------------------------------------------
 
 set(SEARCH_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cpp")
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
