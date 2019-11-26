@@ -2245,6 +2245,10 @@ class DataFrame(object):
         right_on = sorted(right_on)
         cats_to_adjust = []
         for lcol, rcol in zip(left_on, right_on):
+            if (lcol not in lhs._cols) or (rcol not in rhs._cols):
+                # probably wrong columns specified, let libcudf error
+                continue
+
             dtype_l = lhs._cols[lcol].dtype
             dtype_r = rhs._cols[rcol].dtype
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
