@@ -17,11 +17,10 @@
 #ifndef UNARY_OPS_H
 #define UNARY_OPS_H
 
-#include <cudf/cudf.h>
+#include <cudf/unary.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/error.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
+#include <cudf/copying.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -29,21 +28,46 @@ namespace unary {
 
 template<typename T, typename Tout, typename F>
 struct launcher {
-    static
-    void launch(cudf::column_view const& input,
-                cudf::mutable_column_view& output,
-                cudaStream_t stream = 0) {
+    static std::unique_ptr<cudf::column>
+    launch(cudf::column_view const& input,
+           cudf::experimental::unary_op op,
+           rmm::mr::device_memory_resource* mr,
+           cudaStream_t stream = 0) {
 
-        CUDF_EXPECTS(input.size() > 0,              "Launcher requires input size to be non-zero.");
-        CUDF_EXPECTS(input.size() == output.size(), "Launcher requires input and output size to be equal.");
+        std::unique_ptr<cudf::column> output = [&] {
+            if (op == cudf::experimental::unary_op::NOT) {
 
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          output.begin<Tout>(),
-                          F{});
+                auto type = cudf::data_type{cudf::BOOL8};
+                auto size = input.size();
+
+                return std::make_unique<column>(
+                    type, size,
+                    rmm::device_buffer{size * cudf::size_of(type), 0, mr},
+                    copy_bitmask(input, 0, mr),
+                    input.null_count());
+
+            } else {
+                return cudf::experimental::allocate_like(input);
+            }
+        } ();
+
+        if (input.size() == 0) return output;
+
+        auto output_view = output->mutable_view();
+
+        CUDF_EXPECTS(input.size() > 0,                   "Launcher requires input size to be non-zero.");
+        CUDF_EXPECTS(input.size() == output_view.size(), "Launcher requires input and output size to be equal.");
+
+        thrust::transform(
+            rmm::exec_policy(stream)->on(stream),
+            input.begin<T>(),
+            input.end<T>(),
+            output_view.begin<Tout>(),
+            F{});
 
         CUDA_CHECK_LAST();
+
+        return output;
     }
 };
 
