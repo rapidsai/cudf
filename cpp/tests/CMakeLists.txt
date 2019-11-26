@@ -439,7 +439,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
