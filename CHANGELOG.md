@@ -31,6 +31,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3187 Define and implement new replace APIs
 - PR #3356 Add vertical concatenation for table/columns
 - PR #3344 java split API
 - PR #2791 Add `groupby.std()`
@@ -42,8 +43,10 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
+
 
 ## Improvements
 
@@ -208,6 +211,7 @@
 - PR #3435 Fix diff and shift for empty series
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
+- PR #3459 Fix printing of invalid entries
 
 # cuDF 0.10.0 (16 Oct 2019)
 
