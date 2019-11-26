@@ -96,7 +96,7 @@ TEST_F(ReplaceErrorTest, StringsOne) {
                                                            replacement_wrapper,
                                                            mr()));
 
-  cudf::test::print(*result);
+  std::cout << cudf::test::to_string(*result, ",") << "\n";
 }
 
 
