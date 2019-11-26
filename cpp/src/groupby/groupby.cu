@@ -15,15 +15,16 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/aggregation.hpp>
-#include <cudf/column/column_factories.hpp>
 
 #include <memory>
 #include <utility>
@@ -58,27 +59,28 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   }
 }
 
-auto empty_results(table_view const& keys,
-                   std::vector<aggregation_request> const& requests) {
+namespace {
+auto empty_results(std::vector<aggregation_request> const& requests) {
   std::vector<aggregation_result> empty_results;
 
-  std::transform(requests.begin(), requests.end(),
-                 std::back_inserter(empty_results), [](auto const& request) {
-                   std::vector<std::unique_ptr<column>> results;
+  std::transform(
+      requests.begin(), requests.end(), std::back_inserter(empty_results),
+      [](auto const& request) {
+        std::vector<std::unique_ptr<column>> results;
 
-                   std::transform(request.aggregations.begin(),
-                                  request.aggregations.end(),
-                                  std::back_inserter(results),
-                                  [&request](auto const& agg) {
-                                    return make_empty_column(experimental::detail::target_type(
-                                        request.values.type(), agg->kind));
-                                  });
+        std::transform(
+            request.aggregations.begin(), request.aggregations.end(),
+            std::back_inserter(results), [&request](auto const& agg) {
+              return make_empty_column(experimental::detail::target_type(
+                  request.values.type(), agg->kind));
+            });
 
-                   return aggregation_result{std::move(results)};
-                 });
-  return std::make_pair(std::make_unique<table>(),
-                        std::vector<aggregation_result>());
+        return aggregation_result{std::move(results)};
+      });
+
+  return empty_results;
 }
+}  // namespace
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
@@ -90,8 +92,9 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
                            }),
                "Size mismatch between request values and groupby keys.");
   if (_keys.num_rows() == 0) {
-    return empty_results(_keys, requests);
+    std::make_pair(empty_like(_keys), empty_results(requests));
   }
+
   return dispatch_aggregation(requests, 0, mr);
 }
 }  // namespace groupby
