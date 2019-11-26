@@ -116,6 +116,7 @@ struct column_gatherer_impl
    * @param source_column View into the column to gather from
    * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
    * @param gather_map_end End of iterator range of integral values representing the gather map
+   * @param policy Mask allocation policy for creation of gathered column
    * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
    * @param stream CUDA stream on which to execute kernels
@@ -123,16 +124,29 @@ struct column_gatherer_impl
     std::unique_ptr<column> operator()(column_view const& source_column,
                                        MapIterator gather_map_begin,
                                        MapIterator gather_map_end,
+                                       cudf::experimental::mask_allocation_policy policy,
                                        bool ignore_out_of_bounds,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
 
       size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
-      std::unique_ptr<column> destination_column = 
+      std::unique_ptr<column> destination_column =
           cudf::experimental::detail::allocate_like(source_column, num_destination_rows,
-                          cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
+                          policy, mr, stream);
       Element const *source_data{source_column.data<Element>()};
       Element *destination_data{destination_column->mutable_view().data<Element>()};
+
+      //If mask has to be allocated regardless of whether source_column has
+      //mask or not then set all the bits to invalid. This will be populated by
+      //bitmask_kernel later
+      if (ignore_out_of_bounds &&
+          (policy == cudf::experimental::mask_allocation_policy::ALWAYS)) {
+        CUDA_TRY(cudaMemsetAsync(
+              destination_column->mutable_view().null_mask(),
+              0,
+              bitmask_allocation_size_bytes(destination_column->size()),
+              stream));
+      }
 
       using map_type = typename std::iterator_traits<MapIterator>::value_type;
 
@@ -168,6 +182,7 @@ struct column_gatherer_impl<string_view, MapItType>
   * @param source_column View into the column to gather from
   * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
   * @param gather_map_end End of iterator range of integral values representing the gather map
+  * @param policy Mask allocation policy for creation of gathered column
   * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
   * @param mr Memory resource to use for all allocations
   * @param stream CUDA stream on which to execute kernels
@@ -175,6 +190,7 @@ struct column_gatherer_impl<string_view, MapItType>
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
+                                     cudf::experimental::mask_allocation_policy policy,
                                      bool ignore_out_of_bounds,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
@@ -182,11 +198,13 @@ struct column_gatherer_impl<string_view, MapItType>
         return cudf::strings::detail::gather<true>(
                        strings_column_view(source_column),
                        gather_map_begin, gather_map_end,
+                       policy,
                        mr, stream);
       } else {
         return cudf::strings::detail::gather<false>(
                        strings_column_view(source_column),
                        gather_map_begin, gather_map_end,
+                       policy,
                        mr, stream);
       }
   }
@@ -209,6 +227,7 @@ struct column_gatherer
    * @param source_column View into the column to gather from
    * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
    * @param gather_map_end End of iterator range of integral values representing the gather map
+   * @param policy Mask allocation policy for creation of gathered column
    * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
    * @param stream CUDA stream on which to execute kernels
@@ -217,13 +236,14 @@ struct column_gatherer
     std::unique_ptr<column> operator()(column_view const& source_column,
                                        MapIterator gather_map_begin,
                                        MapIterator gather_map_end,
+                                       cudf::experimental::mask_allocation_policy policy,
                                        bool ignore_out_of_bounds,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
       column_gatherer_impl<Element, MapIterator> gatherer{};
 
       return gatherer(source_column, gather_map_begin,
-                    gather_map_end, ignore_out_of_bounds,
+                    gather_map_end, policy, ignore_out_of_bounds,
                     mr, stream);
   }
 };
@@ -300,8 +320,26 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   std::vector<std::unique_ptr<column>> destination_columns;
 
+  //If ignore_out_of_bounds is true and gather map contains an invalid index
+  //then the intent of the gather call is to create some invalid rows. To
+  //faciliate this mask_allocation_policy is set to ALWAYS and passed onto
+  //column_gatherer.
+  cudf::experimental::mask_allocation_policy policy =
+    cudf::experimental::mask_allocation_policy::RETAIN;
+  if (ignore_out_of_bounds) {
+    using map_type = typename std::iterator_traits<MapIterator>::value_type;
+    size_type valid_map_index_count =
+      thrust::count_if(rmm::exec_policy(stream)->on(stream),
+          gather_map_begin, gather_map_end,
+          bounds_checker<map_type>{0, source_table.num_rows()});
+    size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
+    if (valid_map_index_count < num_destination_rows) {
+      policy = cudf::experimental::mask_allocation_policy::ALWAYS;
+    }
+  }
+
   // TODO: Could be beneficial to use streams internally here
-  
+
   for(auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
@@ -310,6 +348,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
                                                                       source_column,
                                                                       gather_map_begin,
                                                                       gather_map_end,
+                                                                      policy,
                                                                       ignore_out_of_bounds,
                                                                       mr,
                                                                       stream));
@@ -338,11 +377,15 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   rmm::device_vector<bitmask_type*> masks(host_masks);
 
+  cudaDeviceSynchronize();
+  CUDA_CHECK_LAST();
   bitmask_kernel<<<gather_grid_size, gather_block_size, 0, stream>>>(*source_table_view,
                                                           gather_map_begin,
                                                           masks.data().get(),
                                                           destination_table->num_rows(),
                                                           valid_counts.data().get());
+  cudaDeviceSynchronize();
+  CUDA_CHECK_LAST();
 
   thrust::host_vector<cudf::size_type> h_valid_counts(valid_counts);
 

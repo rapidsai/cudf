@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/detail/copy.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -48,6 +49,7 @@ namespace detail
  * @param strings Strings instance for this operation.
  * @param begin Start of index iterator.
  * @param end End of index iterator.
+ * @param policy Mask allocation policy for creation of gathered column
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column containing the gathered strings.
@@ -55,6 +57,8 @@ namespace detail
 template<bool IgnoreOutOfBounds, typename MapIterator>
 std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
                                       MapIterator begin, MapIterator end,
+                                      cudf::experimental::mask_allocation_policy policy =
+                                      cudf::experimental::mask_allocation_policy::RETAIN,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                       cudaStream_t stream=0 )
 {
@@ -69,8 +73,12 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 
     // create null mask -- caller must update this
     rmm::device_buffer null_mask;
-    if( strings.has_nulls() ) // make output nullable
-        null_mask = create_null_mask( output_count, UNINITIALIZED, stream,mr );
+    if( IgnoreOutOfBounds &&
+        (policy == cudf::experimental::mask_allocation_policy::ALWAYS)) {
+      null_mask = create_null_mask( output_count, ALL_NULL, stream,mr );
+    } else if( strings.has_nulls() ) {// make output nullable
+      null_mask = create_null_mask( output_count, UNINITIALIZED, stream,mr );
+    }
 
     // build offsets column
     auto offsets_transformer = [d_strings, strings_count] __device__ (size_type idx) {
