@@ -28,7 +28,7 @@ namespace cudf {
 /**
  * @brief Creates an empty column of the specified @p type
  *
- * An empty column does not contain any elements nor a validity mask.
+ * An empty column does not contain any elements or a validity mask.
  *
  * @param type The desired type
  * @return Empty column with desired type
