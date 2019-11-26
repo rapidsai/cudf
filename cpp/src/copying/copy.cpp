@@ -38,6 +38,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc,
     return UNALLOCATED;
   }
 }
+
 }  // namespace
 
 /*
