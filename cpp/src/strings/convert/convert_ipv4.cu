@@ -34,6 +34,15 @@ namespace detail
 {
 namespace
 {
+
+/**
+ * @brief Converts IPv4 strings into integers.
+ *
+ * Only single-byte characters are expected.
+ * No checking is done on the format of individual strings.
+ * Any character that is not [0-9] is considered a delimiter.
+ * This means "128-34-56-709" will parse successfully.
+ */
 struct ipv4_to_integers_fn
 {
     column_device_view const d_strings;
@@ -67,7 +76,7 @@ struct ipv4_to_integers_fn
 
 }
 
-// Convert strings column to boolean column
+// Convert strings column of IPv4 addresses to integers column
 std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                           cudaStream_t stream = 0)
@@ -106,6 +115,13 @@ namespace detail
 namespace
 {
 
+/**
+ * @brief Converts integers into IPv4 addresses.
+ *
+ * Each integer is divided into 8-bit sub-integers.
+ * The sub-integers are converted into 1-3 character digits.
+ * These are placed appropriately between '.' character.
+ */
 struct integers_to_ipv4_fn
 {
     column_device_view const d_column;
@@ -151,7 +167,7 @@ struct integers_to_ipv4_fn
 
 }
 
-//
+// Convert integers into IPv4 addresses
 std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                           cudaStream_t stream = 0)
