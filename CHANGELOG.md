@@ -149,6 +149,7 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
+- PR #3462 Add `make_empty_column` and update `empty_like`.
 
 ## Bug Fixes
 
