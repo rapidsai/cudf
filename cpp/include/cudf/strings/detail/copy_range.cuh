@@ -81,16 +81,30 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
 
     // create resulting null mask
 
-    auto valid_mask = cudf::experimental::detail::valid_if(
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(target.size()),
-      [source_validity_begin, d_target, target_begin, target_end] __device__
-          (size_type idx) {
-        return (idx >= target_begin && idx < target_end) ?
-          *(source_validity_begin + (idx - target_begin)) :
-          d_target.is_valid(idx);
-      },
-      stream, mr);
+    std::pair<rmm::device_buffer, size_type> valid_mask{};
+    if (target.has_nulls()) {  // check validities for both source & target
+      valid_mask = cudf::experimental::detail::valid_if(
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(target.size()),
+        [source_validity_begin, d_target, target_begin, target_end] __device__
+            (size_type idx) {
+          return (idx >= target_begin && idx < target_end) ?
+            *(source_validity_begin + (idx - target_begin)) :
+            d_target.is_valid(idx);
+        },
+        stream, mr);
+    }
+    else {  // check validities for source only
+      valid_mask = cudf::experimental::detail::valid_if(
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(target.size()),
+        [source_validity_begin, d_target, target_begin, target_end] __device__
+            (size_type idx) {
+          return (idx >= target_begin && idx < target_end) ?
+            *(source_validity_begin + (idx - target_begin)) : true;
+        },
+        stream, mr);
+    }
 
     auto null_count = valid_mask.second;
     rmm::device_buffer null_mask{};
@@ -101,23 +115,64 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
 
     // build offsets column
 
-    auto string_size_begin =
-      thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0),
-        [source_value_begin, source_validity_begin, d_target, target_begin,
-            target_end] __device__ (size_type idx) {
-          if (idx >= target_begin && idx < target_end) {
-            return *(source_validity_begin + (idx - target_begin)) ?
-              (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
-          }
-          else {
-            return d_target.is_valid(idx) ?
-              d_target.element<string_view>(idx).size_bytes() : 0;
-          }
-      });
-    auto p_offsets_column =
-      detail::make_offsets_child_column(
-        string_size_begin, string_size_begin + target.size(), mr, stream);
+    std::unique_ptr<column> p_offsets_column{nullptr};
+    if (target.has_nulls()) {  // check validities for both source & target
+      auto string_size_begin =
+        thrust::make_transform_iterator(
+          thrust::make_counting_iterator(0),
+          [source_value_begin, source_validity_begin, d_target, target_begin,
+              target_end] __device__ (size_type idx) {
+            if (idx >= target_begin && idx < target_end) {
+              return *(source_validity_begin + (idx - target_begin)) ?
+                (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
+            }
+            else {
+              return d_target.is_valid(idx) ?
+                d_target.element<string_view>(idx).size_bytes() : 0;
+            }
+        });
+
+      p_offsets_column =
+        detail::make_offsets_child_column(
+          string_size_begin, string_size_begin + target.size(), mr, stream);
+    }
+    else if (null_count > 0) {  // check validities for source only
+      auto string_size_begin =
+        thrust::make_transform_iterator(
+          thrust::make_counting_iterator(0),
+          [source_value_begin, source_validity_begin, d_target, target_begin,
+              target_end] __device__ (size_type idx) {
+            if (idx >= target_begin && idx < target_end) {
+              return *(source_validity_begin + (idx - target_begin)) ?
+                (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
+            }
+            else {
+              return d_target.element<string_view>(idx).size_bytes();
+            }
+        });
+
+      p_offsets_column =
+        detail::make_offsets_child_column(
+          string_size_begin, string_size_begin + target.size(), mr, stream);
+    }
+    else {  // no need to check validities
+      auto string_size_begin =
+        thrust::make_transform_iterator(
+          thrust::make_counting_iterator(0),
+          [source_value_begin, source_validity_begin, d_target, target_begin,
+              target_end] __device__ (size_type idx) {
+            if (idx >= target_begin && idx < target_end) {
+              return (*(source_value_begin + (idx - target_begin))).size_bytes();
+            }
+            else {
+              return d_target.element<string_view>(idx).size_bytes();
+            }
+        });
+
+      p_offsets_column =
+        detail::make_offsets_child_column(
+          string_size_begin, string_size_begin + target.size(), mr, stream);
+    }
 
     // create the chars column
 
