@@ -189,9 +189,10 @@ std::unique_ptr<column> make_fixed_width_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
-  return std::make_unique<column>(
-      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-      std::forward<B>(null_mask), null_count);
+  if(is_timestamp(type)){
+    return make_timestamp_column(type, size, null_mask, null_count, stream, mr);
+  }
+  return make_numeric_column(type, size, null_mask, null_count, stream, mr);  
 }
 
 
