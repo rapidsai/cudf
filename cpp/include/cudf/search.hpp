@@ -26,7 +26,7 @@
 namespace cudf {
 namespace experimental {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find smallest indices in a sorted table where values should be 
  *  inserted to maintain order
  * 
@@ -59,14 +59,14 @@ namespace experimental {
  * @param mr              Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> lower_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find largest indices in a sorted table where values should be 
  *  inserted to maintain order
  * 
@@ -98,14 +98,14 @@ std::unique_ptr<column> lower_bound(table_view const& t,
  * @param mr              Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> upper_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find if the `value` is present in the `col`
  *
  * @throws cudf::logic_error
@@ -125,9 +125,37 @@ std::unique_ptr<column> upper_bound(table_view const& t,
  * @param mr       Device memory resource to use for device memory allocation
  *
  * @return bool    If `value` is found in `column` true, else false.
- *---------------------------------------------------------------------------**/
+ */
 bool contains(column_view const& col, scalar const& value,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief  Returns a new column of type bool8 identifying for each element of @p haystack column,
+ *         if that element is contained in @p needles column.
+ *
+ * The new column will have the same dimension and null status as the @p haystack column.  That is,
+ * any element that is invalid in the @p haystack column will be invalid in the returned column.
+ *
+ * @throws cudf::logic_error
+ * If `haystack.type() != needles.type()`
+ *
+ * @example:
+ *
+ *   haystack = { 10, 20, 30, 40, 50 }
+ *   needles  = { 20, 40, 60, 80 }
+ *
+ *   result = { false, true, false, true, false }
+ *
+ * @param haystack  A column object
+ * @param needles   A column of values to search for in `col`
+ * @param mr         Device memory resource to use for device memory allocation
+ *
+ * @return std::unique_ptr<column> A column of bool8 elements containing
+ * true if the corresponding entry in haystack is contained in needles and false
+ * if it is not.
+ */
+std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace experimental
 } // namespace cudf
