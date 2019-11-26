@@ -21,6 +21,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/column/column_factories.hpp>
 
 #include <algorithm>
 
@@ -45,14 +46,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
  */
 std::unique_ptr<column> empty_like(column_view const& input, cudaStream_t stream)
 {
-  std::vector<std::unique_ptr<column>> children {};
-  children.reserve(input.num_children());
-  for (size_type index = 0; index < input.num_children(); index++) {
-      children.emplace_back(empty_like(input.child(index), stream));
-  }
-
-  return std::make_unique<column>(input.type(), 0, rmm::device_buffer {},
-		                  rmm::device_buffer {}, 0, std::move(children));
+  return make_empty_column(input.type());
 }
 
 /*
