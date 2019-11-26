@@ -131,9 +131,9 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
 
   std::ostringstream tmp;
   tmp << std::to_string(std_col[0])
-      << delimiter << "@"
+      << delimiter << "NULL"
       << delimiter << std::to_string(std_col[2])
-      << delimiter << "@"
+      << delimiter << "NULL"
       << delimiter << std::to_string(std_col[4]);
   
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
@@ -150,7 +150,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString) {
   std::ostringstream tmp;
   tmp << h_strings[0]
       << delimiter << h_strings[1]
-      << delimiter << "@"
+      << delimiter << "NULL"
       << delimiter << h_strings[3]
       << delimiter << h_strings[4]
       << delimiter << h_strings[5]
