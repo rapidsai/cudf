@@ -90,22 +90,6 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                           rmm::mr::get_default_resource(),
                                       cudaStream_t stream = 0);
 
-/**
- * @brief Creates an uninitialized new column of the specified `size` and `type`
- * Supports only fixed-width types.
- *
- * @param[in] type The type of elements in the new column
- * @param[in] size The desired number of elements that the new column should have capacity for
- * @param[in] nullable Optional, whether or not the output column should contain a null mask
- * @param[in] mr Optional, The resource to use for all allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
- */
-std::unique_ptr<column> allocate_like(data_type type, size_type size,
-                                      mask_state state = UNALLOCATED,
-                                      rmm::mr::device_memory_resource *mr =
-                                          rmm::mr::get_default_resource(),
-                                      cudaStream_t stream = 0);
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`

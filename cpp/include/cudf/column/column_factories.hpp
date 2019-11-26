@@ -190,9 +190,9 @@ std::unique_ptr<column> make_fixed_width_column(
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
   if(is_timestamp(type)){
-    return make_timestamp_column(type, size, null_mask, null_count, stream, mr);
+    return make_timestamp_column(type, size, std::forward<B>(null_mask), null_count, stream, mr);
   }
-  return make_numeric_column(type, size, null_mask, null_count, stream, mr);  
+  return make_numeric_column(type, size, std::forward<B>(null_mask), null_count, stream, mr);  
 }
 
 
