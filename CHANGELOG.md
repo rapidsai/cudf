@@ -184,6 +184,7 @@
 - PR #3388 Support getitem with bools when DataFrame has a MultiIndex
 - PR #3408 Fix String and Column (De-)Serialization
 - PR #3372 Fix dask-distributed scatter_by_map bug
+- PR #3188 Repr slices up large DataFrames unless they have a MultiColumn
 
 
 # cuDF 0.10.0 (16 Oct 2019)

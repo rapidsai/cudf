@@ -673,6 +673,19 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         assert_eq(presult, gresult, check_index_type=False)
 
 
+@pytest.mark.xfail("A problem with downcasting in this specific instance.")
+def test_multicolumn_item():
+    gdf = cudf.DataFrame({
+        'x': np.arange(10),
+        'y': np.arange(10),
+        'z': np.arange(10),
+    })
+    gdg = gdf.groupby(['x', 'y']).min()
+    gdgT = gdg.T
+    pdgT = gdgT.to_pandas()
+    assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
+
+
 def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
