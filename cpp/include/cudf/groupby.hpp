@@ -85,12 +85,12 @@ class groupby {
    * @param ignore_null_keys Indicates whether rows in `keys` that contain NULL
    * values should be ignored
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
-   * @param column_order If `keys_are_sorted == true`, indicates whether each
+   * @param column_order If @p `keys_are_sorted == true`, indicates whether each
    * column is ascending/descending. If empty, assumes all  columns are
-   * ascending. Ignored if `keys_are_sorted == false`.
-   * @param null_precedence If `keys_are_sorted == true`, indicates the ordering
+   * ascending. Ignored if @p `keys_are_sorted == false`.
+   * @param null_precedence If @p `keys_are_sorted == true`, indicates the ordering
    * of null values in each column. Else, ignored. If empty, assumes all columns
-   * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
+   * use `null_order::BEFORE`. Ignored if @p `keys_are_sorted == false`.
    */
   explicit groupby(table_view const& keys, bool ignore_null_keys = true,
                    bool keys_are_sorted = false,
