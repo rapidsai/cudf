@@ -44,9 +44,7 @@ namespace compound {
  * @tparam ResultType   the output cudf dtype
  * @tparam Op           the compound operator derived from `cudf::experimental::reduction::op::CompoundOp`
  * ----------------------------------------------------------------------------**/
-template <
-  typename ElementType, typename ResultType, typename Op,
-  typename std::enable_if_t< std::is_base_of<cudf::experimental::reduction::op::CompoundOp<Op>, Op>::value, int> = 0>
+template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
                                            cudf::size_type ddof,

@@ -214,14 +214,6 @@ struct standard_deviation : public CompoundOp<standard_deviation> {
 };
 
 } // namespace op
-
-template <typename ElementType, typename ResultType, typename Op>
-auto make_reduction_iterator(column_device_view const& column) {
-    return thrust::make_transform_iterator(
-        experimental::detail::make_null_replacement_iterator( column, Op::Op::template identity<ElementType>()),
-        typename Op::template transformer<ResultType>{});
-}
-
 } // namespace reduction
 } // namespace experimental
 } // namespace cudf

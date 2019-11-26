@@ -89,9 +89,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
  * ----------------------------------------------------------------------------**/
 template <typename Op, typename InputIterator, typename OutputType, 
   typename IntermediateType=typename thrust::iterator_value<InputIterator>::type>
-  //FIXME: adding this causes reduction.cuh:118:401:   error : ‘__T290’ was not declared in this scope
-  //typename std::enable_if_t< std::is_base_of<cudf::experimental::reduction::op::CompoundOp<Op>, Op>::value, int> = 0>
-std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op op, 
+std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, 
+  op::CompoundOp<Op> op, 
   cudf::size_type valid_count,
   cudf::size_type ddof,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
