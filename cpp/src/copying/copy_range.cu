@@ -46,7 +46,7 @@ struct inplace_copy_range_dispatch {
              cudf::size_type target_begin, cudaStream_t stream = 0) {
     auto p_source_device_view =
       cudf::column_device_view::create(source, stream);
-    if (target.nullable()) {
+    if (p_source_device_view->has_nulls()) {
       cudf::experimental::detail::copy_range(
         cudf::experimental::detail::make_null_replacement_iterator<T>(
           *p_source_device_view, T()) + source_begin,
@@ -56,8 +56,6 @@ struct inplace_copy_range_dispatch {
         stream);
     }
     else {
-      CUDF_EXPECTS(source.has_nulls() == false,
-                   "target should be nullable if source has null values.");
       cudf::experimental::detail::copy_range(
         p_source_device_view->begin<T>() + source_begin,
         thrust::make_constant_iterator(true),  // dummy
