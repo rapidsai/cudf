@@ -16,10 +16,8 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "types.hpp"
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 
@@ -48,14 +46,89 @@ namespace experimental {
  * rows in the source columns to rows in the destination columns.
  * @param[in] check_bounds Optionally perform bounds checking on the values
  * of `gather_map` and throw an error if any of its values are out of bounds.
- * @params[in] mr The resource to use for all allocations
- * @return cudf::table Result of the gather
+ * @param[in] mr The resource to use for all allocations
+ * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
-			      bool check_bounds = false,
-			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                              bool check_bounds = false,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-			       
+/**
+ * @brief Scatters the rows of the source table into a copy of the target table
+ * according to a scatter map.
+ *
+ * Scatters values from the source table into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a
+ * scatter map such that row `scatter_map[i]` of the destination table gets row
+ * `i` of the source table. All other rows of the destination table equal
+ * corresponding rows of the target table.
+ *
+ * The number of columns in source must match the number of columns in target
+ * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
+ * is the number of rows in the `target` table.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param source The input columns containing values to be scattered into the
+ * target columns
+ * @param scatter_map A non-nullable column of integral indices that maps the
+ * rows in the source table to rows in the target table. The size must be equal
+ * to or less than the number of elements in the source columns.
+ * @param target The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param mr The resource to use for all allocations
+ * @return Result of scattering values from source to target
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(
+    table_view const& source, column_view const& scatter_map,
+    table_view const& target, bool check_bounds = false,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters a row of scalar values into a copy of the target table
+ * according to a scatter map.
+ *
+ * Scatters values from the source row into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a
+ * scatter map such that row `scatter_map[i]` of the destination table is
+ * replaced by the source row. All other rows of the destination table equal
+ * corresponding rows of the target table.
+ *
+ * The number of elements in source must match the number of columns in target
+ * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param source The input scalars containing values to be scattered into the
+ * target columns
+ * @param indices A non-nullable column of integral indices that indicate
+ * the rows in the target table to be replaced by source.
+ * @param target The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param mr The resource to use for all allocations
+ * @return Result of scattering values from source to target
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(
+    std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
+    table_view const& target, bool check_bounds = false,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
@@ -64,7 +137,6 @@ enum class  mask_allocation_policy {
     RETAIN, ///< Allocate a null mask if the input contains one
     ALWAYS ///< Allocate a null mask, regardless of input
 };
-
 
 /*
  * Initializes and returns an empty column of the same type as the `input`.
@@ -113,6 +185,79 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
  * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in `input_table`
  */
 std::unique_ptr<table> empty_like(table_view const& input_table);
+
+/**
+ * @brief Copies a range of elements in-place from one column to another.
+ *
+ * Overwrites the range of elements in @p target indicated by the indices
+ * [@p target_begin, @p target_begin + N) with the elements from @p source
+ * indicated by the indices [@p source_begin, @p source_end) (where N =
+ * (@p source_end - @p source_begin)). Use the out-of-place copy function
+ * returning std::unique_ptr<column> for uses cases requiring memory
+ * reallocation. For example for strings columns and other variable-width types.
+ *
+ * If @p source and @p target refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
+ *
+ * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
+ * variable width types).
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ * @throws `cudf::logic_error` if @p source has null values and @p target is not
+ * nullable.
+ *
+ * @param source The column to copy from
+ * @param target The preallocated column to copy into
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param source_end The index of the last element in the source range
+ * (exclusive)
+ * @param target_begin The starting index of the target range (inclusive)
+ * @return void
+ */
+void copy_range(column_view const& source,
+                mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin);
+
+/**
+ * @brief Copies a range of elements out-of-place from one column to another.
+ *
+ * Creates a new column as if an in-place copy was performed into @p target.
+ * A copy of @p target is created first and then the elements indicated by the
+ * indices [@p target_begin, @p target_begin + N) were copied from the elements
+ * indicated by the indices [@p source_begin, @p source_end) of @p source
+ * (where N = (@p source_end - @p source_begin)). Elements outside the range are
+ * copied from @p target into the returned new column target.
+ *
+ * If @p source and @p target refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
+ *
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ *
+ * @param source The column to copy from inside the range.
+ * @param target The column to copy from outside the range.
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param source_end The index of the last element in the source range
+ * (exclusive)
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param mr Memory resource to allocate the result target column.
+ * @return std::unique_ptr<column> The result target column
+ */
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
+                                   rmm::mr::device_memory_resource* mr =
+                                       rmm::mr::get_default_resource());
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.

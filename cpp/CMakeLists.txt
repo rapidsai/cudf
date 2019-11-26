@@ -425,6 +425,7 @@ add_library(cudf
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/cast_ops.cu
             src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
@@ -436,9 +437,12 @@ add_library(cudf
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
+            src/io/avro/reader_impl.cu
             src/io/csv/legacy/csv_reader_impl.cu
             src/io/csv/legacy/csv_writer.cu
             src/io/csv/legacy/csv_gpu.cu
+            src/io/csv/csv_gpu.cu
+            src/io/csv/reader_impl.cu
             src/io/json/legacy/json_reader_impl.cu
             src/io/orc/legacy/orc_reader_impl.cu
             src/io/orc/legacy/orc_writer_impl.cu
@@ -448,10 +452,13 @@ add_library(cudf
             src/io/orc/stripe_init.cu
             src/io/orc/stripe_enc.cu
             src/io/orc/dict_enc.cu
+            src/io/orc/reader_impl.cu
+            src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
+            src/io/parquet/reader_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
@@ -459,6 +466,7 @@ add_library(cudf
             src/io/comp/snap.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
+            src/io/functions.cpp
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
@@ -468,6 +476,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
@@ -478,8 +488,11 @@ add_library(cudf
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/copying/legacy/copy_range.cu
+            src/copying/copy_range.cu
             src/filling/legacy/fill.cu
+            src/filling/fill.cu
             src/filling/legacy/repeat.cu
+            src/filling/repeat.cu
             src/filling/legacy/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
