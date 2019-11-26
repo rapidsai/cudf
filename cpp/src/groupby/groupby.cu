@@ -22,6 +22,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/aggregation.hpp>
+#include <cudf/column/column_factories.hpp>
 
 #include <memory>
 #include <utility>
@@ -29,7 +31,6 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
-
 
 // Constructor
 groupby::groupby(table_view const& keys, bool ignore_null_keys,
@@ -57,6 +58,28 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   }
 }
 
+auto empty_results(table_view const& keys,
+                   std::vector<aggregation_request> const& requests) {
+  std::vector<aggregation_result> empty_results;
+
+  std::transform(requests.begin(), requests.end(),
+                 std::back_inserter(empty_results), [](auto const& request) {
+                   std::vector<std::unique_ptr<column>> results;
+
+                   std::transform(request.aggregations.begin(),
+                                  request.aggregations.end(),
+                                  std::back_inserter(results),
+                                  [&request](auto const& agg) {
+                                    return make_empty_column(experimental::detail::target_type(
+                                        request.values.type(), agg->kind));
+                                  });
+
+                   return aggregation_result{std::move(results)};
+                 });
+  return std::make_pair(std::make_unique<table>(),
+                        std::vector<aggregation_result>());
+}
+
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::aggregate(std::vector<aggregation_request> const& requests,
@@ -67,7 +90,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
                            }),
                "Size mismatch between request values and groupby keys.");
   if (_keys.num_rows() == 0) {
-    // TODO Return appropriate empty results
+    return empty_results(_keys, requests);
   }
   return dispatch_aggregation(requests, 0, mr);
 }
