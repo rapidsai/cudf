@@ -18,10 +18,8 @@
 
 #include <cudf/types.hpp>
 #include <memory>
-#include <rmm/mr/default_memory_resource.hpp>
 
 // Forward declaration
-typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 namespace detail {

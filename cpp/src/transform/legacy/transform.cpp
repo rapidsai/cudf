@@ -16,14 +16,14 @@
 
 #include <cudf/cudf.h>
 #include <nvstrings/NVCategory.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 
 #include <cudf/legacy/column.hpp>
 

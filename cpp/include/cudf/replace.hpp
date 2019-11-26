@@ -24,6 +24,7 @@ namespace experimental {
   /**
    * @brief Replaces all null values in a column with corresponding values of another column
    *
+   * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`. 
    * `input` and `replacement` must be of the same type and size.
    * must be of the same type and same size as the first.
    *
@@ -40,6 +41,7 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
 /**
   * @brief Replaces all null values in a column with a scalar.
   *
+  * If `input[i]` is NULL, then `output[i]` will contain `replacement`.
   * `input` and `replacement` must have the same type.
   * a cudf::scalar of the same data type as the column.
   *
@@ -58,7 +60,6 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
  *  @brief Return a copy of `input_col` replacing all `old_values[i]` present with `new_values[i]`.
- *        with `new_values[i]`.
  *
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace

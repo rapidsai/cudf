@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include "parquet_common.h"
+#include <cuda_runtime.h>
 
 namespace cudf {
 namespace io {
