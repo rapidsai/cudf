@@ -42,6 +42,7 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 
 ## Improvements
@@ -81,7 +82,7 @@
 - PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
 - PR #2991 Added strings column functions concatenate and join_strings
-- PR #3028 Port gather and scatter to libcudf++
+- PR #3028 Define and implement new `gather` APIs.
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Move unary files to legacy
@@ -127,6 +128,7 @@
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
+- PR #3354 Define and implement new `scatter` APIs
 - PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
 - PR #3299 Define and implement new `is_sorted` APIs
@@ -142,6 +144,7 @@
 - PR #3387 Strings column gather function
 - PR #3440 Strings column scatter function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
+- PR #3397 Port unary cast to libcudf++
 - PR #3398 Move reshape.hpp files to legacy
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy

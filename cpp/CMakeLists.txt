@@ -425,6 +425,7 @@ add_library(cudf
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/cast_ops.cu
             src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
@@ -475,6 +476,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
