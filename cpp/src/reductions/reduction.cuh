@@ -34,7 +34,7 @@ namespace reduction {
 namespace detail {
 
 /** --------------------------------------------------------------------------*
- * @brief compute reduction by the operator
+ * @brief Compute the specified simple reduction over the input range of elements.
  *
  * @param[in] d_in      the begin iterator
  * @param[in] num_items the number of items
@@ -122,4 +122,3 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items,
 } // namespace reduction
 } // namespace experimental
 } // namespace cudf
-
