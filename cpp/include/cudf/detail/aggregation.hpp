@@ -77,44 +77,44 @@ using corresponding_operator_t = typename corresponding_operator<k>::type;
  * @tparam k The aggregation performed
  *---------------------------------------------------------------------------**/
 template <typename SourceType, aggregation::Kind k, typename Enable = void>
-struct target_type { using type = void; };
+struct target_type_impl { using type = void; };
 
 // Computing MIN of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct target_type<SourceType, aggregation::MIN> { using type = SourceType; };
+struct target_type_impl<SourceType, aggregation::MIN> { using type = SourceType; };
 
 // Computing MAX of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct target_type<SourceType, aggregation::MAX> { using type = SourceType; };
+struct target_type_impl<SourceType, aggregation::MAX> { using type = SourceType; };
 
 // Always use int64_t accumulator for COUNT
 template <typename SourceType>
-struct target_type<SourceType, aggregation::COUNT> { using type = cudf::size_type; };
+struct target_type_impl<SourceType, aggregation::COUNT> { using type = cudf::size_type; };
 
 // Always use `double` for MEAN
 template <typename SourceType>
-struct target_type<SourceType, aggregation::MEAN> { using type = double; };
+struct target_type_impl<SourceType, aggregation::MEAN> { using type = double; };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
-struct target_type<SourceType, aggregation::SUM,
+struct target_type_impl<SourceType, aggregation::SUM,
                    std::enable_if_t<std::is_integral<SourceType>::value>> {
   using type = int64_t;
 };
 
 // Always use `double` for quantile 
 template <typename SourceType>
-struct target_type<SourceType, aggregation::QUANTILE> { using type = double; };
+struct target_type_impl<SourceType, aggregation::QUANTILE> { using type = double; };
 
 // MEDIAN is a special case of a QUANTILE  
 template <typename SourceType>
-struct target_type<SourceType, aggregation::MEDIAN> {
-   using type = target_type<SourceType, aggregation::QUANTILE>; 
+struct target_type_impl<SourceType, aggregation::MEDIAN> {
+   using type = target_type_impl<SourceType, aggregation::QUANTILE>; 
 };
 
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
-struct target_type<
+struct target_type_impl<
     SourceType, aggregation::SUM,
     std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
@@ -128,7 +128,7 @@ struct target_type<
  * @tparam k The aggregation performed
  */
 template <typename SourceType, aggregation::Kind k>
-using target_type_t = typename target_type<SourceType, k>::type;
+using target_type_t = typename target_type_impl<SourceType, k>::type;
 
 /**
  * @brief Dispatches @p k as a non-type template parameter to a callable, @p f.
@@ -140,7 +140,7 @@ using target_type_t = typename target_type<SourceType, k>::type;
  * @return Forwards the return value of the callable.
  */
 template <typename F>
-decltype(auto) dispatch_aggregation_kind(aggregation::Kind k, F f){
+decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f){
     switch(k){
         case aggregation::SUM:      return f.template operator()<aggregation::SUM>();
         case aggregation::MIN:      return f.template operator()<aggregation::MIN>();
@@ -151,6 +151,17 @@ decltype(auto) dispatch_aggregation_kind(aggregation::Kind k, F f){
         case aggregation::QUANTILE: return f.template operator()<aggregation::QUANTILE>();
     }
 }
+
+/**
+ * @brief Returns the target `data_type` for the specified aggregation @p k
+ * performed on elements of type @p source_type.
+ *
+ * @param source_type The element type to be aggregated
+ * @param k The aggregation
+ * @return data_type The target_type of @p k performed on @p source_type
+ * elements
+ */
+data_type target_type(data_type source_type, aggregation::Kind k);
 
 }  // namespace detail
 }  // namespace experimental
