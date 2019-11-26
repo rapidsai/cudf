@@ -30,183 +30,111 @@ namespace detail {
 
 // trig functions
 
-struct DeviceSin {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return std::sin(data);
-    }
+template<typename T,
+         typename Op,
+         typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+__device__
+T normalized_unary_op(T data, Op op) {
+    return op(data);
+}
 
-    template <typename T,
-              typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+template<typename T,
+         typename Op,
+         typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+__device__
+T normalized_unary_op(T data, Op op) {
+    return static_cast<T>(op(static_cast<float>(data)));
+}
+
+struct DeviceSin {
+    template<typename T>
     __device__
     T operator()(T data) {
-        return static_cast<T>(std::sin(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::sin(e); });
     }
 };
 
 struct DeviceCos {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::cos(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::cos(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::cos(e); });
     }
 };
 
 struct DeviceTan {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::tan(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::tan(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::tan(e); });
     }
 };
 
 struct DeviceArcSin {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::asin(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::asin(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::asin(e); });
     }
 };
 
 struct DeviceArcCos {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::acos(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::acos(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::acos(e); });
     }
 };
 
 struct DeviceArcTan {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::atan(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::atan(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::atan(e); });
     }
 };
 
 // exponential functions
 
 struct DeviceExp {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::exp(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::exp(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::exp(e); });
     }
 };
 
 struct DeviceLog {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::log(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::log(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::log(e); });
     }
 };
 
 struct DeviceSqrt {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::sqrt(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::sqrt(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::sqrt(e); });
     }
 };
 
 // rounding functions
 
 struct DeviceCeil {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::ceil(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::ceil(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::ceil(e); });
     }
 };
 
 struct DeviceFloor {
-    template<typename T,
-             typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+    template<typename T>
     __device__
     T operator()(T data) {
-        return std::floor(data);
-    }
-
-    template<typename T,
-             typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-    __device__
-    T operator()(T data) {
-        return static_cast<T>(std::floor(static_cast<float>(data)));
+        return normalized_unary_op(data, [] (auto e) { return std::floor(e); });
     }
 };
 
