@@ -237,7 +237,6 @@ public:
 std::unique_ptr<cudf::column>
 unary_operation(cudf::column_view const& input,
                 cudf::experimental::unary_op op,
-                cudaStream_t stream,
                 rmm::mr::device_memory_resource* mr) {
 
     std::unique_ptr<cudf::column> output = [&] {

@@ -90,6 +90,14 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
+TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
+{
+    cudf::test::fixed_width_column_wrapper<TypeParam>                 input    {};
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {};
+    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
+    cudf::test::expect_columns_equal(expected, output->view());
+}
+
 template <typename T>
 struct cudf_math_test : public cudf::test::BaseFixture {};
 
@@ -167,16 +175,16 @@ TYPED_TEST(cudf_math_test, SimpleSQRT)
 
 TYPED_TEST(cudf_math_test, EmptyABS)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam> input    {{ }};
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected {{ }};
+    cudf::test::fixed_width_column_wrapper<TypeParam> input    {};
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected {};
     auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptySQRT)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam> input    {{ }};
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected {{ }};
+    cudf::test::fixed_width_column_wrapper<TypeParam> input    {};
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected {};
     auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
     cudf::test::expect_columns_equal(expected, output->view());
 }
