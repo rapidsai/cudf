@@ -33,16 +33,23 @@ using Table       = cudf::experimental::table;
 
 struct JoinTest : public cudf::test::BaseFixture {};
 
+//TEST_F(JoinTest, FullJoinNoNulls)
+//TEST_F(JoinTest, LeftJoinNoNulls)
+//TEST_F(JoinTest, InnerJoinNoNulls)
+
+//TEST_F(JoinTest, FullJoinWithNulls)
+//TEST_F(JoinTest, LeftJoinWithNulls)
+//TEST_F(JoinTest, InnerJoinWithNulls)
+
 TEST_F(JoinTest, FullJoin)
 {
-  std::vector<const char*> h_strings{
-    "Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit" };
   column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
-  column_wrapper <int32_t> col0_1{{0, 1, 2, 4, 1}};
-  strcol_wrapper           col0_2(h_strings.data(), h_strings.data() + 5);
+  strcol_wrapper           col0_1({"s0", "s1", "s2", "s4", "s1"});
+  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}, {1, 1, 1, 1, 1}};
 
   column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}};
+  strcol_wrapper           col1_1{{"s1", "s0", "s1", "s2", "s1"}};
+  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -50,6 +57,7 @@ TEST_F(JoinTest, FullJoin)
   cols0.push_back(col0_2.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
 
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));

@@ -132,8 +132,7 @@ combine_join_columns(
     std::vector<size_type>& left_noncommon_col,
     std::unique_ptr<experimental::table> common_table,
     std::vector<size_type>& left_common_col,
-    std::unique_ptr<experimental::table> right_table,
-    std::vector<size_type>& right_noncommon_col) {
+    std::unique_ptr<experimental::table> right_table) {
   std::vector<std::unique_ptr<column>> left_cols;
   std::vector<std::unique_ptr<column>> common_cols;
   std::vector<std::unique_ptr<column>> right_cols;
@@ -155,7 +154,7 @@ combine_join_columns(
     combined_cols.at(left_common_col.at(i)) = std::move(common_cols.at(i));
   }
   for(size_t i = 0; i < right_cols.size(); ++i) {
-    combined_cols.at(right_noncommon_col.at(i)) = std::move(right_cols.at(i));
+    combined_cols.at(left_cols.size() + common_cols.size() + i) = std::move(right_cols.at(i));
   }
   return std::move(combined_cols);
 }
@@ -232,7 +231,7 @@ construct_join_output_df(
       combine_join_columns(
       std::move(left_table), left_noncommon_col,
       std::move(common_table), left_common_col,
-      std::move(right_table), right_noncommon_col));
+      std::move(right_table)));
 }
 
 template <JoinType join_type, typename index_type>
