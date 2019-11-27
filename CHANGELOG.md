@@ -153,6 +153,7 @@
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
 - PR #3462 Add `make_empty_column` and update `empty_like`.
+- PR #3463 Port NVStrings partition/rpartition to cudf strings column
 
 ## Bug Fixes
 
