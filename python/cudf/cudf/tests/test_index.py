@@ -196,15 +196,15 @@ def test_index_rename_inplace():
 
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
-    gds = gds + 1
+    gds._values = GenericIndex([2, 3, 4])._values
 
     assert (gds_renamed_deep.values == [1, 2, 3]).all()
 
     # inplace=True should yield a shallow copy
     gds_renamed_shallow = gds.rename("new_name", inplace=True)
-    gds = gds + 1
+    gds._values = GenericIndex([3, 4, 5])._values
 
-    assert (gds_renamed_shallow.values == [2, 3, 4]).all()
+    assert (gds_renamed_shallow.values == [3, 4, 5]).all()
 
 
 def test_set_index_as_property():
