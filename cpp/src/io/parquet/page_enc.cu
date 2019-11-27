@@ -83,7 +83,7 @@ inline __device__ uint32_t uint32_init_hash(uint32_t v)
 
 inline __device__ uint32_t uint64_init_hash(uint64_t v)
 {
-    return static_cast<uint32_t>(v + (v >> 32)) & ((1 << INIT_HASH_BITS) - 1);
+    return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
 
@@ -857,9 +857,9 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
             __syncthreads();
             while (s->rle_numvals < s->page.num_rows) {
                 uint32_t rle_numvals = s->rle_numvals;
-                uint32_t nrows = min(s->page.num_rows - rle_numvals, RLE_BFRSZ - (rle_numvals - s->rle_pos));
+                uint32_t nrows = min(s->page.num_rows - rle_numvals, 128);
                 uint32_t row = s->page.start_row + rle_numvals + t;
-                uint32_t def_lvl = (row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
+                uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows) ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
                 s->vals[(rle_numvals + t) & (RLE_BFRSZ-1)] = def_lvl;
                 __syncthreads();
                 rle_numvals += nrows;
@@ -870,7 +870,7 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
                 uint8_t *cur = s->cur;
                 uint8_t *rle_out = s->rle_out;
                 if (t < 4) {
-                    uint32_t rle_bytes = (uint32_t)(rle_out - cur);
+                    uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
                     cur[t] = rle_bytes >> (t * 8);
                 }
                 SYNCWARP();
