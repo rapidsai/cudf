@@ -280,13 +280,11 @@ class Index(object):
         Index
 
         """
+        out = self.copy(deep=False)
+        out.name = name
         if inplace is True:
-            self.name = name
-            return self
+            return out
         else:
-            out = self.copy(deep=False)
-            out.name = name
-
             return out.copy(deep=True)
 
     def astype(self, dtype):
@@ -994,7 +992,7 @@ def as_index(arbitrary, **kwargs):
     kwargs = _setdefault_name(arbitrary, kwargs)
 
     if isinstance(arbitrary, Index):
-        return arbitrary.rename(**kwargs, inplace=True)
+        return arbitrary.rename(**kwargs)
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):

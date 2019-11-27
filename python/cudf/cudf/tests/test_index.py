@@ -196,13 +196,13 @@ def test_index_rename_inplace():
 
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
-    gds._values = GenericIndex([2, 3, 4])._values
+    gds._values.data.mem = GenericIndex([2, 3, 4])._values.data.mem
 
     assert (gds_renamed_deep.values == [1, 2, 3]).all()
 
     # inplace=True should yield a shallow copy
     gds_renamed_shallow = gds.rename("new_name", inplace=True)
-    gds._values = GenericIndex([3, 4, 5])._values
+    gds._values.data.mem = GenericIndex([3, 4, 5])._values.data.mem
 
     assert (gds_renamed_shallow.values == [3, 4, 5]).all()
 
