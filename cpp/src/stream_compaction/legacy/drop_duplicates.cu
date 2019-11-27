@@ -230,7 +230,6 @@ rows in input table should be equal to number of rows in key colums table");
 
   // run gather operation to establish new order
   cudf::gather(&input, unique_indices.data().get(), &destination_table);
-  nvcategory_gather_table(input, destination_table);
   return destination_table;
 }
 
