@@ -104,7 +104,15 @@ def read_csv_without_chunksize(path, **kwargs):
     path : str
         path to files (support for glob)
     """
-    filenames = sorted(glob(str(path)))
+    if isinstance(path, list):
+        filenames = path
+    elif isinstance(path, str):
+        filenames = sorted(glob(path))
+    elif hasattr(path, "__fspath__"):
+        filenames = sorted(glob(path.__fspath__()))
+    else:
+        raise TypeError("Path type not understood:{}".format(type(path)))
+
     name = "read-csv-" + tokenize(path, **kwargs)
 
     meta = cudf.read_csv(filenames[0], **kwargs)

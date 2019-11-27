@@ -46,8 +46,11 @@ test:
   commands:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
+    - test -f $PREFIX/include/cudf/detail/gather.hpp
+    - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
     - test -f $PREFIX/include/cudf/legacy/column.hpp
+    - test -f $PREFIX/include/cudf/legacy/reshape.hpp
     - test -f $PREFIX/include/cudf/legacy/table.hpp
     - test -f $PREFIX/include/cudf/utilities/legacy/nvcategory_util.hpp
     - test -f $PREFIX/include/cudf/utilities/legacy/type_dispatcher.hpp
@@ -72,11 +75,14 @@ test:
     - test -f $PREFIX/include/cudf/legacy/merge.hpp
     - test -f $PREFIX/include/cudf/legacy/join.hpp
     - test -f $PREFIX/include/cudf/legacy/predicates.hpp
+    - test -f $PREFIX/include/cudf/legacy/quantiles.hpp
     - test -f $PREFIX/include/cudf/legacy/reduction.hpp
     - test -f $PREFIX/include/cudf/legacy/replace.hpp
     - test -f $PREFIX/include/cudf/legacy/rolling.hpp
     - test -f $PREFIX/include/cudf/legacy/search.hpp
+    - test -f $PREFIX/include/cudf/stream_compaction.hpp
     - test -f $PREFIX/include/cudf/legacy/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/transpose.hpp
     - test -f $PREFIX/include/cudf/legacy/transform.hpp
     - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/include/cudf/types.hpp

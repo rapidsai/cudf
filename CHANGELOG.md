@@ -1,7 +1,7 @@
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
-
+- PR #2905 Added `Series.median()` and null support for `Series.quantile()`
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
 - PR #2980 Added nvtext is_vowel/is_consonant functions
@@ -19,6 +19,7 @@
 - PR #3161 Move merge files to legacy
 - PR #3079 Added support to write ORC files given a local path
 - PR #3192 Add dtype param to cast `DataFrame` on init
+- PR #3213 Port cuIO to libcudf++
 - PR #3222 Add nvtext character tokenizer
 - PR #3223 Java expose underlying buffers
 - PR #3300 Add `DataFrame.insert`
@@ -30,7 +31,22 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3187 Define and implement new replace APIs
+- PR #3356 Add vertical concatenation for table/columns
+- PR #3344 java split API
+- PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
+- PR #3298 add null replacement iterator for column_device_view
+- PR #3297 Define and implement new groupby API.
+- PR #3396 Update device_atomics with new bool8 and timestamp specializations
+- PR #3411 Java host memory management API
+- PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
+- PR #3401 Add dask_cudf ORC writer (to_orc)
+- PR #3331 Add copy_if_else
+- PR #3427 Define and Implement new multi-search API
+- PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
+- PR #3172 Define and implement new fill/repeat/copy_range APIs
+
 
 ## Improvements
 
@@ -69,7 +85,7 @@
 - PR #2971 Added initial gather and scatter methods for strings_column_view
 - PR #3133 Port NVStrings to cudf column: count_characters and count_bytes
 - PR #2991 Added strings column functions concatenate and join_strings
-- PR #3028 Port gather and scatter to libcudf++
+- PR #3028 Define and implement new `gather` APIs.
 - PR #3135 Add nvtx utilities to cudf::nvtx namespace
 - PR #3021 Java host side concat of serialized buffers
 - PR #3138 Move unary files to legacy
@@ -78,7 +94,9 @@
 - PR #3154 Make `table_view_base.column()` const and add `mutable_table_view.column()`
 - PR #3175 Set cmake cuda version variables
 - PR #3171 Move deprecated error macros to legacy
+- PR #3191 Port NVStrings integer convert ops to cudf column
 - PR #3189 Port NVStrings find ops to cudf column
+- PR #3352 Port NVStrings convert float functions to cudf strings column
 - PR #3193 Add cuPy as a formal dependency
 - PR #3195 Support for zero columned `table_view`
 - PR #3165 Java device memory size for string category
@@ -89,11 +107,14 @@
 - PR #3350 Port NVStrings booleans convert functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
+- PR #3232 Port NVStrings datetime conversion to cudf strings column
+- PR #3136 Define and implement new transpose API
 - PR #3237 Define and implement new transform APIs
 - PR #3245 Move binaryop files to legacy
 - PR #3241 Move stream_compaction files to legacy
 - PR #3166 Move reductions to legacy
 - PR #3261 Small cleanup: remove `== true`
+- PR #3271 Update rmm API based on `rmm.reinitialize(...)` change
 - PR #3266 Remove optional checks for CuPy
 - PR #3268 Adding null ordering per column feature when sorting
 - PR #3239 Adding floating point specialization to comparators for NaNs
@@ -109,11 +130,28 @@
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3286 Clean up the starter code on README
+- PR #3354 Define and implement new `scatter` APIs
+- PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
 - PR #3299 Define and implement new `is_sorted` APIs
 - PR #3328 Partition by stripes in dask_cudf ORC reader
 - PR #3243 Use upstream join code in dask_cudf
+- PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
+- PR #3380 Concatenate columns of strings
+- PR #3382 Add fill function for strings column
+- PR #3391 Move device_atomics_tests.cu files to legacy
+- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`, 
+           `apply_boolean_mask`, `drop_duplicate` and `unique_count`.
+- PR #3387 Strings column gather function
+- PR #3440 Strings column scatter function
+- PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
+- PR #3397 Port unary cast to libcudf++
+- PR #3398 Move reshape.hpp files to legacy
+- PR #3425 Strings column copy_if_else implementation
+- PR #3422 Move utilities to legacy
+- PR #3201 Define and implement new datetime_ops APIs
+- PR #3462 Add `make_empty_column` and update `empty_like`.
 
 ## Bug Fixes
 
@@ -152,15 +190,30 @@
 - PR #3318 Revert arrow to 0.15.0 temporarily to unblock downstream projects CI
 - PR #3317 Fix index-argument bug in dask_cudf parquet reader
 - PR #3323 Fix `insert` non-assert test case
-- PR #3341 Fix `Series` constructor converting NoneType to "None" 
+- PR #3341 Fix `Series` constructor converting NoneType to "None"
 - PR #3326 Fix and test for detail::gather map iterator type inference
 - PR #3334 Remove zero-size exception check from make_strings_column factories
 - PR #3333 Fix compilation issues with `constexpr` functions not marked `__device__`
 - PR #3340 Make all benchmarks use cudf base fixture to initialize RMM pool
 - PR #3337 Fix Java to pad validity buffers to 64-byte boundary
+- PR #3362 Fix `find_and_replace` upcasting series for python scalars and lists
 - PR #3357 Disabling `column_view` iterators for non fixed-width types
+- PR #3383 Fix : properly compute null counts for rolling_window.
+- PR #3386 Removing external includes from `column_view.hpp`
 - PR #3369 Add write_partition to dask_cudf to fix to_parquet bug
-
+- PR #3388 Support getitem with bools when DataFrame has a MultiIndex
+- PR #3408 Fix String and Column (De-)Serialization
+- PR #3372 Fix dask-distributed scatter_by_map bug
+- PR #3419 Fix a bug in parse_into_parts (incomplete input causing walking past the end of string).
+- PR #3413 Fix dask_cudf read_csv file-list bug
+- PR #3416 Fix memory leak in ColumnVector when pulling strings off the GPU
+- PR #3424 Fix benchmark build by adding libcudacxx to benchmark's CMakeLists.txt
+- PR #3435 Fix diff and shift for empty series
+- PR #3439 Fix index-name bug in StringColumn concat
+- PR #3445 Fix ORC Writer default stripe size
+- PR #3459 Fix printing of invalid entries
+- PR #3468 Fix memory leak issue in `drop_duplicates`
+- PR #3474 Fix small doc error in capitalize Docs
 
 # cuDF 0.10.0 (16 Oct 2019)
 

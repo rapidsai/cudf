@@ -417,6 +417,43 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSplitWithArray() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
+      Integer[][] expectedData = {
+          {10},
+          {12, null},
+          {null, 18},
+          {20, 22, 24, 26},
+          {28}};
+
+      ColumnVector[] splits = cv.split(1, 3, 5, 9);
+      try {
+        assertEquals(expectedData.length, splits.length);
+        for (int splitIndex = 0; splitIndex < splits.length; splitIndex++) {
+          ColumnVector subVec = splits[splitIndex];
+          subVec.ensureOnHost();
+          assertEquals(expectedData[splitIndex].length, subVec.getRowCount());
+          for (int subIndex = 0; subIndex < expectedData[splitIndex].length; subIndex++) {
+            Integer expected = expectedData[splitIndex][subIndex];
+            if (expected == null) {
+              assertTrue(subVec.isNull(subIndex));
+            } else {
+              assertEquals(expected, subVec.getInt(subIndex));
+            }
+          }
+        }
+      } finally {
+        for (int i = 0 ; i < splits.length ; i++) {
+          if (splits[i] != null) {
+            splits[i].close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testWithOddSlices() {
     try (ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
       assertThrows(CudfException.class, () -> cv.slice(1, 3, 5, 9, 2, 4, 8));
@@ -609,7 +646,8 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(-1, index.getInt());
 
       try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
-        Table filtered = new Table(cv).filter(mask)) {
+           Table input = new Table(cv);
+           Table filtered = input.filter(mask)) {
         assertEquals(0, filtered.getColumn(0).getRowCount());
       }
 

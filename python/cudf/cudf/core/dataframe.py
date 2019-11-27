@@ -251,7 +251,8 @@ class DataFrame(object):
         frames.extend(index_frames)
 
         # Use the column directly to avoid duplicating the index
-        header["column_names"] = tuple(self._cols.keys())
+        # need to pickle column names to handle numpy integer columns
+        header["column_names"] = pickle.dumps(tuple(self._cols.keys()))
         column_header, column_frames = column.serialize_columns(self._columns)
         header["columns"] = column_header
         frames.extend(column_frames)
@@ -269,7 +270,7 @@ class DataFrame(object):
         # Reconstruct the columns
         column_frames = frames[header["index_frame_count"] :]
 
-        column_names = header["column_names"]
+        column_names = pickle.loads(header["column_names"])
         columns = column.deserialize_columns(header["columns"], column_frames)
 
         return cls(dict(zip(column_names, columns)), index=index)
@@ -398,7 +399,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                index = as_index(self.index.as_column()[mask])
+                index = self.index.take(mask)
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
@@ -429,18 +430,74 @@ class DataFrame(object):
             df[col]._column = df[col]._column.set_mask(boolbits)
         return df
 
-    def __setitem__(self, name, col):
-        """Add/set column by *name or DataFrame*
+    def __setitem__(self, arg, value):
+        """Add/set column by *arg or DataFrame*
         """
-        if isinstance(name, DataFrame):
-            for col_name in self._cols:
-                mask = name[col_name]
-                self._cols[col_name][mask] = col
 
-        elif name in self._cols:
-            self._cols[name] = self._prepare_series_for_add(col)
+        if isinstance(arg, DataFrame):
+            # not handling set_item where arg = df & value = df
+            if isinstance(value, DataFrame):
+                msg = (
+                    "__setitem__ with arg = {!r} and "
+                    "value = {!r} is not supported"
+                )
+                raise TypeError(msg.format(type(value), type(arg)))
+            else:
+                for col_name in self._cols:
+                    scatter_map = arg[col_name]
+                    self._cols[col_name][scatter_map] = value
+        elif is_scalar(arg) or isinstance(arg, tuple):
+            if isinstance(value, DataFrame):
+                _setitem_with_dataframe(
+                    input_df=self,
+                    replace_df=value,
+                    input_cols=[arg],
+                    mask=None,
+                )
+            else:
+                if arg in self._cols:
+                    self._cols[arg] = self._prepare_series_for_add(value)
+                else:
+                    # disc. with pandas here
+                    # pandas raises key error here
+                    self.insert(len(self._cols), arg, value)
+
+        elif isinstance(
+            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
+        ):
+            mask = arg
+            if isinstance(mask, list):
+                mask = np.array(mask)
+
+            if mask.dtype == "bool":
+                if isinstance(value, DataFrame):
+                    _setitem_with_dataframe(
+                        input_df=self,
+                        replace_df=value,
+                        input_cols=None,
+                        mask=mask,
+                    )
+                else:
+                    for col_name in self._cols:
+                        self._cols[col_name][mask] = value
+            else:
+                if isinstance(value, DataFrame):
+                    _setitem_with_dataframe(
+                        input_df=self,
+                        replace_df=value,
+                        input_cols=arg,
+                        mask=None,
+                    )
+                else:
+                    for col in arg:
+                        # we will raise a key error if col not in dataframe
+                        # this behavior will make it
+                        # consistent to pandas >0.21.0
+                        self._cols[col] = self._prepare_series_for_add(value)
+
         else:
-            self.insert(len(self._cols), name, col)
+            msg = "__setitem__ on type {!r} is not supported"
+            raise TypeError(msg.format(type(arg)))
 
     def __delitem__(self, name):
         """
@@ -4069,6 +4126,10 @@ class DataFrame(object):
         else:
             index = None
 
+        # Make sure every column has the correct name
+        for col, name in zip(self._columns, self.columns):
+            col.name = name
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
             self._columns, map_index._column, index
@@ -4167,6 +4228,23 @@ class DataFrame(object):
         else:
             return result
 
+    def cov(self, **kwargs):
+        """Compute the covariance matrix of a DataFrame.
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments to be passed to cupy.cov
+        Returns
+        -------
+        cov : DataFrame
+        """
+        cov = cupy.cov(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
+
 
 def from_pandas(obj):
     """
@@ -4252,3 +4330,36 @@ def _align_indices(lhs, rhs):
                 rhs_out[col] = df[col]
 
     return lhs_out, rhs_out
+
+
+def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
+    """
+        This function sets item dataframes relevant columns with replacement df
+        :param input_df: Dataframe to be modified inplace
+        :param replace_df: Replacement DataFrame to replace values with
+        :param input_cols: columns to replace in the input dataframe
+        :param mask: boolean mask in case of masked replacing
+    """
+
+    if input_cols is None:
+        input_cols = input_df.columns
+
+    if len(input_cols) != len(replace_df.columns):
+        raise ValueError(
+            "Number of Input Columns must be same replacement Dataframe"
+        )
+
+    for col_1, col_2 in zip(input_cols, replace_df.columns):
+        if col_1 in input_df.columns:
+            if mask is not None:
+                input_df._cols[col_1][mask] = replace_df[col_2]
+            else:
+                input_df._cols[col_1] = input_df._prepare_series_for_add(
+                    replace_df[col_2]
+                )
+        else:
+            if mask is not None:
+                raise ValueError("Can not insert new column with a bool mask")
+            else:
+                # handle append case
+                input_df.insert(len(input_df._cols), col_1, replace_df[col_2])

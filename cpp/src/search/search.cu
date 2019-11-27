@@ -21,8 +21,10 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <hash/unordered_multiset.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <strings/utilities.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
@@ -120,12 +122,25 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
-struct contains_scalar {
+template <typename Element>
+struct scalar_compare {
+  using ScalarDeviceType = cudf::experimental::scalar_device_type_t<Element>;
+  scalar_compare(ScalarDeviceType const& scalar): scalar{scalar} {}
+
+  __device__ bool operator()(Element e) {
+    return equality_compare<Element>(e, scalar.value());
+  }
+
+  ScalarDeviceType scalar;
+};
+
+struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_device_view d_col, const scalar &value,
                            cudaStream_t stream) {
 
     using ScalarType = cudf::experimental::scalar_type_t<Element>;
+    using ScalarDeviceType = cudf::experimental::scalar_device_type_t<Element>;
     
     auto s1 = static_cast<const ScalarType *>(&value);
     auto data_it = thrust::make_counting_iterator<size_type>(0);
@@ -138,11 +153,9 @@ struct contains_scalar {
                               data_it, data_it + d_col.size(),
                               eq_op) > 0;
     } else {
-      auto eq_op = compare_with_value<Element, false>(d_col, s2, true);
-
-      return thrust::count_if(rmm::exec_policy(stream)->on(stream),
-                              data_it, data_it + d_col.size(),
-                              eq_op) > 0;
+      return thrust::find(rmm::exec_policy(stream)->on(stream),
+                          d_col.begin<Element>(), d_col.end<Element>(),
+                          s1->value()) != d_col.end<Element>();
     }
   }
 };
@@ -165,9 +178,73 @@ bool contains(column_view const& col,
   auto d_col = column_device_view::create(col, stream);
 
   return cudf::experimental::type_dispatcher(col.type(),
-                                             contains_scalar{},
-                                             *d_col, value,
-                                             stream);
+                                             contains_scalar_dispatch{},
+                                             *d_col, value, stream);
+}
+
+struct multi_contains_dispatch {
+  template <typename Element>
+  std::unique_ptr<column> operator()(column_view const& haystack,
+                                     column_view const& needles,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
+
+    std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
+                                                         haystack.size(),
+                                                         copy_bitmask(haystack),
+                                                         haystack.null_count(),
+                                                         stream, mr);
+  
+    if (haystack.size() == 0) {
+      return result;
+    }
+
+    mutable_column_view result_view = result.get()->mutable_view();
+
+    if (needles.size() == 0) {
+      bool8 f = false;
+      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool8>(), result_view.end<bool8>(), f);
+      return result;
+    }
+
+    auto hash_set = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto device_hash_set = hash_set.to_device();
+
+    auto d_haystack_ptr = column_device_view::create(haystack, stream);
+    auto d_haystack = *d_haystack_ptr;
+
+    if (haystack.has_nulls()) {
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        result_view.begin<bool8>(),
+                        [device_hash_set, d_haystack] __device__ (size_t index) {
+                          return d_haystack.is_null_nocheck(index) || device_hash_set.contains(d_haystack.element<Element>(index));
+                        });
+    } else {
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        result_view.begin<bool8>(),
+                        [device_hash_set, d_haystack] __device__ (size_t index) {
+                          return device_hash_set.contains(d_haystack.element<Element>(index));
+                        });
+    }
+
+    return result;
+  }
+};
+
+std::unique_ptr<column> contains(column_view const& haystack,
+                                 column_view const& needles,
+                                 rmm::mr::device_memory_resource* mr,
+                                 cudaStream_t stream = 0) {
+
+  CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
+
+  return cudf::experimental::type_dispatcher(haystack.type(),
+                                             multi_contains_dispatch{},
+                                             haystack, needles, mr, stream);
 }
 } // namespace detail
 
@@ -192,6 +269,11 @@ std::unique_ptr<column> upper_bound(table_view const& t,
 bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
 {
   return detail::contains(col, value, mr);
+}
+
+std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
+                                       rmm::mr::device_memory_resource* mr) {
+  return detail::contains(haystack, needles, mr);
 }
 
 } // namespace exp
