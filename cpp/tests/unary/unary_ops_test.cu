@@ -228,6 +228,37 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCEIL)
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
+TYPED_TEST(cudf_math_with_floating_point_test, IntegralTypeFail)
+{
+    cudf::test::fixed_width_column_wrapper<TypeParam> input { 1.0 };
+    EXPECT_THROW(
+        auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::BIT_INVERT),
+        cudf::logic_error);
+}
+
+template <typename T>
+struct cudf_math_with_char_test : public cudf::test::BaseFixture {};
+
+using just_char = ::testing::Types<char>;
+
+TYPED_TEST_CASE(cudf_math_with_char_test, just_char);
+
+TYPED_TEST(cudf_math_with_char_test, ArithmeticTypeFail)
+{
+    cudf::test::fixed_width_column_wrapper<TypeParam> input { 'c' };
+    EXPECT_THROW(
+        auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT),
+        cudf::logic_error);
+}
+
+TYPED_TEST(cudf_math_with_char_test, LogicalOpTypeFail)
+{
+    cudf::test::fixed_width_column_wrapper<TypeParam> input { 'h' };
+    EXPECT_THROW(
+        auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT),
+        cudf::logic_error);
+}
+
 template <typename T>
 struct IsNull : public cudf::test::BaseFixture {};
 
