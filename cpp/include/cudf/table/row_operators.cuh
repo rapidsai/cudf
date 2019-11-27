@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -138,50 +137,6 @@ template <typename Element,
 __device__ bool equality_compare(Element const lhs, Element const rhs) {
     return lhs == rhs;
 }
-
-/**---------------------------------------------------------------------------*
- * @brief Computes whether an element in a column is equal to a scalar value
- *
- * @tparam Element identifies the type of the element
- * @tparam has_nulls Indicates the potential for null values in the column
- *---------------------------------------------------------------------------**/
-template <typename Element, bool has_nulls = true>
-struct compare_with_value {
-  using ScalarDeviceType = cudf::experimental::scalar_device_type_t<Element>;
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a function object for comparing an element of a column
-   * to a scalar
-   *
-   * @param col The column
-   * @param val The scalar value to compare with
-   * @param nulls_are_equal Indicates if two null elements are treated as
-   *equivalent
-   *---------------------------------------------------------------------------**/
-  compare_with_value(column_device_view col, const ScalarDeviceType val, bool nulls_are_equal)
-    : col{col}, val{val}, nulls_are_equal{nulls_are_equal} {}
-
-  /**---------------------------------------------------------------------------*
-   * @brief Checks whether the element at `index` in the column is equal
-   * to the scalar value
-   *
-   * @param index The index of element in the column
-   * @return `true` if element from the column compares equal to the scalar value
-   *---------------------------------------------------------------------------**/
-  __device__ bool operator()(size_type index) noexcept {
-    if (has_nulls && col.is_null_nocheck(index)) {
-      if (val.is_valid())
-        return false;
-      else
-        return nulls_are_equal;
-    }
-
-    return equality_compare<Element>(col.element<Element>(index), val.value());
-  }
-
-  column_device_view   col;
-  ScalarDeviceType     val;
-  bool                 nulls_are_equal;
-};
 
 /**---------------------------------------------------------------------------*
  * @brief Performs an equality comparison between two elements in two columns.

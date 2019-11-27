@@ -122,40 +122,72 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
-template <typename Element>
-struct scalar_compare {
-  using ScalarDeviceType = cudf::experimental::scalar_device_type_t<Element>;
-  scalar_compare(ScalarDeviceType const& scalar): scalar{scalar} {}
+template <typename Element, bool nullable = true>
+struct compare_with_value{
+  compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
 
-  __device__ bool operator()(Element e) {
-    return equality_compare<Element>(e, scalar.value());
+    : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
+
+  __device__ bool operator()(size_type i) noexcept {
+    if (nullable) {
+      bool const col_is_null{col.nullable() and col.is_null(i)};
+      if (col_is_null and not val_is_valid)
+        return nulls_are_equal;
+      else if (col_is_null == val_is_valid)
+        return false;
+    }
+    
+    return equality_compare<Element>(col.element<Element>(i), value);
   }
 
-  ScalarDeviceType scalar;
+  column_device_view        col;
+  Element                   value;
+  bool val_is_valid;
+  bool nulls_are_equal;
 };
 
+template <typename Element>
+void populate_element(scalar const& value, Element &e) {
+  using ScalarType = cudf::experimental::scalar_type_t<Element>;
+  auto s1 = static_cast<const ScalarType *>(&value);
+
+  e = s1->value();
+}
+
+template <>
+void populate_element<string_view>(scalar const& value, string_view &e) {
+  using ScalarType = cudf::experimental::scalar_type_t<string_view>;
+  auto s1 = static_cast<const ScalarType *>(&value);
+
+  e = string_view{s1->data(), s1->size()};
+}
+  
 struct contains_scalar_dispatch {
   template <typename Element>
-  bool operator()(column_device_view d_col, const scalar &value,
-                           cudaStream_t stream) {
+  bool operator()(column_view const& col, scalar const& value,
+                  cudaStream_t stream,
+                  rmm::mr::device_memory_resource *mr) {
 
-    using ScalarType = cudf::experimental::scalar_type_t<Element>;
-    using ScalarDeviceType = cudf::experimental::scalar_device_type_t<Element>;
-    
-    auto s1 = static_cast<const ScalarType *>(&value);
+    auto d_col = column_device_view::create(col, stream);
     auto data_it = thrust::make_counting_iterator<size_type>(0);
-    auto s2 = get_scalar_device_view(*s1);
 
-    if (d_col.has_nulls()) {
-      auto eq_op = compare_with_value<Element, true>(d_col, s2, true);
+    bool    element_is_valid{value.is_valid()};
+    Element element;
 
-      return thrust::count_if(rmm::exec_policy(stream)->on(stream),
-                              data_it, data_it + d_col.size(),
-                              eq_op) > 0;
+    populate_element(value, element);
+
+    if (col.has_nulls()) {
+      auto eq_op = compare_with_value<Element, true>(*d_col, element, element_is_valid, true);
+
+      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                            data_it, data_it + col.size(),
+                            eq_op);
     } else {
-      return thrust::find(rmm::exec_policy(stream)->on(stream),
-                          d_col.begin<Element>(), d_col.end<Element>(),
-                          s1->value()) != d_col.end<Element>();
+      auto eq_op = compare_with_value<Element, false>(*d_col, element, element_is_valid, true);
+
+      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                            data_it, data_it + col.size(),
+                            eq_op);
     }
   }
 };
@@ -175,11 +207,10 @@ bool contains(column_view const& col,
     return col.has_nulls();
   }
 
-  auto d_col = column_device_view::create(col, stream);
-
   return cudf::experimental::type_dispatcher(col.type(),
                                              contains_scalar_dispatch{},
-                                             *d_col, value, stream);
+                                             col, value,
+                                             stream, mr);
 }
 
 struct multi_contains_dispatch {
