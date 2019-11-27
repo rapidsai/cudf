@@ -22,6 +22,7 @@
 #include <rmm/rmm.h>
 #include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/default_memory_resource.hpp>
 
 template <class T>
 struct managed_allocator {
