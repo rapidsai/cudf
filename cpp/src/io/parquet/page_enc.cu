@@ -922,7 +922,7 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
         if (dict_bits >= 0) {
             // Dictionary encoding
             if (dict_bits > 0) {
-                uint32_t v, rle_numvals;
+                uint32_t rle_numvals;
 
                 pos = __popc(warp_valids & ((1 << (t & 0x1f)) - 1));
                 if (!(t & 0x1f)) {
@@ -935,13 +935,14 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
                 __syncthreads();
                 pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0);
                 rle_numvals = s->rle_numvals;
-                if (dtype == BOOLEAN) {
-                    v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]; // NOTE: Assuming boolean for now
-                }
-                else {
-                    v = s->col.dict_index[row];
-                }
                 if (is_valid) {
+                    uint32_t v;
+                    if (dtype == BOOLEAN) {
+                        v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row];
+                    }
+                    else {
+                        v = s->col.dict_index[row];
+                    }
                     s->vals[(rle_numvals + pos) & (RLE_BFRSZ - 1)] = v;
                 }
                 rle_numvals += s->scratch_red[3];
@@ -1302,7 +1303,7 @@ gpuEncodePageHeaders(EncPage *pages, EncColumnChunk *chunks, const gpu_inflate_s
             int page_type = page_g.page_type;
             // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and RLE_DICTIONARY in data page,
             // but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data pages (actual encoding is identical).
-            int encoding = (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN;
+            int encoding = (col_g.physical_type != BOOLEAN) ? (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN : RLE;
             CPW_FLD_INT32(1, page_type)
             CPW_FLD_INT32(2, uncompressed_page_size)
             CPW_FLD_INT32(3, compressed_page_size)

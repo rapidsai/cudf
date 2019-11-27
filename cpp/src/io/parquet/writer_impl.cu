@@ -313,6 +313,39 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& ch
 }
 
 
+void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+                                gpu::EncPage *pages, uint32_t num_columns,
+                                uint32_t pages_in_batch, uint32_t first_page_in_batch,
+                                uint32_t rowgroups_in_batch, uint32_t first_rowgroup,
+                                gpu_inflate_input_s *comp_in,
+                                gpu_inflate_status_s *comp_out,
+                                const statistics_chunk *page_stats,
+                                const statistics_chunk *chunk_stats,
+                                cudaStream_t stream) {
+  CUDA_TRY(gpu::EncodePages(pages, chunks.device_ptr(), pages_in_batch,
+                            first_page_in_batch, comp_in, comp_out, stream));
+  switch(compression_) {
+   case SNAPPY:
+    CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
+    break;
+   default:
+    break;
+  }
+  // TBD: Not clear if the official spec actually allows dynamically turning off compression at the chunk-level
+  CUDA_TRY(DecideCompression(chunks.device_ptr() + first_rowgroup * num_columns,
+                             pages, rowgroups_in_batch * num_columns, comp_out, stream));
+  CUDA_TRY(EncodePageHeaders(pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_out,
+                             page_stats, chunk_stats, stream));
+  CUDA_TRY(GatherPages(chunks.device_ptr() + first_rowgroup * num_columns, pages,
+                       rowgroups_in_batch * num_columns, stream));
+  CUDA_TRY(cudaMemcpyAsync(&chunks[first_rowgroup * num_columns],
+                           chunks.device_ptr() + first_rowgroup * num_columns,
+                           rowgroups_in_batch * num_columns * sizeof(gpu::EncColumnChunk),
+                           cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+}
+
+
 writer::impl::impl(std::string filepath, writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
     : _mr(mr) {
@@ -559,6 +592,48 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
   outfile_.write(reinterpret_cast<char *>(&fhdr), sizeof(fhdr));
+
+  // Encode row groups in batches
+  size_t current_chunk_offset = sizeof(fhdr);
+  for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
+    // Count pages in this batch
+    uint32_t rnext = r + batch_list[b];
+    uint32_t first_page_in_batch = chunks[r * num_columns].first_page;
+    uint32_t first_page_in_next_batch = (rnext < num_rowgroups) ? chunks[rnext * num_columns].first_page : num_pages;
+    uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
+    encode_pages(chunks, pages.data().get(), num_columns, pages_in_batch, first_page_in_batch,
+                 batch_list[b], r, comp_in.data().get(), comp_out.data().get(),
+                 (stats_granularity_ >= statistics_freq::statistics_page) ? page_stats.data().get() : nullptr,
+                 (stats_granularity_ >= statistics_freq::statistics_rowgroup) ? page_stats.data().get() + num_pages : nullptr,
+                 stream);
+    for (; r < rnext; r++) {
+      for (auto i = 0; i < num_columns; i++) {
+        gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
+        void *dev_bfr;
+        if (ck->is_compressed) {
+          md.row_groups[r].columns[i].meta_data.codec = compression_;
+          dev_bfr = ck->compressed_bfr;
+        }
+        else {
+          dev_bfr = ck->uncompressed_bfr;
+        }
+        CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
+                                 cudaMemcpyDeviceToHost, stream));
+        CUDA_TRY(cudaStreamSynchronize(stream));
+        md.row_groups[r].total_byte_size += ck->compressed_size;
+        md.row_groups[r].columns[i].meta_data.data_page_offset = current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
+        md.row_groups[r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? current_chunk_offset : 0;
+        md.row_groups[r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
+        md.row_groups[r].columns[i].meta_data.total_compressed_size = ck->compressed_size;
+        outfile_.write(reinterpret_cast<const char *>(host_bfr.get() + ck->ck_stat_size), ck->compressed_size);
+        if (ck->ck_stat_size != 0) {
+          md.row_groups[r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+          memcpy(md.row_groups[r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
+        }
+        current_chunk_offset += ck->compressed_size;
+      }
+    }
+  }
 
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;

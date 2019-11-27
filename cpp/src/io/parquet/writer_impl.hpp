@@ -130,7 +130,7 @@ class writer::impl {
    *
    * @param chunks column chunk array
    * @param col_desc column description array
-   * @param pages column description array
+   * @param pages encoder pages array
    * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
@@ -145,7 +145,31 @@ class writer::impl {
                           uint32_t num_rowgroups, uint32_t num_columns,
                           uint32_t num_pages, uint32_t num_stats_bfr,
                           cudaStream_t stream);
-
+  /**
+   * @brief Encode a batch pages
+   *
+   * @param chunks column chunk array
+   * @param pages encoder pages array
+   * @param num_columns Total number of columns
+   * @param pages_in_batch number of pages in this batch
+   * @param first_page_in_batch first page in batch
+   * @param rowgroups_in_batch number of rowgroups in this batch
+   * @param first_rowgroup first rowgroup in batch
+   * @param comp_in compressor input array
+   * @param comp_out compressor status array
+   * @param page_stats optional page-level statistics (nullptr if none)
+   * @param chunk_stats optional chunk-level statistics (nullptr if none)
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+                    gpu::EncPage *pages, uint32_t num_columns,
+                    uint32_t pages_in_batch, uint32_t first_page_in_batch,
+                    uint32_t rowgroups_in_batch, uint32_t first_rowgroup,
+                    gpu_inflate_input_s *comp_in,
+                    gpu_inflate_status_s *comp_out,
+                    const statistics_chunk *page_stats,
+                    const statistics_chunk *chunk_stats,
+                    cudaStream_t stream);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
