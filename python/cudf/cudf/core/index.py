@@ -280,8 +280,8 @@ class Index(object):
         Index
 
         """
-        self.name = name
         if inplace is True:
+            self.name = name
             return None
         else:
             out = self.copy(deep=False)
