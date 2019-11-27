@@ -129,7 +129,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
  * @param strings Strings instance for this operation.
  * @param begin Start of index iterator.
  * @param end End of index iterator.
- * @param ignore_out_of_bounds If true, indices outside the column's range are ignored.
+ * @param nullify_out_of_bounds If true, indices outside the column's range are nullified.
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column containing the gathered strings.
@@ -137,11 +137,11 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 template<typename MapIterator>
 std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
                                       MapIterator begin, MapIterator end,
-                                      bool ignore_out_of_bounds,
+                                      bool nullify_out_of_bounds,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                       cudaStream_t stream=0 )
 {
-    if( ignore_out_of_bounds )
+    if( nullify_out_of_bounds )
         return gather<true>( strings, begin, end, mr, stream );
     return gather<false>( strings, begin, end, mr, stream );
 }
