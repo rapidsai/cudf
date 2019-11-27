@@ -81,6 +81,16 @@ rmm::device_vector<thrust::pair<const char*,cudf::size_type>> create_test_string
     return d_strings;
 }
 
+void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
+{
+    EXPECT_EQ(lhs.type(), rhs.type());
+    EXPECT_EQ(lhs.size(), 0);
+    EXPECT_EQ(lhs.null_count(), 0);
+    EXPECT_EQ(lhs.nullable(), false);
+    EXPECT_EQ(lhs.has_nulls(), false);
+    // An empty column is not required to have children
+}
+
 TEST_F(EmptyLikeStringTest, ColumnStringTest) {
     rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings = create_test_string();
 
@@ -88,9 +98,7 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest) {
 
     auto got = cudf::experimental::empty_like(column->view());
 
-    auto expected = cudf::strings::detail::make_empty_strings_column();
-
-    cudf::test::expect_columns_equal(got->view(), expected->view());
+    check_empty_string_columns(got->view(), column->view());
 }
 
 std::unique_ptr<cudf::experimental::table> create_table (cudf::size_type size, cudf::mask_state state){
