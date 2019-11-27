@@ -19,6 +19,7 @@
 #include "cudf_gtest.hpp"
 #include "legacy/cudf_test_utils.cuh"
 #include <cudf/wrappers/bool.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
@@ -72,13 +73,14 @@ template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
+
   using uniform_distribution =
-      std::conditional_t<std::is_same<T, bool>::value or
-                             std::is_same<T, experimental::bool8>::value,
-                         std::bernoulli_distribution,
-                         std::conditional_t<std::is_floating_point<T>::value,
-                                            std::uniform_real_distribution<T>,
-                                            std::uniform_int_distribution<T>>>;
+      std::conditional_t<cudf::is_timestamp<T>(), std::uniform_int_distribution<int32_t>,
+        std::conditional_t<std::is_same<T, bool>::value or std::is_same<T, cudf::experimental::bool8>::value,
+                           std::bernoulli_distribution,
+          std::conditional_t<std::is_floating_point<T>::value,
+                             std::uniform_real_distribution<T>,
+                             std::uniform_int_distribution<T> > > >;
 
   UniformRandomGenerator() = default;
 
