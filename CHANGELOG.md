@@ -31,6 +31,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3187 Define and implement new replace APIs
 - PR #3356 Add vertical concatenation for table/columns
 - PR #3344 java split API
 - PR #2791 Add `groupby.std()`
@@ -45,6 +46,7 @@
 - PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
+
 
 ## Improvements
 
@@ -149,6 +151,7 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
+- PR #3462 Add `make_empty_column` and update `empty_like`.
 
 ## Bug Fixes
 
@@ -210,6 +213,7 @@
 - PR #3445 Fix ORC Writer default stripe size
 - PR #3459 Fix printing of invalid entries
 - PR #3466 Fix gather null mask allocation for invalid index
+- PR #3468 Fix memory leak issue in `drop_duplicates`
 
 # cuDF 0.10.0 (16 Oct 2019)
 
