@@ -118,7 +118,6 @@ CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 template <typename T>
 struct type_to_scalar_type_impl {
   using ScalarType = cudf::scalar;
-  using ScalarDeviceType = cudf::detail::scalar_device_view_base;
 };
 
 #ifndef MAP_NUMERIC_SCALAR
