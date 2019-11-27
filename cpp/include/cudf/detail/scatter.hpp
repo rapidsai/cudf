@@ -112,7 +112,7 @@ std::unique_ptr<table> scatter(
  * indices given by partition_map. The number of output tables is one more than
  * the maximum value in `partition_map`.
  * 
- * If a value in [0, n] does not appear in partition_map, then the corresponding
+ * Output table `i` in [0, n] is empty if `i` does not appear in partition_map.
  * output table will be empty.
  *
  * @throw cudf::logic_error when partition_map is a non-integer type
@@ -129,7 +129,7 @@ std::unique_ptr<table> scatter(
  *              [{10, 14}, {1, 3}],
  *              [{12, 18, 20}, {2, null, 0}]}
  *
- * @param input Table whose rows will be partitioned into a set of
+ * @param input Table of rows to be partitioned into a set of tables
  * tables according to `partition_map`
  * @param partition_map  Non-null column of integer values that map
  * each row in `input` table into one of the output tables

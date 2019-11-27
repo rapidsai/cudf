@@ -137,7 +137,8 @@ struct scatter_impl {
       auto const begin = -target.num_rows();
       auto const end = target.num_rows();
       auto bounds = bounds_checker<T>{begin, end};
-      CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream)->on(stream),
+      CUDF_EXPECTS(scatter_map.size() == thrust::count_if(
+        rmm::exec_policy(stream)->on(stream),
         scatter_map.begin<T>(), scatter_map.end<T>(), bounds),
         "Scatter map index out of bounds");
     }
@@ -272,7 +273,8 @@ struct scatter_scalar_impl {
       auto const begin = -target.num_rows();
       auto const end = target.num_rows();
       auto bounds = bounds_checker<T>{begin, end};
-      CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream)->on(stream),
+      CUDF_EXPECTS(indices.size() == thrust::count_if(
+        rmm::exec_policy(stream)->on(stream),
         indices.begin<T>(), indices.end<T>(), bounds),
         "Scatter map index out of bounds");
     }
@@ -348,10 +350,10 @@ struct scatter_to_tables_impl {
 
       // Create empty tables for unused partitions
       for (; next_partition < partition; ++next_partition) {
-        output[next_partition] = empty_like(input, stream);
+        output[next_partition] = empty_like(input);
       }
 
-      // Gather input rows for the current partition
+      // Gather input rows for the current partition (second dispatch for column types)
       auto const data = d_gather_maps.data().get() + offsets[index];
       auto const size = offsets[index + 1] - offsets[index];
       auto const gather_map = column_view(data_type(INT32), size, data);
