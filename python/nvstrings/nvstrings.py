@@ -1693,7 +1693,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["hello, friend","goodbye, friend"])
-        >>> print(s.lower())
+        >>> print(s.capitalize())
         ['Hello, friend", "Goodbye, friend"]
 
         """

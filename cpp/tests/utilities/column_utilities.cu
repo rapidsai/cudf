@@ -144,10 +144,12 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      size_type index = 0;
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [&h_data, &index](Element el) {
-          return (bit_is_set(h_data.second.data(), index++)) ? std::to_string(el) : std::string("@");
-        });
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     out.begin(),
+                     [&h_data](auto idx) {
+                       return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL");
+                     });
     } else {
       std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
           return std::to_string(el);
@@ -176,10 +178,12 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      size_type index = 0;
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [&h_data, &index](std::string el) {
-          return (bit_is_set(h_data.second.data(), index++)) ? el : std::string("@");
-        });
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     out.begin(),
+                     [&h_data](auto idx) {
+                       return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
+                     });
     } else {
       out = std::move(h_data.first);
     }
