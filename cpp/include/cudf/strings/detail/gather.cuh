@@ -43,7 +43,7 @@ namespace detail
  * s2 is ["a", "c"]
  * ```
  *
- * @tparam IgnoreOutOfBounds If true, indices outside the column's range are ignored.
+ * @tparam NullifyOutOfBounds If true, indices outside the column's range are nullified.
  * @tparam MapIterator Iterator for retrieving integer indices of the column.
  *
  * @param strings Strings instance for this operation.
@@ -53,7 +53,7 @@ namespace detail
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column containing the gathered strings.
  */
-template<bool IgnoreOutOfBounds, typename MapIterator>
+template<bool NullifyOutOfBounds, typename MapIterator>
 std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
                                       MapIterator begin, MapIterator end,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -69,7 +69,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
     auto d_strings = *strings_column;
 
     mask_state mstate = mask_state::UNINITIALIZED;
-    if( IgnoreOutOfBounds ) {
+    if( NullifyOutOfBounds ) {
       mstate = ALL_NULL;
     }
     // create null mask -- caller must update this
@@ -77,7 +77,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 
     // build offsets column
     auto offsets_transformer = [d_strings, strings_count] __device__ (size_type idx) {
-            if( IgnoreOutOfBounds && ((idx<0) || (idx >= strings_count)) )
+            if( NullifyOutOfBounds && ((idx<0) || (idx >= strings_count)) )
                 return 0;
              if( d_strings.is_null(idx) )
                 return 0;
@@ -98,7 +98,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
     // fill in chars
     auto gather_chars = [d_strings, begin, strings_count, d_offsets, d_chars] __device__(size_type idx){
             auto index = begin[idx];
-            if( IgnoreOutOfBounds && ((index<0) || (index >= strings_count)) )
+            if( NullifyOutOfBounds && ((index<0) || (index >= strings_count)) )
                 return;
             if( d_strings.is_null(index) )
                 return;
