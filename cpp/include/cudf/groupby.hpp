@@ -69,28 +69,27 @@ class groupby {
   groupby& operator=(groupby&&) = delete;
 
   /**
-   * @brief Construct a groupby object with the specified @p `keys`
+   * @brief Construct a groupby object with the specified `keys`
    *
-   * If the @p `keys` are already sorted, better performance may be achieved by
-   * passing @p `keys_are_sorted == true` and indicating the
-   * ascending/descending order of each column and null order in @p
-   * `column_order` and
-   * @p `null_precedence`, respectively.
+   * If the `keys` are already sorted, better performance may be achieved by
+   * passing `keys_are_sorted == true` and indicating the  ascending/descending
+   * order of each column and null order in  `column_order` and
+   * `null_precedence`, respectively.
    *
-   * @note This object does *not* maintain the lifetime of @p `keys`. It is the
+   * @note This object does *not* maintain the lifetime of `keys`. It is the
    * user's responsibility to ensure the `groupby` object does not outlive the
-   * data viewed by the @p `keys` `table_view`.
+   * data viewed by the `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
    * @param ignore_null_keys Indicates whether rows in `keys` that contain NULL
    * values should be ignored
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
-   * @param column_order If @p `keys_are_sorted == true`, indicates whether each
+   * @param column_order If `keys_are_sorted == true`, indicates whether each
    * column is ascending/descending. If empty, assumes all  columns are
-   * ascending. Ignored if @p `keys_are_sorted == false`.
-   * @param null_precedence If @p `keys_are_sorted == true`, indicates the ordering
+   * ascending. Ignored if `keys_are_sorted == false`.
+   * @param null_precedence If `keys_are_sorted == true`, indicates the ordering
    * of null values in each column. Else, ignored. If empty, assumes all columns
-   * use `null_order::BEFORE`. Ignored if @p `keys_are_sorted == false`.
+   * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
    */
   explicit groupby(table_view const& keys, bool ignore_null_keys = true,
                    bool keys_are_sorted = false,
