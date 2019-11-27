@@ -27,8 +27,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/copy_if_else.cuh>
-#include <utilities/bit_util.cuh>
-#include <utilities/cuda_utils.hpp>
 #include <iterator/legacy/iterator.cuh>
 
 #include <rmm/device_scalar.hpp>
@@ -45,7 +43,7 @@ template <size_type block_size, typename T, typename LeftIter, typename RightIte
 __launch_bounds__(block_size)
 __global__
 void copy_if_else_kernel(  LeftIter lhs,
-                           RightIter rhs,                           
+                           RightIter rhs,
                            Filter filter,
                            mutable_column_device_view out,
                            size_type * __restrict__ const valid_count)
@@ -78,7 +76,7 @@ void copy_if_else_kernel(  LeftIter lhs,
       bool valid = true;
       if(has_validity){
          valid = in_range && (filter(index) ? thrust::get<1>(lhs[index]) : thrust::get<1>(rhs[index]));
-      }      
+      }
 
       // do the copy if-else
       if(in_range){          
@@ -118,30 +116,31 @@ void copy_if_else_kernel(  LeftIter lhs,
 *        using a filter function to select from lhs/rhs columns.
 */
 /* ----------------------------------------------------------------------------*/
-struct copy_if_else_functor_impl {   
-   template <typename Element, typename LeftIter, typename RightIter, typename FilterFn>
+template <typename Element, typename FilterFn>
+struct copy_if_else_functor_impl {
+   template <typename LeftIter, typename RightIter>
    void launch(LeftIter lhs,
                RightIter rhs, 
                FilterFn filter, 
                mutable_column_device_view & out,
-               cudf::size_type & out_null_count,
+               size_type &out_null_count,
                rmm::mr::device_memory_resource *mr,
                cudaStream_t stream)
    {
-      cudf::size_type num_els = cudf::util::round_up_safe(out.size(), warp_size);
+      size_type num_els = cudf::util::round_up_safe(out.size(), warp_size);
       constexpr int block_size = 256;
       cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
 
       // if we have validity in the output
       if(out.nullable()){
-         rmm::device_scalar<cudf::size_type> valid_count{0, stream, mr};
+         rmm::device_scalar<size_type> valid_count{0, stream, mr};
 
          // call the kernel
          copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true><<<grid.num_blocks, block_size, 0, stream>>>(
             lhs, rhs, filter, out, valid_count.data());
 
          out_null_count = out.size() - valid_count.value();
-      } else {                  
+      } else {
          // call the kernel
          copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, false><<<grid.num_blocks, block_size, 0, stream>>>(
             lhs, rhs, filter, out, nullptr);
@@ -149,140 +148,118 @@ struct copy_if_else_functor_impl {
          out_null_count = 0;
       }
    }
-   
+
    // column/column
-   template <typename T, typename Filter, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-   std::unique_ptr<column> operator()( column_view const &lhs, 
+   std::unique_ptr<column> operator()( column_view const &lhs,
                                        column_view const &rhs,
-                                       Filter filter,                                    
+                                       FilterFn filter,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream)
    {              
       // output
       auto validity_policy = lhs.has_nulls() or rhs.has_nulls() ? experimental::mask_allocation_policy::ALWAYS : experimental::mask_allocation_policy::NEVER;
       std::unique_ptr<column> out = experimental::allocate_like(lhs, lhs.size(), validity_policy, mr);
-      auto out_dv = mutable_column_device_view::create(*out);      
-      cudf::size_type out_null_count = 0;
       
+      // if length is 0, return immediately.  make_pair_iterator() does not like nullptr for element input
+      if(lhs.size() == 0){
+         return out;
+      }
+
+      auto out_dv = mutable_column_device_view::create(*out);
+      size_type out_null_count = 0;
+
       if(lhs.has_nulls()){
          if(rhs.has_nulls()){
-            launch<T>(  make_pair_iterator<true, T>((T*)lhs.begin<T>(), lhs.null_mask()),
-                        make_pair_iterator<true, T>((T*)rhs.begin<T>(), rhs.null_mask()),
-                        filter, *out_dv, out_null_count, mr, stream);
+            launch(  make_pair_iterator<true, Element>((Element*)lhs.begin<Element>(), lhs.null_mask()),
+                     make_pair_iterator<true, Element>((Element*)rhs.begin<Element>(), rhs.null_mask()),
+                     filter, *out_dv, out_null_count, mr, stream);
          } else {
-            launch<T>(  make_pair_iterator<true, T>((T*)lhs.begin<T>(), lhs.null_mask()),
-                        make_pair_iterator<false, T>((T*)rhs.begin<T>(), static_cast<bitmask_type*>(nullptr)),
-                        filter, *out_dv, out_null_count, mr, stream);
+            launch(  make_pair_iterator<true, Element>((Element*)lhs.begin<Element>(), lhs.null_mask()),
+                     make_pair_iterator<false, Element>((Element*)rhs.begin<Element>(), static_cast<bitmask_type*>(nullptr)),
+                     filter, *out_dv, out_null_count, mr, stream);
          }
-      } else {            
+      } else {
          if(rhs.has_nulls()){
-            launch<T>(  make_pair_iterator<false, T>((T*)lhs.begin<T>(), static_cast<bitmask_type*>(nullptr)),
-                        make_pair_iterator<true, T>((T*)rhs.begin<T>(), rhs.null_mask()),
-                        filter, *out_dv, out_null_count, mr, stream);
+            launch(  make_pair_iterator<false, Element>((Element*)lhs.begin<Element>(), static_cast<bitmask_type*>(nullptr)),
+                     make_pair_iterator<true, Element>((Element*)rhs.begin<Element>(), rhs.null_mask()),
+                     filter, *out_dv, out_null_count, mr, stream);
          } else {
-            launch<T>(  make_pair_iterator<false, T>((T*)lhs.begin<T>(), static_cast<bitmask_type*>(nullptr)),
-                        make_pair_iterator<false, T>((T*)rhs.begin<T>(), static_cast<bitmask_type*>(nullptr)),
-                        filter, *out_dv, out_null_count, mr, stream);
+            launch(  make_pair_iterator<false, Element>((Element*)lhs.begin<Element>(), static_cast<bitmask_type*>(nullptr)),
+                     make_pair_iterator<false, Element>((Element*)rhs.begin<Element>(), static_cast<bitmask_type*>(nullptr)),
+                     filter, *out_dv, out_null_count, mr, stream);
          }
-      }      
-      
+      }
+
       out->set_null_count(out_null_count);
 
       return out;
-   }       
+   }
 
    // scalar/column
-   template <typename T, typename Filter, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-   std::unique_ptr<column> operator()( cudf::scalar const &lhs, 
+   std::unique_ptr<column> operator()( scalar const &lhs,
                                        column_view const &rhs,
-                                       Filter filter,                                    
+                                       FilterFn filter,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream)
-   {                    
-      // output
+   {                
       auto validity_policy = rhs.has_nulls() ? experimental::mask_allocation_policy::ALWAYS : experimental::mask_allocation_policy::NEVER;
       std::unique_ptr<column> out = experimental::allocate_like(rhs, rhs.size(), validity_policy, mr);
-      auto out_dv = mutable_column_device_view::create(*out);
-      cudf::size_type out_null_count;            
 
-      // data and validity iterators for scalar
-      auto lhs_iter = thrust::make_constant_iterator(static_cast<cudf::experimental::scalar_type_t<T>const*>(&lhs)->value());
-      auto lhs_valids = thrust::make_constant_iterator(1);      
-      
-      if(validity_policy == experimental::mask_allocation_policy::ALWAYS){
-         launch<T>(  thrust::make_zip_iterator(thrust::make_tuple(lhs_iter, lhs_valids)),
-                     make_pair_iterator<true, T>((T*)rhs.begin<T>(), rhs.null_mask()),
-                     filter, *out_dv, out_null_count, mr, stream);
-      } else {
-         launch<T>(  thrust::make_zip_iterator(thrust::make_tuple(lhs_iter, lhs_valids)),
-                     make_pair_iterator<false, T>((T*)rhs.begin<T>(), static_cast<bitmask_type*>(nullptr)),
-                     filter, *out_dv, out_null_count, mr, stream);
+      // if length is 0, return immediately.  make_pair_iterator() does not like nullptr for element input
+      if(rhs.size() == 0){
+         return out;
       }
 
-      out->set_null_count(out_null_count);                   
+      auto out_dv = mutable_column_device_view::create(*out);
+      size_type out_null_count;
+
+      // data and validity iterators for scalar
+      auto lhs_iter = thrust::make_constant_iterator(static_cast<cudf::experimental::scalar_type_t<Element>const*>(&lhs)->value());
+      auto lhs_valids = thrust::make_constant_iterator(1);
+      
+      if(validity_policy == experimental::mask_allocation_policy::ALWAYS){
+         launch(  thrust::make_zip_iterator(thrust::make_tuple(lhs_iter, lhs_valids)),
+                  make_pair_iterator<true, Element>((Element*)rhs.begin<Element>(), rhs.null_mask()),
+                  filter, *out_dv, out_null_count, mr, stream);
+      } else {
+         launch(  thrust::make_zip_iterator(thrust::make_tuple(lhs_iter, lhs_valids)),
+                  make_pair_iterator<false, Element>((Element*)rhs.begin<Element>(), static_cast<bitmask_type*>(nullptr)),
+                  filter, *out_dv, out_null_count, mr, stream);
+      }
+
+      out->set_null_count(out_null_count);
 
       return out;
    }
-   
-   /*
-   // scalar/scalar   
-   template <typename T, typename Filter, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-   std::unique_ptr<column> operator()( cudf::scalar const &lhs, 
-                                       cudf::scalar const &rhs,
+      
+   // scalar/scalar
+   std::unique_ptr<column> operator()( scalar const &lhs,
+                                       scalar const &rhs,
                                        size_type out_size,
-                                       Filter filter,                                    
+                                       FilterFn filter,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream)
-   {                            
-      std::unique_ptr<column> out = experimental::allocate_like(lhs.type(), out_size, experimental::mask_allocation_policy::NEVER, mr);
+   {
+      std::unique_ptr<column> out = make_fixed_width_column(lhs.type(), out_size, UNALLOCATED, stream, mr);
       auto out_dv = mutable_column_device_view::create(*out);
-      cudf::size_type out_null_count_unused;
+      size_type out_null_count_unused;
 
-      auto lhs_iter = thrust::make_constant_iterator(static_cast<cudf::experimental::scalar_type_t<T>const*>(&lhs)->value());
-      auto lhs_valids = thrust::make_constant_iterator(1);      
+      auto all_valid = thrust::make_constant_iterator(1);
 
-      auto rhs_iter = thrust::make_constant_iterator(static_cast<cudf::experimental::scalar_type_t<T>const*>(&rhs)->value());
-      auto rhs_valids = thrust::make_constant_iterator(1);      
+      auto lhs_iter = thrust::make_constant_iterator(static_cast<cudf::experimental::scalar_type_t<Element>const*>(&lhs)->value());
+      auto rhs_iter = thrust::make_constant_iterator(static_cast<cudf::experimental::scalar_type_t<Element>const*>(&rhs)->value());
 
-      launch<T>(  thrust::make_zip_iterator(thrust::make_tuple(lhs_iter, lhs_valids)),
-                  thrust::make_zip_iterator(thrust::make_tuple(rhs_iter, rhs_valids)),
-                  filter, *out_dv, out_null_count_unused, mr, stream);      
-   }      
-   */
+      launch(  thrust::make_zip_iterator(thrust::make_tuple(lhs_iter, all_valid)),
+               thrust::make_zip_iterator(thrust::make_tuple(rhs_iter, all_valid)),
+               filter, *out_dv, out_null_count_unused, mr, stream);
 
-   // string_view overrides
-   template <typename T, typename Filter, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
-   std::unique_ptr<column> operator()( column_view const &lhs, 
-                                       column_view const &rhs,
-                                       Filter filter,                                    
-                                       rmm::mr::device_memory_resource *mr,
-                                       cudaStream_t stream)
-   {
-      CUDF_FAIL("Unxpected non fixed-width type");
-   } 
-   template <typename T, typename Filter, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
-   std::unique_ptr<column> operator()( cudf::scalar const &lhs, 
-                                       column_view const &rhs,
-                                       Filter filter,                                    
-                                       rmm::mr::device_memory_resource *mr,
-                                       cudaStream_t stream)
-   {
-      CUDF_FAIL("Unxpected non fixed-width type");
+      return out;
    }
-   template <typename T, typename Filter, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
-   std::unique_ptr<column> operator()( cudf::scalar const &lhs, 
-                                       cudf::scalar const &rhs,
-                                       Filter filter,                                    
-                                       rmm::mr::device_memory_resource *mr,
-                                       cudaStream_t stream)
-   {
-      CUDF_FAIL("Unxpected non fixed-width type");
-   }  
 };
 
 /**
  * @brief Specialization functor for strings column to perform a copy if/else
- *        using a filter function to select from lhs/rhs columns.
+ *        using a filter function to select from lhs/rhs columns and scalars
  */
 template<typename FilterFn>
 struct copy_if_else_functor_impl<string_view, FilterFn>
@@ -297,7 +274,27 @@ struct copy_if_else_functor_impl<string_view, FilterFn>
                                             strings_column_view(rhs),
                                             filter, mr, stream);
    }
+
+  std::unique_ptr<column> operator()(scalar const &lhs,
+                                     column_view const& rhs,
+                                     FilterFn filter,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream)
+   {
+      CUDF_FAIL("Not implemented yet");
+   }
+
+   std::unique_ptr<column> operator()( scalar const &lhs,
+                                       scalar const &rhs,
+                                       size_type out_size,
+                                       FilterFn filter,
+                                       rmm::mr::device_memory_resource *mr,
+                                       cudaStream_t stream)
+   {
+      CUDF_FAIL("Not implemented yet");
+   }
 };
+
 
 /**
  * @brief Functor called by the `type_dispatcher` in order to perform a copy if/else
@@ -316,6 +313,29 @@ struct copy_if_else_functor
    {
       copy_if_else_functor_impl<Element, FilterFn> copier{};
       return copier(lhs,rhs,filter,mr,stream);
+   }
+
+   template <typename Element, typename FilterFn>
+   std::unique_ptr<column> operator()( scalar const &lhs, 
+                                       column_view const &rhs,
+                                       FilterFn filter,
+                                       rmm::mr::device_memory_resource *mr,
+                                       cudaStream_t stream)
+   {
+      copy_if_else_functor_impl<Element, FilterFn> copier{};
+      return copier(lhs,rhs,filter,mr,stream);
+   }
+
+   template <typename Element, typename FilterFn>
+   std::unique_ptr<column> operator()( scalar const &lhs,
+                                       scalar const &rhs,
+                                       size_type out_size,
+                                       FilterFn filter,
+                                       rmm::mr::device_memory_resource *mr,
+                                       cudaStream_t stream)
+   {
+      copy_if_else_functor_impl<Element, FilterFn> copier{};
+      return copier(lhs,rhs,out_size,filter,mr,stream);
    }
 };
 
@@ -340,29 +360,78 @@ struct copy_if_else_functor
  * @returns new column with the selected elements
  */
 template<typename FilterFn>
-std::unique_ptr<column> copy_if_else( column_view const& lhs, column_view const& rhs, FilterFn filter,
-                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-                                    cudaStream_t stream = 0)
-{            
+std::unique_ptr<column> copy_if_else(  column_view const& lhs, column_view const& rhs, FilterFn filter,
+                                       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                                       cudaStream_t stream = 0)
+{
    return cudf::experimental::type_dispatcher(lhs.type(),
                                              copy_if_else_functor{},
                                              lhs,
                                              rhs,
-                                             filter,                                             
+                                             filter,
                                              mr,
                                              stream);
 }
 
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or
+ *          @p rhs based on the filter lambda.
+ *
+ * @p filter must be a functor or lambda with the following signature:
+ * bool __device__ operator()(cudf::size_type i);
+ * It should return true if the value of @p lhs should be selected, or false if element i of @p rhs should be selected.
+ *
+ * @throws cudf::logic_error if lhs and rhs are not of the same type 
+ * @param[in] left-hand scalar
+ * @param[in] right-hand column_view
+ * @param[in] filter lambda.
+ * @param[in] mr resource for allocating device memory
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns new column with the selected elements
+ */
 template<typename FilterFn>
-std::unique_ptr<column> copy_if_else( scalar const& lhs, column_view const& rhs, FilterFn filter,
-                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-                                    cudaStream_t stream = 0)
-{            
+std::unique_ptr<column> copy_if_else(  scalar const& lhs, column_view const& rhs, FilterFn filter,
+                                       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                                       cudaStream_t stream = 0)
+{ 
    return cudf::experimental::type_dispatcher(lhs.type(),
                                              copy_if_else_functor{},
                                              lhs,
                                              rhs,
-                                             filter,                                             
+                                             filter,
+                                             mr,
+                                             stream);
+}
+
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or
+ *          @p rhs based on the filter lambda.
+ *
+ * @p filter must be a functor or lambda with the following signature:
+ * bool __device__ operator()(cudf::size_type i);
+ * It should return true if the value of @p lhs should be selected, or false if the value of @p rhs should be selected.
+ *
+ * @throws cudf::logic_error if lhs and rhs are not of the same type 
+ * @param[in] left-hand scalar
+ * @param[in] right-hand scalar
+ * @param[in] filter lambda.
+ * @param[in] mr resource for allocating device memory
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns new column with the selected elements
+ */
+template<typename FilterFn>
+std::unique_ptr<column> copy_if_else(  scalar const& lhs, scalar const& rhs, size_type out_size, FilterFn filter,
+                                       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                                       cudaStream_t stream = 0)
+{
+   return cudf::experimental::type_dispatcher(lhs.type(),
+                                             copy_if_else_functor{},
+                                             lhs,
+                                             rhs,
+                                             out_size,
+                                             filter,
                                              mr,
                                              stream);
 }
