@@ -56,23 +56,11 @@ struct default_allocator {
       template <class U> constexpr default_allocator(const default_allocator<U>&) noexcept {}
 
       T* allocate(std::size_t n, cudaStream_t stream = 0) const {
-          T* ptr = 0;
-          rmmError_t result = RMM_ALLOC( (void**)&ptr, n*sizeof(T), stream ); 
-          if( RMM_SUCCESS != result || nullptr == ptr ) 
-          {
-            std::cerr << "ERROR: RMM call in line " << __LINE__ << "of file " 
-                      << __FILE__ << " failed with result " << rmmGetErrorString(result) 
-                      << " (" << result << ") "
-                      << " Attempted to allocate: " << n * sizeof(T) << " bytes.\n";
-            throw std::bad_alloc();
-          }
-
-          return ptr;
+          return (T*)mr->allocate( n*sizeof(T), stream );
       }
 
       void deallocate(T* p, std::size_t, cudaStream_t stream = 0) const {
-          rmmError_t result = RMM_FREE(p, stream);
-          if ( RMM_SUCCESS != result) throw std::runtime_error("default_allocator: RMM Memory Manager Error");
+          mr->deallocate( p, n*sizeof(T), stream );
       }
 };
 

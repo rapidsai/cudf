@@ -587,11 +587,11 @@ if(USE_NVTX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 endif(USE_NVTX)
 
-option(HT_LEGACY_ALLOCATOR "Use the legacy allocator for hash tables" ON)
-if(HT_LEGACY_ALLOCATOR)
-    message(STATUS "Using legacy allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
-endif(HT_LEGACY_ALLOCATOR)
+option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
+if(HT_DEFAULT_ALLOCATOR)
+    message(STATUS "Using default allocator for hash tables")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
