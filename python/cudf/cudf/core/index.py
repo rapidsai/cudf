@@ -276,7 +276,7 @@ class Index(object):
             Name(s) to set.
 
         Returns
-        -------`
+        -------
         Index
 
         """
