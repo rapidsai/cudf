@@ -189,6 +189,22 @@ def test_index_rename():
     gds = as_index(gds, name="abc")
     assert_eq(pds, gds)
 
+def test_index_rename_inplace():
+    pds = pd.Index([1,2,3], name="asdf")
+    gds = as_index(pds)
+
+    # inplace=False should yield a deep copy
+    gds_renamed_deep = gds.rename("new_name", inplace=False)
+    gds = gds + 1
+
+    assert((gds_renamed_deep.values == [1,2,3]).all())
+
+    # inplace=True should yield a shallow copy
+    gds_renamed_shallow = gds.rename("new_name", inplace=True)
+    gds = gds + 1
+
+    assert((gds_renamed_shallow.values == [2,3,4]).all())
+
 
 def test_set_index_as_property():
     cdf = DataFrame()
