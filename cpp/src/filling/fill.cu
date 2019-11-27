@@ -41,13 +41,7 @@ struct inplace_fill_range_dispatch {
   operator()(cudf::size_type source_begin, cudf::size_type source_end,
              cudf::size_type target_begin, cudaStream_t stream = 0) {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
-#if 1
-    // TODO: temporary till the const issue in cudf::scalar's value() is fixed.
-    auto p_scalar =
-      const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_value));
-#else
     auto p_scalar = static_cast<ScalarType const*>(this->p_value);
-#endif
     T value = p_scalar->value(stream);
     bool is_valid = p_scalar->is_valid();
     cudf::experimental::detail::copy_range(
