@@ -664,7 +664,7 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
 )
 def test_multicolumn_item():
     gdf = cudf.DataFrame(
-        {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10),}
+        {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10)}
     )
     gdg = gdf.groupby(["x", "y"]).min()
     gdgT = gdg.T
