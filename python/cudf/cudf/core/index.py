@@ -279,8 +279,6 @@ class Index(object):
         -------
         Index
 
-        Difference from pandas:
-          * Not supporting: inplace
         """
         if inplace is True:
             self.name = name
