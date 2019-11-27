@@ -57,7 +57,7 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
 }
 
 TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
-  constexpr cudf::size_type source_size{10};
+  constexpr cudf::size_type source_size{1000};
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
