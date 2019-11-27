@@ -43,7 +43,8 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool print_all_differences = false);
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences = false);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
