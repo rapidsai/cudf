@@ -46,6 +46,8 @@ test:
   commands:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
+    - test -f $PREFIX/include/cudf/detail/gather.hpp
+    - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
     - test -f $PREFIX/include/cudf/legacy/column.hpp
     - test -f $PREFIX/include/cudf/legacy/reshape.hpp

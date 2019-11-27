@@ -301,7 +301,17 @@ set(REPLACE_TEST_SRC
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
-#################################################################################f##################
+set(REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cu")
+
+ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+
+set(NORMALIZE_REPLACE_TEST_SRC
+	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")
+	
+ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
@@ -438,6 +448,7 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
@@ -633,7 +644,7 @@ ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 # - search test -----------------------------------------------------------------------------------
 
 set(SEARCH_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cpp")
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
