@@ -29,6 +29,7 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 namespace {
+
 inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc,
                                        bool mask_exists) {
   if ((mask_alloc == mask_allocation_policy::ALWAYS) ||
@@ -38,6 +39,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc,
     return UNALLOCATED;
   }
 }
+
 }  // namespace
 
 /*
