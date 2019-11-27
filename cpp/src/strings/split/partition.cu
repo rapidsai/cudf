@@ -38,28 +38,27 @@ namespace
 {
 
 //
-// Partition is split the string at the first occurrence of delimiter, and return 3 elements containing
+// Partition splits the string at the first occurrence of delimiter, and returns 3 elements containing
 // the part before the delimiter, the delimiter itself, and the part after the delimiter.
 // If the delimiter is not found, return 3 elements containing the string itself, followed by two empty strings.
 //
-// >>> import pandas as pd
-// >>> strs = pd.Series(['héllo', None, 'a_bc_déf', 'a__bc', '_ab_cd', 'ab_cd_'])
-// >>> strs.str.partition('_')
-//        0     1       2
-// 0  héllo
-// 1   None  None    None
-// 2      a     _  bc_déf
-// 3      a     _     _bc
-// 4            _   ab_cd
-// 5     ab     _     cd_
+// strs = ["abcde", nullptr, "a_bc_def", "a__bc", "_ab_cd", "ab_cd_"]
+// results = partition(strs,"_")
+//     col0  col1    col2
+// 0  abcde  ""      ""
+// 1  null   null    null
+// 2  a      _       bc_déf
+// 3  a      _      _bc
+// 4  ""     _       ab_cd
+// 5  ab     _       cd_
 //
 struct partition_fn
 {
-    column_device_view const d_strings;  // strings to split
-    string_view const d_delimiter;       // delimiter for split
-    string_index_pair* d_indices_left{};
-    string_index_pair* d_indices_delim{};
-    string_index_pair* d_indices_right{};
+    column_device_view const d_strings;   // strings to split
+    string_view const d_delimiter;        // delimiter for split
+    string_index_pair* d_indices_left{};  // the three
+    string_index_pair* d_indices_delim{}; // output columns
+    string_index_pair* d_indices_right{}; // amigos
 
     partition_fn( column_device_view const& d_strings, string_view const& d_delimiter,
                   string_index_pair* d_indices_left = nullptr,
@@ -78,34 +77,37 @@ struct partition_fn
         }
     }
 
-    __device__ size_type check_delimiter( size_type idx, string_view const& d_str, size_type offset, char_utf8 chr )
+    __device__ size_type check_delimiter( size_type idx, string_view const& d_str, string_view::const_iterator& itr )
     {
+        size_type offset = itr.byte_offset();
         size_type pos = -1;
         if( d_delimiter.empty() )
         {
-            if( chr <= ' ' )  // whitespace delimited
+            if( *itr <= ' ' )  // whitespace delimited
                 pos = offset;
         }
         else
         {
-            if( d_delimiter.compare(d_str.data()+offset, d_str.size_bytes()-offset)==0 )
+            auto bytes = std::min(d_str.size_bytes()-offset,d_delimiter.size_bytes());
+            if( d_delimiter.compare(d_str.data()+offset,bytes)==0 )
                 pos = offset;
         }
         if( pos >=0 ) // delimiter found, set results
         {
             d_indices_left[idx] = string_index_pair{d_str.data(),offset};
-            d_indices_delim[idx] = string_index_pair{d_delimiter.data(),d_delimiter.size_bytes()};
-            offset += d_delimiter.size_bytes();
+            if( d_delimiter.empty() )
+            {
+                d_indices_delim[idx] = string_index_pair{d_str.data()+offset,1};
+                ++offset;
+            }
+            else
+            {
+                d_indices_delim[idx] = string_index_pair{d_delimiter.data(),d_delimiter.size_bytes()};
+                offset += d_delimiter.size_bytes();
+            }
             d_indices_right[idx] = string_index_pair{d_str.data() + offset,d_str.size_bytes() - offset};
         }
         return pos;
-    }
-
-    __device__ void delimiter_not_found(size_type idx, string_view const& d_str)
-    {
-        d_indices_left[idx] = string_index_pair{d_str.data(),d_str.size_bytes()};
-        d_indices_delim[idx] = string_index_pair{d_str.data(),0}; // two empty
-        d_indices_right[idx] = string_index_pair{d_str.data(),0}; // strings added
     }
 
     __device__ void operator()(size_type idx)
@@ -117,33 +119,31 @@ struct partition_fn
         }
         string_view d_str = d_strings.element<string_view>(idx);
         size_type pos = -1;
-        for( auto itr=d_str.begin(); itr < d_str.end(); ++itr )
-        {
-            auto offset = itr.byte_offset();
-            pos = check_delimiter(idx,d_str,offset,*itr);
-            if( pos >= 0 )
-                break;
-        }
+        for( auto itr=d_str.begin(); (pos < 0) && (itr < d_str.end()); ++itr )
+            pos = check_delimiter(idx,d_str,itr);
         if( pos < 0 ) // delimiter not found
-            delimiter_not_found(idx,d_str);
+        {
+            d_indices_left[idx] = string_index_pair{d_str.data(),d_str.size_bytes()};
+            d_indices_delim[idx] = string_index_pair{"",0}; // two empty
+            d_indices_right[idx] = string_index_pair{"",0}; // strings added
+        }
     }
 };
 
 //
 // This follows most of the same logic as partition above except that the delimiter
-// search starts from the end of the string. Also, if no delimiter is found the
+// search starts from the end of each string. Also, if no delimiter is found the
 // resulting array includes two empty strings followed by the original string.
 //
-// >>> import pandas as pd
-// >>> strs = pd.Series(['héllo', None, 'a_bc_déf', 'a__bc', '_ab_cd', 'ab_cd_'])
-// >>> strs.str.rpartition('_')
-//        0     1      2
-// 0               héllo
-// 1   None  None   None
-// 2   a_bc     _    déf
-// 3     a_     _     bc
-// 4    _ab     _     cd
-// 5  ab_cd     _
+// strs = ["abcde", nullptr, "a_bc_def", "a__bc", "_ab_cd", "ab_cd_"]
+// results = rpartition(strs,"_")
+//     col0  col1   col2
+// 0  ""     ""     abcde
+// 1  null   null   null
+// 2  a_bc   _      déf
+// 3  a_     _      bc
+// 4  ab     _      cd
+// 5  ab_cd  _      ""
 //
 struct rpartition_fn : public partition_fn
 {
@@ -163,18 +163,17 @@ struct rpartition_fn : public partition_fn
         string_view d_str = d_strings.element<string_view>(idx);
         size_type pos = -1;
         auto itr = d_str.end();
-        if( d_str.length() > d_delimiter.length() )
-            itr -= d_delimiter.length();
-        while( d_str.begin() < itr )
+        while( (pos < 0) && (d_str.begin() < itr) )
         {
             --itr;
-            auto offset = itr.byte_offset();
-            pos = check_delimiter(idx,d_str,offset,*itr);
-            if( pos >= 0 )
-                break;
+            pos = check_delimiter(idx,d_str,itr);
         }
         if( pos < 0 ) // delimiter not found
-            delimiter_not_found(idx,d_str);
+        {
+            d_indices_left[idx]  = string_index_pair{"",0}; // two empty
+            d_indices_delim[idx] = string_index_pair{"",0}; // strings
+            d_indices_right[idx] = string_index_pair{d_str.data(),d_str.size_bytes()};
+        }
     }
 };
 

@@ -33,8 +33,16 @@ namespace strings
  * each string as a result of the split. The second column will contain
  * the delimiter. The third column will contain the remaining characters
  * of each string after the delimiter.
- * 
+ *
  * Any null string entries return corresponding null output columns.
+ *
+ * ```
+ * s = ["ab_cd","def_g_h"]
+ * r = rpartition(s,"_")
+ * r[0] is ["ab","def"]
+ * r[1] is ["_","_"]
+ * r[2] is ["cd","g_h"]
+ * ```
  *
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
@@ -57,6 +65,14 @@ std::unique_ptr<experimental::table> partition( strings_column_view const& strin
  * of each string after the delimiter.
  *
  * Any null string entries return corresponding null output columns.
+ *
+ * ```
+ * s = ["ab_cd","def_g_h"]
+ * r = rpartition(s,"_")
+ * r[0] is ["ab","def_g"]
+ * r[1] is ["_","_"]
+ * r[2] is ["cd","h"]
+ * ```
  *
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
