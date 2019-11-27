@@ -87,7 +87,7 @@ struct target_type_impl<SourceType, aggregation::MIN> { using type = SourceType;
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::MAX> { using type = SourceType; };
 
-// Always use int64_t accumulator for COUNT
+// Always use size_type accumulator for COUNT
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::COUNT> { using type = cudf::size_type; };
 
@@ -102,6 +102,14 @@ struct target_type_impl<SourceType, aggregation::SUM,
   using type = int64_t;
 };
 
+// Summing float/doubles, use same type accumulator
+template <typename SourceType>
+struct target_type_impl<
+    SourceType, aggregation::SUM,
+    std::enable_if_t<std::is_floating_point<SourceType>::value>> {
+  using type = SourceType;
+};
+
 // Always use `double` for quantile 
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::QUANTILE> { using type = double; };
@@ -112,17 +120,9 @@ struct target_type_impl<SourceType, aggregation::MEDIAN> {
    using type = target_type_impl<SourceType, aggregation::QUANTILE>; 
 };
 
-// Summing float/doubles, use same type accumulator
-template <typename SourceType>
-struct target_type_impl<
-    SourceType, aggregation::SUM,
-    std::enable_if_t<std::is_floating_point<SourceType>::value>> {
-  using type = SourceType;
-};
-
 /**
- * @brief Helper alias to get the accumulator type for performing aggregation @p
- * k on elements of type @p `SourceType`
+ * @brief Helper alias to get the accumulator type for performing aggregation 
+ * `k` on elements of type `SourceType`
  *
  * @tparam SourceType The type on which the aggregation is computed
  * @tparam k The aggregation performed
@@ -131,11 +131,11 @@ template <typename SourceType, aggregation::Kind k>
 using target_type_t = typename target_type_impl<SourceType, k>::type;
 
 /**
- * @brief Dispatches @p k as a non-type template parameter to a callable, @p f.
+ * @brief Dispatches  k as a non-type template parameter to a callable,  f.
  *
  * @tparam F Type of callable
- * @param k The `aggregation::Kind` value to dispatch
- * @param f The callable that accepts an `aggregation::Kind` non-type template
+ * aram k The `aggregation::Kind` value to dispatch
+ * aram f The callable that accepts an `aggregation::Kind` non-type template
  * argument.
  * @return Forwards the return value of the callable.
  */
@@ -153,12 +153,12 @@ decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f){
 }
 
 /**
- * @brief Returns the target `data_type` for the specified aggregation @p k
- * performed on elements of type @p source_type.
+ * @brief Returns the target `data_type` for the specified aggregation  k
+ * performed on elements of type  source_type.
  *
- * @param source_type The element type to be aggregated
- * @param k The aggregation
- * @return data_type The target_type of @p k performed on @p source_type
+ * aram source_type The element type to be aggregated
+ * aram k The aggregation
+ * @return data_type The target_type of  k performed on  source_type
  * elements
  */
 data_type target_type(data_type source_type, aggregation::Kind k);
