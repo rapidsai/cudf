@@ -202,7 +202,7 @@ std::unique_ptr<experimental::table>
       0 == input.num_columns() ||
       0 == keys.size()
       ) {
-      return experimental::detail::empty_like(input, stream);
+      return experimental::empty_like(input);
   }
 
   auto keys_view = input.select(keys);

@@ -63,15 +63,6 @@ ColumnView slice(ColumnView const& input,
                      input.offset() + begin, children);
 }
 
-/*
- * Initializes and returns an empty column of the same type as the `input`.
- *
- * @param[in] input Immutable view of input column to emulate
- * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> An empty column of same type as `input`
- */
-std::unique_ptr<column> empty_like(column_view const& input, cudaStream_t stream = 0);
-
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  * Supports only fixed-width types.

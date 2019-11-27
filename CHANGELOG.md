@@ -150,7 +150,7 @@
 - PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
-- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`, 
+- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`,
            `apply_boolean_mask`, `drop_duplicate` and `unique_count`.
 - PR #3387 Strings column gather function
 - PR #3440 Strings column scatter function
@@ -160,7 +160,12 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
+<<<<<<< HEAD
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+=======
+- PR #3462 Add `make_empty_column` and update `empty_like`.
+- PR #3214 Define and implement new unary operations APIs
+>>>>>>> origin/branch-0.11
 
 ## Bug Fixes
 
@@ -221,6 +226,8 @@
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
 - PR #3459 Fix printing of invalid entries
+- PR #3468 Fix memory leak issue in `drop_duplicates`
+- PR #3474 Fix small doc error in capitalize Docs
 
 # cuDF 0.10.0 (16 Oct 2019)
 

@@ -72,7 +72,7 @@ std::unique_ptr<experimental::table>
                        cudaStream_t stream) {
 
   if (boolean_mask.size() == 0) {
-      return experimental::detail::empty_like(input, stream);
+      return experimental::empty_like(input);
   }
 
   CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
