@@ -59,7 +59,7 @@ struct default_allocator {
           return (T*)mr->allocate( n*sizeof(T), stream );
       }
 
-      void deallocate(T* p, std::size_t, cudaStream_t stream = 0) const {
+      void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
           mr->deallocate( p, n*sizeof(T), stream );
       }
 };
