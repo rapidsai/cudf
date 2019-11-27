@@ -57,11 +57,9 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
 
   for (size_type i = 0; i < source_table.num_columns(); i++) {
 
-    constexpr int warp_size = 32;
-
     column_device_view source_col = source_table.column(i);
 
-    if (source_col.has_nulls()) {
+    if (masks[i] != nullptr) {
       size_type destination_row_base = blockIdx.x * blockDim.x;
       cudf::size_type valid_count_accumulate = 0;
 
@@ -72,14 +70,17 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
         size_type source_row =
           thread_active ? gather_map[destination_row] : 0;
 
-        bool source_bit_is_valid = source_col.has_nulls()
-          ? source_col.is_valid_nocheck(source_row)
-          : true;
+        bool bit_is_valid;
+        if (ignore_out_of_bounds && (source_row < 0 || source_row >= source_col.size())) {
+          bit_is_valid = thread_active && bit_is_set(masks[i], destination_row);
+        } else {
+          bit_is_valid = source_col.is_valid(source_row);
+        }
 
         // Use ballot to find all valid bits in this warp and create the output
         // bitmask element
         const uint32_t valid_warp =
-          __ballot_sync(0xffffffff, thread_active && source_bit_is_valid);
+          __ballot_sync(0xffffffff, thread_active && bit_is_valid);
 
         const size_type valid_index = word_index(destination_row);
 

@@ -350,17 +350,12 @@ using unwrapped_type_t = typename unwrapped_type<T>::type;
 
 } // namespace detail
 
-using category = detail::wrapper<int32_t, GDF_CATEGORY>;
-
+using category          = detail::wrapper<int32_t, GDF_CATEGORY>;
 using nvstring_category = detail::wrapper<int32_t, GDF_STRING_CATEGORY>;
-
-using timestamp = detail::wrapper<int64_t, GDF_TIMESTAMP>;
-
-using date32 = detail::wrapper<int32_t, GDF_DATE32>;
-
-using date64 = detail::wrapper<int64_t, GDF_DATE64>;
-
-using bool8 = detail::wrapper<int8_t, GDF_BOOL8>;
+using timestamp         = detail::wrapper<int64_t, GDF_TIMESTAMP>;
+using date32            = detail::wrapper<int32_t, GDF_DATE32>;
+using date64            = detail::wrapper<int64_t, GDF_DATE64>;
+using bool8             = detail::wrapper<int8_t, GDF_BOOL8>;
 
 // This is necessary for global, constant, non-fundamental types
 // We can't rely on --expt-relaxed-constexpr here because `bool8` is not a
