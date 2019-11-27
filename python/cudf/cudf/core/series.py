@@ -1110,10 +1110,13 @@ class Series(object):
             else:
                 index = Index._concat([o.index for o in objs])
 
+        names = {obj.name for obj in objs}
+        if len(names) == 1:
+            [name] = names
+        else:
+            name = None
         col = Column._concat([o._column for o in objs])
-        if len(set([o.name for o in objs])) != 1:
-            col.name = None
-        return cls(data=col, index=index)
+        return cls(data=col, index=index, name=name)
 
     @property
     def valid_count(self):

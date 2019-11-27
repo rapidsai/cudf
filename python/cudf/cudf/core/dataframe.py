@@ -628,7 +628,7 @@ class DataFrame(object):
             if len(self) > nrows and nrows > 0:
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
-            if len(self.columns) > ncols and ncols > 0:
+            if len(self.columns) > ncols:
                 right_cols = len(self.columns) - int(ncols / 2.0) - 1
                 left_cols = int(ncols / 2.0) + 1
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
