@@ -264,7 +264,7 @@ class Index(object):
         else:
             return column_join_res
 
-    def rename(self, name):
+    def rename(self, name, inplace=False):
         """
         Alter Index name.
 
@@ -282,10 +282,14 @@ class Index(object):
         Difference from pandas:
           * Not supporting: inplace
         """
-        out = self.copy(deep=False)
-        out.name = name
+        if inplace is True:
+            self.name = name
+            return self
+        else:
+            out = self.copy(deep=False)
+            out.name = name
 
-        return out.copy(deep=True)
+            return out.copy(deep=True)
 
     def astype(self, dtype):
         """Convert to the given ``dtype``.
@@ -992,7 +996,7 @@ def as_index(arbitrary, **kwargs):
     kwargs = _setdefault_name(arbitrary, kwargs)
 
     if isinstance(arbitrary, Index):
-        return arbitrary.rename(**kwargs)
+        return arbitrary.rename(**kwargs, inplace=True)
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):
