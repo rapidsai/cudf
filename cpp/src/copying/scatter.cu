@@ -350,7 +350,7 @@ struct scatter_to_tables_impl {
 
       // Create empty tables for unused partitions
       for (; next_partition < partition; ++next_partition) {
-        output[next_partition] = empty_like(input, stream);
+        output[next_partition] = empty_like(input);
       }
 
       // Gather input rows for the current partition (second dispatch for column types)
