@@ -39,7 +39,7 @@ template <typename T>
 class RollingTest : public cudf::test::BaseFixture {
 protected:
   // input as column_wrapper
-  void run_test_col(fixed_width_column_wrapper<T> const& input,
+  void run_test_col(cudf::column_view const& input,
                     const std::vector<size_type> &window,
                     const std::vector<size_type> &forward_window,
                     size_type min_periods,
@@ -82,20 +82,19 @@ protected:
   }
 
   // helper function to test all aggregators
-  void run_test_col_agg(fixed_width_column_wrapper<T> const& input,
+  void run_test_col_agg(cudf::column_view const& input,
                         const std::vector<size_type> &window,
                         const std::vector<size_type> &forward_window,
                         size_type min_periods)
   {
     // test all supported aggregators
-    run_test_col(input, window, forward_window, min_periods, rolling_operator::SUM);
     run_test_col(input, window, forward_window, min_periods, rolling_operator::MIN);
     run_test_col(input, window, forward_window, min_periods, rolling_operator::MAX);
     run_test_col(input, window, forward_window, min_periods, rolling_operator::COUNT);
     run_test_col(input, window, forward_window, min_periods, rolling_operator::MEAN);
-    
-    // this aggregation function is not supported yet - expected to throw an exception
-    //EXPECT_THROW(run_test_col(input, window, forward_window, min_periods, rolling_operator::COUNT_DISTINCT), cudf::logic_error);
+
+    if (!cudf::is_timestamp(input.type()))
+      run_test_col(input, window, forward_window, min_periods, rolling_operator::SUM);
   }
 
   private:
@@ -182,12 +181,56 @@ protected:
   }
 };
 
-TYPED_TEST_CASE(RollingTest, cudf::test::NumericTypes);
 
-TYPED_TEST(RollingTest, EmptyInput) {
-  using T = TypeParam;
+// // ------------- expected failures --------------------
 
-  cudf::test::fixed_width_column_wrapper<T> empty_col{};
+class RollingErrorTest : public cudf::test::BaseFixture {};
+
+// negative sizes
+TEST_F(RollingErrorTest, NegativeSizes)
+{
+  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
+  const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
+  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
+
+  EXPECT_THROW(cudf::experimental::rolling_window(input, -2,  2,  2, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input,  2, -2,  2, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input,  2,  2, -2, rolling_operator::SUM),
+               cudf::logic_error);
+}
+
+// window array size mismatch
+TEST_F(RollingErrorTest, WindowArraySizeMismatch)
+{
+  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
+  const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
+  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
+
+  std::vector<size_type> five({ 2, 1, 2, 1, 4 });
+  std::vector<size_type> four({ 1, 2, 3, 4 });
+  fixed_width_column_wrapper<size_type> five_elements(five.begin(), five.end());
+  fixed_width_column_wrapper<size_type> four_elements(four.begin(), four.end());
+
+  // this runs ok
+  EXPECT_NO_THROW(cudf::experimental::rolling_window(input, five_elements, five_elements, 1,
+                                                     rolling_operator::SUM));
+
+  // mismatch for the window array
+  EXPECT_THROW(cudf::experimental::rolling_window(input, four_elements, five_elements, 1,
+                                                  rolling_operator::SUM),
+               cudf::logic_error);
+
+  // mismatch for the forward window array
+  EXPECT_THROW(cudf::experimental::rolling_window(input, five_elements, four_elements, 1,
+                                                  rolling_operator::SUM),
+               cudf::logic_error);
+}
+
+
+TEST_F(RollingErrorTest, EmptyInput) {
+  cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
   std::unique_ptr<cudf::column> output;
   EXPECT_NO_THROW(output = cudf::experimental::rolling_window(empty_col, 2, 0, 2,
                                                               rolling_operator::SUM));
@@ -205,9 +248,7 @@ TYPED_TEST(RollingTest, EmptyInput) {
   EXPECT_EQ(output->size(), 0);
 }
 
-TYPED_TEST(RollingTest, SizeMismatch) {
-  using T = TypeParam;
-
+TEST_F(RollingErrorTest, SizeMismatch) {
   fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
   std::unique_ptr<cudf::column> output;
   
@@ -229,21 +270,46 @@ TYPED_TEST(RollingTest, SizeMismatch) {
   }
 }
 
-TYPED_TEST(RollingTest, WindowWrongDtype) {
-  using T = TypeParam;
-
+TEST_F(RollingErrorTest, WindowWrongDtype) {
   fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
   std::unique_ptr<cudf::column> output;
   
-  {
-    fixed_width_column_wrapper<float> window{{1.0f, 1.0f, 1.0f}}; 
-    fixed_width_column_wrapper<float> forward_window{{1.0f, 1.0f, 1.0f}};
-    EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, window,
-                                                             forward_window,
-                                                             2, rolling_operator::SUM),
-                 cudf::logic_error);
-  }
+  fixed_width_column_wrapper<float> window{{1.0f, 1.0f, 1.0f}}; 
+  fixed_width_column_wrapper<float> forward_window{{1.0f, 1.0f, 1.0f}};
+  EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, window,
+                                                            forward_window,
+                                                            2, rolling_operator::SUM),
+              cudf::logic_error);
 }
+
+// incorrect type/aggregation combo: sum of timestamps
+TEST_F(RollingErrorTest, SumTimestampNotSupported)
+{
+  constexpr size_type size{10};
+  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
+                                                       thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
+                                                       thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
+                                                       thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
+                                                       thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
+                                                       thrust::make_counting_iterator(size));
+
+  EXPECT_THROW(cudf::experimental::rolling_window(input_D, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input_s, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input_ms, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input_us, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input_ns, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+}
+
+TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
@@ -383,7 +449,7 @@ TYPED_TEST(RollingTest, RandomStaticWithInvalid)
   std::vector<TypeParam> col_data(num_rows);
   std::vector<bool> col_valid(num_rows);
   cudf::test::UniformRandomGenerator<TypeParam> rng;
-  cudf::test::UniformRandomGenerator<TypeParam> rbg;
+  cudf::test::UniformRandomGenerator<bool> rbg;
   std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
   std::generate(col_valid.begin(), col_valid.end(), [&rbg]() { return rbg.generate(); });
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
@@ -447,88 +513,11 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   this->run_test_col_agg(input, window, forward_window, max_window_size);
 }
 
-// // ------------- expected failures --------------------
+// ------------- non-fixed-width types --------------------
 
-class RollingErrorTest : public cudf::test::BaseFixture {};
+/*using RollingTestSeconds = RollingTest<cudf::timestamp_s>;
 
-// negative sizes
-TEST_F(RollingErrorTest, NegativeSizes)
-{
-  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
-  const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
-
-  EXPECT_THROW(cudf::experimental::rolling_window(input, -2,  2,  2, rolling_operator::SUM),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input,  2, -2,  2, rolling_operator::SUM),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input,  2,  2, -2, rolling_operator::SUM),
-               cudf::logic_error);
-}
-
-// window array size mismatch
-TEST_F(RollingErrorTest, WindowArraySizeMismatch)
-{
-  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
-  const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
-
-  std::vector<size_type> five({ 2, 1, 2, 1, 4 });
-  std::vector<size_type> four({ 1, 2, 3, 4 });
-  fixed_width_column_wrapper<size_type> five_elements(five.begin(), five.end());
-  fixed_width_column_wrapper<size_type> four_elements(four.begin(), four.end());
-
-  // this runs ok
-  EXPECT_NO_THROW(cudf::experimental::rolling_window(input, five_elements, five_elements, 1,
-                                                     rolling_operator::SUM));
-
-  // mismatch for the window array
-  EXPECT_THROW(cudf::experimental::rolling_window(input, four_elements, five_elements, 1,
-                                                  rolling_operator::SUM),
-               cudf::logic_error);
-
-  // mismatch for the forward window array
-  EXPECT_THROW(cudf::experimental::rolling_window(input, five_elements, four_elements, 1,
-                                                  rolling_operator::SUM),
-               cudf::logic_error);
-}
-
-// ------------- non-arithmetic types --------------------
-
-template<typename T>
-using RollingTestTimestamp = RollingTest<T>;
-
-TYPED_TEST_CASE(RollingTestTimestamp, cudf::test::TimestampTypes);
-
-// incorrect type/aggregation combo: sum / mean for non-arithmetic types
-TYPED_TEST(RollingTestTimestamp, SumTimestampNotSupported)
-{
-  constexpr size_type size{10};
-  fixed_width_column_wrapper<TypeParam> input(thrust::make_counting_iterator(0),
-                                              thrust::make_counting_iterator(size));
-
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::SUM),
-               cudf::logic_error);
-}
-
-// min/max/count should work for non-arithmetic types
-TYPED_TEST(RollingTestTimestamp, TimestampNoNulls)
-{
-  constexpr size_type size{1000};
-  fixed_width_column_wrapper<TypeParam> input(thrust::make_counting_iterator(0),
-                                              thrust::make_counting_iterator(size));
-  std::vector<size_type> window{2};
-
-  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
-  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
-
-  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
-  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MEAN));
-}
-
-using RollingTestSeconds = RollingTest<cudf::timestamp_s>;
-
-/*TEST_F(RollingTestSeconds, Foo)
+TEST_F(RollingTestSeconds, Foo)
 {
   std::vector<cudf::timestamp_s> h_timestamps{ 131246625 , 1563399277, 1553085296, 1582934400 };
   //  std::vector<const char*> h_expected{ "1974-02-28T01:23:45Z", "2019-07-17T21:34:37Z", nullptr, "2019-03-20T12:34:56Z", "2020-02-29T00:00:00Z" };
@@ -550,6 +539,39 @@ using RollingTestSeconds = RollingTest<cudf::timestamp_s>;
   std::cout << "MEAN\n";
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MEAN));
 }*/
+
+using RollingTestStrings = RollingTest<cudf::string_view>;
+
+TEST_F(RollingTestStrings, StringsUnsupportedOperators)
+{
+  cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
+                                           {1, 1, 1, 0, 1, 0}};
+  
+  std::vector<size_type> window{1};
+
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::SUM),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::MEAN),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::NUMBA_UDF),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::CUDA_UDF),
+               cudf::logic_error);
+}
+
+/*TEST_F(RollingTestStrings, SimpleStatic)
+{
+  cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
+                                           {1, 1, 1, 0, 1, 0}};
+
+  std::vector<size_type> window{1};
+
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
+}*/
+
+
 
 
 // class RollingTestNumba : public GdfTest {};
