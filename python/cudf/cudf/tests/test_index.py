@@ -207,20 +207,22 @@ def test_index_rename_inplace():
 
     assert (gds_renamed_shallow.values == [3, 4, 5]).all()
 
+
 def test_index_rename_preserves_arg():
-    idx1 = GenericIndex([1,2,3], name='orig_name')
+    idx1 = GenericIndex([1, 2, 3], name="orig_name")
 
     # this should be an entirely new object
-    idx2 = idx1.rename('new_name', inplace=False)
+    idx2 = idx1.rename("new_name", inplace=False)
 
-    assert(idx2.name == 'new_name')
-    assert(idx1.name == 'orig_name')
+    assert idx2.name == "new_name"
+    assert idx1.name == "orig_name"
 
     # a new object but referencing the same data
-    idx3 = as_index(idx1, name='last_name')
+    idx3 = as_index(idx1, name="last_name")
 
-    assert(idx3.name == 'last_name')
-    assert(idx1.name == 'orig_name')
+    assert idx3.name == "last_name"
+    assert idx1.name == "orig_name"
+
 
 def test_set_index_as_property():
     cdf = DataFrame()
