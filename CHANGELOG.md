@@ -155,6 +155,7 @@
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+- PR #3471 Add scalar/column, column/scalar and scalar/scalar overloads to copy_if_else.
 
 ## Bug Fixes
 
