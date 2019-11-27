@@ -226,3 +226,14 @@ def test_concat_multiindex_series_and_dataframe():
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
     assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+
+
+@pytest.mark.parametrize("myindex", ["a", "b"])
+def test_concat_string_index_name(myindex):
+    # GH-Issue #3420
+    data = {"a": [123, 456], "b": ["s1", "s2"]}
+    df1 = gd.DataFrame(data).set_index(myindex)
+    df2 = df1.copy()
+    df3 = gd.concat([df1, df2])
+
+    assert df3.index.name == myindex

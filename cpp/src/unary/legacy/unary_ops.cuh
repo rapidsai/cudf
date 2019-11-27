@@ -17,9 +17,9 @@
 #ifndef UNARY_OPS_H
 #define UNARY_OPS_H
 
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 
