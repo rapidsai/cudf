@@ -214,6 +214,7 @@
 - PR #3459 Fix printing of invalid entries
 - PR #3468 Fix memory leak issue in `drop_duplicates`
 - PR #3474 Fix small doc error in capitalize Docs
+- PR #3491 Fix more doc errors in NVStrings
 
 # cuDF 0.10.0 (16 Oct 2019)
 
