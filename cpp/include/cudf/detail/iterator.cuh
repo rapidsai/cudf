@@ -81,6 +81,79 @@ struct null_replaced_value_accessor
 };
 
 /** -------------------------------------------------------------------------*
+ * @brief pair accessor of column with null bitmask
+ * A unary functor returns pair with scalar value at `id` and boolean validity
+ * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
+ * returns a `pair(element, valid)`
+ * This functor is only allowed for nullable columns.
+ *
+ * the return value for element `i` will return `pair(column[i], true)`  
+ * if it is valid, or `pair(null_replacement, false)` if it is null.
+ *
+ * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * -------------------------------------------------------------------------**/
+template <typename Element>
+struct null_replaced_pair_accessor: public null_replaced_value_accessor<Element>
+{
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * @param[in] null_replacement The value to return for null elements
+   * -------------------------------------------------------------------------**/
+  null_replaced_pair_accessor(column_device_view const& _col, Element null_val)
+      : null_replaced_value_accessor<Element>{_col, null_val}
+  { }
+
+  CUDA_DEVICE_CALLABLE
+  thrust::pair<Element, bool> operator()(cudf::size_type i) const {
+    return this->col.is_valid_nocheck(i) ? 
+      //thrust::make_pair(this->col.template element<Element>(i), true) : 
+      thrust::make_pair(null_replaced_value_accessor<Element>::operator()(i), true) : 
+      thrust::make_pair(this->null_replacement, false);
+  }
+};
+
+/** -------------------------------------------------------------------------*
+ * @brief pair accessor of column without null bitmask
+ * A unary functor returns pair with scalar value at `id` and boolean validity
+ * `operator() (cudf::size_type id)` computes `element`  and
+ * returns a `pair(element, true)`
+ * This functor is only allowed for non-nullable columns.
+ *
+ * the return value for element `i` will return `pair(column[i], true)`
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * -------------------------------------------------------------------------**/
+template <typename Element>
+struct pair_accessor
+{
+  column_device_view const col;      ///< column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  pair_accessor(column_device_view const& _col)
+      : col{_col}
+  {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
+                 "the data type mismatch");
+    CUDF_EXPECTS(!_col.nullable(), "Unexpected nullable column.");
+  }
+
+  CUDA_DEVICE_CALLABLE
+  thrust::pair<Element, bool> operator()(cudf::size_type i) const {
+    return thrust::make_pair(col.element<Element>(i), true);
+  }
+};
+
+/** -------------------------------------------------------------------------*
  * @brief validity accessor of column with null bitmask
  * A unary functor returns validity at `id`.
  * `operator() (cudf::size_type id)` computes validity flag at `id`
@@ -132,6 +205,55 @@ auto make_null_replacement_iterator(column_device_view const& column,
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
       null_replaced_value_accessor<Element>{column, null_replacement});
+}
+
+/**
+ * @brief Constructs a pair iterator over a column's values that replaces null
+ * elements with a specified value and its validity.
+ *
+ * Dereferencing the returned iterator for element `i` will return `pair(column[i], true)`
+ * if it is valid, or `pair(null_replacement, false)` if it is null.
+ * This iterator is only allowed for nullable columns.
+ *
+ * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * @param column The column to iterate
+ * @param null_replacement The value to return for null elements
+ * @return auto Iterator that returns valid column elements, or a null
+ * replacement value for null elements and validity of the element in a pair
+ */
+template <typename Element>
+auto make_null_replacement_pair_iterator(column_device_view const& column,
+                                    Element const null_replacement = Element{0})
+{
+  return thrust::make_transform_iterator(
+      thrust::counting_iterator<cudf::size_type>{0},
+      null_replaced_pair_accessor<Element>{column, null_replacement});
+}
+
+/**
+ * @brief Constructs a pair iterator over a column's values and its validity.
+ *
+ * Dereferencing the returned iterator for element `i` will return
+ * `pair(column[i], true)`. This iterator is only allowed for non-nullable
+ * columns.
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * @param column The column to iterate
+ * @return auto Iterator that returns valid column elements, and validity of the
+ * element in a pair
+ */
+template <typename Element>
+auto make_pair_iterator(column_device_view const& column)
+{
+  return thrust::make_transform_iterator(
+      thrust::counting_iterator<cudf::size_type>{0},
+      pair_accessor<Element>{column});
 }
 
 /**
