@@ -57,7 +57,8 @@ public:
   }
 };
 
-void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs, bool print_all_differences) {
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences) {
   expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});

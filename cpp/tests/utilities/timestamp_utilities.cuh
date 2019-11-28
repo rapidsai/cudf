@@ -71,6 +71,7 @@ generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count, mask);
   }
   else {
+    // This needs to be in an else to quash `statement_not_reachable` warnings
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
   }
 }
