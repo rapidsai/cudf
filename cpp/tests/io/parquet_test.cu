@@ -66,7 +66,7 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, cudf::test::NumericTypes);
 using SupportedTimestampTypes = cudf::test::RemoveIf<
-    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D>>,
+    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D, cudf::timestamp_s>>,
     cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
@@ -157,7 +157,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls) {
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
   auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return TypeParam(std::rand() / 10); });
+      0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
 
@@ -183,7 +183,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls) {
   auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return TypeParam(std::rand() / 10); });
+      0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return (i > 30) && (i < 60); });
 
