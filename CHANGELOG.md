@@ -153,6 +153,7 @@
 - PR #3201 Define and implement new datetime_ops APIs
 - PR #3462 Add `make_empty_column` and update `empty_like`
 - PR #3475 Add `bitmask_to_host` column utility
+- PR #3448 Port scatter_to_tables to libcudf++
 - PR #3458 Update strings sections in the transition guide
 - PR #3462 Add `make_empty_column` and update `empty_like`.
 - PR #3214 Define and implement new unary operations APIs
@@ -218,7 +219,10 @@
 - PR #3459 Fix printing of invalid entries
 - PR #3468 Fix memory leak issue in `drop_duplicates`
 - PR #3474 Fix small doc error in capitalize Docs
+- PR #3491 Fix more doc errors in NVStrings
+- PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 
