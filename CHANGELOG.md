@@ -154,6 +154,7 @@
 - PR #3458 Update strings sections in the transition guide
 - PR #3462 Add `make_empty_column` and update `empty_like`.
 - PR #3214 Define and implement new unary operations APIs
+- PR #3475 Add `bitmask_to_host` column utility
 
 ## Bug Fixes
 
