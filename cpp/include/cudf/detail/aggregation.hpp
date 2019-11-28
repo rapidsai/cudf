@@ -134,7 +134,7 @@ using target_type_t = typename target_type_impl<SourceType, k>::type;
  * @brief Dispatches  k as a non-type template parameter to a callable,  f.
  *
  * @tparam F Type of callable
- * aram k The `aggregation::Kind` value to dispatch
+ * @param k The `aggregation::Kind` value to dispatch
  * aram f The callable that accepts an `aggregation::Kind` non-type template
  * argument.
  * @return Forwards the return value of the callable.
