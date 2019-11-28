@@ -1,3 +1,12 @@
+# cuDF 0.12.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
+
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
@@ -151,11 +160,19 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
-- PR #3448 Port scatter_to_tables to libcudf++
-- PR #3458 Update strings sections in the transition guide
+<<<<<<< HEAD
+- PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+=======
 - PR #3462 Add `make_empty_column` and update `empty_like`.
 - PR #3214 Define and implement new unary operations APIs
-- PR #3492 Small cleanup (remove std::abs) and comment
+>>>>>>> origin/branch-0.11
+
+## Bug Fixes
+
+- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
+- PR #3048 Support for zero columned tables
+- PR #3030 Fix snappy decoding regression in PR #3014
+- PR #3041 Fixed exp to experimental namespace name change issue
 
 ## Bug Fixes
 

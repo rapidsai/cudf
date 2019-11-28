@@ -81,6 +81,7 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                           rmm::mr::get_default_resource(),
                                       cudaStream_t stream = 0);
 
+
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
  *          @p rhs based on the value of the corresponding element in @p boolean_mask
