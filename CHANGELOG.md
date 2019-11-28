@@ -160,12 +160,8 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
-<<<<<<< HEAD
-- PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
-=======
 - PR #3462 Add `make_empty_column` and update `empty_like`.
 - PR #3214 Define and implement new unary operations APIs
->>>>>>> origin/branch-0.11
 
 ## Bug Fixes
 
