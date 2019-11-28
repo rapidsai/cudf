@@ -101,6 +101,7 @@ using id_to_type = typename id_to_type_impl<Id>::type;
  * `cudf::type_id` values.
  *---------------------------------------------------------------------------**/
 CUDF_TYPE_MAPPING(cudf::experimental::bool8, type_id::BOOL8);
+CUDF_TYPE_MAPPING(bool, type_id::BOOL);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
 CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
@@ -135,6 +136,7 @@ MAP_NUMERIC_SCALAR(int64_t)
 MAP_NUMERIC_SCALAR(float)
 MAP_NUMERIC_SCALAR(double)
 MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
+MAP_NUMERIC_SCALAR(bool);
 
 template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
