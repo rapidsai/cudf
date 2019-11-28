@@ -114,7 +114,8 @@ constexpr inline bool is_numeric(data_type type) {
  *---------------------------------------------------------------------------**/
 template <typename T>
 constexpr inline bool is_boolean() {
-  return std::is_same<T, cudf::experimental::bool8>::value;
+  return std::is_same<T, cudf::experimental::bool8>::value ||
+         std::is_same<T, bool>::value;
 }
 
 struct is_boolean_impl {
@@ -136,7 +137,6 @@ struct is_boolean_impl {
 constexpr inline bool is_boolean(data_type type) {
   return cudf::experimental::type_dispatcher(type, is_boolean_impl{});
 }
-
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether the type `T` is a timestamp type.

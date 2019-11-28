@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include "cudf_gtest.hpp"
-#include "legacy/cudf_test_utils.cuh"
+#include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -48,10 +47,36 @@ class BaseFixture : public ::testing::Test {
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
 
-  static void SetUpTestCase() { ASSERT_RMM_SUCCEEDED(rmmInitialize(nullptr)); }
+  static void SetUpTestCase() { ASSERT_EQ(rmmInitialize(nullptr), RMM_SUCCESS); }
 
-  static void TearDownTestCase() { ASSERT_RMM_SUCCEEDED(rmmFinalize()); }
+  static void TearDownTestCase() { ASSERT_EQ(rmmFinalize(), RMM_SUCCESS); }
 };
+
+template <typename T, typename Enable = void>
+struct uniform_distribution_impl{};
+template<typename T>
+struct uniform_distribution_impl<T,
+  std::enable_if_t<std::is_integral<T>::value && not cudf::is_boolean<T>()> > {
+   using type = std::uniform_int_distribution<T>;
+};
+
+template<typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value > > {
+   using type = std::uniform_real_distribution<T>;
+};
+
+template<typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>() > > {
+   using type = std::bernoulli_distribution;
+};
+
+template<typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > > {
+   using type = std::uniform_int_distribution<typename T::duration::rep>;
+};
+
+template <typename T>
+using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides uniform random number generation.
@@ -73,14 +98,7 @@ template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
-
-  using uniform_distribution =
-      std::conditional_t<cudf::is_timestamp<T>(), std::uniform_int_distribution<int32_t>,
-        std::conditional_t<std::is_same<T, bool>::value or std::is_same<T, cudf::experimental::bool8>::value,
-                           std::bernoulli_distribution,
-          std::conditional_t<std::is_floating_point<T>::value,
-                             std::uniform_real_distribution<T>,
-                             std::uniform_int_distribution<T> > > >;
+  using uniform_distribution = uniform_distribution_t<T>;
 
   UniformRandomGenerator() = default;
 

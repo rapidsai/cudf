@@ -156,6 +156,7 @@
 - PR #3462 Add `make_empty_column` and update `empty_like`.
 - PR #3214 Define and implement new unary operations APIs
 - PR #3475 Add `bitmask_to_host` column utility
+- PR #3487 Add is_boolean trait and random timestamp generator for testing
 
 ## Bug Fixes
 
