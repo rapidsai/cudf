@@ -139,14 +139,18 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
 
 // copy column bitmask to host (used by to_host())
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
-  std::vector<bitmask_type> host_bitmask;
   if (c.nullable()) {
     auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
-    host_bitmask.resize(num_bitmasks);
+    std::vector<bitmask_type> host_bitmask(num_bitmasks);
+
     CUDA_TRY(cudaMemcpy(host_bitmask.data(), c.null_mask(), num_bitmasks * sizeof(bitmask_type),
                         cudaMemcpyDeviceToHost));
+
+    return host_bitmask;
   }
-  return host_bitmask;
+  else {
+    return std::vector<bitmask_type>{};
+  }
 }
 
 
