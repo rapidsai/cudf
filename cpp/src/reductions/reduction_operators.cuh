@@ -16,204 +16,256 @@
 
 #pragma once
 
-#include <utilities/cudf_utils.h>   //for CUDA_HOST_DEVICE_CALLABLE
+#include <utilities/cudf_utils.h>  //for CUDA_HOST_DEVICE_CALLABLE
 #include <cudf/detail/iterator.cuh>
 #include <iterator/transform_unary_functions.cuh>
 #include <utilities/device_operators.cuh>
 
-#include <cmath>
 #include <thrust/functional.h>
+#include <cmath>
 
 namespace cudf {
 namespace experimental {
 namespace reduction {
 
 // intermediate data structure to compute `var`, `std`
-template<typename ResultType>
-struct var_std
-{
-    ResultType value;                /// the value
-    ResultType value_squared;        /// the value of squared
+template <typename ResultType>
+struct var_std {
+  ResultType value;          /// the value
+  ResultType value_squared;  /// the value of squared
 
-    CUDA_HOST_DEVICE_CALLABLE
-    var_std(ResultType _value=0, ResultType _value_squared=0)
-    : value(_value), value_squared(_value_squared)
-    {};
+  CUDA_HOST_DEVICE_CALLABLE
+  var_std(ResultType _value = 0, ResultType _value_squared = 0)
+      : value(_value), value_squared(_value_squared){};
 
-    using this_t = var_std<ResultType>;
+  using this_t = var_std<ResultType>;
 
-    CUDA_HOST_DEVICE_CALLABLE
-    this_t operator+(this_t const &rhs) const
-    {
-        return this_t(
-            (this->value + rhs.value),
-            (this->value_squared + rhs.value_squared)
-        );
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  this_t operator+(this_t const& rhs) const {
+    return this_t((this->value + rhs.value),
+                  (this->value_squared + rhs.value_squared));
+  };
 };
 
 // transformer for `struct var_std` in order to compute `var`, `std`
-template<typename ResultType>
-struct transformer_var_std
-{
-    using OutputType = var_std<ResultType>;
+template <typename ResultType>
+struct transformer_var_std {
+  using OutputType = var_std<ResultType>;
 
-    CUDA_HOST_DEVICE_CALLABLE
-    OutputType operator() (ResultType const & value)
-    {
-        return OutputType(value, value*value);
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  OutputType operator()(ResultType const& value) {
+    return OutputType(value, value * value);
+  };
 };
 
 // ------------------------------------------------------------------------
 // Definitions of device struct for reduction operation
 // all `op::xxx` must have `Op` and `transformer`
 // `Op`  is used to compute the reduction at device
-// `transformer` is used to convert elements for computing the reduction at device
-// By default `transformer` is static type conversion to ResultType
+// `transformer` is used to convert elements for computing the reduction at device.
+// By default `transformer` is static type conversion to ResultType.
 // In some cases, it could be square or abs or complex operations
-
 namespace op {
 
-// `sum`, `product`, `sum_of_squares`, `min`, `max`
-// are used at simple_reduction
+/**
+ * @brief  Simple reduction operator CRTP Base class
+ *
+ * @tparam Derived operator with SimpleOp interface
+ */
+template <typename Derived>
+struct SimpleOp {
+  /**
+   * @brief Get binary operator functor for reduction
+   *
+   * @return binary operator functor object
+   */
+  auto get_binary_op() {
+    using binary_op = typename Derived::Op;
+    return binary_op{};
+  }
 
-struct sum {
-    using Op = cudf::DeviceSum;
+  /**
+   * @brief Get transformer functor for transforming input column
+   * which inturn is used by reduction binary operator
+   *
+   * @tparam ResultType output type for element transformer
+   *
+   * @return element transformer functor object
+   */
+  template <typename ResultType>
+  auto get_element_transformer() {
+    using element_transformer = typename Derived::transformer<ResultType>;
+    return element_transformer{};
+  }
 
-    template<typename ResultType>
-    using transformer = thrust::identity<ResultType>;
+  /**
+   * @brief get identity value of type `T` for binary reduction operator
+   *
+   * @tparam T data type of identity value
+   *
+   * @return identity value 
+   */
+  template <typename T>
+  constexpr T get_identity() {
+    return Derived::Op::template identity<T>();
+  }
 };
 
-struct product {
-    using Op = cudf::DeviceProduct;
+// `sum`, `product`, `sum_of_squares`, `min`, `max` are used at simple_reduction
+// inferface is defined by CRTP calss SimpleOp
 
-    template<typename ResultType>
-    using transformer = thrust::identity<ResultType>;
+// operator for `sum`
+struct sum : public SimpleOp<sum> {
+  using Op = cudf::DeviceSum;
+
+  template <typename ResultType>
+  using transformer = thrust::identity<ResultType>;
 };
 
-struct sum_of_squares {
-    using Op = cudf::DeviceSum;
+// operator for `product`
+struct product : public SimpleOp<product> {
+  using Op = cudf::DeviceProduct;
 
-    template<typename ResultType>
-    using transformer = cudf::transformer_squared<ResultType>;
+  template <typename ResultType>
+  using transformer = thrust::identity<ResultType>;
 };
 
-struct min {
-    using Op = cudf::DeviceMin;
+// operator for `sum_of_squares`
+struct sum_of_squares : public SimpleOp<sum_of_squares> {
+  using Op = cudf::DeviceSum;
 
-    template<typename ResultType>
-    using transformer = thrust::identity<ResultType>;
+  template <typename ResultType>
+  using transformer = cudf::transformer_squared<ResultType>;
 };
 
-struct max {
-    using Op = cudf::DeviceMax;
+// operator for `min`
+struct min : public SimpleOp<min> {
+  using Op = cudf::DeviceMin;
 
-    template<typename ResultType>
-    using transformer = thrust::identity<ResultType>;
+  template <typename ResultType>
+  using transformer = thrust::identity<ResultType>;
+};
+
+// operator for `max`
+struct max : public SimpleOp<max> {
+  using Op = cudf::DeviceMax;
+
+  template <typename ResultType>
+  using transformer = thrust::identity<ResultType>;
 };
 
 /**
- * @brief  Compound Operator CRTP Base class
+ * @brief  Compound reduction operator CRTP Base class
  * This template class defines the interface for compound operators
+ * In addition to interface defined by SimpleOp CRTP, this class defines
+ * interface for final result transformation.
  *
  * @tparam Derived compound operators derived from CompoundOp
  */
 template <typename Derived>
-struct CompoundOp {
-
-  //Call this using Derived::template compute_result<T>(...);
-  template<typename ResultType, typename IntermediateType>
-  CUDA_HOST_DEVICE_CALLABLE static ResultType
-  compute_result(IntermediateType& input, 
-                 cudf::size_type count,
-                 cudf::size_type ddof) {
-    //Enforced interface
+struct CompoundOp : public SimpleOp<Derived> {
+  /**
+   * @brief  computes the transformed result from result of simple operator.
+   *
+   * @tparam ResultType output type of compound reduction operator
+   * @tparam IntermediateType output type of simple reduction operator
+   * @param input output of simple reduction as input for result transformation
+   * @param count validity count
+   * @param ddof  `ddof` parameter used by variance and standard deviation
+   *
+   * @return transformed output result of compount operator
+   */
+  template <typename ResultType, typename IntermediateType>
+  CUDA_HOST_DEVICE_CALLABLE static ResultType compute_result(
+      const IntermediateType& input, const cudf::size_type& count,
+      const cudf::size_type& ddof) {
+    // Enforced interface
     return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
   }
-
-  private:
-    CompoundOp(){};
-    friend Derived;
 };
 
 // `mean`, `variance`, `standard_deviation` are used at compound_reduction
-// compound_reduction requires intermediate::IntermediateType and intermediate::compute_result
-// IntermediateType is the intermediate data structure type of a single reduction call,
-// it is also used as OutputType of cudf::reduction::detail::reduce at compound_reduction.
-// compute_result computes the final ResultType from the IntermediateType.
-// intemediate::compute_result method is enforced by CRTP base class CompoundOp<>
+// compound_reduction requires intermediate::IntermediateType and
+// intermediate::compute_result IntermediateType is the intermediate data
+// structure type of a single reduction call, it is also used as OutputType of
+// cudf::reduction::detail::reduce at compound_reduction. compute_result
+// computes the final ResultType from the IntermediateType.
+// intemediate::compute_result method is enforced by CRTP base class CompoundOp
 
 // operator for `mean`
 struct mean : public CompoundOp<mean> {
-    using Op = cudf::DeviceSum;
+  using Op = cudf::DeviceSum;
 
-    template<typename ResultType>
-    using transformer = thrust::identity<ResultType>;
+  template <typename ResultType>
+  using transformer = thrust::identity<ResultType>;
 
-    template<typename ResultType>
-    struct intermediate{
-        using IntermediateType = ResultType;  // sum value
+  template <typename ResultType>
+  struct intermediate {
+    using IntermediateType = ResultType;  // sum value
 
-        // compute `mean` from intermediate type `IntermediateType`
-        CUDA_HOST_DEVICE_CALLABLE
-        static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
-        {
-            return (input / count);
-        };
-
+    // compute `mean` from intermediate type `IntermediateType`
+    CUDA_HOST_DEVICE_CALLABLE
+    static ResultType compute_result(const IntermediateType& input,
+                                     const cudf::size_type& count,
+                                     const cudf::size_type& ddof) {
+      return (input / count);
     };
+  };
 };
 
 // operator for `variance`
 struct variance : public CompoundOp<variance> {
-    using Op = cudf::DeviceSum;
+  using Op = cudf::DeviceSum;
 
-    template<typename ResultType>
-    using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+  template <typename ResultType>
+  using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
 
-    template<typename ResultType>
-    struct intermediate{
-        using IntermediateType = var_std<ResultType>; //with sum of value, and sum of squared value
+  template <typename ResultType>
+  struct intermediate {
+    using IntermediateType =
+        var_std<ResultType>;  // with sum of value, and sum of squared value
 
-        // compute `variance` from intermediate type `IntermediateType`
-        CUDA_HOST_DEVICE_CALLABLE
-        static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
-        {
-            ResultType mean = input.value / count;
-            ResultType asum = input.value_squared;
-            cudf::size_type div = count -ddof;
-            ResultType var = asum / div - ((mean * mean) * count) /div;
+    // compute `variance` from intermediate type `IntermediateType`
+    CUDA_HOST_DEVICE_CALLABLE
+    static ResultType compute_result(const IntermediateType& input,
+                                     const cudf::size_type& count,
+                                     const cudf::size_type& ddof) {
+      ResultType mean = input.value / count;
+      ResultType asum = input.value_squared;
+      cudf::size_type div = count - ddof;
+      ResultType var = asum / div - ((mean * mean) * count) / div;
 
-            return var;
-        };
+      return var;
     };
+  };
 };
 
 // operator for `standard deviation`
 struct standard_deviation : public CompoundOp<standard_deviation> {
-    using Op = cudf::DeviceSum;
+  using Op = cudf::DeviceSum;
 
-    template<typename ResultType>
-    using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+  template <typename ResultType>
+  using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
 
-    template<typename ResultType>
-    struct intermediate{
-        using IntermediateType = var_std<ResultType>; //with sum of value, and sum of squared value
+  template <typename ResultType>
+  struct intermediate {
+    using IntermediateType =
+        var_std<ResultType>;  // with sum of value, and sum of squared value
 
-        // compute `standard deviation` from intermediate type `IntermediateType`
-        CUDA_HOST_DEVICE_CALLABLE
-        static ResultType compute_result(const IntermediateType& input, cudf::size_type count, cudf::size_type ddof)
-        {
-            using intermediateOp = typename variance::template intermediate<ResultType>;
-            ResultType var = intermediateOp::compute_result(input, count, ddof);
+    // compute `standard deviation` from intermediate type `IntermediateType`
+    CUDA_HOST_DEVICE_CALLABLE
+    static ResultType compute_result(const IntermediateType& input,
+                                     const cudf::size_type& count,
+                                     const cudf::size_type& ddof) {
+      using intermediateOp = variance::template intermediate<ResultType>;
+      ResultType var = intermediateOp::compute_result(input, count, ddof);
 
-            return static_cast<ResultType>(std::sqrt(var));
-        };
+      return static_cast<ResultType>(std::sqrt(var));
     };
+  };
 };
 
-} // namespace op
-} // namespace reduction
-} // namespace experimental
-} // namespace cudf
+}  // namespace op
+}  // namespace reduction
+}  // namespace experimental
+}  // namespace cudf

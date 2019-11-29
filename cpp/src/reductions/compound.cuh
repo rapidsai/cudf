@@ -56,17 +56,18 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
   std::unique_ptr<scalar> result;
-
+  Op compound_op{};
+  
   if (col.has_nulls()) {
     auto it = thrust::make_transform_iterator(
-      experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
-      typename Op::template transformer<ResultType>{});
-    result = detail::reduce<Op, decltype(it), ResultType>(it, col.size(), Op{}, valid_count, ddof, mr, stream);
+      experimental::detail::make_null_replacement_iterator(*dcol, compound_op.template get_identity<ElementType>()),
+      compound_op.template get_element_transformer<ResultType>());
+    result = detail::reduce<Op, decltype(it), ResultType>(it, col.size(), compound_op, valid_count, ddof, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), 
-        typename Op::template transformer<ResultType>{});
-    result = detail::reduce<Op, decltype(it), ResultType>(it, col.size(), Op{}, valid_count, ddof, mr, stream);
+        compound_op.template get_element_transformer<ResultType>());
+    result = detail::reduce<Op, decltype(it), ResultType>(it, col.size(), compound_op, valid_count, ddof, mr, stream);
   }
   // set scalar is valid
   if (col.null_count() < col.size())

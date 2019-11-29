@@ -47,11 +47,11 @@ namespace detail {
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
 template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type>
-std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op op,
+std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::SimpleOp<Op> sop,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  typename Op::Op binary_op{};
-  OutputType identity = Op::Op::template identity<OutputType>();
+  auto binary_op = sop.get_binary_op();
+  OutputType identity = sop.template get_identity<OutputType>();
   rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
 
   // Allocate temporary storage
@@ -90,13 +90,13 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, Op
 template <typename Op, typename InputIterator, typename OutputType, 
   typename IntermediateType=typename thrust::iterator_value<InputIterator>::type>
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, 
-  op::CompoundOp<Op> op, 
+  op::CompoundOp<Op> cop, 
   cudf::size_type valid_count,
   cudf::size_type ddof,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  typename Op::Op binary_op{};
-  IntermediateType identity = Op::Op::template identity<IntermediateType>();
+  auto binary_op = cop.get_binary_op();
+  IntermediateType identity = cop.template get_identity<IntermediateType>();
   rmm::device_scalar<IntermediateType> intermediate_result{identity, stream, mr};
 
   // Allocate temporary storage
@@ -113,8 +113,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items,
   auto result = new ScalarType(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
    intermediate_result.data(), 1,
-   [dres=result->data(), valid_count, ddof] __device__ (auto i)
-   { *dres = Op::template compute_result<OutputType>(i, valid_count, ddof); } );
+   [dres=result->data(), cop, valid_count, ddof] __device__ (auto i)
+   { *dres = cop.template compute_result<OutputType>(i, valid_count, ddof); } );
   return std::unique_ptr<scalar>(result);
 }
 

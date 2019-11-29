@@ -51,16 +51,17 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
   std::unique_ptr<scalar> result;
+  Op simple_op{};
 
   if (col.has_nulls()) {
     auto it = thrust::make_transform_iterator(
-      experimental::detail::make_null_replacement_iterator(*dcol, Op::Op::template identity<ElementType>()),
-      typename Op::template transformer<ResultType>{});
+      experimental::detail::make_null_replacement_iterator(*dcol, simple_op.template get_identity<ElementType>()),
+      simple_op.template get_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), 
-        typename Op::template transformer<ResultType>{});
+        simple_op.template get_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
   }
   // set scalar is valid
