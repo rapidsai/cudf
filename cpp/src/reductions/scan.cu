@@ -8,7 +8,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <utilities/device_atomics.cuh>
+#include <utilities/legacy/device_atomics.cuh>
 #include <cub/device/device_scan.cuh>
 #include <cudf/reduction.hpp>
 

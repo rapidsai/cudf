@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <utilities/cudf_utils.h>  //for CUDA_HOST_DEVICE_CALLABLE
+#include <utilities/legacy/cudf_utils.h>  //for CUDA_HOST_DEVICE_CALLABLE
 #include <cudf/detail/iterator.cuh>
 #include <iterator/transform_unary_functions.cuh>
-#include <utilities/device_operators.cuh>
+#include <utilities/legacy/device_operators.cuh>
 
 #include <thrust/functional.h>
 #include <cmath>
