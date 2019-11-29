@@ -21,6 +21,8 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture
 {
@@ -88,6 +90,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
   auto result_itr = host_data.first.begin();
   for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr, ++result_itr )
   {
+
     if(*itr)
       EXPECT_TRUE((*result_itr)==(*itr));
   }
