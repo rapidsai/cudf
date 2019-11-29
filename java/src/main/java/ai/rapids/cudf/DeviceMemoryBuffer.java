@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 public class DeviceMemoryBuffer extends MemoryBuffer {
   private static final Logger log = LoggerFactory.getLogger(DeviceMemoryBuffer.class);
 
-  private static final class DeviceBufferCleaner extends MemoryCleaner.Cleaner {
+  private static final class DeviceBufferCleaner extends MemoryBufferCleaner {
     private long address;
 
     DeviceBufferCleaner(long address) {

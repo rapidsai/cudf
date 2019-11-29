@@ -17,7 +17,7 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
-#include <utilities/int_fastdiv.h>
+#include <cudf/detail/utilities/int_fastdiv.h>
 #include <table/legacy/device_table.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 

@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/error.hpp>
-#include <utilities/cuda_utils.hpp>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/cuda_utils.hpp>
+#include <utilities/legacy/bit_util.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 #include <bitmask/legacy/bit_mask.cuh> 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
