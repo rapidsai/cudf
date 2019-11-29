@@ -21,7 +21,6 @@
 
 #include "writer_impl.hpp"
 
-#include <nvstrings/NVStrings.h>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -119,11 +118,38 @@ constexpr T to_clockscale(cudf::type_id timestamp_id) {
 }  // namespace
 
 /**
+ * @brief Helper kernel for converting string data/offsets into nvstrdesc
+ * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
+ * made to use the native offset+data layout.
+ **/
+__global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst, const size_type *offsets,
+                        const char *strdata, const uint32_t *nulls,
+                        size_type column_size) {
+  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row < column_size) {
+    uint32_t is_valid = (nulls) ? (nulls[row >> 5] >> (row & 0x1f)) & 1 : 1;
+    size_t count;
+    const char *ptr;
+    if (is_valid) {
+      size_type cur = offsets[row];
+      size_type next = offsets[row + 1];
+      ptr = strdata + cur;
+      count = (next > cur) ? next - cur : 0;
+    }
+    else {
+      ptr = nullptr;
+      count = 0;
+    }
+    dst[row].ptr = ptr;
+    dst[row].count = count;
+  }
+}
+
+
+/**
  * @brief Helper class that adds ORC-specific column info
  **/
 class orc_column_view {
-  using str_pair = std::pair<const char *, size_t>;
-
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
@@ -141,17 +167,15 @@ class orc_column_view {
         _nulls(col.has_nulls() ? col.null_mask() : nullptr),
         _clockscale(to_clockscale<uint8_t>(col.type().id())),
         _type_kind(to_orc_type(col.type().id())) {
-    if (_string_type) {
+    if (_string_type && _data_count > 0) {
       strings_column_view view{col};
-      _nvstr =
-          NVStrings::create_from_offsets(view.chars().data<char>(), view.size(),
-                                         view.offsets().data<size_type>());
-
-      _indexes = rmm::device_buffer(_data_count * sizeof(str_pair), stream);
-      CUDF_EXPECTS(
-          _nvstr->create_index(static_cast<str_pair *>(_indexes.data())) == 0,
-          "Cannot retrieve string pairs");
+      _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
+      stringdata_to_nvstrdesc<<< ((_data_count-1)>>8)+1, 256, 0, stream >>>(
+            reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
+            view.offsets().data<size_type>(), view.chars().data<char>(),
+            _nulls, _data_count);
       _data = _indexes.data();
+      cudaStreamSynchronize(stream);
     }
     _name = "_col" + std::to_string(_id);
   }
@@ -219,7 +243,6 @@ class orc_column_view {
   ColumnEncodingKind _encoding_kind;
 
   // String dictionary-related members
-  NVStrings *_nvstr = nullptr;
   rmm::device_buffer _indexes;
   size_t dict_stride = 0;
   gpu::DictionaryChunk const *dict = nullptr;
