@@ -437,8 +437,10 @@ TYPED_TEST(IteratorTest, error_handling) {
   CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_null_replacement_pair_iterator(*d_col_no_null, T{0})),
                             "Unexpected non-nullable column.");
 
-  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_pair_iterator<T>(*d_col_null)),
-                            "Unexpected nullable column.");
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_pair_iterator<true, T>(*d_col_no_null)),
+                            "Unexpected non-nullable column.");
+  CUDF_EXPECT_NO_THROW((cudf::experimental::detail::make_pair_iterator<false, T>(*d_col_null)));
+  CUDF_EXPECT_NO_THROW((cudf::experimental::detail::make_pair_iterator<true, T>(*d_col_null)));
 }
 
 struct StringIteratorTest :  public IteratorTest<cudf::string_view> { 
@@ -517,7 +519,7 @@ TYPED_TEST(IteratorTest, nonull_pair_iterator) {
                  [](auto s) { return thrust::make_pair(s, true); });
 
   // GPU test
-  auto it_dev = cudf::experimental::detail::make_pair_iterator<T>(*d_col);
+  auto it_dev = cudf::experimental::detail::make_pair_iterator<false, T>(*d_col);
   this->iterator_test_thrust(replaced_array, it_dev, host_values.size());
 }
 
