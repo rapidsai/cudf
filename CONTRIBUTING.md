@@ -126,6 +126,12 @@ CUDA/GPU requirements:
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
 
+Software requiremnts:
+* `libRMM`
+* `DLpack`
+
+You can obtain `libRMM` from [rmm](https://github.com/rapidsai/rmm) and `DLpack` from [dlpack](https://github.com/dmlc/dlpack).
+
 Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
 `cmake`:
 
@@ -150,6 +156,8 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 - Clone the repository and submodules
 ```bash
 CUDF_HOME=$(pwd)/cudf
+DLPACK_ROOT=/path/to/dlpack/
+RMM_ROOT=/path/to/rmm/
 git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
 cd $CUDF_HOME
 git submodule update --init --remote --recursive
@@ -172,7 +180,8 @@ $ cd build                                                                # ente
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 # -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
+# If cuDF dependencies are not found, you can specify them with -DRMM_INCLUDE=$RMM_ROOT/include -DRMM_LIBRARY=$RMM_ROOT/lib/librmm.so
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON       # configure cmake ...
 
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
@@ -181,6 +190,8 @@ $ make install                                                            # inst
 - As a convenience, a `build.sh` script is provided in `$CUDF_HOME`. To execute the same build commands above, run the script as shown below.  Note that the libraries will be installed to the location set in `$INSTALL_PREFIX` if set (i.e. `export INSTALL_PREFIX=/install/path`), otherwise to `$CONDA_PREFIX`.
 ```bash
 $ cd $CUDF_HOME
+$ export DLPACK_ROOT=/path/to/dlpack/
+$ export RMM_ROOT=/path/to/rmm/
 $ ./build.sh libcudf                   # compile the cuDF libraries and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
 ```
 
