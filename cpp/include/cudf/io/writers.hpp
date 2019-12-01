@@ -102,7 +102,9 @@ namespace parquet {
  * @brief Options for the parquet writer.
  */
 struct writer_options {
+  /// Selects the compressor to use in parquet file
   compression_type compression = compression_type::AUTO;
+  /// Enables or disables column statistics in the parquet file
   statistics_freq stats_granularity = statistics_freq::STATISTICS_ROWGROUP;
 
   writer_options() = default;
