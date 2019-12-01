@@ -328,7 +328,7 @@ struct write_parquet_args {
   /// Specify the compression format to use
   compression_type compression = compression_type::AUTO;
   /// Specify the level of statistics in the output file
-  int stats_level = 1;
+  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Set of columns to output
   table_view table;
 

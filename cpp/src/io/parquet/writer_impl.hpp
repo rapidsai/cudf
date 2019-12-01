@@ -178,7 +178,7 @@ class writer::impl {
   size_t max_rowgroup_rows_ = DEFAULT_ROWGROUP_MAXROWS;
   size_t target_page_size_ = DEFAULT_TARGET_PAGE_SIZE;
   Compression compression_ = Compression::UNCOMPRESSED;
-  int stats_granularity_ = statistics_freq::statistics_none;
+  statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
 
   std::vector<uint8_t> buffer_;
   std::ofstream outfile_;

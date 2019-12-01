@@ -99,20 +99,11 @@ class writer {
 namespace parquet {
 
 /**
- * @brief Statistics granularity type
- */
-enum statistics_freq {
-  statistics_none = 0,     //!< No column statistics
-  statistics_rowgroup = 1, //!< Per-Rowgroup column statistics
-  statistics_page = 2,     //!< Per-page column statistics
-};
-
-/**
  * @brief Options for the parquet writer.
  */
 struct writer_options {
   compression_type compression = compression_type::AUTO;
-  int stats_granularity = 1;
+  statistics_freq stats_granularity = statistics_freq::STATISTICS_ROWGROUP;
 
   writer_options() = default;
   writer_options(writer_options const&) = default;
@@ -122,7 +113,7 @@ struct writer_options {
    *
    * @param format Compression format to use
    */
-  explicit writer_options(compression_type format, int stats_lvl) :
+  explicit writer_options(compression_type format, statistics_freq stats_lvl) :
              compression(format), stats_granularity(stats_lvl) {}
 };
 

@@ -466,7 +466,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
 
   // Allocate column chunks and gather fragment statistics
   rmm::device_vector<statistics_chunk> frag_stats;
-  if (stats_granularity_ > statistics_freq::statistics_none) {
+  if (stats_granularity_ > statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns);
     gather_fragment_statistics(frag_stats.data().get(), fragments, col_desc,
                                num_columns, num_fragments, fragment_size, stream);
@@ -575,7 +575,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   // Initialize data pointers in batch
   size_t max_comp_bfr_size = (compression_ != UNCOMPRESSED) ? gpu::GetMaxCompressedBfrSize(max_uncomp_bfr_size, max_pages_in_batch) : 0;
   uint32_t max_comp_pages = (compression_ != UNCOMPRESSED) ? max_pages_in_batch : 0;
-  uint32_t num_stats_bfr = (stats_granularity_ > statistics_freq::statistics_none) ? num_pages + num_chunks : 0;
+  uint32_t num_stats_bfr = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
   rmm::device_vector<gpu_inflate_input_s> comp_in(max_comp_pages);
@@ -625,8 +625,8 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
     encode_pages(chunks, pages.data().get(), num_columns, pages_in_batch, first_page_in_batch,
                  batch_list[b], r, comp_in.data().get(), comp_out.data().get(),
-                 (stats_granularity_ >= statistics_freq::statistics_page) ? page_stats.data().get() : nullptr,
-                 (stats_granularity_ >= statistics_freq::statistics_rowgroup) ? page_stats.data().get() + num_pages : nullptr,
+                 (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data().get() : nullptr,
+                 (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data().get() + num_pages : nullptr,
                  stream);
     for (; r < rnext; r++) {
       for (auto i = 0; i < num_columns; i++) {
