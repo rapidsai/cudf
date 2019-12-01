@@ -332,7 +332,7 @@ struct write_parquet_args {
   /// Set of columns to output
   table_view table;
 
-  explicit write_parquet_args(sink_info const& snk, table_view const& table)
+  explicit write_parquet_args(sink_info const& sink, table_view const& table)
       : sink(snk), table(table) {}
 };
 
