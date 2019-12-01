@@ -72,7 +72,7 @@ enum class quote_style {
 };
 
 /**
- * @brief Statistics granularity type
+ * @brief Statistics granularity type for parquet/orc writers
  */
 enum statistics_freq {
   STATISTICS_NONE = 0,     //!< No column statistics
