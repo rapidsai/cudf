@@ -323,8 +323,8 @@ std::unique_ptr<table> read_parquet(
  * @brief Settings to use for `write_parquet()`
  */
 struct write_parquet_args {
+  /// Specify the sink to use for writer output
   sink_info sink;
-
   /// Specify the compression format to use
   compression_type compression = compression_type::AUTO;
   /// Specify the level of statistics in the output file
