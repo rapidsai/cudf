@@ -241,15 +241,16 @@ std::unique_ptr<table> read_orc(
  * @brief Settings to use for `write_orc()`
  */
 struct write_orc_args {
+  /// Specify the sink to use for writer output
   sink_info sink;
-
   /// Specify the compression format to use
-  compression_type compression = compression_type::AUTO;
+  compression_type compression;
   /// Set of columns to output
   table_view table;
 
-  explicit write_orc_args(sink_info const& snk, table_view const& table)
-      : sink(snk), table(table) {}
+  explicit write_orc_args(sink_info const& snk, table_view const& table_,
+                          compression_type compression_ = compression_type::AUTO)
+      : sink(snk), table(table_), compression(compression_) {}
 };
 
 /**
@@ -326,14 +327,16 @@ struct write_parquet_args {
   /// Specify the sink to use for writer output
   sink_info sink;
   /// Specify the compression format to use
-  compression_type compression = compression_type::AUTO;
+  compression_type compression;
   /// Specify the level of statistics in the output file
-  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
+  statistics_freq stats_level;
   /// Set of columns to output
   table_view table;
 
-  explicit write_parquet_args(sink_info const& sink, table_view const& table)
-      : sink(snk), table(table) {}
+  explicit write_parquet_args(sink_info const& sink_, table_view const& table_,
+                              compression_type compression_ = compression_type::AUTO,
+                              statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
+      : sink(sink_), table(table_), compression(compression_), stats_level(stats_lvl_) {}
 };
 
 /**
