@@ -276,6 +276,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        cudaStream_t stream = 0)
 {
   // TODO
+  CUDF_FAIL("Unimplemented");
   return cudf::make_numeric_column(data_type{INT32}, 0);
 }
 
