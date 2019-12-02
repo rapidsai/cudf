@@ -783,11 +783,19 @@ class DataFrame(object):
                 else:
                     result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
-            raise NotImplementedError(
-                "Series to DataFrame arithmetic not supported "
-                "until strings can be used as indices. Try converting your"
-                " Series into a DataFrame first."
-            )
+            for col in set(list(self.columns) + list(other.index)):
+
+                if col in self.columns:
+                    l_opr = self._cols[col]
+                else: 
+                    l_opr = Series([np.nan]*len(self))
+                if col in other.index:
+                    r_opr = other[other.index == col][0]
+                else:
+                    r_opr = np.nan
+                result[col] = l_opr + r_opr
+                
+
         elif isinstance(other, numbers.Number):
             for col in self._cols:
                 result[col] = op(self._cols[col], other)
