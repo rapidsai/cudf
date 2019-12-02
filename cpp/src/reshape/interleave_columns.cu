@@ -17,6 +17,7 @@
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include "cudf/utilities/bit.hpp"
 
 namespace cudf {
 
@@ -38,11 +39,44 @@ struct interleave_columns_selector
     }
 };
 
+struct interleave_columns_validity_selector
+{
+    table_device_view in;
+    size_type out_row_count;
+
+    bitmask_type __device__ operator()(size_type i)
+    {
+        bitmask_type out = 0b00000000000000000000000000000000;
+
+        const auto num_bits = cudf::detail::size_in_bits<bitmask_type>();
+
+        for (size_type bit = 0; bit < num_bits; bit++) {
+            size_type out_row = i * num_bits + bit;
+            if (out_row >= out_row_count) {
+                break;
+            }
+
+            out |= _select(out_row) << bit;
+        }
+
+        return out;
+    }
+
+private:
+
+    bool __device__ _select(size_type out_row)
+    {
+        size_type in_col = out_row % in.num_columns();
+        size_type in_row = out_row / in.num_columns();
+
+        return bit_is_set(in.column(in_col).null_mask(), in_row);
+    }
+};
+
 struct interleave_columns_functor
 {
     template <typename TElement>
-    // std::enable_if_t<true, std::unique_ptr<column>>
-    std::unique_ptr<column>
+    std::enable_if_t<cudf::is_fixed_width<TElement>(), std::unique_ptr<cudf::column>>
     operator()(table_view const& in,
                mask_allocation_policy mask_policy,
                rmm::mr::device_memory_resource *mr,
@@ -61,7 +95,26 @@ struct interleave_columns_functor
                           device_out->data<TElement>(),
                           interleave_columns_selector<TElement>{*device_in});
 
+        if (out->nullable())
+        {
+            thrust::transform(rmm::exec_policy(stream)->on(stream),
+                              counting_it,
+                              counting_it + 1,
+                              device_out->null_mask(),
+                              interleave_columns_validity_selector{*device_in, device_out->size()});
+        }
+
         return out;
+    }
+
+    template <typename TElement>
+    std::enable_if_t<not cudf::is_fixed_width<TElement>(), std::unique_ptr<cudf::column>>
+    operator()(table_view const& in,
+               mask_allocation_policy mask_policy,
+               rmm::mr::device_memory_resource *mr,
+               cudaStream_t stream)
+    {
+        CUDF_FAIL("interleave_columns does not work for variable width types.");
     }
 };
 
@@ -95,7 +148,6 @@ interleave_columns(table_view const& in,
                                mr, stream);
 
     return out;
-    // throw new std::runtime_error("");
 }
 
 } // namespace experimental
