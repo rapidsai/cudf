@@ -98,9 +98,6 @@ template <typename SourceValueIterator, typename SourceValidityIterator>
 std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
                                    SourceValidityIterator source_validity_begin,
                                    strings_column_view const& target,
-                                   // TODO: first & last are used for the fill
-                                   // function for strings (instead of begin &
-                                   // end)
                                    size_type target_begin, size_type target_end,
                                    rmm::mr::device_memory_resource* mr =
                                      rmm::mr::get_default_resource(),
