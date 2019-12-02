@@ -57,7 +57,7 @@ endfunction(ConfigureBench)
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 endif()
 
 include_directories("${CMAKE_BINARY_DIR}/include"
@@ -449,6 +449,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
@@ -484,7 +485,7 @@ set(LEGACY_NVSTRING_SCATTER_TEST_SRC
 
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")

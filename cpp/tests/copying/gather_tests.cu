@@ -8,6 +8,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/table_utilities.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/gather.cuh>
 
 
@@ -55,6 +56,31 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
   }
 }
 
+TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
+  constexpr cudf::size_type source_size{1000};
+
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
+  auto gather_map_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2)? -1:i;});
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{gather_map_data, gather_map_data+(source_size*2)};
+
+  cudf::table_view source_table ({source_column});
+  std::unique_ptr<cudf::experimental::table> result =
+    cudf::experimental::detail::gather(
+           source_table,
+           gather_map,
+           false, true
+           );
+
+  auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2)? 0:i;});
+  auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2) || (i >= source_size)? 0:1;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    expect_data, expect_data+(source_size*2), expect_valid};
+
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+  }
+}
 
 TYPED_TEST(GatherTest, IdentityTest) {
   constexpr cudf::size_type source_size{1000};
