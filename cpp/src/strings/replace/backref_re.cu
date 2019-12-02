@@ -22,9 +22,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/replace_re.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
-#include "../regex/regex.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
+#include <strings/regex/regex.cuh>
 
 #include <regex>
 
