@@ -79,6 +79,10 @@ void print_v(const Vector<T, Args...>& v, size_t n, std::ostream& os)
      std::cout<<"empty null mask...\n";
    else
      {
+       EXPECT_EQ( col_host_pair.first.size(),
+                  col_host_pair.second.size() )
+         << "Unbalanced data and null mask column.\n";
+       
        std::cout<<"column null mask:\n";
        print_v(col_host_pair.second, std::cout);
      }
@@ -287,7 +291,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
     inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
 
-#ifdef DEBUG_
+#ifdef DEBUG_PASSED
     inputRows = 8;//simplify debugging...
 #endif
     
@@ -334,7 +338,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
     const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
 
-#ifdef DEBUG_
+#ifdef DEBUG_PASSED
     std::cout<<"##### inputRows: "<<inputRows<<"\n";
     
     std::cout<<"left table columns:\n";
@@ -377,7 +381,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     auto output_column_view1{p_outputTable->view().column(0)};
     auto output_column_view2{p_outputTable->view().column(1)};
 
-#ifdef DEBUG_
+#ifdef DEBUG_PASSED
     std::cout<<"##### outputRows: "<<outputRows<<"\n";
     std::cout<<"##### output views sizes: "
              <<output_column_view1.size()
@@ -500,6 +504,10 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
     inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
 
+#ifdef DEBUG_PASSED
+    inputRows = 8;//simplify debugging... but(?) for nulls need multiple of 64 (Arrow)
+#endif
+
     // data: 0  2  4  6 | valid: 1 1 1 0
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
@@ -527,9 +535,37 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
       });
     columnFactoryT rightColWrap1(sequence2, sequence2 + inputRows, valid_sequence1); // <- recycle valid_seq1, confirmed okay...
 
+    
+#ifdef DEBUG_PASSED
+    std::cout<<"##### inputRows: "<<inputRows<<"\n";
+
+    std::cout<<"left table column:\n";
+    //print_col<TypeParam>
+    cudf::test::print(static_cast<cudf::column_view const&>(leftColWrap1));
+    std::cout<<"\n";
+
+    std::cout<<"right table column:\n";
+    cudf::test::print(static_cast<cudf::column_view const&>(rightColWrap1));
+    std::cout<<"\n";
+#endif
+
     std::vector<cudf::size_type> key_cols{0};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
-    std::vector<cudf::null_order> null_precedence{};
+
+    /*Note: default behavior semantics for null_precedence has changed
+     *      wrt legacy code:
+     *
+     * in legacy code missing (default) nulls argument 
+     * meant nulls are greatest; i.e., null_order::AFTER (not null_order::BEFORE)
+     *
+     * While new semantics is (see row_operators.cuh: row_lexicographic_comparator::operator() ):
+     * null_order null_precedence = _null_precedence == nullptr ?
+     *                  null_order::BEFORE: _null_precedence[i];
+     *
+     * hence missing (default) value meant nulls are smallest
+     * null_order::BEFORE (not  null_order::AFTER) (!)
+    */
+    std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
 
     cudf::table_view left_view{{leftColWrap1}};
     cudf::table_view right_view{{rightColWrap1}};
@@ -563,6 +599,22 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     auto output_column_view1{p_outputTable->view().column(0)};
+
+#ifdef DEBUG_PASSED
+    std::cout<<"##### outputRows: "<<outputRows<<"\n";
+    std::cout<<"##### output views size: "
+             <<output_column_view1.size()
+             <<"\n";
+
+    std::cout<<"output table column:\n";
+    cudf::test::print(output_column_view1);
+    std::cout<<"\n";
+    
+    std::cout<<"expected table column:\n";
+    cudf::test::print(expected_column_view1);
+    std::cout<<"\n";
+#endif
+
     
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
 }
@@ -584,10 +636,10 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
         else
           return static_cast<TypeParam>(row);
       });
-    auto valid_sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
+    auto valid_sequence1 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
         return true;
       });
-    columnFactoryT leftColWrap1(sequence1, sequence1 + inputRows);// <- purposelly left out: valid_sequence1;
+    columnFactoryT leftColWrap1(sequence1, sequence1 + inputRows, valid_sequence1);// if left out: valid_sequence defaults to `false`;
 
     // data: 0 2 4 6 | valid: 1 1 1 1
     auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
@@ -603,7 +655,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
 
 
     // data: 0 1 2 3 | valid: 1 1 1 1
-    columnFactoryT rightColWrap1(sequence1, sequence1 + inputRows);// <- purposelly left out: valid_sequence1;
+    columnFactoryT rightColWrap1(sequence1, sequence1 + inputRows, valid_sequence1);// if left out: valid_sequence defaults to `false`;
     
     // data: 0 1 2 3 | valid: 0 0 0 0
     auto sequence3 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
@@ -615,7 +667,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
         else
           return static_cast<TypeParam>(row);
       });
-    auto valid_sequence0 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
+    auto valid_sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
         return false;
       });
     columnFactoryT rightColWrap2(sequence3, sequence3 + inputRows, valid_sequence0);
@@ -625,7 +677,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
 
     std::vector<cudf::size_type> key_cols{0, 1};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING};
-    std::vector<cudf::null_order> null_precedence{};
+    std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER, cudf::null_order::AFTER};
 
     std::unique_ptr<cudf::experimental::table> p_outputTable;
     EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
