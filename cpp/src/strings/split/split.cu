@@ -25,7 +25,6 @@
 
 #include <vector>
 #include <thrust/transform.h>
-#include <thrust/extrema.h>
 
 namespace cudf
 {
@@ -209,7 +208,7 @@ struct rsplit_tokenizer_fn
 struct whitespace_token_counter_fn
 {
     column_device_view const d_strings;
-    size_type tokens;
+    size_type tokens; // maximum number of tokens
 
     // count the 'words' only between non-whitespace characters
     __device__ size_type operator()(size_type idx) const
