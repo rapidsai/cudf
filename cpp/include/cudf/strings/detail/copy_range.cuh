@@ -27,6 +27,42 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+namespace {
+
+template <bool source_has_nulls, bool target_has_nulls,
+          typename SourceValueIterator, typename SourceValidityIterator>
+struct compute_element_size {
+  SourceValueIterator source_value_begin;
+  SourceValidityIterator source_validity_begin;
+  cudf::column_device_view d_target;
+  cudf::size_type target_begin;
+  cudf::size_type target_end;
+
+  __device__
+  cudf::size_type operator()(cudf::size_type idx) {
+    if (idx >= target_begin && idx < target_end) {
+      if (source_has_nulls) {
+        return *(source_validity_begin + (idx - target_begin)) ?
+          (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
+      }
+      else {
+        return (*(source_value_begin + (idx - target_begin))).size_bytes();
+      }
+    }
+    else {
+      if (target_has_nulls) {
+        return d_target.is_valid_nocheck(idx) ?
+          d_target.element<cudf::string_view>(idx).size_bytes() : 0;
+      }
+      else {
+        return d_target.element<cudf::string_view>(idx).size_bytes();
+      }
+    }
+  }
+};
+
+}
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -123,17 +159,11 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
       auto string_size_begin =
         thrust::make_transform_iterator(
           thrust::make_counting_iterator(0),
-          [source_value_begin, source_validity_begin, d_target, target_begin,
-              target_end] __device__ (size_type idx) {
-            if (idx >= target_begin && idx < target_end) {
-              return *(source_validity_begin + (idx - target_begin)) ?
-                (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
-            }
-            else {
-              return d_target.is_valid_nocheck(idx) ?
-                d_target.element<string_view>(idx).size_bytes() : 0;
-            }
-        });
+          compute_element_size<true, true,
+                               SourceValueIterator, SourceValidityIterator>{
+            source_value_begin, source_validity_begin, d_target,
+            target_begin, target_end
+          });
 
       p_offsets_column =
         detail::make_offsets_child_column(
@@ -143,16 +173,11 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
       auto string_size_begin =
         thrust::make_transform_iterator(
           thrust::make_counting_iterator(0),
-          [source_value_begin, source_validity_begin, d_target, target_begin,
-              target_end] __device__ (size_type idx) {
-            if (idx >= target_begin && idx < target_end) {
-              return *(source_validity_begin + (idx - target_begin)) ?
-                (*(source_value_begin + (idx - target_begin))).size_bytes() : 0;
-            }
-            else {
-              return d_target.element<string_view>(idx).size_bytes();
-            }
-        });
+          compute_element_size<true, false,
+                               SourceValueIterator, SourceValidityIterator>{
+            source_value_begin, source_validity_begin, d_target,
+            target_begin, target_end
+          });
 
       p_offsets_column =
         detail::make_offsets_child_column(
@@ -162,15 +187,11 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
       auto string_size_begin =
         thrust::make_transform_iterator(
           thrust::make_counting_iterator(0),
-          [source_value_begin, source_validity_begin, d_target, target_begin,
-              target_end] __device__ (size_type idx) {
-            if (idx >= target_begin && idx < target_end) {
-              return (*(source_value_begin + (idx - target_begin))).size_bytes();
-            }
-            else {
-              return d_target.element<string_view>(idx).size_bytes();
-            }
-        });
+          compute_element_size<false, false,
+                               SourceValueIterator, SourceValidityIterator>{
+            source_value_begin, source_validity_begin, d_target,
+            target_begin, target_end
+          });
 
       p_offsets_column =
         detail::make_offsets_child_column(

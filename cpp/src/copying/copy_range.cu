@@ -36,7 +36,6 @@
 
 namespace {
 
-
 template <typename T>
 void in_place_copy_range(
     cudf::column_view const& source, cudf::mutable_column_view& target,
