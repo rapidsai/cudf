@@ -1588,7 +1588,14 @@ class DataFrame(object):
             data, forceindex=forceindex, name=name
         )
 
-    def drop(self, labels=None, axis=None, columns=None, errors="raise"):
+    def drop(
+        self,
+        labels=None,
+        axis=None,
+        columns=None,
+        errors="raise",
+        inplace=False,
+    ):
         """Drop column(s)
 
         Parameters
@@ -1600,6 +1607,8 @@ class DataFrame(object):
         columns: array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
+        inplace : bool, default False
+            If True, do operation inplace and return `self`.
 
         Returns
         -------
@@ -1648,7 +1657,10 @@ class DataFrame(object):
             if isinstance(target, (str, numbers.Number))
             else list(target)
         )
-        outdf = self.copy()
+        if inplace:
+            outdf = self
+        else:
+            outdf = self.copy()
         for c in columns:
             outdf._drop_column(c)
         return outdf
