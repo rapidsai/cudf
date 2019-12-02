@@ -425,10 +425,13 @@ add_library(cudf
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/cast_ops.cu
             src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
+            src/unary/math_ops.cu
+            src/unary/unary_ops.cuh
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
@@ -475,6 +478,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
@@ -530,7 +535,8 @@ add_library(cudf
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
-            src/aggregation/aggregation.cpp)
+            src/aggregation/aggregation.cpp
+)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
