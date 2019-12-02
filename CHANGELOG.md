@@ -160,15 +160,15 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
+- PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+- PR #3448 Port scatter_to_tables to libcudf++
+- PR #3458 Update strings sections in the transition guide
 - PR #3462 Add `make_empty_column` and update `empty_like`.
+- PR #3465 Port `aggregation` traits and utilities.
 - PR #3214 Define and implement new unary operations APIs
-
-## Bug Fixes
-
-- PR #2895 Fixed dask_cudf group_split behavior to handle upstream rearrange_by_divisions
-- PR #3048 Support for zero columned tables
-- PR #3030 Fix snappy decoding regression in PR #3014
-- PR #3041 Fixed exp to experimental namespace name change issue
+- PR #3475 Add `bitmask_to_host` column utility
+- PR #3487 Add is_boolean trait and random timestamp generator for testing
+- PR #3492 Small cleanup (remove std::abs) and comment
 
 ## Bug Fixes
 
@@ -229,9 +229,13 @@
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
 - PR #3459 Fix printing of invalid entries
+- PR #3466 Fix gather null mask allocation for invalid index
 - PR #3468 Fix memory leak issue in `drop_duplicates`
 - PR #3474 Fix small doc error in capitalize Docs
+- PR #3491 Fix more doc errors in NVStrings
+- PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 

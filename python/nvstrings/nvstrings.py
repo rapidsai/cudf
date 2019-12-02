@@ -1281,7 +1281,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["hello","goodbye","well"])
-        >>> print(s.ljust(width=6))
+        >>> print(s.rjust(width=6))
         [' hello', 'goodbye', '  well']
 
         """
@@ -1675,7 +1675,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["Hello, friend","Goodbye, friend"])
-        >>> print(s.lower())
+        >>> print(s.upper())
         ['HELLO, FRIEND', 'GOODBYE, FRIEND']
 
         """
@@ -1711,7 +1711,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["Hello, Friend","Goodbye, Friend"])
-        >>> print(s.lower())
+        >>> print(s.swapcase())
         ['hELLO, fRIEND', 'gOODBYE, fRIEND']
 
         """
@@ -1786,7 +1786,7 @@ class nvstrings:
 
         Examples
         --------
-        >>>import nvstrings
+        >>> import nvstrings
         >>> s = nvstrings.to_device(["hello","world"])
         >>> print(s.rindex('l'))
         [3,3]
@@ -2143,9 +2143,8 @@ class nvstrings:
         >>> s = nvstrings.to_device(["a1","b2","c3"])
         >>> for result in s.extract('([ab])(\\d)'):
         ...     print(result)
-        ["a","b"]
-        ["1","2"]
-        [None,None]
+        ["a","b",None]
+        ["1","2",None]
 
         """
         strs = pyniNVStrings.n_extract(self.m_cptr, pat)
