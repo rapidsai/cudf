@@ -51,12 +51,12 @@ struct bounds_checker {
 
 template <bool ignore_out_of_bounds, typename map_iterator_type>
 __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
-				      cudf::size_type num_source_rows,
-				      map_iterator_type gather_map,
-				      bit_mask_t **destination_valid,
-				      cudf::size_type num_destination_rows,
-				      cudf::size_type *d_count,
-				      cudf::size_type num_columns) {
+                                      cudf::size_type num_source_rows,
+                                      map_iterator_type gather_map,
+                                      bit_mask_t **destination_valid,
+                                      cudf::size_type num_destination_rows,
+                                      cudf::size_type *d_count,
+                                      cudf::size_type num_columns) {
   for (cudf::size_type i = 0; i < num_columns; i++) {
     const bit_mask_t *__restrict__ source_valid_col = source_valid[i];
     bit_mask_t *__restrict__ destination_valid_col = destination_valid[i];
@@ -70,51 +70,51 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
       cudf::size_type valid_count_accumulate = 0;
 
       while (destination_row_base < num_destination_rows) {
-	cudf::size_type destination_row = destination_row_base + threadIdx.x;
+        cudf::size_type destination_row = destination_row_base + threadIdx.x;
 
-	const bool thread_active = destination_row < num_destination_rows;
-	cudf::size_type source_row =
-	  thread_active ? gather_map[destination_row] : 0;
+        const bool thread_active = destination_row < num_destination_rows;
+        cudf::size_type source_row =
+          thread_active ? gather_map[destination_row] : 0;
 
-	const uint32_t active_threads =
-	  __ballot_sync(0xffffffff, thread_active);
+        const uint32_t active_threads =
+          __ballot_sync(0xffffffff, thread_active);
 
-	bool source_bit_is_valid;
-	if (ignore_out_of_bounds) {
-	  if (0 <= source_row && source_row < num_source_rows) {
-	    source_bit_is_valid =
-	      src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
-	      : true;
-	  } else {
-	    // If gather_map does not include this row we should just keep the
-	    // original value,
-	    source_bit_is_valid =
-	      bit_mask::is_valid(destination_valid_col, destination_row);
-	  }
-	} else {
-	  source_bit_is_valid =
-	    src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
-	    : true;
-	}
+        bool source_bit_is_valid;
+        if (ignore_out_of_bounds) {
+          if (0 <= source_row && source_row < num_source_rows) {
+            source_bit_is_valid =
+              src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
+              : true;
+          } else {
+            // If gather_map does not include this row we should just keep the
+            // original value,
+            source_bit_is_valid =
+              bit_mask::is_valid(destination_valid_col, destination_row);
+          }
+        } else {
+          source_bit_is_valid =
+            src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
+            : true;
+        }
 
-	// Use ballot to find all valid bits in this warp and create the output
-	// bitmask element
-	const uint32_t valid_warp =
-	  __ballot_sync(active_threads, source_bit_is_valid);
+        // Use ballot to find all valid bits in this warp and create the output
+        // bitmask element
+        const uint32_t valid_warp =
+          __ballot_sync(active_threads, source_bit_is_valid);
 
-	const cudf::size_type valid_index =
-	  cudf::util::detail::bit_container_index<bit_mask_t>(
-	      destination_row);
-	// Only one thread writes output
-	if (0 == threadIdx.x % warp_size && thread_active) {
-	  destination_valid_col[valid_index] = valid_warp;
-	}
-	valid_count_accumulate += cudf::detail::single_lane_popc_block_reduce(valid_warp);
+        const cudf::size_type valid_index =
+          cudf::util::detail::bit_container_index<bit_mask_t>(
+              destination_row);
+        // Only one thread writes output
+        if (0 == threadIdx.x % warp_size && thread_active) {
+          destination_valid_col[valid_index] = valid_warp;
+        }
+        valid_count_accumulate += cudf::detail::single_lane_popc_block_reduce(valid_warp);
 
-	destination_row_base += blockDim.x * gridDim.x;
+        destination_row_base += blockDim.x * gridDim.x;
       }
       if (threadIdx.x == 0) {
-	atomicAdd(d_count + i, valid_count_accumulate);
+        atomicAdd(d_count + i, valid_count_accumulate);
       }
     }
   }

@@ -305,7 +305,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
                           cudaStream_t stream = 0) {
 
     if (0 == input.num_rows() || 0 == input.num_columns()) {
-        return experimental::detail::empty_like(input, stream);
+        return experimental::empty_like(input);
     }
 
     constexpr int block_size = 256;
@@ -371,7 +371,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         return std::make_unique<experimental::table>(std::move(out_columns));
 
    } else {
-        return experimental::detail::empty_like(input, stream);
+        return experimental::empty_like(input);
    }
 }
 
