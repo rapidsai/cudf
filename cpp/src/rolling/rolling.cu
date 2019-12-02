@@ -277,7 +277,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 {
   // TODO
   CUDF_FAIL("Unimplemented");
-  return cudf::make_numeric_column(data_type{INT32}, 0);
+  //return cudf::make_numeric_column(data_type{INT32}, 0);
 }
 
 } // namespace detail
