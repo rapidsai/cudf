@@ -40,14 +40,14 @@ namespace detail {
  * @param[in] num_items the number of items
  * @param[in] op        the reduction operator
  * @param[in] stream    cuda stream
- * @returns   unique_ptr<scalar>    output scalar in device memory
+ * @returns   scalar    output scalar in device memory
  *
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
 template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type>
-std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::SimpleOp<Op> sop,
+std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::simple_op<Op> sop,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   auto binary_op = sop.get_binary_op();
@@ -90,7 +90,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op
 template <typename Op, typename InputIterator, typename OutputType, 
   typename IntermediateType=typename thrust::iterator_value<InputIterator>::type>
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, 
-  op::CompoundOp<Op> cop, 
+  op::compound_op<Op> cop, 
   cudf::size_type valid_count,
   cudf::size_type ddof,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)

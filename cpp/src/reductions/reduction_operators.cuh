@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <utilities/legacy/cudf_utils.h>  //for CUDA_HOST_DEVICE_CALLABLE
+#include <cudf/types.hpp>  //for CUDA_HOST_DEVICE_CALLABLE
 #include <cudf/detail/iterator.cuh>
 #include <iterator/transform_unary_functions.cuh>
-#include <utilities/legacy/device_operators.cuh>
+#include <cudf/detail/utilities/device_operators.cuh>
 
 #include <thrust/functional.h>
 #include <cmath>
@@ -60,8 +60,8 @@ struct transformer_var_std {
 
 // ------------------------------------------------------------------------
 // Definitions of device struct for reduction operation
-// all `op::xxx` must have `Op` and `transformer`
-// `Op`  is used to compute the reduction at device
+// all `op::xxx` must have `op` and `transformer`
+// `op`  is used to compute the reduction at device
 // `transformer` is used to convert elements for computing the reduction at device.
 // By default `transformer` is static type conversion to ResultType.
 // In some cases, it could be square or abs or complex operations
@@ -70,17 +70,17 @@ namespace op {
 /**
  * @brief  Simple reduction operator CRTP Base class
  *
- * @tparam Derived operator with SimpleOp interface
+ * @tparam Derived operator with simple_op interface
  */
 template <typename Derived>
-struct SimpleOp {
+struct simple_op {
   /**
    * @brief Get binary operator functor for reduction
    *
    * @return binary operator functor object
    */
   auto get_binary_op() {
-    using binary_op = typename Derived::Op;
+    using binary_op = typename Derived::op;
     return binary_op{};
   }
 
@@ -107,48 +107,48 @@ struct SimpleOp {
    */
   template <typename T>
   constexpr T get_identity() {
-    return Derived::Op::template identity<T>();
+    return Derived::op::template identity<T>();
   }
 };
 
 // `sum`, `product`, `sum_of_squares`, `min`, `max` are used at simple_reduction
-// inferface is defined by CRTP calss SimpleOp
+// inferface is defined by CRTP calss simple_op
 
 // operator for `sum`
-struct sum : public SimpleOp<sum> {
-  using Op = cudf::DeviceSum;
+struct sum : public simple_op<sum> {
+  using op = cudf::DeviceSum;
 
   template <typename ResultType>
   using transformer = thrust::identity<ResultType>;
 };
 
 // operator for `product`
-struct product : public SimpleOp<product> {
-  using Op = cudf::DeviceProduct;
+struct product : public simple_op<product> {
+  using op = cudf::DeviceProduct;
 
   template <typename ResultType>
   using transformer = thrust::identity<ResultType>;
 };
 
 // operator for `sum_of_squares`
-struct sum_of_squares : public SimpleOp<sum_of_squares> {
-  using Op = cudf::DeviceSum;
+struct sum_of_squares : public simple_op<sum_of_squares> {
+  using op = cudf::DeviceSum;
 
   template <typename ResultType>
   using transformer = cudf::transformer_squared<ResultType>;
 };
 
 // operator for `min`
-struct min : public SimpleOp<min> {
-  using Op = cudf::DeviceMin;
+struct min : public simple_op<min> {
+  using op = cudf::DeviceMin;
 
   template <typename ResultType>
   using transformer = thrust::identity<ResultType>;
 };
 
 // operator for `max`
-struct max : public SimpleOp<max> {
-  using Op = cudf::DeviceMax;
+struct max : public simple_op<max> {
+  using op = cudf::DeviceMax;
 
   template <typename ResultType>
   using transformer = thrust::identity<ResultType>;
@@ -157,13 +157,13 @@ struct max : public SimpleOp<max> {
 /**
  * @brief  Compound reduction operator CRTP Base class
  * This template class defines the interface for compound operators
- * In addition to interface defined by SimpleOp CRTP, this class defines
+ * In addition to interface defined by simple_op CRTP, this class defines
  * interface for final result transformation.
  *
- * @tparam Derived compound operators derived from CompoundOp
+ * @tparam Derived compound operators derived from compound_op
  */
 template <typename Derived>
-struct CompoundOp : public SimpleOp<Derived> {
+struct compound_op : public simple_op<Derived> {
   /**
    * @brief  computes the transformed result from result of simple operator.
    *
@@ -190,11 +190,11 @@ struct CompoundOp : public SimpleOp<Derived> {
 // structure type of a single reduction call, it is also used as OutputType of
 // cudf::reduction::detail::reduce at compound_reduction. compute_result
 // computes the final ResultType from the IntermediateType.
-// intemediate::compute_result method is enforced by CRTP base class CompoundOp
+// intemediate::compute_result method is enforced by CRTP base class compound_op
 
 // operator for `mean`
-struct mean : public CompoundOp<mean> {
-  using Op = cudf::DeviceSum;
+struct mean : public compound_op<mean> {
+  using op = cudf::DeviceSum;
 
   template <typename ResultType>
   using transformer = thrust::identity<ResultType>;
@@ -214,8 +214,8 @@ struct mean : public CompoundOp<mean> {
 };
 
 // operator for `variance`
-struct variance : public CompoundOp<variance> {
-  using Op = cudf::DeviceSum;
+struct variance : public compound_op<variance> {
+  using op = cudf::DeviceSum;
 
   template <typename ResultType>
   using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
@@ -241,8 +241,8 @@ struct variance : public CompoundOp<variance> {
 };
 
 // operator for `standard deviation`
-struct standard_deviation : public CompoundOp<standard_deviation> {
-  using Op = cudf::DeviceSum;
+struct standard_deviation : public compound_op<standard_deviation> {
+  using op = cudf::DeviceSum;
 
   template <typename ResultType>
   using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
