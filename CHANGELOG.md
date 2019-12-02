@@ -159,6 +159,7 @@
 - PR #3475 Add `bitmask_to_host` column utility
 - PR #3487 Add is_boolean trait and random timestamp generator for testing
 - PR #3492 Small cleanup (remove std::abs) and comment
+- PR #3500 Add tests for fill/repeat for strings column.
 
 ## Bug Fixes
 
