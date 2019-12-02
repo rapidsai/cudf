@@ -22,23 +22,6 @@
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
-namespace
-{
-
-/**
- * @brief Used as template parameter to divide size calculation from
- * the actual string operation within a function.
- *
- * Useful when most of the logic is identical for both passes.
- */
-enum TwoPass
-{
-    SizeOnly = 0, ///< calculate the size only
-    ExecuteOp     ///< run the string operation
-};
-
-} // namespace
-
 namespace cudf
 {
 namespace strings
@@ -49,11 +32,23 @@ namespace
 {
 
 /**
+ * @brief Used as template parameter to divide size calculation from
+ * the actual string operation within a function.
+ *
+ * Useful when most of the logic is identical for both passes.
+ */
+enum class two_pass
+{
+    SIZE_ONLY = 0, ///< calculate the size only
+    EXECUTE_OP     ///< run the string operation
+};
+
+/**
  * @brief Function logic for the replace API.
  *
  * This will perform a replace operation on each string.
  */
-template <TwoPass Pass=SizeOnly>
+template <two_pass Pass=two_pass::SIZE_ONLY>
 struct replace_fn
 {
     column_device_view const d_strings;
@@ -68,12 +63,11 @@ struct replace_fn
         if( d_strings.is_null(idx) )
             return 0; // null string
         string_view d_str = d_strings.element<string_view>(idx);
-        auto length = d_str.length();
         auto max_n = max_repl;
         if( max_n < 0 )
-            max_n = length; // max possible replacements
+            max_n = d_str.length(); // max possible replacements
         char* out_ptr = nullptr;
-        if( Pass==ExecuteOp )
+        if( Pass==two_pass::EXECUTE_OP )
             out_ptr = d_chars + d_offsets[idx];
         const char* in_ptr = d_str.data();
         size_type bytes = d_str.size_bytes();
@@ -81,9 +75,9 @@ struct replace_fn
         size_type last_pos = 0;
         while( (position >= 0) && (max_n > 0) )
         {
-            if( Pass==SizeOnly )
+            if( Pass==two_pass::SIZE_ONLY )
                 bytes += d_repl.size_bytes() - d_target.size_bytes();
-            else // ExecuteOp
+            else // EXECUTE_OP
             {
                 size_type curr_pos = d_str.byte_offset(position);
                 out_ptr = copy_and_increment(out_ptr, in_ptr + last_pos, curr_pos - last_pos); // copy left
@@ -93,8 +87,8 @@ struct replace_fn
             position = d_str.find(d_target, position + d_target.size_bytes() );
             --max_n;
         }
-        if( Pass==ExecuteOp ) // copy whats left (or right depending on your point of view)
-            copy_and_increment(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
+        if( Pass==two_pass::EXECUTE_OP ) // copy whats left (or right depending on your point of view)
+            memcpy(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
         return bytes;
     }
 };
@@ -127,7 +121,7 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        replace_fn<SizeOnly>{d_strings, d_target, d_repl, maxrepl} );
+        replace_fn<two_pass::SIZE_ONLY>{d_strings, d_target, d_repl, maxrepl} );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
@@ -138,7 +132,7 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     auto chars_column = create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
     auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        replace_fn<ExecuteOp>{d_strings, d_target, d_repl, maxrepl, d_offsets, d_chars} );
+        replace_fn<two_pass::EXECUTE_OP>{d_strings, d_target, d_repl, maxrepl, d_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
@@ -151,7 +145,7 @@ namespace
  *
  * This will perform a replace_slice operation on each string.
  */
-template <TwoPass Pass=SizeOnly>
+template <two_pass Pass=two_pass::SIZE_ONLY>
 struct replace_slice_fn
 {
     column_device_view const d_strings;
@@ -167,7 +161,7 @@ struct replace_slice_fn
         string_view d_str = d_strings.element<string_view>(idx);
         auto length = d_str.length();
         char* out_ptr = nullptr;
-        if( Pass==ExecuteOp )
+        if( Pass==two_pass::EXECUTE_OP )
             out_ptr = d_chars + d_offsets[idx];
         const char* in_ptr = d_str.data();
         size_type bytes = d_str.size_bytes();
@@ -176,7 +170,7 @@ struct replace_slice_fn
         begin = d_str.byte_offset(begin);
         end = d_str.byte_offset(end);
         bytes += d_repl.size_bytes() - (end - begin);
-        if( Pass==ExecuteOp )
+        if( Pass==two_pass::EXECUTE_OP )
         {
             out_ptr = copy_and_increment( out_ptr, in_ptr, begin );
             out_ptr = copy_string( out_ptr, d_repl );
@@ -210,7 +204,7 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        replace_slice_fn<SizeOnly>{d_strings, d_repl, start, stop} );
+        replace_slice_fn<two_pass::SIZE_ONLY>{d_strings, d_repl, start, stop} );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
@@ -223,7 +217,7 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        replace_slice_fn<ExecuteOp>{d_strings, d_repl, start, stop, d_offsets, d_chars} );
+        replace_slice_fn<two_pass::EXECUTE_OP>{d_strings, d_repl, start, stop, d_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
@@ -237,7 +231,7 @@ namespace
  *
  * This will perform the multi-replace operation on each string.
  */
-template <TwoPass Pass=SizeOnly>
+template <two_pass Pass=two_pass::SIZE_ONLY>
 struct replace_multi_fn
 {
     column_device_view const d_strings;
@@ -251,9 +245,8 @@ struct replace_multi_fn
         if( d_strings.is_null(idx) )
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
-        //auto length = d_str.length();
         char* out_ptr = nullptr;
-        if( Pass==ExecuteOp )
+        if( Pass==two_pass::EXECUTE_OP )
             out_ptr = d_chars + d_offsets[idx];
         const char* in_ptr = d_str.data();
         size_type size = d_str.size_bytes();
@@ -271,7 +264,7 @@ struct replace_multi_fn
                         d_repl = d_repls.element<string_view>(0);
                     else
                         d_repl = d_repls.element<string_view>(tgt_idx);
-                    if( Pass==SizeOnly )
+                    if( Pass==two_pass::SIZE_ONLY )
                         bytes += d_repl.size_bytes() - d_tgt.size_bytes();
                     else
                     {
@@ -285,8 +278,8 @@ struct replace_multi_fn
             }
             ++spos;
         }
-        if( Pass==ExecuteOp ) // copy remainder
-            copy_and_increment(out_ptr,in_ptr+lpos,size-lpos);
+        if( Pass==two_pass::EXECUTE_OP ) // copy remainder
+            memcpy(out_ptr,in_ptr+lpos,size-lpos);
         return bytes;
     }
 };
@@ -318,7 +311,7 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        replace_multi_fn<SizeOnly>{d_strings, d_targets, d_repls} );
+        replace_multi_fn<two_pass::SIZE_ONLY>{d_strings, d_targets, d_repls} );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
@@ -329,7 +322,7 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
     auto chars_column = create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
     auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        replace_multi_fn<ExecuteOp>{d_strings, d_targets, d_repls, d_offsets, d_chars} );
+        replace_multi_fn<two_pass::EXECUTE_OP>{d_strings, d_targets, d_repls, d_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
