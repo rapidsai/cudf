@@ -226,7 +226,7 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
     /* output valid counts calculations*/
     if (input_has_nulls or replacement_has_nulls) {
 
-      bitmask &= __ballot_sync(active_mask, output_is_valid);
+      bitmask = __ballot_sync(active_mask, output_is_valid);
 
       if (0 == lane_id) {
         output_valid[cudf::word_index(i)] = bitmask;
@@ -236,6 +236,7 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
 
 
     i += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, i < nrows);
   }
   if (input_has_nulls or replacement_has_nulls) {
     __syncthreads(); // waiting for the valid counts of each warp to be ready
@@ -463,7 +464,6 @@ struct replace_kernel_forwarder {
                            offsets_data);
     int32_t size;
     CUDA_TRY(cudaMemcpy(&size, offsets_data + offsets_view.size() - 1, sizeof(int32_t), cudaMemcpyDefault));
-    std::cout << "Allocating " << size << " bytes for new strings array\n";
 
     // Allocate chars array and output null mask
     std::unique_ptr<cudf::column> output_chars = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT8), size);
@@ -481,10 +481,18 @@ struct replace_kernel_forwarder {
                                                                valid_count);
     cudaStreamSynchronize(stream);
 
+    cudf::size_type null_count;
+    if (!input_col.has_nulls() && !replacement_values.has_nulls()) {
+      CUDA_TRY(cudaMemset(valid_bits.data(), 0xff, valid_chars));
+      null_count = 0;
+    }
+    else
+      null_count = input_col.size() - valid_counter.value();
+
     std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
                                                                      std::move(offsets),
                                                                      std::move(output_chars),
-                                                                     valid_counter.value(),
+                                                                     null_count,
                                                                      std::move(valid_bits),
                                                                      stream,
                                                                      mr);

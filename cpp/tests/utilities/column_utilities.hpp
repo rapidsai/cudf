@@ -134,7 +134,7 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
   thrust::host_vector<size_type> h_offsets(strings_data.second); // host automatically
 
   // copy nulls to host bitmask
-  if( c.has_nulls() )
+  if( c.nullable() )
   {
     auto num_bitmasks = num_bitmask_words(c.size());
     host_bitmask.resize(num_bitmasks);
