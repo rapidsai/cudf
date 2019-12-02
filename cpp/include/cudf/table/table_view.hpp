@@ -60,7 +60,7 @@ class table_view_base {
   using const_iterator = decltype(std::cbegin(_columns));
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a table from a vector of views
+   * @brief Construct a table from a vector of column views
    *
    * @note Because a `std::vector` is constructible from a
    * `std::initializer_list`, this constructor also supports the following
@@ -145,7 +145,29 @@ class table_view_base {
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
 
- public:
+public:
+  using ColumnView = column_view;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a table from a vector of table views
+   *
+   * @note Because a `std::vector` is constructible from a
+   * `std::initializer_list`, this constructor also supports the following
+   * usage:
+   * ```
+   * table_view t0, t1, t2;
+   * ...
+   * table_view t{{t0,t1,t2}}; // Creates a `table` from the columns of
+   * t0, t1, t2
+   * ```
+   *
+   * @throws cudf::logic_error
+   * If number of rows mismatch
+   *
+   * @param views The vector of table views to construct the table from
+   *---------------------------------------------------------------------------**/
+  table_view(std::vector<table_view> const &views);
+
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
    *
@@ -169,6 +191,8 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
 public:
+  using ColumnView = mutable_column_view;
+
   mutable_column_view& column(size_type column_index) const {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
@@ -176,6 +200,26 @@ public:
    * @brief Creates an immutable `table_view` of the columns
    *---------------------------------------------------------------------------**/
   operator table_view();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a table from a vector of table views
+   *
+   * @note Because a `std::vector` is constructible from a
+   * `std::initializer_list`, this constructor also supports the following
+   * usage:
+   * ```
+   * table_view t0, t1, t2;
+   * ...
+   * table_view t{{t0,t1,t2}}; // Creates a `table` from the columns of
+   * t0, t1, t2
+   * ```
+   *
+   * @throws cudf::logic_error
+   * If number of rows mismatch
+   *
+   * @param views The vector of table views to construct the table from
+   *---------------------------------------------------------------------------**/
+  mutable_table_view(std::vector<mutable_table_view> const &views);
 };
 
 inline bool has_nulls(table_view view) {

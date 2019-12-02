@@ -29,7 +29,7 @@
 #include <table/legacy/device_table.cuh>
 
 #include <random>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 #include "../synchronization/synchronization.hpp"
 #include "../fixture/benchmark_fixture.hpp"
 

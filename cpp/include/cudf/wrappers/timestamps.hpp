@@ -17,8 +17,7 @@
 #pragma once
 
 #include <limits>
-#include <simt/../details/iterator>
-#include <simt/chrono>
+#include <cudf/utilities/chrono.hpp>
 
 /**---------------------------------------------------------------------------*
  * @file timestamps.hpp
@@ -32,7 +31,7 @@ namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
 using time_point =
-    simt::std::chrono::time_point<simt::std::chrono::steady_clock, Duration>;
+    simt::std::chrono::time_point<simt::std::chrono::system_clock, Duration>;
 
 template <class Duration>
 struct timestamp : time_point<Duration> {
@@ -40,7 +39,6 @@ struct timestamp : time_point<Duration> {
   constexpr timestamp(Duration d) : time_point<Duration>(d){};
   constexpr timestamp(typename Duration::rep r)
       : time_point<Duration>(Duration(r)){};
-
   /**
    * @brief Constructs a new timestamp by copying the contents of another
    * `time_point` and converting its duration value if necessary.
