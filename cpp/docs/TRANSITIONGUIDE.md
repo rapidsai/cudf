@@ -878,16 +878,34 @@ Therefore, most operations that produce a new output column of strings use a two
 In scatter, the first phase consists of using the `scatter_map` to determine if string `i` in the output will come from `destination` or from `scatter_values` and use the corresponding size(s) to materialize the offsets column and determine the size of the output. Then, in the second phase, sufficient storage is allocated for the output's characters, and then the characters are filled with the corresponding strings from either `destination` or `scatter_values`.
 
 
-### UTF8 
-
-// TODO
-
 ### `cudf::string_view`
 
-// TODO
+This is the data type for a `STRING` column like `int32_t` is the data type for an `INT32` column. As it's name implies, this is a read-only object instance that points to device memory inside the strings column. It's lifespan is the same (or less) as the column it was created from.
+
+Use the `column_device_view::element` method to access an individual row element. Like any other column, do not call `element()` on a row that is null. 
+```
+   column_device_view d_strings;
+   ...
+   if( d_strings.is_valid(row_index) ) {
+      string_view d_str = d_strings.element<string_view>(row_index);
+      ...
+   }
+```
+A null string is not the same as an empty string. Use the `string_scalar` class if you need an instance of a class object to represent a null string.
+
+The `string_view` contains comparison operators `<,>,==,<=,>=` so they can be used in many cudf functions like `sort` without specific strings code.
+The data for a `string_view` instance is required to be [UTF-8](#UTF-8) and all operators and methods expect this encoding. Unless documented otherwise,
+position and length parameters are specified in characters and not bytes.
+The class also includes a `string_view::const_iterator` which can be used to navigate through individual characters within the string.
+
+The `type-dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
 
 
+### UTF-8
 
+The cudf strings column only supports UTF-8 encoding for strings data. [UTF-8](https://en.wikipedia.org/wiki/UTF-8) is a variable-length character encoding where each character can be 1-4 bytes. This means the length of a string is not the same as its size in bytes. For this reason, it recommended to use the `string_view` class to access these characters for most operations.
+
+The `string_view.cuh` also includes some utility methods for reading and writing (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
 
 
 ### NVCategory<a name="nvcategory_changes"></a>

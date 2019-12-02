@@ -430,6 +430,8 @@ add_library(cudf
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
+            src/unary/math_ops.cu
+            src/unary/unary_ops.cuh
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu

@@ -16,6 +16,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <memory>
 
@@ -53,5 +54,30 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
   aggregation* a = new detail::quantile_aggregation{q, i};
   return std::unique_ptr<aggregation>(a);
 }
+
+namespace detail {
+namespace {
+template <typename SourceType>
+struct dispatch_aggregation_kind {
+  template <aggregation::Kind k>
+  constexpr data_type operator()() const noexcept {
+    return data_type{
+        cudf::experimental::type_to_id<target_type_t<SourceType, k>>()};
+  }
+};
+
+struct dispatch_source_type {
+  template <typename SourceType>
+  constexpr data_type operator()(aggregation::Kind k) const noexcept {
+    return aggregation_dispatcher(k, dispatch_aggregation_kind<SourceType>{});
+  }
+};
+}  // namespace
+
+// Return target data_type for the given source_type and aggregation
+data_type target_type(data_type source_type, aggregation::Kind k) {
+  return cudf::experimental::type_dispatcher(source_type, dispatch_source_type{}, k);
+}
+}  // namespace detail
 }  // namespace experimental
 }  // namespace cudf

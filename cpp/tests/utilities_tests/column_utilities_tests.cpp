@@ -21,15 +21,16 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 template <typename T>
+struct ColumnUtilitiesTest : public cudf::test::BaseFixture
+{
+  cudf::test::UniformRandomGenerator<cudf::size_type> random;
 
-struct ColumnUtilitiesTest
-    : public cudf::test::BaseFixture,
-      cudf::test::UniformRandomGenerator<cudf::size_type> {
-  ColumnUtilitiesTest()
-      : cudf::test::UniformRandomGenerator<cudf::size_type>{1000, 5000} {}
+  ColumnUtilitiesTest() : random{1000, 5000} {}
 
-  auto size() { return this->generate(); }
+  auto size() { return random.generate(); }
 
   auto data_type() {
     return cudf::data_type{cudf::experimental::type_to_id<T>()};
@@ -61,8 +62,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   auto sequence = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
 
-  auto all_valid = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return true; });
+  auto all_valid = thrust::make_constant_iterator<bool>(true);
 
   auto size = this->size();
 
@@ -74,7 +74,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
 
   EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
 
-  auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid+size);
+  auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
 
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
 }
@@ -90,6 +90,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
   auto result_itr = host_data.first.begin();
   for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr, ++result_itr )
   {
+
     if(*itr)
       EXPECT_TRUE((*result_itr)==(*itr));
   }
