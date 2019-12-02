@@ -94,7 +94,7 @@ struct out_of_place_copy_range_dispatch {
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
       cudaStream_t stream = 0) {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
-    if ((!p_ret->nullable()) && source.has_nulls()) {
+    if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
       p_ret->set_null_mask(
         cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
     }
