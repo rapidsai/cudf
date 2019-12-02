@@ -79,12 +79,13 @@ struct out_of_place_fill_range_dispatch {
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
       cudaStream_t stream = 0) {
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
-    if (!p_ret->nullable() && !value.is_valid()) {
-      p_ret->set_null_mask(
-        cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
-    }
 
     if (end != begin) {  // otherwise no fill
+      if (!p_ret->nullable() && !value.is_valid()) {
+        p_ret->set_null_mask(
+          cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
+      }
+
       auto ret_view = p_ret->mutable_view();
       in_place_fill<T>(ret_view, begin, end, value, stream);
     }
@@ -148,8 +149,6 @@ std::unique_ptr<column> fill(column_view const& input,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream) {
-  CUDF_EXPECTS(cudf::is_fixed_width(input.type()) == true,
-               "Variable-sized types are not supported yet.");
   CUDF_EXPECTS((begin >= 0) &&
                (begin <= end) &&
                (begin < input.size()) &&
