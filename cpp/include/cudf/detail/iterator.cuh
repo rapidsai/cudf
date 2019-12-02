@@ -276,7 +276,7 @@ auto make_null_replacement_pair_iterator(column_device_view const& column,
  * @return auto Iterator that returns valid column elements, and validity of the
  * element in a pair
  */
-template <bool has_nulls, typename Element>
+template <typename Element, bool has_nulls=false> 
 auto make_pair_iterator(column_device_view const& column)
 {
   return thrust::make_transform_iterator(
