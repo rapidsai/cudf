@@ -97,17 +97,10 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view const& c) {
-  std::vector<T> host_data;
-
-  if (c.size() > 0) {
-    host_data.resize(c.size());
-    CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T),
-                        cudaMemcpyDeviceToHost));
-  }
-
-  std::vector<bitmask_type> host_bitmask = bitmask_to_host(c);
-  return std::make_pair(host_data, host_bitmask);
+std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+  std::vector<T> host_data(c.size());
+  CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  return { host_data, bitmask_to_host(c) };
 }
 
 /**
@@ -121,27 +114,28 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view const& 
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view const& c) {
-  std::vector<std::string> host_data;
-
-  auto strings = strings_column_view(c);
-  auto strings_data = cudf::strings::create_offsets(strings);
-  thrust::host_vector<char> h_chars(strings_data.first);         // copies vectors to
-  thrust::host_vector<size_type> h_offsets(strings_data.second); // host automatically
+inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
+  auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
+  thrust::host_vector<char> h_chars(strings_data.first);
+  thrust::host_vector<size_type> h_offsets(strings_data.second);
 
   // build std::string vector from chars and offsets
-  if( !h_chars.empty() ) // check for all nulls case
-  {
-    for( size_type idx=0; idx < strings.size(); ++idx )
+  if( !h_chars.empty() ) { // check for all nulls case
+    std::vector<std::string> host_data;
+    host_data.reserve(c.size());
+
+    // When C++17, replace this loop with std::adjacent_difference()
+    for( size_type idx=0; idx < c.size(); ++idx )
     {
         auto offset = h_offsets[idx];
         auto length = h_offsets[idx+1] - offset;
         host_data.push_back(std::string( h_chars.data()+offset, length));
     }
-  }
 
-  std::vector<bitmask_type> host_bitmask = bitmask_to_host(c);
-  return std::make_pair(host_data, host_bitmask);
+    return { host_data, bitmask_to_host(c) };
+  }
+  else 
+    return { std::vector<std::string>{}, bitmask_to_host(c) };
 }
 
 }  // namespace test
