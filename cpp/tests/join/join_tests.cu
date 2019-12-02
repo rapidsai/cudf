@@ -41,11 +41,38 @@ struct JoinTest : public cudf::test::BaseFixture {};
 //TEST_F(JoinTest, LeftJoinWithNulls)
 //TEST_F(JoinTest, InnerJoinWithNulls)
 
+/*
+ *
+ * Full Join :
+ *
+ * | c0 c1 ca |     | c0 c1 cb |
+ * |  3 s0  0 |     |  2 s1  1 | 
+ * |  1 s1  1 |     |  2 s0  0 | 
+ * |  2 s2  2 |  ⟗  |  0 s1  1 | 
+ * |  0 s4  4 |     |  4 s2  2 | 
+ * |  3 s1  1 |     |  3 s1  1 | 
+ * 
+ *  =
+ * 
+ * | c0 c1 ca cb |
+ * |  2 s1 na  1 |
+ * |  2 s0 na  0 |
+ * |  0 s1 na  1 |
+ * |  4 s2 na  2 |
+ * |  3 s1  1  1 |
+ * |  3 s0  0 na |
+ * |  1 s1  1 na |
+ * |  2 s2  2 na |
+ * |  0 s4  4 na |
+ *
+ */
+
+
 TEST_F(JoinTest, FullJoin)
 {
   column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper           col0_1({"s0", "s1", "s2", "s4", "s1"});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}, {1, 1, 1, 1, 1}};
+  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
   column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper           col1_1{{"s1", "s0", "s1", "s2", "s1"}};
