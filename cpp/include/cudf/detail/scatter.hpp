@@ -105,6 +105,45 @@ std::unique_ptr<table> scatter(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+/**
+ * @brief Scatters the rows of a table to `n` tables according to a partition map
+ *
+ * Copies the rows from the input table to new tables according to the table
+ * indices given by partition_map. The number of output tables is one more than
+ * the maximum value in `partition_map`.
+ * 
+ * Output table `i` in [0, n] is empty if `i` does not appear in partition_map.
+ * output table will be empty.
+ *
+ * @throw cudf::logic_error when partition_map is a non-integer type
+ * @throw cudf::logic_error when partition_map is larger than input
+ * @throw cudf::logic_error when partition_map has nulls
+ *
+ * Example:
+ * input:         [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *                 { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * partition_map: {3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
+ * output:     {[{22}, {2}], 
+ *              [{16, 24, 26, 28}, {4, 4, 6, 2}],
+ *              [{}, {}],
+ *              [{10, 14}, {1, 3}],
+ *              [{12, 18, 20}, {2, null, 0}]}
+ *
+ * @param input Table of rows to be partitioned into a set of tables
+ * tables according to `partition_map`
+ * @param partition_map  Non-null column of integer values that map
+ * each row in `input` table into one of the output tables
+ * @param mr The resource to use for all allocations
+ * @param stream The stream to use for CUDA operations
+ *
+ * @return A vector of tables containing the scattered rows of `input`.
+ * `table` `i` contains all rows `j` from `input` where `partition_map[j] == i`.
+ */
+std::vector<std::unique_ptr<table>> scatter_to_tables(
+    table_view const& input, column_view const& partition_map,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
