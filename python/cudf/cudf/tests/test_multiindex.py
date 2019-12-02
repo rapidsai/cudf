@@ -659,9 +659,6 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         assert_eq(presult, gresult, check_index_type=False)
 
 
-@pytest.mark.xfail(
-    reason="A problem with downcasting in this instance", raises=AssertionError
-)
 def test_multicolumn_item():
     gdf = cudf.DataFrame(
         {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10)}

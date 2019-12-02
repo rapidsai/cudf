@@ -670,11 +670,7 @@ class DataFrame(object):
             if pd.options.display.max_columns
             else pd.options.display.width / 2
         )
-        if (
-            len(self) <= nrows
-            and len(self.columns) <= ncols
-            or isinstance(self.columns, cudf.MultiIndex)
-        ):
+        if len(self) <= nrows and len(self.columns) <= ncols:
             output = self.copy(deep=False)
         else:
             left_cols = len(self.columns)
@@ -1932,6 +1928,8 @@ class DataFrame(object):
 
         out = cls(data)
         out._index = index
+        if isinstance(objs[0].columns, cudf.core.multiindex.MultiIndex):
+            out.columns = objs[0].columns
         libcudf.nvtx.nvtx_range_pop()
         return out
 
