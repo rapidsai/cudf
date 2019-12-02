@@ -131,6 +131,18 @@ class column_view_base {
   size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the count of null elements in the range [begin, end)
+   *
+   * @note If _null_count != 0, every invocation of `null_count(begin, end)`
+   * will recompute the count of null elements indicated by the `null_mask` in
+   * the range [begin, end).
+   *
+   * @param begin The starting index of the range (inclusive).
+   * @param end The index of the last element in the range (exlusive).
+   *---------------------------------------------------------------------------**/
+  size_type null_count(size_type begin, size_type end) const;
+
+  /**---------------------------------------------------------------------------*
    * @brief Indicates if the column contains null elements,
    * i.e., `null_count() > 0`
    *
@@ -138,6 +150,19 @@ class column_view_base {
    * @return false All elements are valid
    *---------------------------------------------------------------------------**/
   bool has_nulls() const { return null_count() > 0; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Indicates if the column contains null elements in the range
+   * [begin, end), i.e., `null_count(begin, end) > 0`
+   *
+   * @param begin The starting index of the range (inclusive).
+   * @param end The index of the last element in the range (exlusive).
+   * @return true One or more elements are null in the range [begin, end)
+   * @return false All elements are valid in the range [begin, end)
+   *---------------------------------------------------------------------------**/
+  bool has_nulls(size_type begin, size_type end) const {
+    return null_count(begin, end) > 0;
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
