@@ -18,7 +18,7 @@
 #define LEGACY_BITMASK_HPP
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 
 /**---------------------------------------------------------------------------*
  * @brief Returns true if the specified bit in a validity bit mask is set.

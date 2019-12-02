@@ -691,6 +691,252 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testBoundsNulls() {
+    boolean[] descFlags = new boolean[1];
+    try (Table table = new TestBuilder()
+            .column(null, 20, 20, 20, 30)
+            .build();
+        Table values = new TestBuilder()
+            .column(15)
+            .build();
+         ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsValuesSizeBigger() {
+    boolean[] descFlags = new boolean[2];
+    try(Table table = new TestBuilder()
+            .column(90, 100, 120, 130, 135)
+            .column(.5, .5, .5, .7, .7)
+            .build();
+        Table values = new TestBuilder()
+            .column(120)
+            .column(.3)
+            .column(.7)
+            .build();
+        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsInputSizeBigger() {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(90, 100, 120, 130, 135)
+            .column(.5, .5, .5, .7, .7)
+            .column(90, 100, 120, 130, 135)
+            .build();
+        Table values = new TestBuilder()
+            .column(120)
+            .column(.3)
+            .build();
+        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsMultiCol() {
+    boolean[] descFlags = new boolean[3];
+    try (Table table = new TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .column(5.0, .5, .5, .7, .7)
+            .column(90, 77, 78, 61, 61)
+            .build();
+        Table values = new TestBuilder()
+            .column(20)
+            .column(0.7)
+            .column(61)
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(3)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsFloatsMultiVal() {
+    boolean[] descFlags = new boolean[1];
+    try (Table table = new TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new TestBuilder()
+            .column(20.3, 20.8)
+            .build();
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 3)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsFloatsSingleCol() {
+    boolean[] descFlags = new boolean[3];
+    try(Table table = new TestBuilder()
+            .column(10.0, 20.6, 20.7)
+            .build();
+        Table values = new TestBuilder()
+            .column(20.6)
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsFloatsSingleColDesc() {
+    boolean[] descFlags = new boolean[] {true};
+    try(Table table = new TestBuilder()
+        .column(20.7, 20.6, 10.0)
+        .build();
+        Table values = new TestBuilder()
+            .column(20.6)
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsIntsSingleCol() {
+    boolean[] descFlags = new boolean[1];
+    try(Table table = new TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new TestBuilder()
+            .column(20)
+            .build()) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsIntsSingleColDesc() {
+    boolean[] descFlags = new boolean[]{true};
+    try (Table table = new TestBuilder()
+        .column(20, 20, 20, 20, 10)
+        .build();
+         Table values = new TestBuilder()
+             .column(5)
+             .build();
+         ColumnVector expected = ColumnVector.fromBoxedInts(5)) {
+      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
+        assertColumnsAreEqual(expected, columnVector);
+      }
+    }
+  }
+
+  @Test
+  void testBoundsStringCategories() {
+    boolean[] descFlags = new boolean[1];
+    try (ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, 4, (b) -> {
+           for (int i = 0; i < 4; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
+        });
+        Table table = new Table(cIn);
+        ColumnVector cVal = ColumnVector.build(DType.STRING_CATEGORY, 2, (b) -> {
+          for (int i = 0; i < 2; i++) {
+            b.appendUTF8String(String.valueOf(i).getBytes());
+          }
+        });
+        Table values = new Table(cVal)) {
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, true, table, values).close());
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, false, table, values).close());
+    }
+  }
+
+  @Test
+  void testBoundsEmptyValues() {
+    boolean[] descFlags = new boolean[1];
+    try (ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new TestBuilder()
+            .column(10, 20, 20, 20, 20)
+            .build();
+        Table values = new Table(cv)) {
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, true, table, values).close());
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, false, table, values).close());
+    }
+  }
+
+  @Test
+  void testBoundsEmptyInput() {
+    boolean[] descFlags = new boolean[1];
+    try (ColumnVector cv = new ColumnVector(DType.INT64,
+          TimeUnit.NONE, 0, 0, null, null);
+        Table table = new Table(cv);
+        Table values = new TestBuilder()
+            .column(20)
+            .build()) {
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, true, table, values).close());
+      assertThrows(AssertionError.class,
+          () -> getBoundsCv(descFlags, false, table, values).close());
+    }
+  }
+
+  private ColumnVector getBoundsCv(boolean[] descFlags, boolean isUpperBound,
+      Table table, Table values) {
+    return isUpperBound ?
+        table.upperBound(true, values, descFlags) :
+        table.lowerBound(true, values, descFlags);
+  }
+
+  @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
@@ -1352,7 +1598,8 @@ public class TableTest extends CudfTestBase {
         }
       }
       try (ColumnVector mask = builder.build();
-           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+           Table input = new Table(fromInts);
            Table filteredTable = input.filter(mask)) {
         ColumnVector filtered = filteredTable.getColumn(0);
         filtered.ensureOnHost();
@@ -1369,7 +1616,8 @@ public class TableTest extends CudfTestBase {
   void testMaskDataOnly() {
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
-         Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
+         ColumnVector fromBytes = ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null);
+         Table input = new Table(fromBytes);
          Table filteredTable = input.filter(mask)) {
       ColumnVector filtered = filteredTable.getColumn(0);
       filtered.ensureOnHost();
@@ -1381,12 +1629,14 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+
   @Test
   void testAllFilteredFromData() {
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, false);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+         ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+         Table input = new Table(fromInts);
          Table filteredTable = input.filter(mask)) {
       ColumnVector filtered = filteredTable.getColumn(0);
       assertEquals(DType.INT32, filtered.getType());
@@ -1403,7 +1653,8 @@ public class TableTest extends CudfTestBase {
         builder.setNullAt(i);
       }
       try (ColumnVector mask = builder.build();
-           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+           Table input = new Table(fromInts);
            Table filteredTable = input.filter(mask)) {
         ColumnVector filtered = filteredTable.getColumn(0);
         assertEquals(DType.INT32, filtered.getType());
@@ -1417,7 +1668,8 @@ public class TableTest extends CudfTestBase {
     Boolean[] maskVals = new Boolean[3];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null))) {
+         ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+         Table input = new Table(fromInts)) {
       assertThrows(AssertionError.class, () -> input.filter(mask).close());
     }
   }
@@ -1426,13 +1678,13 @@ public class TableTest extends CudfTestBase {
   void testTableBasedFilter() {
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
-         Table input = new Table(
-             ColumnVector.fromBoxedInts(1, null, 2, 3, null),
-             ColumnVector.categoryFromStrings("one", "two", "three", null, "five"));
+         ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
+         ColumnVector fromStrings = ColumnVector.categoryFromStrings("one", "two", "three", null, "five");
+         Table input = new Table(fromInts, fromStrings);
          Table filtered = input.filter(mask);
-         Table expected = new Table(
-             ColumnVector.fromBoxedInts(null, 3, null),
-             ColumnVector.categoryFromStrings("two", null, "five"))) {
+         ColumnVector expectedFromInts = ColumnVector.fromBoxedInts(null, 3, null);
+         ColumnVector expectedFromStrings = ColumnVector.categoryFromStrings("two", null, "five");
+         Table expected = new Table(expectedFromInts, expectedFromStrings)) {
       assertTablesAreEqual(filtered, expected);
     }
   }
@@ -1442,7 +1694,8 @@ public class TableTest extends CudfTestBase {
     Boolean[] maskVals = new Boolean[5];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
+         ColumnVector fromStrings = ColumnVector.fromStrings("1","2","3","4","5");
+         Table input = new Table(fromStrings)) {
       assertThrows(AssertionError.class, () -> input.filter(mask).close());
     }
   }
@@ -1464,7 +1717,7 @@ public class TableTest extends CudfTestBase {
   void testJSONReadWithFilePath() throws IOException {
     File tempFile = createTempFile(jsonData);
 
-    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    try (Table t = Table.readJSON(tempFile);
     Table expectedTable = new Table.TestBuilder()
         .column( 1l,      3l,                 7l)
         .column(1.1,     4.2,                1.3)
@@ -1479,7 +1732,7 @@ public class TableTest extends CudfTestBase {
     File tempFile = createTempFile(jsonData);
     Schema schema = Schema.builder().column(DType.INT32, "0")
         .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+    try (Table t = Table.readJSON(schema, tempFile);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column(1.1,     4.2,                1.3)
@@ -1505,7 +1758,7 @@ public class TableTest extends CudfTestBase {
   void testJSONReadBufferWithDataTypes() {
     Schema schema = Schema.builder().column(DType.INT32, "0")
         .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(jsonData, schema);
+    try (Table t = Table.readJSON(schema, jsonData);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column(1.1f,     4.2f,                1.3f)
@@ -1517,7 +1770,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testJSONReadBufferWithRange() {
-    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+    try (Table t = Table.readJSON(Schema.INFERRED, JSONOptions.DEFAULT, jsonData, 14, 17);
          Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
              .build()) {
       assertTablesAreEqual(expectedTable, t);
@@ -1535,7 +1788,7 @@ public class TableTest extends CudfTestBase {
     Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
         .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
     JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
-    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+    try (Table t = Table.readJSON(schema, opts, jsonDataWithNames);
          Table expectedTable = new Table.TestBuilder()
              .column(  1l,       3l,                  7l)
              .column("a", "hello", "seven\u24E1\u25B6")
@@ -1552,7 +1805,7 @@ public class TableTest extends CudfTestBase {
     Schema schema = Schema.builder().column(DType.FLOAT32, "1")
         .column(DType.INT32, "0").column(DType.STRING, "2").build();
     JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
-    try (Table t = Table.readJSON(jsonData, opts, schema);
+    try (Table t = Table.readJSON(schema, opts, jsonData);
          Table expectedTable = new Table.TestBuilder()
              .column(  1,       3,                  7)
              .column("a", "hello", "seven\u24E1\u25B6")

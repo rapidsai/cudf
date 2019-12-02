@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf/copying.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
@@ -34,7 +36,9 @@ template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   static std::size_t data_size() { return 1000; }
   static std::size_t mask_size() { return 100; }
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() {
+    return cudf::data_type{cudf::experimental::type_to_id<T>()};
+  }
 
   TypedColumnTest()
       : data{_num_elements * cudf::size_of(type())},
@@ -134,6 +138,22 @@ TYPED_TEST(TypedColumnTest, ExplicitNullCountAllNull) {
 TYPED_TEST(TypedColumnTest, SetNullCountNoMask) {
   cudf::column col{this->type(), this->num_elements(), this->data};
   EXPECT_THROW(col.set_null_count(1), cudf::logic_error);
+}
+
+TYPED_TEST(TypedColumnTest, SetEmptyNullMaskNonZeroNullCount) {
+  cudf::column col{this->type(), this->num_elements(), this->data};
+  rmm::device_buffer empty_null_mask{};
+  EXPECT_THROW(col.set_null_mask(empty_null_mask, this->num_elements()),
+               cudf::logic_error);
+}
+
+TYPED_TEST(TypedColumnTest, SetInvalidSizeNullMaskNonZeroNullCount) {
+  cudf::column col{this->type(), this->num_elements(), this->data};
+  auto invalid_size_null_mask =
+    create_null_mask(std::min(this->num_elements() - 50, 0),
+                     cudf::mask_state::ALL_VALID);
+  EXPECT_THROW(col.set_null_mask(invalid_size_null_mask, this->num_elements()),
+               cudf::logic_error);
 }
 
 TYPED_TEST(TypedColumnTest, SetNullCountEmptyMask) {
@@ -304,4 +324,110 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask) {
   cudf::column_view moved_to_view = moved_to;
   EXPECT_EQ(original_data, moved_to_view.head());
   EXPECT_EQ(original_mask, moved_to_view.null_mask());
+}
+
+TYPED_TEST(TypedColumnTest, ConstructWithChildren) {
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.emplace_back(
+      std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT8}, 42,
+                                     this->data, this->all_valid_mask));
+  children.emplace_back(
+      std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::FLOAT64},
+                                     314, this->data, this->all_valid_mask));
+  cudf::column col{
+      this->type(),         this->num_elements(),     this->data,
+      this->all_valid_mask, cudf::UNKNOWN_NULL_COUNT, std::move(children)};
+
+  verify_column_views(col);
+  EXPECT_EQ(2, col.num_children());
+  EXPECT_EQ(cudf::data_type{cudf::type_id::INT8}, col.child(0).type());
+  EXPECT_EQ(42, col.child(0).size());
+  EXPECT_EQ(cudf::data_type{cudf::type_id::FLOAT64}, col.child(1).type());
+  EXPECT_EQ(314, col.child(1).size());
+}
+
+TYPED_TEST(TypedColumnTest, ReleaseNoChildren) {
+  cudf::column col{this->type(), this->num_elements(), this->data,
+                   this->all_valid_mask};
+  auto original_data = col.view().head();
+  auto original_mask = col.view().null_mask();
+
+  cudf::column::contents contents = col.release();
+  EXPECT_EQ(original_data, contents.data->data());
+  EXPECT_EQ(original_mask, contents.null_mask->data());
+  EXPECT_EQ(0u, contents.children.size());
+  EXPECT_EQ(0, col.size());
+  EXPECT_EQ(0, col.null_count());
+  EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, col.type());
+  EXPECT_EQ(0, col.num_children());
+}
+
+TYPED_TEST(TypedColumnTest, ReleaseWithChildren) {
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.emplace_back(std::make_unique<cudf::column>(
+      this->type(), this->num_elements(), this->data, this->all_valid_mask));
+  children.emplace_back(std::make_unique<cudf::column>(
+      this->type(), this->num_elements(), this->data, this->all_valid_mask));
+  cudf::column col{
+      this->type(),         this->num_elements(),     this->data,
+      this->all_valid_mask, cudf::UNKNOWN_NULL_COUNT, std::move(children)};
+
+  auto original_data = col.view().head();
+  auto original_mask = col.view().null_mask();
+
+  cudf::column::contents contents = col.release();
+  EXPECT_EQ(original_data, contents.data->data());
+  EXPECT_EQ(original_mask, contents.null_mask->data());
+  EXPECT_EQ(2u, contents.children.size());
+  EXPECT_EQ(0, col.size());
+  EXPECT_EQ(0, col.null_count());
+  EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, col.type());
+  EXPECT_EQ(0, col.num_children());
+}
+
+TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
+  cudf::column original{this->type(), this->num_elements(), this->data,
+                        this->all_valid_mask};
+  cudf::column_view original_view = original;
+  cudf::column copy{original_view};
+  verify_column_views(copy);
+  cudf::test::expect_columns_equal(original, copy);
+
+  // Verify deep copy
+  cudf::column_view copy_view = copy;
+  EXPECT_NE(original_view.head(), copy_view.head());
+  EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
+}
+
+TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
+  cudf::column original{this->type(), this->num_elements(), this->data,
+                        this->mask};
+  std::vector<cudf::size_type> indices{
+    0, this->num_elements()/3,
+    this->num_elements()/3, this->num_elements()/2,
+    this->num_elements()/2, this->num_elements()};
+  std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
+
+  auto concatenated_col = cudf::concatenate(views);
+
+  cudf::test::expect_columns_equal(original, *concatenated_col);
+}
+
+struct StringColumnTest : public cudf::test::BaseFixture {};
+
+TEST_F(StringColumnTest, ConcatenateColumnView) {
+    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
+    cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
+    cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
+    cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
+
+    std::vector<cudf::column_view> strings_columns;
+    strings_columns.push_back(strings1);
+    strings_columns.push_back(strings2);
+    strings_columns.push_back(strings3);
+
+    auto results = cudf::concatenate(strings_columns);
+
+    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
+    cudf::test::expect_columns_equal(*results,expected);
 }

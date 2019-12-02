@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/chrono.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -41,6 +42,15 @@ template <typename L, typename R>
 struct is_relationally_comparable_impl<
     L, R, void_t<less_comparable<L, R>, greater_comparable<L, R> > >
     : std::true_type {};
+
+template <typename T>
+using is_timestamp_t = simt::std::disjunction<
+  std::is_same<cudf::timestamp_D, T>,
+  std::is_same<cudf::timestamp_s, T>,
+  std::is_same<cudf::timestamp_ms, T>,
+  std::is_same<cudf::timestamp_us, T>,
+  std::is_same<cudf::timestamp_ns, T>
+>;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether objects of types `L` and `R` can be relationally
@@ -94,6 +104,41 @@ constexpr inline bool is_numeric(data_type type) {
 }
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates whether `T` is a Boolean type.
+ *
+ * `cudf::bool8` is cudf's Boolean type.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is Boolean
+ * @return false `type` is not Boolean
+ *---------------------------------------------------------------------------**/
+template <typename T>
+constexpr inline bool is_boolean() {
+  return std::is_same<T, cudf::experimental::bool8>::value ||
+         std::is_same<T, bool>::value;
+}
+
+struct is_boolean_impl {
+  template <typename T>
+  bool operator()() {
+    return is_boolean<T>();
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether `type` is a Boolean `data_type`.
+ *
+ * `cudf::bool8` is cudf's Boolean type.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a Boolean
+ * @return false `type` is not a Boolean
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_boolean(data_type type) {
+  return cudf::experimental::type_dispatcher(type, is_boolean_impl{});
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Indicates whether the type `T` is a timestamp type.
  *
  * @tparam T  The type to verify
@@ -102,12 +147,7 @@ constexpr inline bool is_numeric(data_type type) {
  *---------------------------------------------------------------------------**/
 template <typename T>
 constexpr inline bool is_timestamp() {
-  return (
-    std::is_same<cudf::timestamp_D, T>::value ||
-    std::is_same<cudf::timestamp_s, T>::value ||
-    std::is_same<cudf::timestamp_ms, T>::value ||
-    std::is_same<cudf::timestamp_us, T>::value ||
-    std::is_same<cudf::timestamp_ns, T>::value );
+  return is_timestamp_t<T>::value;
 }
 
 struct is_timestamp_impl {

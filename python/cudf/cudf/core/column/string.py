@@ -538,6 +538,15 @@ class StringColumn(column.TypedColumnBase):
         elif mem_dtype.type is np.datetime64:
             kwargs.update(units=np.datetime_data(mem_dtype)[0])
             mem_dtype = np.dtype(np.int64)
+            if "format" not in kwargs:
+                if len(self.data) > 0:
+                    # infer on host from the first not na element
+                    fmt = pd.core.tools.datetimes._guess_datetime_format(
+                        self[self.notna()][0]
+                    )
+                    kwargs.update(format=fmt)
+            else:
+                fmt = None
 
         out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
         out_ptr = libcudf.cudf.get_ctype_ptr(out_arr)
@@ -662,7 +671,8 @@ class StringColumn(column.TypedColumnBase):
             ncount=header["null_count"],
             bdevmem=True,
         )
-        return data
+        typ = pickle.loads(header["type"])
+        return typ(data)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":

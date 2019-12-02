@@ -20,8 +20,12 @@
 #include <cudf/utilities/error.hpp>
 #include "./utilities.hpp"
 #include "./utilities.cuh"
+#include "char_types/char_flags.h"
+#include "char_types/char_cases.h"
 
+#include <mutex>
 #include <rmm/rmm.h>
+#include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
 #include <thrust/transform_reduce.h>
@@ -76,9 +80,9 @@ rmm::device_vector<string_view> create_string_vector_from_column(
 }
 
 // build a strings offsets column from a vector of string_views
-std::unique_ptr<cudf::column> offsets_from_string_vector(
+std::unique_ptr<cudf::column> child_offsets_from_string_vector(
     const rmm::device_vector<string_view>& strings,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr )
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
     auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
     auto begin = thrust::make_transform_iterator(strings.begin(), transformer);
@@ -86,10 +90,10 @@ std::unique_ptr<cudf::column> offsets_from_string_vector(
 }
 
 // build a strings chars column from an vector of string_views
-std::unique_ptr<cudf::column> chars_from_string_vector(
+std::unique_ptr<cudf::column> child_chars_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     const int32_t* d_offsets, cudf::size_type null_count,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr )
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream )
 {
     size_type count = strings.size();
     auto d_strings = strings.data().get();
@@ -103,8 +107,7 @@ std::unique_ptr<cudf::column> chars_from_string_vector(
                                              mask_state::UNALLOCATED,
                                              stream, mr );
     // get it's view
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<int8_t>();
+    auto d_chars = chars_column->mutable_view().data<int8_t>();
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, d_offsets, d_chars] __device__(size_type idx){
@@ -140,6 +143,42 @@ std::unique_ptr<column> make_empty_strings_column( rmm::mr::device_memory_resour
                                      rmm::device_buffer{0,stream,mr}, 0 ); // nulls
 }
 
+namespace
+{
+
+// The device variables are created here to avoid using a singleton that may cause issues
+// with RMM initialize/finalize. See PR #3159 for details on this approach.
+__device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
+__device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
+std::mutex g_flags_table_mutex, g_cases_table_mutex;
+character_flags_table_type* d_character_codepoint_flags = nullptr;
+character_cases_table_type* d_character_cases_table = nullptr;
+
+} // namespace
+
+// Return the flags table device pointer
+const character_flags_table_type* get_character_flags_table()
+{
+    std::lock_guard<std::mutex> guard(g_flags_table_mutex);
+    if( !d_character_codepoint_flags )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags,character_codepoint_flags));
+    }
+    return d_character_codepoint_flags;
+}
+
+// Return the cases table device pointer
+const character_cases_table_type* get_character_cases_table()
+{
+    std::lock_guard<std::mutex> guard(g_cases_table_mutex);
+    if( !d_character_cases_table )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table,character_cases_table));
+    }
+    return d_character_cases_table;
+}
 
 } // namespace detail
 } // namespace strings

@@ -26,6 +26,7 @@
 #include <utility>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace {
 

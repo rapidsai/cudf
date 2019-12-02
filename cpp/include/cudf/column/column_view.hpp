@@ -15,12 +15,10 @@
  */
 #pragma once
 
-#include <cudf/cudf.h>
-
+#include <cudf/types.hpp>
 #include <vector>
 
 namespace cudf {
-
 namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -158,7 +156,7 @@ class column_view_base {
 
  protected:
   data_type _type{EMPTY};   ///< Element type
-  cudf::size_type _size{};  ///< Number of elements
+  size_type _size{};  ///< Number of elements
   void const* _data{};      ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
@@ -321,8 +319,11 @@ class column_view : public detail::column_view_base {
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
+
   ~mutable_column_view() = default;
+
   mutable_column_view(mutable_column_view const&) = default;
+
   mutable_column_view(mutable_column_view&&) = default;
   mutable_column_view& operator=(mutable_column_view const&) = default;
   mutable_column_view& operator=(mutable_column_view&&) = default;
@@ -372,7 +373,7 @@ class mutable_column_view : public detail::column_view_base {
    * column, and instead, accessing the elements should be done via `data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   T* head() const noexcept {
@@ -388,11 +389,11 @@ class mutable_column_view : public detail::column_view_base {
    * @TODO Clarify behavior for variable-width types.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* data() const noexcept {
-    return head<T>() + _offset;
+    return const_cast<T*>(detail::column_view_base::data<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -400,11 +401,11 @@ class mutable_column_view : public detail::column_view_base {
    * casted to the specified type.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to the first element after casting
+   * @return T* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* begin() const noexcept {
-    return data<T>();
+    return const_cast<T*>(detail::column_view_base::begin<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -412,11 +413,11 @@ class mutable_column_view : public detail::column_view_base {
    * the specified type.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to one past the last element after casting
+   * @return T* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* end() const noexcept {
-    return begin<T>() + size();
+    return const_cast<T*>(detail::column_view_base::end<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -473,4 +474,4 @@ class mutable_column_view : public detail::column_view_base {
  *---------------------------------------------------------------------------**/
 size_type count_descendants(column_view parent);
 
-}  // namespace cudf
+}// namespace cudf
