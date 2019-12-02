@@ -47,7 +47,6 @@
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 
-
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
@@ -160,7 +159,6 @@
 - PR #3475 Add `bitmask_to_host` column utility
 - PR #3487 Add is_boolean trait and random timestamp generator for testing
 - PR #3492 Small cleanup (remove std::abs) and comment
-
 
 ## Bug Fixes
 
