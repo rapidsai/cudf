@@ -54,7 +54,7 @@ namespace { // anonymous
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
  */
-template <typename T, typename agg_op, bool is_mean, int block_size, bool has_nulls,
+template <typename T, typename agg_op, rolling_operator op, int block_size, bool has_nulls,
           typename WindowIterator>
 __launch_bounds__(block_size)
 __global__
@@ -68,7 +68,7 @@ void gpu_rolling(column_device_view input,
   size_type i = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
 
-  agg_op op;
+    agg_op agg_operator{};
   gdf_size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
@@ -92,7 +92,9 @@ void gpu_rolling(column_device_view input,
     //       for dynamic and static sizes.
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
-        val = op(input.element<T>(j), val);
+        // Element type and output type are different for COUNT
+        T element = (op == rolling_operator::COUNT) ? T{0} : input.element<T>(j);
+        val = agg_operator(element, val);
         count++;
       }
     }
@@ -111,7 +113,8 @@ void gpu_rolling(column_device_view input,
 
     // store the output value, one per thread
     if (output_is_valid)
-      cudf::detail::store_output_functor<T, is_mean>{}(output.element<T>(i), val, count);
+      cudf::detail::store_output_functor<T, op == rolling_operator::MEAN>{}(output.element<T>(i),
+                                                                            val, count);
 
     // process next element 
     i += stride;
@@ -129,8 +132,9 @@ void gpu_rolling(column_device_view input,
 
 struct rolling_window_launcher
 {
-  template<typename T, typename agg_op, bool is_mean, typename WindowIterator,
-           std::enable_if_t<cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
+  template<typename T, typename agg_op, rolling_operator op, typename WindowIterator,
+    std::enable_if_t<cudf::detail::is_supported<T, agg_op, 
+                                                op == rolling_operator::MEAN>()>* = nullptr>
   std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
                                                     WindowIterator window_begin,
                                                     WindowIterator forward_window_begin,
@@ -142,8 +146,10 @@ struct rolling_window_launcher
 
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
-    // output is always nullable
-    std::unique_ptr<column> output =
+    // output is always nullable, COUNT always INT32 output
+    std::unique_ptr<column> output = (op == rolling_operator::COUNT) ?
+        make_numeric_column(cudf::data_type{cudf::INT32}, input.size(),
+                            cudf::UNINITIALIZED, stream, mr) :
         allocate_like(input, cudf::experimental::mask_allocation_policy::ALWAYS, mr);
 
     constexpr cudf::size_type block_size = 256;
@@ -155,11 +161,11 @@ struct rolling_window_launcher
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
     if (input.has_nulls()) {
-      gpu_rolling<T, agg_op, is_mean, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
+      gpu_rolling<T, agg_op, op, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
         (*input_device_view, *output_device_view, device_valid_count.data(),
          window_begin, forward_window_begin, min_periods);
     } else {
-      gpu_rolling<T, agg_op, is_mean, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
+      gpu_rolling<T, agg_op, op, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
         (*input_device_view, *output_device_view, device_valid_count.data(),
          window_begin, forward_window_begin, min_periods);
     }
@@ -177,8 +183,9 @@ struct rolling_window_launcher
   /**
    * @brief If we cannot perform aggregation on this type then throw an error
    */
-  template<typename T, typename agg_op, bool is_mean, typename WindowIterator,
-           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
+  template<typename T, typename agg_op, rolling_operator op, typename WindowIterator,
+    std::enable_if_t<!cudf::detail::is_supported<T, agg_op,
+                                                 op == rolling_operator::MEAN>()>* = nullptr>
   std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
                                                     WindowIterator window_begin,
                                                     WindowIterator forward_window_begin,
@@ -206,25 +213,31 @@ struct rolling_window_launcher
   {
     switch (op) {
     case rolling_operator::SUM:
-      return dispatch_aggregation_type<T, cudf::DeviceSum, false>(input, window_begin,
-                                                                  forward_window_begin, min_periods,
-                                                                  mr, stream);
+      return dispatch_aggregation_type<T, cudf::DeviceSum,
+                                       rolling_operator::SUM>(input, window_begin,
+                                                               forward_window_begin, min_periods,
+                                                               mr, stream);
     case rolling_operator::MIN:
-      return dispatch_aggregation_type<T, cudf::DeviceMin, false>(input, window_begin,
-                                                                  forward_window_begin, min_periods,
-                                                                  mr, stream);
+      return dispatch_aggregation_type<T, cudf::DeviceMin,
+                                       rolling_operator::MIN>(input, window_begin,
+                                                              forward_window_begin, min_periods,
+                                                              mr, stream);
     case rolling_operator::MAX:
-      return dispatch_aggregation_type<T, cudf::DeviceMax, false>(input, window_begin,
-                                                                  forward_window_begin, min_periods,
-                                                                  mr, stream);
+      return dispatch_aggregation_type<T, cudf::DeviceMax,
+                                       rolling_operator::MAX>(input, window_begin,
+                                                              forward_window_begin, min_periods,
+                                                              mr, stream);
     case rolling_operator::COUNT:
-      return dispatch_aggregation_type<T, cudf::DeviceCount, false>(input, window_begin,
-                                                                    forward_window_begin, min_periods,
-                                                                    mr, stream);
+      // for count, use size_type rather than the input type (never load the input)
+      return dispatch_aggregation_type<cudf::size_type, cudf::DeviceCount,
+                                       rolling_operator::COUNT>(input, window_begin,
+                                                                forward_window_begin, min_periods,
+                                                                mr, stream);
     case rolling_operator::MEAN:
-      return dispatch_aggregation_type<T, cudf::DeviceSum, true>(input, window_begin,
-                                                                 forward_window_begin, min_periods,
-                                                                 mr, stream);
+      return dispatch_aggregation_type<T, cudf::DeviceSum,
+                                       rolling_operator::MEAN>(input, window_begin,
+                                                               forward_window_begin, min_periods,
+                                                               mr, stream);
     default:
       // TODO: need a nice way to convert enums to strings, same would be useful for groupby
       CUDF_FAIL("Rolling aggregation function not implemented");

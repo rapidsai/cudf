@@ -49,13 +49,15 @@ enum class rolling_operator {
  *   [i-window+1, i+forward_window] to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ * 
+ * The returned column for `op == COUNT` always has INT32 type.
  *
  * @param[in] input_col The input column
  * @param[in] window The static rolling window size.
  * @param[in] forward_window The static window size in the forward direction.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise 0 is stored in the valid bit mask for element i.
- * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
+ * @param[in] op The rolling window aggregation type (SUM, MAX, MIN, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
  **/
@@ -81,6 +83,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size can be specified for each element using
  *   an additional array.
+ * 
+ * The returned column for `op == COUNT` always has INT32 type.
  * 
  * @throws cudf::logic_error if window column type is not INT32
  *

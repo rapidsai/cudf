@@ -80,7 +80,7 @@ protected:
     std::cout << "\n";
 #endif
 
-    cudf::test::expect_columns_equal(*output, reference);
+    cudf::test::expect_columns_equal(*output, *reference);
   }
 
   // helper function to test all aggregators
@@ -102,9 +102,55 @@ protected:
   private:
 
   // use SFINAE to only instantiate for supported combinations
-  template<class agg_op, bool is_mean,
+
+  // specialization for COUNT
+  std::unique_ptr<cudf::column> 
+  create_count_reference_output(cudf::column_view const& input,
+                                std::vector<size_type> const& window_col,
+                                std::vector<size_type> const& forward_window_col,
+                                size_type min_periods)
+  {
+    size_type num_rows = input.size();
+    std::vector<cudf::size_type> ref_data(num_rows);
+    std::vector<bool> ref_valid(num_rows);
+
+    // input data and mask
+  
+    std::vector<bitmask_type> in_valid; 
+    //std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
+    in_valid = cudf::test::bitmask_to_host(input);
+    bitmask_type* valid_mask = in_valid.data();
+    
+    for(size_type i = 0; i < num_rows; i++) {
+      size_type count = 0;
+      // load sizes
+      min_periods = std::max(min_periods, 1); // at least one observation is required
+
+      // compute bounds
+      auto window = window_col[i%window_col.size()];
+      auto forward_window = forward_window_col[i%forward_window_col.size()];
+      size_type start_index = std::max((size_type)0, i - window + 1);
+      size_type end_index = std::min(num_rows, i + forward_window + 1); // exclusive
+      
+      // aggregate
+      for (size_type j = start_index; j < end_index; j++) {
+        if (!input.nullable() || cudf::bit_is_set(valid_mask, j))
+          count++;
+      }
+
+      ref_valid[i] = (count >= min_periods);
+      if (ref_valid[i])
+        ref_data[i] = count;
+    }
+
+    fixed_width_column_wrapper<cudf::size_type> col(ref_data.begin(), ref_data.end(),
+                                                    ref_valid.begin());
+    return col.release();
+  }
+
+  template<typename agg_op, bool is_mean,
            std::enable_if_t<cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
-  fixed_width_column_wrapper<T> create_reference_output(cudf::column_view const& input,
+  std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& window_col,
                                                         std::vector<size_type> const& forward_window_col,
                                                         size_type min_periods)
@@ -146,12 +192,13 @@ protected:
       }
     }
 
-    return fixed_width_column_wrapper<T>(ref_data.begin(), ref_data.end(), ref_valid.begin());
+    fixed_width_column_wrapper<T> col(ref_data.begin(), ref_data.end(), ref_valid.begin());
+    return col.release();
   }
 
-  template<class agg_op, bool is_mean,
+  template<typename  agg_op, bool is_mean,
            std::enable_if_t<!cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
-  fixed_width_column_wrapper<T> create_reference_output(cudf::column_view const& input,
+  std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& window_col,
                                                         std::vector<size_type> const& forward_window_col,
                                                         size_type min_periods)
@@ -159,7 +206,7 @@ protected:
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
-  fixed_width_column_wrapper<T> create_reference_output(rolling_operator op,
+  std::unique_ptr<cudf::column> create_reference_output(rolling_operator op,
                                                         cudf::column_view const& input,
                                                         std::vector<size_type> const& window,
                                                         std::vector<size_type> const& forward_window,
@@ -168,17 +215,21 @@ protected:
     // unroll aggregation types
     switch(op) {
     case rolling_operator::SUM:
-      return create_reference_output<cudf::DeviceSum, false>(input, window, forward_window, min_periods);
+      return create_reference_output<cudf::DeviceSum, false>(input, window,
+                                                             forward_window, min_periods);
     case rolling_operator::MIN:
-      return create_reference_output<cudf::DeviceMin, false>(input, window, forward_window, min_periods);
+      return create_reference_output<cudf::DeviceMin, false>(input, window,
+                                                             forward_window, min_periods);
     case rolling_operator::MAX:
-      return create_reference_output<cudf::DeviceMax, false>(input, window, forward_window, min_periods);
+      return create_reference_output<cudf::DeviceMax, false>(input, window,
+                                                             forward_window, min_periods);
     case rolling_operator::COUNT:
-      return create_reference_output<cudf::DeviceCount, false>(input, window, forward_window, min_periods);
+      return create_count_reference_output(input, window, forward_window, min_periods);
     case rolling_operator::MEAN:
-      return create_reference_output<cudf::DeviceSum, true>(input, window, forward_window, min_periods);
+      return create_reference_output<cudf::DeviceSum, true>(input, window,
+                                                            forward_window, min_periods);
     default:
-      return fixed_width_column_wrapper<T>({});
+      return fixed_width_column_wrapper<T>({}).release();
     }
   }
 };
