@@ -46,7 +46,7 @@
 - PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
-
+- PR #3497 Add DataFrame.drop(..., inplace=False) argument
 
 ## Improvements
 
@@ -220,6 +220,7 @@
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
 - PR #3459 Fix printing of invalid entries
+- PR #3466 Fix gather null mask allocation for invalid index
 - PR #3468 Fix memory leak issue in `drop_duplicates`
 - PR #3474 Fix small doc error in capitalize Docs
 - PR #3491 Fix more doc errors in NVStrings
