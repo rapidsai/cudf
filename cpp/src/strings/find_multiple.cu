@@ -16,11 +16,11 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/find.hpp>
+#include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include "./utilities.hpp"
+#include <strings/utilities.hpp>
 
 #include <thrust/transform.h>
 
@@ -78,7 +78,7 @@ std::unique_ptr<column> find_multiple( strings_column_view const& strings,
 
 std::unique_ptr<column> find_multiple( strings_column_view const& strings,
                                        strings_column_view const& targets,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                                       rmm::mr::device_memory_resource* mr)
 {
     return detail::find_multiple( strings, targets, mr );
 }
