@@ -31,13 +31,20 @@ namespace detail
   template <typename ColumnType, class AggOp, bool is_mean>
   static constexpr bool is_supported()
   {
-    return  !std::is_same<ColumnType, cudf::string_view>::value && 
-             (cudf::is_numeric<ColumnType>() ||
-              std::is_same<AggOp, DeviceMin>::value ||
-              std::is_same<AggOp, DeviceMax>::value ||
-              std::is_same<AggOp, DeviceCount>::value ||
-              (is_mean && std::is_same<AggOp, DeviceSum>::value &&
-               cudf::is_timestamp<ColumnType>()));
+    constexpr bool comparable_countable_op =
+      std::is_same<AggOp, DeviceMin>::value ||
+      std::is_same<AggOp, DeviceMax>::value ||
+      std::is_same<AggOp, DeviceCount>::value;
+
+    constexpr bool timestamp_mean =
+      is_mean &&
+      std::is_same<AggOp, DeviceSum>::value &&
+      cudf::is_timestamp<ColumnType>();
+
+    return !std::is_same<ColumnType, cudf::string_view>::value &&
+           (cudf::is_numeric<ColumnType>() ||
+            comparable_countable_op ||
+            timestamp_mean);
   }
 
   // store functor
