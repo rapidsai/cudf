@@ -27,8 +27,6 @@
 #include <memory>
 #include <type_traits>
 
-#include <nvstrings/NVCategory.h>
-
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/table/table.hpp>
@@ -41,6 +39,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+//#include <cudf/strings/detail/merge.cuh> // <- TODO: separate PR for strings support
 
 #include <cudf/merge.hpp>
 
@@ -368,6 +367,26 @@ struct ColumnMerger
   {
     //for now...
     CUDF_FAIL("Non fixed-width types are not supported");
+
+    // TODO: separate PR for strins support:
+    //
+    // auto column = strings::detail::merge( strings_column_view(lcol),
+    //                                       strings_column_view(rcol),
+    //                                       dv_row_order_.begin(),
+    //                                       dv_row_order_.end(),
+    //                                       mr_,
+    //                                       stream_);
+    
+    // if (lcol.has_nulls() || rcol.has_nulls())
+    //   {
+    //     auto merged_view = column->mutable_view();
+    //     materialize_bitmask(lcol,
+    //                         rcol,
+    //                         merged_view,
+    //                         dv_row_order_.data().get(),
+    //                         stream_);
+    //   }
+    // return column;
   }
 
 private:
@@ -383,7 +402,9 @@ private:
                                                    cudf::table_view const& right_table,
                                                    std::vector<cudf::size_type> const& key_cols,
                                                    std::vector<cudf::order> const& column_order,
-                                                   std::vector<cudf::null_order> const& null_precedence) {
+                                                   std::vector<cudf::null_order> const& null_precedence,
+                                                   rmm::mr::device_memory_resource* mr,
+                                                   cudaStream_t stream = nullptr) {
     auto n_cols = left_table.num_columns();
     CUDF_EXPECTS( n_cols == right_table.num_columns(), "Mismatched number of columns");
     if (left_table.num_columns() == 0) {
@@ -445,7 +466,7 @@ private:
     std::vector<std::unique_ptr<column>> v_merged_cols;
     v_merged_cols.reserve(n_cols);
 
-    ColumnMerger merger{merged_indices};
+    ColumnMerger merger{merged_indices, mr, stream};
     
     for(auto i=0;i<n_cols;++i)
       {
@@ -473,8 +494,9 @@ std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                                  table_view const& right_table,
                                                  std::vector<cudf::size_type> const& key_cols,
                                                  std::vector<cudf::order> const& column_order,
-                                                 std::vector<cudf::null_order> const& null_precedence){
-  return detail::merge(left_table, right_table, key_cols, column_order, null_precedence);
+                                                 std::vector<cudf::null_order> const& null_precedence,
+                                                 rmm::mr::device_memory_resource* mr){
+  return detail::merge(left_table, right_table, key_cols, column_order, null_precedence, mr);
 }
 
 }  // namespace experimental
