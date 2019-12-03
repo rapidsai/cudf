@@ -1,6 +1,7 @@
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
+
 - PR #2905 Added `Series.median()` and null support for `Series.quantile()`
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
@@ -46,6 +47,7 @@
 - PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
+- PR #3497 Add DataFrame.drop(..., inplace=False) argument
 
 ## Improvements
 
@@ -129,7 +131,9 @@
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
+- PR #3332 Port NVStrings replace to cudf strings column
 - PR #3354 Define and implement new `scatter` APIs
 - PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
@@ -219,11 +223,13 @@
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
 - PR #3459 Fix printing of invalid entries
+- PR #3466 Fix gather null mask allocation for invalid index
 - PR #3468 Fix memory leak issue in `drop_duplicates`
 - PR #3474 Fix small doc error in capitalize Docs
 - PR #3491 Fix more doc errors in NVStrings
 - PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
+- PR #3188 Repr slices up large DataFrames
 
 
 # cuDF 0.10.0 (16 Oct 2019)
