@@ -141,7 +141,7 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
     auto results = cudf::strings::all_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
     auto view = results->view();
-    EXPECT_EQ(cudf::BOOL8, view.type().id());
+    EXPECT_EQ(cudf::BOOL, view.type().id());
     EXPECT_EQ(0,view.size());
     EXPECT_EQ(0,view.null_count());
     EXPECT_EQ(0,view.num_children());

@@ -37,8 +37,8 @@ template <typename T, typename MapIterator>
 rmm::device_vector<T> make_gather_map(MapIterator scatter_iter,
     size_type scatter_rows, size_type gather_rows, cudaStream_t stream)
 {
-  static_assert(std::is_signed<T>::value,
-    "Need different invalid index if unsigned index types are added");
+ static_assert(std::is_signed<T>::value || std::is_same<T, bool>::value,
+   "Need different invalid index if unsigned index types are added");
   auto const invalid_index = static_cast<T>(-1);
 
   // Convert scatter map to a gather map
@@ -341,7 +341,7 @@ struct scatter_to_tables_impl {
     auto offsets = thrust::host_vector<size_type>(d_offsets.begin(), end.second);
     offsets.push_back(partition_map.size());
 
-    CUDF_EXPECTS(partitions.front() >= 0, "Invalid negative partition index");
+    // CUDF_EXPECTS(partitions.front() >= 0, "Invalid negative partition index");
     auto output = std::vector<std::unique_ptr<table>>(partitions.back() + 1);
 
     size_t next_partition = 0;

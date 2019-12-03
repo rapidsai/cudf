@@ -401,17 +401,29 @@ inline auto make_column(std::vector<R> data,
 }
 
 template <typename T, typename R>
+inline auto make_column(thrust::host_vector<R> data) {
+  return cudf::test::fixed_width_column_wrapper<T>{data.begin(), data.end()};
+}
+
+template <typename T, typename R>
+inline auto make_column(thrust::host_vector<R> data,
+                        thrust::host_vector<bool> mask) {
+  return cudf::test::fixed_width_column_wrapper<T>{data.begin(), data.end(),
+                                                   mask.begin()};
+}
+
+template <typename T, typename R>
 void validate_cast_result(cudf::column_view expected,
                           cudf::column_view actual) {
   using namespace cudf::test;
   // round-trip through the host because sizeof(T) may not equal sizeof(R)
-  std::vector<T> h_data;
+  thrust::host_vector<T> h_data;
   std::vector<cudf::bitmask_type> null_mask;
   std::tie(h_data, null_mask) = to_host<T>(expected);
   if (null_mask.size() == 0) {
     expect_columns_equal(make_column<R, T>(h_data), actual);
   } else {
-    std::vector<bool> h_null_mask{};
+    thrust::host_vector<bool> h_null_mask{}; // CH algorithmize
     for (cudf::size_type i = 0; i < expected.size(); ++i) {
       h_null_mask.push_back(cudf::bit_is_set(null_mask.data(), i));
     }

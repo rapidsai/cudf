@@ -43,7 +43,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return make_numeric_column( data_type{BOOL8}, 0 );
+        return make_numeric_column( data_type{BOOL}, 0 );
 
     CUDF_EXPECTS( true_string.is_valid() && true_string.size()>0, "Parameter true_string must not be empty.");
     auto d_true = string_view( true_string.data(), true_string.size());
@@ -51,7 +51,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_strings = *strings_column;
     // create output column copying the strings' null-mask
-    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
+    auto results = make_numeric_column( data_type{BOOL}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<experimental::bool8>();
@@ -94,7 +94,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
     if( strings_count == 0 )
         return make_empty_strings_column(mr,stream);
 
-    CUDF_EXPECTS( booleans.type().id()==BOOL8, "Input column must be boolean type" );
+    CUDF_EXPECTS( booleans.type().id()==BOOL, "Input column must be boolean type" );
     CUDF_EXPECTS( true_string.is_valid() && true_string.size()>0, "Parameter true_string must not be empty.");
     auto d_true = string_view( true_string.data(), true_string.size());
     CUDF_EXPECTS( false_string.is_valid() && false_string.size()>0, "Parameter false_string must not be empty.");

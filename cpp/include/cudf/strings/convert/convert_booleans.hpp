@@ -25,7 +25,7 @@ namespace strings
 {
 
 /**
- * @brief Returns a new BOOL8 column by parsing boolean values from the strings
+ * @brief Returns a new BOOL column by parsing boolean values from the strings
  * in the provided strings column.
  *
  * Any null entries will result in corresponding null entries in the output column.
@@ -33,7 +33,7 @@ namespace strings
  * @param strings Strings instance for this operation.
  * @param true_string String to expect for true. Non-matching strings are false.
  * @param mr Resource for allocating device memory.
- * @return New BOOL8 column converted from strings.
+ * @return New BOOL column converted from strings.
  */
 std::unique_ptr<column> to_booleans( strings_column_view const& strings,
                                      string_scalar const& true_string = string_scalar("true"),
@@ -45,7 +45,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @throw cudf::logic_error if the input column is not BOOL8 type.
+ * @throw cudf::logic_error if the input column is not BOOL type.
  *
  * @param column Boolean column to convert.
  * @param true_string String to use for true in the output column.

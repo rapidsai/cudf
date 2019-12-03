@@ -53,7 +53,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema, bool use_np_dtypes,
                              type_id timestamp_type_id) {
   switch (schema.kind) {
     case orc::BOOLEAN:
-      return type_id::BOOL8;
+      return type_id::BOOL;
     case orc::BYTE:
       return type_id::INT8;
     case orc::SHORT:

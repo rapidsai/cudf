@@ -25,7 +25,7 @@ namespace experimental {
 namespace detail{
 
 /**
- * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between [`begin, `end`)
+ * @brief Creates a column of `BOOL` elements by applying a predicate to every element between [`begin, `end`)
  * `true` indicates the value is satisfies the predicate and `false` indicates it doesn't.
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
@@ -36,7 +36,7 @@ namespace detail{
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing predicate is satisfied.
+ * @returns std::unique_ptr<cudf::column> A column of type `BOOL,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
@@ -45,7 +45,7 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
                            rmm::mr::device_memory_resource * mr =
                                rmm::mr::get_default_resource(),
                            cudaStream_t stream = 0) {
-    auto output = make_numeric_column(data_type(BOOL8), size, UNALLOCATED, stream, mr);
+    auto output = make_numeric_column(data_type(BOOL), size, UNALLOCATED, stream, mr);
     auto output_mutable_view = output->mutable_view();
     auto output_data = output_mutable_view.data<cudf::experimental::bool8>();
 

@@ -75,7 +75,7 @@ std::unique_ptr<experimental::table>
       return experimental::empty_like(input);
   }
 
-  CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
+  CUDF_EXPECTS(boolean_mask.type().id() == BOOL, "Mask must be Boolean type");
   // zero-size inputs are OK, but otherwise input size must match mask size
   CUDF_EXPECTS(input.num_rows() == 0 || input.num_rows() == boolean_mask.size(),
                "Column size mismatch");

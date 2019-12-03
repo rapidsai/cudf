@@ -59,7 +59,7 @@ TEST_F(StringsConvertTest, FromBooleans)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnBoolean)
 {
-    cudf::column_view zero_size_column( cudf::data_type{cudf::BOOL8}, 0, nullptr, nullptr, 0);
+    cudf::column_view zero_size_column( cudf::data_type{cudf::BOOL}, 0, nullptr, nullptr, 0);
     auto results = cudf::strings::from_booleans(zero_size_column);
     cudf::test::expect_strings_empty(results->view());
 }

@@ -131,7 +131,7 @@ data_type convertStringToDtype(const std::string &dtype) {
   if (dtype == "category") return data_type(cudf::type_id::CATEGORY);
   if (dtype == "date32") return data_type(cudf::type_id::TIMESTAMP_DAYS);
   if (dtype == "bool" || dtype == "boolean")
-    return data_type(cudf::type_id::BOOL8);
+    return data_type(cudf::type_id::BOOL);
   if (dtype == "date" || dtype == "date64")
     return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
   if (dtype == "float" || dtype == "float32")
@@ -623,7 +623,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream) {
         } else if (column_stats[col].countDateAndTime > 0L) {
           dtypes.emplace_back(cudf::type_id::TIMESTAMP_NANOSECONDS);
         } else if (column_stats[col].countBool > 0L) {
-          dtypes.emplace_back(cudf::type_id::BOOL8);
+          dtypes.emplace_back(cudf::type_id::BOOL);
         } else if (column_stats[col].countFloat > 0L ||
                    (column_stats[col].countFloat == 0L && countInt > 0L &&
                     column_stats[col].countNULL > 0L)) {

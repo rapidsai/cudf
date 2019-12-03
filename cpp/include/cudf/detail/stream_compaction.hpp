@@ -79,10 +79,10 @@ std::unique_ptr<experimental::table>
  * is returned.
  *
  * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
- * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
+ * @throws cudf::logic_error if `boolean_mask` is not `BOOL` type.
  *
  * @param[in] input The input table_view to filter
- * @param[in] boolean_mask A nullable column_view of type BOOL8 used as
+ * @param[in] boolean_mask A nullable column_view of type BOOL used as
  * a mask to filter the `input`.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels

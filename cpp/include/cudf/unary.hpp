@@ -53,22 +53,22 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::get_default_resource());
 
 /**
- * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
+ * @brief Creates a column of `BOOL` elements where for every element in `input` `true`
  * indicates the value is null and `false` indicates the value is valid.
  *
  * @param[in] input A `column_view` as input
  *
- * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `true` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL` elements with `true` representing `null` values.
  */
 std::unique_ptr<cudf::column> is_null(cudf::column_view const& input);
 
 /**
- * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
+ * @brief Creates a column of `BOOL` elements where for every element in `input` `true`
  * indicates the value is valid and `false` indicates the value is null.
  *
  * @param[in] input A `column_view` as input
  *
- * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `false` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL` elements with `false` representing `null` values.
  */
 std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input);
 

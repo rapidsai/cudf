@@ -42,7 +42,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     auto d_column = *strings_column;
 
     // create output column
-    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
+    auto results = make_numeric_column( data_type{BOOL}, strings_count,
         copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<experimental::bool8>();

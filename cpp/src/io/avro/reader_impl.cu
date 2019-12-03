@@ -48,7 +48,7 @@ namespace {
 type_id to_type_id(const avro::schema_entry *col) {
   switch (col->kind) {
     case avro::type_boolean:
-      return type_id::BOOL8;
+      return type_id::BOOL;
     case avro::type_int:
       return type_id::INT32;
     case avro::type_long:

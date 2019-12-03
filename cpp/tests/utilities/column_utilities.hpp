@@ -22,6 +22,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <boost/container/vector.hpp>
 
 namespace cudf {
 namespace test {
@@ -69,7 +70,7 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
  *
  * @param col The column view
  *---------------------------------------------------------------------------**/
-std::vector<std::string> to_strings(cudf::column_view const& col);
+thrust::host_vector<std::string> to_strings(cudf::column_view const& col);
 
 /**---------------------------------------------------------------------------*
  * @brief Print a column view to an ostream
@@ -97,8 +98,9 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
-  std::vector<T> host_data(c.size());
+
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+  thrust::host_vector<T> host_data(c.size());
   CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return { host_data, bitmask_to_host(c) };
 }
@@ -114,14 +116,14 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
+inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
   thrust::host_vector<char> h_chars(strings_data.first);
   thrust::host_vector<size_type> h_offsets(strings_data.second);
   
   // build std::string vector from chars and offsets
   if( !h_chars.empty() ) { // check for all nulls case
-    std::vector<std::string> host_data;
+    thrust::host_vector<std::string> host_data;
     host_data.reserve(c.size());
 
     // When C++17, replace this loop with std::adjacent_difference()
@@ -135,7 +137,7 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
     return { host_data, bitmask_to_host(c) };
   }
   else 
-    return { std::vector<std::string>{}, bitmask_to_host(c) };
+    return { thrust::host_vector<std::string>{}, bitmask_to_host(c) };
 }
 
 }  // namespace test

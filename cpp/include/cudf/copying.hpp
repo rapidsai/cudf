@@ -369,7 +369,7 @@ std::vector<column_view> split(column_view const& input,
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand column_view
- * @param[in] Non-nullable column of `BOOL8` elements that control selection from `lhs` or `rhs`
+ * @param[in] Non-nullable column of `BOOL` elements that control selection from `lhs` or `rhs`
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements

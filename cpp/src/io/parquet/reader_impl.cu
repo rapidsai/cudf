@@ -85,7 +85,7 @@ constexpr type_id to_type_id(parquet::Type physical,
   // format in combination with the encoding type.
   switch (physical) {
     case parquet::BOOLEAN:
-      return type_id::BOOL8;
+      return type_id::BOOL;
     case parquet::INT32:
       return type_id::INT32;
     case parquet::INT64:

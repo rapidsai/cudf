@@ -88,7 +88,7 @@ std::unique_ptr<column> rfind( strings_column_view const& strings,
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New BOOL8 column.
+ * @return New BOOL column.
  */
 std::unique_ptr<column> contains( strings_column_view const& strings,
                                   string_scalar const& target,
@@ -106,7 +106,7 @@ std::unique_ptr<column> contains( strings_column_view const& strings,
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New BOOL8 column.
+ * @return New BOOL column.
  */
 std::unique_ptr<column> starts_with( strings_column_view const& strings,
                                      string_scalar const& target,
@@ -124,7 +124,7 @@ std::unique_ptr<column> starts_with( strings_column_view const& strings,
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Resource for allocating device memory.
- * @return New BOOL8 column.
+ * @return New BOOL column.
  */
 std::unique_ptr<column> ends_with( strings_column_view const& strings,
                                    string_scalar const& target,
