@@ -138,7 +138,7 @@ class column_view_base {
    * the range [begin, end).
    *
    * @param[in] begin The starting index of the range (inclusive).
-   * @param end The index of the last element in the range (exlusive).
+   * @param[in] end The index of the last element in the range (exlusive).
    *---------------------------------------------------------------------------**/
   size_type null_count(size_type begin, size_type end) const;
 
