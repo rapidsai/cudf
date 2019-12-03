@@ -41,9 +41,12 @@
 #include <cudf/detail/utilities/cuda.cuh>
 //#include <cudf/strings/detail/merge.cuh> // <- TODO: separate PR for strings support
 
-#include <cudf/merge.hpp>
+#include <cudf/detail/merge.hpp>
 
 namespace { // anonym.
+
+using side = cudf::experimental::detail::side;
+using index_type = cudf::experimental::detail::index_type;
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -222,10 +225,10 @@ generate_merged_indices(cudf::table_view const& left_table,
       rmm::device_vector<cudf::null_order> d_null_precedence(null_precedence);
       
       auto ineq_op =
-        cudf::experimental::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
-                                                                      *rhs_device_view,
-                                                                      d_column_order.data().get(),
-                                                                      d_null_precedence.data().get());
+        cudf::experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+                                                                              *rhs_device_view,
+                                                                              d_column_order.data().get(),
+                                                                              d_null_precedence.data().get());
       
         thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
@@ -239,9 +242,9 @@ generate_merged_indices(cudf::table_view const& left_table,
                     });			        
     } else {
       auto ineq_op =
-        cudf::experimental::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
-                                                                       *rhs_device_view,
-                                                                       d_column_order.data().get()); 
+        cudf::experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
+                                                                               *rhs_device_view,
+                                                                               d_column_order.data().get()); 
         thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
