@@ -74,33 +74,6 @@ struct bitwise_partitioner
   const size_type divisor;
 };
 
-/** 
- * @brief Computes which partition each row of a device_table will belong to based
- * on hashing each row, and applying a partition function to the hash value.
- */
-template <typename hasher_type, typename partitioner_type>
-__global__ 
-void compute_row_partition_numbers(hasher_type hasher, 
-                                   const size_type num_rows,
-                                   const size_type num_partitions,
-                                   const partitioner_type the_partitioner,
-                                   size_type *row_partition_numbers)
-{
-  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
-
-  // Compute the hash value for each row, store it to the array of hash values
-  // and compute the partition to which the hash value belongs
-  while (row_number < num_rows) {
-    const hash_value_type row_hash_value = hasher(row_number);
-
-    const size_type partition_number = the_partitioner(row_hash_value);
-
-    row_partition_numbers[row_number] = partition_number;
-
-    row_number += blockDim.x * gridDim.x;
-  }
-}
-
 template <bool has_nulls>
 std::vector<std::unique_ptr<experimental::table>>
 hash_partition_table(table_view const& input,
@@ -109,49 +82,33 @@ hash_partition_table(table_view const& input,
                      rmm::mr::device_memory_resource* mr,
                      cudaStream_t stream)
 {
-  constexpr size_type block_size = 256;
-  constexpr size_type rows_per_thread = 1;
-  constexpr size_type rows_per_block = block_size * rows_per_thread;
-
-  const size_type num_rows = table_to_hash.num_rows();
-  const size_type grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
-
-  auto device_input = table_device_view::create(input, stream);
+  auto const num_rows = table_to_hash.num_rows();
   auto row_partition_numbers = rmm::device_vector<size_type>(num_rows);
-  auto block_partition_sizes = rmm::device_vector<size_type>(grid_size * num_partitions);
-  auto global_partition_sizes = rmm::device_vector<size_type>(num_partitions);
-  CUDA_TRY(cudaMemsetAsync(global_partition_sizes.data().get(), 0, num_partitions * sizeof(size_type), stream));
 
-  auto hasher = experimental::row_hasher<MurmurHash3_32, has_nulls>(*device_input);
+  // Make an iterator to compute the hash over each row
+  auto const device_input = table_device_view::create(input, stream);
+  auto const hasher = experimental::row_hasher<MurmurHash3_32, has_nulls>(*device_input);
+  auto const hash_iterator = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), hasher);
 
   // If the number of partitions is a power of two, we can compute the partition 
   // number of each row more efficiently with bitwise operations
   if (is_power_two(num_partitions)) {
-    // Determines how the mapping between hash value and partition number is computed
-    using partitioner_type = bitwise_partitioner<hash_value_type>;
-
-    // Computes which partition each row belongs to by hashing the row and performing
-    // a partitioning operator on the hash value. Also computes the number of
-    // rows in each partition both for each thread block as well as across all blocks
-    compute_row_partition_numbers
-      <<<grid_size, block_size, num_partitions * sizeof(size_type), stream>>>(
-        hasher, num_rows, num_partitions, partitioner_type(num_partitions),
-        row_partition_numbers.data().get());
+    // Compute which partition each row belongs to using bitwise partitioner
+    auto partitioner = bitwise_partitioner<hash_value_type>{num_partitions};
+    thrust::transform(rmm::exec_policy(stream)->on(stream), hash_iterator,
+      hash_iterator + num_rows, row_partition_numbers.begin(), partitioner);
 
   } else {
-    // Determines how the mapping between hash value and partition number is computed
-    using partitioner_type = modulo_partitioner<hash_value_type>;
-
-    // Computes which partition each row belongs to by hashing the row and performing
-    // a partitioning operator on the hash value. Also computes the number of
-    // rows in each partition both for each thread block as well as across all blocks
-    compute_row_partition_numbers
-      <<<grid_size, block_size, num_partitions * sizeof(size_type), stream>>>(
-        hasher, num_rows, num_partitions, partitioner_type(num_partitions),
-        row_partition_numbers.data().get());
+    // Compute which partition each row belongs to using modulo partitioner
+    auto partitioner = modulo_partitioner<hash_value_type>{num_partitions};
+    thrust::transform(rmm::exec_policy(stream)->on(stream), hash_iterator,
+      hash_iterator + num_rows, row_partition_numbers.begin(), partitioner);
   }
 
-  auto partition_map = column_view(data_type(INT32), num_rows, row_partition_numbers.data().get());
+  // Scatter input rows to output partitions given the partition map
+  auto const partition_map = column_view(data_type(INT32), num_rows,
+    row_partition_numbers.data().get());
   auto output = experimental::detail::scatter_to_tables(input, partition_map, mr, stream);
 
   // Pad with empty tables if we have less than num_partitions
