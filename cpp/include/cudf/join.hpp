@@ -59,6 +59,7 @@ namespace cudf {
  * columns, only a single output column will be produced, which is gathered
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.
+ * @param mr Memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -70,7 +71,6 @@ std::unique_ptr<cudf::experimental::table> inner_join(
                          std::vector<cudf::size_type> const& left_on,
                          std::vector<cudf::size_type> const& right_on,
                          std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         cudaStream_t stream=0,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
@@ -107,6 +107,7 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * columns, only a single output column will be produced, which is gathered
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.
+ * @param mr Memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -118,7 +119,6 @@ std::unique_ptr<cudf::experimental::table> left_join(
                          std::vector<cudf::size_type> const& left_on,
                          std::vector<cudf::size_type> const& right_on,
                          std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         cudaStream_t stream=0,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** 
@@ -156,6 +156,7 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * columns, only a single output column will be produced, which is gathered
  * from respective columns in `left_on` and `right_on`. Else, for every column in
  * `left_on` and `right_on`, an output column will be produced.
+ * @param mr Memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -167,7 +168,6 @@ std::unique_ptr<cudf::experimental::table> full_join(
                          std::vector<cudf::size_type> const& left_on,
                          std::vector<cudf::size_type> const& right_on,
                          std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         cudaStream_t stream=0,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 } //namespace cudf
 

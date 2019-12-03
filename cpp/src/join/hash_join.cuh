@@ -198,6 +198,7 @@ get_base_hash_join_indices(
   if ((join_type == JoinType::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
     return get_base_hash_join_indices<join_type, index_type>(right, left,  true, stream, mr);
   }
+  //Trivial left join case - exit early
   if ((join_type == JoinType::LEFT_JOIN) && (right.num_rows() == 0)) {
     rmm::device_buffer sequence_indices{
       sizeof(index_type)*left.num_rows(), stream, mr};
@@ -222,8 +223,6 @@ get_base_hash_join_indices(
         left.num_rows(), stream, mr);
   }
 
-  //TODO : Add trivial left join case and exit early
-
   using multimap_type = multimap_T<index_type>;
 
   //TODO : attach stream to hash map class according to PR discussion #3272
@@ -237,8 +236,7 @@ get_base_hash_join_indices(
   // Hash table size must be at least 1 in order to have a valid allocation.
   // Even if the hash table will be empty, it still must be allocated for the
   // probing phase in the event of an outer join
-  size_t const hash_table_size =
-      std::max(compute_hash_table_size(build_table_num_rows), size_t{1});
+  size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size);
 

@@ -242,8 +242,9 @@ join_call_compute_df(
     std::vector<size_type> const& left_on,
     std::vector<size_type> const& right_on,
     std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-    cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
+
+  cudaStream_t stream = 0;
 
   CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
@@ -271,7 +272,6 @@ std::unique_ptr<experimental::table> inner_join(
                              std::vector<size_type> const& left_on,
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-                             cudaStream_t stream,
                              rmm::mr::device_memory_resource* mr) {
     return detail::join_call_compute_df<::cudf::detail::JoinType::INNER_JOIN, ::cudf::detail::output_index_type>(
         left,
@@ -279,7 +279,6 @@ std::unique_ptr<experimental::table> inner_join(
         left_on,
         right_on,
         columns_in_common,
-        stream,
         mr);
 }
 
@@ -289,7 +288,6 @@ std::unique_ptr<experimental::table> left_join(
                              std::vector<size_type> const& left_on,
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-                             cudaStream_t stream,
                              rmm::mr::device_memory_resource* mr) {
     return detail::join_call_compute_df<::cudf::detail::JoinType::LEFT_JOIN, ::cudf::detail::output_index_type>(
            left,
@@ -297,7 +295,6 @@ std::unique_ptr<experimental::table> left_join(
            left_on,
            right_on,
            columns_in_common,
-           stream,
            mr);
 }
 
@@ -307,7 +304,6 @@ std::unique_ptr<experimental::table> full_join(
                              std::vector<size_type> const& left_on,
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-                             cudaStream_t stream,
                          rmm::mr::device_memory_resource* mr) {
     return detail::join_call_compute_df<::cudf::detail::JoinType::FULL_JOIN, ::cudf::detail::output_index_type>(
            left,
@@ -315,7 +311,6 @@ std::unique_ptr<experimental::table> full_join(
            left_on,
            right_on,
            columns_in_common,
-           stream,
            mr);
 }
 
