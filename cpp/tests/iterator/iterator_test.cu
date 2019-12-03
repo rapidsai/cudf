@@ -352,13 +352,12 @@ TYPED_TEST_CASE(PairIteratorTest, cudf::test::NumericTypes);
 // This test computes `count`, `sum`, `sum_of_squares` at a single reduction call.
 // It would be useful for `var`, `std` operation
 TYPED_TEST(PairIteratorTest, mean_var_output) {
-  using T = int32_t;
-  using T_upcast = TypeParam;
-  using T_output = cudf::meanvar<T_upcast>;
-  cudf::transformer_meanvar<T_upcast> transformer{};
+  using T = TypeParam;
+  using T_output = cudf::meanvar<T>;
+  cudf::transformer_meanvar<T> transformer{};
 
   const int column_size{5000};
-  const T_upcast init{0};
+  const T init{0};
 
   // data and valid arrays
   std::vector<T> host_values(column_size);
@@ -378,22 +377,22 @@ TYPED_TEST(PairIteratorTest, mean_var_output) {
 
   expected_value.count = d_col->size() - d_col->null_count();
 
-  std::vector<T_upcast> replaced_array(d_col->size());
+  std::vector<T> replaced_array(d_col->size());
   std::transform(host_values.begin(), host_values.end(), host_bools.begin(),
                  replaced_array.begin(),
-                 [&](T x, bool b) { return (b) ? static_cast<T_upcast>(x) : init; });
+                 [&](T x, bool b) { return (b) ? static_cast<T>(x) : init; });
 
   expected_value.count = d_col->size() - d_col->null_count();
   expected_value.value = std::accumulate(replaced_array.begin(),
-                                         replaced_array.end(), T_upcast{0});
+                                         replaced_array.end(), T{0});
   expected_value.value_squared =
-      std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0},
+      std::accumulate(replaced_array.begin(), replaced_array.end(), T{0},
                       [](T acc, T i) { return acc + i * i; });
 
   std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = cudf::experimental::detail::make_pair_iterator<T, true>(*d_col);
+  auto it_dev = cudf::experimental::detail::make_null_replacement_pair_iterator<T>(*d_col);
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
   auto result = thrust::reduce( it_dev_squared, it_dev_squared+ d_col->size());
   EXPECT_EQ(expected_value, result) << "pair iterator reduction sum";

@@ -23,15 +23,6 @@
 #define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
 #define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
 
-#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression)                           \
-do {                                                                          \
-    gdf_error _assert_cudf_success_eval_result;                               \
-    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
-    const char* _assertion_failure_message = #gdf_error_expression;           \
-    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) <<               \
-      "Failing expression: " << _assertion_failure_message;                   \
-} while (0)
-
 // Utility for testing the expectation that an expression x throws the specified
 // exception whose what() message ends with the msg
 #define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
