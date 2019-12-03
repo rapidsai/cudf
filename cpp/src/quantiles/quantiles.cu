@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar.hpp>

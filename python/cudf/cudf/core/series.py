@@ -1110,13 +1110,10 @@ class Series(object):
             else:
                 index = Index._concat([o.index for o in objs])
 
-        names = {obj.name for obj in objs}
-        if len(names) == 1:
-            [name] = names
-        else:
-            name = None
         col = Column._concat([o._column for o in objs])
-        return cls(data=col, index=index, name=name)
+        if len(set([o.name for o in objs])) != 1:
+            col.name = None
+        return cls(data=col, index=index)
 
     @property
     def valid_count(self):
@@ -2426,9 +2423,10 @@ class Series(object):
 
         input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_shift.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
+        if output_dary.size > 0:
+            cudautils.gpu_shift.forall(output_dary.size)(
+                input_dary, output_dary, periods
+            )
         return Series(output_dary, name=self.name, index=self.index)
 
     def diff(self, periods=1):
@@ -2452,9 +2450,10 @@ class Series(object):
 
         input_dary = self.data.mem
         output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_diff.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
+        if output_dary.size > 0:
+            cudautils.gpu_diff.forall(output_dary.size)(
+                input_dary, output_dary, periods
+            )
         return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(

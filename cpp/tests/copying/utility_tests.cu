@@ -21,6 +21,7 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <string>
 
 template <typename T>
@@ -87,7 +88,7 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
     EXPECT_EQ(lhs.null_count(), 0);
     EXPECT_EQ(lhs.nullable(), false);
     EXPECT_EQ(lhs.has_nulls(), false);
-    EXPECT_EQ(lhs.num_children(), rhs.num_children());
+    // An empty column is not required to have children
 }
 
 TEST_F(EmptyLikeStringTest, ColumnStringTest) {

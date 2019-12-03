@@ -16,13 +16,14 @@
 
 #pragma once
 
-#include "cudf_gtest.hpp"
-#include "legacy/cudf_test_utils.cuh"
+#include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/wrappers/bool.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <ftw.h>
 #include <random>
 
 namespace cudf {
@@ -46,10 +47,36 @@ class BaseFixture : public ::testing::Test {
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
 
-  static void SetUpTestCase() { ASSERT_RMM_SUCCEEDED(rmmInitialize(nullptr)); }
+  static void SetUpTestCase() { ASSERT_EQ(rmmInitialize(nullptr), RMM_SUCCESS); }
 
-  static void TearDownTestCase() { ASSERT_RMM_SUCCEEDED(rmmFinalize()); }
+  static void TearDownTestCase() { ASSERT_EQ(rmmFinalize(), RMM_SUCCESS); }
 };
+
+template <typename T, typename Enable = void>
+struct uniform_distribution_impl{};
+template<typename T>
+struct uniform_distribution_impl<T,
+  std::enable_if_t<std::is_integral<T>::value && not cudf::is_boolean<T>()> > {
+   using type = std::uniform_int_distribution<T>;
+};
+
+template<typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value > > {
+   using type = std::uniform_real_distribution<T>;
+};
+
+template<typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>() > > {
+   using type = std::bernoulli_distribution;
+};
+
+template<typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > > {
+   using type = std::uniform_int_distribution<typename T::duration::rep>;
+};
+
+template <typename T>
+using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides uniform random number generation.
@@ -71,13 +98,7 @@ template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
-  using uniform_distribution =
-      std::conditional_t<std::is_same<T, bool>::value or
-                             std::is_same<T, experimental::bool8>::value,
-                         std::bernoulli_distribution,
-                         std::conditional_t<std::is_floating_point<T>::value,
-                                            std::uniform_real_distribution<T>,
-                                            std::uniform_int_distribution<T>>>;
+  using uniform_distribution = uniform_distribution_t<T>;
 
   UniformRandomGenerator() = default;
 
@@ -98,6 +119,52 @@ class UniformRandomGenerator {
  private:
   uniform_distribution dist{};         ///< Distribution
   Engine rng{std::random_device{}()};  ///< Random generator
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Provides temporary directory for temporary test files.
+ *
+ * Example:
+ * ```c++
+ * ::testing::Environment* const temp_env =
+ *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
+ * ```
+ *---------------------------------------------------------------------------**/
+class TempDirTestEnvironment : public ::testing::Environment {
+ public:
+  std::string tmpdir;
+
+  void SetUp() {
+    char tmp_format[] = "/tmp/gtest.XXXXXX";
+    tmpdir = mkdtemp(tmp_format);
+    tmpdir += "/";
+  }
+
+  void TearDown() {
+    // TODO: should use std::filesystem instead, once C++17 support added
+    nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+  }
+
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type,
+                      struct FTW *ftwb) {
+    return remove(pathname);
+  }
+
+  /**
+   * @brief Get directory path to use for temporary files
+   *
+   * @return std::string The temporary directory path
+   */
+  std::string get_temp_dir() { return tmpdir; }
+
+  /**
+   * @brief Get a temporary filepath to use for the specified filename
+   *
+   * @return std::string The temporary filepath
+   */
+  std::string get_temp_filepath(std::string filename) {
+    return tmpdir + filename;
+  }
 };
 
 }  // namespace test

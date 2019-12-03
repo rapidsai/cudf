@@ -45,7 +45,7 @@ class writer::Impl {
   static constexpr const char* MAGIC = "ORC";
 
   // ORC datasets are divided into fixed size, independent stripes
-  static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 64;
+  static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
 
   // ORC rows are divided into groups and assigned indexes for faster seeking
   static constexpr uint32_t DEFAULT_ROW_INDEX_STRIDE = 10000;
