@@ -20,6 +20,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+//TODO remove after PR 3490 merge
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>

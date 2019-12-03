@@ -22,23 +22,13 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-namespace {
-struct default_scalar_functor {
-  template <typename T>
-  auto operator()() {
-    using ScalarType = experimental::scalar_type_t<T>;
-    return std::unique_ptr<scalar>(new ScalarType);
-  }
-};
-}  // namespace
-
 std::unique_ptr<scalar> reduce(
     column_view const& col, reduction_op op, data_type output_dtype,
     size_type ddof, 
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0)
 {
-  std::unique_ptr<scalar> result = experimental::type_dispatcher(output_dtype, default_scalar_functor{});
+  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype);
   result->set_valid(false, stream);
 
   // check if input column is empty

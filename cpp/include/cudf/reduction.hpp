@@ -85,7 +85,7 @@ std::unique_ptr<scalar> reduce(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
- * @brief  Computes the scan (a.k.a. prefix sum) of a column.
+ * @brief  Computes the scan of a column.
  * The null values are skipped for the operation, and if an input element
  * at `i` is null, then the output element at `i` will also be null.
  *

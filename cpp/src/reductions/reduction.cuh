@@ -40,7 +40,7 @@ namespace detail {
  * @param[in] num_items the number of items
  * @param[in] op        the reduction operator
  * @param[in] stream    cuda stream
- * @returns   scalar    output scalar in device memory
+ * @returns   Output scalar in device memory
  *
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
@@ -77,7 +77,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op
  * @param[in] valid_count   the intermediate operator argument 1
  * @param[in] ddof      the intermediate operator argument 2
  * @param[in] stream    cuda stream
- * @returns   scalar    output scalar in device memory
+ * @returns   Output scalar in device memory
  *
  * The reduction operator must have `intermediate::compute_result()` method.
  * This method performs reduction using binary operator `Op::Op` and transforms the
