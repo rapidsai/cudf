@@ -74,29 +74,29 @@ inline __device__ int64_t WarpReduceMaxInt(int64_t vmax)
 inline __device__ double WarpReduceMinFloat(double vmin)
 {
     double v = SHFL_XOR(vmin, 1);
-    vmin = (v < vmin) ? v : vmin;
+    vmin = fmin(vmin, v);
     v = SHFL_XOR(vmin, 2);
-    vmin = (v < vmin) ? v : vmin;
+    vmin = fmin(vmin, v);
     v = SHFL_XOR(vmin, 4);
-    vmin = (v < vmin) ? v : vmin;
+    vmin = fmin(vmin, v);
     v = SHFL_XOR(vmin, 8);
-    vmin = (v < vmin) ? v : vmin;
+    vmin = fmin(vmin, v);
     v = SHFL_XOR(vmin, 16);
-    return (v < vmin) ? v : vmin;
+    return fmin(vmin, v);
 }
 
 inline __device__ double WarpReduceMaxFloat(double vmax)
 {
     double v = SHFL_XOR(vmax, 1);
-    vmax = (v > vmax) ? v : vmax;
+    vmax = fmax(vmax, v);
     v = SHFL_XOR(vmax, 2);
-    vmax = (v > vmax) ? v : vmax;
+    vmax = fmax(vmax, v);
     v = SHFL_XOR(vmax, 4);
-    vmax = (v > vmax) ? v : vmax;
+    vmax = fmax(vmax, v);
     v = SHFL_XOR(vmax, 8);
-    vmax = (v > vmax) ? v : vmax;
+    vmax = fmax(vmax, v);
     v = SHFL_XOR(vmax, 16);
-    return (v > vmax) ? v : vmax;
+    return fmax(vmax, v);
 }
 
 inline __device__ double WarpReduceSumFloat(double vsum)
@@ -311,14 +311,14 @@ void __device__ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype,
     if (t < 32 * 1) {
         vmin = WarpReduceMinFloat(s->warp_min[t].fp_val);
         if (!(t & 0x1f)) {
-            s->ck.min_value.fp_val = vmin;
+            s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
             s->ck.has_minmax = (has_minmax);
         }
     }
     else if (t < 32 * 2) {
         vmax = WarpReduceMaxFloat(s->warp_max[t & 0x1f].fp_val);
         if (!(t & 0x1f)) {
-            s->ck.max_value.fp_val = vmax;
+            s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
         }
     }
     else if (t < 32 * 3) {
@@ -562,14 +562,14 @@ void __device__ mergeFloatColumnStats(merge_state_s *s, const statistics_chunk *
     if (t < 32 * 1) {
         vmin = WarpReduceMinFloat(s->warp_min[t].fp_val);
         if (!(t & 0x1f)) {
-            s->ck.min_value.fp_val = vmin;
+            s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
             s->ck.has_minmax = (has_minmax);
         }
     }
     else if (t < 32 * 2) {
         vmax = WarpReduceMaxFloat(s->warp_max[t & 0x1f].fp_val);
         if (!(t & 0x1f)) {
-            s->ck.max_value.fp_val = vmax;
+            s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO;
         }
     }
     else if (t < 32 * 3) {
