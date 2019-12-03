@@ -226,6 +226,7 @@
 - PR #3491 Fix more doc errors in NVStrings
 - PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
+- PR #3188 Repr slices up large DataFrames
 
 
 # cuDF 0.10.0 (16 Oct 2019)
