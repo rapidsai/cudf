@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/chrono.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>

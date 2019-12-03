@@ -27,6 +27,7 @@ const char* operation =
 R"***(
 #pragma once
     #include "traits.h"
+    using namespace simt::std;
 
     struct Add {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>

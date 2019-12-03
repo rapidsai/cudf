@@ -576,9 +576,17 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
 
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   COMMENT "Run stringify on header timestamps.hpp to convert it to c-str for use in JIT compiled code"
+                   DEPENDS stringify
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp)
+
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/types.h.jit
-                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
+                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit)
 
 add_dependencies(cudf stringify_run)
 
