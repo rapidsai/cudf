@@ -129,7 +129,9 @@
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
+- PR #3332 Port NVStrings replace to cudf strings column
 - PR #3354 Define and implement new `scatter` APIs
 - PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
@@ -159,6 +161,7 @@
 - PR #3475 Add `bitmask_to_host` column utility
 - PR #3487 Add is_boolean trait and random timestamp generator for testing
 - PR #3492 Small cleanup (remove std::abs) and comment
+- PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 - PR #3500 Add tests for fill/repeat for strings column.
 
 ## Bug Fixes
@@ -226,6 +229,7 @@
 - PR #3491 Fix more doc errors in NVStrings
 - PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
+- PR #3188 Repr slices up large DataFrames
 
 
 # cuDF 0.10.0 (16 Oct 2019)
