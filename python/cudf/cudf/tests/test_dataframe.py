@@ -4122,8 +4122,10 @@ def test_cov_nans():
     ],
 )
 def test_df_sr_binop(gsr):
-    gdf = DataFrame({"a": [0, 0, 0], "b": [0, 0, 0], "c": [0, 0, 0]})
-    pdf = gdf.to_pandas()
+    data = {"a": [0, 1, 2], "b": [3, None, 5], "c": [6, 7, np.nan]}
+
+    gdf = DataFrame(data)
+    pdf = pd.DataFrame.from_dict(data)
 
     psr = gsr.to_pandas()
 
