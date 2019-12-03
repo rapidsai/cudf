@@ -46,9 +46,9 @@ TYPED_TEST(TileTest, NoRows)
 {
     using T = TypeParam;
 
-    cudf::table_view in (std::vector<cudf::column_view>{
-        fixed_width_column_wrapper<T>({ }),
-    });
+    fixed_width_column_wrapper<T> in_a({ });
+
+    cudf::table_view in (std::vector<cudf::column_view>{ in_a });
 
     auto expected = in;
     auto actual = cudf::experimental::tile(in, 10);
@@ -61,13 +61,13 @@ TYPED_TEST(TileTest, OneColumn)
 {
     using T = TypeParam;
 
-    cudf::table_view in (std::vector<cudf::column_view>{
-        fixed_width_column_wrapper<T>({ -1, 0, 1 }),
-    });
+    fixed_width_column_wrapper<T> in_a({ -1, 0, 1 });
 
-    cudf::table_view expected (std::vector<cudf::column_view>{
-        fixed_width_column_wrapper<T>({ -1, 0, 1, -1, 0, 1 }),
-    });
+    cudf::table_view in (std::vector<cudf::column_view>{ in_a });
+
+    fixed_width_column_wrapper<T> expected_a({ -1, 0, 1, -1, 0, 1 });
+
+    cudf::table_view expected (std::vector<cudf::column_view>{ expected_a });
 
     auto actual = cudf::experimental::tile(in, 2);
 
