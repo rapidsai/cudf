@@ -27,16 +27,16 @@ const char* traits =
 R"***(
 #pragma once
     #include <cstdint>
-    #include <type_traits>
+    #include <simt/type_traits>
 
     // -------------------------------------------------------------------------
     // Simplifying std::is_integral
     template <typename T>
-    constexpr bool is_integral_v = std::is_integral<T>::value;
+    constexpr bool is_integral_v = simt::std::is_integral<T>::value;
 
     // Simplifying std::is_floating_point
     template <typename T>
-    constexpr bool is_floating_point_v = std::is_floating_point<T>::value;
+    constexpr bool is_floating_point_v = simt::std::is_floating_point<T>::value;
 
     // -------------------------------------------------------------------------
     // type_traits cannot tell the difference between float and double

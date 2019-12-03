@@ -61,7 +61,7 @@ class launcher {
     const std::string& cuda_source,
     const std::vector<std::string>& header_names,
     const std::vector<std::string>& compiler_flags,
-    jitify_v2::file_callback_type file_callback,
+    jitify::experimental::file_callback_type file_callback,
     cudaStream_t stream = 0
   );       
   launcher(launcher&&);
@@ -103,11 +103,11 @@ class launcher {
 
  private:
   cudf::jit::cudfJitCache& cache_instance;
-  cudf::jit::named_prog<jitify_v2::Program> program;
-  cudf::jit::named_prog<jitify_v2::KernelInstantiation> kernel_inst;
+  cudf::jit::named_prog<jitify::experimental::Program> program;
+  cudf::jit::named_prog<jitify::experimental::KernelInstantiation> kernel_inst;
   cudaStream_t stream;
 
-  jitify_v2::KernelInstantiation& get_kernel() { return *std::get<1>(kernel_inst); }
+  jitify::experimental::KernelInstantiation& get_kernel() { return *std::get<1>(kernel_inst); }
 };
 
 } // namespace jit

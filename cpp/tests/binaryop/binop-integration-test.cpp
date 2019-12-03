@@ -335,6 +335,22 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
+    using TypeOut = cudf::experimental::bool8;
+    using TypeLhs = cudf::timestamp_s;
+    using TypeRhs = cudf::timestamp_s;
+
+    using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
+
+    auto lhs = make_random_wrapped_column<TypeLhs>(10);
+    auto rhs = make_random_wrapped_column<TypeRhs>(10);
+    auto out = cudf::experimental::binary_operation(lhs, rhs, 
+                    cudf::experimental::binary_operator::LESS,
+                    data_type(experimental::type_to_id<TypeOut>()));
+
+    ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+}
+
 } // namespace binop
 } // namespace test
 } // namespace cudf
