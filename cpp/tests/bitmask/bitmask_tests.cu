@@ -214,10 +214,10 @@ struct CopyBitmaskTest : public cudf::test::BaseFixture,
 
 void cleanEndWord(rmm::device_buffer &mask, int begin_bit, int end_bit) {
   thrust::device_ptr<cudf::bitmask_type> ptr(
-      static_cast<cudf::bitmask_type *>(mask.data()));
-  auto number_of_mask_words = cudf::util::div_rounding_up_safe(
-      static_cast<size_t>(end_bit - begin_bit),
-      cudf::detail::size_in_bits<cudf::bitmask_type>());
+    static_cast<cudf::bitmask_type *>(mask.data()));
+      
+  auto number_of_mask_words = cudf::num_bitmask_words(
+    static_cast<size_t>(end_bit - begin_bit));
   auto number_of_bits = end_bit - begin_bit;
   if (number_of_bits % 32 != 0) {
     auto end_mask = ptr[number_of_mask_words - 1];

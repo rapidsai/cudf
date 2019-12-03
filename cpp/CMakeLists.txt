@@ -425,10 +425,13 @@ add_library(cudf
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/cast_ops.cu
             src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
+            src/unary/math_ops.cu
+            src/unary/unary_ops.cuh
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
@@ -475,6 +478,8 @@ add_library(cudf
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
@@ -516,6 +521,7 @@ add_library(cudf
             src/strings/filling/fill.cu
             src/strings/find.cu
             src/strings/padding.cu
+            src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
@@ -528,7 +534,8 @@ add_library(cudf
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
-            src/aggregation/aggregation.cpp)
+            src/aggregation/aggregation.cpp
+)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -582,11 +589,11 @@ if(USE_NVTX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 endif(USE_NVTX)
 
-option(HT_LEGACY_ALLOCATOR "Use the legacy allocator for hash tables" ON)
-if(HT_LEGACY_ALLOCATOR)
-    message(STATUS "Using legacy allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
-endif(HT_LEGACY_ALLOCATOR)
+option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
+if(HT_DEFAULT_ALLOCATOR)
+    message(STATUS "Using default allocator for hash tables")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
