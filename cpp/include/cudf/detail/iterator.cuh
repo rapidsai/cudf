@@ -261,7 +261,12 @@ auto make_null_replacement_pair_iterator(column_device_view const& column,
 /**
  * @brief Constructs a pair iterator over a column's values and its validity.
  *
- * Dereferencing the returned iterator for element `i` will return
+ * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
+ * 
+ * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`, `p.first` contains 
+ * the value of the element at `i` and `p.second == true`.
+ *
+ * Else, if the element at `i` is null, then the value of `p.first` is undefined and `p.second == false`. 
  * `pair(column[i], validity)`.
  * `validity` is `true` if `has_nulls=false`.
  * `validity` is validity of the element at `i` if `has_nulls=true` and the
