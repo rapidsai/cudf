@@ -258,8 +258,8 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           cudaStream_t stream)
 {
   // Check for datatype
-  CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_numeric(lhs.type()) || is_timestamp(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_numeric(rhs.type()) || is_timestamp(rhs.type()), "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
@@ -286,7 +286,7 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
 {
   // Check for datatype
   auto is_type_supported_ptx = [] (data_type type) -> bool {
-    return is_numeric(type) and 
+    return (is_numeric(type) or is_timestamp(type)) and 
            type.id() != type_id::INT8; // Numba PTX doesn't support int8
   };
   CUDF_EXPECTS(is_type_supported_ptx(lhs.type()), "Invalid/Unsupported lhs datatype");
