@@ -116,27 +116,38 @@ struct column_gatherer_impl
    * @param source_column View into the column to gather from
    * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
    * @param gather_map_end End of iterator range of integral values representing the gather map
-   * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
+   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
    * @param stream CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
     std::unique_ptr<column> operator()(column_view const& source_column,
                                        MapIterator gather_map_begin,
                                        MapIterator gather_map_end,
-                                       bool ignore_out_of_bounds,
+                                       bool nullify_out_of_bounds,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
 
       size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
-      std::unique_ptr<column> destination_column = 
+      cudf::experimental::mask_allocation_policy policy =
+        cudf::experimental::mask_allocation_policy::RETAIN;
+      if (nullify_out_of_bounds) {
+        policy = cudf::experimental::mask_allocation_policy::ALWAYS;
+      }
+      std::unique_ptr<column> destination_column =
           cudf::experimental::detail::allocate_like(source_column, num_destination_rows,
-                          cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
+                          policy, mr, stream);
       Element const *source_data{source_column.data<Element>()};
       Element *destination_data{destination_column->mutable_view().data<Element>()};
 
       using map_type = typename std::iterator_traits<MapIterator>::value_type;
 
-      if (ignore_out_of_bounds) {
+      if (nullify_out_of_bounds) {
+        CUDA_TRY(cudaMemsetAsync(
+              destination_column->mutable_view().null_mask(),
+              0,
+              bitmask_allocation_size_bytes(destination_column->size()),
+              stream));
+
         thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                           gather_map_end, gather_map_begin,
                           source_data, destination_data,
@@ -168,17 +179,17 @@ struct column_gatherer_impl<string_view, MapItType>
   * @param source_column View into the column to gather from
   * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
   * @param gather_map_end End of iterator range of integral values representing the gather map
-  * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
+  * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
   * @param mr Memory resource to use for all allocations
   * @param stream CUDA stream on which to execute kernels
   *---------------------------------------------------------------------------**/
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
-                                     bool ignore_out_of_bounds,
+                                     bool nullify_out_of_bounds,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
-      if (true == ignore_out_of_bounds) {
+      if (true == nullify_out_of_bounds) {
         return cudf::strings::detail::gather<true>(
                        strings_column_view(source_column),
                        gather_map_begin, gather_map_end,
@@ -209,7 +220,7 @@ struct column_gatherer
    * @param source_column View into the column to gather from
    * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
    * @param gather_map_end End of iterator range of integral values representing the gather map
-   * @param ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds
+   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
    * @param stream CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
@@ -217,13 +228,13 @@ struct column_gatherer
     std::unique_ptr<column> operator()(column_view const& source_column,
                                        MapIterator gather_map_begin,
                                        MapIterator gather_map_end,
-                                       bool ignore_out_of_bounds,
+                                       bool nullify_out_of_bounds,
                                        rmm::mr::device_memory_resource *mr,
                                        cudaStream_t stream) {
       column_gatherer_impl<Element, MapIterator> gatherer{};
 
       return gatherer(source_column, gather_map_begin,
-                    gather_map_end, ignore_out_of_bounds,
+                    gather_map_end, nullify_out_of_bounds,
                     mr, stream);
   }
 };
@@ -278,7 +289,7 @@ struct index_converter : public thrust::unary_function<map_type,map_type>
  * source columns to rows in the destination columns
  * @param[in] check_bounds Optionally perform bounds checking on the values of `gather_map` and throw
  * an error if any of its values are out of bounds.
- * @param[in] ignore_out_of_bounds Ignore values in `gather_map` that are out of bounds. Currently
+ * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds. Currently
  * incompatible with `allow_negative_indices`, i.e., setting both to `true` is undefined.
  * @param[in] allow_negative_indices Interpret each negative index `i` in the gathermap as the
  * positive index `i+num_source_rows`.
@@ -290,7 +301,7 @@ template <typename MapIterator>
 std::unique_ptr<table>
 gather(table_view const& source_table, MapIterator gather_map_begin,
        MapIterator gather_map_end, bool check_bounds = false,
-       bool ignore_out_of_bounds = false,
+       bool nullify_out_of_bounds = false,
        bool allow_negative_indices = false,
        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
        cudaStream_t stream = 0) {
@@ -301,7 +312,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   std::vector<std::unique_ptr<column>> destination_columns;
 
   // TODO: Could be beneficial to use streams internally here
-  
+
   for(auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
@@ -310,7 +321,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
                                                                       source_column,
                                                                       gather_map_begin,
                                                                       gather_map_end,
-                                                                      ignore_out_of_bounds,
+                                                                      nullify_out_of_bounds,
                                                                       mr,
                                                                       stream));
 
@@ -321,7 +332,8 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
 
   auto bitmask_kernel =
-    ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> : gather_bitmask_kernel<false, decltype(gather_map_begin)>;
+    nullify_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> :
+                            gather_bitmask_kernel<false, decltype(gather_map_begin)>;
 
   int gather_grid_size;
   int gather_block_size;
