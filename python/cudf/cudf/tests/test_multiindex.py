@@ -349,20 +349,6 @@ def test_multiindex_columns(pdf, gdf, pdfIndex):
     assert_eq(pdf[("c", "forest", "clear")], gdf[("c", "forest", "clear")])
 
 
-@pytest.mark.xfail(
-    reason="Slicing MultiIndexes not supported yet", raises=TypeError
-)
-def test_multiindex_column_slice(pdf, gdf, pdfIndex):
-    pdf = pdf.T
-    gdf = cudf.from_pandas(pdf)
-    gdfIndex = cudf.from_pandas(pdfIndex)
-    pdf.columns = pdfIndex
-    gdf.columns = gdfIndex
-    assert_eq(
-        pdf[("a", "store"):("b", "house")], gdf[("a", "store"):("b", "house")]
-    )
-
-
 def test_multiindex_from_tuples():
     arrays = [["a", "a", "b", "b"], ["house", "store", "house", "store"]]
     tuples = list(zip(*arrays))
@@ -671,6 +657,16 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         )
     else:
         assert_eq(presult, gresult, check_index_type=False)
+
+
+def test_multicolumn_item():
+    gdf = cudf.DataFrame(
+        {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10)}
+    )
+    gdg = gdf.groupby(["x", "y"]).min()
+    gdgT = gdg.T
+    pdgT = gdgT.to_pandas()
+    assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
 def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
