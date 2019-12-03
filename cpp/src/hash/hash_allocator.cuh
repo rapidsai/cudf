@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef MANAGED_ALLOCATOR_CUH
-#define MANAGED_ALLOCATOR_CUH
+#ifndef HASH_ALLOCATOR_CUH
+#define HASH_ALLOCATOR_CUH
 
 #include <new>
 
@@ -34,7 +34,7 @@ struct managed_allocator {
       template <class U> constexpr managed_allocator(const managed_allocator<U>&) noexcept {}
       
       T* allocate(std::size_t n, cudaStream_t stream = 0) const {
-          return (T*)mr->allocate( n*sizeof(T), stream );
+          return static_cast<T*>(mr->allocate( n*sizeof(T), stream ));
       }
 
       void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
@@ -57,7 +57,7 @@ struct default_allocator {
       template <class U> constexpr default_allocator(const default_allocator<U>&) noexcept {}
 
       T* allocate(std::size_t n, cudaStream_t stream = 0) const {
-          return (T*)mr->allocate( n*sizeof(T), stream );
+          return static_cast<T*>(mr->allocate( n*sizeof(T), stream ));
       }
 
       void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {

@@ -27,7 +27,7 @@
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include "managed.cuh"
-#include "managed_allocator.cuh"
+#include "hash_allocator.cuh"
 
 #include "helper_functions.cuh"
 

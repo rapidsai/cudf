@@ -20,7 +20,7 @@
 #include <utilities/legacy/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include "helper_functions.cuh"
-#include "managed_allocator.cuh"
+#include "hash_allocator.cuh"
 
 #include <thrust/pair.h>
 #include <cassert>
