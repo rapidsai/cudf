@@ -172,6 +172,7 @@
 - PR #3487 Add is_boolean trait and random timestamp generator for testing
 - PR #3492 Small cleanup (remove std::abs) and comment
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
+- PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 
 ## Bug Fixes
 
