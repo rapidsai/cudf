@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #3502 ORC reader: add option to read DECIMALs as INT64
 
 ## Bug Fixes
 
