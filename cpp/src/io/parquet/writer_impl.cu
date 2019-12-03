@@ -192,6 +192,7 @@ class parquet_column_view {
       _data = _indexes.data();
       cudaStreamSynchronize(stream);
     }
+    // TODO: column_view::name() - currently generating default name
     _name = "_col" + std::to_string(_id);
   }
 
