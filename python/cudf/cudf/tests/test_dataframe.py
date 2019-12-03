@@ -4119,10 +4119,13 @@ def test_cov_nans():
         Series([1, 2, 3], index=["a", "b", "c"]),
         Series([1, 2, 3], index=["a", "b", "d"]),
         Series([1, 2], index=["a", "b"]),
+        Series([1, 2, 3], index=gd.core.index.RangeIndex(0, 3)),
     ],
 )
-def test_df_sr_binop(gsr):
-    data = {"a": [0, 1, 2], "b": [3, None, 5], "c": [6, 7, np.nan]}
+@pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
+def test_df_sr_binop(gsr, colnames):
+    data = [[0, 1, 2], [3, None, 5], [6, 7, np.nan]]
+    data = dict(zip(colnames, data))
 
     gdf = DataFrame(data)
     pdf = pd.DataFrame.from_dict(data)
