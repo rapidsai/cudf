@@ -20,4 +20,4 @@
 #define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
 
 #include <simt/chrono>
-#include <simt/../details/iterator>
+#include <details/iterator>
