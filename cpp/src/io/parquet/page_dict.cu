@@ -26,7 +26,7 @@ struct dict_state_s
     uint32_t row_cnt;
     PageFragment *cur_fragment;
     uint32_t *hashmap;
-    uint32_t total_dict_entries;    //!< Total numnber of entries in dictionary
+    uint32_t total_dict_entries;    //!< Total number of entries in dictionary
     uint32_t dictionary_size;       //!< Total dictionary size in bytes
     uint32_t num_dict_entries;      //!< Dictionary entries in current fragment to add
     uint32_t frag_dict_size;
