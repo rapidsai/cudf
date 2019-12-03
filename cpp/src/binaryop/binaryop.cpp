@@ -31,7 +31,6 @@
 #include <cudf/datetime.hpp> // replace eventually
 
 #include <string>
-#include <iostream>
 #include <types.hpp.jit>
 #include <timestamps.hpp.jit>
 
@@ -267,8 +266,6 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
-  std::cout << "CONDA_PREFIX " << std::getenv("CONDA_PREFIX") << "\n";
-
   // Check for datatype
   CUDF_EXPECTS(is_numeric(lhs.type()) || is_timestamp(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_numeric(rhs.type()) || is_timestamp(rhs.type()), "Invalid/Unsupported rhs datatype");
