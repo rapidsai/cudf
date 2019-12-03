@@ -190,6 +190,78 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
+class RepeatStringTestFixture
+    : public cudf::test::BaseFixture,
+      cudf::test::UniformRandomGenerator<cudf::size_type> {
+public:
+  RepeatStringTestFixture()
+      : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
+
+  cudf::size_type repeat_count() { return this->generate(); }
+};
+
+TEST_F(RepeatStringTestFixture, RepeatNullable)
+{
+  constexpr cudf::size_type num_values{10};
+
+  std::vector<std::string> input_values(num_values);
+  std::vector<bool> input_valids(num_values);
+  for (size_t i{0}; i < num_values; i++) {
+    input_values[i] = "#" + std::to_string(i);
+    input_valids[i] = (i % 2) == 0 ? true : false;
+  }
+
+  std::vector<cudf::size_type> counts(num_values);
+  std::transform(counts.begin(), counts.end(), counts.begin(),
+    [&](cudf::size_type count) { return this->repeat_count(); });
+
+  std::vector<std::string> expected_values;
+  std::vector<bool> expected_valids;
+  for (size_t i{0}; i < counts.size(); i++) {
+    for (cudf::size_type j{0}; j < counts[i]; j++) {
+      expected_values.push_back(input_values[i]);
+      expected_valids.push_back(input_valids[i]);
+    }
+  }
+
+  auto input = cudf::test::strings_column_wrapper(
+                  input_values.begin(), input_values.end(),
+                  input_valids.begin());
+
+  auto count = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+                 counts.begin(), counts.end());
+
+  auto expected = cudf::test::strings_column_wrapper(
+                    expected_values.begin(), expected_values.end(),
+                    expected_valids.begin());
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::experimental::repeat(input_table, count);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+}
+
+TEST_F(RepeatStringTestFixture, ZeroSizeInput)
+{
+  std::vector<std::string> input_values{};
+  auto input = cudf::test::strings_column_wrapper(
+                 input_values.begin(), input_values.end());
+
+  auto count = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+                 thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(0));
+
+  auto expected = cudf::test::strings_column_wrapper(
+                    input_values.begin(), input_values.end());
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::experimental::repeat(input_table, count);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+}
+
 class RepeatErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(RepeatErrorTestFixture, LengthMismatch)

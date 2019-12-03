@@ -163,6 +163,7 @@
 - PR #3492 Small cleanup (remove std::abs) and comment
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 - PR #3512 Remove unused CUDA conda labels
+- PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 
 ## Bug Fixes
 
