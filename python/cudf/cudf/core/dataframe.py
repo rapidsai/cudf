@@ -783,8 +783,11 @@ class DataFrame(object):
                 else:
                     result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
-            for col in set(list(self.columns) + list(other.index)):
-
+            result_cols = list(self.columns)
+            for new_col in list(other.index):
+                if new_col not in result_cols:
+                    result_cols.append(new_col)
+            for col in result_cols:
                 if col in self.columns:
                     l_opr = self._cols[col]
                 else: 
@@ -792,8 +795,8 @@ class DataFrame(object):
                 if col in other.index:
                     r_opr = other[other.index == col][0]
                 else:
-                    r_opr = np.nan
-                result[col] = l_opr + r_opr
+                    r_opr = Series([np.nan]*len(self))
+                result[col] = op(l_opr, r_opr)
                 
 
         elif isinstance(other, numbers.Number):
