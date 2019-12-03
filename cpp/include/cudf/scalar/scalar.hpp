@@ -138,6 +138,9 @@ class fixed_width_scalar : public scalar {
    */
   T* data() { return _data.data(); }
 
+  /**
+   * @brief Returns a const raw pointer to the value in device memory
+   */
   T const* data() const { return _data.data(); }
 
  protected:
