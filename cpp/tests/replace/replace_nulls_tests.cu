@@ -79,6 +79,56 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                cudf::logic_error);
 }
 
+struct ReplaceNullsStringsTest : public cudf::test::BaseFixture{};
+
+TEST_F(ReplaceNullsStringsTest, SimpleReplace) {
+  std::vector<std::string> input{"","","","","","","",""};
+  std::vector<cudf::valid_type> input_v{0,0,0,0,0,0,0,0};
+  std::vector<std::string> replacement{"a","b","c","d","e","f","g","h"};
+  std::vector<cudf::valid_type> replacement_v {1,1,1,1,1,1,1,1};
+
+  cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
+  cudf::test::strings_column_wrapper replacement_w{replacement.begin(), replacement.end(), replacement_v.begin()};
+  cudf::test::strings_column_wrapper expected_w{replacement.begin(), replacement.end(), replacement_v.begin()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+
+  cudf::test::expect_columns_equal(*result, expected_w);
+}
+
+TEST_F(ReplaceNullsStringsTest, ReplaceWithNulls) {
+  std::vector<std::string> input{"","","","","","","",""};
+  std::vector<cudf::valid_type> input_v{0,0,0,0,0,0,0,0};
+  std::vector<std::string> replacement{"","","c","d","e","f","g","h"};
+  std::vector<cudf::valid_type> replacement_v {0,0,1,1,1,1,1,1};
+
+  cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
+  cudf::test::strings_column_wrapper replacement_w{replacement.begin(), replacement.end(), replacement_v.begin()};
+  cudf::test::strings_column_wrapper expected_w{replacement.begin(), replacement.end(), replacement_v.begin()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+
+  cudf::test::expect_columns_equal(*result, expected_w);
+}
+
+TEST_F(ReplaceNullsStringsTest, ReplaceNone) {
+  std::vector<std::string> input{"a","b","c","d","e","f","g","h"};
+  std::vector<cudf::valid_type> input_v{1,1,1,1,1,1,1,1};
+  std::vector<std::string> replacement{"z","a","c","d","e","f","g","h"};
+  std::vector<cudf::valid_type> replacement_v {0,0,1,1,1,1,1,1};
+
+  cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
+  cudf::test::strings_column_wrapper replacement_w{replacement.begin(), replacement.end(), replacement_v.begin()};
+  cudf::test::strings_column_wrapper expected_w{input.begin(), input.end()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+
+  cudf::test::expect_columns_equal(*result, expected_w);
+}
+
 template <typename T>
 struct ReplaceNullsTest : public cudf::test::BaseFixture {};
 
