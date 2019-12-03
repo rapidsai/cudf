@@ -4129,7 +4129,7 @@ def test_df_sr_binop(gsr):
 
     psr = gsr.to_pandas()
 
-    # add 
+    # add
     expect = pdf + psr
     got = gdf + gsr
     assert_eq(expect.astype(float), got.astype(float))
@@ -4138,7 +4138,7 @@ def test_df_sr_binop(gsr):
     got = psr + pdf
     assert_eq(expect.astype(float), got.astype(float))
 
-    #sub
+    # sub
     expect = pdf - psr
     got = gdf - gsr
     assert_eq(expect.astype(float), got.astype(float))
