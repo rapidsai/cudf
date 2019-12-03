@@ -1,3 +1,13 @@
+# cuDF 0.12.0 (Date TBD)
+
+## New Features
+- PR #3284 Add gpu-accelerated parquet writer
+
+## Improvements
+
+## Bug Fixes
+
+
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
@@ -35,7 +45,6 @@
 - PR #3344 java split API
 - PR #2791 Add `groupby.std()`
 - PR #3368 Enable dropna argument in dask_cudf groupby
-- PR #3284 Add gpu-accelerated parquet writer
 - PR #3298 add null replacement iterator for column_device_view
 - PR #3297 Define and implement new groupby API.
 - PR #3396 Update device_atomics with new bool8 and timestamp specializations
