@@ -15,18 +15,6 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
-#define DEBUG_
-
-// for debugging, only; TODO: remove:
-//
-#ifdef DEBUG_
-#include <iostream>
-#include <iterator>
-#endif
-
-#ifdef DEBUG_
-#endif
-
 #include <cassert>
 #include <vector>
 #include <memory>
@@ -36,65 +24,10 @@
 
 #include <gtest/gtest.h>
 
-
-#ifdef DEBUG_
-namespace{ //anonym.
-template<typename ColType>
-using hostColType = std::pair<std::vector<ColType>, std::vector<cudf::bitmask_type>>;
-  
-template<typename T, typename...Args, template<typename,typename...> class Vector>
-void print_v(const Vector<T, Args...>& v, std::ostream& os)
-{
-  std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os,","));//okay
-  os<<"\n";
-}
-
-template<typename T, typename...Args, template<typename,typename...> class Vector>
-void print_v(const Vector<T, Args...>& v, typename Vector<T, Args...>::const_iterator pos, std::ostream& os)
-{ 
-  std::copy(v.begin(), pos, std::ostream_iterator<T>(os,","));//okay
-  os<<"\n";
-}
-
-template<typename T, typename...Args, template<typename,typename...> class Vector>
-void print_v(const Vector<T, Args...>& v, size_t n, std::ostream& os)
-{ 
-  std::copy_n(v.begin(), n, std::ostream_iterator<T>(os,","));//okay
-  os<<"\n";
-}
-
-
- template<typename ColType>
- void print_col(cudf::column_view c, std::ostream& os)
- {
-   hostColType<ColType> col_host_pair = cudf::test::to_host<ColType>(c);
-
-   std::cout<<"column data:\n";
-   if( col_host_pair.first.empty() )
-     std::cout<<"empty data...\n";
-   else
-     print_v(col_host_pair.first, std::cout);
-
-   if( col_host_pair.second.empty() )
-     std::cout<<"empty null mask...\n";
-   else
-     {
-       EXPECT_EQ( col_host_pair.first.size(),
-                  col_host_pair.second.size() )
-         << "Unbalanced data and null mask column.\n";
-       
-       std::cout<<"column null mask:\n";
-       print_v(col_host_pair.second, std::cout);
-     }
- }
-}//anonym.
-#endif
-
 template <typename T>
 class MergeTest_ : public cudf::test::BaseFixture {};
 
-//TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes); // <- TODO: put me back!
-TYPED_TEST_CASE(MergeTest_, cudf::test::Types<int32_t>); // for now debug one type at a time...
+TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes);
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
@@ -290,10 +223,6 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     cudf::size_type inputRows = 50000;
     auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
     inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
-
-#ifdef DEBUG_PASSED
-    inputRows = 8;//simplify debugging...
-#endif
     
     auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
@@ -337,25 +266,6 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
     cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
     const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
-
-#ifdef DEBUG_PASSED
-    std::cout<<"##### inputRows: "<<inputRows<<"\n";
-    
-    std::cout<<"left table columns:\n";
-    std::cout<<"1:\n";
-    print_col<TypeParam>(a_left_tbl_cview, std::cout);
-
-    std::cout<<"2:\n";
-    print_col<TypeParam>(static_cast<cudf::column_view const&>(leftColWrap2), std::cout);
-
-    std::cout<<"right table columns:\n";
-    std::cout<<"1:\n";
-    print_col<TypeParam>(a_right_tbl_cview, std::cout);
-
-    std::cout<<"2:\n";
-    print_col<TypeParam>(static_cast<cudf::column_view const&>(rightColWrap2), std::cout);
-#endif
-    
     
     auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
@@ -379,24 +289,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
 
     auto output_column_view1{p_outputTable->view().column(0)};
-    auto output_column_view2{p_outputTable->view().column(1)};
-
-#ifdef DEBUG_PASSED
-    std::cout<<"##### outputRows: "<<outputRows<<"\n";
-    std::cout<<"##### output views sizes: "
-             <<output_column_view1.size()
-             <<", "
-             << output_column_view2.size()
-             <<"\n";
-
-    std::cout<<"output table columns:\n";
-    std::cout<<"1:\n";
-    print_col<TypeParam>(output_column_view1, std::cout);
-
-    std::cout<<"2:\n";
-    print_col<TypeParam>(output_column_view2, std::cout);
-#endif
-    
+    auto output_column_view2{p_outputTable->view().column(1)};    
 
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
     cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
@@ -504,10 +397,6 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
     inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
 
-#ifdef DEBUG_PASSED
-    inputRows = 8;//simplify debugging... but(?) for nulls need multiple of 64 (Arrow)
-#endif
-
     // data: 0  2  4  6 | valid: 1 1 1 0
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
@@ -534,20 +423,6 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
           return static_cast<TypeParam>(2 * row + 1);
       });
     columnFactoryT rightColWrap1(sequence2, sequence2 + inputRows, valid_sequence1); // <- recycle valid_seq1, confirmed okay...
-
-    
-#ifdef DEBUG_PASSED
-    std::cout<<"##### inputRows: "<<inputRows<<"\n";
-
-    std::cout<<"left table column:\n";
-    //print_col<TypeParam>
-    cudf::test::print(static_cast<cudf::column_view const&>(leftColWrap1));
-    std::cout<<"\n";
-
-    std::cout<<"right table column:\n";
-    cudf::test::print(static_cast<cudf::column_view const&>(rightColWrap1));
-    std::cout<<"\n";
-#endif
 
     std::vector<cudf::size_type> key_cols{0};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
@@ -599,22 +474,6 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     auto output_column_view1{p_outputTable->view().column(0)};
-
-#ifdef DEBUG_PASSED
-    std::cout<<"##### outputRows: "<<outputRows<<"\n";
-    std::cout<<"##### output views size: "
-             <<output_column_view1.size()
-             <<"\n";
-
-    std::cout<<"output table column:\n";
-    cudf::test::print(output_column_view1);
-    std::cout<<"\n";
-    
-    std::cout<<"expected table column:\n";
-    cudf::test::print(expected_column_view1);
-    std::cout<<"\n";
-#endif
-
     
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
 }
