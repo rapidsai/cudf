@@ -54,10 +54,10 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 constexpr orc::CompressionKind to_orc_compression(
     compression_type compression) {
   switch (compression) {
+    default:
     case compression_type::SNAPPY:
       return orc::CompressionKind::SNAPPY;
     case compression_type::NONE:
-    default:
       return orc::CompressionKind::NONE;
   }
 }
