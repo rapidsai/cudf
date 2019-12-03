@@ -54,10 +54,10 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 constexpr parquet::Compression to_parquet_compression(
     compression_type compression) {
   switch (compression) {
+    default:
     case compression_type::SNAPPY:
       return parquet::Compression::SNAPPY;
     case compression_type::NONE:
-    default:
       return parquet::Compression::UNCOMPRESSED;
   }
 }
