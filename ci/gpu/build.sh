@@ -87,7 +87,7 @@ else
 
     logger "GoogleTest for libcudf..."
     cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf args="--output-on-failure"
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
