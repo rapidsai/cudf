@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/detail/hashing.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/nvtx_utils.hpp>
@@ -151,7 +152,17 @@ hash_partition_table(table_view const& input,
   }
 
   auto partition_map = column_view(data_type(INT32), num_rows, row_partition_numbers.data().get());
-  return experimental::detail::scatter_to_tables(input, partition_map, mr, stream);
+  auto output = experimental::detail::scatter_to_tables(input, partition_map, mr, stream);
+
+  // Pad with empty tables if we have less than num_partitions
+  if (output.size() < static_cast<size_t>(num_partitions)) {
+    auto const old_size = output.size();
+    output.resize(num_partitions);
+    std::generate(output.begin() + old_size, output.end(),
+      [&input]() { return experimental::empty_like(input); });
+  }
+
+  return output;
 }
 
 }  // namespace

@@ -35,6 +35,7 @@ TYPED_TEST(HashPartition, NumberOfPartitions)
 
   auto columns_to_hash = std::vector<cudf::size_type>({0, 1});
 
-  auto result = cudf::hash_partition(input, columns_to_hash, 3);
-  EXPECT_EQ(size_t{3}, result.size());
+  cudf::size_type const num_partitions = 10;
+  auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  EXPECT_EQ(size_t{num_partitions}, result.size());
 }
