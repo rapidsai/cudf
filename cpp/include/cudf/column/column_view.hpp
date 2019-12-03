@@ -133,9 +133,12 @@ class column_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Returns the count of null elements in the range [begin, end)
    *
-   * @note If _null_count != 0, every invocation of `null_count(begin, end)`
+   * @note If `null_count() != 0`, every invocation of `null_count(begin, end)`
    * will recompute the count of null elements indicated by the `null_mask` in
    * the range [begin, end).
+   *
+   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exlusive).
@@ -154,6 +157,9 @@ class column_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the column contains null elements in the range
    * [begin, end), i.e., `null_count(begin, end) > 0`
+   *
+   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param begin The starting index of the range (inclusive).
    * @param end The index of the last element in the range (exlusive).
