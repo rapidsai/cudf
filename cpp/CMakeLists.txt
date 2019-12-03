@@ -578,6 +578,7 @@ execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 
 add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMENT "Stringify types.h, types.hpp, and timestamps.hpp for use in JIT compiled code"
+                   DEPENDS stringify
                    OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                           ${CMAKE_BINARY_DIR}/include/types.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
