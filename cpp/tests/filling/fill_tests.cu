@@ -196,11 +196,14 @@ public:
     using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
     static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
 
+    auto p_chars = value.c_str();
+    auto num_chars = value.length();
     auto expected_elements =
       cudf::test::make_counting_transform_iterator(
         0,
-        [begin, end, value](auto i) {
-          return (i >= begin && i < end) ? value : "#" + std::to_string(i);
+        [begin, end, p_chars, num_chars](auto i) {
+          return (i >= begin && i < end) ?
+            std::string(p_chars, num_chars) : "#" + std::to_string(i);
         });
     auto expected =
       cudf::test::strings_column_wrapper(
