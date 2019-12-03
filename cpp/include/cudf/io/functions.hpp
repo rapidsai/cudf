@@ -347,7 +347,7 @@ struct write_parquet_args {
  *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::write_parquet_args args{cudf::sink_info(filepath), table->view()};
+ *  cudf::experimental::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
  *  ...
  *  cudf::write_parquet(args);
  * @endcode
