@@ -658,12 +658,11 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     const auto total_pages = count_page_headers(chunks, stream);
     if (total_pages > 0) {
       hostdevice_vector<gpu::PageInfo> pages(total_pages, total_pages, stream);
+      rmm::device_buffer decomp_page_data;
 
       decode_page_headers(chunks, pages, stream);
       if (total_decompressed_size > 0) {
-        auto decomp_page_data = decompress_page_data(chunks, pages, stream);
-        page_data.clear();
-        page_data.push_back(std::move(decomp_page_data));
+        decomp_page_data = decompress_page_data(chunks, pages, stream);
       }
 
       std::vector<column_buffer> out_buffers;

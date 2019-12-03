@@ -51,13 +51,16 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 /**
  * @brief Function that translates GDF compression to parquet compression
  **/
-constexpr parquet::Compression to_parquet_compression(
+parquet::Compression to_parquet_compression(
     compression_type compression) {
   switch (compression) {
-    default:
+    case compression_type::AUTO:
     case compression_type::SNAPPY:
       return parquet::Compression::SNAPPY;
     case compression_type::NONE:
+      return parquet::Compression::UNCOMPRESSED;
+    default:
+      CUDF_EXPECTS(false, "Unsupported compression type");
       return parquet::Compression::UNCOMPRESSED;
   }
 }
@@ -404,6 +407,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   md.schema[0].repetition_type = NO_REPETITION_TYPE;
   md.schema[0].name = "schema";
   md.schema[0].num_children = num_columns;
+  md.column_order_listsize = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
   for (auto i = 0; i < num_columns; i++) {
     auto& col = parquet_columns[i];
     // Column metadata
@@ -467,7 +471,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
 
   // Allocate column chunks and gather fragment statistics
   rmm::device_vector<statistics_chunk> frag_stats;
-  if (stats_granularity_ > statistics_freq::STATISTICS_NONE) {
+  if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns);
     gather_fragment_statistics(frag_stats.data().get(), fragments, col_desc,
                                num_columns, num_fragments, fragment_size, stream);
