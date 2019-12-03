@@ -21,7 +21,6 @@
 #include <set>
 #include <map>
 #include <vector>
-#include <cudf/types.h>
 
 /**
  * @brief Parse and Transform a piece of PTX code that contains the implementation 
