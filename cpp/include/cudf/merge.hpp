@@ -33,26 +33,7 @@ enum class side : bool { LEFT, RIGHT };
  * @brief Tagged index type: `thrust::get<0>` indicates left/right side, 
  * `thrust::get<1>` indicates the row index
  */  
-using index_type = thrust::tuple<side, cudf::size_type>;
-
-
-  struct X{};
-
-  template<typename T>
-  struct compile_time_printer
-  {
-    compile_time_printer(void) = delete;
-  };
-
-  //only the T == X full specialization
-  //can be instantiated:
-  //
-  template<>
-  struct compile_time_printer<X>
-  {
-    compile_time_printer(void){}
-  };
-  
+using index_type = thrust::tuple<side, cudf::size_type>;  
 } //anonym.
 
 namespace cudf {
