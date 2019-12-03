@@ -75,11 +75,7 @@ struct in_place_copy_range_dispatch {
   }
 
   template <typename T>
-  std::enable_if_t<
-    std::is_same<
-      cudf::experimental::id_to_type<cudf::type_id::STRING>, T
-    >::value,
-    void>
+  std::enable_if_t<std::is_same<cudf::string_view, T>::value, void>
   operator()(cudf::size_type source_begin, cudf::size_type source_end,
              cudf::size_type target_begin, cudaStream_t stream = 0) {
     CUDF_FAIL("in-place copy does not work for variable width types.");
