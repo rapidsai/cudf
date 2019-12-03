@@ -327,12 +327,13 @@ cudaError_t EncodePages(EncPage *pages, const EncColumnChunk *chunks, uint32_t n
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] pages Device array of EncPages
  * @param[in] num_chunks Number of column chunks
+ * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks,
+cudaError_t DecideCompression(EncColumnChunk *chunks, const EncPage *pages, uint32_t num_chunks, uint32_t start_page,
                               const gpu_inflate_status_s *comp_out = nullptr, cudaStream_t stream = (cudaStream_t)0);
 
 /**

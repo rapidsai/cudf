@@ -348,7 +348,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
   CUDA_TRY(gpu::EncodePages(pages, chunks.device_ptr(), pages_in_batch,
                             first_page_in_batch, comp_in, comp_out, stream));
   switch(compression_) {
-   case SNAPPY:
+   case parquet::Compression::SNAPPY:
     CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
     break;
    default:
@@ -356,7 +356,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
   }
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the chunk-level
   CUDA_TRY(DecideCompression(chunks.device_ptr() + first_rowgroup * num_columns,
-                             pages, rowgroups_in_batch * num_columns, comp_out, stream));
+                             pages, rowgroups_in_batch * num_columns, first_page_in_batch, comp_out, stream));
   CUDA_TRY(EncodePageHeaders(pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_out,
                              page_stats, chunk_stats, stream));
   CUDA_TRY(GatherPages(chunks.device_ptr() + first_rowgroup * num_columns, pages,
@@ -574,8 +574,8 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   }
 
   // Initialize data pointers in batch
-  size_t max_comp_bfr_size = (compression_ != UNCOMPRESSED) ? gpu::GetMaxCompressedBfrSize(max_uncomp_bfr_size, max_pages_in_batch) : 0;
-  uint32_t max_comp_pages = (compression_ != UNCOMPRESSED) ? max_pages_in_batch : 0;
+  size_t max_comp_bfr_size = (compression_ != parquet::Compression::UNCOMPRESSED) ? gpu::GetMaxCompressedBfrSize(max_uncomp_bfr_size, max_pages_in_batch) : 0;
+  uint32_t max_comp_pages = (compression_ != parquet::Compression::UNCOMPRESSED) ? max_pages_in_batch : 0;
   uint32_t num_stats_bfr = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
