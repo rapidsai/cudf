@@ -94,11 +94,8 @@ struct out_of_place_fill_range_dispatch {
   }
 
   template <typename T>
-  std::enable_if_t<
-    std::is_same<
-      cudf::experimental::id_to_type<cudf::type_id::STRING>, T
-    >::value,
-    std::unique_ptr<cudf::column>>
+  std::enable_if_t<std::is_same<cudf::string_view, T>::value,
+                   std::unique_ptr<cudf::column>>
   operator()(
       cudf::size_type begin, cudf::size_type end,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
