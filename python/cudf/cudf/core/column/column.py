@@ -364,8 +364,13 @@ class ColumnBase(Column):
         if deep:
             return libcudf.copying.copy_column(self)
         else:
-            params = self._replace_defaults()
-            return type(self)(**params)
+            return build_column(
+                self.data,
+                self.dtype,
+                mask=self.mask,
+                offset=self.offset,
+                children=self.children,
+            )
 
     def view(self, newcls, **kwargs):
         """View the underlying column data differently using a subclass of

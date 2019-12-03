@@ -943,6 +943,8 @@ class Series(Table):
         """Returns a *column* (not a Series) or scalar for performing
         binary operations with self._column.
         """
+        if isinstance(other, ColumnBase):
+            return other
         if isinstance(other, Series):
             return other._column
         elif isinstance(other, Index):

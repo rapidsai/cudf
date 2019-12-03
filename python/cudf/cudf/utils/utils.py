@@ -76,11 +76,21 @@ def require_writeable_array(arr):
     return np.require(arr, requirements="W")
 
 
-def scalar_broadcast_to(scalar, shape, dtype):
+def scalar_broadcast_to(scalar, shape, dtype=None):
     from cudf.utils.cudautils import fill_value
     from cudf.utils.dtypes import to_cudf_compatible_scalar
+    from cudf.core.column import column_empty
 
-    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+    if scalar is None:
+        if dtype is None:
+            dtype = "object"
+        return column_empty(np.prod(shape), dtype=dtype, masked=True)
+
+    if isinstance(scalar, str):
+        dtype = "object"
+    else:
+        scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+        dtype = scalar.dtype
 
     if not isinstance(shape, tuple):
         shape = (shape,)

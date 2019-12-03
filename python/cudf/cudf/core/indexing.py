@@ -287,6 +287,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame
         from cudf.core.dataframe import Series
+        from cudf.core.column import as_column
         from cudf.core.index import as_index
 
         # Iloc Step 1:
@@ -325,8 +326,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             df = DataFrame()
-            for key, col in columns_df._cols.items():
-                df[key] = col.iloc[arg[0]]
+            for key in columns_df.columns:
+                df[key] = as_column(columns_df[key].iloc[arg[0]])
             df.columns = columns_df.columns
 
         # Iloc Step 3:

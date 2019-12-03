@@ -407,6 +407,7 @@ def test_dataframe_to_string_wide():
 [3 rows x 100 columns]
 """
     # values should match despite whitespace difference
+
     assert got.split() == expect.split()
 
 
@@ -512,8 +513,8 @@ def test_dataframe_dir_and_getattr():
     assert "oop$" not in o
 
     # Getattr works
-    assert df.a is df["a"]
-    assert df.b is df["b"]
+    assert df.a.equals(df["a"])
+    assert df.b.equals(df["b"])
     with pytest.raises(AttributeError):
         df.not_a_column
 
@@ -1199,7 +1200,7 @@ def test_from_scalar_typing(data_type):
     elif data_type.startswith("datetime64"):
         from datetime import date
 
-        scalar = np.datetime64(date.today())
+        scalar = np.datetime64(date.today()).astype("datetime64[ms]")
         data_type = "datetime64[ms]"
     else:
         scalar = np.dtype(data_type).type(np.random.randint(0, 5))
@@ -1892,12 +1893,20 @@ def test_reset_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.xfail(
+    reason="Individual Columns in a DataFrame are "
+    "stored as Columns, not Series"
+)
 def test_series_reset_index_inplace(pdf, gdf):
     pdf.x.reset_index(drop=True, inplace=True)
     gdf.x.reset_index(drop=True, inplace=True)
     assert_eq(pdf.x, gdf.x)
 
 
+@pytest.mark.xfail(
+    reason="Individual Columns in a DataFrame are "
+    "stored as Columns, not Series"
+)
 @pytest.mark.parametrize("drop", [True, False])
 def test_reset_named_index_inplace(pdf, gdf, drop):
     pdf.index.name = "cudf"
@@ -1907,6 +1916,10 @@ def test_reset_named_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.xfail(
+    reason="Individual Columns in a DataFrame are "
+    "stored as Columns, not Series"
+)
 def test_series_reset_named_index_inplace(pdf, gdf):
     pdf.x.index.name = "cudf"
     gdf.x.index.name = "cudf"
@@ -2897,7 +2910,7 @@ def test_dataframe_sizeof(indexed):
 
     for c in gdf._cols.values():
         assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c._column.__sizeof__() for c in gdf._cols.values())
+    cols_sizeof = sum(c.__sizeof__() for c in gdf._cols.values())
     assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
 
 
