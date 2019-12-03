@@ -34,7 +34,7 @@ namespace cudf {
 namespace test {
 
 // Property equality
-void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs) {
+void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());
@@ -57,7 +57,8 @@ public:
   }
 };
 
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool print_all_differences) {
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences) {
   expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
@@ -136,6 +137,23 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
                             typed_rhs));
 }
 
+// copy column bitmask to host (used by to_host())
+std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
+  if (c.nullable()) {
+    auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
+    std::vector<bitmask_type> host_bitmask(num_bitmasks);
+
+    CUDA_TRY(cudaMemcpy(host_bitmask.data(), c.null_mask(), num_bitmasks * sizeof(bitmask_type),
+                        cudaMemcpyDeviceToHost));
+
+    return host_bitmask;
+  }
+  else {
+    return std::vector<bitmask_type>{};
+  }
+}
+
+
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
@@ -176,7 +194,6 @@ struct column_view_printer {
     auto h_data = cudf::test::to_host<std::string>(col);
 
     out.resize(col.size());
-
     if (col.nullable()) {
       std::transform(thrust::make_counting_iterator(size_type{0}),
                      thrust::make_counting_iterator(col.size()),

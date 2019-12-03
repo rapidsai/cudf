@@ -300,12 +300,6 @@ class MultiIndex(Index):
             # directly, return a Series with a tuple as name.
             result = result.T
             result = result[result.columns[0]]
-            # convert to Series
-            series_name = []
-            for idx, code in enumerate(index._source_data.columns):
-                series_name.append(result.columns._source_data[code][0])
-            result = Series(list(result._cols.values())[0], index=result.index)
-            result.name = tuple(series_name)
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
@@ -351,7 +345,6 @@ class MultiIndex(Index):
             df.columns, row_tuple, len(df._cols)
         )
         result = df._take_columns(valid_indices)
-
         if isinstance(row_tuple, (numbers.Number, slice)):
             row_tuple = [row_tuple]
         if len(result) == 0 and len(result.columns) == 0:
@@ -376,6 +369,8 @@ class MultiIndex(Index):
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
             result.columns = as_index(columns, name=name)
+        if len(row_tuple) == len(self.levels) and len(result.columns) == 1:
+            result = list(result._cols.values())[0]
         return result
 
     def _split_tuples(self, tuples):
