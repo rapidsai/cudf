@@ -56,20 +56,13 @@ struct interleave_columns_validity_selector
                 break;
             }
 
-            out |= _select(out_row) << bit;
+            size_type col = out_row % in.num_columns();
+            size_type row = out_row / in.num_columns();
+
+            out |= bit_is_set(in.column(col).null_mask(), row) << bit;
         }
 
         return out;
-    }
-
-private:
-
-    bool __device__ _select(size_type out_row)
-    {
-        size_type in_col = out_row % in.num_columns();
-        size_type in_row = out_row / in.num_columns();
-
-        return bit_is_set(in.column(in_col).null_mask(), in_row);
     }
 };
 
@@ -99,7 +92,7 @@ struct interleave_columns_functor
         {
             thrust::transform(rmm::exec_policy(stream)->on(stream),
                               counting_it,
-                              counting_it + 1,
+                              counting_it + bitmask_allocation_size_bytes(size),
                               device_out->null_mask(),
                               interleave_columns_validity_selector{*device_in, device_out->size()});
         }
