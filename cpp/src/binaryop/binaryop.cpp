@@ -45,7 +45,7 @@ namespace jit {
   const std::vector<std::string> compiler_flags { "-std=c++14",
                                                   // suppress all NVRTC warnings
                                                   "-w",
-                                                  // force libcudacxx to include system headers
+                                                  // force libcudacxx to not include system headers
                                                   "-D__CUDACC_RTC__",
                                                   // __CHAR_BIT__ is from GCC, but libcxx uses it
                                                   "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
