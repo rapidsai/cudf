@@ -78,7 +78,7 @@ inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
 
 inline __device__ uint32_t uint32_init_hash(uint32_t v)
 {
-    return (v + (v >> 16)) & ((1 << INIT_HASH_BITS) - 1);
+    return (v + (v >> 11) + (v >> 22)) & ((1 << INIT_HASH_BITS) - 1);
 }
 
 inline __device__ uint32_t uint64_init_hash(uint64_t v)
