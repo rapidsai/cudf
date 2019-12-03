@@ -24,6 +24,16 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using cudf::test::expect_tables_equal;
 
+// Transform vector of column wrappers to vector of column views
+template <typename T>
+auto make_view_vector(std::vector<T> const& columns)
+{
+  std::vector<cudf::column_view> views(columns.size());
+  std::transform(columns.begin(), columns.end(), views.begin(),
+    [](auto const& col) { return static_cast<cudf::column_view>(col); });
+  return views;
+}
+
 class HashPartition : public cudf::test::BaseFixture {};
 
 TEST_F(HashPartition, NoColumnsToHash)
@@ -66,8 +76,8 @@ TEST_F(HashPartition, MixedColumnTypes)
   auto result2 = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect output to have size num_partitions
-  EXPECT_EQ(size_t{num_partitions}, result1.size());
-  EXPECT_EQ(size_t{num_partitions}, result2.size());
+  EXPECT_EQ(static_cast<size_t>(num_partitions), result1.size());
+  EXPECT_EQ(result1.size(), result2.size());
 
   // Expect deterministic result from hashing the same input
   for (cudf::size_type i = 0; i < num_partitions; ++i) {
@@ -80,24 +90,43 @@ class HashPartitionFixedWidth : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)
+template <typename T>
+void run_fixed_width_test(size_t cols, size_t rows, cudf::size_type num_partitions)
 {
-  auto first = fixed_width_column_wrapper<TypeParam>({1, 2, 3, 4, 5, 6});
-  auto second = fixed_width_column_wrapper<TypeParam>({7, 8, 9, 10, 11, 12});
-  auto input = cudf::table_view({first, second});
+  std::vector<fixed_width_column_wrapper<T>> columns(cols);
+  std::generate(columns.begin(), columns.end(), [rows]() {
+      auto iter = thrust::make_counting_iterator(0);
+      return fixed_width_column_wrapper<T>(iter, iter + rows);
+    });
+  auto input = cudf::table_view(make_view_vector(columns));
 
-  auto columns_to_hash = std::vector<cudf::size_type>({0, 1});
+  auto columns_to_hash = std::vector<cudf::size_type>(cols);
+  std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  cudf::size_type const num_partitions = 10;
   auto result1 = cudf::hash_partition(input, columns_to_hash, num_partitions);
   auto result2 = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect output to have size num_partitions
-  EXPECT_EQ(size_t{num_partitions}, result1.size());
-  EXPECT_EQ(size_t{num_partitions}, result2.size());
+  EXPECT_EQ(static_cast<size_t>(num_partitions), result1.size());
+  EXPECT_EQ(result1.size(), result2.size());
 
   // Expect deterministic result from hashing the same input
   for (cudf::size_type i = 0; i < num_partitions; ++i) {
     expect_tables_equal(result1[i]->view(), result2[i]->view());
   }
+}
+
+TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)
+{
+  run_fixed_width_test<TypeParam>(5, 10, 50);
+}
+
+TYPED_TEST(HashPartitionFixedWidth, ZeroRows)
+{
+  run_fixed_width_test<TypeParam>(1, 0, 1);
+}
+
+TYPED_TEST(HashPartitionFixedWidth, LargeInput)
+{
+  run_fixed_width_test<TypeParam>(10, 1000, 10);
 }
