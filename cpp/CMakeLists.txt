@@ -167,6 +167,20 @@ else()
 endif(ARROW_FOUND)
 
 ###################################################################################################
+# - clone libcu++ ------------------------------------------------------------------------------------
+
+message(STATUS "Installing libcu++")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                COMMAND git clone --branch jitify-compat --recurse-submodules
+                        https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/include/        DESTINATION include/libcudacxx)
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/libcxx/include/ DESTINATION include/libcxx/include)
+
+###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
@@ -643,6 +657,14 @@ install(TARGETS cudf
         COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
+        DESTINATION include/libcudf
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcudacxx
+        DESTINATION include/libcudf
         COMPONENT cudf)
 
 add_custom_target(install_cudf

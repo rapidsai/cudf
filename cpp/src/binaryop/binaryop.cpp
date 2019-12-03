@@ -30,6 +30,8 @@
 #include <binaryop/jit/util.hpp>
 #include <cudf/datetime.hpp> // replace eventually
 
+#include <string>
+#include <iostream>
 #include <types.hpp.jit>
 #include <timestamps.hpp.jit>
 
@@ -39,6 +41,14 @@ namespace experimental {
 namespace binops {
 
 namespace jit {
+
+  #ifndef LIBCUDF_INCLUDE_DIR
+  #define LIBCUDF_INCLUDE_DIR std::string{std::getenv("CONDA_PREFIX")} + "/include/libcudf"
+  #endif
+
+  // env var always overrides the default value of LIBCUDF_INCLUDE_DIR
+  const char* env_dir = std::getenv("LIBCUDF_INCLUDE_DIR");
+  const std::string libcudf_include_dir = env_dir != NULL ? env_dir : LIBCUDF_INCLUDE_DIR;
 
   const std::string hash = "prog_binop.experimental";
 
@@ -57,7 +67,7 @@ namespace jit {
                                                   "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
                                                   "-D_LIBCUDACXX_HAS_NO_CLIMITS",
                                                   "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
-                                                  "-I/home/ptaylor/dev/rapids/cudf/thirdparty/libcudacxx/include",
+                                                  "-I" + libcudf_include_dir + "/libcudacxx",
                                                 };
   const std::vector<std::string> headers_name
         { "operation.h" , "traits.h", cudf_types_hpp, cudf_wrappers_timestamps_hpp };
@@ -257,6 +267,8 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
+  std::cout << "CONDA_PREFIX " << std::getenv("CONDA_PREFIX") << "\n";
+
   // Check for datatype
   CUDF_EXPECTS(is_numeric(lhs.type()) || is_timestamp(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_numeric(rhs.type()) || is_timestamp(rhs.type()), "Invalid/Unsupported rhs datatype");
