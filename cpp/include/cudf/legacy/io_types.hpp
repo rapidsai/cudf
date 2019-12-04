@@ -21,7 +21,7 @@
 #include <utility>
 #include <vector>
 
-#include <cudf/#include <cudf/legacy/io_types.h>
+#include <cudf/legacy/io_types.h>
 #include <cudf/legacy/table.hpp>
 #include <cudf/types.hpp>
 
