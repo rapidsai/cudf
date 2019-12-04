@@ -319,6 +319,10 @@ struct ColumnMerger
                         ALL_VALID,
                         stream_);
 
+    //set the null count:
+    //
+    p_merged_col->set_null_count(lcol.null_count() + rcol.null_count());
+
     //to resolve view.data()'s types use: ElemenT
     //
     ElemenT const* p_d_lcol = lcol.data<ElemenT>();
