@@ -48,7 +48,7 @@ namespace
 template<size_t stack_size>
 struct extract_fn
 {
-    Reprog_device prog;
+    reprog_device prog;
     column_device_view d_strings;
     size_type column_index;
 
@@ -61,10 +61,8 @@ struct extract_fn
         string_view d_str = d_strings.element<string_view>(idx);
         string_index_pair result{nullptr,0};
         int32_t begin = 0, end = d_str.length();
-        int rtn = prog.find(idx,d_str,begin,end);
-        if( rtn > 0 )
-            rtn = prog.extract(idx,d_str,begin,end,column_index);
-        if( rtn > 0 )
+        if( (prog.find(idx,d_str,begin,end) > 0) &&
+            (prog.extract(idx,d_str,begin,end,column_index) > 0) )
         {
             auto offset = d_str.byte_offset(begin);
             result = string_index_pair{ d_str.data() + offset, d_str.byte_offset(end)-offset };
@@ -86,7 +84,7 @@ std::unique_ptr<experimental::table> extract( strings_column_view const& strings
     auto d_strings = *strings_column;
 
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
+    auto prog = reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
     // extract should include groups
     int groups = d_prog.group_counts();
