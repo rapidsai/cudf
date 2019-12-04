@@ -27,6 +27,12 @@ namespace strings
  * @brief Returns a boolean column identifying rows which
  * match the given regex pattern.
  *
+ * ```
+ * s = ["abc","123","def456"]
+ * r = contains(s,"\\d+")
+ * r is now [false, true, true]
+ * ```
+ *
  * Any null string entries return corresponding null output column entries.
  *
  * @param strings Strings instance for this operation.
@@ -42,6 +48,12 @@ std::unique_ptr<column> contains_re( strings_column_view const& strings,
  * @brief Returns a boolean column identifying rows which
  * matching the given regex pattern but only at the beginning the string.
  *
+ * ```
+ * s = ["abc","123","def456"]
+ * r = contains(s,"\\d+")
+ * r is now [false, true, false]
+ * ```
+ *
  * Any null string entries return corresponding null output column entries.
  *
  * @param strings Strings instance for this operation.
@@ -56,6 +68,12 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
 /**
  * @brief Returns the number of times the given regex pattern
  * matches in each string.
+ *
+ * ```
+ * s = ["abc","123","def45"]
+ * r = contains(s,"\\d")
+ * r is now [0, 3, 2]
+ * ```
  *
  * Any null string entries return corresponding null output column entries.
  *

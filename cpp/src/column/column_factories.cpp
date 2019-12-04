@@ -16,8 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace {
@@ -38,6 +38,11 @@ struct size_of_helper {
 std::size_t size_of(data_type element_type) {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
   return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
+}
+
+// Empty column of specified type
+std::unique_ptr<column> make_empty_column(data_type type) {
+  return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
 // Allocate storage for a specified number of numeric elements

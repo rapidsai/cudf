@@ -63,8 +63,8 @@ std::vector<char32_t> string_to_char32_vector( std::string const& pattern )
 
 }
 
-// Copy Reprog primitive values
-Reprog_device::Reprog_device(Reprog& prog)
+// Copy reprog primitive values
+reprog_device::reprog_device(reprog& prog)
 {
     _startinst_id = prog.get_start_inst();
     _num_capturing_groups = prog.groups_count();
@@ -76,13 +76,13 @@ Reprog_device::Reprog_device(Reprog& prog)
     _stack_mem2 = nullptr;
 }
 
-// Create instance of the Reprog that can be passed into a device kernel
-std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
- Reprog_device::create(std::string const& pattern, const uint8_t* codepoint_flags, size_type strings_count, cudaStream_t stream )
+// Create instance of the reprog that can be passed into a device kernel
+std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
+ reprog_device::create(std::string const& pattern, const uint8_t* codepoint_flags, size_type strings_count, cudaStream_t stream )
 {
     std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
     // compile pattern into host object
-    Reprog h_prog = Reprog::create_from(pattern32.data());
+    reprog h_prog = reprog::create_from(pattern32.data());
     // compute size to hold all the member data
     auto insts_count = h_prog.insts_count();
     auto classes_count = h_prog.classes_count();
@@ -98,7 +98,7 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
     if( insts_count > MAX_STACK_INSTS )
     {
         auto relist_alloc_size = Relist::alloc_size(insts_count);
-        size_t rlm_size = relist_alloc_size*2L*strings_count; // Reljunk has 2 Relist ptrs
+        size_t rlm_size = relist_alloc_size*2L*strings_count; // reljunk has 2 Relist ptrs
         size_t freeSize=0, totalSize=0;
         rmmGetInfo(&freeSize,&totalSize,stream);
         if( rlm_size + memsize > freeSize ) // do not allocate more than we have
@@ -119,12 +119,12 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
     RMM_TRY(RMM_ALLOC(&d_buffer,memsize,stream));
     u_char* d_ptr = d_buffer;        // running device pointer
     // put everything into a flat host buffer first
-    Reprog_device* d_prog = new Reprog_device(h_prog);
+    reprog_device* d_prog = new reprog_device(h_prog);
     // copy the instructions array first (fixed-size structs)
-    Reinst* insts = reinterpret_cast<Reinst*>(h_ptr);
+    reinst* insts = reinterpret_cast<reinst*>(h_ptr);
     memcpy( insts, h_prog.insts_data(), insts_size);
     h_ptr += insts_size; // next section
-    d_prog->_insts = reinterpret_cast<Reinst*>(d_ptr);
+    d_prog->_insts = reinterpret_cast<reinst*>(d_ptr);
     d_ptr += insts_size;
     // copy the startinst_ids next (ints)
     int32_t* startinst_ids = reinterpret_cast<int32_t*>(h_ptr);
@@ -133,16 +133,16 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
     d_prog->_startinst_ids = reinterpret_cast<int32_t*>(d_ptr);
     d_ptr += startids_size;
     // copy classes into flat memory: [class1,class2,...][char32 arrays]
-    Reclass_device* classes = reinterpret_cast<Reclass_device*>(h_ptr);
-    d_prog->_classes = reinterpret_cast<Reclass_device*>(d_ptr);
+    reclass_device* classes = reinterpret_cast<reclass_device*>(h_ptr);
+    d_prog->_classes = reinterpret_cast<reclass_device*>(d_ptr);
     // get pointer to the end to handle variable length data
-    u_char* h_end = h_ptr + (classes_count * sizeof(Reclass_device));
-    u_char* d_end = d_ptr + (classes_count * sizeof(Reclass_device));
+    u_char* h_end = h_ptr + (classes_count * sizeof(reclass_device));
+    u_char* d_end = d_ptr + (classes_count * sizeof(reclass_device));
     // place each class and append the variable length data
     for( int32_t idx=0; idx < classes_count; ++idx )
     {
-        Reclass& h_class = h_prog.class_at(idx);
-        Reclass_device d_class;
+        reclass& h_class = h_prog.class_at(idx);
+        reclass_device d_class;
         d_class.builtins = h_class.builtins;
         d_class.count = h_class.literals.size();
         d_class.literals = reinterpret_cast<char32_t*>(d_end);
@@ -165,11 +165,11 @@ std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
     // copy flat prog to device memory
     CUDA_TRY(cudaMemcpy(d_buffer,h_buffer.data(),memsize,cudaMemcpyHostToDevice));
     //
-    auto deleter = [](Reprog_device*t) {t->destroy();};
-    return std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>(d_prog,deleter);
+    auto deleter = [](reprog_device*t) {t->destroy();};
+    return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog,deleter);
 }
 
-void Reprog_device::destroy()
+void reprog_device::destroy()
 {
     if( _relists_mem )
         RMM_FREE(_relists_mem,0);

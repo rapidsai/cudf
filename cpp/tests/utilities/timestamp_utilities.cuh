@@ -60,9 +60,10 @@ generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
                  .time_since_epoch()
                  .count();
 
+  // When C++17, auto [min, max] = std::minmax(lhs, rhs)
   auto min = std::min(lhs, rhs);
   auto max = std::max(lhs, rhs);
-  auto range = static_cast<Rep>(std::abs(max - min));
+  auto range = static_cast<Rep>(max - min);
   auto iter = cudf::test::make_counting_transform_iterator(
       0, [=](auto i) { return min + (range / count) * i; });
 
@@ -70,8 +71,10 @@ generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
     auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count, mask);
   }
-
-  return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
+  else {
+    // This needs to be in an else to quash `statement_not_reachable` warnings
+    return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
+  }
 }
 
 }  // namespace test

@@ -101,7 +101,7 @@ struct alignas(8) Relist
     }
 };
 
-struct Reljunk
+struct reljunk
 {
     Relist *list1, *list2;
     int32_t	starttype;
@@ -115,7 +115,7 @@ __device__ inline void swaplist(Relist*& l1, Relist*& l2)
     l2 = tmp;
 }
 
-__device__ inline bool Reclass_device::is_match(char32_t ch, const uint8_t* codepoint_flags)
+__device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* codepoint_flags)
 {
     int i=0, len = count;
     for( ; i < len; i += 2 )
@@ -145,32 +145,32 @@ __device__ inline bool Reclass_device::is_match(char32_t ch, const uint8_t* code
     return false;
 }
 
-__device__ inline void Reprog_device::set_stack_mem(u_char* s1, u_char* s2)
+__device__ inline void reprog_device::set_stack_mem(u_char* s1, u_char* s2)
 {
     _stack_mem1 = s1;
     _stack_mem2 = s2;
 }
 
-__host__ __device__ inline Reinst* Reprog_device::get_inst(int32_t idx)
+__host__ __device__ inline reinst* reprog_device::get_inst(int32_t idx) const
 {
     assert( (idx >= 0) && (idx < _insts_count) );
     return _insts + idx;
 }
 
-__device__ inline Reclass_device Reprog_device::get_class(int32_t idx)
+__device__ inline reclass_device reprog_device::get_class(int32_t idx) const
 {
     assert( (idx >= 0) && (idx < _classes_count) );
     return _classes[idx];
 }
 
-__device__ inline int32_t* Reprog_device::get_startinst_ids()
+__device__ inline int32_t* reprog_device::startinst_ids() const
 {
     return _startinst_ids;
 }
 
 
 // execute compiled expression for each character in the provided string
-__device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljunk &jnk, int32_t& begin, int32_t& end, int32_t groupId)
+__device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljunk &jnk, int32_t& begin, int32_t& end, int32_t groupId)
 {
     int32_t match = 0;
     auto checkstart = jnk.starttype;
@@ -217,7 +217,7 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
         {
             //jnk.list1->activate(startinst_id, pos, 0);
             int32_t i = 0;
-            auto ids = get_startinst_ids();
+            auto ids = startinst_ids();
             while( ids[i] >=0 )
                 jnk.list1->activate(ids[i++], (groupId==0 ? pos:-1), -1);
         }
@@ -235,7 +235,7 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
             {
                 int32_t inst_id = static_cast<int32_t>(jnk.list1->inst_ids[i]);
                 int2& range = jnk.list1->ranges[i];
-                const Reinst* inst = get_inst(inst_id);
+                const reinst* inst = get_inst(inst_id);
                 int32_t id_activate = -1;
 
                 switch(inst->type)
@@ -322,7 +322,7 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
         {
             int32_t inst_id = static_cast<int32_t>(jnk.list1->inst_ids[i]);
             int2& range = jnk.list1->ranges[i];
-            const Reinst* inst = get_inst(inst_id);
+            const reinst* inst = get_inst(inst_id);
             int32_t id_activate = -1;
 
             switch(inst->type)
@@ -340,14 +340,14 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
                 break;
             case CCLASS:
             {
-                Reclass_device cls = get_class(inst->u1.cls_id);
+                reclass_device cls = get_class(inst->u1.cls_id);
                 if( cls.is_match(c,_codepoint_flags) )
                     id_activate = inst->u2.next_id;
                 break;
             }
             case NCCLASS:
             {
-                Reclass_device cls = get_class(inst->u1.cls_id);
+                reclass_device cls = get_class(inst->u1.cls_id);
                 if( !cls.is_match(c,_codepoint_flags) )
                     id_activate = inst->u2.next_id;
                 break;
@@ -373,7 +373,7 @@ __device__ inline int32_t Reprog_device::regexec(string_view const& dstr, Reljun
 }
 
 //
-__device__ inline int32_t Reprog_device::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
+__device__ inline int32_t reprog_device::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
 {
     int32_t rtn = 0;
     rtn = call_regexec(idx,dstr,begin,end);
@@ -382,15 +382,15 @@ __device__ inline int32_t Reprog_device::find( int32_t idx, string_view const& d
     return rtn;
 }
 
-__device__ inline int32_t Reprog_device::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col )
+__device__ inline int32_t reprog_device::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col )
 {
     end = begin + 1;
     return call_regexec(idx,dstr,begin,end,col+1);
 }
 
-__device__ inline int32_t Reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
+__device__ inline int32_t reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
 {
-    Reljunk jnk;
+    reljunk jnk;
     jnk.starttype = 0;
     jnk.startchar = 0;
     int type = get_inst(_startinst_id)->type;
@@ -412,7 +412,7 @@ __device__ inline int32_t Reprog_device::call_regexec( int32_t idx, string_view 
 
     auto relists_size = Relist::alloc_size(_insts_count);
     u_char* drel = reinterpret_cast<u_char*>(_relists_mem);       // beginning of Relist buffer;
-    drel += (idx * relists_size * 2);                             // two Relist ptrs in Reljunk:
+    drel += (idx * relists_size * 2);                             // two Relist ptrs in reljunk:
     jnk.list1 = reinterpret_cast<Relist*>(drel);                  // - first one
     jnk.list2 = reinterpret_cast<Relist*>(drel + relists_size);   // - second one
     jnk.list1->set_data(static_cast<int16_t>(_insts_count));      // essentially this is
