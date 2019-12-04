@@ -835,7 +835,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   }
 
   if (!input.has_nulls() || !replacement.is_valid()) {
-    std::cout << "Maybe replacement isn't valid?\n";
     return std::make_unique < cudf::column > (input, stream, mr);
   }
 
