@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/strings/contains.hpp>
 #include <cudf/wrappers/bool.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>
@@ -50,16 +51,16 @@ namespace
 template<size_t stack_size>
 struct contains_fn
 {
-    Reprog_device prog;
+    reprog_device prog;
     column_device_view d_strings;
     bool bmatch{false}; // do not make this a template parameter to keep compile times down
 
     __device__ cudf::experimental::bool8 operator()(size_type idx)
     {
-        u_char data1[stack_size], data2[stack_size];
-        prog.set_stack_mem(data1,data2);
         if( d_strings.is_null(idx) )
             return 0;
+        u_char data1[stack_size], data2[stack_size];
+        prog.set_stack_mem(data1,data2);
         string_view d_str = d_strings.element<string_view>(idx);
         int32_t begin = 0;
         int32_t end = bmatch ? 1 : d_str.length(); // 1=match only the beginning of the string
@@ -79,7 +80,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     auto d_column = *strings_column;
 
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
+    auto prog = reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
 
     // create the output column
@@ -159,7 +160,7 @@ namespace
 template<size_t stack_size>
 struct count_fn
 {
-    Reprog_device prog;
+    reprog_device prog;
     column_device_view d_strings;
 
     __device__ int32_t operator()(unsigned int idx)
@@ -196,7 +197,7 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
     auto d_column = *strings_column;
 
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
+    auto prog = reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
 
     // create the output column

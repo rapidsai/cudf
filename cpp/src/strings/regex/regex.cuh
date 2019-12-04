@@ -29,16 +29,16 @@ namespace strings
 namespace detail
 {
 
-struct Reljunk;
-struct Reinst;
-class Reprog;
+struct reljunk;
+struct reinst;
+class reprog;
 
 /**
- * @brief Regex class stored on the device and executed by Reprog_device.
+ * @brief Regex class stored on the device and executed by reprog_device.
  *
  * This class holds the unique data for any regex CCLASS instruction.
  */
-class Reclass_device
+class reclass_device
 {
 public:
     int32_t builtins{};
@@ -54,15 +54,15 @@ public:
  * Once create, this find/extract methods are used to evaluating the regex instructions
  * against a single string.
  */
-class Reprog_device
+class reprog_device
 {
 public:
-    Reprog_device() = delete;
-    ~Reprog_device() = default;
-    Reprog_device(const Reprog_device&) = default;
-    Reprog_device(Reprog_device&&) = default;
-    Reprog_device& operator=(const Reprog_device&) = default;
-    Reprog_device& operator=(Reprog_device&&) = default;
+    reprog_device() = delete;
+    ~reprog_device() = default;
+    reprog_device(const reprog_device&) = default;
+    reprog_device(reprog_device&&) = default;
+    reprog_device& operator=(const reprog_device&) = default;
+    reprog_device& operator=(reprog_device&&) = default;
 
     /**
      * @brief Create device program instance from a regex pattern.
@@ -75,7 +75,7 @@ public:
      * @param stream CUDA stream for asynchronous memory allocations.
      * @return The program device object.
      */
-    static std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)>>
+    static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
         create(std::string const& pattern, const uint8_t* cp_flags, int32_t strings_count, cudaStream_t stream=0);
     /**
      * @brief Called automatically by the unique_ptr returned from create().
@@ -85,12 +85,12 @@ public:
     /**
      * @brief Returns the number of regex instructions.
      */
-    int32_t insts_counts()   { return _insts_count; }
+    int32_t insts_counts() const  { return _insts_count; }
 
     /**
      * @brief Returns the number of regex groups found in the expression.
      */
-    int32_t group_counts()   { return _num_capturing_groups; }
+    int32_t group_counts() const  { return _num_capturing_groups; }
 
     /**
      * @brief This sets up the memory used for keeping track of the regex progress.
@@ -102,17 +102,17 @@ public:
     /**
      * @brief Returns the regex instruction object for a given index.
      */
-    __host__ __device__ inline Reinst* get_inst(int32_t idx);
+    __host__ __device__ inline reinst* get_inst(int32_t idx) const;
 
     /**
      * @brief Returns the regex class object for a given index.
      */
-    __device__ inline Reclass_device get_class(int32_t idx);
+    __device__ inline reclass_device get_class(int32_t idx) const;
 
     /**
      * @brief Returns the start-instruction-ids vector.
      */
-    __device__ inline int32_t* get_startinst_ids();
+    __device__ inline int32_t* startinst_ids() const;
 
     /**
      * @brief Does a find evaluation using the compiled expression on the given string.
@@ -143,9 +143,9 @@ private:
     int32_t _startinst_id, _num_capturing_groups;
     int32_t _insts_count, _starts_count, _classes_count;
     const uint8_t* _codepoint_flags{}; // table of character types
-    Reinst* _insts{};            // array of regex instructions
+    reinst* _insts{};            // array of regex instructions
     int32_t* _startinst_ids{};   // array of start instruction ids
-    Reclass_device* _classes{};  // array of regex classes
+    reclass_device* _classes{};  // array of regex classes
     void* _relists_mem{};        // runtime relist memory for regexec
     u_char* _stack_mem1{};       // memory for Relist object 1
     u_char* _stack_mem2{};       // memory for Relist object 2
@@ -153,14 +153,14 @@ private:
     /**
      * @brief Executes the regex pattern on the given string.
      */
-    __device__ inline int32_t regexec( string_view const& d_str, Reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
+    __device__ inline int32_t regexec( string_view const& d_str, reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
     /**
      * @brief Utility wrapper to setup stack structures for calling regexec
      */
     __device__ inline int32_t call_regexec( int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
-    Reprog_device(Reprog&); // must use create()
+    reprog_device(reprog&); // must use create()
 };
 
 
