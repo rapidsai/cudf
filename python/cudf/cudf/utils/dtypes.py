@@ -129,7 +129,7 @@ def is_scalar(val):
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
         or isinstance(val, pd.Timestamp)
-        or isinstance(val, pd.Categorical)
+        or (isinstance(val, pd.Categorical) and len(val) == 1)
     )
 
 

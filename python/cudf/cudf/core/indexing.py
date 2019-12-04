@@ -203,9 +203,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
         else:
             columns = self._get_column_selection(arg[1])
-            columns_df = DataFrame()
+            columns_df = DataFrame(index=self._df.index)
             for i, col in enumerate(columns):
                 columns_df.insert(i, col, self._df[col])
+
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
@@ -221,6 +222,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 df = DataFrame()
                 for col in columns_df.columns:
                     df[col] = columns_df[col].loc[arg[0]]
+
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):

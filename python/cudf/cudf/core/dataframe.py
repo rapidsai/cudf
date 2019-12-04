@@ -176,7 +176,7 @@ class DataFrame(object):
                 )
         else:
             if is_list_like(data):
-                if len(data) > 0 and not is_list_like(data[0]):
+                if len(data) > 0 and is_scalar(data[0]):
                     data = [data]
                 self._init_from_list_like(data, index=index, columns=columns)
 
@@ -201,8 +201,11 @@ class DataFrame(object):
         data = list(itertools.zip_longest(*data))
         if columns is None:
             columns = range(len(data))
+
         for col_name, col in enumerate(data):
             self._cols[col_name] = column.as_column(col)
+
+        self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
@@ -425,7 +428,7 @@ class DataFrame(object):
             s = cudf.Series(self._cols[arg], name=arg, index=self.index)
             return s
         elif isinstance(arg, slice):
-            df = DataFrame()
+            df = DataFrame(index=self.index[arg])
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
@@ -449,6 +452,7 @@ class DataFrame(object):
                     return df
                 for col in arg:
                     df[col] = self[col]
+                df.index = self.index
             return df
         elif isinstance(arg, DataFrame):
             return self.mask(arg)
@@ -1498,6 +1502,10 @@ class DataFrame(object):
         if is_scalar(value):
             value = utils.scalar_broadcast_to(value, len(self))
 
+        if isinstance(value, (pd.Series, Series)):
+            if len(self) == 0:
+                self._index = as_index(value.index)
+
         value = column.as_column(value)
 
         if len(self.index) == 0:
@@ -1653,9 +1661,9 @@ class DataFrame(object):
         if isinstance(self.index, cudf.core.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
         if inplace:
-            self.index = new_index
+            self._index = new_index
             for k, new_col in zip(self._cols, out_cols):
-                self[k] = Series(new_col, new_index)
+                self[k] = new_col
         else:
             outdf = DataFrame()
             for k, new_col in zip(self._cols, out_cols):
@@ -3291,7 +3299,10 @@ class DataFrame(object):
                     out_columns.names = self.columns.names
             else:
                 out_columns.name = self.columns.name
-        return pd.DataFrame(out_data, index=out_index, columns=out_columns)
+        out_df = pd.DataFrame(out_data, index=out_index)
+        if out_columns is not None:
+            out_df.columns = out_columns
+        return out_df
 
     @classmethod
     def from_pandas(cls, dataframe, nan_as_null=True):

@@ -127,9 +127,8 @@ class Series(Table):
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
+
         assert isinstance(data, column.ColumnBase)
-        if name is None:
-            name = data.name
 
         super().__init__([data], [name])
         self._index = RangeIndex(len(data)) if index is None else index
@@ -2597,7 +2596,9 @@ class DatetimeProperties(object):
 
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
-        return Series(data=out_column, index=self.series._index)
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
 
 
 def _align_indices(lhs, rhs, join="outer"):
