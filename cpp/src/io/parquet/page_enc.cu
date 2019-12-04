@@ -1255,12 +1255,10 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start, const statistics_chunk *s, 
     dtype = col->stats_dtype;
     switch (dtype) {
     case dtype_bool8:
-    case dtype_int8:
         dtype_len = 1;
         break;
+    case dtype_int8:
     case dtype_int16:
-        dtype_len = 2;
-        break;
     case dtype_int32:
     case dtype_float32:
         dtype_len = 4;
@@ -1303,8 +1301,8 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start, const statistics_chunk *s, 
                     vmax = &s->max_value;
                 }
             }
-            CPW_FLD_BINARY(5, vmin, lmin);
-            CPW_FLD_BINARY(6, vmax, lmax);
+            CPW_FLD_BINARY(5, vmax, lmax);
+            CPW_FLD_BINARY(6, vmin, lmin);
         }
     CPW_END_STRUCT_NOTERMINATION(end);
     return end;
