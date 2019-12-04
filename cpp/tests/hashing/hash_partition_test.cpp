@@ -38,9 +38,9 @@ class HashPartition : public cudf::test::BaseFixture {};
 
 TEST_F(HashPartition, InvalidColumnsToHash)
 {
-  auto floats = fixed_width_column_wrapper<float>({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  auto integers = fixed_width_column_wrapper<int16_t>({1, 2, 3, 4, 5, 6, 7, 8});
-  auto strings = strings_column_wrapper({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
   auto input = cudf::table_view({floats, integers, strings});
 
   auto columns_to_hash = std::vector<cudf::size_type>({-1});
@@ -51,9 +51,9 @@ TEST_F(HashPartition, InvalidColumnsToHash)
 
 TEST_F(HashPartition, ZeroPartitions)
 {
-  auto floats = fixed_width_column_wrapper<float>({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  auto integers = fixed_width_column_wrapper<int16_t>({1, 2, 3, 4, 5, 6, 7, 8});
-  auto strings = strings_column_wrapper({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
   auto input = cudf::table_view({floats, integers, strings});
 
   auto columns_to_hash = std::vector<cudf::size_type>({2});
@@ -66,9 +66,9 @@ TEST_F(HashPartition, ZeroPartitions)
 
 TEST_F(HashPartition, ZeroRows)
 {
-  auto floats = fixed_width_column_wrapper<float>({});
-  auto integers = fixed_width_column_wrapper<int16_t>({});
-  auto strings = strings_column_wrapper({});
+  fixed_width_column_wrapper<float> floats({});
+  fixed_width_column_wrapper<int16_t> integers({});
+  strings_column_wrapper strings({});
   auto input = cudf::table_view({floats, integers, strings});
 
   auto columns_to_hash = std::vector<cudf::size_type>({2});
@@ -93,9 +93,9 @@ TEST_F(HashPartition, ZeroColumns)
 
 TEST_F(HashPartition, MixedColumnTypes)
 {
-  auto floats = fixed_width_column_wrapper<float>({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  auto integers = fixed_width_column_wrapper<int16_t>({1, 2, 3, 4, 5, 6, 7, 8});
-  auto strings = strings_column_wrapper({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
   auto input = cudf::table_view({floats, integers, strings});
 
   auto columns_to_hash = std::vector<cudf::size_type>({0, 2});
