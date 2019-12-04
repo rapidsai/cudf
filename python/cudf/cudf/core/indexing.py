@@ -192,8 +192,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.column import column
+        from cudf.core.dataframe import Series, DataFrame
+        from cudf.core.column import column, as_column
         from cudf.core.index import as_index
         from cudf.utils.cudautils import arange
         from cudf import MultiIndex
@@ -221,7 +221,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 df = DataFrame()
                 for col in columns_df.columns:
-                    df[col] = columns_df[col].loc[arg[0]]
+                    # need Series() in case a scalar is returned
+                    df[col] = Series(columns_df[col].loc[arg[0]])
+                df.columns = columns_df.columns
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
@@ -287,7 +289,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
-        from cudf.core.dataframe import DataFrame
+        from cudf.core.dataframe import DataFrame, Series
         from cudf.core.dataframe import Series
         from cudf.core.column import as_column
         from cudf.core.index import as_index
@@ -329,9 +331,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             df = DataFrame()
             for key in columns_df.columns:
+                # need Series() in case a scalar is returned
                 df[key] = as_column(columns_df[key].iloc[arg[0]])
             df.columns = columns_df.columns
-            df.index = as_index(columns_df.index[arg[0]])
 
         # Iloc Step 3:
         # Reindex

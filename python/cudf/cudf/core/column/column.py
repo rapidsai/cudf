@@ -421,7 +421,6 @@ class ColumnBase(Column):
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))
-            slice_owner = self
             if start == stop:
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice

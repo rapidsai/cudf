@@ -78,7 +78,7 @@ def require_writeable_array(arr):
 
 def scalar_broadcast_to(scalar, shape, dtype=None):
     from cudf.utils.cudautils import fill_value
-    from cudf.utils.dtypes import to_cudf_compatible_scalar
+    from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
     from cudf.core.column import column_empty
 
     if scalar is None:
@@ -86,7 +86,7 @@ def scalar_broadcast_to(scalar, shape, dtype=None):
             dtype = "object"
         return column_empty(np.prod(shape), dtype=dtype, masked=True)
 
-    if isinstance(scalar, str):
+    if isinstance(scalar, str) and is_string_dtype(dtype):
         dtype = "object"
     else:
         scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
