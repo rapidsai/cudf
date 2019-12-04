@@ -207,6 +207,7 @@
 - PR #3435 Fix diff and shift for empty series
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
+- PR #3523 Fix lgenfe issue with debug build
 
 # cuDF 0.10.0 (16 Oct 2019)
 
