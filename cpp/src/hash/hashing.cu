@@ -131,16 +131,17 @@ hash_partition(table_view const& input,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream)
 {
-  CUDF_EXPECTS(columns_to_hash.size() > 0, "Need at least one column to hash");
-  CUDF_EXPECTS(num_partitions > 0, "Need at least one partition");
-
+  std::vector<std::unique_ptr<experimental::table>> output;
   auto table_to_hash = input.select(columns_to_hash);
-  bool const nullable = has_nulls(table_to_hash);
+
+  // Return empty vector if there are no partitions or anything to hash
+  if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
+    return output;
+  }
 
   cudf::nvtx::range_push("CUDF_HASH_PARTITION", cudf::nvtx::PARTITION_COLOR);
 
-  std::vector<std::unique_ptr<experimental::table>> output;
-  if (nullable) {
+  if (has_nulls(table_to_hash)) {
     output = hash_partition_table<true>(
         input, table_to_hash, num_partitions, mr, stream);
   } else {

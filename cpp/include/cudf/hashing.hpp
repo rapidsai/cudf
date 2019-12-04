@@ -27,6 +27,8 @@ namespace cudf {
  * value of the columns specified by `columns_to_hash`. Rows partitioned into
  * the same bin are grouped together into a new table. Returns a vector
  * containing `num_partitions` new tables.
+ * 
+ * @throw std::out_of_range if index is `columns_to_hash` is invalid
  *
  * @param input The table to partition
  * @param columns_to_hash Indices of input columns to hash
