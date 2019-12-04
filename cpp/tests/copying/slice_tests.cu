@@ -73,7 +73,7 @@ std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns(s
 template <typename T>
 struct SliceTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SliceTest, NumericColumnsWithInValids) {
     using T = TypeParam;

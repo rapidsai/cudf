@@ -93,7 +93,7 @@ std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns_f
 template <typename T>
 struct SplitTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(SplitTest, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(SplitTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTest, SplitEndLessThanSize) {
     using T = TypeParam;
