@@ -163,6 +163,7 @@
 - PR #3492 Small cleanup (remove std::abs) and comment
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
+- PR #3520 Revert gather_statistics changes and add warnings
 
 ## Bug Fixes
 
