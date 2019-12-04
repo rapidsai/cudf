@@ -30,7 +30,15 @@ namespace strings
  * The size of the output column is targets.size() * strings.size().
  * output[i] contains the position of target[i % targets.size()] in string[i/targets.size()]
  *
- * @throw cudf::logic_error if start position is greater than stop position.
+ * ```
+ * s = ["abc","def"]
+ * t = ["a","c","e"]
+ * r = find_multiple(s,t)
+ * r is now [ 0, 2,-1,   // for "abc": "a" at pos 0, "c" at pos 2, "e" not found
+ *           -1,-1, 1 ]  // for "def": "a" and "b" not found, "e" at  pos 1
+ * ```
+ *
+ * @throw cudf::logic_error targets is empty or contains nulls
  *
  * @param strings Strings instance for this operation.
  * @param targets Strings to search for in each string.

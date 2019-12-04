@@ -20,7 +20,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
 
 #include <thrust/transform.h>
 
@@ -38,11 +37,9 @@ std::unique_ptr<column> find_multiple( strings_column_view const& strings,
 {
     auto strings_count = strings.size();
     if( strings_count==0 )
-        return make_empty_strings_column(mr,stream);
+        return make_empty_column(data_type{INT32});
     auto targets_count = targets.size();
-    if( targets_count==0 )
-        return std::make_unique<column>(strings.parent());
-
+    CUDF_EXPECTS( targets_count > 0, "Must include at least one search target" );
     CUDF_EXPECTS( !targets.has_nulls(), "Search targets cannot contain null strings" );
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
@@ -74,8 +71,7 @@ std::unique_ptr<column> find_multiple( strings_column_view const& strings,
 
 } // namespace detail
 
-// external APIs
-
+// external API
 std::unique_ptr<column> find_multiple( strings_column_view const& strings,
                                        strings_column_view const& targets,
                                        rmm::mr::device_memory_resource* mr)
