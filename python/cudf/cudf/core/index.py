@@ -25,6 +25,13 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 
+try:
+    import cupy
+
+    have_cupy = True
+except ImportError:
+    have_cupy = False
+
 
 def _to_frame(this_index, index=True, name=None):
     """Create a DataFrame with a column containing this Index
@@ -586,7 +593,12 @@ class RangeIndex(Index):
 
     def as_column(self):
         if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            if have_cupy:
+                vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
+            else:
+                vals = cudautils.arange(
+                    self._start, self._stop, dtype=self.dtype
+                )
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
         return NumericalColumn(
