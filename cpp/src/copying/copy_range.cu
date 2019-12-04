@@ -116,9 +116,6 @@ struct out_of_place_copy_range_dispatch {
       cudf::size_type target_begin,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
       cudaStream_t stream = 0) {
-    CUDF_EXPECTS(target.type().id() == cudf::type_id::STRING,
-                 "Unsupported variable-width type.");
-
     auto target_end = target_begin + (source_end - source_begin);
     auto p_source_device_view =
       cudf::column_device_view::create(source, stream);
