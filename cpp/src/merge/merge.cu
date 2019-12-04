@@ -294,8 +294,12 @@ struct ColumnMerger
     auto lsz = lcol.size();
     auto merged_size = lsz + rcol.size();
     auto type = lcol.type();
-    
-    std::unique_ptr<cudf::column> p_merged_col = cudf::experimental::allocate_like(lcol, merged_size);
+
+    std::unique_ptr<cudf::column> p_merged_col{nullptr};
+    if (lcol.has_nulls())
+      p_merged_col = cudf::experimental::allocate_like(lcol, merged_size);
+    else
+      p_merged_col = cudf::experimental::allocate_like(rcol, merged_size);
 
     //"gather" data from lcol, rcol according to dv_row_order_ "map"
     //(directly calling gather() won't work because
