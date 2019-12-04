@@ -113,9 +113,7 @@ hash_partition_table(table_view const& input,
 
   // Pad with empty tables if we have less than num_partitions
   if (output.size() < static_cast<size_t>(num_partitions)) {
-    auto const old_size = output.size();
-    output.resize(num_partitions);
-    std::generate(output.begin() + old_size, output.end(),
+    std::generate_n(std::back_inserter(output), num_partitions - output.size(),
       [&input]() { return experimental::empty_like(input); });
   }
 
