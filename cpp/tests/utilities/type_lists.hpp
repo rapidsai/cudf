@@ -74,7 +74,10 @@ constexpr auto types_to_ids() {
  * ```
  *---------------------------------------------------------------------------**/
 using NumericTypesWithoutBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
-                                       double> ; //, cudf::experimental::bool8>; #CH TODO
+                                       double> ; // #CH TODO delete
+
+using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
+                                       double, bool> ;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all timestamp types supported in libcudf for use
