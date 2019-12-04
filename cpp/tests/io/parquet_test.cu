@@ -66,7 +66,7 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, cudf::test::NumericTypes);
 using SupportedTimestampTypes = cudf::test::RemoveIf<
-    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D, cudf::timestamp_s>>,
+    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_s>>,
     cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
