@@ -46,8 +46,14 @@ def read_orc(
 
     if engine == "cudf":
         df = libcudf.orc.read_orc(
-            filepath_or_buffer, columns, stripe, skip_rows, num_rows,
-            use_index, decimals_as_float, force_decimal_scale
+            filepath_or_buffer,
+            columns,
+            stripe,
+            skip_rows,
+            num_rows,
+            use_index,
+            decimals_as_float,
+            force_decimal_scale,
         )
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
