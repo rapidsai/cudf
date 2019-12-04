@@ -22,6 +22,8 @@
 #include <vector>
 
 namespace cudf {
+
+namespace experimental {
 // joins
 
 /** 
@@ -170,5 +172,7 @@ std::unique_ptr<cudf::experimental::table> full_join(
                          std::vector<cudf::size_type> const& right_on,
                          std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-} //namespace cudf
 
+} //namespace experimental
+
+} //namespace cudf

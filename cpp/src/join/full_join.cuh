@@ -20,6 +20,8 @@
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
 template <typename T>
@@ -168,5 +170,7 @@ get_left_join_indices_complement(
 }
 
 }//namespace detail
+
+} //namespace experimental
 
 }//namespace cudf

@@ -24,6 +24,8 @@
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
 bool is_trivial_join(
@@ -99,6 +101,28 @@ get_trivial_full_join_indices(
       result_size, stream, mr);
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief  Computes the base join operation between two tables and returns the
+ * output indices of left and right table as a combined table, i.e. if full
+ * join is specified as the join type then left join is called.
+ *
+ * @throws cudf::logic_error
+ * If `left`/`right` table is empty
+ * If type mismatch between joining columns
+ *
+ * @param left  Table of left columns to join
+ * @param right Table of right  columns to join
+ * @param stream stream on which all memory allocations and copies
+ * will be performed
+ * @param mr The memory resource that will be used for allocating
+ * the device memory for the new table
+ * @tparam join_type The type of join to be performed
+ * @tparam index_type The datatype used for the output indices
+ *
+ * @returns Join output indices table
+ */
+/* ----------------------------------------------------------------------------*/
 template <join_type join_t, typename index_type>
 std::unique_ptr<experimental::table>
 get_base_join_indices(
@@ -119,24 +143,45 @@ get_base_join_indices(
   return get_base_hash_join_indices<base_join_t, index_type>(left, right, false, stream, mr);
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+* @Synopsis  Combines the non common left, common left and non commmon right
+* columns in the correct order to form the join output table.
+*
+* @param left_noncommon_table Table obtained by gathering non common left
+* columns.
+* @param left_noncommon_col Output locations of non common left columns in the
+* final table output
+* @param left_common_table Table obtained by gathering common left
+* columns.
+* @param left_common_col Output locations of common left columns in the
+* final table output
+* @param right_noncommon_table Table obtained by gathering non common right
+* columns.
+* @param right_noncommon_col Output locations of non common right columns in the
+* final table output
+*
+* @Returns  Table containing rearranged columns.
+*/
+/* ----------------------------------------------------------------------------*/
 std::vector<std::unique_ptr<column>>
 combine_join_columns(
-    std::unique_ptr<experimental::table> left_table,
+    std::unique_ptr<experimental::table> left_noncommon_table,
     std::vector<size_type>& left_noncommon_col,
-    std::unique_ptr<experimental::table> common_table,
+    std::unique_ptr<experimental::table> left_common_table,
     std::vector<size_type>& left_common_col,
-    std::unique_ptr<experimental::table> right_table) {
+    std::unique_ptr<experimental::table> right_noncommon_table) {
   std::vector<std::unique_ptr<column>> left_cols;
   std::vector<std::unique_ptr<column>> common_cols;
   std::vector<std::unique_ptr<column>> right_cols;
-  if (left_table != nullptr) {
-    left_cols = std::move(left_table->release());
+  if (left_noncommon_table != nullptr) {
+    left_cols = std::move(left_noncommon_table->release());
   }
-  if (common_table != nullptr) {
-    common_cols = std::move(common_table->release());
+  if (left_common_table != nullptr) {
+    common_cols = std::move(left_common_table->release());
   }
-  if (right_table != nullptr) {
-    right_cols = std::move(right_table->release());
+  if (right_noncommon_table != nullptr) {
+    right_cols = std::move(right_noncommon_table->release());
   }
   std::vector<std::unique_ptr<column>> combined_cols(
       left_cols.size() + right_cols.size() + common_cols.size());
@@ -152,6 +197,31 @@ combine_join_columns(
   return std::move(combined_cols);
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+* @brief  Gathers rows from `left` and `right` table and combines them into a
+* single table.
+* 
+* @param left Left input table
+* @param right Right input table
+* @param joined_indices Table containing row indices from which `left` and
+* `right` tables are gathered. If any row index is out of bounds, the
+* contribution in the output `table` will be NULL.
+* @param columns_in_common is a vector of pairs of column indices
+* from tables `left` and `right` respectively, that are "in common".
+* For "common" columns, only a single output column will be produced.
+* For an inner or left join, the result will be gathered from the column in
+* `left`. For a full join, the result will be gathered from both common
+* columns in `left` and `right` and concatenated to form a single column.
+*
+* @Returns  Table containing rearranged columns.
+* @Returns `table` containing the concatenation of rows from `left` and
+* `right` specified by `joined_indices`.
+* For any columns indicated by `columns_in_common`, only the corresponding
+* column in `left` will be included in the result. Final form would look like
+* `left(including common columns)+right(excluding common columns)`.
+*/
+/* ----------------------------------------------------------------------------*/
 template <join_type join_t, typename index_type>
 std::unique_ptr<experimental::table>
 construct_join_output_df(
@@ -227,6 +297,40 @@ construct_join_output_df(
       std::move(right_table)));
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Performs join on the columns provided in `left` and `right` as per
+ * the joining indices given in `left_on` and `right_on` and creates a single
+ * table.
+ *
+ * @param left The left table
+ * @param right The right table
+ * @param left_on The column's indices from `left` to join on.
+ * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * @param right_on The column's indices from `right` to join on.
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`. 
+ * @param columns_in_common is a vector of pairs of column indices into
+ * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * columns, only a single output column will be produced, which is gathered
+ * from `left_on` if it is left join or from intersection of `left_on` and
+ * `right_on`
+ * if it is inner join or gathered from both `left_on` and `right_on` if it is
+ * full join.
+ * Else, for every column in `left_on` and `right_on`, an output column will
+ * be produced.
+ * @param mr The memory resource that will be used for allocating
+ * the device memory for the new table
+ * @param stream Optional, stream on which all memory allocations and copies
+ * will be performed
+ *
+ * @tparam join_type The type of join to be performed
+ * @tparam index_type The type of index used for calculation of join indices
+ *
+ * @returns Result of joining `left` and `right` tables on the columns
+ * specified by `left_on` and `right_on`. The resulting table will be joined columns of
+ * `left(including common columns)+right(excluding common columns)`.
+ */
+/* ----------------------------------------------------------------------------*/
 template <join_type join_t, typename index_type>
 std::unique_ptr<experimental::table>
 join_call_compute_df(
@@ -235,9 +339,8 @@ join_call_compute_df(
     std::vector<size_type> const& left_on,
     std::vector<size_type> const& right_on,
     std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-    rmm::mr::device_memory_resource* mr) {
-
-  cudaStream_t stream = 0;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) {
 
   CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
@@ -266,7 +369,7 @@ std::unique_ptr<experimental::table> inner_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                              rmm::mr::device_memory_resource* mr) {
-    return detail::join_call_compute_df<::cudf::detail::join_type::INNER_JOIN, ::cudf::detail::output_index_type>(
+    return detail::join_call_compute_df<::cudf::experimental::detail::join_type::INNER_JOIN, ::cudf::experimental::detail::output_index_type>(
         left,
         right,
         left_on,
@@ -282,7 +385,7 @@ std::unique_ptr<experimental::table> left_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                              rmm::mr::device_memory_resource* mr) {
-    return detail::join_call_compute_df<::cudf::detail::join_type::LEFT_JOIN, ::cudf::detail::output_index_type>(
+    return detail::join_call_compute_df<::cudf::experimental::detail::join_type::LEFT_JOIN, ::cudf::experimental::detail::output_index_type>(
            left,
            right,
            left_on,
@@ -298,7 +401,7 @@ std::unique_ptr<experimental::table> full_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                          rmm::mr::device_memory_resource* mr) {
-    return detail::join_call_compute_df<::cudf::detail::join_type::FULL_JOIN, ::cudf::detail::output_index_type>(
+    return detail::join_call_compute_df<::cudf::experimental::detail::join_type::FULL_JOIN, ::cudf::experimental::detail::output_index_type>(
            left,
            right,
            left_on,
@@ -307,4 +410,6 @@ std::unique_ptr<experimental::table> full_join(
            mr);
 }
 
-}
+} //namespace experimental
+
+} //namespace cudf

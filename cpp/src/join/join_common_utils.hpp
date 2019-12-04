@@ -27,6 +27,8 @@
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
 using output_index_type = ::cudf::size_type;
@@ -61,10 +63,10 @@ enum class join_type {
 * @Synopsis  Creates a table containing two empty indices column for trivial
 * join.
 *
-* @param mr Optional, the memory resource that will be used for allocating
-* the device memory for the new column
 * @param stream Optional, stream on which all memory allocations and copies
 * will be performed
+* @param mr Optional, the memory resource that will be used for allocating
+* the device memory for the new column
 *
 * @Returns  Table containing empty indices.
 */
@@ -177,5 +179,7 @@ get_indices_table(
 }
 
 }//namespace detail
+
+} //namespace experimental
 
 }//namespace cudf

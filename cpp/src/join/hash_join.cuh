@@ -29,18 +29,22 @@
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
-using join_type = ::cudf::detail::join_type;
-using output_index_type = ::cudf::detail::output_index_type;
+using join_type = ::cudf::experimental::detail::join_type;
+using output_index_type = ::cudf::experimental::detail::output_index_type;
 
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Gives an estimate of the size of the join output produced when
- * joining two tables together. If the two tables are of relatively equal size,
- * then the returned output size will be the exact output size. However, if the
- * probe table is significantly larger than the build table, then we attempt
- * to estimate the output size by using only a subset of the rows in the probe table.
+ * joining two tables together.
+ *
+ * If the two tables are of relatively equal size, then the returned output
+ * size will be the exact output size. However, if the probe table is
+ * significantly larger than the build table, then we attempt to estimate the
+ * output size by using only a subset of the rows in the probe table.
  *
  * @throws cudf::logic_error if join_t is not INNER_JOIN or LEFT_JOIN
  *
@@ -112,7 +116,7 @@ estimate_join_output_size(
   int numBlocks {-1};
 
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<join_t, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>,
+    &numBlocks, compute_join_output_size<join_t, multimap_type, block_size>,
     block_size, 0
   ));
 
@@ -138,8 +142,7 @@ estimate_join_output_size(
     // find what the size of the output will be.
     compute_join_output_size<join_t,
                              multimap_type,
-                             block_size,
-                             DEFAULT_JOIN_CACHE_SIZE>
+                             block_size>
     <<<numBlocks * num_sms, block_size, 0, stream>>>(
         hash_table,
         build_table,
@@ -185,6 +188,25 @@ estimate_join_output_size(
         std::move(e));
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief  Computes the join operation between two tables and returns the
+ * output indices of left and right table as a combined table
+ *
+ * @param left  Table of left columns to join
+ * @param right Table of right  columns to join
+ * @param flip_join_indices Flag that indicates whether the left and right
+ * tables have been flipped, meaning the output indices should also be flipped.
+ * @param stream stream on which all memory allocations and copies
+ * will be performed
+ * @param mr The memory resource that will be used for allocating
+ * the device memory for the new table
+ * @tparam join_type The type of join to be performed
+ * @tparam index_type The datatype used for the output indices
+ *
+ * @returns Join output indices table
+ */
+/* ----------------------------------------------------------------------------*/
 template <join_type join_t, typename index_type>
 std::enable_if_t<(join_t != join_type::FULL_JOIN),
 std::unique_ptr<experimental::table>>
@@ -327,5 +349,7 @@ get_base_hash_join_indices(
 }
 
 }//namespace detail
+
+} //namespace experimental
 
 }//namespace cudf

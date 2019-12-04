@@ -24,15 +24,17 @@
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
 //TODO : Use the same hasher type as concurrent_unordered_multimap
 using row_equality = cudf::experimental::row_equality_comparator<true>;
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
 * @brief  Adds a pair of indices to the shared memory cache
-* 
+*
 * @param[in] first The first index in the pair
 * @param[in] second The second index in the pair
 * @param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
@@ -40,14 +42,14 @@ memory cache the pair will be written
 * @param[in] warp_id The ID of the warp of the calling the thread
 * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
 * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
-* 
+*
 */
 /* ----------------------------------------------------------------------------*/
 template<typename size_type, typename output_index_type>
-__inline__ __device__ void add_pair_to_cache(const output_index_type first, 
-                                             const output_index_type second, 
-                                             size_type *current_idx_shared, 
-                                             const int warp_id, 
+__inline__ __device__ void add_pair_to_cache(const output_index_type first,
+                                             const output_index_type second,
+                                             size_type *current_idx_shared,
+                                             const int warp_id,
                                              output_index_type *joined_shared_l,
                                              output_index_type *joined_shared_r)
 {
@@ -109,14 +111,12 @@ __global__ void build_hash_table(multimap_type multi_map,
 * @param[out] output_size The resulting output size
   @tparam join_t The type of join to be performed
   @tparam multimap_type The datatype of the hash table
-  @tparam output_cache_size The size of the shared memory cache for caching the join output results
 *
 */
 /* ----------------------------------------------------------------------------*/
 template< join_type join_t,
           typename multimap_type,
-          int block_size,
-          int output_cache_size>
+          int block_size>
 __global__ void compute_join_output_size( multimap_type multi_map,
                                           table_device_view build_table,
                                           table_device_view probe_table,
@@ -429,5 +429,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
 }
 
 }//namespace detail
+
+} //namespace experimental
 
 }//namespace cudf
