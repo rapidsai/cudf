@@ -27,7 +27,7 @@
 template <typename T>
 class MergeTest_ : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(MergeTest_, cudf::test::NumericTypes);
+TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
@@ -183,9 +183,7 @@ TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes) {
 TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
-    cudf::size_type inputRows = 50000;
-    auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
-    inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
+    cudf::size_type inputRows = 40;
 
     auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
     columnFactoryT leftColWrap1(sequence, sequence+inputRows);
@@ -220,9 +218,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
 TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
-    cudf::size_type inputRows = 50000;
-    auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
-    inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
+    cudf::size_type inputRows = 40;
     
     auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
@@ -298,9 +294,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
 TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
-    cudf::size_type inputRows = 50000;
-    auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
-    inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
+    cudf::size_type inputRows = 40;
 
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
@@ -393,9 +387,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
 TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
-    cudf::size_type inputRows = 50000;
-    auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
-    inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
+    cudf::size_type inputRows = 40;
 
     // data: 0  2  4  6 | valid: 1 1 1 0
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
@@ -481,9 +473,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
 TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
-    cudf::size_type inputRows = 50000;
-    auto unwrap_max = cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()); 
-    inputRows = (static_cast<cudf::size_type>(unwrap_max) < inputRows ? 40 : inputRows);
+    cudf::size_type inputRows = 40;
 
     // data: 0 1 2 3 | valid: 1 1 1 1
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
