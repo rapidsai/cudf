@@ -447,7 +447,7 @@ class RangeIndex(Index):
             item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
         ):
             return False
-        elif not item % 1 == 0:
+        if not item % 1 == 0:
             return False
         if self._start <= item < self._stop:
             return True
