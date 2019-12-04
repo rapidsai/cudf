@@ -12,7 +12,7 @@ nvidia-docker
 ## Usage
 
 ```
-bash build.sh [-h] [-H] [-s] [-r <repo_dir>] [-i <image_name>]
+bash build.sh [-h] [-H] [-s] [-x] [-r <repo_dir>] [-i <image_name>]
 Build and test your local repository using a base gpuCI Docker image
 
 where:

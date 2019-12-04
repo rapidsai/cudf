@@ -1,6 +1,7 @@
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
+- PR #3525 Altered build.sh accept flag to disable nvtx
 - PR #2905 Added `Series.median()` and null support for `Series.quantile()`
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
