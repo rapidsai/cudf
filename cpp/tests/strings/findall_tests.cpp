@@ -19,7 +19,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/utilities/table_utilities.hpp>
+#include <tests/strings/utilities.h>
 
 #include <gmock/gmock.h>
 #include <vector>
@@ -41,15 +42,17 @@ TEST_F(StringsFindallTests, FindallTest)
 
     std::string pattern = "(\\w+)";
     auto results = cudf::strings::findall_re(strings_view,pattern);
-    EXPECT_TRUE( results.size()==2 );
+    EXPECT_TRUE( results->num_columns()==2 );
 
     cudf::test::strings_column_wrapper expected1( h_expecteds.data(), h_expecteds.data() + h_strings.size(),
         thrust::make_transform_iterator( h_expecteds.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[0]),expected1);
-
     cudf::test::strings_column_wrapper expected2( h_expecteds.data()+h_strings.size(), h_expecteds.data() + h_expecteds.size(),
         thrust::make_transform_iterator( h_expecteds.data()+h_strings.size(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[1]),expected2);
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back( expected1.release() );
+    columns.push_back( expected2.release() );
+    cudf::experimental::table expected(std::move(columns));
+    cudf::test::expect_tables_equal(*results,expected);
 }
 
 TEST_F(StringsFindallTests, MediumRegex)
@@ -63,17 +66,17 @@ TEST_F(StringsFindallTests, MediumRegex)
 
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::findall_re(strings_view, medium_regex);
-    EXPECT_TRUE( results.size()==2 );
+    EXPECT_TRUE( results->num_columns()==2 );
 
     std::vector<const char*> h_expected1{"first words 1234", nullptr };
     cudf::test::strings_column_wrapper expected1( h_expected1.begin(), h_expected1.end(),
         thrust::make_transform_iterator( h_expected1.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[0]),expected1);
+    cudf::test::expect_columns_equal(results->get_column(0),expected1);
 
     std::vector<const char*> h_expected2{"just numbers 9876", nullptr };
     cudf::test::strings_column_wrapper expected2( h_expected2.begin(), h_expected2.end(),
         thrust::make_transform_iterator( h_expected2.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[1]),expected2);
+    cudf::test::expect_columns_equal(results->get_column(1),expected2);
 }
 
 TEST_F(StringsFindallTests, LargeRegex)
@@ -91,10 +94,10 @@ TEST_F(StringsFindallTests, LargeRegex)
 
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::findall_re(strings_view, large_regex);
-    EXPECT_TRUE( results.size()==1 );
+    EXPECT_TRUE( results->num_columns()==1 );
 
     std::vector<const char*> h_expected{large_regex.c_str(), nullptr, nullptr };
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*(results[0]),expected);
+    cudf::test::expect_columns_equal(results->get_column(0),expected);
 }

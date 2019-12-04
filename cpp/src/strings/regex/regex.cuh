@@ -118,22 +118,26 @@ public:
      * @brief Does a find evaluation using the compiled expression on the given string.
      *
      * @param idx The string index used for mapping the stack for this string in global memory (if necessary).
-     * @param dstr The string to evaluate.
+     * @param d_str The string to search.
      * @param[in,out] begin Position index to begin the search. If found, returns the position found in the string.
      * @param[in,out] end Position index to end the search. If found, returns the last position matching in the string.
+     * @return Returns 0 if no match is found.
      */
-    __device__ inline int find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end );
+    __device__ inline int32_t find( int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end );
 
     /**
      * @brief Does an extract evaluation using the compiled expression on the given string.
+     * 
+     * This will find a specific match within the string when more than match occurs.
      *
      * @param idx The string index used for mapping the stack for this string in global memory (if necessary).
-     * @param dstr The string to evaluate.
+     * @param d_str The string to search.
      * @param[in,out] begin Position index to begin the search. If found, returns the position found in the string.
      * @param[in,out] end Position index to end the search. If found, returns the last position matching in the string.
-     * @param col The specific instance to return if more than one match is found.
+     * @param column The specific instance to return if more than one match is found.
+     * @return Returns 0 if no match is found.
      */
-    __device__ inline int extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col );
+    __device__ inline int32_t extract( int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t column );
 
 private:
     int32_t _startinst_id, _num_capturing_groups;
@@ -149,20 +153,20 @@ private:
     /**
      * @brief Executes the regex pattern on the given string.
      */
-    __device__ inline int32_t regexec( string_view const& dstr, Reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
+    __device__ inline int32_t regexec( string_view const& d_str, Reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
     /**
      * @brief Utility wrapper to setup stack structures for calling regexec
      */
-    __device__ inline int32_t call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid=0 );
+    __device__ inline int32_t call_regexec( int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
-    Reprog_device(Reprog&);
+    Reprog_device(Reprog&); // must use create()
 };
 
 
 // 10128 ≈ 1000 instructions
-// Formula is from data_size_for calculaton
-// bytes = (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
+// Formula is based on Relist::data_size_for() calculaton;
+// Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
 constexpr int32_t MAX_STACK_INSTS = 1000;
 
 constexpr int32_t RX_STACK_SMALL  = 112;

@@ -22,8 +22,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/findall.hpp>
-#include "./utilities.hpp"
-#include "regex/regex.cuh"
+#include <strings/utilities.hpp>
+#include <strings/regex/regex.cuh>
 
 #include <thrust/extrema.h>
 
@@ -43,13 +43,8 @@ namespace
 /**
  * @brief This functor handles counting the number of matches per string.
  *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
- *
+ * @tparam stack_size Correlates to the number of regex instructions.
+ *         Each instruction requires a fixed sized memory overhead.
  */
 template<size_t stack_size>
 struct findall_count_fn
@@ -81,14 +76,6 @@ struct findall_count_fn
 /**
  * @brief This functor handles extracting matched strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
- *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
- *
  */
 template<size_t stack_size>
 struct findall_fn
@@ -131,7 +118,7 @@ struct findall_fn
 } // namespace
 
 //
-std::vector<std::unique_ptr<column>> findall_re( strings_column_view const& strings,
+std::unique_ptr<experimental::table> findall_re( strings_column_view const& strings,
                                                  std::string const& pattern,
                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                                  cudaStream_t stream = 0)
@@ -199,14 +186,14 @@ std::vector<std::unique_ptr<column>> findall_re( strings_column_view const& stri
         auto column = make_strings_column(indices,stream,mr);
         results.emplace_back(std::move(column));
     }
-    return results;
+    return std::make_unique<experimental::table>(std::move(results));
 }
 
 } // namespace detail
 
 // external API
 
-std::vector<std::unique_ptr<column>> findall_re( strings_column_view const& strings,
+std::unique_ptr<experimental::table> findall_re( strings_column_view const& strings,
                                                  std::string const& pattern,
                                                  rmm::mr::device_memory_resource* mr)
 {
