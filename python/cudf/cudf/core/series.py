@@ -2608,5 +2608,7 @@ def _align_indices(lhs, rhs, join="outer"):
     """
     if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
-        lhs, rhs = lhs.join(rhs, how=join, sort=True)._cols.values()
+        lhs_rhs = lhs.join(rhs, how=join, sort=True)
+        lhs = lhs_rhs.iloc[:, 0]
+        rhs = lhs_rhs.iloc[:, 1]
     return lhs, rhs

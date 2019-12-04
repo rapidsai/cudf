@@ -329,6 +329,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             for key in columns_df.columns:
                 df[key] = as_column(columns_df[key].iloc[arg[0]])
             df.columns = columns_df.columns
+            df.index = as_index(columns_df.index[arg[0]])
 
         # Iloc Step 3:
         # Reindex

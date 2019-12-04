@@ -176,6 +176,8 @@ class DataFrame(object):
                 )
         else:
             if is_list_like(data):
+                if len(data) > 0 and not is_list_like(data[0]):
+                    data = [data]
                 self._init_from_list_like(data, index=index, columns=columns)
 
             else:
@@ -720,8 +722,7 @@ class DataFrame(object):
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
-        result = DataFrame()
-        result.set_index(self.index)
+        result = DataFrame(index=self.index)
 
         def op(lhs, rhs):
             if fill_value is None:
@@ -739,7 +740,7 @@ class DataFrame(object):
         elif isinstance(other, DataFrame):
 
             lhs, rhs = _align_indices(self, other)
-
+            result.index = lhs.index
             max_num_rows = max(lhs.shape[0], rhs.shape[0])
 
             def fallback(col, fn):
@@ -756,9 +757,9 @@ class DataFrame(object):
                     result[col] = fallback(lhs[col], fn)
             for col in rhs._cols:
                 if col in lhs._cols:
-                    result[col] = op(lhs[col], rhs._cols[col])
+                    result[col] = op(lhs[col], rhs[col])
                 else:
-                    result[col] = fallback(rhs._cols[col], _reverse_op(fn))
+                    result[col] = fallback(rhs[col], _reverse_op(fn))
         elif isinstance(other, Series):
             raise NotImplementedError(
                 "Series to DataFrame arithmetic not supported "
@@ -4256,8 +4257,8 @@ def _align_indices(lhs, rhs):
             suffixes=("_x", "_y"),
         )
         df = df.sort_index()
-        lhs_out = DataFrame()
-        rhs_out = DataFrame()
+        lhs_out = DataFrame(index=df.index)
+        rhs_out = DataFrame(index=df.index)
         common = set(lhs.columns) & set(rhs.columns)
         common_x = set(["{}_x".format(x) for x in common])
         common_y = set(["{}_y".format(x) for x in common])
