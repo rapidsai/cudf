@@ -541,7 +541,6 @@ void replace_nulls_strings(cudf::column_device_view input,
       if (nonzero_output)
         std::memcpy(chars + offsets[i], out.data(), out.size_bytes());
 
-
       uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
       if (0 == lane_id) {
         output_valid[cudf::word_index(i)] = bitmask;
