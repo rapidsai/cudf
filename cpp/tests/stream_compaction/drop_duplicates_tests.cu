@@ -31,13 +31,21 @@
 template <typename T>
 struct UniqueCountCommon : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(UniqueCountCommon, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(UniqueCountCommon, cudf::test::NumericTypes);
 
 TYPED_TEST(UniqueCountCommon, NoNull)
 {
     using T = TypeParam;
 
-    std::vector<T> input = {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+    std::vector<int> ints = {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4}; 
+
+    // do this transform to avoid narrowing conversion for bool type
+    std::vector<T> input(ints.size());
+    std::transform(
+        std::begin(ints),
+        std::end(ints),
+        std::begin(input),
+        [] (auto const& e) { return static_cast<T>(e); });
 
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end()};
 

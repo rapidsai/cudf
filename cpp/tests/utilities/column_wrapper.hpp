@@ -110,9 +110,7 @@ class column_wrapper {
  *---------------------------------------------------------------------------**/
 template <typename Element, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
-  static_assert(cudf::is_fixed_width<Element>(),
-                "Unexpected non-fixed width type.");
-  std::vector<Element> elements(begin, end);
+  thrust::host_vector<Element> elements(begin, end);
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
 
@@ -201,9 +199,6 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
  *---------------------------------------------------------------------------**/
 template <typename Element>
 class fixed_width_column_wrapper : public detail::column_wrapper {
-  static_assert(cudf::is_fixed_width<Element>(),
-                "Unexpected non-fixed width type.");
-
  public:
   /**---------------------------------------------------------------------------*
    * @brief Default constructor initializes an empty column with proper dtype

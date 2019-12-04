@@ -140,7 +140,7 @@ TEST_F(DropNullsTest, StringColWithNull) {
 template <typename T>
 struct DropNullsTestAll : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(DropNullsTestAll, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(DropNullsTestAll, cudf::test::NumericTypes);
 
 TYPED_TEST(DropNullsTestAll, AllNull) {
     using T = TypeParam;
