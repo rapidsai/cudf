@@ -116,23 +116,19 @@ struct split_tokenizer_fn
                                             size_type col_idx, size_type column_count,
                                             size_type const* d_token_counts) const
     {
-        // dcount already accounts for the maxsplit value
-        size_type dcount = d_token_counts[idx];
-        if( col_idx >= dcount || d_strings.is_null(idx) )
+        // token_count already includes the max-split value
+        size_type token_count = d_token_counts[idx];
+        if( col_idx >= token_count || d_strings.is_null(idx) )
             return string_index_pair{nullptr,0};
         string_view d_str = d_strings.element<string_view>(idx);
         auto delim_nchars = d_delimiter.length();
-        size_type spos = 0, nchars = d_str.length();
+        size_type spos = 0;
+        size_type nchars = d_str.length();
         size_type epos = nchars;
-        // skip delimiters until we reach this column
-        for( size_type c=0; c < (dcount-1); ++c )
+        // skip delimiters until we reach the col_idx or the token_count
+        for( size_type c=0; c < (token_count-1); ++c )
         {
             epos = d_str.find(d_delimiter,spos);
-            if( epos < 0 )
-            {
-                epos = nchars;
-                break;
-            }
             if( c==col_idx )  // found our column
                 break;
             spos = epos + delim_nchars;
@@ -164,22 +160,19 @@ struct rsplit_tokenizer_fn
                                             size_type col_idx, size_type column_count,
                                             size_type const* d_token_counts) const
     {
-        size_type dcount = d_token_counts[idx]; // dcount already accounts for the maxsplit value
-        if( col_idx >= dcount || d_strings.is_null(idx) )
+        // token_count already includes the max-split value
+        size_type token_count = d_token_counts[idx];
+        if( col_idx >= token_count || d_strings.is_null(idx) )
             return string_index_pair{nullptr,0};
         string_view d_str = d_strings.element<string_view>(idx);
         auto delim_nchars = d_delimiter.length();
-        size_type spos = 0, nchars = d_str.length();
+        size_type spos = 0;
+        size_type nchars = d_str.length();
         size_type epos = nchars;
-        // skip delimiters until we reach this column
-        for( auto c=(dcount-1); c > 0; --c )
+        // skip delimiters until we reach col-idx or token_count
+        for( auto c=(token_count-1); c > 0; --c )
         {
             spos = d_str.rfind(d_delimiter,0,epos);
-            if( spos < 0 )
-            {
-                spos = 0;
-                break;
-            }
             if( c==col_idx ) // found our column
             {
                 spos += delim_nchars;  // do not include delimiter
@@ -217,7 +210,7 @@ struct whitespace_token_counter_fn
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
         size_type dcount = 0;
-        bool spaces = true;
+        bool spaces = true; // need to treat a run of whitespace as a single delimiter
         auto itr = d_str.begin();
         while( itr != d_str.end() )
         {
@@ -286,13 +279,15 @@ struct whitespace_split_tokenizer_fn
                                             size_type col_idx, size_type column_count,
                                             size_type const* d_token_counts) const
     {
-        size_type dcount = d_token_counts[idx];
-        if( col_idx >= dcount || d_strings.is_null(idx) )
+        size_type token_count = d_token_counts[idx];
+        if( col_idx >= token_count || d_strings.is_null(idx) )
             return string_index_pair{nullptr,0};
         string_view d_str = d_strings.element<string_view>(idx);
-        size_type c = 0, nchars = d_str.length();
-        size_type spos = 0, epos = nchars;
-        bool spaces = true;
+        size_type c = 0;
+        size_type nchars = d_str.length();
+        size_type spos = 0;
+        size_type epos = nchars;
+        bool spaces = true;  // need to treat a run of whitespace as a single delimiter
         for( size_type pos=0; pos < nchars; ++pos )
         {
             char_utf8 ch = d_str[pos];
@@ -307,10 +302,10 @@ struct whitespace_split_tokenizer_fn
             if( !spaces )
             {
                 epos = nchars;
-                if( (c+1)==tokens )
+                if( (c+1)==tokens ) // hit max tokens
                     break;
                 epos = pos;
-                if( c==col_idx )
+                if( c==col_idx ) // found our column
                     break;
                 spos = pos+1;
                 epos = nchars;
@@ -318,6 +313,7 @@ struct whitespace_split_tokenizer_fn
             }
             spaces = !spaces;
         }
+        // this is the string for this column
         string_index_pair result{nullptr,0}; // init to null string
         if( spos < epos )
         {
@@ -343,13 +339,15 @@ struct whitespace_rsplit_tokenizer_fn
                                             size_type col_idx, size_type column_count,
                                             size_type const* d_token_counts) const
     {
-        size_type dcount = d_token_counts[idx];
-        if( col_idx >= dcount || d_strings.is_null(idx) )
+        size_type token_count = d_token_counts[idx];
+        if( col_idx >= token_count || d_strings.is_null(idx) )
             return string_index_pair{nullptr,0};
         string_view d_str = d_strings.element<string_view>(idx);
-        size_type c = (dcount-1), nchars = d_str.length();
-        size_type spos = 0, epos = nchars;
-        bool spaces = true;
+        size_type c = (token_count-1);
+        size_type nchars = d_str.length();
+        size_type spos = 0;
+        size_type epos = nchars;
+        bool spaces = true;  // need to treat a run of whitespace as a single delimiter
         for( int pos=nchars; pos > 0; --pos )
         {
             char_utf8 ch = d_str[pos-1];
@@ -364,10 +362,10 @@ struct whitespace_rsplit_tokenizer_fn
             if( !spaces )
             {
                 spos = 0;
-                if( (column_count-c)==tokens )
+                if( (column_count-c)==tokens )  // hit max tokens
                     break;
                 spos = pos;
-                if( c==col_idx )
+                if( c==col_idx ) // found our column
                     break;
                 epos = pos-1;
                 spos = 0;
@@ -375,6 +373,7 @@ struct whitespace_rsplit_tokenizer_fn
             }
             spaces = !spaces;
         }
+        // this is the string for this column
         string_index_pair result{nullptr,0}; // init to null string
         if( spos < epos )
         {
