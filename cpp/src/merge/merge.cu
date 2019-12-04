@@ -161,11 +161,7 @@ void materialize_bitmask(cudf::column_view const& left_col,
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
         (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
     } else {
-      //TODO: just memset all the bits to ALL_VALID
-      //
-      materialize_merged_bitmask_kernel<false, false>
-        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-        (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
+      CUDF_FAIL("materialize_merged_bitmask_kernel<false, false>() should never be called.");
     }
   }
 
