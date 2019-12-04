@@ -33,7 +33,8 @@ namespace groupby {
 namespace detail {
 namespace hash {
 namespace {
-// Commented for a while as there is an issue with constexpr usage in cuda versions  < cuda 10.2
+// This is a temporary fix due to compiler bug and we can resort back to
+// constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
 #if 0
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
@@ -61,6 +62,9 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
  * @return false `t` is invalid for a hash based groupby
  */
 bool constexpr is_hash_aggregation(aggregation::Kind t) {
+  // this is a temporary fix due to compiler bug and we can resort back to
+  // constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
+  // return array_contains(hash_aggregations, t);
   return (t == aggregation::SUM) or (t == aggregation::MIN) or
          (t == aggregation::MAX) or (t == aggregation::COUNT) or
          (t == aggregation::MEAN);
