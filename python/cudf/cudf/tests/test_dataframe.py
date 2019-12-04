@@ -4149,10 +4149,10 @@ def test_df_sr_binop(gsr, colnames, op):
 
     psr = gsr.to_pandas()
 
-    expect = op(pdf,psr)
-    got = op(gdf,gsr)
+    expect = op(pdf, psr)
+    got = op(gdf, gsr)
     assert_eq(expect.astype(float), got.astype(float))
 
     expect = op(psr, pdf)
     got = op(psr, pdf)
-    assert_eq(expect.astype(float), got.astype(float)
+    assert_eq(expect.astype(float), got.astype(float))
