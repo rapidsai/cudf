@@ -205,11 +205,12 @@ TYPED_TEST(ScatterToTablesIndexTypes, MultipleTypes)
   auto integers = std::vector<int16_t>({1, 2, 3, 4, 5, 6});
   auto strings = std::vector<char const*>({"a", "bb", "ccc", "d", "ee", "fff"});
   auto partition_map = std::vector<TypeParam>({3, 1, 1, 4}); // shorter than input is ok
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return 1;});
 
   // Assemble input table
-  auto floats_in = fixed_width_column_wrapper<float>(floats.begin(), floats.end());
-  auto integers_in = fixed_width_column_wrapper<int16_t>(integers.begin(), integers.end());
-  auto strings_in = strings_column_wrapper(strings.begin(), strings.end());
+  auto floats_in = fixed_width_column_wrapper<float>(floats.begin(), floats.end(), validity);
+  auto integers_in = fixed_width_column_wrapper<int16_t>(integers.begin(), integers.end(), validity);
+  auto strings_in = strings_column_wrapper(strings.begin(), strings.end(), validity);
   auto input = cudf::table_view({floats_in, integers_in, strings_in});
 
   auto const partition_col = fixed_width_column_wrapper<TypeParam>(
@@ -217,9 +218,9 @@ TYPED_TEST(ScatterToTablesIndexTypes, MultipleTypes)
 
   // Compute expected tables
   auto gather_maps = make_gather_maps(partition_map);
-  auto floats_cols = gather_fixed_width(floats, gather_maps);
-  auto integers_cols = gather_fixed_width(integers, gather_maps);
-  auto strings_cols = gather_strings<false>(strings, gather_maps);
+  auto floats_cols = gather_fixed_width(floats, validity, gather_maps);
+  auto integers_cols = gather_fixed_width(integers, validity, gather_maps);
+  auto strings_cols = gather_strings<true>(strings, gather_maps);
 
   auto floats_views = make_view_vector(floats_cols);
   auto integers_views = make_view_vector(integers_cols);
