@@ -27,7 +27,7 @@
 template <typename T>
 struct EmptyLikeTest : public cudf::test::BaseFixture {};
 
-using numeric_types = cudf::test::NumericTypes;
+using numeric_types = cudf::test::NumericTypesWithoutBool;
 
 TYPED_TEST_CASE(EmptyLikeTest, numeric_types);
 

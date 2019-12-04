@@ -58,7 +58,7 @@ cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_typ
 template <typename T>
 struct cudf_logical_test : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypes);
+TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(cudf_logical_test, LogicalNot)
 {
@@ -101,7 +101,7 @@ TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
 template <typename T>
 struct cudf_math_test : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(cudf_math_test, cudf::test::NumericTypes);
+TYPED_TEST_CASE(cudf_math_test, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(cudf_math_test, ABS)
 {
@@ -262,7 +262,7 @@ TYPED_TEST(cudf_math_with_char_test, LogicalOpTypeFail)
 template <typename T>
 struct IsNull : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(IsNull, cudf::test::NumericTypes);
+TYPED_TEST_CASE(IsNull, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(IsNull, AllValid)
 {
@@ -309,7 +309,7 @@ TYPED_TEST(IsNull, EmptyColumns)
 template <typename T>
 struct IsNotNull : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(IsNotNull, cudf::test::NumericTypes);
+TYPED_TEST_CASE(IsNotNull, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(IsNotNull, AllValid)
 {
@@ -478,7 +478,7 @@ TEST_F(CastTimestamps, IsIdempotent) {
 template <typename T>
 struct CastToTimestamps : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(CastToTimestamps, cudf::test::NumericTypes);
+TYPED_TEST_CASE(CastToTimestamps, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(CastToTimestamps, AllValid) {
   using T = TypeParam;
@@ -514,7 +514,7 @@ TYPED_TEST(CastToTimestamps, AllValid) {
 template <typename T>
 struct CastFromTimestamps : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(CastFromTimestamps, cudf::test::NumericTypes);
+TYPED_TEST_CASE(CastFromTimestamps, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(CastFromTimestamps, AllValid) {
   using T = TypeParam;

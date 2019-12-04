@@ -64,7 +64,7 @@ struct OrcWriterTimestampTypeTest : public OrcWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(OrcWriterNumericTypeTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(OrcWriterNumericTypeTest, cudf::test::NumericTypesWithoutBool);
 using SupportedTimestampTypes = cudf::test::RemoveIf<
     cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D>>,
     cudf::test::TimestampTypes>;

@@ -42,7 +42,7 @@ struct Bool8CtorTest
  */
 static constexpr int NUM_TRIALS{10000};
 
-using Bool8CastSourceTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::Types<bool>>;
+using Bool8CastSourceTypes = cudf::test::Concat<cudf::test::NumericTypesWithoutBool, cudf::test::Types<bool>>;
 
 TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 

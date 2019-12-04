@@ -70,10 +70,10 @@ constexpr auto types_to_ids() {
  * Example:
  * ```
  * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypesWithoutBool);
  * ```
  *---------------------------------------------------------------------------**/
-using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
+using NumericTypesWithoutBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
                                        double> ; //, cudf::experimental::bool8>; #CH TODO
 
 /**---------------------------------------------------------------------------*
@@ -111,7 +111,7 @@ using StringTypes = cudf::test::Types<string_view>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
+using FixedWidthTypes = Concat<NumericTypesWithoutBool, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of sortable types for use in GTest typed tests.
@@ -122,7 +122,7 @@ using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
+using ComparableTypes = Concat<NumericTypesWithoutBool, TimestampTypes, StringTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -137,7 +137,7 @@ using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using AllTypes = Concat<NumericTypes, TimestampTypes>;
+using AllTypes = Concat<NumericTypesWithoutBool, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of all `cudf::type_id`s
@@ -153,7 +153,7 @@ static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
+static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypesWithoutBool>()};
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of all timestamp `cudf::type_id`s

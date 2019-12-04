@@ -41,7 +41,7 @@ template <typename T>
 struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypes);
+TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   auto sequence = cudf::test::make_counting_transform_iterator(

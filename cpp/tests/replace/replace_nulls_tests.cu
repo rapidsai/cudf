@@ -82,7 +82,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
 template <typename T>
 struct ReplaceNullsTest : public cudf::test::BaseFixture {};
 
-using test_types = cudf::test::NumericTypes;
+using test_types = cudf::test::NumericTypesWithoutBool;
 
 TYPED_TEST_CASE(ReplaceNullsTest, test_types);
 

@@ -31,7 +31,7 @@
 template <typename T>
 struct SortedOrder : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(SortedOrder, cudf::test::NumericTypes);
+TYPED_TEST_CASE(SortedOrder, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(SortedOrder, WithNullMax)
 {

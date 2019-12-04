@@ -38,7 +38,7 @@ struct NumericScalarFactory : public ScalarFactoryTest {
   static constexpr auto factory = cudf::make_numeric_scalar;
 };
 
-TYPED_TEST_CASE(NumericScalarFactory, cudf::test::NumericTypes);
+TYPED_TEST_CASE(NumericScalarFactory, cudf::test::NumericTypesWithoutBool);
 
 TYPED_TEST(NumericScalarFactory, FactoryDefault) {
   std::unique_ptr<cudf::scalar> s = this->factory(
