@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n --allgpuarch -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n -x --allgpuarch -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h] [-x]
    clean        - remove all existing build artifacts and configuration (start
                   over)
    libnvstrings - build the nvstrings C++ code only
@@ -31,6 +31,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
+   -x           - do not build nvtx
    --allgpuarch - build for all supported GPU architectures
    -h           - print this text
 
@@ -50,6 +51,7 @@ BUILD_TYPE=Release
 INSTALL_TARGET=install
 BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
+BUILD_NVTX=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -92,6 +94,9 @@ fi
 if hasArg benchmarks; then
     BENCHMARKS="ON"
 fi
+if hasArg -x; then
+    BUILD_NVTX="OFF"
+fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -124,6 +129,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
+          -DUSE_NVTX=${BUILD_NVTX} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
@@ -152,6 +158,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
+          -DUSE_NVTX=${BUILD_NVTX} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
