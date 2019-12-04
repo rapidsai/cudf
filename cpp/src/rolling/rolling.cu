@@ -43,6 +43,7 @@ namespace { // anonymous
  * @tparam agg_op  A functor that defines the aggregation operation
  * @tparam is_mean Compute mean=sum/count across all valid elements in the window
  * @tparam block_size CUDA block size for the kernel
+ * @tparam has_nulls true if the input column has nulls
  * @tparam WindowIterator iterator type (inferred)
  * @param input Input column device view
  * @param output Output column device view
@@ -68,8 +69,7 @@ void gpu_rolling(column_device_view input,
   size_type i = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
 
-    agg_op agg_operator{};
-  gdf_size_type warp_valid_count{0};
+  size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
   while(i < input.size())
@@ -94,7 +94,7 @@ void gpu_rolling(column_device_view input,
       if (!has_nulls || input.is_valid(j)) {
         // Element type and output type are different for COUNT
         T element = (op == rolling_operator::COUNT) ? T{0} : input.element<T>(j);
-        val = agg_operator(element, val);
+        val = agg_op{}(element, val);
         count++;
       }
     }
@@ -122,7 +122,7 @@ void gpu_rolling(column_device_view input,
   }
 
   // sum the valid counts across the whole block  
-  gdf_size_type block_valid_count = 
+  size_type block_valid_count = 
     cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
   
   if(threadIdx.x == 0) {
@@ -142,7 +142,7 @@ struct rolling_window_launcher
                                                     rmm::mr::device_memory_resource *mr,
                                                     cudaStream_t stream)
   {
-    if (input.size() == 0) return empty_like(input);
+    if (input.empty()) return empty_like(input);
 
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
