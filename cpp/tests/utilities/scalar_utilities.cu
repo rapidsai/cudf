@@ -1,0 +1,78 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <tests/utilities/scalar_utilities.hpp>
+
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <sstream>
+#include <type_traits>
+
+namespace cudf {
+namespace test {
+
+namespace {
+
+template<typename T>
+using scalar_type_t = cudf::experimental::scalar_type_t<T>;
+
+struct compare_scalar_functor
+{
+    template<typename T>
+    typename std::enable_if_t<not std::is_arithmetic<T>::value, void>
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    {
+        using TScalar = cudf::experimental::scalar_type_t<T>;
+
+        TScalar const* lhs_t = static_cast<TScalar const*>((void*) &lhs);
+        TScalar const* rhs_t = static_cast<TScalar const*>((void*) &rhs);
+
+        EXPECT_EQ(lhs_t->value(), rhs_t->value());
+    }
+
+    template<typename T>
+    typename std::enable_if_t<std::is_arithmetic<T>::value, void>
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    {
+        using TScalar = cudf::experimental::scalar_type_t<T>;
+
+        TScalar const* lhs_t = static_cast<TScalar const*>((void*) &lhs);
+        TScalar const* rhs_t = static_cast<TScalar const*>((void*) &rhs);
+
+        EXPECT_DOUBLE_EQ(lhs_t->value(), rhs_t->value());
+    }
+};
+
+} // anonymous namespace
+
+void expect_scalars_equal(cudf::scalar const& lhs,
+                          cudf::scalar const& rhs,
+                          bool print_all_differences)
+{
+    EXPECT_EQ(lhs.type(), rhs.type());
+    EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
+
+    if (not lhs.is_valid()) {
+        return;
+    }
+
+    cudf::experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
+}
+
+} // namespace test
+} // namespace cudf
