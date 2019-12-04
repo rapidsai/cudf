@@ -674,7 +674,7 @@ struct replace_nulls_column_kernel_forwarder {
                                            cudf::column_view const& replacement,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0) {
-    rmm::device_scalar<cudf::size_type> valid_counter(0);
+    rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type *valid_count = valid_counter.data();
 
     auto replace_first = replace_nulls_strings<0, false>;
