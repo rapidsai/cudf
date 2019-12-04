@@ -45,87 +45,87 @@ enum OperatorType
     NOP          = 0302, // No operation, internal use only
 };
 
-static Reclass ccls_w(1); // = { 'a', 'z','A','Z','0','9','_','_' };
-static Reclass ccls_W(8); // = { '\n','\n','a', 'z', 'A', 'Z', '0', '9', '_', '_' };
-static Reclass ccls_s(2); // = { '\t', '\t', '\n', '\n', '\r', '\r', '\f', '\f', '\v', '\v', ' ', ' ' };
-static Reclass ccls_S(16);// ccls_S is the same as ccls_s
-static Reclass ccls_d(4); // = { '0', '9' };
-static Reclass ccls_D(32);// = { '\n', '\n', '0', '9' };
+static reclass ccls_w(1); // = { 'a', 'z','A','Z','0','9','_','_' };
+static reclass ccls_W(8); // = { '\n','\n','a', 'z', 'A', 'Z', '0', '9', '_', '_' };
+static reclass ccls_s(2); // = { '\t', '\t', '\n', '\n', '\r', '\r', '\f', '\f', '\v', '\v', ' ', ' ' };
+static reclass ccls_S(16);// ccls_S is the same as ccls_s
+static reclass ccls_d(4); // = { '0', '9' };
+static reclass ccls_D(32);// = { '\n', '\n', '0', '9' };
 
 } // namespace
 
-int32_t Reprog::add_inst(int32_t t)
+int32_t reprog::add_inst(int32_t t)
 {
-    Reinst inst;
+    reinst inst;
     inst.type = t;
     inst.u2.left_id = 0;
     inst.u1.right_id = 0;
     return add_inst(inst);
 }
 
-int32_t Reprog::add_inst(Reinst inst)
+int32_t reprog::add_inst(reinst inst)
 {
     _insts.push_back(inst);
     return (int)_insts.size() - 1;
 }
 
-int32_t Reprog::add_class(Reclass cls)
+int32_t reprog::add_class(reclass cls)
 {
     _classes.push_back(cls);
     return (int)_classes.size()-1;
 }
 
-Reinst& Reprog::inst_at(int32_t id)
+reinst& reprog::inst_at(int32_t id)
 {
     return _insts[id];
 }
 
-Reclass& Reprog::class_at(int32_t id)
+reclass& reprog::class_at(int32_t id)
 {
     return _classes[id];
 }
 
-void Reprog::set_start_inst(int32_t id)
+void reprog::set_start_inst(int32_t id)
 {
     _startinst_id = id;
 }
 
-int32_t Reprog::get_start_inst() const
+int32_t reprog::get_start_inst() const
 {
     return _startinst_id;
 }
 
-int32_t Reprog::insts_count() const
+int32_t reprog::insts_count() const
 {
     return (int)_insts.size();
 }
 
-int32_t Reprog::classes_count() const
+int32_t reprog::classes_count() const
 {
     return (int)_classes.size();
 }
 
-void Reprog::set_groups_count(int32_t groups)
+void reprog::set_groups_count(int32_t groups)
 {
     _num_capturing_groups = groups;
 }
 
-int32_t Reprog::groups_count() const
+int32_t reprog::groups_count() const
 {
     return _num_capturing_groups;
 }
 
-const Reinst* Reprog::insts_data() const
+const reinst* reprog::insts_data() const
 {
     return _insts.data();
 }
 
-const int32_t* Reprog::starts_data() const
+const int32_t* reprog::starts_data() const
 {
     return _startinst_ids.data();
 }
 
-int32_t Reprog::starts_count() const
+int32_t reprog::starts_count() const
 {
     return (int)_startinst_ids.size();
 }
@@ -133,7 +133,7 @@ int32_t Reprog::starts_count() const
 // Converts pattern into regex classes
 class RegParser
 {
-    Reprog& m_prog;
+    reprog& m_prog;
 
     const char32_t* exprp;
     bool lexdone;
@@ -279,7 +279,7 @@ class RegParser
                 }
 
         /* merge spans */
-        Reclass yycls;
+        reclass yycls;
         yycls.builtins=builtins;
         int p = 0;
         if( cls.size()>=2 )
@@ -376,7 +376,7 @@ class RegParser
                 {
                     if (id_ccls_W < 0)
                     {
-                        Reclass cls = ccls_w;
+                        reclass cls = ccls_w;
                         cls.literals += '\n';
                         cls.literals += '\n';
                         yyclass_id = m_prog.add_class(cls);
@@ -419,7 +419,7 @@ class RegParser
                 {
                     if (id_ccls_D < 0)
                     {
-                        Reclass cls = ccls_d;
+                        reclass cls = ccls_d;
                         cls.literals += '\n';
                         cls.literals += '\n';
                         yyclass_id = m_prog.add_class(cls);
@@ -552,7 +552,7 @@ public:
 
     bool m_has_counted;
 
-    RegParser(const char32_t* pattern, int dot_type, Reprog& prog) : m_prog(prog)
+    RegParser(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
     {
         exprp = pattern;
         lexdone = false;
@@ -582,7 +582,7 @@ public:
  */
 class RegCompiler
 {
-    Reprog& m_prog;
+    reprog& m_prog;
 
     struct Node
     {
@@ -885,7 +885,7 @@ class RegCompiler
 
 
 public:
-    RegCompiler(const char32_t* pattern, int dot_type, Reprog& prog) : m_prog(prog)
+    RegCompiler(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
     {
         // Parse
         std::vector<RegParser::Item> items;
@@ -950,16 +950,16 @@ public:
 };
 
 // Convert pattern into program
-Reprog Reprog::create_from(const char32_t* pattern)
+reprog reprog::create_from(const char32_t* pattern)
 {
-    Reprog rtn;
+    reprog rtn;
     RegCompiler compiler(pattern, ANY, rtn); // future feature: ANYNL
     //rtn->print();
     return rtn;
 }
 
 //
-void Reprog::optimize1()
+void reprog::optimize1()
 {
     // Treat non-capturing LBRAs/RBRAs as NOOP
     for (int i = 0; i < (int)_insts.size(); i++)
@@ -1031,7 +1031,7 @@ void Reprog::optimize1()
 }
 
 // expand leading ORs to multiple startinst_ids
-void Reprog::optimize2()
+void reprog::optimize2()
 {
     _startinst_ids.clear();
     std::vector<int> stack;
@@ -1040,7 +1040,7 @@ void Reprog::optimize2()
     {
         int id = *(stack.end() - 1);
         stack.pop_back();
-        const Reinst& inst = _insts[id];
+        const reinst& inst = _insts[id];
         if(inst.type == OR)
         {
             stack.push_back(inst.u2.left_id);
@@ -1054,12 +1054,12 @@ void Reprog::optimize2()
     _startinst_ids.push_back(-1); // terminator mark
 }
 
-void Reprog::print()
+void reprog::print()
 {
     printf("Instructions:\n");
     for(int i = 0; i < _insts.size(); i++)
     {
-        const Reinst& inst = _insts[i];
+        const reinst& inst = _insts[i];
         printf("%d :", i);
         switch (inst.type)
         {
@@ -1137,7 +1137,7 @@ void Reprog::print()
     printf("\nClasses %d\n",count);
     for( int i = 0; i < count; i++ )
     {
-        const Reclass& cls = _classes[i];
+        const reclass& cls = _classes[i];
         int len = (int)cls.literals.size();
         printf("%2d: ", i);
         for( int j=0; j < len; j += 2 )
