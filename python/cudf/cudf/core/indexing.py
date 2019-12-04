@@ -187,6 +187,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import DataFrame
+        from cudf.core.dataframe import Series
         from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf.utils.cudautils import arange
@@ -195,6 +196,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         # Step 1: Gather columns
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
+            if isinstance(columns_df, Series):
+                return columns_df
         else:
             columns = self._get_column_selection(arg[1])
             columns_df = DataFrame()

@@ -69,17 +69,16 @@ class groupby {
   groupby& operator=(groupby&&) = delete;
 
   /**
-   * @brief Construct a groupby object with the specified @p `keys`
+   * @brief Construct a groupby object with the specified `keys`
    *
-   * If the @p `keys` are already sorted, better performance may be achieved by
-   * passing @p `keys_are_sorted == true` and indicating the
-   * ascending/descending order of each column and null order in @p
-   * `column_order` and
-   * @p `null_precedence`, respectively.
+   * If the `keys` are already sorted, better performance may be achieved by
+   * passing `keys_are_sorted == true` and indicating the  ascending/descending
+   * order of each column and null order in  `column_order` and
+   * `null_precedence`, respectively.
    *
-   * @note This object does *not* maintain the lifetime of @p `keys`. It is the
+   * @note This object does *not* maintain the lifetime of `keys`. It is the
    * user's responsibility to ensure the `groupby` object does not outlive the
-   * data viewed by the @p `keys` `table_view`.
+   * data viewed by the `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
    * @param ignore_null_keys Indicates whether rows in `keys` that contain NULL

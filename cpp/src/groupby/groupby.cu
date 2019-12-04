@@ -15,7 +15,10 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
@@ -29,7 +32,6 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
-
 
 // Constructor
 groupby::groupby(table_view const& keys, bool ignore_null_keys,
@@ -57,6 +59,29 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   }
 }
 
+namespace {
+auto empty_results(std::vector<aggregation_request> const& requests) {
+  std::vector<aggregation_result> empty_results;
+
+  std::transform(
+      requests.begin(), requests.end(), std::back_inserter(empty_results),
+      [](auto const& request) {
+        std::vector<std::unique_ptr<column>> results;
+
+        std::transform(
+            request.aggregations.begin(), request.aggregations.end(),
+            std::back_inserter(results), [&request](auto const& agg) {
+              return make_empty_column(experimental::detail::target_type(
+                  request.values.type(), agg->kind));
+            });
+
+        return aggregation_result{std::move(results)};
+      });
+
+  return empty_results;
+}
+}  // namespace
+
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::aggregate(std::vector<aggregation_request> const& requests,
@@ -67,8 +92,9 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
                            }),
                "Size mismatch between request values and groupby keys.");
   if (_keys.num_rows() == 0) {
-    // TODO Return appropriate empty results
+    std::make_pair(empty_like(_keys), empty_results(requests));
   }
+
   return dispatch_aggregation(requests, 0, mr);
 }
 }  // namespace groupby

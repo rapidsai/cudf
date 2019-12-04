@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from cudf.core import Buffer, DataFrame, Index, Series
+from cudf.core import Buffer, DataFrame, Index, MultiIndex, Series
 from cudf.core.column import CategoricalColumn
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
@@ -63,6 +63,10 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             else:
                 for col in o.columns:
                     df[col] = o[col]
+        if isinstance(objs[0], DataFrame) and isinstance(
+            objs[0].columns, MultiIndex
+        ):
+            df.columns = MultiIndex._concat([obj.columns for obj in objs])
         return df
 
     if len(typs) > 1:
