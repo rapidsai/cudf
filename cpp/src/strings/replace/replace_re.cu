@@ -54,7 +54,7 @@ template<size_t stack_size>
 struct replace_regex_fn
 {
     column_device_view const d_strings;
-    Reprog_device prog;
+    reprog_device prog;
     string_view const d_repl;
     size_type maxrepl;
     const int32_t* d_offsets{}; // these are null when
@@ -121,7 +121,7 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
+    auto prog = reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
     auto regex_insts = d_prog.insts_counts();
 

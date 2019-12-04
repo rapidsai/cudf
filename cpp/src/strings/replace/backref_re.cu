@@ -97,7 +97,7 @@ template<size_t stack_size>
 struct backrefs_fn
 {
     column_device_view const d_strings;
-    Reprog_device prog;
+    reprog_device prog;
     string_view const d_repl;   // string replacement template
     thrust::pair<size_type,size_type>* d_backrefs; // ref/pos pairs
     size_type backref_count;
@@ -180,7 +180,7 @@ std::unique_ptr<column> replace_with_backrefs( strings_column_view const& string
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
+    auto prog = reprog_device::create(pattern,get_character_flags_table(),strings_count,stream);
     auto d_prog = *prog;
     auto regex_insts = d_prog.insts_counts();
 

@@ -54,7 +54,7 @@ template<size_t stack_size>
 struct replace_multi_regex_fn
 {
     column_device_view const d_strings;
-    Reprog_device* progs; // array of regex progs
+    reprog_device* progs; // array of regex progs
     size_type number_of_patterns;
     column_device_view const d_repls; // replacment strings
     const int32_t* d_offsets{}; // these are null when
@@ -77,7 +77,7 @@ struct replace_multi_regex_fn
         {
             for( size_type ptn_idx=0; ptn_idx < number_of_patterns; ++ptn_idx )
             {
-                Reprog_device prog = progs[ptn_idx];
+                reprog_device prog = progs[ptn_idx];
                 prog.set_stack_mem(data1,data2);
                 size_type begin = ch_pos, end = ch_pos+1;
                 if( prog.find(idx,d_str,begin,end) > 0 )
@@ -130,11 +130,11 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
     auto d_flags = get_character_flags_table();
     // compile regexes into device objects
     size_type regex_insts = 0;
-    std::vector<std::unique_ptr<Reprog_device, std::function<void(Reprog_device*)> > > h_progs;
-    rmm::device_vector<Reprog_device> progs;
+    std::vector<std::unique_ptr<reprog_device, std::function<void(reprog_device*)> > > h_progs;
+    rmm::device_vector<reprog_device> progs;
     for( auto itr = patterns.begin(); itr != patterns.end(); ++itr )
     {
-        auto prog = Reprog_device::create(*itr,d_flags,strings_count,stream);
+        auto prog = reprog_device::create(*itr,d_flags,strings_count,stream);
         auto insts = prog->insts_counts();
         if( insts > regex_insts )
             regex_insts = insts;
