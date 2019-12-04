@@ -783,18 +783,20 @@ class DataFrame(object):
                 else:
                     result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
+            other_cols = dict(other.to_pandas())
+
             result_cols = list(self.columns)
-            for new_col in list(other.index):
+            for new_col in other_cols.keys():
                 if new_col not in result_cols:
                     result_cols.append(new_col)
             for col in result_cols:
                 if col in self.columns and col in other.index:
                     l_opr = self._cols[col]
-                    r_opr = other[other.index == col][0]
+                    r_opr = other_cols[col]
                 else:
                     if col not in self.columns:
                         l_opr = Series([np.nan] * len(self))
-                        r_opr = other[other.index == col][0]
+                        r_opr = other_cols[col]
                     if col not in other.index:
                         l_opr = self._cols[col]
                         r_opr = np.nan
