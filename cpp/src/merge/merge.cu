@@ -430,30 +430,9 @@ private:
 
     //collect index columns for lhs, rhs, resp.
     //
-    std::vector<cudf::column_view> left_index_cols;
-    std::vector<cudf::column_view> right_index_cols;
-    bool nullable{false};
-
-    //TODO: use `table_view select(std::vector<cudf::size_type> const& column_indices) const;`
-    //(when it becomes available; currently in PR# 3144)
-    //
-    for(auto&& indx: key_cols)
-      {
-        const cudf::column_view& left_col = left_table.column(indx);
-        const cudf::column_view& right_col= right_table.column(indx);
-
-        //for the purpose of generating merged indices, there's
-        //no point looking into _all_ table columns for nulls,
-        //just the index ones:
-        //
-        if( left_col.has_nulls() || right_col.has_nulls() )
-          nullable = true;
-        
-        left_index_cols.push_back(left_col);
-        right_index_cols.push_back(right_col);
-      }
-    cudf::table_view index_left_view{left_index_cols};   //table_view move cnstr. would be nice
-    cudf::table_view index_right_view{right_index_cols}; //same...
+    cudf::table_view index_left_view{left_table.select(key_cols)};  //table_view move cnstr. would be nice
+    cudf::table_view index_right_view{right_table.select(key_cols)};//same...
+    bool nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
     //extract merged row order according to indices:
     //
