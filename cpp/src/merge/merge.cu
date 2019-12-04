@@ -316,7 +316,7 @@ struct ColumnMerger
     //
     cudf::set_null_mask(merged_view.null_mask(),
                         merged_view.size(),
-                        ALL_VALID,
+                        true,
                         stream_);
 
     //set the null count:
