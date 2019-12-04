@@ -23,15 +23,15 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
-#include "join_common_utils.hpp"
-#include "join_kernels.cuh"
-#include "full_join.cuh"
+#include <join/join_common_utils.hpp>
+#include <join/join_kernels.cuh>
+#include <join/full_join.cuh>
 
 namespace cudf {
 
 namespace detail {
 
-using JoinType = ::cudf::detail::JoinType;
+using join_type = ::cudf::detail::join_type;
 using output_index_type = ::cudf::detail::output_index_type;
 
 /* --------------------------------------------------------------------------*/
@@ -42,7 +42,7 @@ using output_index_type = ::cudf::detail::output_index_type;
  * probe table is significantly larger than the build table, then we attempt
  * to estimate the output size by using only a subset of the rows in the probe table.
  *
- * @throws cudf::logic_error if join_type is not INNER_JOIN or LEFT_JOIN
+ * @throws cudf::logic_error if join_t is not INNER_JOIN or LEFT_JOIN
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
@@ -52,7 +52,7 @@ using output_index_type = ::cudf::detail::output_index_type;
  * @returns An estimate of the size of the output of the join operation
  */
 /* ----------------------------------------------------------------------------*/
-template <JoinType join_type,
+template <join_type join_t,
           typename multimap_type>
 std::unique_ptr<experimental::scalar_type_t<size_type>>
 estimate_join_output_size(
@@ -76,17 +76,17 @@ estimate_join_output_size(
   } else {
     // If the build table is empty, we know exactly how large the output
     // will be for the different types of joins and can return immediately
-    switch(join_type) {
+    switch(join_t) {
 
       // Inner join with an empty table will have no output
-      case JoinType::INNER_JOIN:
+      case join_type::INNER_JOIN:
         { return std::make_unique<experimental::scalar_type_t<size_type>>(
             0, true, stream, mr);
         }
 
       // Left join with an empty table will have an output of NULL rows
       // equal to the number of rows in the probe table
-      case JoinType::LEFT_JOIN:
+      case join_type::LEFT_JOIN:
         { return std::make_unique<experimental::scalar_type_t<size_type>>(
             probe_table_num_rows, true, stream, mr);
         }
@@ -108,11 +108,11 @@ estimate_join_output_size(
 
   CUDA_CHECK_LAST();
 
-  constexpr int block_size {DEFAULT_CUDA_BLOCK_SIZE};
+  constexpr int block_size {DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks {-1};
 
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<join_type, multimap_type, block_size, DEFAULT_CUDA_CACHE_SIZE>,
+    &numBlocks, compute_join_output_size<join_t, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>,
     block_size, 0
   ));
 
@@ -132,14 +132,14 @@ estimate_join_output_size(
     e.set_value(0);
     auto size_estimate = get_scalar_device_view(e);
 
-    RowHash hash_probe{probe_table};
+    row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
-    compute_join_output_size<join_type,
+    compute_join_output_size<join_t,
                              multimap_type,
                              block_size,
-                             DEFAULT_CUDA_CACHE_SIZE>
+                             DEFAULT_JOIN_CACHE_SIZE>
     <<<numBlocks * num_sms, block_size, 0, stream>>>(
         hash_table,
         build_table,
@@ -185,8 +185,8 @@ estimate_join_output_size(
         std::move(e));
 }
 
-template <JoinType join_type, typename index_type>
-std::enable_if_t<(join_type != JoinType::FULL_JOIN),
+template <join_type join_t, typename index_type>
+std::enable_if_t<(join_t != join_type::FULL_JOIN),
 std::unique_ptr<experimental::table>>
 get_base_hash_join_indices(
     table_view const& left,
@@ -195,11 +195,11 @@ get_base_hash_join_indices(
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
 
-  if ((join_type == JoinType::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_hash_join_indices<join_type, index_type>(right, left,  true, stream, mr);
+  if ((join_t == join_type::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
+    return get_base_hash_join_indices<join_t, index_type>(right, left,  true, stream, mr);
   }
   //Trivial left join case - exit early
-  if ((join_type == JoinType::LEFT_JOIN) && (right.num_rows() == 0)) {
+  if ((join_t == join_type::LEFT_JOIN) && (right.num_rows() == 0)) {
     rmm::device_buffer sequence_indices{
       sizeof(index_type)*left.num_rows(), stream, mr};
     thrust::device_ptr<index_type> sequence_indices_ptr(
@@ -223,7 +223,7 @@ get_base_hash_join_indices(
         left.num_rows(), stream, mr);
   }
 
-  using multimap_type = multimap_T<index_type>;
+  using multimap_type = multimap_t<index_type>;
 
   //TODO : attach stream to hash map class according to PR discussion #3272
 
@@ -242,10 +242,10 @@ get_base_hash_join_indices(
 
   // build the hash table
   if (build_table_num_rows > 0) {
-    RowHash hash_build{*build_table};
+    row_hash hash_build{*build_table};
     experimental::scalar_type_t<int> f(0, true, stream, mr);
     auto failure = get_scalar_device_view(f);
-    constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
+    constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(build_table_num_rows, block_size);
     build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         *hash_table,
@@ -258,7 +258,7 @@ get_base_hash_join_indices(
   }
 
   auto estimated_join_output_size =
-    estimate_join_output_size<join_type, multimap_type>(
+    estimate_join_output_size<join_t, multimap_type>(
         *build_table, *probe_table, *hash_table, stream, mr);
 
   size_type estimated_size = estimated_join_output_size->value();
@@ -284,19 +284,19 @@ get_base_hash_join_indices(
       sizeof(index_type)*estimated_size,
       stream, mr};
 
-    constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
+    constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
     global_write_index.set_value(0);
     auto write_index = get_scalar_device_view(global_write_index);
 
-    RowHash hash_probe{*probe_table};
+    row_hash hash_probe{*probe_table};
     row_equality equality{*probe_table, *build_table};
-    probe_hash_table<join_type,
+    probe_hash_table<join_t,
                      multimap_type,
                      hash_value_type,
                      output_index_type,
                      block_size,
-                     DEFAULT_CUDA_CACHE_SIZE>
+                     DEFAULT_JOIN_CACHE_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         *hash_table,
         *build_table,
@@ -319,9 +319,6 @@ get_base_hash_join_indices(
       break;
     }
   }
-
-  left_indices.resize(sizeof(index_type)*join_size, stream);
-  right_indices.resize(sizeof(index_type)*join_size, stream);
 
   return get_indices_table<index_type>(
       std::move(left_indices), std::move(right_indices),

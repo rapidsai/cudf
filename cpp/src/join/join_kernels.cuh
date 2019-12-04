@@ -18,6 +18,7 @@
 
 #include <cudf/table/table_device_view.cuh>
 #include <cub/cub.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include "join_common_utils.hpp"
 
@@ -72,7 +73,7 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 template<typename multimap_type, typename ScalarDeviceViewType>
 __global__ void build_hash_table(multimap_type multi_map,
                                  table_device_view build_table,
-                                 RowHash hash_build,
+                                 row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
                                  ScalarDeviceViewType error)
 {
@@ -106,20 +107,20 @@ __global__ void build_hash_table(multimap_type multi_map,
 * @param[in] probe_table The probe table
 * @param[in] probe_table_num_rows The number of rows in the probe table
 * @param[out] output_size The resulting output size
-  @tparam join_type The type of join to be performed
+  @tparam join_t The type of join to be performed
   @tparam multimap_type The datatype of the hash table
   @tparam output_cache_size The size of the shared memory cache for caching the join output results
 *
 */
 /* ----------------------------------------------------------------------------*/
-template< JoinType join_type,
+template< join_type join_t,
           typename multimap_type,
           int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type multi_map,
                                           table_device_view build_table,
                                           table_device_view probe_table,
-                                          RowHash hash_probe,
+                                          row_hash hash_probe,
                                           row_equality check_row_equality,
                                           const cudf::size_type probe_table_num_rows,
                                           numeric_scalar_device_view<cudf::size_type> output_size)
@@ -148,7 +149,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
     found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
-    bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);
+    bool running = (join_t == join_type::LEFT_JOIN) || (end != found);
     bool found_match = false;
 
     while ( running )
@@ -156,7 +157,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
       // TODO Simplify this logic...
 
       // Left joins always have an entry in the output
-      if (join_type == JoinType::LEFT_JOIN && (end == found)) {
+      if (join_t == join_type::LEFT_JOIN && (end == found)) {
         running = false;
       }
       // Stop searching after encountering an empty hash table entry
@@ -194,7 +195,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
           running = false;
       }
 
-      if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+      if ((join_t == join_type::LEFT_JOIN) && (!running) && (!found_match)) {
         ++thread_counter;
       }
     }
@@ -225,7 +226,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
  * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
  * @param[in] max_size The maximum size of the output
  * @param[in] offset An optional offset
- * @tparam join_type The type of join to be performed
+ * @tparam join_t The type of join to be performed
  * @tparam multimap_type The type of the hash table
  * @tparam output_index_type The datatype used for the indices in the output arrays
  * @tparam block_size The number of threads per block for this kernel
@@ -233,7 +234,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
  *
  */
 /* ----------------------------------------------------------------------------*/
-template< JoinType join_type,
+template< join_type join_t,
           typename multimap_type,
           typename key_type,
           typename output_index_type,
@@ -242,7 +243,7 @@ template< JoinType join_type,
 __global__ void probe_hash_table( multimap_type multi_map,
                                   table_device_view build_table,
                                   table_device_view probe_table,
-                                  RowHash hash_probe,
+                                  row_hash hash_probe,
                                   row_equality check_row_equality,
                                   const cudf::size_type probe_table_num_rows,
                                   output_index_type * join_output_l,
@@ -252,7 +253,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
                                   bool flip_results,
                                   const output_index_type offset = 0)
 {
-  constexpr int num_warps = block_size/warp_size;
+  constexpr int num_warps = block_size/experimental::detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
   __shared__ output_index_type join_shared_r[num_warps][output_cache_size];
@@ -263,8 +264,8 @@ __global__ void probe_hash_table( multimap_type multi_map,
       output_r = join_output_l;
   }
 
-  const int warp_id = threadIdx.x/warp_size;
-  const int lane_id = threadIdx.x%warp_size;
+  const int warp_id = threadIdx.x/experimental::detail::warp_size;
+  const int lane_id = threadIdx.x%experimental::detail::warp_size;
 
   if ( 0 == lane_id )
   {
@@ -295,7 +296,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
     probe_row_hash_value = hash_probe(probe_row_index);
     found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
-    bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
+    bool running = (join_t == join_type::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
     while ( __any_sync( activemask, running ) )
@@ -308,7 +309,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
         // TODO Simplify this logic...
 
         // Left joins always have an entry in the output
-        if (join_type == JoinType::LEFT_JOIN && (end == found)) {
+        if (join_t == join_type::LEFT_JOIN && (end == found)) {
           running = false;
         }
         // Stop searching after encountering an empty hash table entry
@@ -350,7 +351,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
         }
 
         // If performing a LEFT join and no match was found, insert a Null into the output
-        if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+        if ((join_t == join_type::LEFT_JOIN) && (!running) && (!found_match)) {
           const output_index_type probe_index{offset + probe_row_index};
           add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
         }
@@ -360,7 +361,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
       __syncwarp(activemask);
 #endif
       //flush output cache if next iteration does not fit
-      if ( current_idx_shared[warp_id] + warp_size >= output_cache_size )
+      if ( current_idx_shared[warp_id] + experimental::detail::warp_size >= output_cache_size )
       {
 
         // count how many active threads participating here which could be less than warp_size
@@ -375,7 +376,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
           output_offset = atomicAdd( current_idx.data(), current_idx_shared[warp_id] );
         }
 
-        output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
+        output_offset = cub::ShuffleIndex(output_offset, 0, experimental::detail::warp_size, activemask);
 
         for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads )
         {
@@ -412,7 +413,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
         output_offset = atomicAdd( current_idx.data(), current_idx_shared[warp_id] );
       }
 
-      output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
+      output_offset = cub::ShuffleIndex(output_offset, 0, experimental::detail::warp_size, activemask);
 
       for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads )
       {

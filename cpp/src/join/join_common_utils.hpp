@@ -32,13 +32,12 @@ namespace detail {
 using output_index_type = ::cudf::size_type;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
-constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
-constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
-constexpr int warp_size = 32;
+constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
+constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr output_index_type JoinNoneValue = -1;
 
 template <typename index_type>
-using multimap_T =
+using multimap_t =
   concurrent_unordered_multimap<hash_value_type,
                                 index_type,
                                 size_t,
@@ -48,30 +47,28 @@ using multimap_T =
                                 equal_to<hash_value_type>,
                                 legacy_allocator< thrust::pair<hash_value_type, index_type> > >;
 
-using RowHash =
+using row_hash =
 cudf::experimental::row_hasher<default_hash>;
 
-enum class JoinType {
+enum class join_type {
   INNER_JOIN,
   LEFT_JOIN,
   FULL_JOIN
 };
 
-template <typename index_type>
-inline
-data_type
-integer_type(void) {
-  cudf::type_id type;
-  switch(sizeof(index_type))
-  {
-    case 1 : type = INT8;  break;
-    case 2 : type = INT16; break;
-    case 4 : type = INT32; break;
-    case 8 : type = INT64; break;
-  }
-  return data_type(type);
-}
-
+/* --------------------------------------------------------------------------*/
+/**
+* @Synopsis  Creates a table containing two empty indices column for trivial
+* join.
+*
+* @param mr Optional, the memory resource that will be used for allocating
+* the device memory for the new column
+* @param stream Optional, stream on which all memory allocations and copies
+* will be performed
+*
+* @Returns  Table containing empty indices.
+*/
+/* ----------------------------------------------------------------------------*/
 template <typename index_type>
 std::unique_ptr<cudf::experimental::table>
 get_empty_index_table(
@@ -80,11 +77,11 @@ get_empty_index_table(
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(
         std::make_unique<column>(
-          integer_type<index_type>(), 0,
+          data_type(cudf::experimental::type_to_id<index_type>()), 0,
           rmm::device_buffer{0, stream, mr}));
     columns.emplace_back(
         std::make_unique<column>(
-          integer_type<index_type>(), 0,
+          data_type(cudf::experimental::type_to_id<index_type>()), 0,
           rmm::device_buffer{0, stream, mr}));
     return std::make_unique<cudf::experimental::table>(std::move(columns));
 }
@@ -139,6 +136,22 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
   return std::make_unique<experimental::table>(tmp_table);
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+* @Synopsis  Convenience function to wrap device_buffer's containing join
+* indices result into a table.
+*
+* @param left_indices Device buffer containing left indices result of join
+* @param right_indices Device buffer containing right indices result of join
+* @param join_size Number of indices contained in the buffers
+* @param stream Optional, stream on which all memory allocations and copies
+* will be performed
+* @param mr Optional, the memory resource that will be used for allocating
+* the device memory for the new column
+*
+* @Returns  Table containing join indices result.
+*/
+/* ----------------------------------------------------------------------------*/
 template <typename index_type, typename B = rmm::device_buffer>
 std::unique_ptr<cudf::experimental::table>
 get_indices_table(
@@ -151,16 +164,14 @@ get_indices_table(
   rmm::device_buffer r{std::forward<B>(right_indices)};
   l.resize(sizeof(index_type)*join_size, stream);
   r.resize(sizeof(index_type)*join_size, stream);
-  //l.shrink_to_fit(stream);//TODO : probably not needed since indices are temp for the duration of join
-  //r.shrink_to_fit(stream);//TODO : probably not needed since indices are temp for the duration of join
   std::vector<std::unique_ptr<column>> columns;
   columns.emplace_back(
       std::make_unique<column>(
-        integer_type<index_type>(), join_size,
+        data_type(cudf::experimental::type_to_id<index_type>()), join_size,
         std::move(l)));
   columns.emplace_back(
       std::make_unique<column>(
-        integer_type<index_type>(), join_size,
+        data_type(cudf::experimental::type_to_id<index_type>()), join_size,
         std::move(r)));
   return std::make_unique<cudf::experimental::table>(std::move(columns));
 }

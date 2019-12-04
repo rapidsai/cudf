@@ -103,7 +103,7 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
-- PR #3224 Join implemented using new cudf::table class.
+- PR #3224 Define and implement new join APIs.
 - PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3350 Port NVStrings booleans convert functions
 - PR #3231 Add `column::release()` to give up ownership of contents.

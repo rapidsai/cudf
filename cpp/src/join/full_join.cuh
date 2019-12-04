@@ -15,24 +15,24 @@
  */
 #pragma once
 
-#include "join_common_utils.hpp"
+#include <join/join_common_utils.hpp>
 #include <cudf/copying.hpp>
 
 namespace cudf {
 
 namespace detail {
 
-template <typename size_type>
-struct ValidRange {
-    size_type start, stop;
+template <typename T>
+struct valid_range {
+    T start, stop;
     __host__ __device__
-    ValidRange(
-            const size_type begin,
-            const size_type end) :
+    valid_range(
+            const T begin,
+            const T end) :
         start(begin), stop(end) {}
 
     __host__ __device__ __forceinline__
-    bool operator()(const size_type index)
+    bool operator()(const T index)
     {
         return ((index >= start) && (index < stop));
     }
@@ -41,7 +41,7 @@ struct ValidRange {
 /* --------------------------------------------------------------------------*/
 /**
 * @Synopsis  Creates a column of indices containing values from 0 to
-* right_table_row_count - 1 is created exluding those in the right_indices
+* right_table_row_count - 1 excluding those in the right_indices
 * column.
 *
 * @Param right_indices Column of indices
@@ -87,7 +87,7 @@ create_missing_indices(
     //Assume all the indices in invalid_index_map are invalid
     rmm::device_vector<index_type> invalid_index_map(right_table_row_count, 1);
     //Functor to check for index validity since left joins can create invalid indices
-    ValidRange<size_type> valid_range(0, right_table_row_count);
+    valid_range<size_type> valid(0, right_table_row_count);
 
     //invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     //Thus specifying that those locations are valid
@@ -98,7 +98,7 @@ create_missing_indices(
         right_indices.begin<index_type>(),//Index locations
         right_indices.begin<index_type>(),//Stencil - Check if index location is valid
         invalid_index_map.begin(),//Output indices
-        valid_range);//Stencil Predicate
+        valid);//Stencil Predicate
     size_type begin_counter = static_cast<size_type>(0);
     size_type end_counter = static_cast<size_type>(right_table_row_count);
 
@@ -113,15 +113,33 @@ create_missing_indices(
       unmatched_indices_ptr;
   }
   return std::make_unique<column>(
-      integer_type<index_type>(),
+      data_type(cudf::experimental::type_to_id<index_type>()),
       indices_count,
       std::move(unmatched_indices));
 }
 
 
+/* --------------------------------------------------------------------------*/
+/**
+* @Synopsis  Creates a table containing the complement of left join indices.
+* This table has two columns. The first one is filled with JoinNoneValue(-1)
+* and the second one contains values from 0 to right_table_row_count - 1
+* excluding those found in the right_indices column.
+* 
+* @Param right_indices Column of indices
+* @Param left_table_row_count Number of rows of left table
+* @Param right_table_row_count Number of rows of right table
+* @param mr Optional, the memory resource that will be used for allocating
+* the device memory for the new column
+* @param stream Optional, stream on which all memory allocations and copies
+* will be performed
+*
+* @Returns  Table containing the left join indices complement
+*/
+/* ----------------------------------------------------------------------------*/
 template <typename index_type>
 std::unique_ptr<experimental::table>
-get_join_indices_complement(
+get_left_join_indices_complement(
     column_view const& right_indices,
     size_type left_table_row_count,
     size_type right_table_row_count,

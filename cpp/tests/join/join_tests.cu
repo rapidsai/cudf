@@ -26,6 +26,7 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -279,4 +280,285 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+}
+
+//Empty Left Table
+TEST_F(JoinTest, EmptyLeftTableInnerJoin)
+{
+  column_wrapper <int32_t> col0_0;
+  column_wrapper <int32_t> col0_1;
+
+  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table empty0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::inner_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(empty0, *result);
+}
+
+TEST_F(JoinTest, EmptyLeftTableLeftJoin)
+{
+  column_wrapper <int32_t> col0_0;
+  column_wrapper <int32_t> col0_1;
+
+  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table empty0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::left_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(empty0, *result);
+}
+
+TEST_F(JoinTest, EmptyLeftTableFullJoin)
+{
+  column_wrapper <int32_t> col0_0;
+  column_wrapper <int32_t> col0_1;
+
+  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table empty0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::full_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(t1, *result);
+}
+
+//Empty Right Table
+TEST_F(JoinTest, EmptyRightTableInnerJoin)
+{
+  column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}};
+  column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  column_wrapper <int32_t> col1_0;
+  column_wrapper <int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
+
+  auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(empty1, *result);
+}
+
+TEST_F(JoinTest, EmptyRightTableLeftJoin)
+{
+  column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}, {1, 1, 1, 1, 1}};
+  column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  column_wrapper <int32_t> col1_0;
+  column_wrapper <int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
+
+  auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(t0, *result);
+}
+
+TEST_F(JoinTest, EmptyRightTableFullJoin)
+{
+  column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}};
+  column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  column_wrapper <int32_t> col1_0;
+  column_wrapper <int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
+
+  auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(t0, *result);
+}
+
+//Both tables empty
+TEST_F(JoinTest, BothEmptyInnerJoin)
+{
+  column_wrapper <int32_t> col0_0;
+  column_wrapper <int32_t> col0_1;
+
+  column_wrapper <int32_t> col1_0;
+  column_wrapper <int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
+
+  auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(empty1, *result);
+}
+
+TEST_F(JoinTest, BothEmptyLeftJoin)
+{
+  column_wrapper <int32_t> col0_0;
+  column_wrapper <int32_t> col0_1;
+
+  column_wrapper <int32_t> col1_0;
+  column_wrapper <int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
+
+  auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(empty1, *result);
+}
+
+TEST_F(JoinTest, BothEmptyFullJoin)
+{
+  column_wrapper <int32_t> col0_0;
+  column_wrapper <int32_t> col0_1;
+
+  column_wrapper <int32_t> col1_0;
+  column_wrapper <int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
+
+  auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  cudf::test::expect_tables_equal(empty1, *result);
+}
+
+//EqualValues X Inner,Left,Full
+
+TEST_F(JoinTest, EqualValuesInnerJoin)
+{
+  column_wrapper <int32_t> col0_0{{0, 0}};
+  strcol_wrapper           col0_1({"s0", "s0"});
+
+  column_wrapper <int32_t> col1_0{{0, 0}};
+  strcol_wrapper           col1_1({"s0", "s0"});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+
+  column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
+  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  Table gold(std::move(cols_gold));
+
+  cudf::test::expect_tables_equal(gold, *result);
+}
+
+TEST_F(JoinTest, EqualValuesLeftJoin)
+{
+  column_wrapper <int32_t> col0_0{{0, 0}};
+  strcol_wrapper           col0_1({"s0", "s0"});
+
+  column_wrapper <int32_t> col1_0{{0, 0}};
+  strcol_wrapper           col1_1({"s0", "s0"});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+
+  column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}, {1, 1, 1, 1}};
+  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  Table gold(std::move(cols_gold));
+
+  cudf::test::expect_tables_equal(gold, *result);
+}
+
+TEST_F(JoinTest, EqualValuesFullJoin)
+{
+  column_wrapper <int32_t> col0_0{{0, 0}};
+  strcol_wrapper           col0_1({"s0", "s0"});
+
+  column_wrapper <int32_t> col1_0{{0, 0}};
+  strcol_wrapper           col1_1({"s0", "s0"});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+
+  column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
+  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"});
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  Table gold(std::move(cols_gold));
+
+  cudf::test::expect_tables_equal(gold, *result);
 }

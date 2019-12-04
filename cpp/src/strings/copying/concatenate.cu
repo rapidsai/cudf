@@ -31,10 +31,17 @@ namespace strings
 namespace detail
 {
 
-std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& strings_columns,
+std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& s_columns,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream )
 {
+    //Workaround for concatenating 0 length string column view
+    std::vector<strings_column_view> strings_columns;
+    for (auto& s : s_columns) {
+      if (s.size() != 0) {
+        strings_columns.push_back(s);
+      }
+    }
     // calculate the size of the output column
     size_t strings_count = thrust::transform_reduce( strings_columns.begin(), strings_columns.end(),
         [] (auto scv) { return scv.size(); }, static_cast<size_t>(0), thrust::plus<size_t>());

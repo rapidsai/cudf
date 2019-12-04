@@ -43,15 +43,15 @@ namespace cudf {
  * Result: { a: {1, 2}, b: {1, 2}, c: {1, 2} }
  *
  * @throws cudf::logic_error 
- * if either table is empty or if number of rows in either table exceeds INT_MAX
- * if number of elements in `right_on` and `left_on` are not equal
+ * if either table is empty or if the number of rows in either table exceeds
+ * INT_MAX if number of elements in `right_on` and `left_on` are not equal
  *
  * @param[in] left The left table
  * @param[in] right The right table
- * @param[in] left_on The column's indices from `left` to join on.
+ * @param[in] left_on The column indices from `left` to join on.
  * The column from `left` indicated by `left_on[i]` will be compared against the column 
  * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column's indices from `right` to join on.
+ * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column 
  * from `left` indicated by `left_on[i]`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
@@ -72,6 +72,7 @@ std::unique_ptr<cudf::experimental::table> inner_join(
                          std::vector<cudf::size_type> const& right_on,
                          std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
@@ -91,15 +92,15 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * Result: { a: {0, 1, 2}, b: {NULL, 1, 2}, c: {NULL, 1, 2} }
  *
  * @throws cudf::logic_error
- * if either table is empty or if number of rows in either table exceeds INT_MAX
- * if number of elements in `right_on` and `left_on` are not equal
+ * if either table is empty or if the number of rows in either table exceeds
+ * INT_MAX if number of elements in `right_on` and `left_on` are not equal
  *
  * @param[in] left The left table
  * @param[in] right The right table
- * @param[in] left_on The column's indices from `left` to join on.
+ * @param[in] left_on The column indices from `left` to join on.
  * The column from `left` indicated by `left_on[i]` will be compared against the column 
  * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column's indices from `right` to join on.
+ * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column 
  * from `left` indicated by `left_on[i]`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
@@ -140,15 +141,15 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
  *
  * @throws cudf::logic_error
- * if either table is empty or if number of rows in either table exceeds INT_MAX
- * if number of elements in `right_on` and `left_on` are not equal
+ * if either table is empty or if the number of rows in either table exceeds
+ * INT_MAX if number of elements in `right_on` and `left_on` are not equal
  *
  * @param[in] left The left table
  * @param[in] right The right table
- * @param[in] left_on The column's indices from `left` to join on.
+ * @param[in] left_on The column indices from `left` to join on.
  * The column from `left` indicated by `left_on[i]` will be compared against the column 
  * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column's indices from `right` to join on.
+ * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column 
  * from `left` indicated by `left_on[i]`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
