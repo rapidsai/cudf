@@ -50,7 +50,7 @@ struct hex_to_integer_fn
     /**
      * @brief Converts a single hex string into an integer.
      *
-     * Non-hexidecimal characters are ignored.
+     * Non-hexadecimal characters are ignored.
      * This means it can handle "0x01A23" and "1a23".
      *
      * Overflow of the int64 type is not detected.
@@ -135,7 +135,7 @@ std::unique_ptr<column> hex_to_integers( strings_column_view const& strings,
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
-        return make_numeric_column( output_type, 0 );
+        return make_empty_column( output_type );
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_strings = *strings_column;
     // create integer output column copying the strings null-mask

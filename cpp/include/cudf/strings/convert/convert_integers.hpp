@@ -70,7 +70,7 @@ std::unique_ptr<column> from_integers( column_view const& integers,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns a new integer numeric column parsing hexidecimal values from the
+ * @brief Returns a new integer numeric column parsing hexadecimal values from the
  * provided strings column.
  *
  * Any null entries will result in corresponding null entries in the output column.
