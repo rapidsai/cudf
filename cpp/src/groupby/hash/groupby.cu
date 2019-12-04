@@ -57,7 +57,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
  * @return true `t` is valid for a hash based groupby
  * @return false `t` is invalid for a hash based groupby
  */
-constexpr bool is_hash_aggregation(aggregation::Kind t) {
+bool is_hash_aggregation(aggregation::Kind t) {
   return array_contains(hash_aggregations, t);
 }
 }  // namespace
