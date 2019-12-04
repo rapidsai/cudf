@@ -49,11 +49,12 @@ public:
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-    auto destination = cudf::test::fixed_width_column_wrapper<T>(
-                         thrust::make_counting_iterator(0),
-                         thrust::make_counting_iterator(0) + size,
-                         cudf::test::make_counting_transform_iterator(
-                           0, destination_validity));
+    auto destination =
+      cudf::test::fixed_width_column_wrapper<T>(
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(0) + size,
+        cudf::test::make_counting_transform_iterator(
+        0, destination_validity));
 
     std::unique_ptr<cudf::scalar> p_val{nullptr};
     cudf::data_type type{cudf::experimental::type_to_id<T>()};
@@ -106,13 +107,13 @@ TYPED_TEST(FillTypedTestFixture, SetSingle)
   using T = TypeParam;
 
   cudf::size_type index{9};
-  T val{1};
+  T value{1};
 
   // First set it as valid
-  this->test(index, index+1, val, true);
+  this->test(index, index + 1, value, true);
 
   // next set it as invalid
-  this->test(index, index+1, val, false);
+  this->test(index, index + 1, value, false);
 }
 
 TYPED_TEST(FillTypedTestFixture, SetAll)
@@ -121,13 +122,13 @@ TYPED_TEST(FillTypedTestFixture, SetAll)
 
   cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-  T val{1};
+  T value{1};
 
   // First set it as valid
-  this->test(0, size, val, true);
+  this->test(0, size, value, true);
 
   // next set it as invalid
-  this->test(0, size, val, false);
+  this->test(0, size, value, false);
 }
 
 TYPED_TEST(FillTypedTestFixture, SetRange)
@@ -136,13 +137,13 @@ TYPED_TEST(FillTypedTestFixture, SetRange)
 
   cudf::size_type begin{99};
   cudf::size_type end{299};
-  T val{1};
+  T value{1};
 
   // First set it as valid
-  this->test(begin, end, val, true);
+  this->test(begin, end, value, true);
 
   // Next set it as invalid
-  this->test(begin, end, val, false);
+  this->test(begin, end, value, false);
 }
 
 TYPED_TEST(FillTypedTestFixture, SetRangeNullCount)
@@ -153,22 +154,136 @@ TYPED_TEST(FillTypedTestFixture, SetRangeNullCount)
 
   cudf::size_type begin{10};
   cudf::size_type end{50};
-  T val{1};
+  T value{1};
 
   // First set it as valid value
-  this->test(begin, end, val, true, odd_valid);
+  this->test(begin, end, value, true, odd_valid);
 
   // Next set it as invalid
-  this->test(begin, end, val, false, odd_valid);
+  this->test(begin, end, value, false, odd_valid);
 
   // All invalid column should have some valid
-  this->test(begin, end, val, true, all_invalid);
+  this->test(begin, end, value, true, all_invalid);
 
   // All should be invalid
-  this->test(begin, end, val, false, all_invalid);
+  this->test(begin, end, value, false, all_invalid);
 
   // All should be valid
-  this->test(0, size, val, true, odd_valid);
+  this->test(0, size, value, true, odd_valid);
+}
+
+class FillStringTestFixture : public cudf::test::BaseFixture {
+public:
+  static constexpr cudf::size_type column_size{100};
+
+  template <typename BitInitializerType = decltype(all_valid)>
+  void test(cudf::size_type begin,
+           cudf::size_type end,
+           std::string value,
+           bool value_is_valid = true,
+           BitInitializerType destination_validity = all_valid) {
+    cudf::size_type size{FillStringTestFixture::column_size};
+
+    auto destination_elements =
+      cudf::test::make_counting_transform_iterator(
+        0, [](auto i) { return "#" + std::to_string(i); });
+    auto destination =
+      cudf::test::strings_column_wrapper(
+        destination_elements, destination_elements + size,
+        cudf::test::make_counting_transform_iterator(0, destination_validity));
+
+    auto p_val = cudf::make_string_scalar(value);
+    using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+    static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
+
+    auto p_chars = value.c_str();
+    auto num_chars = value.length();
+    auto expected_elements =
+      cudf::test::make_counting_transform_iterator(
+        0,
+        [begin, end, p_chars, num_chars](auto i) {
+          return (i >= begin && i < end) ?
+            std::string(p_chars, num_chars) : "#" + std::to_string(i);
+        });
+    auto expected =
+      cudf::test::strings_column_wrapper(
+        expected_elements, expected_elements + size,
+        cudf::test::make_counting_transform_iterator(
+        0,
+        [begin, end, value_is_valid, destination_validity](auto i) {
+          return (i >= begin && i < end) ?
+            value_is_valid : destination_validity(i);
+        }));
+
+    auto p_ret = cudf::experimental::fill(destination, begin, end, *p_val);
+    cudf::test::expect_columns_equal(*p_ret, expected);
+  }
+};
+
+TEST_F(FillStringTestFixture, SetSingle)
+{
+  cudf::size_type size{FillStringTestFixture::column_size};
+
+  cudf::size_type index{9};
+  auto value = "#" + std::to_string(size * 2);
+
+  // First set it as valid
+  this->test(index, index + 1, value, true);
+
+  // next set it as invalid
+  this->test(index, index + 1, value, false);
+}
+
+TEST_F(FillStringTestFixture, SetAll)
+{
+  cudf::size_type size{FillStringTestFixture::column_size};
+
+  auto value = "#" + std::to_string(size * 2);
+
+  // First set it as valid
+  this->test(0, size, value, true);
+
+  // next set it as invalid
+  this->test(0, size, value, false);
+}
+
+TEST_F(FillStringTestFixture, SetRange)
+{
+  cudf::size_type size{FillStringTestFixture::column_size};
+
+  cudf::size_type begin{9};
+  cudf::size_type end{99};
+  auto value = "#" + std::to_string(size * 2);
+
+  // First set it as valid
+  this->test(begin, end, value, true);
+
+  // Next set it as invalid
+  this->test(begin, end, value, false);
+}
+
+TEST_F(FillStringTestFixture, SetRangeNullCount)
+{
+  cudf::size_type size{FillStringTestFixture::column_size};
+
+  cudf::size_type begin{10};
+  cudf::size_type end{50};
+  auto value = "#" + std::to_string(size * 2);
+
+  // First set it as valid value
+  this->test(begin, end, value, true, odd_valid);
+
+  // Next set it as invalid
+  this->test(begin, end, value, false, odd_valid);
+
+  // All invalid column should have some valid
+  this->test(begin, end, value, true, all_invalid);
+
+  // All should be invalid
+  this->test(begin, end, value, false, all_invalid);
+
+  // All should be valid
+  this->test(0, size, value, true, odd_valid);
 }
 
 class FillErrorTestFixture : public cudf::test::BaseFixture {};
@@ -272,19 +387,5 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(
                  destination, 0, 10, *p_val),
-               cudf::logic_error);
-}
-
-TEST_F(FillErrorTestFixture, StringCategoryNotSupported)
-{
-  auto p_val = cudf::make_string_scalar("five");
-
-  std::vector<std::string>
-    strings{"", "this", "is", "a", "column", "of", "strings"};
-  auto destination_string =
-    cudf::test::strings_column_wrapper(strings.begin(), strings.end());
-
-  EXPECT_THROW(auto p_ret = cudf::experimental::fill(
-                 destination_string, 0, 1, *p_val),
                cudf::logic_error);
 }
