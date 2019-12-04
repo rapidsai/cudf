@@ -28,6 +28,7 @@
 #include <cudf/cudf.h>
 #include <gtest/gtest.h>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture{};
 
@@ -125,6 +126,22 @@ TEST_F(ReplaceNullsStringsTest, ReplaceNone) {
 
   std::unique_ptr<cudf::column> result;
   ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+
+  cudf::test::expect_columns_equal(*result, expected_w);
+}
+
+TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar) {
+  std::vector<std::string> input{"","","","","","","",""};
+  std::vector<cudf::valid_type> input_v{0,0,0,0,0,0,0,0};
+  std::unique_ptr<cudf::scalar> repl = cudf::make_string_scalar("rep", 0, mr());
+  repl->set_valid(true, 0);
+  std::vector<std::string> expected{"rep","rep","rep","rep","rep","rep","rep","rep"};
+
+  cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
+  cudf::test::strings_column_wrapper expected_w{expected.begin(), expected.end()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, *repl, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
