@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/copying.hpp>
 
@@ -150,7 +151,8 @@ struct rolling_window_launcher
     std::unique_ptr<column> output = (op == rolling_operator::COUNT) ?
         make_numeric_column(cudf::data_type{cudf::INT32}, input.size(),
                             cudf::UNINITIALIZED, stream, mr) :
-        allocate_like(input, cudf::experimental::mask_allocation_policy::ALWAYS, mr);
+        cudf::experimental::detail::allocate_like(input, input.size(),
+          cudf::experimental::mask_allocation_policy::ALWAYS, mr, stream);
 
     constexpr cudf::size_type block_size = 256;
     cudf::experimental::detail::grid_1d grid(input.size(), block_size);
