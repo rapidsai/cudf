@@ -21,6 +21,9 @@ namespace io {
 namespace parquet {
 namespace gpu {
 
+// Spark doesn't support RLE encoding for BOOLEANs
+#define ENABLE_BOOL_RLE             0
+
 #define INIT_HASH_BITS              12
 
 struct frag_init_state_s
@@ -816,6 +819,46 @@ static __device__ void RleEncode(page_enc_state_s *s, uint32_t numvals, uint32_t
 }
 
 
+/**
+ * @brief PLAIN bool encoder
+ *
+ * @param[in,out] s Page encode state
+ * @param[in] numvals Total count of input values
+ * @param[in] flush nonzero if last batch in block
+ * @param[in] t thread id (0..127)
+ */
+static __device__ void PlainBoolEncode(page_enc_state_s *s, uint32_t numvals, uint32_t flush, uint32_t t)
+{
+    uint32_t rle_pos = s->rle_pos;
+    uint8_t *dst = s->rle_out;
+
+    while (rle_pos < numvals) {
+        uint32_t pos = rle_pos + t;
+        uint32_t v = (pos < numvals) ? s->vals[pos & (RLE_BFRSZ - 1)] : 0;
+        uint32_t n = min(numvals - rle_pos, 128);
+        uint32_t nbytes = (n + ((flush) ? 7 : 0)) >> 3;
+        if (!nbytes) {
+            break;
+        }
+        v |= SHFL_XOR(v, 1) << 1;
+        v |= SHFL_XOR(v, 2) << 2;
+        v |= SHFL_XOR(v, 4) << 4;
+        if (t < n && !(t & 7))
+        {
+            dst[t >> 3] = v;
+        }
+        rle_pos = min(rle_pos + nbytes * 8, numvals);
+        dst += nbytes;
+    }
+    __syncthreads();
+    if (!t) {
+        s->rle_pos = rle_pos;
+        s->rle_numvals = numvals;
+        s->rle_out = dst;
+    }
+}
+
+
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128, 8)
 gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, uint32_t start_page)
@@ -947,6 +990,12 @@ gpuEncodePages(EncPage *pages, const EncColumnChunk *chunks, gpu_inflate_input_s
                 }
                 rle_numvals += s->scratch_red[3];
                 __syncthreads();
+            #if !ENABLE_BOOL_RLE
+                if (dtype == BOOLEAN) {
+                    PlainBoolEncode(s, rle_numvals, (cur_row == s->page.num_rows), t);
+                }
+                else
+            #endif
                 RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
                 __syncthreads();
             }
@@ -1308,7 +1357,11 @@ gpuEncodePageHeaders(EncPage *pages, EncColumnChunk *chunks, const gpu_inflate_s
             int page_type = page_g.page_type;
             // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and RLE_DICTIONARY in data page,
             // but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data pages (actual encoding is identical).
+        #if ENABLE_BOOL_RLE
             int encoding = (col_g.physical_type != BOOLEAN) ? (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN : RLE;
+        #else
+            int encoding = (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN;
+        #endif
             CPW_FLD_INT32(1, page_type)
             CPW_FLD_INT32(2, uncompressed_page_size)
             CPW_FLD_INT32(3, compressed_page_size)
