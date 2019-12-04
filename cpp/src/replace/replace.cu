@@ -182,7 +182,6 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
   if (input_has_nulls or replacement_has_nulls) {
-    __syncthreads(); // waiting for the valid counts of each warp to be ready
 
     // Compute total valid count for this block and add it to global count
     uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
