@@ -177,7 +177,6 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
       }
     }
 
-
     i += blockDim.x * gridDim.x;
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
