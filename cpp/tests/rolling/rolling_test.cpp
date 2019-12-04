@@ -116,13 +116,10 @@ protected:
 
     // input data and mask
   
-    std::vector<bitmask_type> in_valid; 
-    //std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
-    in_valid = cudf::test::bitmask_to_host(input);
+    std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
     bitmask_type* valid_mask = in_valid.data();
-    
+
     for(size_type i = 0; i < num_rows; i++) {
-      size_type count = 0;
       // load sizes
       min_periods = std::max(min_periods, 1); // at least one observation is required
 
@@ -131,8 +128,9 @@ protected:
       auto forward_window = forward_window_col[i%forward_window_col.size()];
       size_type start_index = std::max((size_type)0, i - window + 1);
       size_type end_index = std::min(num_rows, i + forward_window + 1); // exclusive
-      
+
       // aggregate
+      size_type count = 0;
       for (size_type j = start_index; j < end_index; j++) {
         if (!input.nullable() || cudf::bit_is_set(valid_mask, j))
           count++;
@@ -168,7 +166,7 @@ protected:
     agg_op op;
     for(size_type i = 0; i < num_rows; i++) {
       T val = agg_op::template identity<T>();
-      size_type count = 0;
+
       // load sizes
       min_periods = std::max(min_periods, 1); // at least one observation is required
 
@@ -179,6 +177,7 @@ protected:
       size_type end_index = std::min(num_rows, i + forward_window + 1); // exclusive
       
       // aggregate
+      size_type count = 0;
       for (size_type j = start_index; j < end_index; j++) {
         if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
           val = op(in_col[j], val);
@@ -413,8 +412,7 @@ TYPED_TEST(RollingTest, AllInvalid)
   size_type num_rows = 1000;
 
   std::vector<TypeParam> col_data(num_rows);
-  std::vector<bool>      col_mask(num_rows);
-  std::fill(col_mask.begin(), col_mask.end(), 0);
+  std::vector<bool>      col_mask(num_rows, 0);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
   std::vector<size_type> window({100});
@@ -428,11 +426,9 @@ TYPED_TEST(RollingTest, ZeroWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows);
-  std::vector<bool>      col_mask(num_rows);
-  std::fill(col_data.begin(), col_data.end(), 1);
-  std::fill(col_mask.begin(), col_mask.end(), 1);
-
+  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<bool>      col_mask(num_rows, 1);
+  
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
   std::vector<size_type> window({0});
   size_type periods = num_rows;
@@ -445,10 +441,9 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows);
-  std::vector<bool>      col_mask(num_rows);
-  std::fill(col_data.begin(), col_data.end(), 1);
-  std::fill(col_mask.begin(), col_mask.end(), 1);
+  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<bool>      col_mask(num_rows, 1);
+
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
 
   std::vector<size_type> window({num_rows});
@@ -464,10 +459,9 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows);
-  std::vector<bool>      col_mask(num_rows);
-  std::fill(col_data.begin(), col_data.end(), 1);
-  std::fill(col_mask.begin(), col_mask.end(), 1);
+  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<bool>      col_mask(num_rows, 1);
+  
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
 
   std::vector<size_type> window({num_rows});
