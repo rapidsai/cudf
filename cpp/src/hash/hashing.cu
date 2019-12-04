@@ -18,7 +18,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/nvtx_utils.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/scatter.hpp>
@@ -34,15 +33,17 @@ namespace {
  * that uses the modulo operation.
  */
 template <typename hash_value_t>
-struct modulo_partitioner
+class modulo_partitioner
 {
+ public:
   modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
 
-  __host__ __device__
+  __device__
   size_type operator()(hash_value_t hash_value) const {
     return hash_value % divisor;
   }
 
+ private:
   const size_type divisor;
 };
 
@@ -53,25 +54,27 @@ bool is_power_two(T number) {
 
 /** 
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
- * that uses bitshifts. Only works when num_partitions is a power of 2.
+ * that uses a bitwise mask. Only works when num_partitions is a power of 2.
  *
  * For n % d, if d is a power of two, then it can be computed more efficiently via 
  * a single bitwise AND as:
  * n & (d - 1)
  */
 template <typename hash_value_t>
-struct bitwise_partitioner
+class bitwise_partitioner
 {
-  bitwise_partitioner(size_type num_partitions) : divisor{(num_partitions - 1)} {
+ public:
+  bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)} {
     assert(is_power_two(num_partitions));
   }
 
-  __host__ __device__
+  __device__
   size_type operator()(hash_value_t hash_value) const {
-    return hash_value & (divisor);
+    return hash_value & mask; // hash_value & (num_partitions - 1)
   }
 
-  const size_type divisor;
+ private:
+  const size_type mask;
 };
 
 template <bool has_nulls>
