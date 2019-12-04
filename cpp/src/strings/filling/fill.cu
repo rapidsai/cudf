@@ -33,7 +33,7 @@ namespace detail
 {
 
 std::unique_ptr<column> fill( strings_column_view const& strings,
-                              size_type first, size_type last,
+                              size_type begin, size_type end,
                               string_scalar const& value,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream = 0 )
@@ -41,9 +41,9 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
     auto strings_count = strings.size();
     if( strings_count == 0 )
         return detail::make_empty_strings_column(mr,stream);
-    CUDF_EXPECTS( (first >= 0) && (last <= strings_count), "Parameters [first,last) are outside the range of the provided strings column");
-    CUDF_EXPECTS( first <= last, "Parameters [first,last) have invalid range values");
-    if( first==last ) // return a copy
+    CUDF_EXPECTS( (begin >= 0) && (end <= strings_count), "Parameters [begin,end) are outside the range of the provided strings column");
+    CUDF_EXPECTS( begin <= end, "Parameters [begin,end) have invalid range values");
+    if( begin==end ) // return a copy
         return std::make_unique<column>( strings.parent() );
 
     auto execpol = rmm::exec_policy(stream);
@@ -58,18 +58,18 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
     auto valid_mask = cudf::experimental::detail::valid_if(
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        [d_strings, first, last, d_value] __device__ (size_type idx) {
-            return ((first <= idx) && (idx < last)) ? !d_value.is_null() : !d_strings.is_null(idx);
+        [d_strings, begin, end, d_value] __device__ (size_type idx) {
+            return ((begin <= idx) && (idx < end)) ? !d_value.is_null() : !d_strings.is_null(idx);
         }, stream, mr );
     rmm::device_buffer null_mask = valid_mask.first;
     auto null_count = valid_mask.second;
 
     // build offsets column
-    auto offsets_transformer = [d_strings, first, last, d_value] __device__ (size_type idx) {
-            if( ((first <= idx) && (idx < last)) ? d_value.is_null() : d_strings.is_null(idx) )
+    auto offsets_transformer = [d_strings, begin, end, d_value] __device__ (size_type idx) {
+            if( ((begin <= idx) && (idx < end)) ? d_value.is_null() : d_strings.is_null(idx) )
                 return 0;
             int32_t bytes = d_value.size_bytes();
-            if( (idx < first) || (idx >= last) )
+            if( (idx < begin) || (idx >= end) )
                 bytes = d_strings.element<string_view>(idx).size_bytes();
             return bytes;
         };
@@ -87,11 +87,11 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        [d_strings, first, last, d_value, d_offsets, d_chars] __device__(size_type idx){
-            if( ((first <= idx) && (idx < last)) ? d_value.is_null() : d_strings.is_null(idx) )
+        [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx){
+            if( ((begin <= idx) && (idx < end)) ? d_value.is_null() : d_strings.is_null(idx) )
                 return;
             string_view d_str = d_value;
-            if( (idx < first) || (idx >= last) )
+            if( (idx < begin) || (idx >= end) )
                 d_str = d_strings.element<string_view>(idx);
             memcpy( d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
