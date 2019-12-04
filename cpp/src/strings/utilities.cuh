@@ -54,6 +54,7 @@ __device__ inline char* copy_string( char* buffer, const string_view& d_string )
     return copy_and_increment( buffer, d_string.data(), d_string.size_bytes() );
 }
 
+
 /**
  * @brief Creates child offsets and chars columns by applying the template function that
  * can be used for computing the output size of each string as well as create the output.

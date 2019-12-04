@@ -52,18 +52,18 @@ enum InstType
 /**
  * @brief Class type for regex compiler instruction.
  */
-struct Reclass
+struct reclass
 {
     int32_t builtins;    // bit mask identifying builtin classes
     std::u32string literals; // ranges as pairs of utf-8 characters
-    Reclass() : builtins(0) {}
-    Reclass(int m) : builtins(m) {}
+    reclass() : builtins(0) {}
+    reclass(int m) : builtins(m) {}
 };
 
 /**
  * @brief Structure of an encoded regex instruction
  */
-struct Reinst
+struct reinst
 {
     int32_t	type;           /* operator type or instruction type */
     union	{
@@ -83,35 +83,35 @@ struct Reinst
  * @brief Regex program handles parsing a pattern in to individual set
  * of chained instructions.
  */
-class Reprog
+class reprog
 {
  public:
 
-    Reprog() = default;
-    Reprog(const Reprog&) = default;
-    Reprog(Reprog&&) = default;
-    ~Reprog() = default;
-    Reprog& operator=(const Reprog&) = default;
-    Reprog& operator=(Reprog&&) = default;
+    reprog() = default;
+    reprog(const reprog&) = default;
+    reprog(reprog&&) = default;
+    ~reprog() = default;
+    reprog& operator=(const reprog&) = default;
+    reprog& operator=(reprog&&) = default;
 
     /**
      * @brief Parses the given regex pattern and compiles
      * into a list of chained instructions.
      */
-    static Reprog create_from(const char32_t* pattern);
+    static reprog create_from(const char32_t* pattern);
 
     int32_t add_inst(int32_t type);
-    int32_t add_inst(Reinst inst);
-    int32_t add_class(Reclass cls);
+    int32_t add_inst(reinst inst);
+    int32_t add_class(reclass cls);
 
     void set_groups_count(int32_t groups);
     int32_t groups_count() const;
 
-    const Reinst* insts_data() const;
+    const reinst* insts_data() const;
     int32_t insts_count() const;
-    Reinst& inst_at(int32_t id);
+    reinst& inst_at(int32_t id);
 
-    Reclass& class_at(int32_t id);
+    reclass& class_at(int32_t id);
     int32_t classes_count() const;
 
     const int32_t* starts_data() const;
@@ -125,8 +125,8 @@ class Reprog
     void print(); // for debugging
 
 private:
-    std::vector<Reinst> _insts;
-    std::vector<Reclass> _classes;
+    std::vector<reinst> _insts;
+    std::vector<reclass> _classes;
     int32_t _startinst_id;
     std::vector<int32_t> _startinst_ids; // short-cut to speed-up ORs
     int32_t _num_capturing_groups;
