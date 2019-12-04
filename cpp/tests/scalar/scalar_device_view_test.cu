@@ -47,7 +47,6 @@ __global__ void test_value(ScalarDeviceViewType s,
   *result = (s.value() == s1.value());
 }
 
-#if 0
 TYPED_TEST(TypedScalarDeviceViewTest, Value) {
   TypeParam value{7};
   cudf::experimental::scalar_type_t<TypeParam> s(value);
@@ -68,7 +67,6 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value) {
 
   EXPECT_TRUE(result.value());
 }
-#endif
 
 template <typename ScalarDeviceViewType>
 __global__ void test_null(ScalarDeviceViewType s, bool* result) {
@@ -87,7 +85,6 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
   EXPECT_FALSE(result.value());
 }
 
-#if 0
 template <typename ScalarDeviceViewType>
 __global__ void test_setnull(ScalarDeviceViewType s) {
   s.set_valid(false);
@@ -104,7 +101,6 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
 
   EXPECT_FALSE(s.is_valid());
 }
-#endif
 
 
 struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};

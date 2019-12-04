@@ -78,11 +78,6 @@ class scalar {
    */
   bool* validity_data() { return _is_valid.data(); }
 
-  /**
-   * @brief Returns a raw pointer to the validity bool in device memory
-   */
-  bool const* validity_data() const { return _is_valid.data(); }
-
  protected:
   data_type _type{EMPTY};      ///< Logical type of value in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
@@ -235,7 +230,14 @@ class string_scalar : public scalar {
    * 
    * @param stream The CUDA stream to do the operation in
    */
-  std::string value(cudaStream_t stream = 0) const;
+  std::string to_string(cudaStream_t stream = 0) const;
+  
+  /**
+   * @brief Get the value of the scalar as a string_view
+   * 
+   * @param stream The CUDA stream to do the operation in
+   */
+  value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
   
   /**
    * @brief Returns the size of the string in bytes
