@@ -50,7 +50,7 @@ template<size_t stack_size>
 struct findall_count_fn
 {
     column_device_view const d_strings;
-    Reprog_device prog;
+    reprog_device prog;
 
     __device__ size_type operator()(size_type idx)
     {
@@ -81,7 +81,7 @@ template<size_t stack_size>
 struct findall_fn
 {
     column_device_view const d_strings;
-    Reprog_device prog;
+    reprog_device prog;
     size_type column_index;
     size_type const* d_counts;
 
@@ -129,7 +129,7 @@ std::unique_ptr<experimental::table> findall_re( strings_column_view const& stri
 
     auto d_flags = detail::get_character_flags_table();
     // compile regex into device object
-    auto prog = Reprog_device::create(pattern,d_flags,strings_count,stream);
+    auto prog = reprog_device::create(pattern,d_flags,strings_count,stream);
     auto d_prog = *prog;
     auto execpol = rmm::exec_policy(stream);
     int regex_insts = prog->insts_counts();
