@@ -4123,7 +4123,24 @@ def test_cov_nans():
     ],
 )
 @pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
-def test_df_sr_binop(gsr, colnames):
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.add,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
+    ],
+)
+def test_df_sr_binop(gsr, colnames, op):
     data = [[0, 1, 2], [3, None, 5], [6, 7, np.nan]]
     data = dict(zip(colnames, data))
 
@@ -4132,39 +4149,10 @@ def test_df_sr_binop(gsr, colnames):
 
     psr = gsr.to_pandas()
 
-    # add
-    expect = pdf + psr
-    got = gdf + gsr
+    expect = op(pdf,psr)
+    got = op(gdf,gsr)
     assert_eq(expect.astype(float), got.astype(float))
 
-    expect = psr + pdf
-    got = psr + pdf
-    assert_eq(expect.astype(float), got.astype(float))
-
-    # sub
-    expect = pdf - psr
-    got = gdf - gsr
-    assert_eq(expect.astype(float), got.astype(float))
-
-    expect = psr - pdf
-    got = psr - pdf
-    assert_eq(expect.astype(float), got.astype(float))
-
-    # mul
-    expect = pdf * psr
-    got = gdf * gsr
-    assert_eq(expect.astype(float), got.astype(float))
-
-    expect = psr * pdf
-    got = psr * pdf
-    assert_eq(expect.astype(float), got.astype(float))
-
-    # div
-    expect = pdf / psr
-    got = gdf / gsr
-    assert_eq(expect.astype(float), got.astype(float))
-
-    expect = psr / pdf
-    got = psr / pdf
-
-    assert_eq(expect.astype(float), got.astype(float))
+    expect = op(psr, pdf)
+    got = op(psr, pdf)
+    assert_eq(expect.astype(float), got.astype(float)
