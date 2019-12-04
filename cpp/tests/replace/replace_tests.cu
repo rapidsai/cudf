@@ -80,8 +80,10 @@ TEST_F(ReplaceErrorTest, NullInOldValues)
                cudf::logic_error);
 }
 
+struct ReplaceStringsTest : public cudf::test::BaseFixture{};
+
 // Strings test
-TEST_F(ReplaceErrorTest, Strings) {
+TEST_F(ReplaceStringsTest, Strings) {
   std::vector<std::string> input{"a","b","c","d","e","f","g","h"};
   std::vector<std::string> values_to_replace{"a"};
   std::vector<std::string> replacement{"z"};
@@ -103,7 +105,7 @@ TEST_F(ReplaceErrorTest, Strings) {
 }
 
 // Strings test
-TEST_F(ReplaceErrorTest, StringsReplacementNulls) {
+TEST_F(ReplaceStringsTest, StringsReplacementNulls) {
   std::vector<std::string> input{"a","b","c","d","e","f","g","h"};
   std::vector<std::string> values_to_replace{"a","b"};
   std::vector<std::string> replacement{"z",""};
@@ -125,7 +127,51 @@ TEST_F(ReplaceErrorTest, StringsReplacementNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceErrorTest, StringsInputNulls) {
+TEST_F(ReplaceStringsTest, StringsResultAllNulls) {
+  std::vector<std::string> input{"b","b","b","b","b","b","b","b"};
+  std::vector<std::string> values_to_replace{"a","b"};
+  std::vector<std::string> replacement{"a",""};
+  std::vector<cudf::valid_type> replacement_valid{1,0};
+  std::vector<std::string> expected{"","","","","","","",""};
+  std::vector<cudf::valid_type> ex_valid{0,0,0,0,0,0,0,0};
+  cudf::test::strings_column_wrapper input_wrapper{input.begin(), input.end()};
+  cudf::test::strings_column_wrapper values_to_replace_wrapper{values_to_replace.begin(), values_to_replace.end()};
+  cudf::test::strings_column_wrapper replacement_wrapper{replacement.begin(), replacement.end(), replacement_valid.begin()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(input_wrapper,
+                                                           values_to_replace_wrapper,
+                                                           replacement_wrapper,
+                                                           mr()));
+  cudf::test::strings_column_wrapper expected_wrapper{expected.begin(), expected.end(), ex_valid.begin()};
+
+  cudf::test::expect_columns_equal(*result, expected_wrapper);
+}
+
+// Strings test
+TEST_F(ReplaceStringsTest, StringsResultAllEmpty) {
+  std::vector<std::string> input{"b","b","b","b","b","b","b","b"};
+  std::vector<std::string> values_to_replace{"a","b"};
+  std::vector<std::string> replacement{"a",""};
+  std::vector<cudf::valid_type> replacement_valid{1,1};
+  std::vector<std::string> expected{"","","","","","","",""};
+  std::vector<cudf::valid_type> ex_valid{1,1,1,1,1,1,1,1};
+  cudf::test::strings_column_wrapper input_wrapper{input.begin(), input.end()};
+  cudf::test::strings_column_wrapper values_to_replace_wrapper{values_to_replace.begin(), values_to_replace.end()};
+  cudf::test::strings_column_wrapper replacement_wrapper{replacement.begin(), replacement.end(), replacement_valid.begin()};
+
+  std::unique_ptr<cudf::column> result;
+  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(input_wrapper,
+                                                           values_to_replace_wrapper,
+                                                           replacement_wrapper,
+                                                           mr()));
+  cudf::test::strings_column_wrapper expected_wrapper{expected.begin(), expected.end(), ex_valid.begin()};
+
+  cudf::test::expect_columns_equal(*result, expected_wrapper);
+}
+
+// Strings test
+TEST_F(ReplaceStringsTest, StringsInputNulls) {
   std::vector<std::string> input{"a","b","","","e","f","g","h"};
   std::vector<std::string> values_to_replace{"a","b"};
   std::vector<std::string> replacement{"z","y"};
@@ -147,7 +193,7 @@ TEST_F(ReplaceErrorTest, StringsInputNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceErrorTest, StringsInputAndReplacementNulls) {
+TEST_F(ReplaceStringsTest, StringsInputAndReplacementNulls) {
   std::vector<std::string> input{"a","b","","","e","f","g","h"};
   std::vector<std::string> values_to_replace{"a","b"};
   std::vector<std::string> replacement{"z",""};
@@ -170,7 +216,7 @@ TEST_F(ReplaceErrorTest, StringsInputAndReplacementNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceErrorTest, StringsEmptyReplacement) {
+TEST_F(ReplaceStringsTest, StringsEmptyReplacement) {
   std::vector<std::string> input{"a","b","","","e","f","g","h"};
   std::vector<std::string> values_to_replace{};
   std::vector<std::string> replacement{};
@@ -192,7 +238,7 @@ TEST_F(ReplaceErrorTest, StringsEmptyReplacement) {
 }
 
 // Strings test
-TEST_F(ReplaceErrorTest, StringsLargeScale) {
+TEST_F(ReplaceStringsTest, StringsLargeScale) {
   std::vector<std::string> input{"a","b","","","e","f","g","h"};
   std::vector<std::string> values_to_replace{"a","b"};
   std::vector<std::string> replacement{"z",""};

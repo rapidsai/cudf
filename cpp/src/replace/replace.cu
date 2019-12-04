@@ -111,23 +111,52 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
                                            cudf::column_device_view values_to_replace,
                                            cudf::column_device_view replacement,
                                            cudf::mutable_column_device_view offsets,
-                                           cudf::mutable_column_device_view indices) {
+                                           cudf::mutable_column_device_view indices,
+                                           cudf::bitmask_type * output_valid,
+                                           cudf::size_type* __restrict__ output_valid_count) {
   cudf::size_type nrows = input.size();
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t active_mask = 0xffffffff;
+  active_mask = __ballot_sync(active_mask, i < nrows);
+  auto const lane_id { threadIdx.x % cudf::experimental::detail::warp_size };
+  uint32_t valid_sum { 0 };
+
   while (i < nrows) {
     bool input_is_valid = true;
+
     if (input_has_nulls)
       input_is_valid = input.is_valid_nocheck(i);
+    bool output_is_valid = input_is_valid;
+
     if (input_is_valid){
       int result = get_new_string_value(i, input, values_to_replace, replacement);
       cudf::string_view output = (result == -1) ? input.element<cudf::string_view>(i) : replacement.element<cudf::string_view>(result);
       offsets.data<cudf::size_type>()[i] = output.size_bytes();
       indices.data<cudf::size_type>()[i] = result;
+      if (replacement_has_nulls && result != -1){
+        output_is_valid = replacement.is_valid_nocheck(result);
+      }
     } else {
       offsets.data<cudf::size_type>()[i] = 0;
       indices.data<cudf::size_type>()[i] = -1;
     }
+
+    uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
+    if (0 == lane_id) {
+      output_valid[cudf::word_index(i)] = bitmask;
+      valid_sum += __popc(bitmask);
+    }
+
+
     i += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, i < nrows);
+  }
+
+  // Compute total valid count for this block and add it to global count
+  uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+  // one thread computes and adds to output_valid_count
+  if (threadIdx.x == 0) {
+    atomicAdd(output_valid_count, block_valid_count);
   }
 }
 
@@ -136,21 +165,14 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
                                             cudf::column_device_view replacement,
                                             cudf::mutable_column_device_view offsets,
                                             cudf::mutable_column_device_view strings,
-                                            cudf::mutable_column_device_view indices,
-                                            cudf::bitmask_type * output_valid,
-                                            cudf::size_type * __restrict__ output_valid_count) {
+                                            cudf::mutable_column_device_view indices) {
   cudf::size_type nrows = input.size();
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t active_mask = 0xffffffff;
-  active_mask = __ballot_sync(active_mask, i < nrows);
-  auto const lane_id { threadIdx.x % cudf::experimental::detail::warp_size };
-  uint32_t valid_sum { 0 };
+
   while (i < nrows) {
     bool output_is_valid = true;
     bool input_is_valid = true;
     cudf::size_type idx = indices.element<cudf::size_type>(i);
-    uint32_t bitmask = 0xffffffff;
-
 
     if (input_has_nulls){
       input_is_valid = input.is_valid_nocheck(i);
@@ -166,28 +188,7 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
                   output.size_bytes());
     }
 
-    /* output valid counts calculations*/
-    if (input_has_nulls or replacement_has_nulls) {
-
-      bitmask = __ballot_sync(active_mask, output_is_valid);
-
-      if (0 == lane_id) {
-        output_valid[cudf::word_index(i)] = bitmask;
-        valid_sum += __popc(bitmask);
-      }
-    }
-
     i += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, i < nrows);
-  }
-  if (input_has_nulls or replacement_has_nulls) {
-
-    // Compute total valid count for this block and add it to global count
-    uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
-    // one thread computes and adds to output_valid_count
-    if (threadIdx.x == 0) {
-      atomicAdd(output_valid_count, block_valid_count);
-    }
   }
 }
 
@@ -392,13 +393,18 @@ struct replace_kernel_forwarder {
     auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
     auto device_indices = cudf::mutable_column_device_view::create(indices_view);
 
+    int valid_chars = cudf::bitmask_allocation_size_bytes(input_col.size());
+    rmm::device_buffer valid_bits(valid_chars, stream, mr);
+
     // Call first pass kernel to get sizes in offsets
     cudf::experimental::detail::grid_1d grid { input_col.size(), BLOCK_SIZE, 1 };
     replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
                                                               *device_values_to_replace,
                                                               *device_replacement,
                                                               *device_offsets,
-                                                              *device_indices);
+                                                              *device_indices,
+                                                              reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
+                                                              valid_count);
 
     // Compute the offsets from the sizes
     int32_t * offsets_data = offsets_view.data<int32_t>();
@@ -410,10 +416,10 @@ struct replace_kernel_forwarder {
     CUDA_TRY(cudaMemcpyAsync(&size, offsets_data + offsets_view.size() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
 
     // Allocate chars array and output null mask
+    cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
     std::unique_ptr<cudf::column> output_chars =
-        cudf::strings::detail::create_chars_child_column(input_col.size(), 0, size, mr, stream);
-    int valid_chars = cudf::bitmask_allocation_size_bytes(input_col.size());
-    rmm::device_buffer valid_bits(valid_chars, stream, mr);
+        cudf::strings::detail::create_chars_child_column(input_col.size(), null_count, size, mr, stream);
+
     auto output_chars_view = output_chars->mutable_view();
     auto device_chars = cudf::mutable_column_device_view::create(output_chars_view);
 
@@ -421,17 +427,7 @@ struct replace_kernel_forwarder {
                                                                *device_replacement,
                                                                *device_offsets,
                                                                *device_chars,
-                                                               *device_indices,
-                                                               reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
-                                                               valid_count);
-
-    cudf::size_type null_count;
-    if (!input_col.has_nulls() && !replacement_values.has_nulls()) {
-      CUDA_TRY(cudaMemsetAsync(valid_bits.data(), 0xff, valid_chars, stream));
-      null_count = 0;
-    }
-    else
-      null_count = input_col.size() - valid_counter.value(stream);
+                                                               *device_indices);
 
     std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
                                                                      std::move(offsets),
@@ -536,15 +532,14 @@ void replace_nulls_strings(cudf::column_device_view input,
 
     if (phase == 0) {
       offsets[i] = nonzero_output ? out.size_bytes() : 0;
-    } else if (phase == 1) {
-      if (nonzero_output)
-        std::memcpy(chars + offsets[i], out.data(), out.size_bytes());
-
       uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
       if (0 == lane_id) {
         output_valid[cudf::word_index(i)] = bitmask;
         valid_sum += __popc(bitmask);
       }
+    } else if (phase == 1) {
+      if (nonzero_output)
+        std::memcpy(chars + offsets[i], out.data(), out.size_bytes());
     }
 
     i += blockDim.x * gridDim.x;
@@ -552,8 +547,7 @@ void replace_nulls_strings(cudf::column_device_view input,
   }
 
   // Compute total valid count for this block and add it to global count
-  uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<
-      BLOCK_SIZE, 0>(valid_sum);
+  uint32_t block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
   if (threadIdx.x == 0) {
     atomicAdd(valid_counter, block_valid_count);
@@ -714,11 +708,11 @@ struct replace_nulls_column_kernel_forwarder {
     CUDA_TRY(cudaMemcpyAsync(&size, offsets_data + offsets_view.size() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
 
     // Allocate chars array and output null mask
+    cudf::size_type null_count = input.size() - valid_counter.value(stream);
     std::unique_ptr<cudf::column> output_chars =
-        cudf::strings::detail::create_chars_child_column(input.size(), 0, size, mr, stream);
+        cudf::strings::detail::create_chars_child_column(input.size(), null_count, size, mr, stream);
 
     auto output_chars_view = output_chars->mutable_view();
-    auto device_chars = cudf::mutable_column_device_view::create(output_chars_view);
 
     replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
                                                                *device_replacement,
