@@ -65,26 +65,22 @@ enum class join_type {
 *
 * @param stream Optional, stream on which all memory allocations and copies
 * will be performed
-* @param mr Optional, the memory resource that will be used for allocating
-* the device memory for the new column
 *
 * @Returns  Table containing empty indices.
 */
 /* ----------------------------------------------------------------------------*/
 template <typename index_type>
 std::unique_ptr<cudf::experimental::table>
-get_empty_index_table(
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+get_empty_index_table(cudaStream_t stream) {
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(
         std::make_unique<column>(
           data_type(cudf::experimental::type_to_id<index_type>()), 0,
-          rmm::device_buffer{0, stream, mr}));
+          rmm::device_buffer{0, stream}));
     columns.emplace_back(
         std::make_unique<column>(
           data_type(cudf::experimental::type_to_id<index_type>()), 0,
-          rmm::device_buffer{0, stream, mr}));
+          rmm::device_buffer{0, stream}));
     return std::make_unique<cudf::experimental::table>(std::move(columns));
 }
 
@@ -148,8 +144,6 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
 * @param join_size Number of indices contained in the buffers
 * @param stream Optional, stream on which all memory allocations and copies
 * will be performed
-* @param mr Optional, the memory resource that will be used for allocating
-* the device memory for the new column
 *
 * @Returns  Table containing join indices result.
 */
@@ -160,8 +154,7 @@ get_indices_table(
     B&& left_indices,
     B&& right_indices,
     cudf::size_type join_size,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+    cudaStream_t stream) {
   rmm::device_buffer l{std::forward<B>(left_indices)};
   rmm::device_buffer r{std::forward<B>(right_indices)};
   l.resize(sizeof(index_type)*join_size, stream);

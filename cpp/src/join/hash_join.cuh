@@ -63,8 +63,7 @@ estimate_join_output_size(
     table_device_view build_table,
     table_device_view probe_table,
     multimap_type hash_table,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+    cudaStream_t stream) {
 
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
@@ -85,14 +84,14 @@ estimate_join_output_size(
       // Inner join with an empty table will have no output
       case join_type::INNER_JOIN:
         { return std::make_unique<experimental::scalar_type_t<size_type>>(
-            0, true, stream, mr);
+            0, true, stream);
         }
 
       // Left join with an empty table will have an output of NULL rows
       // equal to the number of rows in the probe table
       case join_type::LEFT_JOIN:
         { return std::make_unique<experimental::scalar_type_t<size_type>>(
-            probe_table_num_rows, true, stream, mr);
+            probe_table_num_rows, true, stream);
         }
 
       default:
@@ -108,7 +107,7 @@ estimate_join_output_size(
 
   // Allocate storage for the counter used to get the size of the join output
   size_type h_size_estimate{0};
-  experimental::scalar_type_t<size_type> e(0, true, stream, mr);
+  experimental::scalar_type_t<size_type> e(0, true, stream);
 
   CUDA_CHECK_LAST();
 
@@ -199,8 +198,6 @@ estimate_join_output_size(
  * tables have been flipped, meaning the output indices should also be flipped.
  * @param stream stream on which all memory allocations and copies
  * will be performed
- * @param mr The memory resource that will be used for allocating
- * the device memory for the new table
  * @tparam join_type The type of join to be performed
  * @tparam index_type The datatype used for the output indices
  *
@@ -214,16 +211,15 @@ get_base_hash_join_indices(
     table_view const& left,
     table_view const& right,
     bool flip_join_indices,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+    cudaStream_t stream) {
 
   if ((join_t == join_type::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_hash_join_indices<join_t, index_type>(right, left,  true, stream, mr);
+    return get_base_hash_join_indices<join_t, index_type>(right, left,  true, stream);
   }
   //Trivial left join case - exit early
   if ((join_t == join_type::LEFT_JOIN) && (right.num_rows() == 0)) {
     rmm::device_buffer sequence_indices{
-      sizeof(index_type)*left.num_rows(), stream, mr};
+      sizeof(index_type)*left.num_rows(), stream};
     thrust::device_ptr<index_type> sequence_indices_ptr(
         static_cast<index_type*>(sequence_indices.data()));
     thrust::sequence(
@@ -232,7 +228,7 @@ get_base_hash_join_indices(
         sequence_indices_ptr + left.num_rows(),
         0);
     rmm::device_buffer invalid_indices{
-      sizeof(index_type)*left.num_rows(), stream, mr};
+      sizeof(index_type)*left.num_rows(), stream};
     thrust::device_ptr<index_type> inv_index_ptr(
         static_cast<index_type*>(invalid_indices.data()));
     thrust::fill(
@@ -242,7 +238,7 @@ get_base_hash_join_indices(
         JoinNoneValue);
     return get_indices_table<index_type>(
         std::move(sequence_indices), std::move(invalid_indices),
-        left.num_rows(), stream, mr);
+        left.num_rows(), stream);
   }
 
   using multimap_type = multimap_t<index_type>;
@@ -265,7 +261,7 @@ get_base_hash_join_indices(
   // build the hash table
   if (build_table_num_rows > 0) {
     row_hash hash_build{*build_table};
-    experimental::scalar_type_t<int> f(0, true, stream, mr);
+    experimental::scalar_type_t<int> f(0, true, stream);
     auto failure = get_scalar_device_view(f);
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(build_table_num_rows, block_size);
@@ -281,30 +277,30 @@ get_base_hash_join_indices(
 
   auto estimated_join_output_size =
     estimate_join_output_size<join_t, multimap_type>(
-        *build_table, *probe_table, *hash_table, stream, mr);
+        *build_table, *probe_table, *hash_table, stream);
 
   size_type estimated_size = estimated_join_output_size->value();
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    return get_empty_index_table<index_type>(stream, mr);
+    return get_empty_index_table<index_type>(stream);
   }
 
   // Because we are approximating the number of joined elements, our approximation
   // might be incorrect and we might have underestimated the number of joined elements.
   // As such we will need to de-allocate memory and re-allocate memory to ensure
   // that the final output is correct.
-  experimental::scalar_type_t<size_type> global_write_index(0, true, stream, mr);
+  experimental::scalar_type_t<size_type> global_write_index(0, true, stream);
   size_type join_size{0};
 
-  rmm::device_buffer left_indices{0, stream, mr};
-  rmm::device_buffer right_indices{0, stream, mr};
+  rmm::device_buffer left_indices{0, stream};
+  rmm::device_buffer right_indices{0, stream};
   while (true) {
     left_indices = rmm::device_buffer{
       sizeof(index_type)*estimated_size,
-      stream, mr};
+      stream};
     right_indices = rmm::device_buffer{
       sizeof(index_type)*estimated_size,
-      stream, mr};
+      stream};
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
@@ -344,7 +340,7 @@ get_base_hash_join_indices(
 
   return get_indices_table<index_type>(
       std::move(left_indices), std::move(right_indices),
-      join_size, stream, mr);
+      join_size, stream);
 
 }
 

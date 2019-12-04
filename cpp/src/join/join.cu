@@ -115,8 +115,6 @@ get_trivial_full_join_indices(
  * @param right Table of right  columns to join
  * @param stream stream on which all memory allocations and copies
  * will be performed
- * @param mr The memory resource that will be used for allocating
- * the device memory for the new table
  * @tparam join_type The type of join to be performed
  * @tparam index_type The datatype used for the output indices
  *
@@ -128,8 +126,7 @@ std::unique_ptr<experimental::table>
 get_base_join_indices(
     table_view const& left,
     table_view const& right,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+    cudaStream_t stream) {
   CUDF_EXPECTS (0 != left.num_columns(), "Selected left dataset is empty");
   CUDF_EXPECTS (0 != right.num_columns(), "Selected right dataset is empty");
   CUDF_EXPECTS(std::equal(
@@ -140,7 +137,7 @@ get_base_join_indices(
       "Mismatch in joining column data types");
 
   constexpr join_type base_join_t = (join_t == join_type::FULL_JOIN)? join_type::LEFT_JOIN : join_t;
-  return get_base_hash_join_indices<base_join_t, index_type>(left, right, false, stream, mr);
+  return get_base_hash_join_indices<base_join_t, index_type>(left, right, false, stream);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -355,7 +352,7 @@ join_call_compute_df(
   }
 
   std::unique_ptr<cudf::experimental::table> joined_indices =
-    get_base_join_indices<join_t, index_type>(left.select(left_on), right.select(right_on), stream, mr);
+    get_base_join_indices<join_t, index_type>(left.select(left_on), right.select(right_on), stream);
 
   return construct_join_output_df<join_t, index_type>(left, right, std::move(joined_indices), columns_in_common, mr, stream);
 }
