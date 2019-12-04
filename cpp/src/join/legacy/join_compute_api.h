@@ -221,9 +221,9 @@ gdf_error compute_hash_join(
   gdf_column_view(output_l, nullptr, nullptr, 0, N_GDF_TYPES);
   gdf_column_view(output_r, nullptr, nullptr, 0, N_GDF_TYPES);
 
-  // The LEGACY allocator allocates the hash table array with normal cudaMalloc,
-  // the non-legacy allocator uses managed memory
-#ifdef HT_LEGACY_ALLOCATOR
+  // The default allocator allocates the hash table array with default RMM memory resource,
+  // the non-default allocator uses managed memory
+#ifdef HT_DEFAULT_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<hash_value_type,
                                                       output_index_type,
                                                       size_t,
@@ -231,7 +231,7 @@ gdf_error compute_hash_join(
                                                       std::numeric_limits<output_index_type>::max(),
                                                       default_hash<hash_value_type>,
                                                       equal_to<hash_value_type>,
-                                                      legacy_allocator< thrust::pair<hash_value_type, output_index_type> > >;
+                                                      default_allocator< thrust::pair<hash_value_type, output_index_type> > >;
 #else
   using multimap_type = concurrent_unordered_multimap<hash_value_type,
                                                       output_index_type,
