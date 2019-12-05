@@ -47,7 +47,6 @@
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
-- PR #3438 first working attempt to use scalar_device_view in search
 
 ## Improvements
 
@@ -164,6 +163,7 @@
 - PR #3492 Small cleanup (remove std::abs) and comment
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
+- PR #3438 Update scalar and scalar_device_view to better support strings
 
 ## Bug Fixes
 
