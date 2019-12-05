@@ -1,3 +1,13 @@
+# cuDF 0.12.0 (Date TBD)
+
+## New Features
+- PR #3224 Define and implement new join APIs.
+
+## Improvements
+
+## Bug Fixes
+
+
 # cuDF 0.11.0 (Date TBD)
 
 ## New Features
@@ -104,7 +114,6 @@
 - PR #3205 Move transform files to legacy
 - PR #3202 Rename and move error.hpp to public headers
 - PR #2878 Use upstream merge code in dask_cudf
-- PR #3224 Define and implement new join APIs.
 - PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3350 Port NVStrings booleans convert functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
@@ -158,6 +167,7 @@
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
 - PR #3421 Port NVStrings find_multiple to cudf strings column
+- PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 - PR #3448 Port scatter_to_tables to libcudf++
 - PR #3458 Update strings sections in the transition guide
 - PR #3462 Add `make_empty_column` and update `empty_like`.
