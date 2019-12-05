@@ -519,6 +519,7 @@ add_library(cudf
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
+            src/strings/find_multiple.cu
             src/strings/filling/fill.cu
             src/strings/padding.cu
             src/strings/replace/replace.cu
