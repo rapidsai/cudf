@@ -49,8 +49,6 @@ struct valid_range {
 * @Param right_indices Column of indices
 * @Param left_table_row_count Number of rows of left table
 * @Param right_table_row_count Number of rows of right table
-* @param mr Optional, the memory resource that will be used for allocating
-* the device memory for the new column
 * @param stream Optional, stream on which all memory allocations and copies
 * will be performed
 *
@@ -63,12 +61,11 @@ create_missing_indices(
     column_view const& right_indices,
     const size_type left_table_row_count,
     const size_type right_table_row_count,
-    rmm::mr::device_memory_resource* mr,
     cudaStream_t stream) {
 
   //Vector allocated for unmatched result
   rmm::device_buffer unmatched_indices{
-    sizeof(index_type)*right_table_row_count, stream, mr};
+    sizeof(index_type)*right_table_row_count, stream};
 
   thrust::device_ptr<index_type> unmatched_indices_ptr(
       static_cast<index_type*>(unmatched_indices.data()));
@@ -131,8 +128,6 @@ create_missing_indices(
 * @Param right_indices Column of indices
 * @Param left_table_row_count Number of rows of left table
 * @Param right_table_row_count Number of rows of right table
-* @param mr Optional, the memory resource that will be used for allocating
-* the device memory for the new column
 * @param stream Optional, stream on which all memory allocations and copies
 * will be performed
 *
@@ -145,12 +140,11 @@ get_left_join_indices_complement(
     column_view const& right_indices,
     size_type left_table_row_count,
     size_type right_table_row_count,
-    rmm::mr::device_memory_resource* mr,
     cudaStream_t stream) {
 
   //Get array of indices that do not appear in r_index_ptr
   auto right_indices_complement = create_missing_indices<index_type>(
-      right_indices, left_table_row_count, right_table_row_count, mr, stream);
+      right_indices, left_table_row_count, right_table_row_count, stream);
 
   auto left_invalid_indices = experimental::allocate_like(right_indices_complement->view());
   thrust::device_ptr<index_type> inv_index_ptr(

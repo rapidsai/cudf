@@ -33,9 +33,6 @@ namespace experimental {
 
 namespace detail {
 
-using join_type = ::cudf::experimental::detail::join_type;
-using output_index_type = ::cudf::experimental::detail::output_index_type;
-
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Gives an estimate of the size of the join output produced when
@@ -46,7 +43,7 @@ using output_index_type = ::cudf::experimental::detail::output_index_type;
  * significantly larger than the build table, then we attempt to estimate the
  * output size by using only a subset of the rows in the probe table.
  *
- * @throws cudf::logic_error if join_t is not INNER_JOIN or LEFT_JOIN
+ * @throws cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
@@ -56,9 +53,9 @@ using output_index_type = ::cudf::experimental::detail::output_index_type;
  * @returns An estimate of the size of the output of the join operation
  */
 /* ----------------------------------------------------------------------------*/
-template <join_type join_t,
+template <join_kind JoinKind,
           typename multimap_type>
-std::unique_ptr<experimental::scalar_type_t<size_type>>
+std::unique_ptr<rmm::device_scalar<size_type>>
 estimate_join_output_size(
     table_device_view build_table,
     table_device_view probe_table,
@@ -79,19 +76,19 @@ estimate_join_output_size(
   } else {
     // If the build table is empty, we know exactly how large the output
     // will be for the different types of joins and can return immediately
-    switch(join_t) {
+    switch(JoinKind) {
 
       // Inner join with an empty table will have no output
-      case join_type::INNER_JOIN:
-        { return std::make_unique<experimental::scalar_type_t<size_type>>(
-            0, true, stream);
+      case join_kind::INNER_JOIN:
+        { return std::make_unique<rmm::device_scalar<size_type>>(
+            0, stream);
         }
 
       // Left join with an empty table will have an output of NULL rows
       // equal to the number of rows in the probe table
-      case join_type::LEFT_JOIN:
-        { return std::make_unique<experimental::scalar_type_t<size_type>>(
-            probe_table_num_rows, true, stream);
+      case join_kind::LEFT_JOIN:
+        { return std::make_unique<rmm::device_scalar<size_type>>(
+            probe_table_num_rows, stream);
         }
 
       default:
@@ -107,7 +104,7 @@ estimate_join_output_size(
 
   // Allocate storage for the counter used to get the size of the join output
   size_type h_size_estimate{0};
-  experimental::scalar_type_t<size_type> e(0, true, stream);
+  rmm::device_scalar<size_type> size_estimate(0, stream);
 
   CUDA_CHECK_LAST();
 
@@ -115,7 +112,7 @@ estimate_join_output_size(
   int numBlocks {-1};
 
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<join_t, multimap_type, block_size>,
+    &numBlocks, compute_join_output_size<JoinKind, multimap_type, block_size>,
     block_size, 0
   ));
 
@@ -132,14 +129,13 @@ estimate_join_output_size(
 
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
-    e.set_value(0);
-    auto size_estimate = get_scalar_device_view(e);
+    size_estimate.set_value(0);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
-    compute_join_output_size<join_t,
+    compute_join_output_size<JoinKind,
                              multimap_type,
                              block_size>
     <<<numBlocks * num_sms, block_size, 0, stream>>>(
@@ -149,16 +145,16 @@ estimate_join_output_size(
         hash_probe,
         equality,
         sample_probe_num_rows,
-        size_estimate);
+        size_estimate.data());
     CUDA_CHECK_LAST();
 
     // Only in case subset of probe table is chosen,
     // increase the estimated output size by a factor of the ratio between the
     // probe and build tables
     if(sample_probe_num_rows < probe_table_num_rows) {
-      h_size_estimate = e.value() * probe_to_build_ratio;
+      h_size_estimate = size_estimate.value() * probe_to_build_ratio;
     } else {
-      h_size_estimate = e.value();
+      h_size_estimate = size_estimate.value();
     }
 
     // If the size estimate is non-zero, then we have a valid estimate and can break
@@ -181,10 +177,9 @@ estimate_join_output_size(
 
   } while(true);
 
-  e.set_value(h_size_estimate);
-  return std::make_unique<
-    experimental::scalar_type_t<size_type>>(
-        std::move(e));
+  size_estimate.set_value(h_size_estimate);
+  return std::make_unique<rmm::device_scalar<size_type>>(
+        std::move(size_estimate));
 }
 
 /* --------------------------------------------------------------------------*/
@@ -198,14 +193,14 @@ estimate_join_output_size(
  * tables have been flipped, meaning the output indices should also be flipped.
  * @param stream stream on which all memory allocations and copies
  * will be performed
- * @tparam join_type The type of join to be performed
+ * @tparam join_kind The type of join to be performed
  * @tparam index_type The datatype used for the output indices
  *
  * @returns Join output indices table
  */
 /* ----------------------------------------------------------------------------*/
-template <join_type join_t, typename index_type>
-std::enable_if_t<(join_t != join_type::FULL_JOIN),
+template <join_kind JoinKind, typename index_type>
+std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
 std::unique_ptr<experimental::table>>
 get_base_hash_join_indices(
     table_view const& left,
@@ -213,11 +208,11 @@ get_base_hash_join_indices(
     bool flip_join_indices,
     cudaStream_t stream) {
 
-  if ((join_t == join_type::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_hash_join_indices<join_t, index_type>(right, left,  true, stream);
+  if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
+    return get_base_hash_join_indices<JoinKind, index_type>(right, left, true, stream);
   }
   //Trivial left join case - exit early
-  if ((join_t == join_type::LEFT_JOIN) && (right.num_rows() == 0)) {
+  if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
     rmm::device_buffer sequence_indices{
       sizeof(index_type)*left.num_rows(), stream};
     thrust::device_ptr<index_type> sequence_indices_ptr(
@@ -261,8 +256,7 @@ get_base_hash_join_indices(
   // build the hash table
   if (build_table_num_rows > 0) {
     row_hash hash_build{*build_table};
-    experimental::scalar_type_t<int> f(0, true, stream);
-    auto failure = get_scalar_device_view(f);
+    rmm::device_scalar<int> failure(0, stream);
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(build_table_num_rows, block_size);
     build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
@@ -270,16 +264,16 @@ get_base_hash_join_indices(
         *build_table,
         hash_build,
         build_table_num_rows,
-        failure);
+        failure.data());
     // Check error code from the kernel
-    if (f.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
+    if (failure.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
   }
 
   auto estimated_join_output_size =
-    estimate_join_output_size<join_t, multimap_type>(
+    estimate_join_output_size<JoinKind, multimap_type>(
         *build_table, *probe_table, *hash_table, stream);
 
-  size_type estimated_size = estimated_join_output_size->value();
+  size_type estimated_size = estimated_join_output_size->value(stream);
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
     return get_empty_index_table<index_type>(stream);
@@ -289,7 +283,7 @@ get_base_hash_join_indices(
   // might be incorrect and we might have underestimated the number of joined elements.
   // As such we will need to de-allocate memory and re-allocate memory to ensure
   // that the final output is correct.
-  experimental::scalar_type_t<size_type> global_write_index(0, true, stream);
+  rmm::device_scalar<size_type> write_index(0, stream);
   size_type join_size{0};
 
   rmm::device_buffer left_indices{0, stream};
@@ -304,12 +298,11 @@ get_base_hash_join_indices(
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
-    global_write_index.set_value(0);
-    auto write_index = get_scalar_device_view(global_write_index);
+    write_index.set_value(0);
 
     row_hash hash_probe{*probe_table};
     row_equality equality{*probe_table, *build_table};
-    probe_hash_table<join_t,
+    probe_hash_table<JoinKind,
                      multimap_type,
                      hash_value_type,
                      output_index_type,
@@ -324,13 +317,13 @@ get_base_hash_join_indices(
         probe_table->num_rows(),
         static_cast<index_type*>(left_indices.data()),
         static_cast<index_type*>(right_indices.data()),
-        write_index,
+        write_index.data(),
         estimated_size,
         flip_join_indices);
 
     CUDA_CHECK_LAST();
 
-    join_size = global_write_index.value();
+    join_size = write_index.value();
     if (estimated_size < join_size) {
       estimated_size *= 2;
     } else {

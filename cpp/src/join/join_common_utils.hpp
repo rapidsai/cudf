@@ -52,7 +52,7 @@ using multimap_t =
 using row_hash =
 cudf::experimental::row_hasher<default_hash>;
 
-enum class join_type {
+enum class join_kind {
   INNER_JOIN,
   LEFT_JOIN,
   FULL_JOIN

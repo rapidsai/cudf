@@ -30,15 +30,15 @@ namespace experimental {
  * @brief  Performs an inner join on the specified columns of two
  * tables (left, right)
  *
- * @example TableA a: {0, 1, 2}
- *          TableB b: {1, 2, 3}, a: {1, 2, 5}
+ * @example Left a: {0, 1, 2}
+ *          Right b: {1, 2, 3}, a: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {1}
  *          columns_in_common: { {0, 1} }
  * Result: { a: {1, 2}, b: {1, 2} }
  *
- * @example TableA a: {0, 1, 2}
- *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ * @example Left a: {0, 1, 2}
+ *          Right b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {0}
  *          columns_in_common: { }
@@ -79,15 +79,15 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
  *
- * @example TableA a: {0, 1, 2}
- *          TableB b: {1, 2, 3}, a: {1 ,2 ,5}
+ * @example Left a: {0, 1, 2}
+ *          Right b: {1, 2, 3}, a: {1 ,2 ,5}
  *          left_on: {0}
  *          right_on: {1}
  *          columns_in_common: { {0, 1} }
  * Result: { a: {0, 1, 2}, b: {NULL, 1, 2} }
  *
- * @example TableA a: {0, 1, 2}
- *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ * @example Left a: {0, 1, 2}
+ *          Right b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {0}
  *          columns_in_common: { }
@@ -128,15 +128,15 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two tables (left, right)
  * 
- * @example TableA a: {0, 1, 2}
- *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ * @example Left a: {0, 1, 2}
+ *          Right b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {1}
  *          columns_in_common: { {0, 1} }
  * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
  *
- * @example TableA a: {0, 1, 2}
- *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ * @example Left a: {0, 1, 2}
+ *          Right b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {0}
  *          columns_in_common: { }
