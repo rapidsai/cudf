@@ -76,9 +76,6 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
                                                   cudf::size_type const num_destination_rows,
                                                   index_type const* const __restrict__ merged_indices) {
   cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-
-  cudf::bitmask_type const* const __restrict__ source_left_mask = left_dcol.null_mask();
-  cudf::bitmask_type const* const __restrict__ source_right_mask= right_dcol.null_mask();
   cudf::bitmask_type* const __restrict__ destination_mask = out_dcol.null_mask();
   
   auto active_threads =
@@ -248,17 +245,15 @@ namespace cudf {
 namespace experimental { 
 namespace detail {
 
-//work-in-progress:
-//
 //generate merged column
 //given row order of merged tables
 //(ordered according to indices of key_cols)
 //and the 2 columns to merge
 //
-struct ColumnMerger
+struct column_merger
 {
-  using VectorI = rmm::device_vector<index_type>;
-  explicit ColumnMerger(VectorI const& row_order,
+  using index_vector = rmm::device_vector<index_type>;
+  explicit column_merger(index_vector const& row_order,
                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                         cudaStream_t stream = nullptr):
     dv_row_order_(row_order),
@@ -374,11 +369,9 @@ struct ColumnMerger
   }
 
 private:
-  VectorI const& dv_row_order_;
+  index_vector const& dv_row_order_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
-  
-  //see `class element_relational_comparator` in `cpp/include/cudf/table/row_operators.cuh` as a model;
 };
   
 
@@ -400,19 +393,18 @@ private:
     auto keys_sz = key_cols.size(); 
     CUDF_EXPECTS( keys_sz > 0, "Empty key_cols");
     CUDF_EXPECTS( keys_sz <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
-    CUDF_EXPECTS( keys_sz == column_order.size(), "Mismatched number of index columns and order specifiers");
+
+    CUDF_EXPECTS(keys_sz == column_order.size(), "Mismatched size between key_cols and column_order");
     
     if (not column_order.empty())
       {
-        CUDF_EXPECTS(key_cols.size() == column_order.size(), "Mismatched size between key_cols and column_order");
-
         CUDF_EXPECTS(column_order.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in column_order");
       }
 
     //collect index columns for lhs, rhs, resp.
     //
-    cudf::table_view index_left_view{left_table.select(key_cols)};  //table_view move cnstr. would be nice
-    cudf::table_view index_right_view{right_table.select(key_cols)};//same...
+    cudf::table_view index_left_view{left_table.select(key_cols)};
+    cudf::table_view index_right_view{right_table.select(key_cols)};
     bool nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
     //extract merged row order according to indices:
@@ -429,7 +421,7 @@ private:
     std::vector<std::unique_ptr<column>> v_merged_cols;
     v_merged_cols.reserve(n_cols);
 
-    ColumnMerger merger{merged_indices, mr, stream};
+    column_merger merger{merged_indices, mr, stream};
     
     for(auto i=0;i<n_cols;++i)
       {
