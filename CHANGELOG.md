@@ -329,6 +329,7 @@
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 - PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
 - PR #3147 DataFrame can be initialized from rows via list of tuples
+- PR #3539 Restrict CuPy to 6
 
 ## Bug Fixes
 
