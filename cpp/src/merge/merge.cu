@@ -207,31 +207,24 @@ generate_merged_indices(cudf::table_view const& left_table,
                                                                               d_null_precedence.data().get());
       
         thrust::merge(exec_pol->on(stream),
-                    left_begin_zip_iterator,
-                    left_end_zip_iterator,
-                    right_begin_zip_iterator,
-                    right_end_zip_iterator,
-                    merged_indices.begin(),
-                      [ineq_op] __device__ (index_type const & left_tuple,
-                                            index_type const & right_tuple) {
-                        return ineq_op(left_tuple, right_tuple);
-                    });			        
+                      left_begin_zip_iterator,
+                      left_end_zip_iterator,
+                      right_begin_zip_iterator,
+                      right_end_zip_iterator,
+                      merged_indices.begin(),
+                      ineq_op);
     } else {
       auto ineq_op =
         cudf::experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
                                                                                *rhs_device_view,
                                                                                d_column_order.data().get()); 
         thrust::merge(exec_pol->on(stream),
-                    left_begin_zip_iterator,
-                    left_end_zip_iterator,
-                    right_begin_zip_iterator,
-                    right_end_zip_iterator,
-                    merged_indices.begin(),
-                      [ineq_op] __device__ (index_type const & left_tuple,
-                                            index_type const & right_tuple) {
-                        return ineq_op(left_tuple, right_tuple);
-                          
-                    });					        
+                      left_begin_zip_iterator,
+                      left_end_zip_iterator,
+                      right_begin_zip_iterator,
+                      right_end_zip_iterator,
+                      merged_indices.begin(),
+                      ineq_op);
     }
 
     CHECK_STREAM(stream);
