@@ -410,7 +410,8 @@ CPW_BEGIN_STRUCT(FileMetaData)
         if (s->column_order_listsize >= 0xf) put_uint(s->column_order_listsize);
         for (uint32_t i = 0; i < s->column_order_listsize; i++) {
             put_fldh(1, 0, ST_FLD_STRUCT);
-            putb(0);
+            putb(0); // ColumnOrder.field1 struct end
+            putb(0); // ColumnOrder struct end
         }
         cur_fld = 7;
     }
