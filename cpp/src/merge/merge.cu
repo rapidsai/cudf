@@ -103,7 +103,7 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
 
     // Only one thread writes output
     if (0 == threadIdx.x % warpSize) {
-      destination_mask[output_element] = result_mask;
+      out_dcol.set_mask_word(output_element, result_mask);
     }
 
     destination_row += blockDim.x * gridDim.x;
