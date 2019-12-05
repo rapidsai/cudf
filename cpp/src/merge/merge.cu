@@ -27,7 +27,6 @@
 #include <memory>
 #include <type_traits>
 
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -45,8 +44,11 @@
 
 namespace { // anonym.
 
-using cudf::experimental::detail::side;
-using index_type = cudf::experimental::detail::index_type;
+using namespace cudf;
+
+using experimental::detail::side;
+using index_type = experimental::detail::index_type;
+
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -70,13 +72,13 @@ using index_type = cudf::experimental::detail::index_type;
  * to be copied to the output. Length must be equal to `num_destination_rows`
  */
 template <bool left_have_valids, bool right_have_valids>
-__global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_dcol,
-                                                  cudf::column_device_view right_dcol,
-                                                  cudf::mutable_column_device_view out_dcol,
-                                                  cudf::size_type const num_destination_rows,
+__global__ void materialize_merged_bitmask_kernel(column_device_view left_dcol,
+                                                  column_device_view right_dcol,
+                                                  mutable_column_device_view out_dcol,
+                                                  size_type const num_destination_rows,
                                                   index_type const* const __restrict__ merged_indices) {
-  cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-  cudf::bitmask_type* const __restrict__ destination_mask = out_dcol.null_mask();
+  size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+  bitmask_type* const __restrict__ destination_mask = out_dcol.null_mask();
   
   auto active_threads =
     __ballot_sync(0xffffffff, destination_row < num_destination_rows);
@@ -84,7 +86,7 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
   while (destination_row < num_destination_rows) {
     index_type const& merged_idx = merged_indices[destination_row];
     side const src_side = thrust::get<0>(merged_idx);
-    cudf::size_type const src_row  = thrust::get<1>(merged_idx);
+    size_type const src_row  = thrust::get<1>(merged_idx);
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
     if (left_have_valids && from_left) {
@@ -96,10 +98,10 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
 
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
-    cudf::bitmask_type const result_mask{
+    bitmask_type const result_mask{
       __ballot_sync(active_threads, source_bit_is_valid)};
 
-    cudf::size_type const output_element = cudf::word_index(destination_row);
+    size_type const output_element = word_index(destination_row);
 
     // Only one thread writes output
     if (0 == threadIdx.x % warpSize) {
@@ -112,17 +114,17 @@ __global__ void materialize_merged_bitmask_kernel(cudf::column_device_view left_
   }
 }
 
-void materialize_bitmask(cudf::column_view const& left_col,
-                         cudf::column_view const& right_col,
-                         cudf::mutable_column_view& out_col,
+void materialize_bitmask(column_view const& left_col,
+                         column_view const& right_col,
+                         mutable_column_view& out_col,
                          index_type const* merged_indices,
                          cudaStream_t stream) {
-  constexpr cudf::size_type BLOCK_SIZE{256};
-  cudf::experimental::detail::grid_1d grid_config {out_col.size(), BLOCK_SIZE };
+  constexpr size_type BLOCK_SIZE{256};
+  experimental::detail::grid_1d grid_config {out_col.size(), BLOCK_SIZE };
 
-  auto p_left_dcol  = cudf::column_device_view::create(left_col);
-  auto p_right_dcol = cudf::column_device_view::create(right_col);
-  auto p_out_dcol   = cudf::mutable_column_device_view::create(out_col);
+  auto p_left_dcol  = column_device_view::create(left_col);
+  auto p_right_dcol = column_device_view::create(right_col);
+  auto p_out_dcol   = mutable_column_device_view::create(out_col);
 
   auto left_valid  = *p_left_dcol;
   auto right_valid = *p_right_dcol;
@@ -166,22 +168,22 @@ void materialize_bitmask(cudf::column_view const& left_col,
  * @Returns A table containing sorted data from left_table and right_table 
  */
 rmm::device_vector<index_type>
-generate_merged_indices(cudf::table_view const& left_table,
-                        cudf::table_view const& right_table,
-                        std::vector<cudf::order> const& column_order,
-                        std::vector<cudf::null_order> const& null_precedence,
+generate_merged_indices(table_view const& left_table,
+                        table_view const& right_table,
+                        std::vector<order> const& column_order,
+                        std::vector<null_order> const& null_precedence,
                         bool nullable = true,
                         cudaStream_t stream = nullptr) {
 
-    const cudf::size_type left_size  = left_table.num_rows();
-    const cudf::size_type right_size = right_table.num_rows();
-    const cudf::size_type total_size = left_size + right_size;
+    const size_type left_size  = left_table.num_rows();
+    const size_type right_size = right_table.num_rows();
+    const size_type total_size = left_size + right_size;
 
     thrust::constant_iterator<side> left_side(side::LEFT);
     thrust::constant_iterator<side> right_side(side::RIGHT);
 
-    auto left_indices = thrust::make_counting_iterator(static_cast<cudf::size_type>(0));
-    auto right_indices = thrust::make_counting_iterator(static_cast<cudf::size_type>(0));
+    auto left_indices = thrust::make_counting_iterator(static_cast<size_type>(0));
+    auto right_indices = thrust::make_counting_iterator(static_cast<size_type>(0));
 
     auto left_begin_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(left_side, left_indices));
     auto right_begin_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(right_side, right_indices));
@@ -191,17 +193,17 @@ generate_merged_indices(cudf::table_view const& left_table,
 
     rmm::device_vector<index_type> merged_indices(total_size);
     
-    auto lhs_device_view = cudf::table_device_view::create(left_table, stream);
-    auto rhs_device_view = cudf::table_device_view::create(right_table, stream);
+    auto lhs_device_view = table_device_view::create(left_table, stream);
+    auto rhs_device_view = table_device_view::create(right_table, stream);
 
-    rmm::device_vector<cudf::order> d_column_order(column_order); 
+    rmm::device_vector<order> d_column_order(column_order); 
     
     auto exec_pol = rmm::exec_policy(stream);
     if (nullable){
-      rmm::device_vector<cudf::null_order> d_null_precedence(null_precedence);
+      rmm::device_vector<null_order> d_null_precedence(null_precedence);
       
       auto ineq_op =
-        cudf::experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+        experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
                                                                               *rhs_device_view,
                                                                               d_column_order.data().get(),
                                                                               d_null_precedence.data().get());
@@ -215,7 +217,7 @@ generate_merged_indices(cudf::table_view const& left_table,
                       ineq_op);
     } else {
       auto ineq_op =
-        cudf::experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
+        experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
                                                                                *rhs_device_view,
                                                                                d_column_order.data().get()); 
         thrust::merge(exec_pol->on(stream),
@@ -232,7 +234,7 @@ generate_merged_indices(cudf::table_view const& left_table,
     return merged_indices;
 }
 
-} // namespace
+} // anonym. namespace
 
 namespace cudf {
 namespace experimental { 

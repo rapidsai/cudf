@@ -1,4 +1,3 @@
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/table/table.hpp>
