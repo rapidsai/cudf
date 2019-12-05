@@ -39,7 +39,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-//#include <cudf/strings/detail/merge.cuh> // <- TODO: separate PR for strings support
+#include <cudf/strings/detail/merge.cuh>
 
 #include <cudf/detail/merge.hpp>
 
@@ -372,28 +372,23 @@ struct ColumnMerger
                    std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
   {
-    //for now...
-    CUDF_FAIL("Non fixed-width types are not supported");
-
-    // TODO: separate PR for strins support:
-    //
-    // auto column = strings::detail::merge( strings_column_view(lcol),
-    //                                       strings_column_view(rcol),
-    //                                       dv_row_order_.begin(),
-    //                                       dv_row_order_.end(),
-    //                                       mr_,
-    //                                       stream_);
+    auto column = strings::detail::merge( strings_column_view(lcol),
+                                          strings_column_view(rcol),
+                                          dv_row_order_.begin(),
+                                          dv_row_order_.end(),
+                                          mr_,
+                                          stream_);
     
-    // if (lcol.has_nulls() || rcol.has_nulls())
-    //   {
-    //     auto merged_view = column->mutable_view();
-    //     materialize_bitmask(lcol,
-    //                         rcol,
-    //                         merged_view,
-    //                         dv_row_order_.data().get(),
-    //                         stream_);
-    //   }
-    // return column;
+    if (lcol.has_nulls() || rcol.has_nulls())
+      {
+        auto merged_view = column->mutable_view();
+        materialize_bitmask(lcol,
+                            rcol,
+                            merged_view,
+                            dv_row_order_.data().get(),
+                            stream_);
+      }
+    return column;
   }
 
 private:
