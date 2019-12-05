@@ -233,6 +233,7 @@
 - PR #3476 Fix ORC reader timezone conversion
 - PR #3188 Repr slices up large DataFrames
 - PR #3530 Fix copy_if_else test case fail issue
+- PR #3532 Fix potential use-after-free in cudf parquet reader
 
 
 # cuDF 0.10.0 (16 Oct 2019)
