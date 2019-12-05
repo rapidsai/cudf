@@ -105,6 +105,11 @@ class column_view_base {
   size_type size() const noexcept { return _size; }
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns true if `size()` returns zero, or false otherwise
+   *---------------------------------------------------------------------------**/
+  size_type is_empty() const noexcept { return size() == 0; }
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns the element `data_type`
    *---------------------------------------------------------------------------**/
   data_type type() const noexcept { return _type; }
