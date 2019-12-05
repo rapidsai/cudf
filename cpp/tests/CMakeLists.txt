@@ -245,6 +245,15 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 ###################################################################################################
 # - hashing tests ---------------------------------------------------------------------------------
 
+set(HASHING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+
+ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - legacy hashing tests ---------------------------------------------------------------------------------
+
 set(LEGACY_HASHING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_partition_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_test.cu")
