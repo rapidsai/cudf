@@ -197,6 +197,7 @@ auto get_scalar_device_view(numeric_scalar<T>& s) {
 /**
  * @brief Get the device view of a string_scalar
  */
+inline
 auto get_scalar_device_view(string_scalar& s) {
   return string_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size());
 }
