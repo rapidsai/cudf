@@ -66,17 +66,17 @@ struct hex_to_integer_fn
             if( ch >= '0' && ch <= '9' )
             {
                 result += static_cast<int64_t>(ch-48) * base;
-                base <<= 4; // multiply by 16
+                base *= 16;
             }
             else if( ch >= 'A' && ch <= 'Z' )
             {
                 result += static_cast<int64_t>(ch-55) * base;
-                base <<= 4; // multiply by 16
+                base *= 16;
             }
             else if( ch >= 'a' && ch <= 'z' )
             {
                 result += static_cast<int64_t>(ch-87) * base;
-                base <<= 4; // multiply by 16
+                base *= 16;
             }
         }
         return result;
