@@ -245,6 +245,15 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 ###################################################################################################
 # - hashing tests ---------------------------------------------------------------------------------
 
+set(HASHING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+
+ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - legacy hashing tests ---------------------------------------------------------------------------------
+
 set(LEGACY_HASHING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_partition_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_test.cu")
@@ -450,7 +459,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")

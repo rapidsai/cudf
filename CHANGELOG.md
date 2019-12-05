@@ -27,6 +27,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3144 Define and implement new hashing APIs `hash` and `hash_partition`
 - PR #3229 Define and implement new search APIs
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
@@ -165,6 +166,7 @@
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
+- PR #3414 Add copy_range function for strings column
 
 ## Bug Fixes
 
@@ -233,6 +235,7 @@
 - PR #3476 Fix ORC reader timezone conversion
 - PR #3188 Repr slices up large DataFrames
 - PR #3530 Fix copy_if_else test case fail issue
+- PR #3523 Fix lgenfe issue with debug build
 - PR #3532 Fix potential use-after-free in cudf parquet reader
 
 
