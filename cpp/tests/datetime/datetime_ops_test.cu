@@ -36,7 +36,7 @@ struct NonTimestampTest : public cudf::test::BaseFixture {
 };
 
 using NonTimestampTypes =
-    cudf::test::Concat<cudf::test::NumericTypesWithoutBool, cudf::test::StringTypes>;
+    cudf::test::Concat<cudf::test::NumericTypes, cudf::test::StringTypes>;
 
 TYPED_TEST_CASE(NonTimestampTest, NonTimestampTypes);
 

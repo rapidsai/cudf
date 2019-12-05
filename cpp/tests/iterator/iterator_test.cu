@@ -174,7 +174,6 @@ struct IteratorTest : public GdfTest
   }
 };
 
-// using TestingTypes = cudf::test::NumericTypesWithoutBool;
 using TestingTypes = cudf::test::AllTypes;
 
 TYPED_TEST_CASE(IteratorTest, TestingTypes);

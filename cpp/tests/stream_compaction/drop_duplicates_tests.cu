@@ -37,15 +37,8 @@ TYPED_TEST(UniqueCountCommon, NoNull)
 {
     using T = TypeParam;
 
-    std::vector<int> ints = {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4}; 
-
-    // do this transform to avoid narrowing conversion for bool type
-    std::vector<T> input(ints.size());
-    std::transform(
-        std::begin(ints),
-        std::end(ints),
-        std::begin(input),
-        [] (auto const& e) { return static_cast<T>(e); });
+    std::vector<T> input = cudf::test::detail::make_type_param_vector<T>(
+        {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
 
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end()};
 

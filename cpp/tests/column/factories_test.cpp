@@ -38,7 +38,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 template <typename T>
 class NumericFactoryTest : public ColumnFactoryTest {};
 
-TYPED_TEST_CASE(NumericFactoryTest, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(NumericFactoryTest, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericFactoryTest, EmptyNoMask) {
   auto column = cudf::make_numeric_column(
