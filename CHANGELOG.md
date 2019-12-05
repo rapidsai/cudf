@@ -237,6 +237,7 @@
 - PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
 - PR #3188 Repr slices up large DataFrames
+- PR #3519 Fix strings column concatenate handling zero-sized columns
 - PR #3530 Fix copy_if_else test case fail issue
 - PR #3523 Fix lgenfe issue with debug build
 
