@@ -131,20 +131,6 @@ void materialize_bitmask(cudf::column_view const& left_col,
   auto right_valid = *p_right_dcol;
   auto out_valid   = *p_out_dcol;
 
-  //these tests in the legacy code
-  //tested the null_mask buffer against nullptr,
-  //not if there were nulls, which may not be
-  //equivalent with semantics below...
-  //
-  //in fact, the null_mask being nullptr is
-  //equivalent to ALL_VALID (see types.hpp comment on
-  //UNALLOCATED);
-  //this is not the meaning of
-  //left_have_valids and right_have_valids non-template
-  //bool params (which indicate whether the corresponding
-  //null_maks buffers are non-nullptr<true> or not<false>);
-  //
-  //
   if (p_left_dcol->has_nulls()) {
     if (p_right_dcol->has_nulls()) {
       materialize_merged_bitmask_kernel<true, true>
@@ -182,9 +168,6 @@ void materialize_bitmask(cudf::column_view const& left_col,
  *
  * @Returns A table containing sorted data from left_table and right_table 
  */
-
-  //BUG: it reverses left-right results
-  //
 rmm::device_vector<index_type>
 generate_merged_indices(cudf::table_view const& left_table,
                         cudf::table_view const& right_table,
@@ -286,8 +269,8 @@ struct ColumnMerger
   
   // column merger operator;
   //
-  template<typename ElemenT>//required: column type
-  std::enable_if_t<cudf::is_fixed_width<ElemenT>(),
+  template<typename Element>//required: column type
+  std::enable_if_t<cudf::is_fixed_width<Element>(),
                    std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
   {
@@ -323,10 +306,10 @@ struct ColumnMerger
     //
     p_merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
-    //to resolve view.data()'s types use: ElemenT
+    //to resolve view.data()'s types use: Element
     //
-    ElemenT const* p_d_lcol = lcol.data<ElemenT>();
-    ElemenT const* p_d_rcol = rcol.data<ElemenT>();
+    Element const* p_d_lcol = lcol.data<Element>();
+    Element const* p_d_rcol = rcol.data<Element>();
         
     auto exe_pol = rmm::exec_policy(stream_);
     
@@ -336,30 +319,24 @@ struct ColumnMerger
     //
     thrust::transform(exe_pol->on(stream_),
                       dv_row_order_.begin(), dv_row_order_.end(),
-                      merged_view.begin<ElemenT>(),
+                      merged_view.begin<Element>(),
                       [p_d_lcol, p_d_rcol] __device__ (index_type const& index_pair){
                        auto side = thrust::get<0>(index_pair);
                        auto index = thrust::get<1>(index_pair);
                        
-                       ElemenT val = (side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index]);
+                       Element val = (side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index]);
                        return val;
                       }
                      );
 
-    //cudaDeviceSynchronize();//? nope...these two could proceed concurrently
-
-
     //CAVEAT: conditional call below is erroneous without
     //set_null_mask() call (see TODO above):
     //
-    if (lcol.has_nulls() || rcol.has_nulls())
+    if (lcol.has_nulls() || rcol.has_nulls()) {
       //resolve null mask:
       //
-      materialize_bitmask(lcol,
-                          rcol,
-                          merged_view,
-                          dv_row_order_.data().get(),
-                          stream_);
+      materialize_bitmask(lcol,rcol, merged_view, dv_row_order_.data().get(), stream_);
+    }
                    
     return p_merged_col;
   }
@@ -367,8 +344,8 @@ struct ColumnMerger
   //specialization for string...?
   //or should use `cudf::string_view` instead?
   //
-  template<typename ElemenT>//required: column type
-  std::enable_if_t<not cudf::is_fixed_width<ElemenT>(),
+  template<typename Element>//required: column type
+  std::enable_if_t<not cudf::is_fixed_width<Element>(),
                    std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
   {
