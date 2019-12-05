@@ -1,0 +1,114 @@
+#include <cudf/copying.hpp>
+#include <cudf/join.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/gather.hpp>
+#include <hash/concurrent_unordered_map.cuh>
+
+#include "hash_join.cuh"
+
+namespace cudf {
+
+namespace detail {
+
+std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view const& left,
+                                                               cudf::table_view const& right,
+                                                               std::vector<cudf::size_type> const& left_on,
+                                                               std::vector<cudf::size_type> const& right_on,
+                                                               std::vector<cudf::size_type> const& return_columns,
+                                                               JoinType join_type,
+                                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                               cudaStream_t stream = 0) {
+
+  CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
+  CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
+  CUDF_EXPECTS (left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
+
+#if 0
+  if (is_trivial_join(left, right, left_on, right_on, join_type)) {
+    return experimental::empty_like(left.select(return_columns));
+  }
+#endif
+
+  if ((JoinType::LEFT_ANTI_JOIN == join_type) && (0 == right.num_rows())) {
+    // Everything matches, just copy the proper columns from the left table
+    return std::make_unique<experimental::table>(left.select(return_columns), stream, mr);
+  }
+
+  // Only care about existence, so we'll use an unordered map (other joins need a multimap)
+  using hash_table_type = concurrent_unordered_map<cudf::size_type, bool8, RowHash, row_equality>;
+
+  // Create hash table containing all keys found in right table
+  auto right_rows_d = table_device_view::create(right.select(right_on), stream);
+  size_t const hash_table_size = compute_hash_table_size(right.num_rows());
+  RowHash hash_build{*right_rows_d};
+  row_equality equality_build{*right_rows_d, *right_rows_d};
+  auto hash_table_ptr = hash_table_type::create(hash_table_size,
+                                                std::numeric_limits<bool8>::max(),
+                                                std::numeric_limits<cudf::size_type>::max(),
+                                                hash_build,
+                                                equality_build);
+  auto hash_table = *hash_table_ptr;
+
+  constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
+  experimental::detail::grid_1d config(right.num_rows(), block_size);
+
+  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(hash_table, right.num_rows());
+
+  //
+  // Now we have a hash table, we need to iterate over the rows of the left table
+  // and check to see if they are contained in the hash table
+  //
+  auto left_rows_d = table_device_view::create(left.select(left_on), stream);
+
+  RowHash hash_probe{*left_rows_d};
+  row_equality equality{*left_rows_d, *right_rows_d};
+
+  // For semi join we want contains to be true, for anti join we want contains to be false
+  bool join_type_boolean = (join_type == JoinType::LEFT_SEMI_JOIN);
+
+  rmm::device_vector<size_type> gather_map(left.num_rows());
+
+  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+                                        thrust::make_counting_iterator<size_type>(0),
+                                        thrust::make_counting_iterator<size_type>(left.num_rows()),
+                                        gather_map.begin(),
+                                        [hash_table, hash_probe, equality, join_type_boolean]
+                                        __device__ (size_type idx) {
+                                          auto pos = hash_table.find(idx, hash_probe, equality);
+                                          return (pos != hash_table.end()) == join_type_boolean;
+                                        });
+
+  gather_map.resize(thrust::distance(gather_map.begin(), gather_map_end));
+
+  column_view gather_map_cv(data_type{experimental::type_to_id<size_type>()}, gather_map.size(), gather_map.data().get());
+
+  return cudf::experimental::detail::gather(left.select(return_columns), gather_map_cv, false, false, true, mr);
+}
+} // detail
+
+std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const& left,
+                                                          cudf::table_view const& right,
+                                                          std::vector<cudf::size_type> const& left_on,
+                                                          std::vector<cudf::size_type> const& right_on,
+                                                          std::vector<cudf::size_type> const& return_columns,
+                                                          rmm::mr::device_memory_resource* mr) {
+
+  return detail::left_semi_anti_join(left, right, left_on, right_on, return_columns, detail::JoinType::LEFT_SEMI_JOIN, mr, 0);
+  
+
+}
+
+std::unique_ptr<cudf::experimental::table> left_anti_join(cudf::table_view const& left,
+                                                          cudf::table_view const& right,
+                                                          std::vector<cudf::size_type> const& left_on,
+                                                          std::vector<cudf::size_type> const& right_on,
+                                                          std::vector<cudf::size_type> const& return_columns,
+                                                          rmm::mr::device_memory_resource* mr) {
+
+  return detail::left_semi_anti_join(left, right, left_on, right_on, return_columns, detail::JoinType::LEFT_ANTI_JOIN, mr, 0);
+}
+
+}

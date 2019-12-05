@@ -225,7 +225,7 @@ class concurrent_unordered_map {
         atomicCAS(&(insert_location->first), m_unused_key, insert_pair.first)};
 
     // Hash bucket empty
-    if (m_equal(m_unused_key, old_key)) {
+    if (m_unused_key == old_key) {
       insert_location->second = insert_pair.second;
       return insert_result::SUCCESS;
     }
@@ -306,6 +306,46 @@ class concurrent_unordered_map {
       if (m_equal(m_unused_key, existing_key)) {
         return this->end();
       }
+      index = (index + 1) % m_capacity;
+      current_bucket = &m_hashtbl_values[index];
+    }
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Searches the map for the specified key using different hash and equality functions.
+   *
+   * This find function enables creation of the map and querying of
+   * the map to use different functions.  This is useful in situations
+   * where we use indirect access to get to elements being compared,
+   * and want to have different tables used during query.
+   *
+   * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
+   *do concurrent `insert` and `find` operations.
+   *
+   * @param k The key to search for
+   * @param f_hash hashing function for this find
+   * @param f_equal equality function for this find
+   * @return An iterator to the key if it exists, else map.end()
+   *---------------------------------------------------------------------------**/
+  __device__ const_iterator find(key_type const& k, hasher f_hash,
+                                 key_equal f_equal) const {
+    size_type const key_hash = f_hash(k);
+    size_type index = key_hash % m_capacity;
+
+    value_type* current_bucket = &m_hashtbl_values[index];
+
+    while (true) {
+      key_type const existing_key = current_bucket->first;
+
+      if (m_unused_key == existing_key) {
+        return this->end();
+      }
+
+      if (f_equal(k, existing_key)) {
+        return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
+                              current_bucket);
+      }
+
       index = (index + 1) % m_capacity;
       current_bucket = &m_hashtbl_values[index];
     }

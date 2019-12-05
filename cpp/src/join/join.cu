@@ -55,6 +55,13 @@ bool is_trivial_join(
       return true;
   }
 
+  // If left semi join (contains) and right table is empty,
+  // return immediately
+  if ((JoinType::LEFT_SEMI_JOIN == join_type) &&
+      (0 == right.num_rows())) {
+    return true;
+  }
+
   return false;
 }
 

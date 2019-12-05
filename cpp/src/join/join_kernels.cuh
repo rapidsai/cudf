@@ -96,6 +96,23 @@ __global__ void build_hash_table(multimap_type multi_map,
     }
 }
 
+template <typename Map>
+__global__ void build_hash_table(Map map, size_type num_rows) {
+
+  cudf::size_type idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while (idx < num_rows) {
+    // How do I handle null checks?
+    //   From slack discussion....  we don't worry about nulls here.  If there are nulls
+    //   we will insert them into the hash table.  The logic later that compares results
+    //   will not identify things as equal if the keys contain nulls.
+    //
+    auto xxx = map.insert(thrust::make_pair(idx, true));
+    idx += blockDim.x * gridDim.x;
+  }
+}
+  
+
 /* --------------------------------------------------------------------------*/
 /**
 * @brief  Computes the output size of joining the probe table to the build table

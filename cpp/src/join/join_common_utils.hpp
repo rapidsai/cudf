@@ -54,7 +54,9 @@ cudf::experimental::row_hasher<default_hash>;
 enum class JoinType {
   INNER_JOIN,
   LEFT_JOIN,
-  FULL_JOIN
+  FULL_JOIN,
+  LEFT_SEMI_JOIN,
+  LEFT_ANTI_JOIN
 };
 
 template <typename index_type>
@@ -102,7 +104,7 @@ get_empty_index_table(
  * `common_column_indices`
  *---------------------------------------------------------------------------**/
 
-auto non_common_column_indices(
+inline auto non_common_column_indices(
     size_type num_columns,
     std::vector<size_type> const& common_column_indices) {
   CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
@@ -122,7 +124,7 @@ auto non_common_column_indices(
    return non_common_column_indices;
 }
 
-std::unique_ptr<experimental::table> get_empty_joined_table(
+inline std::unique_ptr<experimental::table> get_empty_joined_table(
                          table_view const& left,
                          table_view const& right,
                          std::vector<std::pair<size_type, size_type>> const& columns_in_common) {
