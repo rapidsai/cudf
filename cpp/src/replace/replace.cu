@@ -57,7 +57,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/null_mask.hpp>
 
 namespace { //anonymous
 
@@ -106,6 +108,18 @@ __device__ int get_new_string_value(cudf::size_type idx,
   return match;
 }
 
+/*
+ * Kernel which does the first pass of strings replace. It computes the output null_mask, null_count,
+ * and the offsets.
+ *
+ * @param input The input column to replace strings in.
+ * @param values_to_replace The string values to replace.
+ * @param replacement The replacement values.
+ * @param offsets The column which will contain the offsets of the new string column
+ * @param indices Temporary column used to store the replacement indices
+ * @param output_valid The output null_mask
+ * @param output_valid_count The output valid count
+ */
 template<bool input_has_nulls, bool replacement_has_nulls>
 __global__ void replace_strings_first_pass(cudf::column_device_view input,
                                            cudf::column_device_view values_to_replace,
@@ -160,6 +174,15 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
   }
 }
 
+/*
+ * Kernel which does the second pass of strings replace. It copies the string data needed from input and
+ * replacement into the new strings column chars column.
+ * @param input The input column
+ * @param replacement The replacement values
+ * @param offsets The offsets column of the new strings column
+ * @param strings The chars column of the new strings column
+ * @param indices Temporary column used to store the replacement indices.
+ */
 template<bool input_has_nulls, bool replacement_has_nulls>
 __global__ void replace_strings_second_pass(cudf::column_device_view input,
                                             cudf::column_device_view replacement,
@@ -353,92 +376,104 @@ struct replace_kernel_forwarder {
                                            cudf::column_view const& replacement_values,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0) {
-    rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
-    cudf::size_type *valid_count = valid_counter.data();
-
-    auto replace_first = replace_strings_first_pass<true, false>;
-    auto replace_second = replace_strings_second_pass<true, false>;
-    if (input_col.has_nulls()) {
-      if (replacement_values.has_nulls()) {
-        replace_first = replace_strings_first_pass<true, true>;
-        replace_second = replace_strings_second_pass<true,true>;
-      }
-    } else {
-      if (replacement_values.has_nulls()) {
-        replace_first = replace_strings_first_pass<false, true>;
-        replace_second = replace_strings_second_pass<false, true>;
-      } else {
-        replace_first = replace_strings_first_pass<false, false>;
-        replace_second = replace_strings_second_pass<false, false>;
-      }
-    }
-
-    // Create new offsets column to use in kernel
-    std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
-                                                                      input_col.size() + 1,
-                                                                      cudf::mask_state::UNALLOCATED,
-                                                                      stream,
-                                                                      mr);
-    std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
-                                                                      input_col.size(),
-                                                                      cudf::mask_state::UNALLOCATED,
-                                                                      stream);
-
-    auto offsets_view = offsets->mutable_view();
-    auto indices_view = indices->mutable_view();
-
-    auto device_in = cudf::column_device_view::create(input_col);
-    auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
-    auto device_replacement = cudf::column_device_view::create(replacement_values);
-    auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
-    auto device_indices = cudf::mutable_column_device_view::create(indices_view);
-
-    int valid_chars = cudf::bitmask_allocation_size_bytes(input_col.size());
-    rmm::device_buffer valid_bits(valid_chars, stream, mr);
-
-    // Call first pass kernel to get sizes in offsets
-    cudf::experimental::detail::grid_1d grid { input_col.size(), BLOCK_SIZE, 1 };
-    replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
-                                                              *device_values_to_replace,
-                                                              *device_replacement,
-                                                              *device_offsets,
-                                                              *device_indices,
-                                                              reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
-                                                              valid_count);
-
-    // Compute the offsets from the sizes
-    int32_t * offsets_data = offsets_view.data<int32_t>();
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
-                           offsets_data,
-                           offsets_data + offsets_view.size(),
-                           offsets_data);
-    int32_t size;
-    CUDA_TRY(cudaMemcpyAsync(&size, offsets_data + offsets_view.size() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
-
-    // Allocate chars array and output null mask
-    cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
-    std::unique_ptr<cudf::column> output_chars =
-        cudf::strings::detail::create_chars_child_column(input_col.size(), null_count, size, mr, stream);
-
-    auto output_chars_view = output_chars->mutable_view();
-    auto device_chars = cudf::mutable_column_device_view::create(output_chars_view);
-
-    replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
-                                                               *device_replacement,
-                                                               *device_offsets,
-                                                               *device_chars,
-                                                               *device_indices);
-
-    std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
-                                                                     std::move(offsets),
-                                                                     std::move(output_chars),
-                                                                     null_count,
-                                                                     std::move(valid_bits),
-                                                                     stream,
-                                                                     mr);
-    return output;
-  };
+    CUDF_FAIL("No specialization exists for this type");
+  }
 };
+
+template<>
+std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_view>(cudf::column_view const& input_col,
+                                                                                      cudf::column_view const& values_to_replace,
+                                                                                      cudf::column_view const& replacement_values,
+                                                                                      rmm::mr::device_memory_resource* mr,
+                                                                                      cudaStream_t stream){
+  rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
+  cudf::size_type *valid_count = valid_counter.data();
+
+  auto replace_first = replace_strings_first_pass<true, false>;
+  auto replace_second = replace_strings_second_pass<true, false>;
+  if (input_col.has_nulls()) {
+    if (replacement_values.has_nulls()) {
+      replace_first = replace_strings_first_pass<true, true>;
+      replace_second = replace_strings_second_pass<true,true>;
+    }
+  } else {
+    if (replacement_values.has_nulls()) {
+      replace_first = replace_strings_first_pass<false, true>;
+      replace_second = replace_strings_second_pass<false, true>;
+    } else {
+      replace_first = replace_strings_first_pass<false, false>;
+      replace_second = replace_strings_second_pass<false, false>;
+    }
+  }
+
+  // Create new offsets column to use in kernel
+  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
+                                                                    input_col.size(),
+                                                                    cudf::mask_state::UNALLOCATED,
+                                                                    stream,
+                                                                    mr);
+  std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
+                                                                    input_col.size(),
+                                                                    cudf::mask_state::UNALLOCATED,
+                                                                    stream);
+
+  auto sizes_view = sizes->mutable_view();
+  auto indices_view = indices->mutable_view();
+
+  auto device_in = cudf::column_device_view::create(input_col);
+  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
+  auto device_replacement = cudf::column_device_view::create(replacement_values);
+  auto device_sizes = cudf::mutable_column_device_view::create(sizes_view);
+  auto device_indices = cudf::mutable_column_device_view::create(indices_view);
+
+  rmm::device_buffer valid_bits = cudf::create_null_mask(input_col.size(),
+                                                         cudf::mask_state::UNINITIALIZED,
+                                                         stream,
+                                                         mr);
+
+  // Call first pass kernel to get sizes in offsets
+  cudf::experimental::detail::grid_1d grid { input_col.size(), BLOCK_SIZE, 1 };
+  replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                            *device_values_to_replace,
+                                                            *device_replacement,
+                                                            *device_sizes,
+                                                            *device_indices,
+                                                            reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
+                                                            valid_count);
+
+  std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(sizes_view.begin<int32_t>(),
+                                                                                     sizes_view.end<int32_t>(),
+                                                                                     mr,
+                                                                                     stream);
+  auto offsets_view = offsets->mutable_view();
+  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
+  int32_t size;
+  CUDA_TRY(cudaMemcpyAsync(&size, offsets_view.end<int32_t>() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
+
+  // Allocate chars array and output null mask
+  cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
+  std::unique_ptr<cudf::column> output_chars =
+      cudf::strings::detail::create_chars_child_column(input_col.size(), null_count, size, mr, stream);
+
+  auto output_chars_view = output_chars->mutable_view();
+  auto device_chars = cudf::mutable_column_device_view::create(output_chars_view);
+
+  replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                             *device_replacement,
+                                                             *device_offsets,
+                                                             *device_chars,
+                                                             *device_indices);
+
+  std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
+                                                                   std::move(offsets),
+                                                                   std::move(output_chars),
+                                                                   null_count,
+                                                                   std::move(valid_bits),
+                                                                   stream,
+                                                                   mr);
+  return output;
+}
+
 } //end anonymous namespace
 
 namespace cudf {
@@ -666,71 +701,81 @@ struct replace_nulls_column_kernel_forwarder {
                                            cudf::column_view const& replacement,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0) {
-    rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
-    cudf::size_type *valid_count = valid_counter.data();
-
-    auto replace_first = replace_nulls_strings<0, false>;
-    auto replace_second = replace_nulls_strings<1, false>;
-    if (replacement.has_nulls()){
-      replace_first = replace_nulls_strings<0, true>;
-      replace_second = replace_nulls_strings<1, true>;
-    }
-
-    // Create new offsets column to use in kernel
-    std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
-                                                                      input.size() + 1,
-                                                                      cudf::mask_state::UNALLOCATED,
-                                                                      stream,
-                                                                      mr);
-    auto offsets_view = offsets->mutable_view();
-    auto device_in = cudf::column_device_view::create(input);
-    auto device_replacement = cudf::column_device_view::create(replacement);
-
-    int valid_chars = cudf::bitmask_allocation_size_bytes(input.size());
-    rmm::device_buffer valid_bits(valid_chars, stream, mr);
-
-    // Call first pass kernel to get sizes in offsets
-    cudf::experimental::detail::grid_1d grid { input.size(), BLOCK_SIZE, 1 };
-    replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
-                                                              *device_replacement,
-                                                              reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
-                                                              offsets_view.data<cudf::size_type>(),
-                                                              nullptr,
-                                                              valid_count);
-
-    // Compute the offsets from the sizes
-    int32_t * offsets_data = offsets_view.data<int32_t>();
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
-                           offsets_data,
-                           offsets_data + offsets_view.size(),
-                           offsets_data);
-    int32_t size;
-    CUDA_TRY(cudaMemcpyAsync(&size, offsets_data + offsets_view.size() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
-
-    // Allocate chars array and output null mask
-    cudf::size_type null_count = input.size() - valid_counter.value(stream);
-    std::unique_ptr<cudf::column> output_chars =
-        cudf::strings::detail::create_chars_child_column(input.size(), null_count, size, mr, stream);
-
-    auto output_chars_view = output_chars->mutable_view();
-
-    replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
-                                                               *device_replacement,
-                                                               reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
-                                                               offsets_view.data<cudf::size_type>(),
-                                                               output_chars_view.data<char>(),
-                                                               valid_count);
-
-    std::unique_ptr<cudf::column> output = cudf::make_strings_column(input.size(),
-                                                                     std::move(offsets),
-                                                                     std::move(output_chars),
-                                                                     input.size() - valid_counter.value(stream),
-                                                                     std::move(valid_bits),
-                                                                     stream,
-                                                                     mr);
-    return output;
+    CUDF_FAIL("No specialization exists for the given type.");
   }
 };
+
+template<>
+std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator ()<cudf::string_view>(cudf::column_view const& input,
+                                                                                                    cudf::column_view const& replacement,
+                                                                                                    rmm::mr::device_memory_resource* mr,
+                                                                                                    cudaStream_t stream) {
+  rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
+  cudf::size_type *valid_count = valid_counter.data();
+
+  auto replace_first = replace_nulls_strings<0, false>;
+  auto replace_second = replace_nulls_strings<1, false>;
+  if (replacement.has_nulls()){
+    replace_first = replace_nulls_strings<0, true>;
+    replace_second = replace_nulls_strings<1, true>;
+  }
+
+  // Create new offsets column to use in kernel
+  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
+                                                                  input.size(),
+                                                                  cudf::mask_state::UNALLOCATED,
+                                                                  stream);
+
+  auto sizes_view = sizes->mutable_view();
+  auto device_in = cudf::column_device_view::create(input);
+  auto device_replacement = cudf::column_device_view::create(replacement);
+
+  rmm::device_buffer valid_bits = cudf::create_null_mask(input.size(),
+                                                         cudf::mask_state::UNINITIALIZED,
+                                                         stream,
+                                                         mr);
+
+  // Call first pass kernel to get sizes in offsets
+  cudf::experimental::detail::grid_1d grid { input.size(), BLOCK_SIZE, 1 };
+  replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                            *device_replacement,
+                                                            reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
+                                                            sizes_view.begin<cudf::size_type>(),
+                                                            nullptr,
+                                                            valid_count);
+
+  std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(sizes_view.begin<int32_t>(),
+                                                                                           sizes_view.end<int32_t>(),
+                                                                                           mr,
+                                                                                           stream);
+  auto offsets_view = offsets->mutable_view();
+
+  int32_t size;
+  CUDA_TRY(cudaMemcpyAsync(&size, offsets_view.end<int32_t>() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
+
+  // Allocate chars array and output null mask
+  cudf::size_type null_count = input.size() - valid_counter.value(stream);
+  std::unique_ptr<cudf::column> output_chars =
+      cudf::strings::detail::create_chars_child_column(input.size(), null_count, size, mr, stream);
+
+  auto output_chars_view = output_chars->mutable_view();
+
+  replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
+                                                             *device_replacement,
+                                                             reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
+                                                             offsets_view.begin<cudf::size_type>(),
+                                                             output_chars_view.data<char>(),
+                                                             valid_count);
+
+  std::unique_ptr<cudf::column> output = cudf::make_strings_column(input.size(),
+                                                                   std::move(offsets),
+                                                                   std::move(output_chars),
+                                                                   input.size() - valid_counter.value(stream),
+                                                                   std::move(valid_bits),
+                                                                   stream,
+                                                                   mr);
+  return output;
+}
 
 template<typename T>
 struct replace_nulls_functor {
@@ -781,12 +826,19 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            cudf::scalar const& replacement,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0) {
-    cudf::strings_column_view input_s(input);
-    const cudf::string_scalar& repl = reinterpret_cast<const cudf::string_scalar&>(replacement);
-    std::cout << "Calling cudf::strings::replace_nulls()\n";
-    return cudf::strings::replace_nulls(input_s, repl, mr);
+    CUDF_FAIL("No specialization exists for the given type.");
   }
 };
+
+template<>
+std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator ()<cudf::string_view>(cudf::column_view const& input,
+                                                                                                   cudf::scalar const& replacement,
+                                                                                                   rmm::mr::device_memory_resource* mr,
+                                                                                                   cudaStream_t stream) {
+  cudf::strings_column_view input_s(input);
+  const cudf::string_scalar& repl = static_cast<const cudf::string_scalar&>(replacement);
+  return cudf::strings::replace_nulls(input_s, repl, mr);
+}
 
 } //end anonymous namespace
 
