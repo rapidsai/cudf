@@ -67,7 +67,7 @@ public:
     /**
      * @brief Create device program instance from a regex pattern.
      *
-     * The number of strings is needed to compute the stack size required when executing the regex.
+     * The number of strings is needed to compute the state data size required when evaluating the regex.
      *
      * @param pattern The regex pattern to compile.
      * @param cp_flags The code-point lookup table for character types.
@@ -117,7 +117,7 @@ public:
     /**
      * @brief Does a find evaluation using the compiled expression on the given string.
      *
-     * @param idx The string index used for mapping the stack for this string in global memory (if necessary).
+     * @param idx The string index used for mapping the state memory for this string in global memory (if necessary).
      * @param d_str The string to search.
      * @param[in,out] begin Position index to begin the search. If found, returns the position found in the string.
      * @param[in,out] end Position index to end the search. If found, returns the last position matching in the string.
@@ -130,7 +130,7 @@ public:
      * 
      * This will find a specific match within the string when more than match occurs.
      *
-     * @param idx The string index used for mapping the stack for this string in global memory (if necessary).
+     * @param idx The string index used for mapping the state memory for this string in global memory (if necessary).
      * @param d_str The string to search.
      * @param[in,out] begin Position index to begin the search. If found, returns the position found in the string.
      * @param[in,out] end Position index to end the search. If found, returns the last position matching in the string.
@@ -147,8 +147,8 @@ private:
     int32_t* _startinst_ids{};   // array of start instruction ids
     reclass_device* _classes{};  // array of regex classes
     void* _relists_mem{};        // runtime relist memory for regexec
-    u_char* _stack_mem1{};       // memory for Relist object 1
-    u_char* _stack_mem2{};       // memory for Relist object 2
+    u_char* _stack_mem1{};       // memory for relist object 1
+    u_char* _stack_mem2{};       // memory for relist object 2
 
     /**
      * @brief Executes the regex pattern on the given string.
@@ -156,7 +156,7 @@ private:
     __device__ inline int32_t regexec( string_view const& d_str, reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
     /**
-     * @brief Utility wrapper to setup stack structures for calling regexec
+     * @brief Utility wrapper to setup state memory structures for calling regexec
      */
     __device__ inline int32_t call_regexec( int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t groupid=0 );
 
@@ -165,7 +165,7 @@ private:
 
 
 // 10128 ≈ 1000 instructions
-// Formula is based on Relist::data_size_for() calculaton;
+// Formula is based on relist::data_size_for() calculaton;
 // Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
 constexpr int32_t MAX_STACK_INSTS = 1000;
 
