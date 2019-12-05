@@ -45,7 +45,7 @@
 
 namespace { // anonym.
 
-using side = cudf::experimental::detail::side;
+using cudf::experimental::detail::side;
 using index_type = cudf::experimental::detail::index_type;
 
 /**

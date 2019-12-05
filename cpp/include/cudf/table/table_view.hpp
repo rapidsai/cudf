@@ -237,7 +237,7 @@ inline bool has_nulls(table_view view) {
 inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
   return std::equal(lhs.begin(), lhs.end(),
                     rhs.begin(), rhs.end(),
-                    [](cudf::column_view const& lcol, cudf::column_view const& rcol){
+                    [](column_view const& lcol, column_view const& rcol){
                       return (lcol.type() == rcol.type());
                     });
 }
