@@ -37,7 +37,7 @@ namespace {
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-static constexpr std::array<aggregation::Kind, 5> hash_aggregations{
+constexpr std::array<aggregation::Kind, 5> hash_aggregations{
     aggregation::SUM, aggregation::MIN, aggregation::MAX, aggregation::COUNT,
     aggregation::MEAN};
 

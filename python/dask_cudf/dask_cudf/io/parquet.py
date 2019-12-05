@@ -42,11 +42,12 @@ class CudfEngine(ArrowEngine):
                 piece, open_file_func=partial(fs.open, mode="rb")
             )
         else:
-            # `piece` contains (path, row_group, partition_keys)
+            # `piece` = (path, row_group, partition_keys)
+            (path, row_group, partition_keys) = piece
             piece = pq.ParquetDatasetPiece(
-                piece[0],
-                row_group=piece[1],
-                partition_keys=piece[2],
+                path,
+                row_group=row_group,
+                partition_keys=partition_keys,
                 open_file_func=partial(fs.open, mode="rb"),
             )
 
@@ -139,7 +140,9 @@ class CudfEngine(ArrowEngine):
             return []
 
 
-def read_parquet(path, **kwargs):
+def read_parquet(
+    path, columns=None, split_row_groups=True, gather_statistics=None, **kwargs
+):
     """ Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
@@ -157,11 +160,18 @@ def read_parquet(path, **kwargs):
     --------
     cudf.read_parquet
     """
-
-    columns = kwargs.pop("columns", None)
     if isinstance(columns, str):
         columns = [columns]
-    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)
+    if split_row_groups:
+        gather_statistics = True
+    return dd.read_parquet(
+        path,
+        columns=columns,
+        split_row_groups=split_row_groups,
+        gather_statistics=gather_statistics,
+        engine=CudfEngine,
+        **kwargs,
+    )
 
 
 to_parquet = partial(dd.to_parquet, engine=CudfEngine)

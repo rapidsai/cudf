@@ -31,6 +31,7 @@
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
 - PR #3291 Add normalize_nans_and_zeros
+- PR #3187 Define and implement new replace APIs
 - PR #3356 Add vertical concatenation for table/columns
 - PR #3344 java split API
 - PR #2791 Add `groupby.std()`
@@ -42,8 +43,10 @@
 - PR #3393 Implement df.cov and enable covariance/correlation in dask_cudf
 - PR #3401 Add dask_cudf ORC writer (to_orc)
 - PR #3331 Add copy_if_else
+- PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
+- PR #3497 Add DataFrame.drop(..., inplace=False) argument
 
 ## Improvements
 
@@ -126,7 +129,9 @@
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
+- PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
+- PR #3332 Port NVStrings replace to cudf strings column
 - PR #3354 Define and implement new `scatter` APIs
 - PR #3322 Port NVStrings pad operations to cudf strings column
 - PR #3345 Add cache member for number of characters in string_view class
@@ -138,7 +143,7 @@
 - PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
-- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`, 
+- PR #3303 Define and implement new stream compaction APIs `copy_if`, `drop_nulls`,
            `apply_boolean_mask`, `drop_duplicate` and `unique_count`.
 - PR #3387 Strings column gather function
 - PR #3440 Strings column scatter function
@@ -148,6 +153,17 @@
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
+- PR #3448 Port scatter_to_tables to libcudf++
+- PR #3458 Update strings sections in the transition guide
+- PR #3462 Add `make_empty_column` and update `empty_like`.
+- PR #3465 Port `aggregation` traits and utilities.
+- PR #3214 Define and implement new unary operations APIs
+- PR #3475 Add `bitmask_to_host` column utility
+- PR #3487 Add is_boolean trait and random timestamp generator for testing
+- PR #3492 Small cleanup (remove std::abs) and comment
+- PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
+- PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
+- PR #3438 Update scalar and scalar_device_view to better support strings
 
 ## Bug Fixes
 
@@ -207,7 +223,16 @@
 - PR #3435 Fix diff and shift for empty series
 - PR #3439 Fix index-name bug in StringColumn concat
 - PR #3445 Fix ORC Writer default stripe size
-- PR #3530 Fix copy_if test case fail issue 
+- PR #3459 Fix printing of invalid entries
+- PR #3466 Fix gather null mask allocation for invalid index
+- PR #3468 Fix memory leak issue in `drop_duplicates`
+- PR #3474 Fix small doc error in capitalize Docs
+- PR #3491 Fix more doc errors in NVStrings
+- PR #3478 Fix as_index deep copy via Index.rename inplace arg
+- PR #3476 Fix ORC reader timezone conversion
+- PR #3188 Repr slices up large DataFrames
+- PR #3530 Fix copy_if_else test case fail issue
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 
