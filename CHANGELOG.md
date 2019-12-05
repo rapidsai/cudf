@@ -166,6 +166,7 @@
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
+- PR #3414 Add copy_range function for strings column
 
 ## Bug Fixes
 

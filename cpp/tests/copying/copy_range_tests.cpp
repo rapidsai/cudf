@@ -210,6 +210,171 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
              source_begin, source_end, target_begin);
 }
 
+class CopyRangeStringTestFixture : public cudf::test::BaseFixture {};
+
+TEST_F(CopyRangeStringTestFixture, CopyWithNullsString)
+{
+  cudf::size_type size{100};
+  cudf::size_type source_begin{9};
+  cudf::size_type source_end{50};
+  cudf::size_type target_begin{30};
+  auto target_end = target_begin + (source_end - source_begin);
+  auto row_diff = source_begin - target_begin;
+
+  auto target_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return "#" + std::to_string(i); });
+  auto target = cudf::test::strings_column_wrapper(
+    target_elements,
+    target_elements + size,
+    cudf::test::make_counting_transform_iterator(0, all_valid));
+
+  auto source_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return "#" + std::to_string(i * 2); });
+  auto source = cudf::test::strings_column_wrapper(
+    source_elements,
+    source_elements + size,
+    cudf::test::make_counting_transform_iterator(
+      0, even_valid));
+
+  auto expected_elements =
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_begin, target_end, row_diff](auto i) {
+        auto num =
+          std::to_string(
+            ((i >= target_begin) && (i < target_end)) ? (i + row_diff) * 2 : i);
+        return "#" + num;
+     });
+  auto expected = cudf::test::strings_column_wrapper(
+    expected_elements,
+    expected_elements + size,
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_begin, target_end, row_diff](auto i) {
+        return ((i >= target_begin) && (i < target_end)) ?
+          even_valid(i + row_diff) : all_valid(i);
+      }));
+
+  auto p_ret =
+    cudf::experimental::copy_range(
+      source, target, source_begin, source_end, target_begin);
+  cudf::test::expect_columns_equal(*p_ret, expected);
+}
+
+TEST_F(CopyRangeStringTestFixture, CopyNoNullsString)
+{
+  cudf::size_type size{100};
+  cudf::size_type source_begin{9};
+  cudf::size_type source_end{50};
+  cudf::size_type target_begin{30};
+  auto target_end = target_begin + (source_end - source_begin);
+  auto row_diff = source_begin - target_begin;
+
+  auto target_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return "#" + std::to_string(i); });
+  auto target = cudf::test::strings_column_wrapper(
+    target_elements,
+    target_elements + size);
+
+  auto source_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return "#" + std::to_string(i * 2); });
+  auto source = cudf::test::strings_column_wrapper(
+    source_elements,
+    source_elements + size);
+
+  auto expected_elements =
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_begin, target_end, row_diff](auto i) {
+        auto num =
+          std::to_string(
+            ((i >= target_begin) && (i < target_end)) ? (i + row_diff) * 2 : i);
+        return "#" + num;
+     });
+  auto expected = cudf::test::strings_column_wrapper(
+    expected_elements,
+    expected_elements + size);
+
+  auto p_ret =
+    cudf::experimental::copy_range(
+      source, target, source_begin, source_end, target_begin);
+  cudf::test::expect_columns_equal(*p_ret, expected);
+}
+
+TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
+{
+  cudf::size_type size{200};
+  cudf::size_type source_offset{27};
+  cudf::size_type source_begin{9};
+  cudf::size_type source_end{50};
+  cudf::size_type target_offset{58};
+  cudf::size_type target_begin{30};
+  auto target_end = target_begin + (source_end - source_begin);
+  auto row_diff =
+    (source_offset + source_begin) - (target_offset + target_begin);
+
+  auto target_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return "#" + std::to_string(i); });
+  auto target = cudf::test::strings_column_wrapper(
+    target_elements,
+    target_elements + size,
+    cudf::test::make_counting_transform_iterator(0, all_valid));
+
+  auto target_slice = cudf::experimental::slice(
+    target,
+    std::vector<cudf::size_type>{target_offset, size})[0];
+
+  auto source_elements =
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return "#" + std::to_string(i * 2); });
+  auto source = cudf::test::strings_column_wrapper(
+    source_elements,
+    source_elements + size,
+    cudf::test::make_counting_transform_iterator(
+      0, even_valid));
+
+  auto source_slice = cudf::experimental::slice(
+    source,
+    std::vector<cudf::size_type>{source_offset, size})[0];
+
+  auto expected_elements =
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_offset, target_begin, target_end, row_diff](auto i) {
+        auto num =
+          std::to_string(
+            ((i >= target_offset + target_begin) &&
+             (i < target_offset + target_end)) ?
+            (i + row_diff) * 2 : i);
+        return "#" + num;
+     });
+  auto expected = cudf::test::strings_column_wrapper(
+    expected_elements,
+    expected_elements + size,
+    cudf::test::make_counting_transform_iterator(
+      0,
+      [target_offset, target_begin, target_end, row_diff](auto i) {
+        return ((i >= target_offset + target_begin) &&
+                (i < target_offset + target_end)) ?
+          even_valid(i + row_diff) : all_valid(i);
+      }));
+
+  auto expected_slice =
+    cudf::experimental::slice(
+      expected,
+      std::vector<cudf::size_type>{target_offset, size})[0];
+
+  auto p_ret =
+    cudf::experimental::copy_range(
+      source_slice, target_slice, source_begin, source_end, target_begin);
+  cudf::test::expect_columns_equal(*p_ret, expected_slice);
+}
+
 class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
@@ -340,19 +505,5 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
                  source, target, 0, 100, 0),
-               cudf::logic_error);
-}
-
-TEST_F(CopyRangeErrorTestFixture, StringCategoryNotSupported)
-{
-  std::vector<std::string>
-    strings{"", "this", "is", "a", "column", "of", "strings"};
-  auto target_string =
-    cudf::test::strings_column_wrapper(strings.begin(), strings.end());
-  auto source_string =
-    cudf::test::strings_column_wrapper(strings.begin(), strings.end());
-
-  EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
-                 source_string, target_string, 0, 1, 0),
                cudf::logic_error);
 }
