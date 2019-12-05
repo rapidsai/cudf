@@ -94,18 +94,19 @@ rmm::device_buffer create_null_mask(size_type size, mask_state state,
   return mask;
 }
 
-// Set pre-allocated null mask to:
-//ALL_VALID, if valid_flag==true, or ALL_NULL, otherwise;
-void set_null_mask(bitmask_type* ptr_bitmask,
-                   size_type size, bool valid_flag,
+//Set pre-allocated null mask to:
+//all entries to valid, if valid_flag==true,
+//or null, otherwise;
+void set_null_mask(bitmask_type* bitmask,
+                   size_type size, bool valid,
                    cudaStream_t stream)
 {
-  if (ptr_bitmask != nullptr)
+  if (bitmask != nullptr)
     {
       size_type mask_size = bitmask_allocation_size_bytes(size);
 
-      uint8_t fill_value = (valid_flag == true) ? 0xff : 0x00;
-      CUDA_TRY(cudaMemsetAsync(ptr_bitmask,
+      uint8_t fill_value = (valid == true) ? 0xff : 0x00;
+      CUDA_TRY(cudaMemsetAsync(bitmask,
                                fill_value, mask_size, stream));
     }
 }
