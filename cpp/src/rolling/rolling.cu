@@ -143,7 +143,7 @@ struct rolling_window_launcher
                                                     rmm::mr::device_memory_resource *mr,
                                                     cudaStream_t stream)
   {
-    if (input.empty()) return empty_like(input);
+    if (input.is_empty()) return empty_like(input);
 
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
