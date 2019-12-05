@@ -43,9 +43,9 @@ enum class rolling_operator {
  * invalidates the bit mask for element i if there are not enough observations. The window size is
  * static (the same for each element). This matches Pandas' API for DataFrame.rolling with a few
  * notable differences:
- * - instead of the center flag it uses the forward window size to allow for more flexible windows.
- *   The total window size = window + forward_window. Element i uses elements
- *   [i-window+1, i+forward_window] to do the window computation.
+ * - instead of the center flag it uses a two-part window to allow for more flexible windows.
+ *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
+ *   `[i-preceding_window, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * 
@@ -54,8 +54,8 @@ enum class rolling_operator {
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
  * @param[in] input_col The input column
- * @param[in] window The static rolling window size.
- * @param[in] forward_window The static window size in the forward direction.
+ * @param[in] preceding_window The static rolling window size in the backward direction.
+ * @param[in] following_window The static rolling window size in the forward direction.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] op The rolling window aggregation type (SUM, MAX, MIN, etc.)
@@ -63,8 +63,8 @@ enum class rolling_operator {
  * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       size_type window,
-                                       size_type forward_window,
+                                       size_type preceding_window,
+                                       size_type following_window,
                                        size_type min_periods,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr =
@@ -77,9 +77,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * invalidates the bit mask for element i if there are not enough observations. The window size is
  * dynamic (varying for each element). This matches Pandas' API for DataFrame.rolling with a few
  * notable differences:
- * - instead of the center flag it uses the forward window size to allow for more flexible windows. 
- *   The total window size for element i = window[i] + forward_window[i]. Element i uses elements
- *   [i-window[i]+1, i+forward_window[i]] to do the window computation.
+ * - instead of the center flag it uses a two-part window to allow for more flexible windows.
+ *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
+ *   `[i-preceding_window, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size can be specified for each element using
@@ -92,10 +92,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @throws cudf::logic_error if window column type is not INT32
  *
  * @param[in] input_col The input column
- * @param[in] window A non-nullable column of INT32 window sizes. window[i] specifies window size
- *                   for element i.
- * @param[in] forward_window A non-nullable column of INT32 window sizes in the forward direction.
- *                           forward_window[i] specifies window size for element i.
+ * @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction.
+ *                             `preceding_window[i]` specifies preceding window size for element `i`.
+ * @param[in] following_window A non-nullable column of INT32 window sizes in the backward direction.
+ *                             `following_window[i]` specifies following window size for element `i`.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
@@ -103,8 +103,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       column_view const& window,
-                                       column_view const& forward_window,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
                                        size_type min_periods,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr =
@@ -117,9 +117,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * defined aggregator, and invalidates the bit mask for element i if there are not enough
  * observations. The window size is  static (the same for each element). This matches Pandas' API
  * for DataFrame.rolling with a few notable differences:
- * - instead of the center flag it uses the forward window size to allow for more flexible windows.
- *   The total window size = window + forward_window. Element i uses elements
- *   [i-window+1, i+forward_window] to do the window computation.
+ * - instead of the center flag it uses a two-part window to allow for more flexible windows.
+ *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
+ *   `[i-preceding_window, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  *
@@ -132,8 +132,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * applied.
  *
  * @param[in] input_col The input column
- * @param[in] window The static rolling window size.
- * @param[in] forward_window The static window size in the forward direction.
+ * @param[in] preceding_window The static rolling window size in the backward direction.
+ * @param[in] following_window The static rolling window size in the forward direction.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] udf A CUDA string or a PTX string compiled by numba that contains the implementation
@@ -145,8 +145,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       size_type window,
-                                       size_type forward_window,
+                                       size_type preceding_window,
+                                       size_type following_window,
                                        size_type min_periods,
                                        std::string const& udf,
                                        rolling_operator op,
@@ -161,9 +161,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * defined aggregator, and invalidates the bit mask for element i if there are not enough
  * observations. The window size is dynamic (varying for each element). This matches Pandas' API
  * for DataFrame.rolling with a few notable differences:
- * - instead of the center flag it uses the forward window size to allow for more flexible windows.
- *   The total window size for element i = window[i] + forward_window[i]. Element i uses elements
- *   [i-window[i]+1, i+forward_window[i]] to do the window computation.
+ * - instead of the center flag it uses a two-part window to allow for more flexible windows.
+ *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
+ *   `[i-preceding_window, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  *
@@ -178,10 +178,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @throws cudf::logic_error if window column type is not INT32
  * 
  * @param[in] input_col The input column
- * @param[in] window A non-nullable column of INT32 window sizes. window[i] specifies window size
- *                   for element i.
- * @param[in] forward_window A non-nullable column of INT32 window sizes in the forward direction.
- *                           forward_window[i] specifies window size for element i.
+* @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction.
+ *                             `preceding_window[i]` specifies preceding window size for element `i`.
+ * @param[in] following_window A non-nullable column of INT32 window sizes in the backward direction.
+ *                             `following_window[i]` specifies following window size for element `i`.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] udf A CUDA string or a PTX string compiled by numba that contains the implementation
@@ -193,8 +193,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @returns   A nullable output column containing the rolling window results
  **/
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       column_view const& window,
-                                       column_view const& forward_window,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
                                        size_type min_periods,
                                        std::string const& udf,
                                        rolling_operator op,

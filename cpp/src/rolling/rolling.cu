@@ -48,11 +48,11 @@ namespace { // anonymous
  * @tparam WindowIterator iterator type (inferred)
  * @param input Input column device view
  * @param output Output column device view
- * @param window_begin[in] Rolling window size iterator, accumulates from
- *                in_col[i-window+1] to in_col[i] inclusive
- * @param forward_window_begin[in] Rolling window size iterator in the forward
+ * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
+ *                in_col[i-preceding_window] to in_col[i] inclusive
+ * @param following_window_begin[in] Rolling window size iterator in the forward
  *                direction, accumulates from in_col[i] to
- *                in_col[i+forward_window] inclusive
+ *                in_col[i+following_window] inclusive
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
  */
@@ -63,8 +63,8 @@ __global__
 void gpu_rolling(column_device_view input,
                  mutable_column_device_view output,
                  size_type * __restrict__ output_valid_count,
-                 WindowIterator window_begin,
-                 WindowIterator forward_window_begin,
+                 WindowIterator preceding_window_begin,
+                 WindowIterator following_window_begin,
                  size_type min_periods)
 {
   size_type i = blockIdx.x * block_size + threadIdx.x;
@@ -80,12 +80,12 @@ void gpu_rolling(column_device_view input,
     // for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
 
-    size_type window = window_begin[i];
-    size_type forward_window = forward_window_begin[i];
+    size_type preceding_window = preceding_window_begin[i];
+    size_type following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start_index = max(0, i - window + 1);
-    size_type end_index = min(input.size(), i + forward_window + 1); // exclusive
+    size_type start_index = max(0, i - preceding_window);
+    size_type end_index = min(input.size(), i + following_window + 1); // exclusive
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -137,8 +137,8 @@ struct rolling_window_launcher
     std::enable_if_t<cudf::detail::is_supported<T, agg_op, 
                                                 op == rolling_operator::MEAN>()>* = nullptr>
   std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
-                                                    WindowIterator window_begin,
-                                                    WindowIterator forward_window_begin,
+                                                    WindowIterator preceding_window_begin,
+                                                    WindowIterator following_window_begin,
                                                     size_type min_periods,
                                                     rmm::mr::device_memory_resource *mr,
                                                     cudaStream_t stream)
@@ -165,11 +165,11 @@ struct rolling_window_launcher
     if (input.has_nulls()) {
       gpu_rolling<T, agg_op, op, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
         (*input_device_view, *output_device_view, device_valid_count.data(),
-         window_begin, forward_window_begin, min_periods);
+         preceding_window_begin, following_window_begin, min_periods);
     } else {
       gpu_rolling<T, agg_op, op, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
         (*input_device_view, *output_device_view, device_valid_count.data(),
-         window_begin, forward_window_begin, min_periods);
+         preceding_window_begin, following_window_begin, min_periods);
     }
 
     output->set_null_count(output->size() - device_valid_count.value(stream));
@@ -189,8 +189,8 @@ struct rolling_window_launcher
     std::enable_if_t<!cudf::detail::is_supported<T, agg_op,
                                                  op == rolling_operator::MEAN>()>* = nullptr>
   std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
-                                                    WindowIterator window_begin,
-                                                    WindowIterator forward_window_begin,
+                                                    WindowIterator preceding_window_begin,
+                                                    WindowIterator following_window_begin,
                                                     size_type min_periods,
                                                     rmm::mr::device_memory_resource *mr,
                                                     cudaStream_t stream)
@@ -206,8 +206,8 @@ struct rolling_window_launcher
    */
   template <typename T, typename WindowIterator>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     WindowIterator window_begin,
-                                     WindowIterator forward_window_begin,
+                                     WindowIterator preceding_window_begin,
+                                     WindowIterator following_window_begin,
                                      size_type min_periods,
                                      rolling_operator op,
                                      rmm::mr::device_memory_resource *mr,
@@ -216,29 +216,29 @@ struct rolling_window_launcher
     switch (op) {
     case rolling_operator::SUM:
       return dispatch_aggregation_type<T, cudf::DeviceSum,
-                                       rolling_operator::SUM>(input, window_begin,
-                                                               forward_window_begin, min_periods,
+                                       rolling_operator::SUM>(input, preceding_window_begin,
+                                                               following_window_begin, min_periods,
                                                                mr, stream);
     case rolling_operator::MIN:
       return dispatch_aggregation_type<T, cudf::DeviceMin,
-                                       rolling_operator::MIN>(input, window_begin,
-                                                              forward_window_begin, min_periods,
+                                       rolling_operator::MIN>(input, preceding_window_begin,
+                                                              following_window_begin, min_periods,
                                                               mr, stream);
     case rolling_operator::MAX:
       return dispatch_aggregation_type<T, cudf::DeviceMax,
-                                       rolling_operator::MAX>(input, window_begin,
-                                                              forward_window_begin, min_periods,
+                                       rolling_operator::MAX>(input, preceding_window_begin,
+                                                              following_window_begin, min_periods,
                                                               mr, stream);
     case rolling_operator::COUNT:
       // for count, use size_type rather than the input type (never load the input)
       return dispatch_aggregation_type<cudf::size_type, cudf::DeviceCount,
-                                       rolling_operator::COUNT>(input, window_begin,
-                                                                forward_window_begin, min_periods,
+                                       rolling_operator::COUNT>(input, preceding_window_begin,
+                                                                following_window_begin, min_periods,
                                                                 mr, stream);
     case rolling_operator::MEAN:
       return dispatch_aggregation_type<T, cudf::DeviceSum,
-                                       rolling_operator::MEAN>(input, window_begin,
-                                                               forward_window_begin, min_periods,
+                                       rolling_operator::MEAN>(input, preceding_window_begin,
+                                                               following_window_begin, min_periods,
                                                                mr, stream);
     default:
       // TODO: need a nice way to convert enums to strings, same would be useful for groupby
@@ -252,8 +252,8 @@ struct rolling_window_launcher
 // Applies a rolling window function to the values in a column.
 template <typename WindowIterator>
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       WindowIterator window_begin,
-                                       WindowIterator forward_window_begin,
+                                       WindowIterator preceding_window_begin,
+                                       WindowIterator following_window_begin,
                                        size_type min_periods,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr,
@@ -261,15 +261,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   return cudf::experimental::type_dispatcher(input.type(),
                                              rolling_window_launcher{},
-                                             input, window_begin, forward_window_begin,
+                                             input, preceding_window_begin, following_window_begin,
                                              min_periods, op, mr, stream);
 }
 
 // Applies a user-defined rolling window function to the values in a column.
 template <typename WindowIterator>
 std::unique_ptr<column> rolling_window(column_view const &input,
-                                       WindowIterator window_begin,
-                                       WindowIterator forward_window_begin,
+                                       WindowIterator preceding_window_begin,
+                                       WindowIterator following_window_begin,
                                        size_type min_periods,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator agg_op,
@@ -286,84 +286,84 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 
 // Applies a fixed-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       size_type window,
-                                       size_type forward_window,
+                                       size_type preceding_window,
+                                       size_type following_window,
                                        size_type min_periods,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
-               "Window size and min periods must be non-negative");
+  CUDF_EXPECTS((preceding_window >= 0) && (following_window >= 0) && (min_periods >= 0),
+               "Window sizes and min periods must be non-negative");
 
-  auto window_begin = thrust::make_constant_iterator(window);
-  auto forward_window_begin = thrust::make_constant_iterator(forward_window);
+  auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
+  auto following_window_begin = thrust::make_constant_iterator(following_window);
 
-  return cudf::experimental::detail::rolling_window(input, window_begin, forward_window_begin,
-                                                    min_periods, op, mr, 0);
+  return cudf::experimental::detail::rolling_window(input, preceding_window_begin,
+                                                    following_window_begin, min_periods, op, mr, 0);
 }
 
 // Applies a variable-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                       column_view const& window,
-                                       column_view const& forward_window,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
                                        size_type min_periods,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (window.size() == 0 || forward_window.size() == 0) return empty_like(input);
+  if (preceding_window.size() == 0 || following_window.size() == 0) return empty_like(input);
 
-  CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
-               "window/forward_window must have INT32 type");
+  CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
+               "preceding_window/following_window must have INT32 type");
 
-  CUDF_EXPECTS(window.size() == input.size() && forward_window.size() == input.size(),
-               "window/forward_window size must match input size");
+  CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
+               "preceding_window/following_window size must match input size");
 
-  return cudf::experimental::detail::rolling_window(input, window.begin<size_type>(),
-                                                    forward_window.begin<size_type>(), min_periods,
-                                                    op, mr, 0);
+  return cudf::experimental::detail::rolling_window(input, preceding_window.begin<size_type>(),
+                                                    following_window.begin<size_type>(),
+                                                    min_periods, op, mr, 0);
 }
 
 // Applies a fixed-size user-defined rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const &input,
-                                       size_type window,
-                                       size_type forward_window,
+                                       size_type preceding_window,
+                                       size_type following_window,
                                        size_type min_periods,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator op,
                                        data_type output_type,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
-               "Window size and min periods must be non-negative");
+  CUDF_EXPECTS((preceding_window >= 0) && (following_window >= 0) && (min_periods >= 0),
+               "Window sizes and min periods must be non-negative");
 
-  auto window_begin = thrust::make_constant_iterator(window);
-  auto forward_window_begin = thrust::make_constant_iterator(forward_window);
+  auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
+  auto following_window_begin = thrust::make_constant_iterator(following_window);
 
-  return cudf::experimental::detail::rolling_window(input, window_begin, forward_window_begin,
-                                                    min_periods, user_defined_aggregator, op,
-                                                    output_type, mr, 0);
+  return cudf::experimental::detail::rolling_window(input, preceding_window_begin,
+                                                    following_window_begin, min_periods,
+                                                    user_defined_aggregator, op, output_type, mr, 0);
 }
 
 // Applies a variable-size user-defined rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const &input,
-                                       column_view const& window,
-                                       column_view const& forward_window,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
                                        size_type min_periods,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator op,
                                        data_type output_type,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (window.size() == 0 || forward_window.size() == 0) return empty_like(input);
+  if (preceding_window.size() == 0 || following_window.size() == 0) return empty_like(input);
 
-  CUDF_EXPECTS(window.type().id() == INT32 && forward_window.type().id() == INT32,
-               "window/forward_window must have INT32 type");
+  CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
+               "preceding_window/following_window must have INT32 type");
 
-  CUDF_EXPECTS(window.size() != input.size() && forward_window.size() != input.size(),
-               "window/forward_window size must match input size");
+  CUDF_EXPECTS(preceding_window.size() != input.size() && following_window.size() != input.size(),
+               "preceding_window/following_window size must match input size");
 
-  return cudf::experimental::detail::rolling_window(input, window.begin<size_type>(),
-                                                    forward_window.begin<size_type>(), min_periods,
+  return cudf::experimental::detail::rolling_window(input, preceding_window.begin<size_type>(),
+                                                    following_window.begin<size_type>(), min_periods,
                                                     user_defined_aggregator, op, output_type, mr, 0);
 }
 
