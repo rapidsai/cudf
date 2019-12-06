@@ -1,6 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
+- PR #3538 - Define and implmeent left semi join and left anti join
 
 ## Improvements
 
