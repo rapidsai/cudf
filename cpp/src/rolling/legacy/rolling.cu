@@ -27,7 +27,7 @@
 
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/rolling.hpp>
-#include "rolling_detail.hpp"
+#include <rolling/legacy/rolling_detail.hpp>
 
 // allocate column
 #include <io/utilities/wrapper_utils.hpp>

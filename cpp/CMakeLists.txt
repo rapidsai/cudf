@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -422,6 +422,7 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
+            src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
@@ -492,7 +493,7 @@ add_library(cudf
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/utilities/legacy/column_utils.cpp
-	        src/copying/gather.cu
+            src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
@@ -525,6 +526,7 @@ add_library(cudf
             src/table/table_device_view.cu
             src/table/table.cpp
             src/bitmask/null_mask.cu
+            src/rolling/rolling.cu
             src/sort/sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
@@ -534,10 +536,12 @@ add_library(cudf
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
+            src/strings/find_multiple.cu
             src/strings/filling/fill.cu
             src/strings/padding.cu
             src/strings/replace/replace.cu
