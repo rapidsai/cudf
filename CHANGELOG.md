@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #3370 Port NVStrings strip functions
+
 ## Bug Fixes
 
 
@@ -116,7 +118,6 @@
 - PR #2878 Use upstream merge code in dask_cudf
 - PR #3217 Port NVStrings upper and lower case conversion functions
 - PR #3350 Port NVStrings booleans convert functions
-- PR #3370 Port NVStrings strip functions
 - PR #3231 Add `column::release()` to give up ownership of contents.
 - PR #3157 Use enum class rather than enum for mask_allocation_policy
 - PR #3232 Port NVStrings datetime conversion to cudf strings column
