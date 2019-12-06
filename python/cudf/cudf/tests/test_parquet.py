@@ -318,6 +318,15 @@ def test_parquet_reader_microsecond_timestamps(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_mixedcompression(datadir):
+    fname = datadir / "mixed_compression.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
 def test_parquet_reader_invalids(tmpdir):
     test_pdf = make_pdf(nrows=1000, nvalids=1000 // 4, dtype=np.int64)
 
