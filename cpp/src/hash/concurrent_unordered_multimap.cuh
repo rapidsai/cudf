@@ -19,7 +19,7 @@
 
 #include "managed.cuh"
 #include "hash_allocator.cuh"
-#include "helper_functions.cuh"
+#include <hash/helper_functions.cuh>
 #include <utilities/legacy/device_atomics.cuh>
 
 #include <cudf/cudf.h>
