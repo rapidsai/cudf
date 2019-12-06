@@ -400,7 +400,11 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
             return static_cast<TypeParam>(ret); // <- no shortcut to this can avoid compiler errors
           }
         else
-          return static_cast<TypeParam>(2 * row);
+          {
+            auto row2 = row * 2;
+            TypeParam res = static_cast<TypeParam>(row2);
+            return static_cast<TypeParam>(res);
+          }
       });
     auto valid_sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         return (row < inputRows - 1);
@@ -501,7 +505,11 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
             return static_cast<TypeParam>(ret);
           }
         else
-          return static_cast<TypeParam>(2 * row);
+          {
+            auto row2 = row * 2;
+            TypeParam res = static_cast<TypeParam>(row2);
+            return static_cast<TypeParam>(res);
+          }
       });
     columnFactoryT leftColWrap2(sequence2, sequence2 + inputRows, valid_sequence1);
 
