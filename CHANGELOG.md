@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #3364 Port NVStrings split functions
+- PR #3463 Port NVStrings partition/rpartition to cudf strings column
 
 ## Bug Fixes
 
@@ -173,7 +174,6 @@
 - PR #3448 Port scatter_to_tables to libcudf++
 - PR #3458 Update strings sections in the transition guide
 - PR #3462 Add `make_empty_column` and update `empty_like`.
-- PR #3463 Port NVStrings partition/rpartition to cudf strings column
 - PR #3465 Port `aggregation` traits and utilities.
 - PR #3214 Define and implement new unary operations APIs
 - PR #3475 Add `bitmask_to_host` column utility
