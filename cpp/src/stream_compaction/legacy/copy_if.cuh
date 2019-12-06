@@ -21,14 +21,14 @@
 
 #include <bitmask/legacy/bit_mask.cuh>
 
-#include <utilities/device_atomics.cuh>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/device_atomics.cuh>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>

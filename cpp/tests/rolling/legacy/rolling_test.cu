@@ -21,7 +21,7 @@
 #include <src/rolling/legacy/rolling_detail.hpp>
 
 #include <cudf/utilities/error.hpp>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <gtest/gtest.h>
@@ -144,6 +144,7 @@ private:
     cudf::size_type nrows = in_col.size();
     ref_data.resize(nrows);
     ref_data_valid.resize(nrows);
+    ref_data_null_count = 0;
     agg_op op;
     for(cudf::size_type i = 0; i < nrows; i++) {
       T val = agg_op::template identity<T>();
@@ -165,7 +166,9 @@ private:
       }
       ref_data_valid[i] = (count >= min_periods);
       if (ref_data_valid[i]) {
-	cudf::detail::store_output_functor<T, average>{}(ref_data[i], val, count);
+        cudf::detail::store_output_functor<T, average>{}(ref_data[i], val, count);
+      } else {
+        ref_data_null_count++;
       }
     }
   }
@@ -224,7 +227,7 @@ private:
     // copy output valid mask to host
     cudf::size_type nmasks = gdf_valid_allocation_size(nrows);
     std::vector<cudf::valid_type> out_col_mask(nmasks);
-    CUDA_TRY(cudaMemcpy(out_col_mask.data(), static_cast<cudf::valid_type*>(out_gdf_col->valid), nmasks * sizeof(cudf::valid_type), cudaMemcpyDefault));
+    CUDA_TRY(cudaMemcpy(out_col_mask.data(), static_cast<cudf::valid_type*>(out_gdf_col->valid), nmasks * sizeof(cudf::valid_type), cudaMemcpyDefault));        
       
     // create column wrappers and compare
     cudf::test::column_wrapper<T> out(out_col, [&](cudf::size_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
@@ -235,6 +238,7 @@ private:
     //ref.print();
 
     ASSERT_TRUE(out == ref);
+    ASSERT_TRUE(out_gdf_col->null_count == ref_data_null_count);
   }
 
   // input
@@ -244,6 +248,7 @@ private:
   // reference
   std::vector<T> ref_data;
   std::vector<bool> ref_data_valid;
+  gdf_size_type ref_data_null_count;
 
   // output
   gdf_col_pointer out_gdf_col;

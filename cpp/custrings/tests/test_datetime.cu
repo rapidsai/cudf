@@ -13,22 +13,22 @@ TEST_F(TestTimestamp, ToTimestamp)
 {
     {    
         std::vector<const char*> hstrs{"1974-02-28T01:23:45Z", "2019-07-17T21:34:37Z",
-                                       nullptr, "" };
+                                       nullptr, "", "1974" };
         NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
         thrust::device_vector<unsigned long> results(hstrs.size(),0);
         strs->timestamp2long("%Y-%m-%dT%H:%M:%SZ", NVStrings::seconds, results.data().get());
-        int expected[] = { 131246625, 1563399277, 0,0 };
+        int expected[] = { 131246625, 1563399277, 0, 0, 0 };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
             EXPECT_EQ((int)results[idx],expected[idx]);
         NVStrings::destroy(strs);
     }
 
     {    
-        std::vector<const char*> hstrs{"12.28.1982", "07.17.2019" };
+        std::vector<const char*> hstrs{"12.28.1982", "07.17.2019", "06" };
         NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
         thrust::device_vector<unsigned long> results(hstrs.size(),0);
         strs->timestamp2long("%m-%d-%Y", NVStrings::days, results.data().get());
-        int expected[] = { 4744, 18094 };
+        int expected[] = { 4744, 18094, 0 };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
             EXPECT_EQ((int)results[idx],expected[idx]);
         NVStrings::destroy(strs);

@@ -264,7 +264,7 @@ class Index(object):
         else:
             return column_join_res
 
-    def rename(self, name):
+    def rename(self, name, inplace=False):
         """
         Alter Index name.
 
@@ -279,13 +279,14 @@ class Index(object):
         -------
         Index
 
-        Difference from pandas:
-          * Not supporting: inplace
         """
-        out = self.copy(deep=False)
-        out.name = name
-
-        return out.copy(deep=True)
+        if inplace is True:
+            self.name = name
+            return None
+        else:
+            out = self.copy(deep=False)
+            out.name = name
+            return out.copy(deep=True)
 
     def astype(self, dtype):
         """Convert to the given ``dtype``.
@@ -831,7 +832,6 @@ class DatetimeIndex(GenericIndex):
                 np.array(values, dtype="<M8[ms]")
             )
         super(DatetimeIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     @property
     def year(self):
@@ -947,7 +947,6 @@ class StringIndex(GenericIndex):
                 nvstrings.to_device(values), dtype="object"
             )
         super(StringIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     def to_pandas(self):
         return pd.Index(self.values, name=self.name, dtype="object")
@@ -994,7 +993,9 @@ def as_index(arbitrary, **kwargs):
     kwargs = _setdefault_name(arbitrary, kwargs)
 
     if isinstance(arbitrary, Index):
-        return arbitrary.rename(**kwargs)
+        idx = arbitrary.copy(deep=False)
+        idx.rename(**kwargs, inplace=True)
+        return idx
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):
