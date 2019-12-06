@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+- Update Java package to 0.12
 
 
 # cuDF 0.11.0 (Date TBD)
