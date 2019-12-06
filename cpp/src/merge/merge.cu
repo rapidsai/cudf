@@ -78,7 +78,6 @@ __global__ void materialize_merged_bitmask_kernel(column_device_view left_dcol,
                                                   size_type const num_destination_rows,
                                                   index_type const* const __restrict__ merged_indices) {
   size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-  bitmask_type* const __restrict__ destination_mask = out_dcol.null_mask();
   
   auto active_threads =
     __ballot_sync(0xffffffff, destination_row < num_destination_rows);
