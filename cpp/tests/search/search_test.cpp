@@ -27,6 +27,7 @@ using cudf::test::expect_columns_equal;
 using cudf::numeric_scalar;
 using cudf::string_scalar;
 using cudf::size_type;
+using cudf::experimental::bool8;
 
 TEST_F(SearchTest, empty_table)
 {
@@ -1549,4 +1550,208 @@ TEST_F(SearchTest, contains_nullable_column_false_string)
   result = cudf::experimental::contains(column, scalar);
 
   ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_some)
+{
+  using element_type = int64_t;
+
+  fixed_width_column_wrapper<element_type>    haystack {0, 1, 17, 19, 23, 29, 71};
+  fixed_width_column_wrapper<element_type>    needles  {17, 19, 45, 72};
+
+  fixed_width_column_wrapper<bool8>           expect {0, 0, 1, 1, 0, 0, 0};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_none)
+{
+  using element_type = int64_t;
+
+  fixed_width_column_wrapper<element_type>    haystack {0, 1, 17, 19, 23, 29, 71};
+  fixed_width_column_wrapper<element_type>    needles  {2, 3};
+
+  fixed_width_column_wrapper<bool8>           expect {0, 0, 0, 0, 0, 0, 0};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_some_string)
+{
+  std::vector<const char*> h_haystack_strings  { "0", "1", "17", "19", "23", "29", "71"};
+  std::vector<const char*> h_needles_strings   { "17", "19", "45", "72" };
+
+  cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(),
+                                              h_haystack_strings.end());
+
+  cudf::test::strings_column_wrapper needles(h_needles_strings.begin(),
+                                             h_needles_strings.end());
+
+  fixed_width_column_wrapper<bool8>           expect {0, 0, 1, 1, 0, 0, 0};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_none_string)
+{
+  std::vector<const char*> h_haystack_strings    { "0", "1", "17", "19", "23", "29", "71"};
+  std::vector<const char*> h_needles_strings { "2", "3" };
+
+  cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(),
+                                              h_haystack_strings.end());
+
+  cudf::test::strings_column_wrapper needles(h_needles_strings.begin(),
+                                             h_needles_strings.end());
+
+  fixed_width_column_wrapper<bool8>           expect {0, 0, 0, 0, 0, 0, 0};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_some_with_nulls)
+{
+  using element_type = int64_t;
+
+  fixed_width_column_wrapper<element_type>    haystack { {0, 1, 17, 19, 23, 29, 71},
+                                                         {1, 1,  0,  1,  1,  1,  1} };
+  fixed_width_column_wrapper<element_type>    needles { {17, 19, 23, 72},
+                                                       { 1,  0,  1,  1 } };
+
+  fixed_width_column_wrapper<bool8>           expect { {0, 0, 0, 0, 1, 0, 0},
+                                                       {1, 1, 0, 1, 1, 1, 1} };
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_none_with_nulls)
+{
+  using element_type = int64_t;
+
+  fixed_width_column_wrapper<element_type>    haystack { {0, 1, 17, 19, 23, 29, 71},
+                                                         {1, 1,  0,  1,  1,  1,  1} };
+  fixed_width_column_wrapper<element_type>    needles { {17, 19, 24, 72},
+                                                       { 1,  0,  1,  1 } };
+
+  fixed_width_column_wrapper<bool8>           expect { {0, 0, 0, 0, 0, 0, 0},
+                                                       {1, 1, 0, 1, 1, 1, 1} };
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_some_string_with_nulls)
+{
+  std::vector<const char*> h_haystack_strings    { "0", "1", nullptr, "19", "23", "29", "71"};
+  std::vector<const char*> h_needles_strings     { "17", "23", nullptr, "72" };
+
+  fixed_width_column_wrapper<bool8>           expect { {0, 0, 0, 0, 1, 0, 0},
+                                                       {1, 1, 0, 1, 1, 1, 1} };
+
+  cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(),
+                                              h_haystack_strings.end(),
+                                              thrust::make_transform_iterator( h_haystack_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper needles(h_needles_strings.begin(),
+                                             h_needles_strings.end(),
+                                             thrust::make_transform_iterator( h_needles_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_none_string_with_nulls)
+{
+  std::vector<const char*> h_haystack_strings    { "0", "1", nullptr, "19", "23", "29", "71"};
+  std::vector<const char*> h_needles_strings     { "2", nullptr };
+
+  fixed_width_column_wrapper<bool8>           expect { {0, 0, 0, 0, 0, 0, 0},
+                                                       {1, 1, 0, 1, 1, 1, 1} };
+
+  cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(),
+                                              h_haystack_strings.end(),
+                                              thrust::make_transform_iterator( h_haystack_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  cudf::test::strings_column_wrapper needles(h_needles_strings.begin(),
+                                            h_needles_strings.end(),
+                                            thrust::make_transform_iterator( h_needles_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_empty_column)
+{
+  using element_type = int64_t;
+
+  fixed_width_column_wrapper<element_type>    haystack {};
+  fixed_width_column_wrapper<element_type>    needles  {2, 3};
+
+  fixed_width_column_wrapper<bool8>           expect {};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_empty_column_string)
+{
+  std::vector<const char*> h_haystack_strings    { };
+  std::vector<const char*> h_needles_strings     { "17", "19", "45", "72" };
+
+  cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(),
+                                              h_haystack_strings.end());
+
+  cudf::test::strings_column_wrapper needles(h_needles_strings.begin(),
+                                            h_needles_strings.end());
+
+  fixed_width_column_wrapper<bool8>           expect {};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_empty_input_set)
+{
+  using element_type = int64_t;
+
+  fixed_width_column_wrapper<element_type>    haystack {0, 1, 17, 19, 23, 29, 71};
+  fixed_width_column_wrapper<element_type>    needles  {};
+
+  fixed_width_column_wrapper<bool8>           expect {0, 0, 0, 0, 0, 0, 0};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_empty_input_set_string)
+{
+  std::vector<const char*> h_haystack_strings    { "0", "1", "17", "19", "23", "29", "71"};
+  std::vector<const char*> h_needles_strings     { };
+
+  cudf::test::strings_column_wrapper haystack(h_haystack_strings.begin(),
+                                              h_haystack_strings.end());
+
+  cudf::test::strings_column_wrapper needles(h_needles_strings.begin(),
+                                             h_needles_strings.end());
+
+  fixed_width_column_wrapper<bool8>           expect {0, 0, 0, 0, 0, 0, 0};
+
+  auto result = cudf::experimental::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
 }

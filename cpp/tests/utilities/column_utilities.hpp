@@ -32,7 +32,7 @@ namespace test {
  * @param lhs The first column
  * @param rhs The second column
  */
-void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs);
+void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
@@ -43,7 +43,8 @@ void expect_column_properties_equal(cudf::column_view lhs, cudf::column_view rhs
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs, bool print_all_differences = false);
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences = false);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -79,6 +80,14 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
  *---------------------------------------------------------------------------**/
 void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::string const& delimiter=",");
 
+/**---------------------------------------------------------------------------*
+ * @brief Copy the null bitmask from a column view to a host vector
+ *
+ * @param c      The column view
+ * @returns      Vector of bitmask_type elements
+ *---------------------------------------------------------------------------**/
+std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
+
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -89,28 +98,9 @@ void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::str
  */
 template <typename T>
 std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
-  std::vector<T> host_data;
-  std::vector<bitmask_type> host_bitmask;
-
-  auto col = column(c);
-
-  if (col.size() > 0) {
-    host_data.resize(col.size());
-    CUDA_TRY(cudaMemcpy(host_data.data(), col.view().head<T>(),
-                        col.size() * sizeof(T),
-                        cudaMemcpyDeviceToHost));
-  }
-
-  if (col.nullable()) {
-    size_t mask_allocation_bytes = bitmask_allocation_size_bytes(c.size());
-    host_bitmask.resize(mask_allocation_bytes);
-    size_t num_mask_elements = num_bitmask_words(c.size());
-    CUDA_TRY(cudaMemcpy(host_bitmask.data(), col.view().null_mask(),
-                        num_mask_elements * sizeof(bitmask_type),
-                        cudaMemcpyDeviceToHost));
-  }
-
-  return std::make_pair(host_data, host_bitmask);
+  std::vector<T> host_data(c.size());
+  CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  return { host_data, bitmask_to_host(c) };
 }
 
 /**
@@ -125,35 +115,27 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
  */
 template <>
 inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
-  std::vector<std::string> host_data;
-  std::vector<bitmask_type> host_bitmask;
-
-  auto strings = strings_column_view(c);
-  auto strings_data = cudf::strings::create_offsets(strings);
-  thrust::host_vector<char> h_chars(strings_data.first);         // copies vectors to
-  thrust::host_vector<size_type> h_offsets(strings_data.second); // host automatically
-
-  // copy nulls to host bitmask
-  if( c.has_nulls() )
-  {
-    auto num_bitmasks = num_bitmask_words(c.size());
-    host_bitmask.resize(num_bitmasks);
-    CUDA_TRY(cudaMemcpy(host_bitmask.data(), c.null_mask(),
-                        num_bitmasks*sizeof(bitmask_type), cudaMemcpyDeviceToHost));
-  }
+  auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
+  thrust::host_vector<char> h_chars(strings_data.first);
+  thrust::host_vector<size_type> h_offsets(strings_data.second);
 
   // build std::string vector from chars and offsets
-  if( !h_chars.empty() ) // check for all nulls case
-  {
-    for( size_type idx=0; idx < strings.size(); ++idx )
+  if( !h_chars.empty() ) { // check for all nulls case
+    std::vector<std::string> host_data;
+    host_data.reserve(c.size());
+
+    // When C++17, replace this loop with std::adjacent_difference()
+    for( size_type idx=0; idx < c.size(); ++idx )
     {
         auto offset = h_offsets[idx];
         auto length = h_offsets[idx+1] - offset;
         host_data.push_back(std::string( h_chars.data()+offset, length));
     }
-  }
 
-  return std::make_pair(host_data, host_bitmask);
+    return { host_data, bitmask_to_host(c) };
+  }
+  else 
+    return { std::vector<std::string>{}, bitmask_to_host(c) };
 }
 
 }  // namespace test

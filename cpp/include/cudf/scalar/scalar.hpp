@@ -139,7 +139,7 @@ class fixed_width_scalar : public scalar {
   T* data() { return _data.data(); }
 
   /**
-   * @brief Returns a raw pointer to the value in device memory
+   * @brief Returns a const raw pointer to the value in device memory
    */
   T const* data() const { return _data.data(); }
 
@@ -230,7 +230,14 @@ class string_scalar : public scalar {
    * 
    * @param stream The CUDA stream to do the operation in
    */
-  std::string value(cudaStream_t stream = 0) const;
+  std::string to_string(cudaStream_t stream = 0) const;
+  
+  /**
+   * @brief Get the value of the scalar as a string_view
+   * 
+   * @param stream The CUDA stream to do the operation in
+   */
+  value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
   
   /**
    * @brief Returns the size of the string in bytes

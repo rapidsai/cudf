@@ -19,6 +19,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cstring>
 
 namespace cudf
@@ -53,6 +55,7 @@ __device__ inline char* copy_string( char* buffer, const string_view& d_string )
 {
     return copy_and_increment( buffer, d_string.data(), d_string.size_bytes() );
 }
+
 
 /**
  * @brief Utility to create a null mask for a strings column using a custom function.
