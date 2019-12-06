@@ -27,6 +27,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3144 Define and implement new hashing APIs `hash` and `hash_partition`
 - PR #3229 Define and implement new search APIs
 - PR #3308 java add API for memory usage callbacks
 - PR #2691 Row-wise reduction and scan operations via CuPy
@@ -140,6 +141,7 @@
 - PR #3243 Use upstream join code in dask_cudf
 - PR #3371 Add `select` method to `table_view`
 - PR #3309 Add java and JNI bindings for search bounds
+- PR #3305 Define and implement new rolling window APIs
 - PR #3380 Concatenate columns of strings
 - PR #3382 Add fill function for strings column
 - PR #3391 Move device_atomics_tests.cu files to legacy
@@ -150,9 +152,11 @@
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
 - PR #3397 Port unary cast to libcudf++
 - PR #3398 Move reshape.hpp files to legacy
+- PR #3423 Port NVStrings htoi to cudf strings column
 - PR #3425 Strings column copy_if_else implementation
 - PR #3422 Move utilities to legacy
 - PR #3201 Define and implement new datetime_ops APIs
+- PR #3421 Port NVStrings find_multiple to cudf strings column
 - PR #3448 Port scatter_to_tables to libcudf++
 - PR #3458 Update strings sections in the transition guide
 - PR #3462 Add `make_empty_column` and update `empty_like`.
@@ -162,6 +166,10 @@
 - PR #3487 Add is_boolean trait and random timestamp generator for testing
 - PR #3492 Small cleanup (remove std::abs) and comment
 - PR #3407 Allow multiple row-groups per task in dask_cudf read_parquet
+- PR #3512 Remove unused CUDA conda labels
+- PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
+- PR #3438 Update scalar and scalar_device_view to better support strings
+- PR #3414 Add copy_range function for strings column
 
 ## Bug Fixes
 
@@ -229,6 +237,9 @@
 - PR #3478 Fix as_index deep copy via Index.rename inplace arg
 - PR #3476 Fix ORC reader timezone conversion
 - PR #3188 Repr slices up large DataFrames
+- PR #3519 Fix strings column concatenate handling zero-sized columns
+- PR #3530 Fix copy_if_else test case fail issue
+- PR #3523 Fix lgenfe issue with debug build
 
 
 # cuDF 0.10.0 (16 Oct 2019)
@@ -323,6 +334,7 @@
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 - PR #2834 DataFrame supports setting columns via attribute syntax `df.x = col`
 - PR #3147 DataFrame can be initialized from rows via list of tuples
+- PR #3539 Restrict CuPy to 6
 
 ## Bug Fixes
 

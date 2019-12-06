@@ -125,6 +125,7 @@ struct type_to_scalar_type_impl {
 template <>                                         \
 struct type_to_scalar_type_impl<Type> {             \
   using ScalarType = cudf::numeric_scalar<Type>;    \
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<Type>; \
 };
 #endif
 
@@ -139,6 +140,7 @@ MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
 template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType = cudf::string_scalar;
+  using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -146,6 +148,7 @@ struct type_to_scalar_type_impl<cudf::string_view> {
 template <>                                         \
 struct type_to_scalar_type_impl<Type> {             \
   using ScalarType = cudf::timestamp_scalar<Type>;  \
+  using ScalarDeviceType = cudf::timestamp_scalar_device_view<Type>;       \
 };
 #endif
 
@@ -162,6 +165,9 @@ MAP_TIMESTAMP_SCALAR(timestamp_ns)
  */
 template <typename T>
 using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
+
+template <typename T>
+using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
