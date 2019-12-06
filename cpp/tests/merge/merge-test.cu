@@ -313,7 +313,11 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
             return static_cast<TypeParam>(ret);
           }
         else
-          return static_cast<TypeParam>(row * 2);
+          {
+            auto row2 = row * 2;
+            TypeParam res = static_cast<TypeParam>(row2);
+            return static_cast<TypeParam>(res);
+          }
       });
     columnFactoryT leftColWrap2(sequence2, sequence2 + inputRows);
 
