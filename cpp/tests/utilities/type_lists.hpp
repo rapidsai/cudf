@@ -64,13 +64,13 @@ constexpr auto types_to_ids() {
 
 // use this to make std::vector with NumericTypes to avoid narrowing conversion with bool
 template <typename TypeParam, typename T>
-auto make_type_param_vector(std::initializer_list<T> const&& init_list) {
+auto make_type_param_vector(std::initializer_list<T> const& init_list) {
   std::vector<TypeParam> vec(init_list.size());
   std::transform(
-        std::cbegin(init_list),
-        std::cend(init_list),
-        std::begin(vec),
-        [] (auto const& e) { return static_cast<T>(e); });
+    std::cbegin(init_list),
+    std::cend(init_list),
+    std::begin(vec),
+    [] (auto const& e) { return static_cast<T>(e); });
   return vec;
 }
 
@@ -86,11 +86,8 @@ auto make_type_param_vector(std::initializer_list<T> const&& init_list) {
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypesWithoutBool);
  * ```
  *---------------------------------------------------------------------------**/
-using NumericTypesWithoutBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
-                                       double> ; // #CH TODO delete
-
-using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float,
-                                       double, bool> ;
+using NumericTypesWithoutBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double> ; // #CH TODO delete
+using NumericTypes            = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double, bool> ;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all timestamp types supported in libcudf for use

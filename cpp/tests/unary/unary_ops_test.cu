@@ -58,26 +58,26 @@ cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_typ
 template <typename T>
 struct cudf_logical_test : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypes);
 
 TYPED_TEST(cudf_logical_test, LogicalNot)
 {
-    cudf::size_type colSize = 1000;
-    std::vector<TypeParam> h_input_v(colSize, false);
-    std::vector<cudf::experimental::bool8> h_expect_v(colSize);
+    cudf::size_type const colSize = 1000;
+    std::vector<TypeParam> const h_input_v(colSize, false);
+    thrust::host_vector<bool> h_expect_v(colSize);
 
     std::transform(
         std::cbegin(h_input_v),
         std::cend(h_input_v),
         std::begin(h_expect_v),
-        [] (TypeParam e) -> cudf::bool8 {
-            return static_cast<cudf::bool8>(!e);
+        [] (TypeParam e) {
+            return static_cast<bool>(!e);
         });
 
-    cudf::test::fixed_width_column_wrapper<TypeParam>                 input    (std::cbegin(h_input_v),  std::cend(h_input_v));
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
+    cudf::test::fixed_width_column_wrapper<TypeParam> const input    (std::cbegin(h_input_v),  std::cend(h_input_v));
+    cudf::test::fixed_width_column_wrapper<bool>      const expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
 
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
 
     cudf::test::expect_columns_equal(expected, output->view());
 }
@@ -101,13 +101,13 @@ TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
 template <typename T>
 struct cudf_math_test : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(cudf_math_test, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(cudf_math_test, cudf::test::NumericTypes);
 
 TYPED_TEST(cudf_math_test, ABS)
 {
     using T = TypeParam;
 
-    cudf::size_type colSize = 1000;
+    cudf::size_type const colSize = 1000;
     std::vector<T> h_input_v(colSize);
     std::vector<T> h_expect_v(colSize);
 
@@ -122,10 +122,10 @@ TYPED_TEST(cudf_math_test, ABS)
         std::begin(h_expect_v),
         [] (auto e) { return std::abs(e); });
 
-    cudf::test::fixed_width_column_wrapper<T> input    (std::cbegin(h_input_v),  std::cend(h_input_v));
-    cudf::test::fixed_width_column_wrapper<T> expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
+    cudf::test::fixed_width_column_wrapper<T> const input    (std::cbegin(h_input_v),  std::cend(h_input_v));
+    cudf::test::fixed_width_column_wrapper<T> const expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
 
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
 
     cudf::test::expect_columns_equal(expected, output->view());
 }
@@ -134,7 +134,7 @@ TYPED_TEST(cudf_math_test, SQRT)
 {
     using T = TypeParam;
 
-    cudf::size_type colSize = 1000;
+    cudf::size_type const colSize = 1000;
     std::vector<T> h_input_v(colSize);
     std::vector<T> h_expect_v(colSize);
 
@@ -149,43 +149,49 @@ TYPED_TEST(cudf_math_test, SQRT)
         std::begin(h_expect_v),
         [] (auto e) { return std::sqrt(static_cast<float>(e)); });
 
-    cudf::test::fixed_width_column_wrapper<T> input    (std::cbegin(h_input_v),  std::cend(h_input_v));
-    cudf::test::fixed_width_column_wrapper<T> expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
+    cudf::test::fixed_width_column_wrapper<T> const input    (std::cbegin(h_input_v),  std::cend(h_input_v));
+    cudf::test::fixed_width_column_wrapper<T> const expected (std::cbegin(h_expect_v), std::cend(h_expect_v));
 
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
 
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleABS)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam> input    {{ -2, -1, 1, 2 }};
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected {{  2,  1, 1, 2 }};
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
+    using T = TypeParam;
+    auto input_temp  = cudf::test::detail::make_type_param_vector<T>({ -2, -1, 1, 2 });
+    auto output_temp = cudf::test::detail::make_type_param_vector<T>({ -2,  1, 1, 2 });
+    cudf::test::fixed_width_column_wrapper<T> const input    {input_temp.begin(),  input_temp.end()};
+    cudf::test::fixed_width_column_wrapper<T> const expected {output_temp.begin(), output_temp.end()};
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRT)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam> input    {{ 1, 4, 9, 16 }};
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected {{ 1, 2, 3, 4  }};
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
+    using T = TypeParam;
+    auto input_temp  = cudf::test::detail::make_type_param_vector<T>({ 1, 4, 9, 16 });
+    auto output_temp = cudf::test::detail::make_type_param_vector<T>({ 1, 2, 3, 4  });
+    cudf::test::fixed_width_column_wrapper<T> const input    {input_temp.begin(),  input_temp.end()};
+    cudf::test::fixed_width_column_wrapper<T> const expected {output_temp.begin(), output_temp.end()};
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptyABS)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam> input    {};
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected {};
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
+    cudf::test::fixed_width_column_wrapper<TypeParam> const input    {};
+    cudf::test::fixed_width_column_wrapper<TypeParam> const expected {};
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptySQRT)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam> input    {};
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected {};
-    auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
+    cudf::test::fixed_width_column_wrapper<TypeParam> const input    {};
+    cudf::test::fixed_width_column_wrapper<TypeParam> const expected {};
+    auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
     cudf::test::expect_columns_equal(expected, output->view());
 }
 
