@@ -155,6 +155,7 @@ cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vec
 				chunk_offset + result_offset, key, d_count.data().get(), positions);
 		}
 	}
+	CUDA_TRY(cudaStreamSynchronize(0));
 
 	return d_count[0];
 }
