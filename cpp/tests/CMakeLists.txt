@@ -245,6 +245,15 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 ###################################################################################################
 # - hashing tests ---------------------------------------------------------------------------------
 
+set(HASHING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+
+ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - legacy hashing tests ---------------------------------------------------------------------------------
+
 set(LEGACY_HASHING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_partition_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_test.cu")
@@ -599,12 +608,20 @@ set(LEGACY_STREAM_COMPACTION_TEST_SRC
 ConfigureTest(LEGACY_STREAM_COMPACTION_TEST "${LEGACY_STREAM_COMPACTION_TEST_SRC}")
 
 ###################################################################################################
-# - rolling tests ---------------------------------------------------------------------------------
+# - legacy rolling tests ---------------------------------------------------------------------------------
 
 set(LEGACY_ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/legacy/rolling_test.cu")
 
 ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - rolling tests ---------------------------------------------------------------------------------
+
+set(ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp")
+
+ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
