@@ -1184,20 +1184,17 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
                     hi = (~hi) + (lo == 0);
                     lo = (~lo) + 1;
                 }
-                if (scale != 0)
+                lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
+                hi >>= (int32_t)scale;
+                if (hi != 0)
                 {
-                    lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
-                    hi >>= (int32_t)scale;
-                    if (hi != 0)
-                    {
-                        // Use intermediate float
-                        lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
-                        hi = 0;
-                    }
-                    else
-                    {
-                        lo /= kPow5i[scale];
-                    }
+                    // Use intermediate float
+                    lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
+                    hi = 0;
+                }
+                else
+                {
+                    lo /= kPow5i[scale];
                 }
                 vals[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
             }
