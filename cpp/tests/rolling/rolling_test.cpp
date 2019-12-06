@@ -161,7 +161,7 @@ protected:
     std::vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    std::vector<T> in_col;
+    thrust::host_vector<T> in_col;
     std::vector<bitmask_type> in_valid; 
     std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
     bitmask_type* valid_mask = in_valid.data();

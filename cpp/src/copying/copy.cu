@@ -27,9 +27,9 @@ std::unique_ptr<column> copy_if_else( column_view const& lhs, column_view const&
                                       cudaStream_t stream)
 {
    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both columns must be of the same type");
-   CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");   
+   CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");
    CUDF_EXPECTS(not boolean_mask.has_nulls(), "Boolean mask must not contain null values.");
-   CUDF_EXPECTS(boolean_mask.type() == data_type(BOOL8), "Boolean mask column must be of type BOOL8");   
+   CUDF_EXPECTS(boolean_mask.type() == data_type(BOOL), "Boolean mask column must be of type BOOL");
    CUDF_EXPECTS(boolean_mask.size() == lhs.size(), "Boolean mask column must be the same size as lhs and rhs columns");
 
    if (lhs.size() == 0) {
