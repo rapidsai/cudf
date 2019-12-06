@@ -670,12 +670,12 @@ def test_int8_float16_binop():
     got = a / b
     utils.assert_eq(expect, got, check_dtype=False)
 
-@pytest.mark.parametrize('dtype', ['int64', 'float64', 'string'])
-def test_vector_to_none_binops(dtype):
-    data = Series([1,2,3,None], dtype=dtype)
 
-    expect = Series([None]*4).astype(dtype)
+@pytest.mark.parametrize("dtype", ["int64", "float64", "string"])
+def test_vector_to_none_binops(dtype):
+    data = Series([1, 2, 3, None], dtype=dtype)
+
+    expect = Series([None] * 4).astype(dtype)
     got = data + None
 
     utils.assert_eq(expect, got)
-    
