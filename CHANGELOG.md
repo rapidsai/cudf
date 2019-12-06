@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+- PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 
 
 # cuDF 0.11.0 (Date TBD)
