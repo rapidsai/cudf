@@ -456,7 +456,7 @@ class Series(Table):
             if not pd.api.types.is_integer(key):
                 to_dtype = np.result_type(value.dtype, self._column.dtype)
                 value = value.astype(to_dtype)
-                self._column = self._column.astype(to_dtype)
+                self._column._assign(self._column.astype(to_dtype))
 
         self._column[key] = value
 

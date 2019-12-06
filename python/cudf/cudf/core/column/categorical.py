@@ -245,11 +245,6 @@ class CategoricalColumn(column.ColumnBase):
             Name of the Column
         """
         # Default to String dtype if len(categories) == 0, like pandas does
-        categories = (
-            column.as_column(dtype.categories)
-            if len(dtype.categories) > 0
-            else column.column_empty(0, np.dtype("object"), masked=False)
-        )
         if data.size % dtype.data_dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         size = data.size // dtype.data_dtype.itemsize

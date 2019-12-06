@@ -162,8 +162,21 @@ def scatter(source, maps, target, bounds_check=True):
             c_bounds_check)
 
     free_column(c_maps)
-
+    
     result_cols = columns_from_table(&c_result_table)
+
+    for i, in_col in enumerate(target_cols):
+        if is_categorical_dtype(in_col.dtype):
+            dtype = cudf.CategoricalDtype(
+                data_dtype=result_cols[i].dtype,
+                categories=in_col.cat().categories,
+                ordered=in_col.cat().ordered
+            )
+            result_cols[i] = column.build_column(
+                data=result_cols[i].data,
+                mask=result_cols[i].mask,
+                dtype=dtype)
+    
 
     del c_source_table
     del c_target_table

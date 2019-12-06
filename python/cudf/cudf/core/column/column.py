@@ -76,8 +76,13 @@ class ColumnBase(Column):
             ),
         )
 
+    @property
     def data(self):
         return self._data
+
+    @data.setter
+    def data(self, value):
+        self._data = value
 
     @property
     def mask(self):
@@ -117,6 +122,19 @@ class ColumnBase(Column):
         )
         result.gpu_data._obj = self
         return result
+
+    def _assign(self, other):
+        """
+        Assign another Column's buffers, children and properties
+        to this column.
+        """
+        self._data = other.data
+        self.mask = other.mask
+        self.children = other.children
+        self.dtype = other.dtype
+        self.offset = other.offset
+        self.size = other.size
+        self.__class__ = other.__class__
 
     def __len__(self):
         return self.size
@@ -521,6 +539,10 @@ class ColumnBase(Column):
             )
             raise ValueError(msg)
 
+        if is_categorical_dtype(value.dtype):
+            value = value.cat().set_categories(self.categories)._column
+            assert self.dtype == value.dtype
+
         if isinstance(key, slice):
             out = libcudf.copying.copy_range(
                 self, value, key_start, key_stop, 0
@@ -534,7 +556,8 @@ class ColumnBase(Column):
                         f"index out of bounds for column of size {len(self)}"
                     )
 
-        self._mimic_inplace(out, inplace=True)
+        self._assign(out)
+        # self._mimic_inplace(out, inplace=True)
 
     def fillna(self, value):
         """Fill null values with ``value``.
