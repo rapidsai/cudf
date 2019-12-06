@@ -148,34 +148,14 @@ struct pair_accessor
   {
     CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
                  "the data type mismatch");
+    if(has_nulls) {
+      CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+    }
   }
 
   CUDA_DEVICE_CALLABLE
   thrust::pair<Element, bool> operator()(cudf::size_type i) const {
-    return {col.element<Element>(i), true};
-  }
-};
-// @brief specialization of `pair_accessor` for nullable column
-template <typename Element>
-struct pair_accessor<Element, true>
-{
-  column_device_view const col;      ///< column view of column in device
-
-  /** -------------------------------------------------------------------------*
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
-   * -------------------------------------------------------------------------**/
-  pair_accessor(column_device_view const& _col)
-      : col{_col}
-  {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
-                 "the data type mismatch");
-    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
-  }
-
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<Element, bool> operator()(cudf::size_type i) const {
-    return {col.element<Element>(i), col.is_valid_nocheck(i)};
+    return {col.element<Element>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
 };
 
