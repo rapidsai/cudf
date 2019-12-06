@@ -109,3 +109,176 @@ NVStrings* NVText::create_ngrams(NVStrings& strs, unsigned int ngrams, const cha
     return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_results,ngrams_count);
 }
 
+// This class walks a string looking for specified delimiter character(s).
+// It will automatically ignore adjacent delimiters (i.e. different than split).
+// The next_token method returns character start position (spos) and end
+// position (epos) between delimiter runs identifying each token.
+// An iterator is used to retrieve each utf8 character to be checked.
+// The spaces parameter identifies a run of delimiters (or not delimiters).
+struct base_string_tokenize
+{
+    custring_view_array d_strings;
+    custring_view* d_delimiter;
+    custring_view* d_separator;
+    size_t* d_offsets;
+
+    __device__ bool is_delimiter(Char ch)
+    {
+        if( !d_delimiter )
+            return (ch <= ' '); // all ascii whitespace
+        return d_delimiter->find(ch)>=0;
+    }
+
+    __device__ bool next_token( custring_view* dstr, bool& spaces, custring_view::iterator& itr, int& spos, int& epos )
+    {
+        if( spos >= dstr->chars_count() )
+            return false;
+        for( ; itr != dstr->end(); ++itr )
+        {
+            Char ch = *itr;
+            if( spaces == is_delimiter(ch) )
+            {
+                if( spaces )
+                    spos = itr.position()+1;
+                else
+                    epos = itr.position()+1;
+                continue;
+            }
+            spaces = !spaces;
+            if( spaces )
+            {
+                epos = itr.position();
+                break;
+            }
+        }
+        return spos < epos;
+    }
+};
+
+struct ngram_token_counter_fn : base_string_tokenize
+{
+    custring_view_array d_strings;
+    custring_view* d_separator;
+
+    __device__ int32_t operator()(unsigned int idx)
+    {
+        custring_view* dstr = d_strings[idx];
+        if( !dstr )
+            return 0;
+        bool spaces = true;
+        int nchars = dstr->chars_count();
+        int spos = 0, epos = nchars;
+        int32_t token_count = 0;
+        auto itr = dstr->begin();
+        while( next_token(dstr,spaces,itr,spos,epos) )
+        {
+            ++token_count;
+            spos = epos + 1;
+            epos = nchars;
+            ++itr;
+        }
+        return token_count;
+    }
+};
+
+struct ngram_counts_fn : base_string_tokenize
+{
+    int32_t ngrams; // always >=2 
+    __device__ int32_t operator()(int32_t count)
+    {
+        return count ? count - ngrams + 1 : 0;
+    }
+};
+
+struct ngram_tokens_positions_fn : base_string_tokenize
+{
+    custring_view_array d_strings;
+    custring_view* d_separator;
+    int32_t* d_token_offsets;
+    thrust::pair<int32_t,int32_t>* d_token_positions;
+
+    __device__ void operator()(unsigned int idx)
+    {
+        custring_view* dstr = d_strings[idx];
+        if( !dstr )
+            return;
+        bool spaces = true;
+        int nchars = dstr->chars_count();
+        int spos = 0, epos = nchars, token_index = 0;
+        auto token_positions = d_token_positions + d_token_offsets[idx];
+        auto itr = dstr->begin();
+        while( next_token(dstr,spaces,itr,spos,epos) )
+        {
+            token_positions[token_index++] =
+                thrust::make_pair(dstr->byte_offset_for(spos),  // convert char pos
+                                  dstr->byte_offset_for(epos)); // to byte offset
+            spos = epos + 1;
+            epos = nchars;
+            ++itr;
+        }
+    }
+};
+
+struct ngram_sizes_fn : base_string_tokenize
+{
+    using position_pair = thrust::pair<int32_t,int32_t>;
+    custring_view_array d_strings;
+    custring_view* d_separator;
+    int32_t ngrams; // always >=2 
+    int32_t* d_token_counts;
+    int32_t* d_token_offsets;
+    position_pair* d_token_positions;
+
+    __device__ int32_t operator()(unsigned int idx)
+    {
+        custring_view* dstr = d_strings[idx];
+        if( !dstr )
+            return 0;
+        int token_count = d_token_counts[idx];
+        int32_t bytes = 0;
+        for( int token_index = 0; token_index < token_count; ++token_index )
+        {
+            int32_t length = 0;
+            for( int n = 0; n < ngrams; ++n )
+            {
+                if( token_index >= n )
+                {
+                    position_pair item = d_token_positions[token_index-n];
+                    length += item.second - item.first;
+                    length += d_separator->size();
+                }
+            }
+            if( length > 0 )
+                bytes += length - d_separator->size();
+        }
+        return bytes;
+    }
+};
+
+NVStrings* NVText::ngrams_tokenize(NVStrings const& strs, const char* delimiter, unsigned int ngrams, const char* separator )
+{
+    if( ngrams==0 )
+        ngrams = 2;
+    if( separator==nullptr )
+        separator = "";
+    unsigned int count = strs.size();
+    if( count==0 )
+        return strs.copy();
+    if( ngrams==1 )
+        return NVText::tokenize(strs,delimiter);
+
+    auto execpol = rmm::exec_policy(0);
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    // first let's remove any nulls or empty strings
+    auto end = thrust::remove_if(execpol->on(0), d_strings, d_strings + count,
+        [] __device__ ( custring_view* dstr ) { return (dstr==nullptr) || dstr->empty(); } );
+    count = (unsigned int)(end - d_strings); // new count
+
+    custring_view* d_separator = custring_from_host(separator);
+
+    // compute size of new strings
+
+}

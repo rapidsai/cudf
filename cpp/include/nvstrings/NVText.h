@@ -188,6 +188,17 @@ public:
     static NVStrings* create_ngrams(NVStrings& strs, unsigned int ngrams, const char* separator );
 
     /**
+     * @brief Creates ngrams of the tokens in each string.
+     * 
+     * @param strs Tokens to make into ngrams.
+     * @param delimiter String used to determine tokens.
+     * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.
+     * @param separator String used to join tokens.
+     * @return The tokens as ngrams.
+     */
+    static NVStrings* ngrams_tokenize(NVStrings const& strs, const char* delimiter, unsigned int ngrams, const char* separator );
+
+    /**
      * @brief Computes Porter Stemmer measure on words in the provided NVStrings instance.
      * @param strs Words that preprocessed to lowercase with no punctuation and no whitespace.
      * @param vowels Characters to check as vowels.
