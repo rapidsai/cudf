@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+-PR #3549 Fix index name issue with iloc with RangeIndex
 
 
 # cuDF 0.11.0 (Date TBD)
