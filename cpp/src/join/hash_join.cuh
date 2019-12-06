@@ -18,14 +18,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <hash/concurrent_unordered_multimap.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>
-#include <join/full_join.cuh>
 
 namespace cudf {
 
@@ -182,16 +180,16 @@ estimate_join_output_size(
         std::move(size_estimate));
 }
 
-std::pair<rmm::device_vector<output_index_type>,
-rmm::device_vector<output_index_type>>
+std::pair<rmm::device_vector<size_type>,
+rmm::device_vector<size_type>>
 get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
-  rmm::device_vector<output_index_type> left_indices(left.num_rows());
+  rmm::device_vector<size_type> left_indices(left.num_rows());
   thrust::sequence(
       rmm::exec_policy(stream)->on(stream),
       left_indices.begin(),
       left_indices.end(),
       0);
-  rmm::device_vector<output_index_type> right_indices(left.num_rows());
+  rmm::device_vector<size_type> right_indices(left.num_rows());
   thrust::fill(
       rmm::exec_policy(stream)->on(stream),
       right_indices.begin(),
@@ -212,12 +210,11 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
  * @param stream stream on which all memory allocations and copies
  * will be performed
  * @tparam join_kind The type of join to be performed
- * @tparam index_type The datatype used for the output indices
  *
  * @returns Join output indices vector pair
  */
 /* ----------------------------------------------------------------------------*/
-template <join_kind JoinKind, typename index_type>
+template <join_kind JoinKind>
 std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
 std::pair<rmm::device_vector<size_type>,
 rmm::device_vector<size_type>>>
@@ -228,14 +225,12 @@ get_base_hash_join_indices(
     cudaStream_t stream) {
 
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_hash_join_indices<JoinKind, index_type>(right, left, true, stream);
+    return get_base_hash_join_indices<JoinKind>(right, left, true, stream);
   }
   //Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
     return get_trivial_left_join_indices(left, stream);
   }
-
-  using multimap_type = multimap_t<index_type>;
 
   //TODO : attach stream to hash map class according to PR discussion #3272
 
@@ -301,7 +296,6 @@ get_base_hash_join_indices(
     probe_hash_table<JoinKind,
                      multimap_type,
                      hash_value_type,
-                     output_index_type,
                      block_size,
                      DEFAULT_JOIN_CACHE_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
@@ -311,8 +305,8 @@ get_base_hash_join_indices(
         hash_probe,
         equality,
         probe_table->num_rows(),
-        static_cast<index_type*>(left_indices.data().get()),
-        static_cast<index_type*>(right_indices.data().get()),
+        left_indices.data().get(),
+        right_indices.data().get(),
         write_index.data(),
         estimated_size,
         flip_join_indices);

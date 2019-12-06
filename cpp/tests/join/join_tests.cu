@@ -36,6 +36,28 @@ using Table       = cudf::experimental::table;
 
 struct JoinTest : public cudf::test::BaseFixture {};
 
+TEST_F(JoinTest, InvalidCommonColumnIndices)
+{
+  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
+  column_wrapper <int32_t> col0_1{{0, 1, 2, 4, 1}};
+
+  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  EXPECT_THROW (
+      cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}),
+      cudf::logic_error);
+}
+
 TEST_F(JoinTest, FullJoinNoNulls)
 {
   column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};

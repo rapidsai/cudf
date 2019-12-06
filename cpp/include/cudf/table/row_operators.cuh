@@ -26,6 +26,7 @@
 
 #include <thrust/equal.h>
 #include <thrust/swap.h>
+#include <thrust/transform_reduce.h>
 
 namespace cudf {
 namespace experimental {
