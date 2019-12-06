@@ -33,11 +33,14 @@ namespace groupby {
 namespace detail {
 namespace hash {
 namespace {
+// This is a temporary fix due to compiler bug and we can resort back to
+// constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
+#if 0
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-static constexpr std::array<aggregation::Kind, 5> hash_aggregations{
+constexpr std::array<aggregation::Kind, 5> hash_aggregations{
     aggregation::SUM, aggregation::MIN, aggregation::MAX, aggregation::COUNT,
     aggregation::MEAN};
 
@@ -48,6 +51,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
   }
   return false;
 }
+#endif
 
 /**
  * @brief Indicates whether the specified aggregation operation can be computed
@@ -57,8 +61,13 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
  * @return true `t` is valid for a hash based groupby
  * @return false `t` is invalid for a hash based groupby
  */
-constexpr bool is_hash_aggregation(aggregation::Kind t) {
-  return array_contains(hash_aggregations, t);
+bool constexpr is_hash_aggregation(aggregation::Kind t) {
+  // this is a temporary fix due to compiler bug and we can resort back to
+  // constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
+  // return array_contains(hash_aggregations, t);
+  return (t == aggregation::SUM) or (t == aggregation::MIN) or
+         (t == aggregation::MAX) or (t == aggregation::COUNT) or
+         (t == aggregation::MEAN);
 }
 }  // namespace
 
