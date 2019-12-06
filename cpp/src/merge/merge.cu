@@ -375,7 +375,7 @@ private:
                                                    std::vector<cudf::order> const& column_order,
                                                    std::vector<cudf::null_order> const& null_precedence,
                                                    rmm::mr::device_memory_resource* mr,
-                                                   cudaStream_t stream = nullptr) {
+                                                   cudaStream_t stream = 0) {
     auto n_cols = left_table.num_columns();
     CUDF_EXPECTS( n_cols == right_table.num_columns(), "Mismatched number of columns");
     if (left_table.num_columns() == 0) {
