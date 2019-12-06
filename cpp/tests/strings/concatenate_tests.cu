@@ -32,13 +32,14 @@ struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 TEST_F(StringsConcatenateTest, Concatenate)
 {
     std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
-
     cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
     cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
     cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
 
     std::vector<cudf::strings_column_view> strings_columns;
     strings_columns.push_back(cudf::strings_column_view(strings1));
+    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
     strings_columns.push_back(cudf::strings_column_view(strings2));
     strings_columns.push_back(cudf::strings_column_view(strings3));
 

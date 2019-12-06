@@ -58,6 +58,11 @@ struct launcher {
         CUDF_EXPECTS(input.size() > 0,                   "Launcher requires input size to be non-zero.");
         CUDF_EXPECTS(input.size() == output_view.size(), "Launcher requires input and output size to be equal.");
 
+        if (input.nullable())
+            output->set_null_mask(
+                rmm::device_buffer{ input.null_mask(), bitmask_allocation_size_bytes(input.size()) },
+                input.null_count());
+
         thrust::transform(
             rmm::exec_policy(stream)->on(stream),
             input.begin<T>(),

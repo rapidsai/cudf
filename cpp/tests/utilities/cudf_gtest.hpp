@@ -92,3 +92,24 @@ struct TypeList<Types<TYPES...>> {
 }  // namespace testing
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+// Utility for testing the expectation that an expression x throws the specified
+// exception whose what() message ends with the msg
+#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
+do { \
+  EXPECT_THROW({                                                     \
+    try { x; }                                                       \
+    catch (const exception &e) {                                     \
+    ASSERT_NE(nullptr, e.what());                                    \
+    EXPECT_THAT(e.what(), testing::StartsWith((startswith)));        \
+    EXPECT_THAT(e.what(), testing::EndsWith((endswith)));            \
+    throw;                                                           \
+  }}, exception);                                                    \
+} while (0)
+
+#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
+EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
+
+#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
+EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
