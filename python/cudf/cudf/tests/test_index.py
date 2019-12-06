@@ -286,4 +286,3 @@ def test_rangeindex_slice_attr_name():
     rg = RangeIndex(start, stop, "myindex")
     sliced_rg = rg[0:9]
     assert_eq(rg.name, sliced_rg.name)
-
