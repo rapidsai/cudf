@@ -40,7 +40,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 //#include <cudf/strings/detail/merge.cuh> // <- TODO: separate PR for strings support
 
-#include <cudf/detail/merge.hpp>
+#include <cudf/detail/merge.cuh>
 
 namespace { // anonym.
 
