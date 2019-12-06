@@ -22,7 +22,38 @@ from cudf.core.column import (
     column,
 )
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
+
+
+def _to_frame(this_index, index=True, name=None):
+    """Create a DataFrame with a column containing this Index
+
+    Parameters
+    ----------
+    index : boolean, default True
+        Set the index of the returned DataFrame as the original Index
+    name : str, default None
+        Name to be used for the column
+
+    Returns
+    -------
+    DataFrame
+        cudf DataFrame
+    """
+
+    from cudf import DataFrame
+
+    if name is not None:
+        col_name = name
+    elif this_index.name is None:
+        col_name = 0
+    else:
+        col_name = this_index.name
+
+    return DataFrame(
+        {col_name: this_index.as_column()}, index=this_index if index else None
+    )
 
 
 class Index(object):
@@ -93,7 +124,7 @@ class Index(object):
 
     @property
     def gpu_values(self):
-        return self.as_column().to_gpu_array()
+        return self.as_column().data.mem
 
     def min(self):
         return self.as_column().min()
@@ -233,7 +264,7 @@ class Index(object):
         else:
             return column_join_res
 
-    def rename(self, name):
+    def rename(self, name, inplace=False):
         """
         Alter Index name.
 
@@ -248,13 +279,14 @@ class Index(object):
         -------
         Index
 
-        Difference from pandas:
-          * Not supporting: inplace
         """
-        out = self.copy(deep=False)
-        out.name = name
-
-        return out.copy(deep=True)
+        if inplace is True:
+            self.name = name
+            return None
+        else:
+            out = self.copy(deep=False)
+            out.name = name
+            return out.copy(deep=True)
 
     def astype(self, dtype):
         """Convert to the given ``dtype``.
@@ -292,6 +324,26 @@ class Index(object):
         from cudf.core.series import Series
 
         return Series(self._values)
+
+    def isnull(self):
+        """Identify missing values in an Index.
+        """
+        return as_index(self.as_column().isnull(), name=self.name)
+
+    def isna(self):
+        """Identify missing values in an Index. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in an Index.
+        """
+        return as_index(self.as_column().notna(), name=self.name)
+
+    def notnull(self):
+        """Identify non-missing values in an Index. Alias for notna.
+        """
+        return self.notna()
 
     @property
     @property
@@ -441,7 +493,7 @@ class RangeIndex(Index):
             index += self._start
             return index
         elif isinstance(index, (list, np.ndarray)):
-            index = np.array(index)
+            index = np.asarray(index)
             index = rmm.to_device(index)
 
         else:
@@ -540,6 +592,10 @@ class RangeIndex(Index):
         return NumericalColumn(
             data=Buffer(vals), dtype=vals.dtype, name=self.name
         )
+
+    @copy_docstring(_to_frame)
+    def to_frame(self, index=True, name=None):
+        return _to_frame(self, index, name)
 
     def to_gpu_array(self):
         return self.as_column().to_gpu_array()
@@ -675,6 +731,10 @@ class GenericIndex(Index):
         col.name = self.name
         return col
 
+    @copy_docstring(_to_frame)
+    def to_frame(self, index=True, name=None):
+        return _to_frame(self, index, name)
+
     @property
     def name(self):
         return self._values.name
@@ -772,7 +832,6 @@ class DatetimeIndex(GenericIndex):
                 np.array(values, dtype="<M8[ms]")
             )
         super(DatetimeIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     @property
     def year(self):
@@ -797,6 +856,10 @@ class DatetimeIndex(GenericIndex):
     @property
     def second(self):
         return self.get_dt_field("second")
+
+    @property
+    def weekday(self):
+        return self.get_dt_field("weekday")
 
     def to_pandas(self):
         nanos = self.as_column().astype("datetime64[ns]")
@@ -850,7 +913,6 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     @property
     def names(self):
@@ -885,7 +947,6 @@ class StringIndex(GenericIndex):
                 nvstrings.to_device(values), dtype="object"
             )
         super(StringIndex, self).__init__(values, **kwargs)
-        assert self._values.null_count == 0
 
     def to_pandas(self):
         return pd.Index(self.values, name=self.name, dtype="object")
@@ -932,7 +993,9 @@ def as_index(arbitrary, **kwargs):
     kwargs = _setdefault_name(arbitrary, kwargs)
 
     if isinstance(arbitrary, Index):
-        return arbitrary.rename(**kwargs)
+        idx = arbitrary.copy(deep=False)
+        idx.rename(**kwargs, inplace=True)
+        return idx
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):

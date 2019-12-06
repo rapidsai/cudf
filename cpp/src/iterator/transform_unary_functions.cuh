@@ -28,7 +28,6 @@
 #define CUDF_TRANSFORM_UNARY_FUNCTIONS_CUH
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
@@ -51,10 +50,10 @@ struct meanvar
 {
     ElementType value;                /// the value
     ElementType value_squared;        /// the value of squared
-    gdf_index_type count;   /// the count
+    cudf::size_type count;   /// the count
 
     CUDA_HOST_DEVICE_CALLABLE
-    meanvar(ElementType _value=0, ElementType _value_squared=0, gdf_index_type _count=0)
+    meanvar(ElementType _value=0, ElementType _value_squared=0, cudf::size_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
     {};
 

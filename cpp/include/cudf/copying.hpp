@@ -14,492 +14,368 @@
  * limitations under the License.
  */
 
-#ifndef COPYING_HPP
-#define COPYING_HPP
+#pragma once
 
-#include "cudf.h"
-#include "types.hpp"
-#include <vector>
+#include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/table.hpp>
 
-// Forward declaration
-typedef struct CUstream_st* cudaStream_t;
+#include <memory>
 
 namespace cudf {
+namespace experimental {
+
+/**
+ * @brief Gathers the specified rows (including null values) of a set of columns.
+ *
+ * Gathers the rows of the source columns according to `gather_map` such that row "i"
+ * in the resulting table's columns will contain row "gather_map[i]" from the source columns.
+ * The number of rows in the result table will be equal to the number of elements in
+ * `gather_map`.
+ *
+ * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `source_table`.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param[in] source_table The input columns whose rows will be gathered
+ * @param[in] gather_map View into a non-nullable column of integral indices that maps the
+ * rows in the source columns to rows in the destination columns.
+ * @param[in] check_bounds Optionally perform bounds checking on the values
+ * of `gather_map` and throw an error if any of its values are out of bounds.
+ * @param[in] mr The resource to use for all allocations
+ * @return std::unique_ptr<table> Result of the gather
+ */
+std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
+                              bool check_bounds = false,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters the rows of the source table into a copy of the target table
+ * according to a scatter map.
+ *
+ * Scatters values from the source table into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a
+ * scatter map such that row `scatter_map[i]` of the destination table gets row
+ * `i` of the source table. All other rows of the destination table equal
+ * corresponding rows of the target table.
+ *
+ * The number of columns in source must match the number of columns in target
+ * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
+ * is the number of rows in the `target` table.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param source The input columns containing values to be scattered into the
+ * target columns
+ * @param scatter_map A non-nullable column of integral indices that maps the
+ * rows in the source table to rows in the target table. The size must be equal
+ * to or less than the number of elements in the source columns.
+ * @param target The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param mr The resource to use for all allocations
+ * @return Result of scattering values from source to target
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(
+    table_view const& source, column_view const& scatter_map,
+    table_view const& target, bool check_bounds = false,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters a row of scalar values into a copy of the target table
+ * according to a scatter map.
+ *
+ * Scatters values from the source row into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a
+ * scatter map such that row `scatter_map[i]` of the destination table is
+ * replaced by the source row. All other rows of the destination table equal
+ * corresponding rows of the target table.
+ *
+ * The number of elements in source must match the number of columns in target
+ * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param source The input scalars containing values to be scattered into the
+ * target columns
+ * @param indices A non-nullable column of integral indices that indicate
+ * the rows in the target table to be replaced by source.
+ * @param target The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param mr The resource to use for all allocations
+ * @return Result of scattering values from source to target
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(
+    std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
+    table_view const& target, bool check_bounds = false,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters the rows of a table to `n` tables according to a partition map
+ *
+ * Copies the rows from the input table to new tables according to the table
+ * indices given by partition_map. The number of output tables is one more than
+ * the maximum value in `partition_map`.
+ * 
+ * Output table `i` in [0, n] is empty if `i` does not appear in partition_map.
+ * output table will be empty.
+ *
+ * @throw cudf::logic_error when partition_map is a non-integer type
+ * @throw cudf::logic_error when partition_map is larger than input
+ * @throw cudf::logic_error when partition_map has nulls
+ *
+ * Example:
+ * input:         [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *                 { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * partition_map: {3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
+ * output:     {[{22}, {2}], 
+ *              [{16, 24, 26, 28}, {4, 4, 6, 2}],
+ *              [{}, {}],
+ *              [{10, 14}, {1, 3}],
+ *              [{12, 18, 20}, {2, null, 0}]}
+ *
+ * @param input Table of rows to be partitioned into a set of tables
+ * tables according to `partition_map`
+ * @param partition_map  Non-null column of integer values that map
+ * each row in `input` table into one of the output tables
+ * @param mr The resource to use for all allocations
+ *
+ * @return A vector of tables containing the scattered rows of `input`.
+ * `table` `i` contains all rows `j` from `input` where `partition_map[j] == i`.
+ */
+std::vector<std::unique_ptr<table>> scatter_to_tables(
+    table_view const& input, column_view const& partition_map,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
-enum mask_allocation_policy {
+enum class  mask_allocation_policy {
     NEVER, ///< Do not allocate a null mask, regardless of input
     RETAIN, ///< Allocate a null mask if the input contains one
     ALWAYS ///< Allocate a null mask, regardless of input
 };
 
 /*
- * Initializes and returns gdf_column of the same type as the input.
- * 
- * @param input The input column to emulate
- * @return gdf_column An unallocated column of same type as input
- */
-gdf_column empty_like(gdf_column const& input);
-
-/**
- * @brief Allocates a new column of the same size and type as the input.
+ * Initializes and returns an empty column of the same type as the `input`.
  *
- * @param input The input column to emulate
- * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
- * @param stream Optional stream in which to perform copies
- * @return gdf_column An allocated column of same size and type of input
+ * @param[in] input Immutable view of input column to emulate
+ * @return std::unique_ptr<column> An empty column of same type as `input`
  */
-gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc = RETAIN,
-                         cudaStream_t stream = 0);
+std::unique_ptr<column> empty_like(column_view const& input);
 
 /**
- * @brief Allocates a new column of the specified size and same type as the input.
+ * @brief Creates an uninitialized new column of the same size and type as the `input`.
+ * Supports only fixed-width types.
  *
- * @param input The input column to emulate
- * @param size The size of the column to allocate in rows
- * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
- * @param stream Optional stream in which to perform copies
- * @return gdf_column An allocated column of same size and type of input
+ * @param[in] input Immutable view of input column to emulate
+ * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
-                         cudaStream_t stream = 0);
-
+std::unique_ptr<column> allocate_like(column_view const& input,
+                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                                      rmm::mr::device_memory_resource *mr =
+                                          rmm::mr::get_default_resource());
 
 /**
- * @brief Creates a new column that is a copy of input
- * 
- * @param input The input column to copy
- * @param stream Optional stream in which to perform copies
- * @return gdf_column A copy of input
- */
-gdf_column copy(gdf_column const& input, cudaStream_t stream = 0);
-
-/**
- * @brief Creates a table of empty columns with the same types as the inputs
+ * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
+ * Supports only fixed-width types.
  *
- * Creates the `gdf_column` objects, but does not allocate any underlying device
+ * @param[in] input Immutable view of input column to emulate
+ * @param[in] size The desired number of elements that the new column should have capacity for
+ * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
+ */
+std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
+                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                                      rmm::mr::device_memory_resource *mr =
+                                          rmm::mr::get_default_resource());
+
+/**
+ * @brief Creates a table of empty columns with the same types as the `input_table`
+ *
+ * Creates the `cudf::column` objects, but does not allocate any underlying device
  * memory for the column's data or bitmask.
  *
- * @note It is the caller's responsibility to delete the `gdf_column` object for
- * every column in the new table.
- *
- * @param t The input table to emulate
- * @return table A table of empty columns of same type as input
+ * @param[in] input_table Immutable view of input table to emulate
+ * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in `input_table`
  */
-table empty_like(table const& t);
+std::unique_ptr<table> empty_like(table_view const& input_table);
 
 /**
- * @brief Creates a table of columns with the same type and allocation size as
- * the input.
+ * @brief Copies a range of elements in-place from one column to another.
  *
- * Creates the `gdf_column` objects, and allocates underlying device memory for
- * each column matching the input columns
+ * Overwrites the range of elements in @p target indicated by the indices
+ * [@p target_begin, @p target_begin + N) with the elements from @p source
+ * indicated by the indices [@p source_begin, @p source_end) (where N =
+ * (@p source_end - @p source_begin)). Use the out-of-place copy function
+ * returning std::unique_ptr<column> for uses cases requiring memory
+ * reallocation. For example for strings columns and other variable-width types.
  *
- * @note It is the caller's responsibility to free each column's device memory
- * allocation in addition to deleting the `gdf_column` object for every column
- * in the new table.
+ * If @p source and @p target refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
  *
- * @param t The table to emulate
- * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
- * @param stream Optional stream in which to perform allocations
- * @return table A table of columns with same type and allocation size as input
- */
-table allocate_like(table const& t, mask_allocation_policy mask_alloc = RETAIN,
-                    cudaStream_t stream = 0);
-
-/**
- * @brief Creates a table of columns with the specified size and same type as
- * the input.
+ * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
+ * variable width types).
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
+ * @throws `cudf::logic_error` if @p source has null values and @p target is not
+ * nullable.
  *
- * Creates the `gdf_column` objects, and allocates underlying device memory for
- * each column matching the input columns
- *
- * @note It is the caller's responsibility to free each column's device memory
- * allocation in addition to deleting the `gdf_column` object for every column
- * in the new table.
- *
- * @param t The table to emulate
- * @param size The size of the columns to allocate
- * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
- * @param stream Optional stream in which to perform allocations
- * @return table A table of columns with same type as @p t and specified @p size
- */
-table allocate_like(table const& t, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
-                    cudaStream_t stream = 0);
-
-
-/**
- * @brief Creates a table of columns and deep copies the data from an input
- * table.
- *
- * @note It is the caller's responsibility to free each column's device memory
- * allocation in addition to deleting the `gdf_column` object for every column
- * in the new table.
- *
- * @param t The table to copy
- * @param stream Optional stream in which to perform allocations and copies
- * @return table A table that is an exact copy of @p t
- */
-table copy(table const& t, cudaStream_t stream = 0);
-
-/**
- * @brief Copies a range of elements from one column to another.
- * 
- * Copies N elements of @p in_column starting at @p in_begin to the N
- * elements of @p out_column starting at @p out_begin, where
- * N = (@p out_end - @p out_begin)
- * 
- * The datatypes of in_column and out_column must be the same.
- *
- * If the input and output columns are the same and ranges overlap, the
- * behavior is undefined.
- *
- * @param[out] out_column The preallocated column to copy into
- * @param[in] in_column The column to copy from
- * @param[in] out_begin The starting index of the output range
- * @param[in] out_end The index one past the end of the output range
- * @param[in] in_begin The starting index of the input range
- * 
+ * @param source The column to copy from
+ * @param target The preallocated column to copy into
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param source_end The index of the last element in the source range
+ * (exclusive)
+ * @param target_begin The starting index of the target range (inclusive)
  * @return void
  */
-void copy_range(gdf_column *out_column, gdf_column const &in_column,
-                gdf_index_type out_begin, gdf_index_type out_end, 
-                gdf_index_type in_begin);
+void copy_range(column_view const& source,
+                mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin);
 
 /**
- * @brief Creates a new `table` as if an in-place scatter from a `source` table
- * was performed on the `target` table.
+ * @brief Copies a range of elements out-of-place from one column to another.
  *
- * It is the user's reponsibility to free the device memory allocated in the
- * returned table `destination_table`.
+ * Creates a new column as if an in-place copy was performed into @p target.
+ * A copy of @p target is created first and then the elements indicated by the
+ * indices [@p target_begin, @p target_begin + N) were copied from the elements
+ * indicated by the indices [@p source_begin, @p source_end) of @p source
+ * (where N = (@p source_end - @p source_begin)). Elements outside the range are
+ * copied from @p target into the returned new column target.
  *
- * The `source_table` and the `target_table` must have equal numbers of columns.
+ * If @p source and @p target refer to the same elements and the ranges overlap,
+ * the behavior is undefined.
  *
- * The datatypes between coresponding columns in the source and target columns
- * must be the same.
+ * @throws `cudf::logic_error` for invalid range (if
+ * @p source_begin > @p source_end, @p source_begin < 0,
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws `cudf::logic_error` if @p target and @p source have different types.
  *
- * The number of elements in the `scatter_map` must equal the number of rows in
- * the source columns.
- *
- * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `destination_table`.
- *
- * If the same index appears more than once in `scatter_map`, the result is
- * undefined.
- *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the destination table. If `check_bounds == false`, the behavior is undefined.
- *
- * A column in the output will only be nullable if:
- * - Its corresponding column in `target` is nullable
- * - Its corresponding column in `source` has `null_count > 0`
- *
- * @Param[in] source The columns whose rows will be scattered
- * @Param[in] scatter_map A non-nullable column of integral indices that map rows
- * in the input columns to rows in the output columns.
- * @Param[in] target The table to copy and then perform an in-place scatter
- * into the copy.
- * @Param[in] check_bounds Optionally perform bounds checking on the values
- * of `scatter_map` and throw an error if any of its values are out of bounds.
- * @return[out] The result of the scatter
+ * @param source The column to copy from inside the range.
+ * @param target The column to copy from outside the range.
+ * @param source_begin The starting index of the source range (inclusive)
+ * @param source_end The index of the last element in the source range
+ * (exclusive)
+ * @param target_begin The starting index of the target range (inclusive)
+ * @param mr Memory resource to allocate the result target column.
+ * @return std::unique_ptr<column> The result target column
  */
-table scatter(table const& source, gdf_column const& scatter_map,
-	      table const& target, bool check_bounds = false);
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
+                                   rmm::mr::device_memory_resource* mr =
+                                       rmm::mr::get_default_resource());
 
 /**
- * @brief Creates a new `table` as if an in-place scatter from a `source` table
- * was performed on the `target` table.
+ * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
+ * The returned views of `input` are constructed from an even number indices where
+ * the `i`th returned `column_view` views the elements in `input` indicated by the range
+ * `[indices[2*i], indices[(2*i)+1])`.
  *
- * It is the user's reponsibility to free the device memory allocated in the
- * returned table `destination_table`.
+ * For all `i` it is expected `indices[i] <= input.size()`
+ * For all `i%2==0`, it is expected that `indices[i] <= indices[i+1]`
  *
- * The `source_table` and the `target_table` must have equal numbers of columns.
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
  *
- * The datatypes between coresponding columns in the source and target columns
- * must be the same.
- *
- * The number of elements in the `scatter_map` must equal the number of rows in
- * the source columns.
- *
- * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `destination_table`.
- *
- * If the same index appears more than once in `scatter_map`, the result is
- * undefined.
- *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the destination table. If `check_bounds == false`, the behavior is undefined.
- *
- * A column in the output will only be nullable if:
- * - Its corresponding column in `target` is nullable
- * - Its corresponding column in `source` has `null_count > 0`
- *
- * @Param[in] source The columns whose rows will be scattered
- * @Param[in] scatter_map An array of integral indices that map rows
- * in the input columns to rows in the output columns.
- * @Param[in] target The table to copy and then perform an in-place scatter
- * into the copy.
- * @Param[in] check_bounds Optionally perform bounds checking on the values
- * of `scatter_map` and throw an error if any of its values are out of bounds.
- * @return[out] The result of the scatter
- */
-table scatter(table const& source, gdf_index_type const scatter_map[],
-	      table const& target, bool check_bounds = false);
-
-/**
- * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
- * values into the rows of a `target` table in-place.
- *
- * `data` and `valid` of a specific row of the target_column is kept
- * unchanged if the `scatter_map` does not map to that row.
- *
- * The datatypes between coresponding columns in the source and target
- * columns must be the same.
- *
- * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `destination_table`.
- *
- * If the same index appears more than once in `scatter_map`, the result is
- * undefined.
- *
- * If the scalar is null (is_valid == false) and the target column does not
- * have a valid bitmask, the destination column will have a bitmask allocated.
- *
- * @Param[in] source The row to be scattered
- * @Param[in] scatter_map An array that maps to rows in the output columns.
- * @Param[in] target The table to copy and then perform an in-place scatter
- * into the copy.
- * @return[out] The result of the scatter
- */
-table scatter(std::vector<gdf_scalar> const& source,
-	      gdf_index_type const scatter_map[],
-	      gdf_size_type num_scatter_rows, table const& target);
-
-/**
- * @brief Gathers the specified rows (including null values) of a set of source
- * columns into a set of destination columns.
- *
- * The two sets of columns must have equal numbers of columns.
- *
- * Gathers the rows of the source columns into the destination columns according
- * to `gather_map` such that row "i" in the destination columns will contain
- * row "gather_map[i]" from the source columns.
- *
- * The datatypes between coresponding columns in the source and destination
- * columns must be the same.
- *
- * The number of elements in the `gather_map` must equal the number of rows in the
- * destination columns.
- *
- * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `source_table`.
- *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
- *
- * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map A non-nullable column of integral indices that maps the
- * rows in the source columns to rows in the destination columns.
- * @param[in] check_bounds Optionally perform bounds checking on the values
- * of `gather_map` and throw an error if any of its values are out of bounds.
- * @param[out] destination_table A preallocated set of columns with a number
- * of rows equal in size to the number of elements in the gather_map that will
- * contain the rearrangement of the source columns based on the mapping. Can be
- * the same as `source_table` (in-place gather).
- */
-void gather(table const* source_table, gdf_column const& gather_map,
-	    table* destination_table, bool check_bounds=false);
-
-/**
- * @brief Gathers the specified rows (including null values) of a set of source
- * columns into a set of destination columns.
- *
- * The two sets of columns must have equal numbers of columns.
- *
- * Gathers the rows of the source columns into the destination columns according
- * to `gather_map` such that row "i" in the destination columns will contain
- * row "gather_map[i]" from the source columns.
- *
- * The datatypes between coresponding columns in the source and destination
- * columns must be the same.
- *
- * The number of elements in the `gather_map` must equal the number of rows in the
- * destination columns.
- *
- * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `source_table`.
- *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
- *
- * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map An array of integral indices that maps the
- * rows in the source columns to rows in the destination columns.
- * @param[in] check_bounds Optionally perform bounds checking on the values
- * of `gather_map` and throw an error if any of its values are out of bounds.
- * @param[out] destination_table A preallocated set of columns with a number
- * of rows equal in size to the number of elements in the gather_map that will
- * contain the rearrangement of the source columns based on the mapping. Can be
- * the same as `source_table` (in-place gather).
- */
-void gather(table const* source_table, gdf_index_type const gather_map[],
-	    table* destination_table, bool check_bounds=false);
-
-/**
- * @brief Gathers the the specified rows (including null values) of a set of columns,
- * returning the result as a `table`.
- *
- * Gathers the rows of the source columns according to `gather_map` such that row "i"
- * in the resulting table will contain row "gather_map[i]" from the source columns.
- *
- * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `source_table`.
- *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
- *
- * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map A non-nullable column of integral indices that maps the
- * rows in the source columns to rows in the destination columns.
- * @param[in] check_bounds Optionally perform bounds checking on the values
- * of `gather_map` and throw an error if any of its values are out of bounds.
- * @return cudf::table Result of the gather
- */
-table gather(table const* source_table, gdf_column const& gather_map, bool check_bounds=false);
-
-/**
- * @brief Slices a column (including null values) into a set of columns
- * according to a set of indices.
- *
- * The "slice" function divides part of the input column into multiple intervals
- * of rows using the indices values and it stores the intervals into the output
- * columns. Regarding the interval of indices, a pair of values are taken from
- * the indices array in a consecutive manner. The pair of indices are left-closed
- * and right-open.
- *
- * The pairs of indices in the array are required to comply with the following
- * conditions:
- * a, b belongs to Range[0, input column size]
- * a <= b, where the position of a is less or equal to the position of b.
-  *
- * Exceptional cases for the indices array are:
- * When the values in the pair are equal, the function returns an empty column.
- * When the values in the pair are 'strictly decreasing', the outcome is
- * undefined.
- * When any of the values in the pair don't belong to the range[0, input column
- * size), the outcome is undefined.
- * When the indices array is empty, an empty vector of columns is returned.
- *
- * Example:
+ * @example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
  * indices: {1, 3, 5, 9, 2, 4, 8, 8}
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
- * @param[in] input         The input column whose rows will be sliced.
- * @param[in] indices       An device array of indices that are used to take 'slices'
- * of the input column.
- * @param[in] num_indices   Number of indices in the indices array
- * @return  A std::vector of gdf_column*, each of which may have a different
- * number of rows. The number of rows in each column is equal to the difference
- * of two consecutive indices in the indices array.
+ * @throws `cudf::logic_error` if `indices` size is not even.
+ * @throws `cudf::logic_error` When the values in the pair are strictly decreasing.
+ * @throws `cudf::logic_error` When any of the values in the pair don't belong to
+ * the range [0, input.size()).
+ *
+ * @param input View of column to slice
+ * @param indices A vector of indices used to take slices of `input`.
+ * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<gdf_column*> slice(gdf_column const &         input,
-                               gdf_index_type const*      indices,
-                               gdf_size_type              num_indices);
+std::vector<column_view> slice(column_view const& input,
+                               std::vector<size_type> const& indices);
 
 /**
- * @brief Splits a column (including null values) into a set of columns
- * according to a set of indices.
+ * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
+ * derived from expected splits.
  *
- * The "split" function divides the input column into multiple intervals
- * of rows using the splits indices values and it stores the intervals into the
- * output columns. Regarding the interval of indices, a pair of values are taken
- * from the indices array in a consecutive manner. The pair of indices are
- * left-closed and right-open.
+ * The returned view's of `input` are constructed from vector of splits, which indicates
+ * where the split should occur. The `i`th returned `column_view` is sliced as
+ * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
+ * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
  *
- * The indices array ('splits') is require to be a monotonic non-decreasing set.
- * The indices in the array are required to comply with the following conditions:
- * a, b belongs to Range[0, input column size]
- * a <= b, where the position of a is less or equal to the position of b.
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  *
- * The split function will take a pair of indices from the indices array
- * ('splits') in a consecutive manner. For the first pair, the function will
- * take the value 0 and the first element of the indices array. For the last pair,
- * the function will take the last element of the indices array and the size of
- * the input column.
- *
- * Exceptional cases for the indices array are:
- * When the values in the pair are equal, the function return an empty column.
- * When the values in the pair are 'strictly decreasing', the outcome is
- * undefined.
- * When any of the values in the pair don't belong to the range[0, input column
- * size), the outcome is undefined.
- * When the indices array is empty, an empty vector of columns is returned.
- *
- * The input columns may have different sizes. The number of
- * columns must be equal to the number of indices in the array plus one. 
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * splits: {2, 5, 9}
+ * splits:  {2, 5, 9}
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
- * @param[in] input         The input column whose rows will be split.
- * @param[in] splits        An device array of indices that are used to divide
- * the input column into multiple columns.
- * @param[in] num_splits   Number of splits in the splits indices array
- * @return A std::vector of gdf_column*, each of which may have a different size
- * a different number of rows.
+ * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
+ * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ *
+ * @param input View of column to split
+ * @param splits A vector of indices where the view will be split
+ * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<gdf_column*> split(gdf_column const &         input,
-                               gdf_index_type const*      splits,
-                               gdf_size_type              num_splits);
+std::vector<column_view> split(column_view const& input,
+                               std::vector<size_type> const& splits);
 
 /**
- * @brief Scatters the rows of a table to `n` tables according to a scatter map
+ * @brief   Returns a new column, where each element is selected from either @p lhs or 
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
  *
- * Copies the rows from the input table to new
- * tables according to the table indices given by scatter map.
- * The number of output tables is one more than the maximum value in @p scatter_map.
- * If a value in [0,n] does not appear in scatter_map, then the corresponding
- * output table will be empty.
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
+ *          output[i] = (boolean_mask[i]) ? lhs[i] : rhs[i]
+ *          
+ * @throws cudf::logic_error if lhs and rhs are not of the same type
+ * @throws cudf::logic_error if lhs and rhs are not of the same length 
+ * @throws cudf::logic_error if boolean_mask contains nulls
+ * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
+ * @param[in] left-hand column_view
+ * @param[in] right-hand column_view
+ * @param[in] Non-nullable column of `BOOL8` elements that control selection from `lhs` or `rhs`
+ * @param[in] mr resource for allocating device memory
  *
- * `scatter_map` is a non-nullable column of `GDF_INT32` elements whose `size`
- * equals `input.num_rows()` and contains numbers in range of [0, n].
- *
- * Exceptional cases for the scatter_map column are:
- * @throws cudf::logic_error when `scatter_map.dtype != GDF_INT32`
- * @throws cudf::logic_error when `scatter_map.size != input.num_rows()`
- * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
- *
- * Example:
- * input:       [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
- *               { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * scatter_map:  { 3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
- * output:     {[{22}, {2}], 
- *              [{16, 24, 26, 28}, {4, 4, 6, 2}], 
- *              [{}, {}], 
- *              [{10, 14}, {1, 3}], 
- *              [{12, 18, 20}, {2, null, 0}]}
- *
- * @param[in] input Table whose rows will be partitioned into a set of
- * tables according to `scatter_map` 
- * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map
- * each row in `input` table into one of the output tables. 
- *
- * @return A std::vector of `table`s containing the scattered rows of `input`.
- * `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`. 
- *
+ * @returns new column with the selected elements
  */
-std::vector<cudf::table>
-scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
+std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& rhs, column_view const& boolean_mask,
+                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                                 
+}  // namespace experimental
 }  // namespace cudf
-
-#endif  // COPYING_H

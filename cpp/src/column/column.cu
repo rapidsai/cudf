@@ -17,14 +17,19 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/utilities/bit.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/strings/copying.hpp>
+#include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/copying.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <algorithm>
+#include <numeric>
 #include <vector>
 
 namespace cudf {
@@ -42,6 +47,7 @@ column::column(column const &other)
   }
 }
 
+// Copy ctor w/ explicit stream/mr
 column::column(column const &other, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr)
     : _type{other._type},
@@ -56,7 +62,7 @@ column::column(column const &other, cudaStream_t stream,
 }
 
 // Move constructor
-column::column(column &&other)
+column::column(column &&other) noexcept
     : _type{other._type},
       _size{other._size},
       _data{std::move(other._data)},
@@ -66,6 +72,17 @@ column::column(column &&other)
   other._size = 0;
   other._null_count = 0;
   other._type = data_type{EMPTY};
+}
+
+// Release contents
+column::contents column::release() noexcept {
+  _size = 0;
+  _null_count = 0;
+  _type = data_type{EMPTY};
+  return column::contents{
+      std::make_unique<rmm::device_buffer>(std::move(_data)),
+      std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
+      std::move(_children)};
 }
 
 // Create immutable view
@@ -80,7 +97,7 @@ column_view column::view() const {
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
-      null_count(),  0,
+      null_count(), 0,
       child_views};
 }
 
@@ -120,6 +137,30 @@ size_type column::null_count() const {
   return _null_count;
 }
 
+void column::set_null_mask(rmm::device_buffer&& new_null_mask,
+                   size_type new_null_count) {
+  if(new_null_count > 0){
+    CUDF_EXPECTS(new_null_mask.size() >=
+                   cudf::bitmask_allocation_size_bytes(this->size()),
+                 "Column with null values must be nullable and the null mask \
+                  buffer size should match the size of the column.");
+    }
+    _null_mask = std::move(new_null_mask);  // move
+    _null_count = new_null_count;
+}
+
+void column::set_null_mask(rmm::device_buffer const& new_null_mask,
+                   size_type new_null_count) {
+  if(new_null_count > 0){
+    CUDF_EXPECTS(new_null_mask.size() >=
+                   cudf::bitmask_allocation_size_bytes(this->size()),
+                 "Column with null values must be nullable and the null mask \
+                  buffer size should match the size of the column.");
+    }
+    _null_mask = new_null_mask;  // copy
+    _null_count = new_null_count;
+}
+
 void column::set_null_count(size_type new_null_count) {
   if (new_null_count > 0) {
     CUDF_EXPECTS(nullable(), "Invalid null count.");
@@ -127,79 +168,122 @@ void column::set_null_count(size_type new_null_count) {
   _null_count = new_null_count;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Copies the bits starting at the specified offset from a source
- * bitmask into the destination bitmask.
- *
- * Bit `i` in `destination` will be equal to bit `i + offset` from `source`.
- *
- * @param destination The mask to copy into
- * @param source The mask to copy from
- * @param bit_offset The offset into `source` from which to begin the copy
- * @param number_of_bits The number of bits to copy
- *---------------------------------------------------------------------------**/
-__global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
-                                    bitmask_type const *__restrict__ source,
-                                    size_type bit_offset,
-                                    size_type number_of_bits) {
-  constexpr size_type warp_size{32};
-  size_type destination_bit_index = threadIdx.x + blockIdx.x * blockDim.x;
+struct create_column_from_view {
+  cudf::column_view view;
+  cudaStream_t stream;
+  rmm::mr::device_memory_resource *mr;
 
-  auto active_mask =
-      __ballot_sync(0xFFFF'FFFF, destination_bit_index < number_of_bits);
+ template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   cudf::strings_column_view sview(view);
+   auto col = cudf::strings::detail::slice(sview, view.offset(), -1, 1, stream, mr);
+   return col;
+ }
 
-  while (destination_bit_index < number_of_bits) {
-    bitmask_type const new_word = __ballot_sync(
-        active_mask, bit_is_set(source, bit_offset + destination_bit_index));
+ template <typename ColumnType,
+           std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
+ std::unique_ptr<column> operator()() {
 
-    if (threadIdx.x % warp_size == 0) {
-      destination[word_index(destination_bit_index)] = new_word;
-    }
+   std::vector<std::unique_ptr<column>> children;
+   for (size_type i = 0; i < view.num_children(); ++i) {
+     children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+   }
 
-    destination_bit_index += blockDim.x * gridDim.x;
-    active_mask =
-        __ballot_sync(active_mask, destination_bit_index < number_of_bits);
-  }
-}
+   auto col = std::make_unique<column>(view.type(), view.size(),
+       rmm::device_buffer{
+       static_cast<const char*>(view.head()) +
+       (view.offset() * cudf::size_of(view.type())),
+       view.size() * cudf::size_of(view.type()), stream, mr},
+       cudf::copy_bitmask(view, stream, mr),
+       view.null_count(), std::move(children));
+
+   return col;
+ }
+
+};
+
+struct create_column_from_view_vector {
+  std::vector<cudf::column_view> views;
+  cudaStream_t stream;
+  rmm::mr::device_memory_resource *mr;
+
+ template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   std::vector<cudf::strings_column_view> sviews;
+   sviews.reserve(views.size());
+   for (auto &v : views) { sviews.emplace_back(v); }
+
+   auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
+
+   //If concatenated string column is nullable, proceed to calculate it
+   if (col->nullable()) {
+     cudf::detail::concatenate_masks(views,
+         (col->mutable_view()).null_mask(), stream);
+   }
+
+   return col;
+ }
+
+ template <typename ColumnType,
+           std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
+ std::unique_ptr<column> operator()() {
+
+   auto type = views.front().type();
+   size_type total_element_count =
+     std::accumulate(views.begin(), views.end(), 0,
+         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
+
+   bool has_nulls = std::any_of(views.begin(), views.end(),
+                      [](const column_view col) { return col.has_nulls(); });
+   using mask_policy = cudf::experimental::mask_allocation_policy;
+
+   mask_policy policy{mask_policy::NEVER};
+   if (has_nulls) { policy = mask_policy::ALWAYS; }
+
+   auto col = cudf::experimental::allocate_like(views.front(),
+       total_element_count, policy, mr);
+
+   auto m_view = col->mutable_view();
+   auto count = 0;
+   // TODO replace loop with a single kernel https://github.com/rapidsai/cudf/issues/2881
+   for (auto &v : views) {
+     thrust::copy(rmm::exec_policy()->on(stream),
+         v.begin<ColumnType>(),
+         v.end<ColumnType>(),
+         m_view.begin<ColumnType>() + count);
+     count += v.size();
+   }
+
+   //If concatenated column is nullable, proceed to calculate it
+   if (col->nullable()) {
+     cudf::detail::concatenate_masks(views,
+         (col->mutable_view()).null_mask(), stream);
+   }
+
+   return col;
+ }
+
+};
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
-               rmm::mr::device_memory_resource *mr) {
-  CUDF_FAIL("Copying from a view is not supported yet.");
-}
-/*
-: _type{view.type()},
-_size{view.size()},
-// TODO: Fix for variable-width types
-_data{view.head() + (view.offset() * cudf::size_of(view.type())),
-view.size() * cudf::size_of(view.type()), stream, mr},
-_null_count{view.null_count()} {
+               rmm::mr::device_memory_resource *mr) :
+column( *cudf::experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr})) {}
 
-if (view.nullable()) {
-// If there's no offset, do a simple copy
-if (view.offset() == 0) {
-_null_mask =
-rmm::device_buffer{static_cast<void const *>(view.null_mask()),
-              bitmask_allocation_size_bytes(size()), stream, mr},
-} else {
-CUDF_EXPECTS(view.offset() > 0, "Invalid view offset.");
-// If there's a non-zero offset, need to handle offset bitmask elements
-_null_mask =
-rmm::device_buffer{bitmask_allocation_size_bytes(size()), stream, mr};
-cudf::util::cuda::grid_config_1d config(view.size(), 256);
-copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
-             stream>>>(
-static_cast<bitmask_type *>(_null_mask.data()), view.null_mask(),
-view.offset(), view.size());
-CHECK_STREAM(stream);
-}
-}
+// Concatenates the elements from a vector of column_views
+std::unique_ptr<column>
+concatenate(std::vector<column_view> const& columns_to_concat,
+            rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
+  if (columns_to_concat.empty()) { return std::make_unique<column>(); }
 
-// Implicitly invokes conversion of the view's child views to `column`s
-for (size_type i = 0; i < view.num_children(); ++i) {
-_children.emplace_back(view.child(i), stream, mr);
+  data_type type = columns_to_concat.front().type();
+  CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
+        [type](auto const& c) { return c.type() == type; }),
+      "Type mismatch in columns to concatenate.");
+  return cudf::experimental::type_dispatcher(type,
+      create_column_from_view_vector{columns_to_concat, stream, mr});
 }
-}
-*/
 
 }  // namespace cudf

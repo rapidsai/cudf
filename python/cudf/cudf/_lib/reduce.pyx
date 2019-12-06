@@ -15,11 +15,13 @@ from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
+from libcpp.utility cimport pair
 
 import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
+from cudf._lib.utils cimport *
 cimport cudf._lib.includes.reduce as cpp_reduce
 
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
@@ -27,6 +29,8 @@ pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 _REDUCTION_OP = {
     'max': cpp_reduce.MAX,
     'min': cpp_reduce.MIN,
+    'any': cpp_reduce.ANY,
+    'all': cpp_reduce.ALL,
     'sum': cpp_reduce.SUM,
     'product': cpp_reduce.PRODUCT,
     'sum_of_squares': cpp_reduce.SUMOFSQUARES,
@@ -79,7 +83,7 @@ def reduce(reduction_op, col, dtype=None, ddof=1):
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(col, col_dtype)
     cdef gdf_scalar c_result
-    cdef gdf_size_type c_ddof = ddof
+    cdef size_type c_ddof = ddof
     cdef cpp_reduce.operators c_op = _REDUCTION_OP[reduction_op]
 
     with nogil:
@@ -121,3 +125,29 @@ def scan(col_inp, col_out, scan_op, inclusive):
     free_column(c_col_out)
 
     return
+
+
+def group_std(key_columns, value_columns, ddof=1):
+    """ Calculate the group wise `quant` quantile for the value_columns
+    Returns column of group wise quantile specified by quant
+    """
+
+    cdef cudf_table *c_t = table_from_columns(key_columns)
+    cdef cudf_table *c_val = table_from_columns(value_columns)
+    cdef size_type c_ddof = ddof
+
+    cdef pair[cudf_table, cudf_table] c_result
+    with nogil:
+        c_result = cpp_reduce.group_std(
+            c_t[0],
+            c_val[0],
+            c_ddof
+        )
+
+    result_key_cols = columns_from_table(&c_result.first)
+    result_val_cols = columns_from_table(&c_result.second)
+
+    free(c_t)
+    free(c_val)
+
+    return (result_key_cols, result_val_cols)

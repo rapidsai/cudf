@@ -228,7 +228,7 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
             if (t < literal_run)
             {
                 uint32_t run_id = t >> 7;
-                uint32_t run = (run_id == num_runs - 1) ? literal_run & 0x7f : 0x80;
+                uint32_t run = min(literal_run - run_id * 128, 128);
                 if (!(t & 0x7f))
                     dst[run_id + t] = 0x100 - run;
                 dst[run_id + t + 1] = (cid == CI_PRESENT) ? __brev(v0) >> 24 : v0;
@@ -254,11 +254,10 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
                 inpos += 130;
                 repeat_run -= 130;
             }
-            if (!flush)
+            if (!flush && repeat_run == numvals)
             {
                 // Wait for more data in case we can continue the run later 
-                if (repeat_run == numvals && !flush)
-                    break;
+                break;
             }
             if (repeat_run >= 3)
             {
@@ -555,9 +554,9 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 // Patched base mode
                 if (!t)
                 {
-                    uint32_t bw, pw = 1, pll, pgw = 1;
+                    uint32_t bw, pw = 1, pll, pgw = 1, bv_scale = (is_signed) ? 0 : 1;
                     vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
-                    bw = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax), 7)) : (4 - min(CountLeadingBytes32(vmax), 3));
+                    bw = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7)) : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
                 #if ZERO_PLL_WAR
                     // Insert a dummy zero patch
                     pll = 1;
@@ -811,7 +810,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 {
                     uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
                     nrows_out = (nrows_out + flush) >> 3;
-                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out, nrows_out, flush, t) * 8;
+                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, (s->chunk.start_row + present_out) >> 3, nrows_out, flush, t) * 8;
                 }
                 __syncthreads();
                 if (!t)
@@ -1282,13 +1281,14 @@ extern "C" __global__ void __launch_bounds__(1024)
 gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, uint8_t *compressed_bfr, uint32_t comp_blk_size)
 {
     __shared__ __align__(16) StripeStream ss;
-    __shared__ uint8_t * volatile comp_src_g;
+    __shared__ const uint8_t * volatile comp_src_g;
     __shared__ uint32_t volatile comp_len_g;
 
     uint32_t strm_id = blockIdx.x;
     uint32_t t = threadIdx.x;
     uint32_t num_blocks, b, blk_size;
-    uint8_t *src, *dst;
+    const uint8_t *src;
+    uint8_t *dst;
 
     if (t < sizeof(StripeStream) / sizeof(uint32_t))
     {
@@ -1310,7 +1310,7 @@ gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in
             if (dst_len >= src_len)
             {
                 // Copy from uncompressed source
-                src = reinterpret_cast<uint8_t *>(blk_in->srcDevice);
+                src = reinterpret_cast<const uint8_t *>(blk_in->srcDevice);
                 blk_out->bytes_written = src_len;
                 dst_len = src_len;
                 blk_size24 = dst_len * 2 + 1;
@@ -1318,7 +1318,7 @@ gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in
             else
             {
                 // Compressed block
-                src = reinterpret_cast<uint8_t *>(blk_in->dstDevice);
+                src = reinterpret_cast<const uint8_t *>(blk_in->dstDevice);
                 blk_size24 = dst_len * 2 + 0;
             }
             dst[0] = static_cast<uint8_t>(blk_size24 >> 0);

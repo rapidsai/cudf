@@ -30,9 +30,11 @@ namespace jit {
       const std::string& cuda_source,
       const std::vector<std::string>& header_names,
       const std::vector<std::string>& compiler_flags,
-      jitify_v2::file_callback_type file_callback
-    ): 
-      cache_instance{cudf::jit::cudfJitCache::Instance()}
+      jitify_v2::file_callback_type file_callback,
+      cudaStream_t stream
+    )
+     : cache_instance{cudf::jit::cudfJitCache::Instance()}
+     , stream(stream) 
     {
       program = cache_instance.getProgram(
                   hash,
@@ -47,6 +49,7 @@ namespace jit {
      : program {std::move(launcher.program)}
      , cache_instance {cudf::jit::cudfJitCache::Instance()}
      , kernel_inst {std::move(launcher.kernel_inst)}
+     , stream {launcher.stream}
     { }
 
 } // namespace jit

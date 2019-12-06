@@ -17,7 +17,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <exception>
 #include <vector>
@@ -42,8 +43,11 @@ column_view_base::column_view_base(data_type type, size_type size,
     CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
     CUDF_EXPECTS(nullptr == null_mask,
                  "EMPTY column should have no null mask.");
-  } else if (size > 0) {
-    CUDF_EXPECTS(nullptr != data, "Null data pointer.");
+  }
+  else if ( is_compound(type) ) {
+    CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
+  } else if( size > 0){
+    CUDF_EXPECTS(nullptr != data, "Null data pointer.");	   
   }
 
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");
@@ -57,9 +61,17 @@ column_view_base::column_view_base(data_type type, size_type size,
 // If null count is known, returns it. Else, compute and return it
 size_type column_view_base::null_count() const {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::count_unset_bits(null_mask(), offset(), size());
+    _null_count = cudf::count_unset_bits(null_mask(), offset(), offset()+size());
   }
   return _null_count;
+}
+
+size_type column_view_base::null_count(size_type begin, size_type end) const {
+  CUDF_EXPECTS((begin <= end) && (begin >= 0) && (begin <  size()) &&
+                 (end <= size()),
+               "Range is out of bounds.");
+  return (null_count() == 0) ?
+    0 : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
 }
 }  // namespace detail
 

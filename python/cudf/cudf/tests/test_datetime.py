@@ -39,7 +39,7 @@ def numerical_data():
     return np.arange(1, 10)
 
 
-fields = ["year", "month", "day", "hour", "minute", "second"]
+fields = ["year", "month", "day", "hour", "minute", "second", "weekday"]
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])

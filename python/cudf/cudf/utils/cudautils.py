@@ -1,12 +1,10 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from functools import lru_cache
-from math import fmod
 
 import numpy as np
 from numba import cuda, int32, numpy_support
 
-import nvstrings
 import rmm
 
 from cudf.utils.utils import (
@@ -16,6 +14,7 @@ from cudf.utils.utils import (
     mask_bitsize,
     mask_get,
     mask_set,
+    rint,
 )
 
 
@@ -368,52 +367,6 @@ def gpu_fill_masked(value, validity, out):
             out[tid] = value
 
 
-@cuda.jit
-def gpu_isnull(validity, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        valid = mask_get(validity, tid)
-        if valid:
-            out[tid] = False
-        else:
-            out[tid] = True
-
-
-def isnull_mask(data, mask):
-    # necessary due to rapidsai/custrings#263
-    if isinstance(data, nvstrings.nvstrings):
-        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
-    else:
-        output_dary = rmm.device_array(data.size, dtype=np.bool_)
-
-    if output_dary.size > 0:
-        gpu_isnull.forall(output_dary.size)(mask, output_dary)
-    return output_dary
-
-
-@cuda.jit
-def gpu_notna(validity, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        valid = mask_get(validity, tid)
-        if valid:
-            out[tid] = True
-        else:
-            out[tid] = False
-
-
-def notna_mask(data, mask):
-    # necessary due to rapidsai/custrings#263
-    if isinstance(data, nvstrings.nvstrings):
-        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
-    else:
-        output_dary = rmm.device_array(data.size, dtype=np.bool_)
-
-    if output_dary.size > 0:
-        gpu_notna.forall(output_dary.size)(mask, output_dary)
-    return output_dary
-
-
 #
 # Binary kernels
 #
@@ -548,27 +501,13 @@ def gpu_diff(in_col, out_col, N):
 @cuda.jit
 def gpu_round(in_col, out_col, decimal):
     i = cuda.grid(1)
-    round_val = 10 ** (-1.0 * decimal)
+    f = 10 ** decimal
 
     if i < in_col.size:
-        current = in_col[i]
-        newval = current // round_val * round_val
-        remainder = fmod(current, round_val)
-
-        if remainder != 0 and remainder > (0.5 * round_val) and current > 0:
-            newval = newval + round_val
-            out_col[i] = newval
-
-        elif (
-            remainder != 0
-            and abs(remainder) < (0.5 * round_val)
-            and current < 0
-        ):
-            newval = newval + round_val
-            out_col[i] = newval
-
-        else:
-            out_col[i] = newval
+        ret = in_col[i] * f
+        ret = rint(ret)
+        tmp = ret / f
+        out_col[i] = tmp
 
 
 def apply_round(data, decimal):
@@ -874,9 +813,7 @@ def row_matrix(cols, nrow, ncol, dtype):
     for colidx, col in enumerate(cols):
         data = matrix[:, colidx]
         if data.size > 0:
-            gpu_row_matrix.forall(data.size)(
-                data, col.to_gpu_array(), nrow, ncol
-            )
+            gpu_row_matrix.forall(data.size)(data, col.data.mem, nrow, ncol)
     return matrix
 
 

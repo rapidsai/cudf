@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef __IO_CSV_COMMON_H__
-#define __IO_CSV_COMMON_H__
+#pragma once
+
+class SerialTrieNode;
 
 namespace cudf {
 namespace io {
@@ -23,7 +24,7 @@ namespace csv {
 
 /**
  * @brief Per-column parsing flags used for dtype detection and data conversion
- **/
+ */
 namespace column_parse {
 enum : uint8_t {
   disabled = 0,        ///< data is not read
@@ -37,22 +38,41 @@ using flags = uint8_t;
 
 /**
  * @brief Per-column histogram struct holding detected ocurrences of each dtype
- **/
+ */
 struct stats {
-  gdf_size_type countFloat;
-  gdf_size_type countDateAndTime;
-  gdf_size_type countString;
-  gdf_size_type countBool;
-  gdf_size_type countInt8;
-  gdf_size_type countInt16;
-  gdf_size_type countInt32;
-  gdf_size_type countInt64;
-  gdf_size_type countNULL;
+  uint32_t countFloat;
+  uint32_t countDateAndTime;
+  uint32_t countString;
+  uint32_t countBool;
+  uint32_t countInt8;
+  uint32_t countInt16;
+  uint32_t countInt32;
+  uint32_t countInt64;
+  uint32_t countNULL;
 };
 }  // namespace column_parse
+
+/**
+ * @brief Structure for holding various options used when parsing and
+ * converting CSV data to cuDF data type values.
+ */
+struct ParseOptions {
+  char delimiter;
+  char terminator;
+  char quotechar;
+  char decimal;
+  char thousands;
+  char comment;
+  bool keepquotes;
+  bool doublequote;
+  bool dayfirst;
+  bool skipblanklines;
+  SerialTrieNode* trueValuesTrie;
+  SerialTrieNode* falseValuesTrie;
+  SerialTrieNode* naValuesTrie;
+  bool multi_delimiter;
+};
 
 }  // namespace csv
 }  // namespace io
 }  // namespace cudf
-
-#endif // __IO_CSV_COMMON_H__

@@ -14,215 +14,164 @@
  * limitations under the License.
  */
 
-#ifndef GROUPBY_HPP
-#define GROUPBY_HPP
+#pragma once
 
-#include "cudf.h"
-#include "types.hpp"
-#include <cudf/quantiles.hpp>
+#include <cudf/aggregation.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
-#include <tuple>
+#include <utility>
 #include <vector>
 
-// Not possible to forward declare rmm::device_vector because it's a type alias
-// to a type with a default template arg. Therefore, this is the best we can do
-namespace thrust {
-template <typename T, typename A>
-class device_vector;
-}
-template <typename T>
-class rmm_allocator;
-
 namespace cudf {
-
-class table;
-
+namespace experimental {
 namespace groupby {
 
-/**---------------------------------------------------------------------------*
- * @brief Top-level options for controlling behavior of the groupby operation.
+/**
+ * @brief Request for groupby aggregation(s) to perform on a column.
  *
- * This structure defines all of the shared options between the hash and
- * sort-based groupby algorithms. Implementation specific options should be
- * defined by a new structure that inherits from this one inside the appropriate
- * namespace.
+ * The group membership of each `value[i]` is determined by the corresponding
+ * row `i` in the original order of `keys` used to construct the
+ * `groupby`. I.e., for each `aggregation`, `values[i]` is aggregated with all
+ * other `values[j]` where rows `i` and `j` in `keys` are equivalent.
  *
- *---------------------------------------------------------------------------**/
-struct Options {
-  Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
-
-  Options() = default;
-
-  /**---------------------------------------------------------------------------*
-   * Determines whether key rows with null values are ignored.
-   *
-   * If `true`, any row in the `keys` table that contains a NULL value will be
-   * ignored. That is, the row will not be present in the output keys, and it's
-   * associated row in the `values` table will also be ignored.
-   *
-   * If `false`, rows in the `keys` table with NULL values will be treated as
-   * any other row. Furthermore, a NULL value will be considered equal to
-   * another NULL value. For example, two rows `{1, 2, 3, NULL}` and `{1, 2, 3,
-   * NULL}` will be considered equal, and their associated rows in the `values`
-   * table will be aggregated.
-   *
-   * @note The behavior for a Pandas groupby operation is `ignore_null_keys ==
-   *true`.
-   * @note The behavior for a SQL groupby operation is `ignore_null_keys ==
-   *false`.
-   *
-   *---------------------------------------------------------------------------**/
-  bool const ignore_null_keys{true};
+ * `values.size()` column must equal `keys.num_rows()`.
+ */
+struct aggregation_request {
+  column_view values;  ///< The elements to aggregate
+  std::vector<std::unique_ptr<aggregation>>
+      aggregations;  ///< Desired aggregations
 };
 
-/**---------------------------------------------------------------------------*
- * @brief Supported aggregation operations
+/**
+ * @brief The result(s) of an `aggregation_request`
  *
- *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE};
-
-namespace hash {
-
-/**---------------------------------------------------------------------------*
- * @brief  Options unique to the hash-based groupby
- *---------------------------------------------------------------------------**/
-struct Options : groupby::Options {
-  Options(bool _ignore_null_keys = true)
-      : groupby::Options(_ignore_null_keys) {}
-}; 
-
-/**---------------------------------------------------------------------------*
- * @brief Performs groupby operation(s) via a hash-based implementation
+ * For every `aggregation_request` given to `groupby::aggregate` an
+ * `aggregation_result` will be returned. The `aggregation_result` holds the
+ * resulting column(s) for each requested aggregation on the `request`s values.
  *
- * Given a table of keys and corresponding table of values, equivalent keys will
- * be grouped together and a reduction operation performed across the associated
- * values (i.e., reduce by key). The reduction operation to be performed is
- * specified by a list of operator enums of equal length to the number of value
- * columns.
- *
- * The output of the operation is the table of key columns that hold all the
- * unique keys from the input key columns and a table of aggregation columns
- * that hold the specified reduction across associated values among all
- * identical keys.
- *
- * @param keys The table of keys
- * @param values The table of aggregation values
- * @param ops The list of aggregation operations
- * @return A tuple whose first member contains the table of output keys, and
- * second member contains the table of reduced output values
- *---------------------------------------------------------------------------**/
-std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
-                                            cudf::table const& values,
-                                            std::vector<operators> const& ops,
-                                            Options options = Options{});
-
-}  // namespace hash
-
-namespace sort {
-
-struct operation_args {};
-
-struct quantile_args : operation_args {
-  std::vector<double> quantiles;
-  cudf::interpolation interpolation;
-  
-  quantile_args(const std::vector<double> &_quantiles,  cudf::interpolation _interpolation)
-  : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
-  {}
+ */
+struct aggregation_result {
+  /// Columns of results from an `aggregation_request`
+  std::vector<std::unique_ptr<column>> results{};
 };
 
-struct operation {
-  operators                         op_name;
-  std::unique_ptr<operation_args>   args;
+/**
+ * @brief Groups values by keys and computes aggregations on those groups.
+ */
+class groupby {
+ public:
+  groupby() = delete;
+  ~groupby() = default;
+  groupby(groupby const&) = delete;
+  groupby(groupby&&) = delete;
+  groupby& operator=(groupby const&) = delete;
+  groupby& operator=(groupby&&) = delete;
+
+  /**
+   * @brief Construct a groupby object with the specified `keys`
+   *
+   * If the `keys` are already sorted, better performance may be achieved by
+   * passing `keys_are_sorted == true` and indicating the  ascending/descending
+   * order of each column and null order in  `column_order` and
+   * `null_precedence`, respectively.
+   *
+   * @note This object does *not* maintain the lifetime of `keys`. It is the
+   * user's responsibility to ensure the `groupby` object does not outlive the
+   * data viewed by the `keys` `table_view`.
+   *
+   * @param keys Table whose rows act as the groupby keys
+   * @param ignore_null_keys Indicates whether rows in `keys` that contain NULL
+   * values should be ignored
+   * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
+   * @param column_order If `keys_are_sorted == true`, indicates whether each
+   * column is ascending/descending. If empty, assumes all  columns are
+   * ascending. Ignored if `keys_are_sorted == false`.
+   * @param null_precedence If `keys_are_sorted == true`, indicates the ordering
+   * of null values in each column. Else, ignored. If empty, assumes all columns
+   * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
+   */
+  explicit groupby(table_view const& keys, bool ignore_null_keys = true,
+                   bool keys_are_sorted = false,
+                   std::vector<order> const& column_order = {},
+                   std::vector<null_order> const& null_precedence = {});
+
+  /**
+   * @brief Performs grouped aggregations on the specified values.
+   *
+   * The values to aggregate and the aggregations to perform are specifed in an
+   * `aggregation_request`. Each request contains a `column_view` of values to
+   * aggregate and a set of `aggregation`s to perform on those elements.
+   *
+   * For each `aggregation` in a request, `values[i]` is aggregated with
+   * all other `values[j]` where rows `i` and `j` in `keys` are equivalent.
+   *
+   * The `size()` of the request column must equal `keys.num_rows()`.
+   *
+   * For every `aggregation_request` an `aggregation_result` will be returned.
+   * The `aggregation_result` holds the resulting column(s) for each requested
+   * aggregation on the `request`s values. The order of the columns in each
+   * result is the same order as was specified in the request.
+   *
+   * The returned `table` contains the group labels for each group, i.e., the
+   * unique rows from `keys`. Element `i` across all aggregation results
+   * belongs to the group at row `i` in the group labels table.
+   *
+   * The order of the rows in the group labels is arbitrary. Furthermore,
+   * successive `groupby::aggregate` calls may return results in different
+   * orders.
+   *
+   * @throws cudf::logic_error If `requests[i].values.size() !=
+   * keys.num_rows()`.
+   *
+   * Example:
+   * ```
+   * Input:
+   * keys:     {1 2 1 3 1}
+   *           {1 2 1 4 1}
+   * request:
+   *   values: {3 1 4 9 2}
+   *   aggregations: {{SUM}, {MIN}}
+   *
+   * result:
+   *
+   * keys:  {3 1 2}
+   *        {4 1 2}
+   * values:
+   *   SUM: {9 9 1}
+   *   MIN: {9 2 1}
+   * ```
+   *
+   * @param requests The set of columns to aggregate and the aggregations to
+   * perform
+   * @param mr Memory resource used to allocate the returned table and columns
+   * @return Pair containing the table with each group's unique key and
+   * a vector of aggregation_results for each request in the same order as
+   * specified in `requests`.
+   */
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
+      std::vector<aggregation_request> const& requests,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+ private:
+  table_view _keys;                    ///< Keys that determine grouping
+  bool _ignore_null_keys{true};        ///< Ignore rows in keys with NULLs
+  bool _keys_are_sorted{false};        ///< Whether or not the keys are sorted
+  std::vector<order> _column_order{};  ///< If keys are sorted, indicates
+                                       ///< the order of each column
+  std::vector<null_order> _null_precedence{};  ///< If keys are sorted,
+                                               ///< indicates null order
+                                               ///< of each column
+
+  /**
+   * @brief Dispatches to the appropriate implementation to satisfy the
+   * aggregation requests.
+   */
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
+  dispatch_aggregation(std::vector<aggregation_request> const& requests,
+                       cudaStream_t stream,
+                       rmm::mr::device_memory_resource* mr);
 };
-
-enum class null_order : bool { AFTER, BEFORE }; 
-
-/**---------------------------------------------------------------------------*
- * @brief  Options unique to the sort-based groupby
- * The priority of determining the sort flags:
- * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
- *---------------------------------------------------------------------------**/
-struct Options : groupby::Options {
-  null_order null_sort_behavior; ///< Indicates how nulls are treated
-  bool input_sorted; ///< Indicates if the input data is sorted. 
-
-  Options(bool _ignore_null_keys = true,
-          null_order _null_sort_behavior = null_order::AFTER,
-          bool _input_sorted = false)
-      : groupby::Options(_ignore_null_keys),
-        input_sorted(_input_sorted),
-        null_sort_behavior(_null_sort_behavior) {}
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Performs groupby operation(s) via a sort-based implementation
- *
- * Given a table of keys and corresponding table of values, equivalent keys will
- * be grouped together and a reduction operation performed across the associated
- * values (i.e., reduce by key). The reduction operation to be performed is
- * specified by a list of operator enums of equal length to the number of value
- * columns.
- *
- * The output of the operation is the table of key columns that hold all the
- * unique keys from the input key columns and a table of aggregation columns
- * that hold the specified reduction across associated values among all
- * identical keys.
- *
- * @param keys The table of keys
- * @param values The table of aggregation values
- * @param ops The list of aggregation operations
- * @return A tuple whose first member contains the table of output keys, and
- * second member contains the reduced output values
- *---------------------------------------------------------------------------**/
-std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
-                                            cudf::table const& values,
-                                            std::vector<operation> const& ops,
-                                            Options options = Options{});
-}  // namespace sort
 }  // namespace groupby
+}  // namespace experimental
 }  // namespace cudf
-
-/**
- * @brief Returns the first index of each unique row. Assumes the data is
- * already sorted
- *
- * @param[in]  input_table          The input columns whose rows are sorted.
- * @param[in]  context              The options for controlling treatment of
- * nulls context->flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are
- * treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
- *
- * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
- */
-gdf_column
-gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
-
-/**
- * @brief Sorts a set of columns based on specified "key" columns. Returns a
- * column containing the offset to the start of each set of unique keys.
- *
- * @param[in]  input_table           The input columns whose rows will be
- * grouped.
- * @param[in]  num_key_cols             The number of key columns.
- * @param[in]  key_col_indices          The indices of the of the key columns by
- * which data will be grouped.
- * @param[in]  context                  The context used to control how nulls
- * are treated in group by context->flag_null_sort_behavior GDF_NULL_AS_LARGEST
- * = Nulls are treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as
- * smallest, context-> flag_groupby_include_nulls false = Nulls keys are ignored
- * (Pandas style), true = Nulls keys are treated as values. NULL keys will
- * compare as equal NULL == NULL (SQL style)
- *
- * @returns A tuple containing:
- *          - A cudf::table containing a set of columns sorted by the key
- * columns.
- *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
- */
-std::pair<cudf::table,
-          gdf_column>
-gdf_group_by_without_aggregations(cudf::table const& input_table,
-                                  gdf_size_type num_key_cols,
-                                  gdf_index_type const* key_col_indices,
-                                  gdf_context* context);
-
-#endif

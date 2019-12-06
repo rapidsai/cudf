@@ -14,48 +14,49 @@
  * limitations under the License.
  */
 
-#include <iterator/iterator.cuh>
-#include <table/legacy/device_table.cuh>
-#include <table/legacy/device_table_row_operators.cuh>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
-#include <utilities/column_utils.hpp>
-#include <io/utilities/wrapper_utils.hpp>
-
+#include <cudf/column/column_factories.hpp>
 #include <cudf/search.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
+#include <hash/unordered_multiset.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <strings/utilities.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
+#include <thrust/logical.h>
 
 namespace cudf {
+namespace experimental {
 
 namespace {
 
-template <typename DataIterator, typename ValuesIterator, typename Comparator>
+template <typename DataIterator, typename ValuesIterator,
+          typename OutputIterator, typename Comparator>
 void launch_search(DataIterator it_data,
-                    ValuesIterator it_vals,
-                    gdf_size_type data_size,
-                    gdf_size_type values_size,
-                    void* output,
-                    Comparator comp,
-                    bool find_first,
-                    cudaStream_t stream)
+                   ValuesIterator it_vals,
+                   size_type data_size,
+                   size_type values_size,
+                   OutputIterator it_output,
+                   Comparator comp,
+                   bool find_first,
+                   cudaStream_t stream)
 {
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         it_data, it_data + data_size,
                         it_vals, it_vals + values_size,
-                        static_cast<gdf_index_type*>(output),
-                        comp);
+                        it_output, comp);
   }
   else {
     thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                         it_data, it_data + data_size,
                         it_vals, it_vals + values_size,
-                        static_cast<gdf_index_type*>(output),
-                        comp);
+                        it_output, comp);
   }
 }
 
@@ -63,131 +64,248 @@ void launch_search(DataIterator it_data,
 
 namespace detail {
 
-gdf_column search_ordered(table const& t,
-                          table const& values,
-                          bool find_first,
-                          std::vector<bool> const& desc_flags,
-                          bool nulls_as_largest,
-                          cudaStream_t stream = 0)
+std::unique_ptr<column> search_ordered(table_view const& t,
+                                       table_view const& values,
+                                       bool find_first,
+                                       std::vector<order> const& column_order,
+                                       std::vector<null_order> const& null_precedence,
+                                       rmm::mr::device_memory_resource *mr,
+                                       cudaStream_t stream = 0)
 {
   // Allocate result column
-  gdf_column result_like{};
-  result_like.dtype = GDF_INT32;
-  result_like.size = values.num_rows();
-  result_like.data = values.get_column(0)->data;
-  auto result = allocate_like(result_like);
+  std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<size_type>()}, values.num_rows(),
+                                                       mask_state::UNALLOCATED, stream, mr);
+
+  mutable_column_view result_view = result.get()->mutable_view();
 
   // Handle empty inputs
   if (t.num_rows() == 0) {
-    CUDA_TRY(cudaMemset(result.data, 0, values.num_rows()));
-    if (is_nullable(result)) {
-      CUDA_TRY(cudaMemset(result.valid, 0, values.num_rows()));
-    }
+    CUDA_TRY(cudaMemset(result_view.data<size_type>(), 0, values.num_rows() * sizeof(size_type)));
+    return result;
   }
 
-  auto d_t      = device_table::create(t, stream);
-  auto d_values = device_table::create(values, stream);
-  auto count_it = thrust::make_counting_iterator(0);
-
-  rmm::device_vector<int8_t> dv_desc_flags(desc_flags);
-  auto d_desc_flags = dv_desc_flags.data().get();
-  
-  if ( has_nulls(t) ) {
-    auto ineq_op = (find_first)
-                 ? row_inequality_comparator<true>(*d_t, *d_values, !nulls_as_largest, d_desc_flags)
-                 : row_inequality_comparator<true>(*d_values, *d_t, !nulls_as_largest, d_desc_flags);
-
-    launch_search(count_it, count_it, t.num_rows(), values.num_rows(), result.data,
-                  ineq_op, find_first, stream);
+  if (not column_order.empty()) {
+    CUDF_EXPECTS(
+        static_cast<std::size_t>(t.num_columns()) == column_order.size(),
+        "Mismatch between number of columns and column order.");
   }
-  else {
-    auto ineq_op = (find_first)
-                 ? row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest, d_desc_flags)
-                 : row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest, d_desc_flags);
 
-    launch_search(count_it, count_it, t.num_rows(), values.num_rows(), result.data,
-                  ineq_op, find_first, stream);
+  if (not null_precedence.empty()) {
+    CUDF_EXPECTS(
+        static_cast<std::size_t>(t.num_columns()) == null_precedence.size(),
+        "Mismatch between number of columns and null precedence.");
+  }
+
+  auto d_t      = table_device_view::create(t, stream);
+  auto d_values = table_device_view::create(values, stream);
+  auto count_it = thrust::make_counting_iterator<size_type>(0);
+
+  rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
+  rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
+
+  if (has_nulls(t)) {
+    auto ineq_op = (find_first)
+      ? row_lexicographic_comparator<true>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
+      : row_lexicographic_comparator<true>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
+
+    launch_search(count_it, count_it, t.num_rows(), values.num_rows(),
+                  result_view.data<size_type>(), ineq_op, find_first, stream);
+  } else {
+    auto ineq_op = (find_first)
+      ? row_lexicographic_comparator<false>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
+      : row_lexicographic_comparator<false>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
+
+    launch_search(count_it, count_it, t.num_rows(), values.num_rows(),
+                  result_view.data<size_type>(), ineq_op, find_first, stream);
   }
 
   return result;
 }
 
-template <bool nullable = true>
+template <typename Element, bool nullable = true>
 struct compare_with_value{
+  compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
 
-            compare_with_value(device_table t, device_table val, bool nulls_are_equal = true)
-                : compare(t, val, nulls_are_equal) {}
+    : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
 
-            __device__ bool operator()(gdf_index_type i){
-               return compare(i, 0);
-            }
-            row_equality_comparator<nullable> compare;
+  __device__ bool operator()(size_type i) noexcept {
+    if (nullable) {
+      bool const col_is_null{col.nullable() and col.is_null(i)};
+      if (col_is_null and not val_is_valid)
+        return nulls_are_equal;
+      else if (col_is_null == val_is_valid)
+        return false;
+    }
+    
+    return equality_compare<Element>(col.element<Element>(i), value);
+  }
+
+  column_device_view        col;
+  Element                   value;
+  bool val_is_valid;
+  bool nulls_are_equal;
 };
 
-bool contains(gdf_column const& column,
-              gdf_scalar const& value,
+template <typename Element>
+void populate_element(scalar const& value, Element &e) {
+  using ScalarType = cudf::experimental::scalar_type_t<Element>;
+  auto s1 = static_cast<const ScalarType *>(&value);
+
+  e = s1->value();
+}
+
+template <>
+void populate_element<string_view>(scalar const& value, string_view &e) {
+  using ScalarType = cudf::experimental::scalar_type_t<string_view>;
+  auto s1 = static_cast<const ScalarType *>(&value);
+
+  e = string_view{s1->data(), s1->size()};
+}
+  
+struct contains_scalar_dispatch {
+  template <typename Element>
+  bool operator()(column_view const& col, scalar const& value,
+                  cudaStream_t stream,
+                  rmm::mr::device_memory_resource *mr) {
+
+    auto d_col = column_device_view::create(col, stream);
+    auto data_it = thrust::make_counting_iterator<size_type>(0);
+
+    bool    element_is_valid{value.is_valid()};
+    Element element;
+
+    populate_element(value, element);
+
+    if (col.has_nulls()) {
+      auto eq_op = compare_with_value<Element, true>(*d_col, element, element_is_valid, true);
+
+      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                            data_it, data_it + col.size(),
+                            eq_op);
+    } else {
+      auto eq_op = compare_with_value<Element, false>(*d_col, element, element_is_valid, true);
+
+      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                            data_it, data_it + col.size(),
+                            eq_op);
+    }
+  }
+};
+
+bool contains(column_view const& col,
+              scalar const& value,
+              rmm::mr::device_memory_resource *mr,
               cudaStream_t stream = 0)
 {
-  CUDF_EXPECTS(column.dtype == value.dtype, "DTYPE mismatch");
+  CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
 
-  // No element to compare against
-  if (column.size == 0) {
-      return false;
+  if (col.size() == 0) {
+    return false;
   }
 
-  if (value.is_valid == false){
-      return cudf::has_nulls(column);
+  if (not value.is_valid()) {
+    return col.has_nulls();
   }
 
-  // Create column with scalar's data
-  gdf_column_wrapper val (1, value.dtype, gdf_dtype_extra_info{}, "");
-  RMM_TRY(RMM_ALLOC(&val.get()->data, cudf::size_of(value.dtype), stream));
-  CUDA_TRY(cudaMemcpyAsync(val.get()->data, (void*) &value.data,
-                  cudf::size_of(value.dtype), cudaMemcpyHostToDevice, stream));
+  return cudf::experimental::type_dispatcher(col.type(),
+                                             contains_scalar_dispatch{},
+                                             col, value,
+                                             stream, mr);
+}
 
-  gdf_column* tmp_column = const_cast<gdf_column *> (&column);
-  gdf_column* tmp_value = val.get();
+struct multi_contains_dispatch {
+  template <typename Element>
+  std::unique_ptr<column> operator()(column_view const& haystack,
+                                     column_view const& needles,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
 
-  // Creating a single column device table
-  auto d_t = device_table::create(1, &tmp_column, stream);
-  auto d_value = device_table::create(1, &tmp_value, stream);
-  auto data_it = thrust::make_counting_iterator(0);
+    std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
+                                                         haystack.size(),
+                                                         copy_bitmask(haystack),
+                                                         haystack.null_count(),
+                                                         stream, mr);
+  
+    if (haystack.size() == 0) {
+      return result;
+    }
 
-  if (cudf::has_nulls(column)) {
-    auto eq_op = compare_with_value<true>(*d_t, *d_value, true);
+    mutable_column_view result_view = result.get()->mutable_view();
 
-    return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                          data_it, data_it + column.size,
-                          eq_op);
+    if (needles.size() == 0) {
+      bool8 f = false;
+      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool8>(), result_view.end<bool8>(), f);
+      return result;
+    }
+
+    auto hash_set = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto device_hash_set = hash_set.to_device();
+
+    auto d_haystack_ptr = column_device_view::create(haystack, stream);
+    auto d_haystack = *d_haystack_ptr;
+
+    if (haystack.has_nulls()) {
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        result_view.begin<bool8>(),
+                        [device_hash_set, d_haystack] __device__ (size_t index) {
+                          return d_haystack.is_null_nocheck(index) || device_hash_set.contains(d_haystack.element<Element>(index));
+                        });
+    } else {
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        result_view.begin<bool8>(),
+                        [device_hash_set, d_haystack] __device__ (size_t index) {
+                          return device_hash_set.contains(d_haystack.element<Element>(index));
+                        });
+    }
+
+    return result;
   }
-  else {
-    auto eq_op = compare_with_value<false>(*d_t, *d_value, true);
+};
 
-    return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                          data_it, data_it + column.size,
-                          eq_op);
-  }
+std::unique_ptr<column> contains(column_view const& haystack,
+                                 column_view const& needles,
+                                 rmm::mr::device_memory_resource* mr,
+                                 cudaStream_t stream = 0) {
+
+  CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
+
+  return cudf::experimental::type_dispatcher(haystack.type(),
+                                             multi_contains_dispatch{},
+                                             haystack, needles, mr, stream);
 }
 } // namespace detail
 
-gdf_column lower_bound(table const& t,
-                       table const& values,
-                       std::vector<bool> const& desc_flags,
-                       bool nulls_as_largest)
+std::unique_ptr<column> lower_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource *mr)
 {
-  return detail::search_ordered(t, values, true, desc_flags, nulls_as_largest);
+  return detail::search_ordered(t, values, true, column_order, null_precedence, mr);
 }
 
-gdf_column upper_bound(table const& t,
-                       table const& values,
-                       std::vector<bool> const& desc_flags,
-                       bool nulls_as_largest)
+std::unique_ptr<column> upper_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource *mr)
 {
-  return detail::search_ordered(t, values, false, desc_flags, nulls_as_largest);
+  return detail::search_ordered(t, values, false, column_order, null_precedence, mr);
 }
 
-bool contains(gdf_column const& column, gdf_scalar const& value)
+bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
 {
-    return detail::contains(column, value);
+  return detail::contains(col, value, mr);
 }
+
+std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
+                                       rmm::mr::device_memory_resource* mr) {
+  return detail::contains(haystack, needles, mr);
+}
+
+} // namespace exp
 } // namespace cudf

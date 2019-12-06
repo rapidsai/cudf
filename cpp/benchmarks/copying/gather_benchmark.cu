@@ -16,14 +16,14 @@
 
 #include <benchmark/benchmark.h>
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
@@ -38,16 +38,16 @@ class Gather: public cudf::benchmark {
 
 template<class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state){
-  const gdf_size_type source_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
+  const cudf::size_type source_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type destination_size{(cudf::size_type)state.range(0)};
 
-  const gdf_size_type n_cols = (gdf_size_type)state.range(1);
+  const cudf::size_type n_cols = (cudf::size_type)state.range(1);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,
     { source_size, 
-      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }
+      [](cudf::size_type row){ return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return true; }
     }
   );
   std::vector<gdf_column*> vp_src(n_cols);
@@ -56,20 +56,20 @@ void BM_gather(benchmark::State& state){
   }
   
   // Create gather_map that reverses order of source_column
-  std::vector<gdf_index_type> host_gather_map(source_size);
+  std::vector<cudf::size_type> host_gather_map(source_size);
   std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
   if(coalesce){
     std::reverse(host_gather_map.begin(), host_gather_map.end());
   }else{
     std::random_shuffle(host_gather_map.begin(), host_gather_map.end());
   }
-  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+  thrust::device_vector<cudf::size_type> gather_map(host_gather_map);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
     n_cols,
     { source_size, 
-      [](gdf_index_type row){return static_cast<TypeParam>(row);},
-      [](gdf_index_type row) { return true; }
+      [](cudf::size_type row){return static_cast<TypeParam>(row);},
+      [](cudf::size_type row) { return true; }
     }
   );
   std::vector<gdf_column*> vp_dest (n_cols);
@@ -89,13 +89,11 @@ void BM_gather(benchmark::State& state){
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
-using namespace cudf;
-
 #define GBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
-BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {        \
+BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State& state) {        \
   BM_gather<type, coalesce>(state);                                     \
 }                                                                       \
-BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
+BENCHMARK_REGISTER_F(Gather, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
 
 GBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
 GBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);

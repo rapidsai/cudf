@@ -1,11 +1,22 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#ifndef __IO_CSV_GPU_H__
-#define __IO_CSV_GPU_H__
+#pragma once
 
-#include <cudf/cudf.h>
-#include "csv_common.h"
-
-#include "type_conversion.cuh"
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace io {
@@ -26,13 +37,12 @@ namespace gpu {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
-                               gdf_size_type num_rows,
-                               gdf_size_type num_columns,
-                               const ParseOptions &options,
-                               column_parse::flags *flags,
-                               column_parse::stats *stats,
-                               cudaStream_t stream = (cudaStream_t)0);
+cudaError_t DetectColumnTypes(const char *data, const uint64_t *row_starts,
+                              size_t num_rows, size_t num_columns,
+                              const ParseOptions &options,
+                              column_parse::flags *flags,
+                              column_parse::stats *stats,
+                              cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for decoding row-column data
@@ -51,16 +61,15 @@ cudaError_t DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeCsvColumnData(
-    const char *data, const uint64_t *row_starts, gdf_size_type num_rows,
-    gdf_size_type num_columns, const ParseOptions &options,
-    const column_parse::flags *flags, gdf_dtype *dtypes, void **columns,
-    gdf_valid_type **valids, gdf_size_type *num_valid,
-    cudaStream_t stream = (cudaStream_t)0);
+cudaError_t DecodeRowColumnData(const char *data, const uint64_t *row_starts,
+                                size_t num_rows, size_t num_columns,
+                                const ParseOptions &options,
+                                const column_parse::flags *flags,
+                                cudf::data_type *dtypes, void **columns,
+                                cudf::bitmask_type **valids,
+                                cudaStream_t stream = (cudaStream_t)0);
 
 }  // namespace gpu
 }  // namespace csv
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_CSV_GPU_H__

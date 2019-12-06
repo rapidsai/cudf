@@ -16,10 +16,18 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "utilities/cuda.cuh"
+#ifndef CUDA_HOST_DEVICE_CALLABLE
+#ifdef __CUDACC__
+#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
+#define CUDA_DEVICE_CALLABLE __device__ inline
+#else
+#define CUDA_HOST_DEVICE_CALLABLE inline
+#define CUDA_DEVICE_CALLABLE inline
+#endif
+#endif
 
 #include <cstddef>
+#include <cstdint>
 
 /**---------------------------------------------------------------------------*
  * @file types.hpp
@@ -53,8 +61,20 @@ struct table;
 class column;
 class column_view;
 class mutable_column_view;
+class string_view;
 
-namespace exp {
+class scalar;
+template <typename T> class numeric_scalar;
+class string_scalar;
+template <typename T> class timestamp_scalar;
+
+template <typename T> class numeric_scalar_device_view;
+class string_scalar_device_view;
+template <typename T> class timestamp_scalar_device_view;
+
+
+
+namespace experimental {
 class table;
 }
 class table_view;
@@ -62,6 +82,7 @@ class mutable_table_view;
 
 using size_type = int32_t;
 using bitmask_type = uint32_t;
+using valid_type = uint8_t;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates an unknown null count.
@@ -97,6 +118,20 @@ enum mask_state {
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
+namespace experimental{
+/**
+ * @brief Interpolation method to use when the desired quantile lies between
+ * two data points i and j
+ *
+ */
+enum class interpolation {
+    LINEAR,  ///< Linear interpolation between i and j
+    LOWER,       ///< Lower data point (i)
+    HIGHER,      ///< Higher data point (j)
+    MIDPOINT,    ///< (i + j)/2
+    NEAREST      ///< i or j, whichever is nearest
+};
+}
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/
@@ -109,9 +144,12 @@ enum type_id {
   FLOAT32,    ///< 4 byte floating point
   FLOAT64,    ///< 8 byte floating point
   BOOL8,      ///< Boolean using one byte per value, 0 == false, else true
-  DATE32,     ///< days since Unix Epoch in int32
-  TIMESTAMP,  ///< duration of specified resolution since Unix Epoch in int64
-  CATEGORY,   ///< Categorical/Dictionary type
+  TIMESTAMP_DAYS,     ///< days since Unix Epoch in int32
+  TIMESTAMP_SECONDS,  ///< duration of seconds since Unix Epoch in int64
+  TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
+  TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
+  TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
+  CATEGORY,   ///< Categorial/Dictionary type
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids

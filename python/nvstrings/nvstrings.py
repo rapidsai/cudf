@@ -1,3 +1,7 @@
+import weakref
+
+import rmm  # noqa: F401
+
 import pyniNVStrings
 
 
@@ -363,7 +367,7 @@ def create_from_ipc(ipc_data):
 def free(dstrs):
     """Force free resources for the specified instance."""
     if dstrs is not None:
-        pyniNVStrings.n_destroyStrings(dstrs.m_cptr)
+        dstrs._finalizer()
         dstrs.m_cptr = 0
 
 
@@ -374,6 +378,11 @@ def bind_cpointer(cptr, own=True):
         rtn = nvstrings(cptr)
         rtn._own = own
     return rtn
+
+
+def _destroy_nvstrings_instance(own, cptr):
+    if own:
+        pyniNVStrings.n_destroyStrings(cptr)
 
 
 # this will be documented with all the public methods
@@ -395,11 +404,9 @@ class nvstrings:
         """
         self.m_cptr = cptr
         self._own = True
-
-    def __del__(self):
-        if self._own:
-            pyniNVStrings.n_destroyStrings(self.m_cptr)
-        self.m_cptr = 0
+        self._finalizer = weakref.finalize(
+            self, _destroy_nvstrings_instance, self._own, self.m_cptr
+        )
 
     def __str__(self):
         return str(pyniNVStrings.n_createHostStrings(self.m_cptr))
@@ -1274,7 +1281,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["hello","goodbye","well"])
-        >>> print(s.ljust(width=6))
+        >>> print(s.rjust(width=6))
         [' hello', 'goodbye', '  well']
 
         """
@@ -1668,7 +1675,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["Hello, friend","Goodbye, friend"])
-        >>> print(s.lower())
+        >>> print(s.upper())
         ['HELLO, FRIEND', 'GOODBYE, FRIEND']
 
         """
@@ -1686,7 +1693,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["hello, friend","goodbye, friend"])
-        >>> print(s.lower())
+        >>> print(s.capitalize())
         ['Hello, friend", "Goodbye, friend"]
 
         """
@@ -1704,7 +1711,7 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> s = nvstrings.to_device(["Hello, Friend","Goodbye, Friend"])
-        >>> print(s.lower())
+        >>> print(s.swapcase())
         ['hELLO, fRIEND', 'gOODBYE, fRIEND']
 
         """
@@ -1779,7 +1786,7 @@ class nvstrings:
 
         Examples
         --------
-        >>>import nvstrings
+        >>> import nvstrings
         >>> s = nvstrings.to_device(["hello","world"])
         >>> print(s.rindex('l'))
         [3,3]
@@ -2136,9 +2143,8 @@ class nvstrings:
         >>> s = nvstrings.to_device(["a1","b2","c3"])
         >>> for result in s.extract('([ab])(\\d)'):
         ...     print(result)
-        ["a","b"]
-        ["1","2"]
-        [None,None]
+        ["a","b",None]
+        ["1","2",None]
 
         """
         strs = pyniNVStrings.n_extract(self.m_cptr, pat)
