@@ -590,7 +590,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     std::vector<int> chunk_map(num_chunks);
 
     // Tracker for eventually deallocating compressed and uncompressed data
-    std::vector<rmm::device_buffer> page_data;
+    std::vector<rmm::device_buffer> page_data(num_chunks);
 
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
@@ -632,8 +632,8 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
                                   : col_meta.data_page_offset;
           auto buffer =
               _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data.emplace_back(buffer->data(), buffer->size(), stream);
-          d_compdata = static_cast<uint8_t *>(page_data.back().data());
+          page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+          d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
         }
         chunks.insert(gpu::ColumnChunkDesc(
             col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -658,12 +658,18 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     const auto total_pages = count_page_headers(chunks, stream);
     if (total_pages > 0) {
       hostdevice_vector<gpu::PageInfo> pages(total_pages, total_pages, stream);
+      rmm::device_buffer decomp_page_data;
 
       decode_page_headers(chunks, pages, stream);
       if (total_decompressed_size > 0) {
-        auto decomp_page_data = decompress_page_data(chunks, pages, stream);
-        page_data.clear();
-        page_data.push_back(std::move(decomp_page_data));
+        decomp_page_data = decompress_page_data(chunks, pages, stream);
+        // Free compressed data
+        for (size_t c = 0; c < chunks.size(); c++) {
+          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+            page_data[c].resize(0);
+            page_data[c].shrink_to_fit();
+          }
+        }
       }
 
       std::vector<column_buffer> out_buffers;
