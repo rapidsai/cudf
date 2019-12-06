@@ -23,6 +23,7 @@
 
 #include <thrust/iterator/constant_iterator.h>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/range/adaptor/transformed.hpp>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture
@@ -112,15 +113,10 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   std::vector<TypeParam> std_col = cudf::test::detail::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(std_col.begin(), std_col.end());
 
-  std::vector<std::string> str(std_col.size());
+  auto to_string = [] (auto e) { return std::to_string(e); };
+  auto const expected = boost::join(std_col | boost::adaptors::transformed(to_string), delimiter);
 
-  std::transform(
-    std::cbegin(std_col),
-    std::cend(std_col),
-    std::begin(str),
-    [] (auto e) { return std::to_string(e); });
-
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), boost::join(str, delimiter));
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
 }
 
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
