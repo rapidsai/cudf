@@ -46,7 +46,7 @@ using multimap_T =
                                 std::numeric_limits<index_type>::max(),
                                 default_hash<hash_value_type>,
                                 equal_to<hash_value_type>,
-                                legacy_allocator< thrust::pair<hash_value_type, index_type> > >;
+                                default_allocator< thrust::pair<hash_value_type, index_type> > >;
 
 using RowHash =
 cudf::experimental::row_hasher<default_hash>;
