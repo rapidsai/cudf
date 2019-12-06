@@ -22,7 +22,6 @@
 #include <hash/helper_functions.cuh>
 #include <utilities/legacy/device_atomics.cuh>
 
-#include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 

@@ -18,8 +18,8 @@
 #define CONCURRENT_UNORDERED_MAP_CUH
 
 #include <utilities/legacy/device_atomics.cuh>
-#include "helper_functions.cuh"
-#include "hash_allocator.cuh"
+#include <hash/helper_functions.cuh>
+#include <hash/hash_allocator.cuh>
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
