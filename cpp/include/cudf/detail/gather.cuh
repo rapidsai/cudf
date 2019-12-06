@@ -147,9 +147,7 @@ struct column_gatherer_impl
               0,
               bitmask_allocation_size_bytes(destination_column->size()),
               stream));
-      }
 
-      if (nullify_out_of_bounds) {
         thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                           gather_map_end, gather_map_begin,
                           source_data, destination_data,
@@ -334,7 +332,8 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
 
   auto bitmask_kernel =
-    nullify_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> : gather_bitmask_kernel<false, decltype(gather_map_begin)>;
+    nullify_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> :
+                            gather_bitmask_kernel<false, decltype(gather_map_begin)>;
 
   int gather_grid_size;
   int gather_block_size;
