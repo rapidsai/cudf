@@ -40,37 +40,37 @@ struct valid_range {
     }
 };
 
+
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Creates a column of indices containing values from 0 to
-* right_table_row_count - 1 excluding those in the right_indices
-* column.
-*
-* @Param right_indices Column of indices
+* @Synopsis  Creates a table containing the complement of left join indices.
+* This table has two columns. The first one is filled with JoinNoneValue(-1)
+* and the second one contains values from 0 to right_table_row_count - 1
+* excluding those found in the right_indices column.
+* 
+* @Param right_indices Vector of indices
 * @Param left_table_row_count Number of rows of left table
 * @Param right_table_row_count Number of rows of right table
 * @param stream Optional, stream on which all memory allocations and copies
 * will be performed
 *
-* @Returns  Column containing the indices that are missing from right_indices
+* @Returns  Pair of vectors containing the left join indices complement
 */
 /* ----------------------------------------------------------------------------*/
 template <typename index_type>
-std::unique_ptr<column>
-create_missing_indices(
-    column_view const& right_indices,
-    const size_type left_table_row_count,
-    const size_type right_table_row_count,
+std::pair<rmm::device_vector<size_type>,
+rmm::device_vector<size_type>>
+get_left_join_indices_complement(
+    rmm::device_vector<size_type>& right_indices,
+    size_type left_table_row_count,
+    size_type right_table_row_count,
     cudaStream_t stream) {
 
+  //Get array of indices that do not appear in right_indices
+
   //Vector allocated for unmatched result
-  rmm::device_buffer unmatched_indices{
-    sizeof(index_type)*right_table_row_count, stream};
+  rmm::device_vector<size_type> right_indices_complement(right_table_row_count);
 
-  thrust::device_ptr<index_type> unmatched_indices_ptr(
-      static_cast<index_type*>(unmatched_indices.data()));
-
-  size_type indices_count = right_table_row_count;
   //If left table is empty in a full join call then all rows of the right table
   //should be represented in the joined indices. This is an optimization since
   //if left table is empty and full join is called all the elements in
@@ -79,8 +79,8 @@ create_missing_indices(
   if (left_table_row_count == 0) {
     thrust::sequence(
         rmm::exec_policy(stream)->on(stream),
-        unmatched_indices_ptr,
-        unmatched_indices_ptr + right_table_row_count,
+        right_indices_complement.begin(),
+        right_indices_complement.end(),
         0);
   } else {
     //Assume all the indices in invalid_index_map are invalid
@@ -94,73 +94,29 @@ create_missing_indices(
         rmm::exec_policy(stream)->on(stream),
         thrust::make_constant_iterator(0),
         thrust::make_constant_iterator(0) + right_indices.size(),
-        right_indices.begin<index_type>(),//Index locations
-        right_indices.begin<index_type>(),//Stencil - Check if index location is valid
+        right_indices.begin(),//Index locations
+        right_indices.begin(),//Stencil - Check if index location is valid
         invalid_index_map.begin(),//Output indices
         valid);//Stencil Predicate
     size_type begin_counter = static_cast<size_type>(0);
     size_type end_counter = static_cast<size_type>(right_table_row_count);
 
     //Create list of indices that have been marked as invalid
-    indices_count = thrust::copy_if(
+    size_type indices_count = thrust::copy_if(
         rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator(begin_counter),
         thrust::make_counting_iterator(end_counter),
         invalid_index_map.begin(),
-        unmatched_indices_ptr,
+        right_indices_complement.begin(),
         thrust::identity<index_type>()) -
-      unmatched_indices_ptr;
+      right_indices_complement.begin();
+    right_indices_complement.resize(indices_count);
   }
-  return std::make_unique<column>(
-      data_type(cudf::experimental::type_to_id<index_type>()),
-      indices_count,
-      std::move(unmatched_indices));
-}
 
+  rmm::device_vector<size_type> left_invalid_indices(
+      right_indices_complement.size(), JoinNoneValue);
 
-/* --------------------------------------------------------------------------*/
-/**
-* @Synopsis  Creates a table containing the complement of left join indices.
-* This table has two columns. The first one is filled with JoinNoneValue(-1)
-* and the second one contains values from 0 to right_table_row_count - 1
-* excluding those found in the right_indices column.
-* 
-* @Param right_indices Column of indices
-* @Param left_table_row_count Number of rows of left table
-* @Param right_table_row_count Number of rows of right table
-* @param stream Optional, stream on which all memory allocations and copies
-* will be performed
-*
-* @Returns  Table containing the left join indices complement
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type>
-std::unique_ptr<experimental::table>
-get_left_join_indices_complement(
-    column_view const& right_indices,
-    size_type left_table_row_count,
-    size_type right_table_row_count,
-    cudaStream_t stream) {
-
-  //Get array of indices that do not appear in r_index_ptr
-  auto right_indices_complement = create_missing_indices<index_type>(
-      right_indices, left_table_row_count, right_table_row_count, stream);
-
-  auto left_invalid_indices = experimental::allocate_like(right_indices_complement->view());
-  thrust::device_ptr<index_type> inv_index_ptr(
-      (left_invalid_indices->mutable_view()).template begin<index_type>());
-
-  //Copy JoinNoneValue to inv_index_ptr to denote that a match does not exist on the left
-  thrust::fill(
-      rmm::exec_policy(stream)->on(stream),
-      inv_index_ptr,
-      inv_index_ptr + left_invalid_indices->size(),
-      JoinNoneValue);
-
-  std::vector<std::unique_ptr<column>> cols;
-  cols.emplace_back(std::move(left_invalid_indices));
-  cols.emplace_back(std::move(right_indices_complement));
-  return std::make_unique<experimental::table>(std::move(cols));
+  return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
 }//namespace detail

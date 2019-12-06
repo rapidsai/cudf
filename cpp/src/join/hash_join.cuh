@@ -182,6 +182,24 @@ estimate_join_output_size(
         std::move(size_estimate));
 }
 
+std::pair<rmm::device_vector<output_index_type>,
+rmm::device_vector<output_index_type>>
+get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
+  rmm::device_vector<output_index_type> left_indices(left.num_rows());
+  thrust::sequence(
+      rmm::exec_policy(stream)->on(stream),
+      left_indices.begin(),
+      left_indices.end(),
+      0);
+  rmm::device_vector<output_index_type> right_indices(left.num_rows());
+  thrust::fill(
+      rmm::exec_policy(stream)->on(stream),
+      right_indices.begin(),
+      right_indices.end(),
+      JoinNoneValue);
+  return std::make_pair(std::move(left_indices), std::move(right_indices));
+}
+
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the join operation between two tables and returns the
@@ -196,12 +214,13 @@ estimate_join_output_size(
  * @tparam join_kind The type of join to be performed
  * @tparam index_type The datatype used for the output indices
  *
- * @returns Join output indices table
+ * @returns Join output indices vector pair
  */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind, typename index_type>
 std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
-std::unique_ptr<experimental::table>>
+std::pair<rmm::device_vector<size_type>,
+rmm::device_vector<size_type>>>
 get_base_hash_join_indices(
     table_view const& left,
     table_view const& right,
@@ -213,27 +232,7 @@ get_base_hash_join_indices(
   }
   //Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
-    rmm::device_buffer sequence_indices{
-      sizeof(index_type)*left.num_rows(), stream};
-    thrust::device_ptr<index_type> sequence_indices_ptr(
-        static_cast<index_type*>(sequence_indices.data()));
-    thrust::sequence(
-        rmm::exec_policy(stream)->on(stream),
-        sequence_indices_ptr,
-        sequence_indices_ptr + left.num_rows(),
-        0);
-    rmm::device_buffer invalid_indices{
-      sizeof(index_type)*left.num_rows(), stream};
-    thrust::device_ptr<index_type> inv_index_ptr(
-        static_cast<index_type*>(invalid_indices.data()));
-    thrust::fill(
-        rmm::exec_policy(stream)->on(stream),
-        inv_index_ptr,
-        inv_index_ptr + left.num_rows(),
-        JoinNoneValue);
-    return get_indices_table<index_type>(
-        std::move(sequence_indices), std::move(invalid_indices),
-        left.num_rows(), stream);
+    return get_trivial_left_join_indices(left, stream);
   }
 
   using multimap_type = multimap_t<index_type>;
@@ -276,7 +275,8 @@ get_base_hash_join_indices(
   size_type estimated_size = estimated_join_output_size->value(stream);
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    return get_empty_index_table<index_type>(stream);
+    rmm::device_vector<size_type> left_empty, right_empty;
+    return std::make_pair(left_empty, right_empty);
   }
 
   // Because we are approximating the number of joined elements, our approximation
@@ -286,15 +286,11 @@ get_base_hash_join_indices(
   rmm::device_scalar<size_type> write_index(0, stream);
   size_type join_size{0};
 
-  rmm::device_buffer left_indices{0, stream};
-  rmm::device_buffer right_indices{0, stream};
+  rmm::device_vector<size_type> left_indices;
+  rmm::device_vector<size_type> right_indices;
   while (true) {
-    left_indices = rmm::device_buffer{
-      sizeof(index_type)*estimated_size,
-      stream};
-    right_indices = rmm::device_buffer{
-      sizeof(index_type)*estimated_size,
-      stream};
+    left_indices.resize(estimated_size);
+    right_indices.resize(estimated_size);
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
@@ -315,8 +311,8 @@ get_base_hash_join_indices(
         hash_probe,
         equality,
         probe_table->num_rows(),
-        static_cast<index_type*>(left_indices.data()),
-        static_cast<index_type*>(right_indices.data()),
+        static_cast<index_type*>(left_indices.data().get()),
+        static_cast<index_type*>(right_indices.data().get()),
         write_index.data(),
         estimated_size,
         flip_join_indices);
@@ -331,9 +327,9 @@ get_base_hash_join_indices(
     }
   }
 
-  return get_indices_table<index_type>(
-      std::move(left_indices), std::move(right_indices),
-      join_size, stream);
+  left_indices.resize(join_size);
+  right_indices.resize(join_size);
+  return std::make_pair(std::move(left_indices), std::move(right_indices));
 
 }
 

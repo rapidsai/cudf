@@ -58,32 +58,6 @@ enum class join_kind {
   FULL_JOIN
 };
 
-/* --------------------------------------------------------------------------*/
-/**
-* @Synopsis  Creates a table containing two empty indices column for trivial
-* join.
-*
-* @param stream Optional, stream on which all memory allocations and copies
-* will be performed
-*
-* @Returns  Table containing empty indices.
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type>
-std::unique_ptr<cudf::experimental::table>
-get_empty_index_table(cudaStream_t stream) {
-    std::vector<std::unique_ptr<column>> columns;
-    columns.emplace_back(
-        std::make_unique<column>(
-          data_type(cudf::experimental::type_to_id<index_type>()), 0,
-          rmm::device_buffer{0, stream}));
-    columns.emplace_back(
-        std::make_unique<column>(
-          data_type(cudf::experimental::type_to_id<index_type>()), 0,
-          rmm::device_buffer{0, stream}));
-    return std::make_unique<cudf::experimental::table>(std::move(columns));
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a vector with non-common indices which is set difference
@@ -134,42 +108,32 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
   return std::make_unique<experimental::table>(tmp_table);
 }
 
-/* --------------------------------------------------------------------------*/
-/**
-* @Synopsis  Convenience function to wrap device_buffer's containing join
-* indices result into a table.
-*
-* @param left_indices Device buffer containing left indices result of join
-* @param right_indices Device buffer containing right indices result of join
-* @param join_size Number of indices contained in the buffers
-* @param stream Optional, stream on which all memory allocations and copies
-* will be performed
-*
-* @Returns  Table containing join indices result.
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type, typename B = rmm::device_buffer>
-std::unique_ptr<cudf::experimental::table>
-get_indices_table(
-    B&& left_indices,
-    B&& right_indices,
-    cudf::size_type join_size,
-    cudaStream_t stream) {
-  rmm::device_buffer l{std::forward<B>(left_indices)};
-  rmm::device_buffer r{std::forward<B>(right_indices)};
-  l.resize(sizeof(index_type)*join_size, stream);
-  r.resize(sizeof(index_type)*join_size, stream);
-  std::vector<std::unique_ptr<column>> columns;
-  columns.emplace_back(
-      std::make_unique<column>(
-        data_type(cudf::experimental::type_to_id<index_type>()), join_size,
-        std::move(l)));
-  columns.emplace_back(
-      std::make_unique<column>(
-        data_type(cudf::experimental::type_to_id<index_type>()), join_size,
-        std::move(r)));
-  return std::make_unique<cudf::experimental::table>(std::move(columns));
+template <typename index_type>
+std::pair<rmm::device_vector<index_type>,
+rmm::device_vector<index_type>>
+concatenate_vector_pairs(
+std::pair<rmm::device_vector<index_type>,
+rmm::device_vector<index_type>>& a,
+std::pair<rmm::device_vector<index_type>,
+rmm::device_vector<index_type>>& b)
+{
+  CUDF_EXPECTS((a.first.size() == a.second.size()),
+               "Mismatch between sizes of vectors in vector pair");
+  CUDF_EXPECTS((b.first.size() == b.second.size()),
+               "Mismatch between sizes of vectors in vector pair");
+  if (a.first.size() == 0) {
+    return b;
+  } else if (b.first.size() == 0) {
+    return a;
+  }
+  auto original_size = a.first.size();
+  a.first.resize(a.first.size() + b.first.size());
+  a.second.resize(a.second.size() + b.second.size());
+  thrust::copy(b.first.begin(), b.first.end(), a.first.begin() + original_size);
+  thrust::copy(b.second.begin(), b.second.end(), a.second.begin() + original_size);
+  return a;
 }
+
 
 }//namespace detail
 
