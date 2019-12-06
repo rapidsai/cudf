@@ -30,8 +30,15 @@ namespace strings
 namespace detail
 {
 
-//
-struct alignas(8) Relist
+/**
+ * @brief This holds the state information when evaluating a string
+ * against a regex pattern.
+ * 
+ * There are 2 instances of this per string managed in the reljunk class.
+ * As each regex instruction is evaluated for a string, the result is
+ * reflected here. The regexec function updates and manages this state data.
+ */
+struct alignas(8) relist
 {
     int16_t size, listsize;
     int32_t reserved;
@@ -46,20 +53,20 @@ struct alignas(8) Relist
 
     __host__ __device__ inline static int32_t alloc_size(int32_t insts)
     {
-        int32_t size = sizeof(Relist);
+        int32_t size = sizeof(relist);
         size += data_size_for(insts);
         size = ((size+7)/8)*8;   // align it too
         return size;
     }
 
-    __host__ __device__ inline Relist() {}
+    __host__ __device__ inline relist() {}
 
     __host__ __device__ inline void set_data(int16_t insts, u_char* data=nullptr)
     {
         listsize = insts;
         u_char* ptr = (u_char*)data;
         if( ptr==nullptr )
-            ptr = ((u_char*)this) + sizeof(Relist);
+            ptr = ((u_char*)this) + sizeof(relist);
         ranges = (int2*)ptr;
         ptr += listsize * sizeof(ranges[0]);
         inst_ids = (short*)ptr;
@@ -101,20 +108,30 @@ struct alignas(8) Relist
     }
 };
 
+/**
+ * @brief This manages the two relist instances required by the regexec function.
+ */
 struct reljunk
 {
-    Relist *list1, *list2;
+    relist *list1, *list2;
     int32_t	starttype;
     char32_t startchar;
 };
 
-__device__ inline void swaplist(Relist*& l1, Relist*& l2)
+__device__ inline void swaplist(relist*& l1, relist*& l2)
 {
-    Relist* tmp = l1;
+    relist* tmp = l1;
     l1 = l2;
     l2 = tmp;
 }
 
+/**
+ * @brief Utility to check a specific character against this class instance.
+ * 
+ * @param ch A 4-byte UTF-8 character.
+ * @param codepoint_flags Used for mapping a character to type for builtin classes.
+ * @return true if the character matches
+ */
 __device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* codepoint_flags)
 {
     int i=0, len = count;
@@ -145,6 +162,16 @@ __device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* code
     return false;
 }
 
+/**
+ * @brief Set the device data to be used for holding the state data of a string.
+ * 
+ * With one thread per string, the stack is used to maintain state when evaluating the string.
+ * With large regex patterns, the normal stack is not always practical.
+ * This mechanism allows an alternate buffer of device memory to be used in place of the stack
+ * for the state data.
+ * 
+ * Two distinct buffers are required for the state data.
+ */
 __device__ inline void reprog_device::set_stack_mem(u_char* s1, u_char* s2)
 {
     _stack_mem1 = s1;
@@ -168,9 +195,19 @@ __device__ inline int32_t* reprog_device::startinst_ids() const
     return _startinst_ids;
 }
 
-
-// execute compiled expression for each character in the provided string
-__device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljunk &jnk, int32_t& begin, int32_t& end, int32_t groupId)
+/**
+ * @brief Evaluate a specific string against regex pattern compiled to this instance.
+ * 
+ * This is the main function for executing the regex against an individual string.
+ * 
+ * @param dstr String used for matching.
+ * @param jnk State data object for this string.
+ * @param[in,out] begin Character position to start evaluation. On return, it is the position of the match.
+ * @param[in,out] end Character position to stop evaluation. On return, it is the end of the matched substring.
+ * @param group_id Index of the group to match in a multi-group regex pattern.
+ * @return >0 if match found
+ */
+__device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljunk &jnk, int32_t& begin, int32_t& end, int32_t group_id)
 {
     int32_t match = 0;
     auto checkstart = jnk.starttype;
@@ -219,7 +256,7 @@ __device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljun
             int32_t i = 0;
             auto ids = startinst_ids();
             while( ids[i] >=0 )
-                jnk.list1->activate(ids[i++], (groupId==0 ? pos:-1), -1);
+                jnk.list1->activate(ids[i++], (group_id==0 ? pos:-1), -1);
         }
 
         c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
@@ -249,13 +286,13 @@ __device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljun
                         id_activate = inst_id;
                         break;
                     case LBRA:
-                        if(inst->u1.subid == groupId)
+                        if(inst->u1.subid == group_id)
                             range.x = pos;
                         id_activate = inst->u2.next_id;
                         expanded = true;
                         break;
                     case RBRA:
-                        if(inst->u1.subid == groupId)
+                        if(inst->u1.subid == group_id)
                             range.y = pos;
                         id_activate = inst->u2.next_id;
                         expanded = true;
@@ -355,7 +392,7 @@ __device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljun
             case END:
                 match = 1;
                 begin = range.x;
-                end = groupId==0? pos : range.y;
+                end = group_id==0? pos : range.y;
                 goto BreakFor;
             }
             if (id_activate >= 0)
@@ -372,7 +409,6 @@ __device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljun
     return match;
 }
 
-//
 __device__ inline int32_t reprog_device::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
 {
     int32_t rtn = 0;
@@ -382,13 +418,13 @@ __device__ inline int32_t reprog_device::find( int32_t idx, string_view const& d
     return rtn;
 }
 
-__device__ inline int32_t reprog_device::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t col )
+__device__ inline int32_t reprog_device::extract( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id )
 {
     end = begin + 1;
-    return call_regexec(idx,dstr,begin,end,col+1);
+    return call_regexec(idx,dstr,begin,end,group_id+1);
 }
 
-__device__ inline int32_t reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t groupid )
+__device__ inline int32_t reprog_device::call_regexec( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id )
 {
     reljunk jnk;
     jnk.starttype = 0;
@@ -402,22 +438,22 @@ __device__ inline int32_t reprog_device::call_regexec( int32_t idx, string_view 
 
     if( _relists_mem==0 )
     {
-        Relist relist1, relist2;
+        relist relist1, relist2;
         jnk.list1 = &relist1;
         jnk.list2 = &relist2;
         jnk.list1->set_data(static_cast<int16_t>(_insts_count),_stack_mem1);
         jnk.list2->set_data(static_cast<int16_t>(_insts_count),_stack_mem2);
-        return regexec(dstr,jnk,begin,end,groupid);
+        return regexec(dstr,jnk,begin,end,group_id);
     }
 
-    auto relists_size = Relist::alloc_size(_insts_count);
-    u_char* drel = reinterpret_cast<u_char*>(_relists_mem);       // beginning of Relist buffer;
-    drel += (idx * relists_size * 2);                             // two Relist ptrs in reljunk:
-    jnk.list1 = reinterpret_cast<Relist*>(drel);                  // - first one
-    jnk.list2 = reinterpret_cast<Relist*>(drel + relists_size);   // - second one
+    auto relists_size = relist::alloc_size(_insts_count);
+    u_char* drel = reinterpret_cast<u_char*>(_relists_mem);       // beginning of relist buffer;
+    drel += (idx * relists_size * 2);                             // two relist ptrs in reljunk:
+    jnk.list1 = reinterpret_cast<relist*>(drel);                  // - first one
+    jnk.list2 = reinterpret_cast<relist*>(drel + relists_size);   // - second one
     jnk.list1->set_data(static_cast<int16_t>(_insts_count));      // essentially this is
     jnk.list2->set_data(static_cast<int16_t>(_insts_count));      // substitute ctor call
-    return regexec(dstr,jnk,begin,end,groupid);
+    return regexec(dstr,jnk,begin,end,group_id);
 }
 
 } // namespace detail
