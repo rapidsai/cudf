@@ -65,6 +65,14 @@ size_type column_view_base::null_count() const {
   }
   return _null_count;
 }
+
+size_type column_view_base::null_count(size_type begin, size_type end) const {
+  CUDF_EXPECTS((begin <= end) && (begin >= 0) && (begin <  size()) &&
+                 (end <= size()),
+               "Range is out of bounds.");
+  return (null_count() == 0) ?
+    0 : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
+}
 }  // namespace detail
 
 // Immutable view constructor
