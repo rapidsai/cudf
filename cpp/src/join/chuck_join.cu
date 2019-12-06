@@ -7,7 +7,8 @@
 #include <cudf/detail/gather.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
-#include "hash_join.cuh"
+#include <cudf/detail/gather.cuh>
+#include <join/hash_join.cuh>
 
 namespace cudf {
 
@@ -24,6 +25,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
 
   CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
+  CUDF_EXPECTS (0 != return_columns.size(), "Number of returned columns is 0");
   CUDF_EXPECTS (left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
 
 #if 0
@@ -45,11 +47,19 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
   size_t const hash_table_size = compute_hash_table_size(right.num_rows());
   RowHash hash_build{*right_rows_d};
   row_equality equality_build{*right_rows_d, *right_rows_d};
+
+  // Going to join it with left table
+  auto left_rows_d = table_device_view::create(left.select(left_on), stream);
+  RowHash hash_probe{*left_rows_d};
+  row_equality equality_probe{*left_rows_d, *right_rows_d};
+
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
                                                 std::numeric_limits<bool8>::max(),
                                                 std::numeric_limits<cudf::size_type>::max(),
                                                 hash_build,
-                                                equality_build);
+                                                equality_build,
+                                                hash_probe,
+                                                equality_probe);
   auto hash_table = *hash_table_ptr;
 
   constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
@@ -61,10 +71,6 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
   // Now we have a hash table, we need to iterate over the rows of the left table
   // and check to see if they are contained in the hash table
   //
-  auto left_rows_d = table_device_view::create(left.select(left_on), stream);
-
-  RowHash hash_probe{*left_rows_d};
-  row_equality equality{*left_rows_d, *right_rows_d};
 
   // For semi join we want contains to be true, for anti join we want contains to be false
   bool join_type_boolean = (join_type == JoinType::LEFT_SEMI_JOIN);
@@ -75,17 +81,16 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
                                         thrust::make_counting_iterator<size_type>(0),
                                         thrust::make_counting_iterator<size_type>(left.num_rows()),
                                         gather_map.begin(),
-                                        [hash_table, hash_probe, equality, join_type_boolean]
+                                        [hash_table, join_type_boolean]
                                         __device__ (size_type idx) {
-                                          auto pos = hash_table.find(idx, hash_probe, equality);
+                                          auto pos = hash_table.find(idx);
                                           return (pos != hash_table.end()) == join_type_boolean;
                                         });
 
   gather_map.resize(thrust::distance(gather_map.begin(), gather_map_end));
 
-  column_view gather_map_cv(data_type{experimental::type_to_id<size_type>()}, gather_map.size(), gather_map.data().get());
-
-  return cudf::experimental::detail::gather(left.select(return_columns), gather_map_cv, false, false, true, mr);
+  return cudf::experimental::detail::gather(left.select(return_columns), gather_map.begin(), gather_map_end,
+                                            false, false, true, mr);
 }
 } // detail
 

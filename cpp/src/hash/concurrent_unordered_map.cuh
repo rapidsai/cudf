@@ -87,14 +87,19 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
  *  - add constructor that takes pointer to hash_table to avoid allocations
  *  - extend interface to accept streams
  */
-template <typename Key, typename Element, typename Hasher = default_hash<Key>,
+template <typename Key, typename Element,
+          typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
-          typename Allocator = legacy_allocator<thrust::pair<Key, Element>>>
+          typename Allocator = legacy_allocator<thrust::pair<Key, Element>>,
+          typename FindHasher = Hasher,
+          typename FindEquality = Equality>
 class concurrent_unordered_map {
  public:
   using size_type = size_t;
   using hasher = Hasher;
   using key_equal = Equality;
+  using find_hasher = FindHasher;
+  using find_key_equal = FindEquality;
   using allocator_type = Allocator;
   using key_type = Key;
   using mapped_type = Element;
@@ -134,13 +139,62 @@ class concurrent_unordered_map {
       const Equality& equal = key_equal(),
       const allocator_type& allocator = allocator_type()) {
     using Self =
-        concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
+      concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator, FindHasher, FindEquality>;
 
     auto deleter = [](Self* p) { p->destroy(); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
         new Self(capacity, unused_element, unused_key, hash_function, equal,
-                 allocator),
+                 hash_function, equal, allocator),
+        deleter};
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Factory to construct a new concurrent unordered map for indirect references.
+   *
+   * Returns a `std::unique_ptr` to a new concurrent unordered map object. The
+   * map is non-owning and trivially copyable and should be passed by value into
+   * kernels. The `unique_ptr` contains a custom deleter that will free the
+   * map's contents.  The call here allows the user to specify different hashing
+   * and equality functions for insert and find, allowing you to insert rows
+   * from one column or table and do a find against a different column or table.
+   *
+   * @note The implementation of this unordered_map uses sentinel values to
+   * indicate an entry in the hash table that is empty, i.e., if a hash bucket
+   *is empty, the pair residing there will be equal to (unused_key,
+   *unused_element). As a result, attempting to insert a key equal to
+   *`unused_key` results in undefined behavior.
+   *
+   * @param capacity The maximum number of pairs the map may hold
+   * @param unused_element The sentinel value to use for an empty value
+   * @param unused_key The sentinel value to use for an empty key
+   * @param hash_function The hash function to use for hashing keys during insertion
+   * @param equal The equality comparison function for comparing if two keys are
+   *              equal during insertion
+   * @param find_hash_function The hash function to use for hashing keys during
+   *                           find calls.
+   * @param find_equal The equality comparison function for comparing if two keys are
+   *                    equal during find calls
+   * @param allocator The allocator to use for allocation the hash table's
+   * storage
+   *---------------------------------------------------------------------------**/
+  static auto create(
+      size_type capacity,
+      const mapped_type unused_element,
+      const key_type unused_key,
+      const Hasher& hash_function,
+      const Equality& equal,
+      const FindHasher find_hash_function,
+      const FindEquality find_equal,
+      const allocator_type& allocator = allocator_type()) {
+    using Self =
+      concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator, FindHasher, FindEquality>;
+
+    auto deleter = [](Self* p) { p->destroy(); };
+
+    return std::unique_ptr<Self, std::function<void(Self*)>>{
+        new Self(capacity, unused_element, unused_key, hash_function, equal,
+                 find_hash_function, find_equal, allocator),
         deleter};
   }
 
@@ -291,45 +345,7 @@ class concurrent_unordered_map {
    * @return An iterator to the key if it exists, else map.end()
    *---------------------------------------------------------------------------**/
   __device__ const_iterator find(key_type const& k) const {
-    size_type const key_hash = m_hf(k);
-    size_type index = key_hash % m_capacity;
-
-    value_type* current_bucket = &m_hashtbl_values[index];
-
-    while (true) {
-      key_type const existing_key = current_bucket->first;
-
-      if (m_equal(k, existing_key)) {
-        return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
-                              current_bucket);
-      }
-      if (m_equal(m_unused_key, existing_key)) {
-        return this->end();
-      }
-      index = (index + 1) % m_capacity;
-      current_bucket = &m_hashtbl_values[index];
-    }
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Searches the map for the specified key using different hash and equality functions.
-   *
-   * This find function enables creation of the map and querying of
-   * the map to use different functions.  This is useful in situations
-   * where we use indirect access to get to elements being compared,
-   * and want to have different tables used during query.
-   *
-   * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
-   *do concurrent `insert` and `find` operations.
-   *
-   * @param k The key to search for
-   * @param f_hash hashing function for this find
-   * @param f_equal equality function for this find
-   * @return An iterator to the key if it exists, else map.end()
-   *---------------------------------------------------------------------------**/
-  __device__ const_iterator find(key_type const& k, hasher f_hash,
-                                 key_equal f_equal) const {
-    size_type const key_hash = f_hash(k);
+    size_type const key_hash = m_f_hf(k);
     size_type index = key_hash % m_capacity;
 
     value_type* current_bucket = &m_hashtbl_values[index];
@@ -341,7 +357,7 @@ class concurrent_unordered_map {
         return this->end();
       }
 
-      if (f_equal(k, existing_key)) {
+      if (m_f_equal(k, existing_key)) {
         return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                               current_bucket);
       }
@@ -417,7 +433,9 @@ class concurrent_unordered_map {
 
  private:
   hasher m_hf;
+  find_hasher m_f_hf;
   key_equal m_equal;
+  find_key_equal m_f_equal;
   mapped_type m_unused_element;
   key_type m_unused_key;
   allocator_type m_allocator;
@@ -438,10 +456,15 @@ class concurrent_unordered_map {
    *---------------------------------------------------------------------------**/
   concurrent_unordered_map(size_type capacity, const mapped_type unused_element,
                            const key_type unused_key,
-                           const Hasher& hash_function, const Equality& equal,
+                           const Hasher& hash_function,
+                           const Equality& equal,
+                           const FindHasher &find_hash_function,
+                           const FindEquality &find_equality_function,
                            const allocator_type& allocator)
       : m_hf(hash_function),
+        m_f_hf(find_hash_function),
         m_equal(equal),
+        m_f_equal(find_equality_function),
         m_allocator(allocator),
         m_capacity(capacity),
         m_unused_element(unused_element),
