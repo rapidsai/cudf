@@ -21,9 +21,10 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <vector>
+#include <string>
 #include <gmock/gmock.h>
 
 
@@ -123,4 +124,28 @@ TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 
     cudf::test::strings_column_wrapper strings{ "this string intentionally left blank" };
     EXPECT_THROW(cudf::strings::to_integers(column->view(),dtype), cudf::logic_error);
+}
+
+
+TEST_F(StringsConvertTest, HexToInteger)
+{
+    std::vector<const char*> h_strings{ "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    std::vector<int32_t> h_expected;
+    for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
+    {
+        if( *itr==nullptr )
+            h_expected.push_back(0);
+        else
+           h_expected.push_back( (int)std::stol(std::string(*itr),0,16) );
+    }
+
+    auto strings_view = cudf::strings_column_view(strings);
+    auto results = cudf::strings::hex_to_integers(strings_view, cudf::data_type{cudf::INT32} );
+
+    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results, expected);
 }
