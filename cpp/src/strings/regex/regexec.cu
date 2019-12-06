@@ -97,8 +97,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     // check memory size needed for executing regex
     if( insts_count > MAX_STACK_INSTS )
     {
-        auto relist_alloc_size = Relist::alloc_size(insts_count);
-        size_t rlm_size = relist_alloc_size*2L*strings_count; // reljunk has 2 Relist ptrs
+        auto relist_alloc_size = relist::alloc_size(insts_count);
+        size_t rlm_size = relist_alloc_size*2L*strings_count; // reljunk has 2 relist ptrs
         size_t freeSize=0, totalSize=0;
         rmmGetInfo(&freeSize,&totalSize,stream);
         if( rlm_size + memsize > freeSize ) // do not allocate more than we have
