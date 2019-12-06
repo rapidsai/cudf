@@ -103,7 +103,7 @@ def apply_op(lhs, rhs, out, op):
     cdef gdf_scalar* c_scalar = NULL
     cdef gdf_column* c_out = column_view_from_column(out)
 
-    if np.isscalar(lhs):
+    if np.isscalar(lhs) or lhs is None:
         check_gdf_compatibility(rhs)
         c_rhs = column_view_from_column(rhs)
         c_scalar = gdf_scalar_from_scalar(lhs)
@@ -114,7 +114,7 @@ def apply_op(lhs, rhs, out, op):
             op
         )
 
-    elif np.isscalar(rhs):
+    elif np.isscalar(rhs) or rhs is None:
         check_gdf_compatibility(lhs)
         c_lhs = column_view_from_column(lhs)
         c_scalar = gdf_scalar_from_scalar(rhs)
