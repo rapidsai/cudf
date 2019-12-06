@@ -342,6 +342,18 @@ TYPED_TEST(IteratorTest, large_size_reduction) {
   this->iterator_test_cub(expected_value, it_dev, d_col->size());
 }
 
+struct add_meanvar {
+  template <typename T>
+  CUDA_HOST_DEVICE_CALLABLE thrust::pair<T, bool> operator()( const thrust::pair<T, bool>& lhs, const thrust::pair<T, bool>& rhs) {
+    if (lhs.second & rhs.second)
+      return thrust::pair<T, bool>{lhs.first+rhs.first, true};
+    else if (lhs.second)
+      return thrust::pair<T, bool>{lhs};
+    else 
+      return thrust::pair<T, bool>{rhs};
+  }
+};
+
 template <typename T>
 struct PairIteratorTest : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(PairIteratorTest, cudf::test::NumericTypes);
@@ -392,10 +404,10 @@ TYPED_TEST(PairIteratorTest, mean_var_output) {
   std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = cudf::experimental::detail::make_null_replacement_pair_iterator<T>(*d_col);
+  auto it_dev = cudf::experimental::detail::make_pair_iterator<T, true>(*d_col);
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result = thrust::reduce( it_dev_squared, it_dev_squared+ d_col->size());
-  EXPECT_EQ(expected_value, result) << "pair iterator reduction sum";
+  auto result = thrust::reduce( it_dev_squared, it_dev_squared+ d_col->size(), thrust::make_pair(T_output{}, true), add_meanvar{} );
+  EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
 }
 #endif
 
