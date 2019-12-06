@@ -17,22 +17,21 @@
 #ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
 #define CONCURRENT_UNORDERED_MULTIMAP_CUH
 
+#include "managed.cuh"
+#include "hash_allocator.cuh"
+#include "helper_functions.cuh"
+#include <utilities/legacy/device_atomics.cuh>
+
 #include <cudf/cudf.h>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
+
+#include <thrust/pair.h>
+
 #include <cassert>
 #include <iostream>
 #include <iterator>
 #include <type_traits>
-
-#include <thrust/pair.h>
-
-#include <cudf/utilities/error.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include "managed.cuh"
-#include "hash_allocator.cuh"
-
-#include "helper_functions.cuh"
-
-#include <utilities/legacy/device_atomics.cuh>
 
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
