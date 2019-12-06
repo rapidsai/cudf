@@ -22,6 +22,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <boost/algorithm/string/join.hpp>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture
@@ -41,7 +42,7 @@ template <typename T>
 struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   auto sequence = cudf::test::make_counting_transform_iterator(
@@ -108,27 +109,26 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   const char* delimiter = ",";
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
-  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+  std::vector<TypeParam> std_col = cudf::test::detail::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(std_col.begin(), std_col.end());
 
-  std::ostringstream tmp;
+  std::vector<std::string> str(std_col.size());
 
-  int index = 0;
-  for (auto x : std_col) {
-    tmp << ((index == 0) ? "" : delimiter);
-    tmp << std::to_string(x);
-    ++index;
-  }
+  std::transform(
+    std::cbegin(std_col),
+    std::cend(std_col),
+    std::begin(str),
+    [] (auto e) { return std::to_string(e); });
 
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), boost::join(str, delimiter));
 }
 
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   const char* delimiter = ",";
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
-                                                              {1, 0, 1, 0, 1} };
-  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+  std::vector<TypeParam> std_col = cudf::test::detail::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  std::vector<bool> mask = {1, 0, 1, 0, 1};
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col (std_col.begin(), std_col.end(), mask.begin());
 
   std::ostringstream tmp;
   tmp << std::to_string(std_col[0])
