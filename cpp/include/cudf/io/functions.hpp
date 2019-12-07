@@ -46,13 +46,16 @@ struct read_avro_args {
 
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
+  /// Optional output location for table metadata
+  table_metadata *output_metadata = nullptr;
 
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
   size_type num_rows = -1;
 
-  explicit read_avro_args(source_info const& src) : source(src) {}
+  explicit read_avro_args(source_info const& src, table_metadata *metadata = nullptr)
+      : source(src), output_metadata(metadata) {}
 };
 
 /**

@@ -66,9 +66,9 @@ std::unique_ptr<table> read_avro(read_avro_args const& args,
   auto reader = make_reader<avro::reader>(args.source, options, mr);
 
   if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows);
+    return reader->read_rows(args.skip_rows, args.num_rows, args.output_metadata);
   } else {
-    return reader->read_all();
+    return reader->read_all(args.output_metadata);
   }
 }
 

@@ -68,11 +68,13 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
+   * @param metadata Optional location to return table metadata
    * @param stream Stream to use for memory allocation and kernels
    *
    * @return The set of columns
    */
-  std::unique_ptr<table> read(int skip_rows, int num_rows, cudaStream_t stream);
+  std::unique_ptr<table> read(int skip_rows, int num_rows,
+                              table_metadata *metadata, cudaStream_t stream);
 
  private:
   /**

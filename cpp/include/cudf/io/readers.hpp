@@ -121,21 +121,25 @@ class reader {
    * @brief Reads the entire dataset.
    *
    * @param stream Optional stream to use for device memory alloc and kernels
+   * @param metadata Optional location to return table metadata
    *
    * @return The set of columns
    */
-  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
+                                  cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
+   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns
    */
   std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
+                                   table_metadata *metadata = nullptr,
                                    cudaStream_t stream = 0);
 };
 
