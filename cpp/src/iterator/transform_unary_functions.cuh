@@ -115,13 +115,13 @@ struct transformer_squared
 template<typename ElementType>
 struct transformer_meanvar
 {
-    using ResultType = thrust::pair<meanvar<ElementType>, bool>;
+    using ResultType = meanvar<ElementType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     ResultType operator()(thrust::pair<ElementType, bool> const& pair)
     {
         ElementType v = pair.first;
-        return thrust::make_pair(meanvar<ElementType>(v, v*v, (pair.second)? 1 : 0 ), pair.second);
+        return meanvar<ElementType>(v, v*v, (pair.second)? 1 : 0 );
     };
 };
 

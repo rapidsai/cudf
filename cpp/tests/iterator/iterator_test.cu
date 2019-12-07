@@ -342,15 +342,29 @@ TYPED_TEST(IteratorTest, large_size_reduction) {
   this->iterator_test_cub(expected_value, it_dev, d_col->size());
 }
 
-struct add_meanvar {
+// Transformers and Operators for pair_iterator test
+template<typename ElementType>
+struct transformer_pair_meanvar
+{
+    using ResultType = thrust::pair<cudf::meanvar<ElementType>, bool>;
+
+    CUDA_HOST_DEVICE_CALLABLE
+    ResultType operator()(thrust::pair<ElementType, bool> const& pair)
+    {
+        ElementType v = pair.first;
+        return {{v, v*v, (pair.second)? 1 : 0 }, pair.second};
+    };
+};
+
+struct sum_if_not_null {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE thrust::pair<T, bool> operator()( const thrust::pair<T, bool>& lhs, const thrust::pair<T, bool>& rhs) {
     if (lhs.second & rhs.second)
-      return thrust::pair<T, bool>{lhs.first+rhs.first, true};
+      return {lhs.first+rhs.first, true};
     else if (lhs.second)
-      return thrust::pair<T, bool>{lhs};
+      return {lhs};
     else 
-      return thrust::pair<T, bool>{rhs};
+      return {rhs};
   }
 };
 
@@ -366,7 +380,7 @@ TYPED_TEST_CASE(PairIteratorTest, cudf::test::NumericTypes);
 TYPED_TEST(PairIteratorTest, mean_var_output) {
   using T = TypeParam;
   using T_output = cudf::meanvar<T>;
-  cudf::transformer_meanvar<T> transformer{};
+  transformer_pair_meanvar<T> transformer{};
 
   const int column_size{5000};
   const T init{0};
@@ -406,7 +420,7 @@ TYPED_TEST(PairIteratorTest, mean_var_output) {
   // GPU test
   auto it_dev = cudf::experimental::detail::make_pair_iterator<T, true>(*d_col);
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result = thrust::reduce( it_dev_squared, it_dev_squared+ d_col->size(), thrust::make_pair(T_output{}, true), add_meanvar{} );
+  auto result = thrust::reduce( it_dev_squared, it_dev_squared+ d_col->size(), thrust::make_pair(T_output{}, true), sum_if_not_null{} );
   EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
 }
 #endif
@@ -597,7 +611,6 @@ TYPED_TEST(IteratorTest, scalar_iterator) {
   auto it_pair_dev = cudf::experimental::detail::make_scalar_pair_iterator<T>(*s);
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }
-
 
 TYPED_TEST(IteratorTest, null_scalar_iterator) {
   using T = TypeParam;
