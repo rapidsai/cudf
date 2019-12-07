@@ -177,12 +177,13 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     if s is NULL:
         raise MemoryError
     if val is None:
-        val = np.int8(0)
         is_valid = False
+        val = np.bool_(False)
 
+
+    s[0].dtype = gdf_dtype_from_value(val, dtype)  
+    s[0].is_valid = is_valid     
     set_scalar_value(s, val)       
-    s[0].dtype = gdf_dtype_from_value(val, dtype)
-    s[0].is_valid = is_valid
     return s
 
 
