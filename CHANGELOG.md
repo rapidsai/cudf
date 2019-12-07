@@ -1,11 +1,13 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
+- PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
 
 ## Bug Fixes
-- Update Java package to 0.12
+- PR #3550 Update Java package to 0.12
+- PR #3549 Fix index name issue with iloc with RangeIndex
 
 
 # cuDF 0.11.0 (Date TBD)
@@ -37,6 +39,7 @@
 - PR #3278 Add `to_host` utility to copy `column_view` to host
 - PR #3087 Add new cudf::experimental bool8 wrapper
 - PR #3219 Construct column from column_view
+- PR #3250 Define and implement new merge APIs
 - PR #3144 Define and implement new hashing APIs `hash` and `hash_partition`
 - PR #3229 Define and implement new search APIs
 - PR #3308 java add API for memory usage callbacks
