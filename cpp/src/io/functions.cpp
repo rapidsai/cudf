@@ -160,7 +160,7 @@ std::unique_ptr<table> read_parquet(read_parquet_args const& args,
 
   parquet::reader_options options{args.columns, args.strings_to_categorical,
                                   args.use_pandas_metadata,
-                                  args.timestamp_type};
+                                  args.timestamp_type, args.output_metadata};
   auto reader = make_reader<parquet::reader>(args.source, options, mr);
 
   if (args.row_group != -1) {

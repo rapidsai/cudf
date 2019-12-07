@@ -434,6 +434,7 @@ struct reader_options {
   bool strings_to_categorical = false;
   bool use_pandas_metadata = false;
   data_type timestamp_type{EMPTY};
+  table_metadata *output_metadata = nullptr;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -445,13 +446,16 @@ struct reader_options {
    * @param strings_to_categorical Whether to return strings as category
    * @param use_pandas_metadata Whether to always load PANDAS index columns
    * @param timestamp_type Cast timestamp columns to a specific type
+   * @param metadata Optional table metadata to return column names and user data
    */
   reader_options(std::vector<std::string> columns, bool strings_to_categorical,
-                 bool use_pandas_metadata, data_type timestamp_type)
+                 bool use_pandas_metadata, data_type timestamp_type,
+                 table_metadata *metadata = nullptr)
       : columns(std::move(columns)),
         strings_to_categorical(strings_to_categorical),
         use_pandas_metadata(use_pandas_metadata),
-        timestamp_type(timestamp_type) {}
+        timestamp_type(timestamp_type),
+        output_metadata(metadata) {}
 };
 
 /**

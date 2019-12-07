@@ -22,7 +22,9 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <string>
+#include <map>
 
 // Forward declarations
 namespace arrow {
@@ -78,6 +80,14 @@ enum statistics_freq {
   STATISTICS_NONE = 0,     //!< No column statistics
   STATISTICS_ROWGROUP = 1, //!< Per-Rowgroup column statistics
   STATISTICS_PAGE = 2,     //!< Per-page column statistics
+};
+
+/**
+ * @brief Table metadata for io readers/writers (primarily column names)
+ */
+struct table_metadata {
+  std::vector<std::string> column_names;
+  std::map<std::string, std::string> user_data;
 };
 
 /**

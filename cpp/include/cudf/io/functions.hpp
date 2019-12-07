@@ -294,8 +294,11 @@ struct read_parquet_args {
   bool use_pandas_metadata = true;
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
+  /// Optional output location for table metadata
+  table_metadata *output_metadata = nullptr;
 
-  explicit read_parquet_args(source_info const& src) : source(src) {}
+  explicit read_parquet_args(source_info const& src, table_metadata *metadata = nullptr)
+      : source(src), output_metadata(metadata) {}
 };
 
 /**

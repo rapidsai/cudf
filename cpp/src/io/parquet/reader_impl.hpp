@@ -147,6 +147,7 @@ class reader::impl {
   std::string _pandas_index;
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
+  table_metadata *_out_metadata = nullptr;
 };
 
 }  // namespace parquet

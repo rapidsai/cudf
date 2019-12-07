@@ -556,6 +556,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.strings_to_categorical;
+
+  // Output metadata to return column names
+  _out_metadata = options.output_metadata;
 }
 
 std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
@@ -684,6 +687,20 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
         out_columns.emplace_back(make_column(column_types[i], num_rows,
                                              out_buffers[i], stream, _mr));
       }
+    }
+  }
+
+  // Return metadata
+  if (_out_metadata) {
+    // Return column names (must match order of returned columns)
+    _out_metadata->column_names.resize(_selected_columns.size());
+    for (size_t i = 0; i < _selected_columns.size(); i++) {
+      _out_metadata->column_names[i] = _selected_columns[i].second;
+    }
+    // Return user metadata
+    _out_metadata->user_data.clear();
+    for (const auto& kv : _metadata->key_value_metadata) {
+      _out_metadata->user_data.insert({kv.key, kv.value});
     }
   }
 
