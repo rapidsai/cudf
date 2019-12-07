@@ -86,8 +86,8 @@ enum statistics_freq {
  * @brief Table metadata for io readers/writers (primarily column names)
  */
 struct table_metadata {
-  std::vector<std::string> column_names;
-  std::map<std::string, std::string> user_data;
+  std::vector<std::string> column_names; //!< Names of columns contained in the table
+  std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs
 };
 
 /**
