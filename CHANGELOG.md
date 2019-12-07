@@ -5,7 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
-- RP #3545 Add `cudaStreamSynchronize` before return in function of `findAllFromSet` 
+- RP #3545 Add copy result into host before return in function of `findAllFromSet` 
 
 # cuDF 0.11.0 (Date TBD)
 
