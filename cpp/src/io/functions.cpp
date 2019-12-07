@@ -180,7 +180,7 @@ void write_parquet(write_parquet_args const& args,
   parquet::writer_options options{args.compression, args.stats_level};
   auto writer = make_writer<parquet::writer>(args.sink, options, mr);
 
-  writer->write_all(args.table);
+  writer->write_all(args.table, args.metadata);
 }
 
 }  // namespace io
