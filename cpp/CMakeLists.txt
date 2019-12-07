@@ -460,9 +460,12 @@ add_library(cudf
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
+            src/io/parquet/page_enc.cu
+            src/io/parquet/page_dict.cu
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/parquet/reader_impl.cu
+            src/io/parquet/writer_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
@@ -471,6 +474,7 @@ add_library(cudf
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/functions.cpp
+            src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu

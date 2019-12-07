@@ -1,6 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
+- PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
 
