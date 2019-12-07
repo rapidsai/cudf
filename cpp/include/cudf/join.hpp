@@ -239,7 +239,7 @@ std::unique_ptr<cudf::experimental::table> full_join(
    *          left_on: {0}
    *          right_on: {0}
    *          return_columns: { 1 }
-   * Result: { c: {5} }
+   * Result: { c: {1} }
    *
    * @throws cudf::logic_error 
    * if either table is empty or if number of rows in either table exceeds INT_MAX
