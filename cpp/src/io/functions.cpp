@@ -150,7 +150,7 @@ void write_orc(write_orc_args const& args,
   orc::writer_options options{args.compression};
   auto writer = make_writer<orc::writer>(args.sink, options, mr);
 
-  writer->write_all(args.table);
+  writer->write_all(args.table, args.metadata);
 }
 
 // Freeform API wraps the detail reader class API

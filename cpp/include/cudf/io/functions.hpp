@@ -250,10 +250,13 @@ struct write_orc_args {
   compression_type compression;
   /// Set of columns to output
   table_view table;
+  /// Optional associated metadata
+  const table_metadata *metadata;
 
   explicit write_orc_args(sink_info const& snk, table_view const& table_,
+                          const table_metadata *metadata_ = nullptr,
                           compression_type compression_ = compression_type::AUTO)
-      : sink(snk), table(table_), compression(compression_) {}
+      : sink(snk), table(table_), metadata(metadata_), compression(compression_) {}
 };
 
 /**
