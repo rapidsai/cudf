@@ -598,8 +598,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _use_np_dtypes = options.use_np_dtypes;
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          int stripe, cudaStream_t stream) {
+std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows, int stripe,
+                                          table_metadata *metadata_out,
+                                          cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
 
   // Select only stripes required (aka row groups)
@@ -756,6 +757,20 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
+  // Return metadata
+  if (metadata_out) {
+    // Return column names (must match order of returned columns)
+    metadata_out->column_names.resize(_selected_columns.size());
+    for (size_t i = 0; i < _selected_columns.size(); i++) {
+      metadata_out->column_names[i] = _metadata->ff.GetColumnName(_selected_columns[i]);
+    }
+    // Return user metadata
+    metadata_out->user_data.clear();
+    for (const auto& kv : _metadata->ff.metadata) {
+      metadata_out->user_data.insert({kv.name, kv.value});
+    }
+  }
+
   return std::make_unique<table>(std::move(out_columns));
 }
 
@@ -781,21 +796,24 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
-  return _impl->read(0, -1, -1, stream);
+std::unique_ptr<table> reader::read_all(table_metadata *md,
+                                        cudaStream_t stream) {
+  return _impl->read(0, -1, -1, md, stream);
 }
 
 // Forward to implementation
 std::unique_ptr<table> reader::read_stripe(size_type stripe,
+                                           table_metadata *md,
                                            cudaStream_t stream) {
-  return _impl->read(0, -1, stripe, stream);
+  return _impl->read(0, -1, stripe, md, stream);
 }
 
 // Forward to implementation
 std::unique_ptr<table> reader::read_rows(size_type skip_rows,
                                          size_type num_rows,
+                                         table_metadata *md,
                                          cudaStream_t stream) {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, md, stream);
 }
 
 }  // namespace orc

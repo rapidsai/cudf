@@ -469,7 +469,6 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     for (const auto& kv : _metadata->user_data) {
       metadata_out->user_data.insert({kv.first, kv.second});
     }
-
   }
 
   return std::make_unique<table>(std::move(out_columns));

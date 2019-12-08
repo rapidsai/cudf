@@ -199,6 +199,8 @@ struct read_orc_args {
 
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
+  /// Optional output location for table metadata
+  table_metadata *output_metadata = nullptr;
 
   /// Stripe to read; -1 is all
   size_type stripe = -1;
@@ -215,7 +217,8 @@ struct read_orc_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
-  explicit read_orc_args(source_info const& src) : source(src) {}
+  explicit read_orc_args(source_info const& src, table_metadata *metadata = nullptr)
+      : source(src), output_metadata(metadata) {}
 };
 
 /**

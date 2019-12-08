@@ -134,11 +134,11 @@ std::unique_ptr<table> read_orc(read_orc_args const& args,
   auto reader = make_reader<orc::reader>(args.source, options, mr);
 
   if (args.stripe != -1) {
-    return reader->read_stripe(args.stripe);
+    return reader->read_stripe(args.stripe, args.output_metadata);
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows);
+    return reader->read_rows(args.skip_rows, args.num_rows, args.output_metadata);
   } else {
-    return reader->read_all();
+    return reader->read_all(args.output_metadata);
   }
 }
 
