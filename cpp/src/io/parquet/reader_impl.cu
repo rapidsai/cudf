@@ -556,13 +556,10 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.strings_to_categorical;
-
-  // Output metadata to return column names
-  _out_metadata = options.output_metadata;
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          int row_group, cudaStream_t stream) {
+std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows, int row_group,
+                                          table_metadata *out_metadata, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
 
   // Select only row groups required
@@ -691,16 +688,16 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
   }
 
   // Return metadata
-  if (_out_metadata) {
+  if (out_metadata) {
     // Return column names (must match order of returned columns)
-    _out_metadata->column_names.resize(_selected_columns.size());
+    out_metadata->column_names.resize(_selected_columns.size());
     for (size_t i = 0; i < _selected_columns.size(); i++) {
-      _out_metadata->column_names[i] = _selected_columns[i].second;
+      out_metadata->column_names[i] = _selected_columns[i].second;
     }
     // Return user metadata
-    _out_metadata->user_data.clear();
+    out_metadata->user_data.clear();
     for (const auto& kv : _metadata->key_value_metadata) {
-      _out_metadata->user_data.insert({kv.key, kv.value});
+      out_metadata->user_data.insert({kv.key, kv.value});
     }
   }
 
@@ -732,21 +729,23 @@ reader::~reader() = default;
 std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
-  return _impl->read(0, -1, -1, stream);
+std::unique_ptr<table> reader::read_all(table_metadata *md, cudaStream_t stream) {
+  return _impl->read(0, -1, -1, md, stream);
 }
 
 // Forward to implementation
 std::unique_ptr<table> reader::read_row_group(size_type row_group,
+                                              table_metadata *md,
                                               cudaStream_t stream) {
-  return _impl->read(0, -1, row_group, stream);
+  return _impl->read(0, -1, row_group, md, stream);
 }
 
 // Forward to implementation
 std::unique_ptr<table> reader::read_rows(size_type skip_rows,
                                          size_type num_rows,
+                                         table_metadata *md,
                                          cudaStream_t stream) {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, md, stream);
 }
 
 }  // namespace parquet

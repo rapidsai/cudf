@@ -160,15 +160,15 @@ std::unique_ptr<table> read_parquet(read_parquet_args const& args,
 
   parquet::reader_options options{args.columns, args.strings_to_categorical,
                                   args.use_pandas_metadata,
-                                  args.timestamp_type, args.output_metadata};
+                                  args.timestamp_type};
   auto reader = make_reader<parquet::reader>(args.source, options, mr);
 
   if (args.row_group != -1) {
-    return reader->read_row_group(args.row_group);
+    return reader->read_row_group(args.row_group, args.output_metadata);
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows);
+    return reader->read_rows(args.skip_rows, args.num_rows, args.output_metadata);
   } else {
-    return reader->read_all();
+    return reader->read_all(args.output_metadata);
   }
 }
 

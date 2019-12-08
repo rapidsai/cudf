@@ -438,7 +438,6 @@ struct reader_options {
   bool strings_to_categorical = false;
   bool use_pandas_metadata = false;
   data_type timestamp_type{EMPTY};
-  table_metadata *output_metadata = nullptr;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -450,16 +449,13 @@ struct reader_options {
    * @param strings_to_categorical Whether to return strings as category
    * @param use_pandas_metadata Whether to always load PANDAS index columns
    * @param timestamp_type Cast timestamp columns to a specific type
-   * @param metadata Optional table metadata to return column names and user data
    */
   reader_options(std::vector<std::string> columns, bool strings_to_categorical,
-                 bool use_pandas_metadata, data_type timestamp_type,
-                 table_metadata *metadata = nullptr)
+                 bool use_pandas_metadata, data_type timestamp_type)
       : columns(std::move(columns)),
         strings_to_categorical(strings_to_categorical),
         use_pandas_metadata(use_pandas_metadata),
-        timestamp_type(timestamp_type),
-        output_metadata(metadata) {}
+        timestamp_type(timestamp_type) {}
 };
 
 /**
@@ -522,20 +518,24 @@ class reader {
    * @brief Reads the entire dataset.
    *
    * @param stream Optional stream to use for device memory alloc and kernels
+   * @param metadata Optional location to return table metadata
    *
    * @return The set of columns
    */
-  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
+                                  cudaStream_t stream = 0);
 
   /**
    * @brief Reads a specific group of rows.
    *
    * @param row_group Index of the row group
+   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns
    */
   std::unique_ptr<table> read_row_group(size_type row_group,
+                                        table_metadata *metadata = nullptr,
                                         cudaStream_t stream = 0);
 
   /**
@@ -543,11 +543,13 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
+   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns
    */
   std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
+                                   table_metadata *metadata = nullptr,
                                    cudaStream_t stream = 0);
 };
 
