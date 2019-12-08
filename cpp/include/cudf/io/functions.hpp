@@ -166,7 +166,11 @@ struct read_csv_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
-  explicit read_csv_args(source_info const& src) : source(src) {}
+  /// Optional output location for table metadata
+  table_metadata *output_metadata = nullptr;
+
+  explicit read_csv_args(source_info const& src, table_metadata *metadata = nullptr)
+      : source(src), output_metadata(metadata) {}
 };
 
 /**
@@ -210,7 +214,7 @@ struct read_orc_args {
   size_type num_rows = -1;
 
   /// Whether to use row index to speed-up reading
-  bool use_index = false;
+  bool use_index = true;
 
   /// Whether to use numpy-compatible dtypes
   bool use_np_dtypes = true;

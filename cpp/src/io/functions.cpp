@@ -116,11 +116,13 @@ std::unique_ptr<table> read_csv(read_csv_args const& args,
 
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
     return reader->read_byte_range(args.byte_range_offset,
-                                   args.byte_range_size);
+                                   args.byte_range_size,
+                                   args.output_metadata);
   } else if (args.skiprows != -1 || args.skipfooter != -1 || args.nrows != -1) {
-    return reader->read_rows(args.skiprows, args.skipfooter, args.nrows);
+    return reader->read_rows(args.skiprows, args.skipfooter, args.nrows,
+                             args.output_metadata);
   } else {
-    return reader->read_all();
+    return reader->read_all(args.output_metadata);
   }
 }
 

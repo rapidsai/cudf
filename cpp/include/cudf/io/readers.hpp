@@ -275,11 +275,13 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
+   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns
    */
-  std::unique_ptr<table> read_all(cudaStream_t stream = 0);
+  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
+                                  cudaStream_t stream = 0);
 
   /**
    * @brief Reads all the rows within a byte range.
@@ -290,11 +292,13 @@ class reader {
    *
    * @param offset Byte offset from the start
    * @param size Number of bytes from the offset; set to 0 for all remaining
+   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns
    */
   std::unique_ptr<table> read_byte_range(size_t offset, size_t size,
+                                         table_metadata *metadata = nullptr,
                                          cudaStream_t stream = 0);
 
   /**
@@ -303,12 +307,15 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param skip_rows_end Number of rows to skip from the end
    * @param num_rows Number of rows to read; use `0` for all remaining data
+   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns
    */
   std::unique_ptr<table> read_rows(size_type skip_rows, size_type skip_rows_end,
-                                   size_type num_rows, cudaStream_t stream = 0);
+                                   size_type num_rows,
+                                   table_metadata *metadata = nullptr,
+                                   cudaStream_t stream = 0);
 };
 
 }  // namespace csv
