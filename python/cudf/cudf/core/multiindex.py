@@ -366,9 +366,8 @@ class MultiIndex(Index):
             not slice(None) in row_tuple
             and not isinstance(row_tuple[0], slice)
         ):
-            # columns = self._popn(len(row_tuple))
-            # result.columns = columns.take(valid_indices)
-            result.columns = self.take(valid_indices)
+            columns = self._popn(len(row_tuple))
+            result.columns = columns.take(valid_indices)
         else:
             result.columns = self.take(valid_indices)
         if len(result.columns.levels) == 1:
