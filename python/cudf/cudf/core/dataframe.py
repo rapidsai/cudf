@@ -1331,11 +1331,11 @@ class DataFrame(object):
             index = RangeIndex(len(positions))
         else:
             index = self.index.take(positions)
-        out = DataFrame(index=index)
+        out = DataFrame()
         if self._cols:
             for i, col_name in enumerate(self._cols.keys()):
                 out[col_name] = self._cols[col_name][positions]
-        return out
+        return out.set_index(index)
 
     def _take_columns(self, positions):
         positions = Series(positions)
