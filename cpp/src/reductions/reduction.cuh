@@ -46,7 +46,8 @@ namespace detail {
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
-template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type>
+template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type,
+typename std::enable_if_t<!std::is_same<OutputType, string_view>::value>* = nullptr >
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::simple_op<Op> sop,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
@@ -65,6 +66,30 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op
 
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
   auto s = new ScalarType(std::move(dev_result), true, stream, mr); //only for string_view, data is copied
+  return std::unique_ptr<scalar>(s);
+}
+
+// @brief string_view specialization of simple reduction
+template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type,
+typename std::enable_if_t<std::is_same<OutputType, string_view>::value>* = nullptr >
+std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::simple_op<Op> sop,
+  rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
+  auto binary_op = sop.get_binary_op();
+  OutputType identity = sop.template get_identity<OutputType>();
+  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
+
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+
+  // Run reduction
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
+
+  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  auto s = new ScalarType(dev_result, true, stream, mr); //only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
 

@@ -272,12 +272,10 @@ class string_scalar : public scalar {
    * @param stream The CUDA stream to do the allocation in
    * @param mr The memory resource to use for allocation
    */
-  string_scalar(rmm::device_scalar<value_type>&& data, bool is_valid = true, cudaStream_t stream = 0,
+  string_scalar(rmm::device_scalar<value_type>& data, bool is_valid = true, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
    : string_scalar(data.value(), is_valid, stream, mr)
-  {
-    data.~device_scalar();
-  }
+  { }
 
   /**
    * @brief Get the value of the scalar in a host std::string

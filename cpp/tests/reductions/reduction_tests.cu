@@ -671,7 +671,7 @@ struct StringReductionTest : public cudf::test::BaseFixture {
           cudf::experimental::reduce(underlying_column, op, output_dtype, ddof);
       using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
       auto result1 = static_cast<ScalarType*>(result.get());
-      //std::cout<<"e="<<expected_value<<",r="<<result1->value()<<std::endl;
+      //std::cout<<"e="<<expected_value<<",r="<<result1->to_string()<<std::endl;
       EXPECT_EQ(expected_value, result1->to_string());
     };
 
