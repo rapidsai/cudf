@@ -241,15 +241,16 @@ std::unique_ptr<table> read_orc(
  * @brief Settings to use for `write_orc()`
  */
 struct write_orc_args {
+  /// Specify the sink to use for writer output
   sink_info sink;
-
   /// Specify the compression format to use
-  compression_type compression = compression_type::AUTO;
+  compression_type compression;
   /// Set of columns to output
   table_view table;
 
-  explicit write_orc_args(sink_info const& snk, table_view const& table)
-      : sink(snk), table(table) {}
+  explicit write_orc_args(sink_info const& snk, table_view const& table_,
+                          compression_type compression_ = compression_type::AUTO)
+      : sink(snk), table(table_), compression(compression_) {}
 };
 
 /**
@@ -318,6 +319,45 @@ struct read_parquet_args {
 std::unique_ptr<table> read_parquet(
     read_parquet_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Settings to use for `write_parquet()`
+ */
+struct write_parquet_args {
+  /// Specify the sink to use for writer output
+  sink_info sink;
+  /// Specify the compression format to use
+  compression_type compression;
+  /// Specify the level of statistics in the output file
+  statistics_freq stats_level;
+  /// Set of columns to output
+  table_view table;
+
+  explicit write_parquet_args(sink_info const& sink_, table_view const& table_,
+                              compression_type compression_ = compression_type::AUTO,
+                              statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
+      : sink(sink_), table(table_), compression(compression_), stats_level(stats_lvl_) {}
+};
+
+/**
+ * @brief Writes a set of columns to parquet format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::experimental::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  cudf::write_parquet(args);
+ * @endcode
+ *
+ * @param args Settings for controlling writing behavior
+ * @param mr Optional resource to use for device memory allocation
+ */
+void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resource* mr =
+                                               rmm::mr::get_default_resource());
+
 
 }  // namespace io
 }  // namespace experimental
