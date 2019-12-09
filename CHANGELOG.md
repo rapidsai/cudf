@@ -4,6 +4,7 @@
 - PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
+- PR #3561 Rework contains implementation in search
 
 ## Bug Fixes
 -PR #3549 Fix index name issue with iloc with RangeIndex
