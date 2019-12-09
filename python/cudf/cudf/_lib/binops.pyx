@@ -113,7 +113,7 @@ def apply_op(lhs, rhs, out, op):
             <gdf_column*> c_out,
             op
         )
-    if lhs is None:
+    elif lhs is None:
         check_gdf_compatibility(rhs)
         c_rhs = column_view_from_column(rhs)
         c_scalar = gdf_scalar_from_scalar(lhs, rhs.dtype)
@@ -135,7 +135,7 @@ def apply_op(lhs, rhs, out, op):
             op
         )
 
-    if rhs is None:
+    elif rhs is None:
         check_gdf_compatibility(lhs)
         c_lhs = column_view_from_column(lhs)
         c_scalar = gdf_scalar_from_scalar(rhs, lhs.dtype)
