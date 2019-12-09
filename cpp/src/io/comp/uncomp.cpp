@@ -301,13 +301,13 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t *comp_data, size_t 
         return zerr;
     }
     do {
-        if (strm.total_out == strm.avail_out) {
-            dst.resize(strm.avail_out + (1 << 30));
-            strm.avail_out = dst.size();
+        if (strm.avail_out == 0) {
+            dst.resize(strm.total_out + (1 << 30));
+            strm.avail_out = dst.size() - strm.total_out;
             strm.next_out = reinterpret_cast<uint8_t*>(dst.data()) + strm.total_out;
         }
-        zerr = inflate(&strm, Z_FINISH);
-    } while (zerr == Z_BUF_ERROR && strm.total_out == strm.avail_out);
+        zerr = inflate(&strm, Z_SYNC_FLUSH);
+    } while (zerr == Z_BUF_ERROR && strm.avail_out == 0 && strm.total_out == dst.size());
     dst.resize(strm.total_out);
     inflateEnd(&strm);
     return (zerr == Z_STREAM_END) ? Z_OK : zerr;
