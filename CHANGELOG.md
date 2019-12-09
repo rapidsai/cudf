@@ -2,10 +2,12 @@
 
 ## New Features
 - PR #3224 Define and implement new join APIs.
+- PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
 
 ## Bug Fixes
+-PR #3549 Fix index name issue with iloc with RangeIndex
 
 
 # cuDF 0.11.0 (Date TBD)
