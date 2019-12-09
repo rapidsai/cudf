@@ -279,3 +279,10 @@ def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.GenericIndex(idx, name="idx")
     assert_eq(gidx.notna().to_array(), pidx.notna())
+
+
+def test_rangeindex_slice_attr_name():
+    start, stop = 0, 10
+    rg = RangeIndex(start, stop, "myindex")
+    sliced_rg = rg[0:9]
+    assert_eq(rg.name, sliced_rg.name)
