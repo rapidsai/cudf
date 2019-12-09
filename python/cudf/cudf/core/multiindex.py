@@ -366,8 +366,9 @@ class MultiIndex(Index):
             not slice(None) in row_tuple
             and not isinstance(row_tuple[0], slice)
         ):
-            columns = self._popn(len(row_tuple))
-            result.columns = columns.take(valid_indices)
+            # columns = self._popn(len(row_tuple))
+            # result.columns = columns.take(valid_indices)
+            result.columns = self.take(valid_indices)
         else:
             result.columns = self.take(valid_indices)
         if len(result.columns.levels) == 1:
@@ -376,6 +377,7 @@ class MultiIndex(Index):
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
             result.columns = as_index(columns, name=name)
+
         return result
 
     def _split_tuples(self, tuples):
@@ -647,9 +649,8 @@ class MultiIndex(Index):
     @property
     def is_unique(self):
         if not hasattr(self, "_is_unique"):
-            self._is_unique = (
-                self._source_data._size
-                == self._source_data.drop_duplicates()._size
+            self._is_unique = len(self._source_data) == len(
+                self._source_data.drop_duplicates()
             )
         return self._is_unique
 

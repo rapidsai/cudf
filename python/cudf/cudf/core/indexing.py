@@ -332,7 +332,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             df = DataFrame()
             for key in columns_df.columns:
                 # need Series() in case a scalar is returned
-                df[key] = as_column(columns_df[key].iloc[arg[0]])
+                df[key] = Series(columns_df[key].iloc[arg[0]])
             df.columns = columns_df.columns
 
         # Iloc Step 3:

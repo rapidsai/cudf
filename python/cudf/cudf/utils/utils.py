@@ -86,7 +86,7 @@ def scalar_broadcast_to(scalar, shape, dtype=None):
             dtype = "object"
         return column_empty(np.prod(shape), dtype=dtype, masked=True)
 
-    if isinstance(scalar, str) and is_string_dtype(dtype):
+    if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
         dtype = "object"
     else:
         scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
