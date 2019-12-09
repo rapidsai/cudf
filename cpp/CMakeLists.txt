@@ -363,6 +363,7 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
+            src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
