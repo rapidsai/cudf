@@ -19,11 +19,6 @@
 #include "cudf/utilities/bit.hpp"
 #include "thrust/iterator/transform_iterator.h"
 #include "thrust/transform.h"
-// #include "thrust/functional.h"
-// #include "thrust/iterator/counting_iterator.h"
-// #include "thrust/iterator/transform_iterator.h"
-// #include "thrust/iterator/zip_iterator.h"
-// #include "thrust/tuple.h"
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/utilities/error.hpp>
@@ -94,14 +89,17 @@ struct quantile_index
     }
 };
 
-template<typename T, typename TResult, typename TSortMap>
+} // anonymous namespace
+
+template<typename T, typename TResult, typename TSortMap, bool sortmap_is_gpu>
 std::unique_ptr<scalar>
-select_quantile_2(T const * begin,
-    TSortMap sortmap,
-    size_t size,
-    double quantile,
-    interpolation interpolation)
+select_quantile(T const * begin,
+                TSortMap sortmap,
+                size_t size,
+                double quantile,
+                interpolation interpolation)
 {
+    
     if (size < 2) {
         auto result_value = get_array_value(begin, 0);
         return make_numeric_scalar<TResult>(static_cast<TResult>(result_value));
@@ -148,47 +146,6 @@ select_quantile_2(T const * begin,
     return make_numeric_scalar(value);
 }
 
-} // anonymous namespace
-
-template<typename T, typename TResult, typename TSortMap>
-std::unique_ptr<scalar>
-select_quantile(T const * begin,
-                TSortMap sortmap,
-                size_t size,
-                double quantile,
-                bool is_sorted,
-                order order,
-                null_order null_order,
-                interpolation interpolation,
-                rmm::mr::device_memory_resource *mr,
-                cudaStream_t stream)
-{
-    // using TScalar = cudf::experimental::scalar_type_t<T>;
-    // data_type type{type_to_id<T>()};
-
-    if( quantile >= 1.0 && !is_sorted )
-    {
-        // T const * value_p = thrust::max_element(rmm::exec_policy(stream)->on(stream), data, data + size);
-        // T value = cudf::detail::get_array_value(value_p, 0);
-        // auto result = make_numeric_scalar(type);
-        // auto result_sc = static_cast<TScalar *>(result.get());
-        // result_sc->set_value(value);
-        // return result;
-    }
-
-    if( quantile <= 0.0 && !is_sorted )
-    {
-        // T const * value_p = thrust::min_element(rmm::exec_policy(stream)->on(stream), data, data + size);
-        // T value = cudf::detail::get_array_value(value_p, 0);
-        // auto result = make_numeric_scalar(type);
-        // auto result_sc = static_cast<TScalar *>(result.get());
-        // result_sc->set_value(value);
-        // return result;
-    }
-
-    return detail::select_quantile_2<T, TResult, TSortMap>(begin, sortmap, size, quantile, interpolation);
-}
-
 template<typename T, typename TResult>
 std::unique_ptr<scalar>
 trampoline(column_view const& in,
@@ -200,8 +157,36 @@ trampoline(column_view const& in,
            rmm::mr::device_memory_resource *mr,
            cudaStream_t stream)
 {
+    if (in.size() == 1) {
+        auto result_value = get_array_value(in.begin<T>(), 0);
+        return make_numeric_scalar<TResult>(static_cast<TResult>(result_value));
+    }
 
     if (not is_sorted) {
+
+        // using TScalar = cudf::experimental::scalar_type_t<T>;
+        // data_type type{type_to_id<T>()};
+
+        if (quantile >= 1.0)
+        {
+            // T const * value_p = thrust::max_element(rmm::exec_policy(stream)->on(stream), data, data + size);
+            // T value = cudf::detail::get_array_value(value_p, 0);
+            // auto result = make_numeric_scalar(type);
+            // auto result_sc = static_cast<TScalar *>(result.get());
+            // result_sc->set_value(value);
+            // return result;
+        }
+
+        if (quantile <= 0.0)
+        {
+            // T const * value_p = thrust::min_element(rmm::exec_policy(stream)->on(stream), data, data + size);
+            // T value = cudf::detail::get_array_value(value_p, 0);
+            // auto result = make_numeric_scalar(type);
+            // auto result_sc = static_cast<TScalar *>(result.get());
+            // result_sc->set_value(value);
+            // return result;
+        }
+
         table_view unsorted {{ in }};
         auto sorted_idx = sorted_order(unsorted, { order }, { null_order });
         auto sorted = gather(unsorted, sorted_idx->view());
@@ -211,34 +196,24 @@ trampoline(column_view const& in,
             ? sorted_col.begin<T>()
             : sorted_col.begin<T>() + sorted_col.null_count();
 
-            return select_quantile<T, TResult, thrust::counting_iterator<size_type>>(
+            return select_quantile<T, TResult, thrust::counting_iterator<size_type>, true>(
                 data_begin,
                 thrust::make_counting_iterator<size_type>(0),
                 in.size() - in.null_count(),
                 quantile,
-                is_sorted,
-                order,
-                null_order,
-                interpolation,
-                mr,
-                stream);
+                interpolation);
     }
 
     auto data_begin = null_order == null_order::AFTER
         ? in.begin<T>()
         : in.begin<T>() + in.null_count();
 
-    return select_quantile<T, TResult, thrust::counting_iterator<size_type>>(
+    return select_quantile<T, TResult, thrust::counting_iterator<size_type>, false>(
         data_begin,
         thrust::make_counting_iterator<size_type>(0),
         in.size() - in.null_count(),
         quantile,
-        is_sorted,
-        order,
-        null_order,
-        interpolation,
-        mr,
-        stream);
+        interpolation);
 }
 
 struct trampoline_functor
