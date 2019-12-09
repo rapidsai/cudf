@@ -16,14 +16,14 @@
 
 #include <cudf/cudf.h>
 #include <nvstrings/NVCategory.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 
 #include <cudf/legacy/column.hpp>
 
@@ -61,11 +61,11 @@ void unary_operation(gdf_column& output, const gdf_column& input,
       cudf::jit::parse_single_function_ptx(
           udf, "GENERIC_UNARY_OP", 
           cudf::jit::getTypeName(output_type), {0}
-          ) + code::kernel;
+          ) + cudf::experimental::transformation::jit::code::kernel;
   }else{  
     cuda_source = 
       cudf::jit::parse_single_function_cuda(
-          udf, "GENERIC_UNARY_OP") + code::kernel;
+          udf, "GENERIC_UNARY_OP") + cudf::experimental::transformation::jit::code::kernel;
   }
   
   // Launch the jitify kernel

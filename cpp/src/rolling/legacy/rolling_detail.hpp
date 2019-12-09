@@ -17,7 +17,7 @@
 #ifndef ROLLING_DETAIL_HPP
 #define ROLLING_DETAIL_HPP
 
-#include <utilities/device_operators.cuh>
+#include <utilities/legacy/device_operators.cuh>
 
 namespace cudf
 {

@@ -90,6 +90,18 @@ using TimestampTypes = cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms,
                                          timestamp_us, timestamp_ns>;
 
 /**---------------------------------------------------------------------------*
+ * @brief Provides a list of all string types supported in libcudf for use in a
+ * GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all string types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using StringTypes = cudf::test::Types<string_view>;
+
+/**---------------------------------------------------------------------------*
  * @brief Provides a list of all fixed-width element types for use in GTest
  * typed tests.
  * 
@@ -102,10 +114,21 @@ using TimestampTypes = cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms,
 using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
+ * @brief Provides a list of sortable types for use in GTest typed tests.
+ * 
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all sortable types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
+
+/**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
  * typed test.
  *
- * @note Currently does not provide any of the "wrapped" types, e.g., timestamp,
+ * @note Currently does not provide any of the "wrapped" types, e.g.,
  * category, etc.
  *
  * Example:
@@ -147,13 +170,24 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
+static constexpr std::array<cudf::type_id, 8> non_numeric_type_ids{
     cudf::EMPTY,
     cudf::TIMESTAMP_DAYS,
     cudf::TIMESTAMP_SECONDS,
     cudf::TIMESTAMP_MILLISECONDS,
     cudf::TIMESTAMP_MICROSECONDS,
     cudf::TIMESTAMP_NANOSECONDS,
+    cudf::CATEGORY,
+    cudf::STRING};
+
+/**---------------------------------------------------------------------------*
+ * @brief `std::array` of all non-fixed-width `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
+ *---------------------------------------------------------------------------**/
+static constexpr std::array<cudf::type_id, 3> non_fixed_width_type_ids{
+    cudf::EMPTY,    
     cudf::CATEGORY,
     cudf::STRING};
 

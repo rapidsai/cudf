@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -363,10 +363,12 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
+            src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
+            src/sort/is_sorted.cu
             src/sort/legacy/digitize.cu
             src/groupby/hash/legacy/groupby.cu
             src/groupby/sort/legacy/sort_helper.cu
@@ -391,15 +393,21 @@ add_library(cudf
             src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
+            src/transform/transform.cpp
             src/bitmask/legacy/bitmask_ops.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/stream_compaction/legacy/apply_boolean_mask.cu
             src/stream_compaction/legacy/drop_nulls.cu
             src/stream_compaction/legacy/drop_duplicates.cu
             src/datetime/legacy/datetime_ops.cu
+            src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
+            src/hash/hashing.cu
             src/hash/legacy/hashing.cu
-            src/quantiles/quantiles.cu
-            src/quantiles/group_quantiles.cu
+            src/quantiles/legacy/quantiles.cu
+            src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
             src/reductions/legacy/max.cu
@@ -411,16 +419,21 @@ add_library(cudf
             src/reductions/legacy/mean.cu
             src/reductions/legacy/var.cu
             src/reductions/legacy/std.cu
+            src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
             src/replace/legacy/replace.cu
-	    src/replace/replace.cu
-            src/reshape/stack.cu
+            src/replace/replace.cu
+            src/reshape/legacy/stack.cu
+            src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
+            src/unary/cast_ops.cu
             src/unary/null_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
+            src/unary/math_ops.cu
+            src/unary/unary_ops.cuh
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
@@ -428,9 +441,12 @@ add_library(cudf
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
+            src/io/avro/reader_impl.cu
             src/io/csv/legacy/csv_reader_impl.cu
             src/io/csv/legacy/csv_writer.cu
             src/io/csv/legacy/csv_gpu.cu
+            src/io/csv/csv_gpu.cu
+            src/io/csv/reader_impl.cu
             src/io/json/legacy/json_reader_impl.cu
             src/io/orc/legacy/orc_reader_impl.cu
             src/io/orc/legacy/orc_writer_impl.cu
@@ -440,10 +456,16 @@ add_library(cudf
             src/io/orc/stripe_init.cu
             src/io/orc/stripe_enc.cu
             src/io/orc/dict_enc.cu
+            src/io/orc/reader_impl.cu
+            src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
+            src/io/parquet/page_enc.cu
+            src/io/parquet/page_dict.cu
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
+            src/io/parquet/reader_impl.cu
+            src/io/parquet/writer_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
@@ -451,15 +473,20 @@ add_library(cudf
             src/io/comp/snap.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
+            src/io/functions.cpp
+            src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
-            src/utilities/column_utils.cpp
-	    src/copying/gather.cu
+            src/utilities/legacy/column_utils.cpp
+            src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu
+            src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/legacy/copy.cpp
@@ -469,10 +496,14 @@ add_library(cudf
             src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/copying/legacy/copy_range.cu
+            src/copying/copy_range.cu
             src/filling/legacy/fill.cu
+            src/filling/fill.cu
             src/filling/legacy/repeat.cu
+            src/filling/repeat.cu
             src/filling/legacy/tile.cu
             src/search/legacy/search.cu
+            src/search/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
@@ -481,22 +512,38 @@ add_library(cudf
             src/table/table_device_view.cu
             src/table/table.cpp
             src/bitmask/null_mask.cu
+            src/rolling/rolling.cu
             src/sort/sort.cu
             src/column/legacy/interop.cpp
-            src/strings/strings_column_factories.cu
-            src/strings/strings_scalar_factories.cpp
-            src/strings/strings_column_view.cu
-            src/strings/utilities.cu
             src/strings/attributes.cu
-            src/strings/copying/copying.cu
-            src/strings/sorting/sorting.cu
-            src/strings/substring.cu
-            src/strings/combine.cu
-            src/strings/char_types/char_types.cu
             src/strings/case.cu
+            src/strings/char_types/char_types.cu
+            src/strings/combine.cu
+            src/strings/convert/convert_booleans.cu
+            src/strings/convert/convert_datetime.cu
+            src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_hex.cu
+            src/strings/convert/convert_integers.cu
+            src/strings/copying/concatenate.cu
+            src/strings/copying/copying.cu
             src/strings/find.cu
+            src/strings/find_multiple.cu
+            src/strings/filling/fill.cu
+            src/strings/padding.cu
+            src/strings/replace/replace.cu
+            src/strings/sorting/sorting.cu
+            src/strings/strings_column_factories.cu
+            src/strings/strings_column_view.cu
+            src/strings/strings_scalar_factories.cpp
+            src/strings/substring.cu
+            src/strings/utilities.cu
             src/scalar/scalar.cpp
-            src/scalar/scalar_factories.cpp)
+            src/scalar/scalar_factories.cpp
+            src/groupby/groupby.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/sort/groupby.cu
+            src/aggregation/aggregation.cpp
+)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -550,11 +597,11 @@ if(USE_NVTX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 endif(USE_NVTX)
 
-option(HT_LEGACY_ALLOCATOR "Use the legacy allocator for hash tables" ON)
-if(HT_LEGACY_ALLOCATOR)
-    message(STATUS "Using legacy allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
-endif(HT_LEGACY_ALLOCATOR)
+option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
+if(HT_DEFAULT_ALLOCATOR)
+    message(STATUS "Using default allocator for hash tables")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------

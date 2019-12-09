@@ -123,7 +123,9 @@ class Column(object):
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             objs = [o._data for o in objs]
-            return StringColumn(data=nvstrings.from_strings(*objs))
+            return StringColumn(
+                data=nvstrings.from_strings(*objs), name=head.name
+            )
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
@@ -1403,10 +1405,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    data = as_column(
-                        pd.Series(arbitrary, dtype="category"),
-                        nan_as_null=nan_as_null,
-                    )
+                    sr = pd.Series(arbitrary, dtype="category")
+                    data = as_column(sr, nan_as_null=nan_as_null)
+                elif np_type == np.str_:
+                    sr = pd.Series(arbitrary, dtype="str")
+                    data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
                         np.array(arbitrary, dtype=np_type),
