@@ -6,7 +6,8 @@
 ## Improvements
 
 ## Bug Fixes
--PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 
 
 # cuDF 0.11.0 (Date TBD)
