@@ -72,6 +72,15 @@ enum class quote_style {
 };
 
 /**
+ * @brief Column statistics granularity type for parquet/orc writers
+ */
+enum statistics_freq {
+  STATISTICS_NONE = 0,     //!< No column statistics
+  STATISTICS_ROWGROUP = 1, //!< Per-Rowgroup column statistics
+  STATISTICS_PAGE = 2,     //!< Per-page column statistics
+};
+
+/**
  * @brief Source information for read interfaces
  */
 struct source_info {
