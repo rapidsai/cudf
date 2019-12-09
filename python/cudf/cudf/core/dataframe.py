@@ -1094,7 +1094,11 @@ class DataFrame(object):
         if hasattr(self, "multi_cols"):
             return self.multi_cols
         else:
-            return pd.Index(self._cols)
+            if hasattr(self, "_columns_name"):
+                name = self._columns_name
+            else:
+                name = None
+            return pd.Index(self._cols, name=name)
 
     @columns.setter
     def columns(self, columns):
@@ -1117,6 +1121,8 @@ class DataFrame(object):
             if hasattr(self, "multi_cols"):
                 delattr(self, "multi_cols")
             self._rename_columns(columns)
+            if hasattr(columns, "name"):
+                self._columns_name = columns.name
 
     @property
     def _columns(self):
