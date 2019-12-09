@@ -465,10 +465,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
       metadata_out->column_names[i] = selected_columns[i].second;
     }
     // Return user metadata
-    metadata_out->user_data.clear();
-    for (const auto& kv : _metadata->user_data) {
-      metadata_out->user_data.insert({kv.first, kv.second});
-    }
+    metadata_out->user_data = _metadata->user_data;
   }
 
   return std::make_unique<table>(std::move(out_columns));
