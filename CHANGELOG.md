@@ -1,4 +1,4 @@
-# cuDF 0.11.0 (Date TBD)
+# cuDF 0.11.0 (11 Dec 2019)
 
 ## New Features
 - PR #2905 Added `Series.median()` and null support for `Series.quantile()`
