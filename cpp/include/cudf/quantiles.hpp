@@ -42,10 +42,7 @@ quantile(column_view const& in,
          interpolation interpolation  = interpolation::LINEAR,
          bool is_sorted = false,
          order order = order::ASCENDING,
-         null_order null_order = null_order::AFTER,
-         rmm::mr::device_memory_resource *mr =
-          rmm::mr::get_default_resource(),
-         cudaStream_t stream = 0);
+         null_order null_order = null_order::AFTER);
 
 /* @brief Computes a quantile of a given column.
  *
@@ -58,16 +55,15 @@ quantile(column_view const& in,
  *
  * @returns Quantiles for each column. Elements are null if columns are empty.
  */
+
+ 
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& in,
           double quantile,
           interpolation interpolation  = interpolation::LINEAR,
           bool is_sorted = false,
           std::vector<order> order = {},
-          std::vector<null_order> = {},
-          rmm::mr::device_memory_resource *mr =
-            rmm::mr::get_default_resource(),
-          cudaStream_t stream = 0);
+          std::vector<null_order> = {});
 
 } // namespace experimental
 

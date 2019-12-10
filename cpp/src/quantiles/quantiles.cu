@@ -18,6 +18,7 @@
 #include "cudf/types.hpp"
 #include "cudf/utilities/bit.hpp"
 #include "thrust/iterator/transform_iterator.h"
+#include "thrust/iterator/zip_iterator.h"
 #include "thrust/transform.h"
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
@@ -39,6 +40,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/copying.hpp>
+#include <tuple>
 
 namespace cudf {
 namespace experimental {
@@ -142,8 +144,9 @@ trampoline(column_view const& in,
            order order,
            null_order null_order,
            interpolation interpolation,
-           rmm::mr::device_memory_resource *mr,
-           cudaStream_t stream)
+           rmm::mr::device_memory_resource *mr =
+            rmm::mr::get_default_resource(),
+           cudaStream_t stream = 0)
 {
     if (in.size() == 1) {
         auto result_value = get_array_value(in.begin<T>(), 0);
@@ -213,8 +216,9 @@ struct trampoline_functor
                order order,
                null_order null_order,
                interpolation interpolation,
-               rmm::mr::device_memory_resource *mr,
-               cudaStream_t stream)
+               rmm::mr::device_memory_resource *mr =
+                 rmm::mr::get_default_resource(),
+               cudaStream_t stream = 0)
     {
         CUDF_FAIL("non-arithmetic types are unsupported");
     }
@@ -227,8 +231,9 @@ struct trampoline_functor
                order order,
                null_order null_order,
                interpolation interpolation,
-               rmm::mr::device_memory_resource *mr,
-               cudaStream_t stream)
+               rmm::mr::device_memory_resource *mr =
+                 rmm::mr::get_default_resource(),
+               cudaStream_t stream = 0)
     {
         return trampoline<T, double>(in, quantile, is_sorted, order, null_order, interpolation, mr, stream);
     }
@@ -236,42 +241,25 @@ struct trampoline_functor
 
 } // namespace detail
 
-std::unique_ptr<scalar>
-quantile(column_view const& in,
-         double quantile,
-         interpolation interpolation,
-         bool is_sorted,
-         order order,
-         null_order null_order,
-         rmm::mr::device_memory_resource *mr,
-         cudaStream_t stream)
-{
-    if (in.size() == in.null_count()) {
-        data_type type{experimental::type_to_id<double>()};
-        return make_numeric_scalar(type, stream, mr);
-    }
-
-    return cudf::experimental::type_dispatcher(in.type(), detail::trampoline_functor{},
-                                               in, quantile, is_sorted, order, null_order, interpolation,
-                                               mr, stream);
-}
-
 std::vector<std::unique_ptr<scalar>>
-quantiles(mutable_table_view const& in,
+quantiles(table_view const& in,
           double quantile,
           interpolation interpolation,
           bool is_sorted,
-          order order,
-          null_order null_order,
-          rmm::mr::device_memory_resource *mr,
-          cudaStream_t stream)
+          std::vector<order> orders,
+          std::vector<null_order> null_orders)
 {
     std::vector<std::unique_ptr<scalar>> out(in.num_columns());
-
-    std::transform(in.begin(), in.end(), out.begin(), [&](column_view const& in_column) {
-        return experimental::quantile(in_column, quantile, interpolation, is_sorted, order, null_order, mr, stream);
-    });
-
+    for (size_type i = 0; i < in.num_columns(); i++) {
+        auto in_col = in.column(i);
+        if (in_col.size() == in_col.null_count()) {
+            out[i] = std::make_unique<numeric_scalar<double>>(0, false);
+        } else {
+            out[i] = type_dispatcher(in_col.type(), detail::trampoline_functor{},
+                                     in_col, quantile, is_sorted, orders[i], null_orders[i], interpolation);
+        }
+        
+    }
     return out;
 }
 

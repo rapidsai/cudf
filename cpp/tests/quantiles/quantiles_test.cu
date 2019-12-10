@@ -218,18 +218,19 @@ unsorted() {
 
 template<typename T>
 void test(testdata::test_case<T> test_case) {
+    using namespace experimental;
     for (auto & expected : test_case.expectations) {
-        using namespace experimental;
-        auto actual_higher   = quantile(test_case.column, expected.quantile, interpolation::HIGHER);
-        auto actual_lower    = quantile(test_case.column, expected.quantile, interpolation::LOWER);
-        auto actual_nearest  = quantile(test_case.column, expected.quantile, interpolation::NEAREST);
-        auto actual_midpoint = quantile(test_case.column, expected.quantile, interpolation::MIDPOINT);
-        auto actual_linear   = quantile(test_case.column, expected.quantile, interpolation::LINEAR);
-        expect_scalars_equal(expected.higher,   *actual_higher);
-        expect_scalars_equal(expected.lower,    *actual_lower);
-        expect_scalars_equal(expected.linear,   *actual_nearest);
-        expect_scalars_equal(expected.midpoint, *actual_midpoint);
-        expect_scalars_equal(expected.nearest,  *actual_linear);
+        table_view in_table { { test_case.column } };
+        auto actual_higher   = quantiles(in_table, expected.quantile, interpolation::HIGHER,   test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_lower    = quantiles(in_table, expected.quantile, interpolation::LOWER,    test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_nearest  = quantiles(in_table, expected.quantile, interpolation::NEAREST,  test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_linear   = quantiles(in_table, expected.quantile, interpolation::LINEAR,   test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        expect_scalars_equal(expected.higher,   *actual_higher[0]);
+        expect_scalars_equal(expected.lower,    *actual_lower[0]);
+        expect_scalars_equal(expected.linear,   *actual_nearest[0]);
+        expect_scalars_equal(expected.midpoint, *actual_midpoint[0]);
+        expect_scalars_equal(expected.nearest,  *actual_linear[0]);
     }
 }
 
