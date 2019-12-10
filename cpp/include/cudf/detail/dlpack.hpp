@@ -15,11 +15,10 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
-
-#include <dlpack/dlpack.h>
+#include <cudf/column/dlpack.hpp>
 
 namespace cudf {
+namespace detail {
 
 /**
  * @brief Convert a DLPack DLTensor into cudf::columns
@@ -35,7 +34,8 @@ namespace cudf {
  */
 std::vector<std::unique_ptr<column>> from_dlpack(
     DLManagedTensor const& managed_tensor,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
 
 /**
  * @brief Convert cudf::columns into a DLPack DLTensor
@@ -46,6 +46,8 @@ std::vector<std::unique_ptr<column>> from_dlpack(
  * 
  * @return 1D or 2D DLPack tensor (single or multiple columns)
  */
-DLManagedTensor to_dlpack(std::vector<column_view> const& columns);
+DLManagedTensor to_dlpack(std::vector<column_view> const& columns,
+    cudaStream_t stream = 0);
 
+}  // namespace detail
 }  // namespace cudf
