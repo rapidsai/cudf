@@ -653,9 +653,7 @@ class StringColumn(column.TypedColumnBase):
 
         for i, frame in enumerate(frames):
             if isinstance(frame, memoryview):
-                sheader = header["subheaders"][i]
-                dtype = sheader["dtype"]
-                frame = np.frombuffer(frame, dtype=dtype)
+                frame = np.asarray(frame)
                 frame = cudautils.to_device(frame)
 
             arrays.append(libcudf.cudf.get_ctype_ptr(frame))
