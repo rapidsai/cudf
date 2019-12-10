@@ -1154,7 +1154,7 @@ class DataFrame(object):
     @index.setter
     def index(self, value):
         if isinstance(value, cudf.core.multiindex.MultiIndex):
-            if len(value) != len(self):
+            if len(self._cols) > 0 and len(value) != len(self):
                 msg = (
                     f"Length mismatch: Expected axis has "
                     "%d elements, new values "
@@ -2176,6 +2176,8 @@ class DataFrame(object):
         inp = self.copy(deep=False)
         temp_columns = inp.columns.copy(deep=False)
         temp_index = inp.index.copy(deep=False)
+        if len(self._cols) == 0:
+            return DataFrame(index=temp_columns, columns=temp_index)
         inp.columns = pd.RangeIndex(start=0, stop=len(self.columns))
         inp.index = RangeIndex(start=0, stop=len(self))
         result = libcudf.transpose.transpose(inp)
