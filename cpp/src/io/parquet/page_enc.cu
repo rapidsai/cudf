@@ -1254,7 +1254,7 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start, const statistics_chunk *s, 
     uint8_t *end, dtype, dtype_len;
     dtype = col->stats_dtype;
     switch (dtype) {
-    case dtype_bool8:
+    case dtype_bool:
         dtype_len = 1;
         break;
     case dtype_int8:

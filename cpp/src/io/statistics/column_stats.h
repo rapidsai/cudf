@@ -21,7 +21,7 @@ namespace io {
 
 enum statistics_dtype {
     dtype_none,
-    dtype_bool8,
+    dtype_bool,
     dtype_int8,
     dtype_int16,
     dtype_int32,

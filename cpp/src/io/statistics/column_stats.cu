@@ -435,7 +435,7 @@ gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *grou
     }
     __syncthreads();
     dtype = s->col.stats_dtype;
-    if (dtype >= dtype_bool8 && dtype <= dtype_timestamp64) {
+    if (dtype >= dtype_bool && dtype <= dtype_timestamp64) {
         gatherIntColumnStats(s, dtype, t);
     }
     else if (dtype >= dtype_float32 && dtype <= dtype_float64) {
@@ -703,7 +703,7 @@ gpuMergeColumnStatistics(statistics_chunk *chunks_out, const statistics_chunk *c
     __syncthreads();
     dtype = s->col.stats_dtype;
 
-    if (dtype >= dtype_bool8 && dtype <= dtype_timestamp64) {
+    if (dtype >= dtype_bool && dtype <= dtype_timestamp64) {
         mergeIntColumnStats(s, dtype, chunks_in + s->group.start_chunk, s->group.num_chunks, t);
     }
     else if (dtype >= dtype_float32 && dtype <= dtype_float64) {
