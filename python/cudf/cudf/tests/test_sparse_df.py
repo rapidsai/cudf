@@ -89,5 +89,5 @@ def test_to_dense_array():
 def test_reading_arrow_sparse_data():
     pdf, schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
-    gdf = DataFrame(gar.to_dict().items())
+    gdf = DataFrame(gar.to_dict())
     assert_eq(pdf, gdf)
