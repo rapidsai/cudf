@@ -683,6 +683,36 @@ static PyObject* n_create_ngrams( PyObject* self, PyObject* args )
     return PyLong_FromVoidPtr((void*)strs);
 }
 
+static PyObject* n_ngrams_tokenize( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    const char* delimiter = " ";
+    PyObject* argDelim = PyTuple_GetItem(args,1);
+    if( argDelim != Py_None )
+        delimiter = PyUnicode_AsUTF8(argDelim);
+
+    unsigned int ngrams = 0;
+    PyObject* pyngrams = PyTuple_GetItem(args,2);
+    if( pyngrams != Py_None )
+        ngrams = (unsigned int)PyLong_AsLong(pyngrams);
+
+    const char* separator = " ";
+    PyObject* pysep = PyTuple_GetItem(args,3);
+    if( pysep != Py_None )
+        separator = PyUnicode_AsUTF8(pysep);
+
+    Py_BEGIN_ALLOW_THREADS
+    strs = NVText::ngrams_tokenize(*strs,delimiter,ngrams,separator);
+    Py_END_ALLOW_THREADS
+    if( strs==0 )
+        Py_RETURN_NONE;
+    return PyLong_FromVoidPtr((void*)strs);
+}
+
 static PyObject* n_scatter_count( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -853,6 +883,7 @@ static PyMethodDef s_Methods[] = {
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
     { "n_edit_distance_matrix", n_edit_distance_matrix, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
+    { "n_ngrams_tokenize", n_ngrams_tokenize, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
     { "n_porter_stemmer_measure", n_porter_stemmer_measure, METH_VARARGS, "" },
     { "n_is_letter", n_is_letter, METH_VARARGS, "" },

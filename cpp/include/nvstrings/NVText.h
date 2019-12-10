@@ -37,7 +37,7 @@ public:
      * @param delimiter String or character used to identify tokens. Default is whitespace.
      * @return Just the tokens. No empty or null strings.
      */
-    static NVStrings* tokenize(NVStrings& strs, const char* delimiter=nullptr);
+    static NVStrings* tokenize(NVStrings const& strs, const char* delimiter=nullptr);
 
     /**
      * @brief Tokenize all the strings into a single instance using multiple delimiters.
@@ -196,7 +196,7 @@ public:
      * @param separator String used to join tokens.
      * @return The tokens as ngrams.
      */
-    static NVStrings* ngrams_tokenize(NVStrings const& strs, const char* delimiter, unsigned int ngrams, const char* separator );
+    static NVStrings* ngrams_tokenize(NVStrings const& strs, const char* delimiter, int32_t ngrams, const char* separator );
 
     /**
      * @brief Computes Porter Stemmer measure on words in the provided NVStrings instance.
