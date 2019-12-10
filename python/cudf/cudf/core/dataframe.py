@@ -668,22 +668,28 @@ class DataFrame(object):
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
-            else 15
+            else pd.options.display.width / 2
         )
-        if len(self) <= nrows or len(self.columns) <= ncols:
+        if len(self) <= nrows and len(self.columns) <= ncols:
             output = self.copy(deep=False)
         else:
-            uppercols = len(self.columns) - ncols - 1
-            upper_left = self.head(nrows).iloc[:, :ncols]
-            upper_right = self.head(nrows).iloc[:, uppercols:]
-            lower_left = self.tail(nrows).iloc[:, :ncols]
-            lower_right = self.tail(nrows).iloc[:, uppercols:]
-            output = cudf.concat(
-                [
-                    cudf.concat([upper_left, upper_right], axis=1),
-                    cudf.concat([lower_left, lower_right], axis=1),
-                ]
-            )
+            left_cols = len(self.columns)
+            right_cols = 0
+            upper_rows = len(self)
+            lower_rows = 0
+            if len(self) > nrows and nrows > 0:
+                upper_rows = int(nrows / 2.0) + 1
+                lower_rows = upper_rows + (nrows % 2)
+            if len(self.columns) > ncols:
+                right_cols = len(self.columns) - int(ncols / 2.0) - 1
+                left_cols = int(ncols / 2.0) + 1
+            upper_left = self.head(upper_rows).iloc[:, :left_cols]
+            upper_right = self.head(upper_rows).iloc[:, right_cols:]
+            lower_left = self.tail(lower_rows).iloc[:, :left_cols]
+            lower_right = self.tail(lower_rows).iloc[:, right_cols:]
+            upper = cudf.concat([upper_left, upper_right], axis=1)
+            lower = cudf.concat([lower_left, lower_right], axis=1)
+            output = cudf.concat([upper, lower])
         temp_mi_columns = output.columns
         for col in output._cols:
             if (
@@ -1934,6 +1940,8 @@ class DataFrame(object):
 
         out = cls(data)
         out._index = index
+        if isinstance(objs[0].columns, cudf.core.multiindex.MultiIndex):
+            out.columns = objs[0].columns
         libcudf.nvtx.nvtx_range_pop()
         return out
 

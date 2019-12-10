@@ -19,6 +19,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cstring>
 
 namespace cudf
@@ -29,18 +31,31 @@ namespace detail
 {
 
 /**
- * @brief This utility will copy the argument string's data into
- * the provided buffer.
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes copied.
+ *
+ * @param buffer Device buffer to copy to.
+ * @param input Data to copy from.
+ * @param bytes Number of bytes to copy.
+ * @return Pointer to the end of the output buffer after the copy.
+ */
+__device__ inline char* copy_and_increment( char* buffer, const char* input, size_type bytes )
+{
+    memcpy( buffer, input, bytes );
+    return buffer + bytes;
+}
+
+/**
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes copied.
  *
  * @param buffer Device buffer to copy to.
  * @param d_string String to copy.
- * @return Points to the end of the buffer after the copy.
+ * @return Pointer to the end of the output buffer after the copy.
  */
 __device__ inline char* copy_string( char* buffer, const string_view& d_string )
 {
-    memcpy( buffer, d_string.data(), d_string.size_bytes() );
-    return buffer + d_string.size_bytes();
+    return copy_and_increment( buffer, d_string.data(), d_string.size_bytes() );
 }
+
 
 /**
  * @brief Utility to create a null mask for a strings column using a custom function.
