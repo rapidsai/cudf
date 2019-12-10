@@ -3309,8 +3309,10 @@ class DataFrame(object):
         else:
             out_columns = self.columns
 
-        for col_name, (c, x) in zip(out_columns, self._cols.items()):
-            out_data[col_name] = x.to_pandas(index=out_index)
+        # for col_name, (c, x) in zip(out_columns, self._cols.items()):
+        #     out_data[col_name] = x.to_pandas(index=out_index)
+        for i, col_key in enumerate(self._cols):
+            out_data[i] = self._cols[col_key].to_pandas(index=out_index)
 
         if isinstance(self.columns, Index):
             out_columns = self.columns.to_pandas()
@@ -3319,7 +3321,9 @@ class DataFrame(object):
                     out_columns.names = self.columns.names
             else:
                 out_columns.name = self.columns.name
-        out_df = pd.DataFrame(out_data, index=out_index, columns=out_columns)
+
+        out_df = pd.DataFrame(out_data, index=out_index)
+        out_df.columns = out_columns
         return out_df
 
     @classmethod
