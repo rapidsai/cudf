@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "sort_helper.hpp"
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/groupby.hpp>
@@ -38,6 +39,11 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     std::vector<null_order> const& null_precedence,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr)
 {
+
+  // Sort keys using sort_helper
+  // TODO (dm): sort helper should be stored in groupby object
+  // TODO (dm): convert sort helper's include_nulls to ignore_nulls
+  helper sorter(keys, not ignore_null_keys, null_precedence, keys_are_sorted);
 
   return std::make_pair(std::make_unique<table>(),
                         std::vector<aggregation_result>{});
