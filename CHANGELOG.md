@@ -257,6 +257,7 @@
 - PR #3523 Fix lgenfe issue with debug build
 - PR #3532 Fix potential use-after-free in cudf parquet reader
 - PR #3540 Fix unary_op null_mask bug and add missing test cases
+- PR #3559 Use HighLevelGraph api in DataFrame constructor (Fix upstream compatibility)
 
 # cuDF 0.10.0 (16 Oct 2019)
 
