@@ -140,7 +140,7 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - groupby tests ---------------------------------------------------------------------------------
+# - legacy groupby tests ---------------------------------------------------------------------------------
 
 set(LEGACY_HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_count.cu"
@@ -174,6 +174,14 @@ set(LEGACY_GROUPBY_WO_AGG_TEST_SRC
     )
 
 ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
+
+###################################################################################################
+# - groupby tests ---------------------------------------------------------------------------------
+
+set(GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/super_basic_test.cu")
+
+ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
