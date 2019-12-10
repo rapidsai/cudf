@@ -132,6 +132,8 @@ Software requiremnts:
 
 You can obtain `libRMM` from [rmm](https://github.com/rapidsai/rmm) and `DLpack` from [dlpack](https://github.com/dmlc/dlpack).
 
+Other dependencies are pulled as [submodules](.gitmodules).
+
 Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
 `cmake`:
 
