@@ -15,7 +15,7 @@
  */
 
 #include <cudf/wrappers/bool.hpp>
-#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <limits>
 #include <algorithm>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -31,188 +31,244 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
-#include <vector>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 #include <cudf/quantiles.hpp>
+#include <type_traits>
 
-using namespace cudf::test;
 
-using bool8 = cudf::experimental::bool8;
+using namespace std;
+using namespace cudf;
+using namespace test;
+using bool8 = experimental::bool8;
 
+using q_res = numeric_scalar<double>;
 
 namespace {
 
-// =============================================================================
-// ---- helpers funcs ----------------------------------------------------------
+// ----- test data -------------------------------------------------------------
+
+namespace testdata {
+
+    struct q_expect
+    {
+        q_expect(double quantile):
+            quantile(quantile),
+            higher(0, false), lower(0, false), linear(0, false), midpoint(0, false), nearest(0, false) { }
+
+        q_expect(double quantile,
+                 double higher, double lower, double linear, double midpoint, double nearest):
+            quantile(quantile),
+            higher(higher), lower(lower), linear(linear), midpoint(midpoint), nearest(nearest) { }
+    
+        double quantile;
+        q_res higher;
+        q_res lower;
+        q_res linear;
+        q_res midpoint;
+        q_res nearest;
+    };
 
 template<typename T>
-std::unique_ptr<cudf::scalar> make_numeric_scalar(T value)
-{
-    using TScalar = cudf::experimental::scalar_type_t<T>;
+struct test_case {
+    fixed_width_column_wrapper<T> column;
+    vector<q_expect> expectations;
+    bool is_sorted;
+    order order;
+    null_order null_order;
+};
 
-    cudf::data_type type{cudf::experimental::type_to_id<T>()};
-    auto s = make_numeric_scalar(type);
+// all numerics
 
-    TScalar * s_sc = static_cast<TScalar *>(s.get());
-    s_sc->set_valid(true);
-    s_sc->set_value(value);
+template<typename T>
+test_case<T>
+empty() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ }),
+        {
+            q_expect{ -1.0 },
+            q_expect{  0.0 },
+            q_expect{  0.5 },
+            q_expect{  1.0 },
+            q_expect{  2.0 }
+        }
+    };
+}
 
-    return s;
+// floating point
+
+template<typename T>
+typename std::enable_if_t<is_floating_point<T>::value, test_case<T>>
+single() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 7.31 }),
+        {
+            q_expect{ -1.0, 7.31, 7.31, 7.31, 7.31, 7.31, },
+            q_expect{  0.0, 7.31, 7.31, 7.31, 7.31, 7.31, },
+            q_expect{  1.0, 7.31, 7.31, 7.31, 7.31, 7.31, },
+        }
+    };
 }
 
 template<typename T>
-std::unique_ptr<cudf::scalar> make_numeric_scalar()
-{
-    cudf::data_type type{cudf::experimental::type_to_id<T>()};
-    return make_numeric_scalar(type);
+typename std::enable_if_t<is_floating_point<T>::value, test_case<T>>
+all_invalid() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7 },
+                                       { 0,      0,   0,    0,    0,    0,     0,   0,   0 }),
+        {
+            q_expect{ -1.0 },
+            q_expect{  0.0 },
+            q_expect{  0.5 },
+            q_expect{  1.0 },
+            q_expect{  2.0 }
+        }
+    };
 }
 
-} // anonymous namespace
+template<typename T>
+typename std::enable_if_t<is_floating_point<T>::value, test_case<T>>
+unsorted() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7 }),
+        {
+            q_expect{ 0.0, -1.01, -1.01, -1.01, -1.01, -1.01 },
+        }
+    };
+}
+
+// integral
+
+template<typename T>
+typename std::enable_if_t<is_integral<T>::value and not is_boolean<T>(), test_case<T>>
+single() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 7 }),
+        {
+            q_expect{ 0.7, 7, 7, 7, 7, 7 }
+        }
+    };
+}
+
+template<typename T>
+typename std::enable_if_t<is_integral<T>::value and not is_boolean<T>(), test_case<T>>
+all_invalid() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 6, 0, 3, 4, 2, 1, -1, 1, 6 },
+                                       { 0, 0, 0, 0, 0, 0,  0, 0, 0}),
+        {
+            q_expect{ 0.7 }
+        }
+    };
+}
+
+template<typename T>
+typename std::enable_if_t<is_integral<T>::value and not is_boolean<T>(), test_case<T>>
+unsorted() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 6, 0, 3, 4, 2, 1, -1, 1, 6 }),
+        {
+            q_expect{ 0.0, -1, -1, -1, -1, -1 }
+        }
+    };
+}
+
+// boolean
+
+template<typename T>
+typename std::enable_if_t<is_boolean<T>(), test_case<T>>
+single() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 1 }),
+        {
+            q_expect{ 0.7, 1.0, 1.0, 1.0, 1.0, 1.0 }
+        }
+    };
+}
+
+template<typename T>
+typename std::enable_if_t<is_boolean<T>(), test_case<T>>
+all_invalid() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 1, 0, 1, 1, 0, 1, 0, 1, 1 },
+                                       { 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+        {
+            q_expect{ 0.7 }
+        }
+    };
+}
+
+template<typename T>
+typename std::enable_if_t<is_boolean<T>(), test_case<T>>
+unsorted() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 0, 0, 1, 1, 0, 1, 1, 0, 1 }),
+        {
+            q_expect{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,}
+        }
+    };
+}
+
+} // namespace testdata
 
 // =============================================================================
-// ---- tests ------------------------------------------------------------------
+// ----- helper functions ------------------------------------------------------
+
+template<typename T>
+void test(testdata::test_case<T> test_case) {
+    for (auto & expected : test_case.expectations) {
+        using namespace experimental;
+        auto actual_higher   = quantile(test_case.column, expected.quantile, interpolation::HIGHER);
+        auto actual_lower    = quantile(test_case.column, expected.quantile, interpolation::LOWER);
+        auto actual_nearest  = quantile(test_case.column, expected.quantile, interpolation::NEAREST);
+        auto actual_midpoint = quantile(test_case.column, expected.quantile, interpolation::MIDPOINT);
+        auto actual_linear   = quantile(test_case.column, expected.quantile, interpolation::LINEAR);
+        expect_scalars_equal(expected.higher,   *actual_higher);
+        expect_scalars_equal(expected.lower,    *actual_lower);
+        expect_scalars_equal(expected.linear,   *actual_nearest);
+        expect_scalars_equal(expected.midpoint, *actual_midpoint);
+        expect_scalars_equal(expected.nearest,  *actual_linear);
+    }
+}
+
+// =============================================================================
+// ----- tests -----------------------------------------------------------------
 
 template <typename T>
-struct QuantilesTest : public BaseFixture {};
+struct QuantilesTest : public BaseFixture {
+};
 
-TYPED_TEST_CASE(QuantilesTest, cudf::test::NumericTypes);
+// using TestTypes = test::Types<int, float, double, bool8>;
+// using TestTypes = AllTypes;
+using TestTypes = NumericTypes;
 
-// TYPED_TEST(QuantilesTest, TestScalar)
+TYPED_TEST_CASE(QuantilesTest, TestTypes);
+
+TYPED_TEST(QuantilesTest, TestEmpty)
+{
+    test(testdata::empty<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestSingle)
+{
+    test(testdata::single<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestAllElementsInvalid)
+{
+    test(testdata::all_invalid<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestUnsorted)
+{
+    test(testdata::unsorted<TypeParam>());
+}
+
+// TYPED_TEST(QuantilesTest, TestUnsortedWithInvalids)
 // {
-//     using T = TypeParam;
-
-//     auto val1 = make_numeric_scalar<T>(0);
-//     auto val2 = make_numeric_scalar<T>(0);
-//     auto val3 = make_numeric_scalar<T>(1);
-//     auto val4 = make_numeric_scalar<T>(1);
-
-//     cudf::test::expect_scalars_equal(*val1, *val2);
-//     cudf::test::expect_scalars_equal(*val3, *val4);
+//     test(testdata::unsorted_with_invalids<TypeParam>());
 // }
 
-TYPED_TEST(QuantilesTest, TestColumnEmpty)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ });
-
-    auto expected = make_numeric_scalar<double>();
-    auto actual = cudf::experimental::quantile(in, 0);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnOneElement)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ 5 });
-
-    auto expected = make_numeric_scalar<double>(5.0);
-    auto actual = cudf::experimental::quantile(in, 0, cudf::experimental::interpolation::NEAREST, true);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnTwoElementsSortedLower)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ -4, -1, 3, 2, 1 });
-
-    auto expected_lower = make_numeric_scalar<double>(3);
-    auto actual_lower = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::LOWER, true);
-
-    cudf::test::expect_scalars_equal(*expected_lower, *actual_lower);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnTwoElementsSortedHigher)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    const T higher = 5;
-    const T lower = 0;
-
-    auto in = fixed_width_column_wrapper<T>({ lower, higher });
-
-    auto expected = make_numeric_scalar<double>(higher);
-    auto actual = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::HIGHER, true);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnTwoElementsSortedMidpoint)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    const T higher = 5;
-    const T lower = 0;
-
-    auto in = fixed_width_column_wrapper<T>({ lower, higher });
-
-    auto expected = make_numeric_scalar<double>(2.5);
-    auto actual = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::MIDPOINT, true);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnOneElementNullMidpoint)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ 0 }, { 0 });
-
-    auto expected = make_numeric_scalar<double>();
-    auto actual = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::MIDPOINT, true);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnTwoElementsUnsorted)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ 10, 5 });
-
-    auto expected = make_numeric_scalar<double>(5);
-    auto actual = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::LOWER, false);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-TYPED_TEST(QuantilesTest, TestColumnTwoElementsNullMidpoint)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ 0, 0 }, { 0, 0 });
-
-    auto expected = make_numeric_scalar<double>();
-    auto actual = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::MIDPOINT, true);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
-
-
-TYPED_TEST(QuantilesTest, TestColumnThreeElementsNullSandwichUnsorted)
-{
-    using T = TypeParam;
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-
-    auto in = fixed_width_column_wrapper<T>({ 0, 7, 0 }, { 0, 1, 0 });
-
-    auto expected = make_numeric_scalar<double>(7);
-    auto actual = cudf::experimental::quantile(in, 0.5, cudf::experimental::interpolation::MIDPOINT, false);
-
-    cudf::test::expect_scalars_equal(*expected, *actual);
-}
+} // anonymous namespace

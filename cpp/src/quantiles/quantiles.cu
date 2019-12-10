@@ -58,18 +58,6 @@ T get_array_value(T const* devarr, size_type location)
     return result;
 }
 
-template<typename T>
-std::unique_ptr<scalar>
-inline make_numeric_scalar(T value)
-{
-    using TScalar = cudf::experimental::scalar_type_t<T>;
-    data_type type{type_to_id<T>()};
-    auto result = make_numeric_scalar(type);
-    auto result_sc = static_cast<TScalar *>(result.get());
-    result_sc->set_value(value);
-    return result;
-}
-
 struct quantile_index
 {
     size_type lower_bound;
@@ -102,7 +90,7 @@ select_quantile(T const * begin,
     
     if (size < 2) {
         auto result_value = get_array_value(begin, 0);
-        return make_numeric_scalar<TResult>(static_cast<TResult>(result_value));
+        return std::make_unique<numeric_scalar<TResult>>(result_value);
     }
 
     quantile_index idx(size, quantile);
@@ -143,7 +131,7 @@ select_quantile(T const * begin,
         throw new cudf::logic_error("not implemented");
     }
 
-    return make_numeric_scalar(value);
+    return std::make_unique<numeric_scalar<TResult>>(value);
 }
 
 template<typename T, typename TResult>
@@ -159,8 +147,7 @@ trampoline(column_view const& in,
 {
     if (in.size() == 1) {
         auto result_value = get_array_value(in.begin<T>(), 0);
-        return make_numeric_scalar<TResult>(static_cast<TResult>(result_value));
-    }
+        return std::make_unique<numeric_scalar<TResult>>(static_cast<TResult>(result_value));    }
 
     if (not is_sorted) {
 

@@ -21,6 +21,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <sstream>
+#include <jit/type.h>
 #include <type_traits>
 
 namespace cudf {
@@ -54,24 +55,21 @@ struct compare_scalar_functor
         TScalar const* lhs_t = static_cast<TScalar const*>((void*) &lhs);
         TScalar const* rhs_t = static_cast<TScalar const*>((void*) &rhs);
 
-        EXPECT_DOUBLE_EQ(lhs_t->value(), rhs_t->value());
+        EXPECT_NEAR(lhs_t->value(), rhs_t->value(), 1.0e-7);
     }
 };
 
 } // anonymous namespace
 
 void expect_scalars_equal(cudf::scalar const& lhs,
-                          cudf::scalar const& rhs,
-                          bool print_all_differences)
+                          cudf::scalar const& rhs)
 {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 
-    if (not lhs.is_valid()) {
-        return;
+    if (lhs.is_valid() and lhs.type() == rhs.type()) {
+        experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
     }
-
-    cudf::experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
 }
 
 } // namespace test

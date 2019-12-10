@@ -28,11 +28,9 @@ namespace test {
  *
  * @param lhs                   The first scalar
  * @param rhs                   The second scalar
- * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
 void expect_scalars_equal(cudf::scalar const& lhs,
-                          cudf::scalar const& rhs,
-                          bool print_all_differences = false);
+                          cudf::scalar const& rhs);
 
 } // namespace test
 } // namespace cudf
