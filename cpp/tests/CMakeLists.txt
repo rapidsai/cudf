@@ -598,6 +598,13 @@ set(MERGE_TEST_SRC
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
+###################################################################################################
+# - sorted-merge string tests ----------------------------------------------------------------------------
+
+set(MERGE_STRING_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-str-test.cpp")
+
+ConfigureTest(MERGE_STRING_TEST "${MERGE_STRING_TEST_SRC}")
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
