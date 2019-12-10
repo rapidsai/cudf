@@ -17,22 +17,22 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/binaryop.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/detail/binaryop.hpp>
 
-#include <jit/launcher.h>
-#include <jit/type.h>
-#include <jit/parser.h>
 #include <binaryop/jit/code/code.h>
+#include <jit/launcher.h>
+#include <jit/parser.h>
+#include <jit/type.h>
 #include <binaryop/jit/util.hpp>
-#include <cudf/datetime.hpp> // replace eventually
+#include <cudf/datetime.hpp>  // replace eventually
 
 #include <string>
-#include <types.hpp.jit>
 #include <timestamps.hpp.jit>
+#include <types.hpp.jit>
 
 namespace cudf {
 namespace experimental {
@@ -41,69 +41,67 @@ namespace binops {
 
 namespace jit {
 
-  #ifndef LIBCUDF_INCLUDE_DIR
-  #define LIBCUDF_INCLUDE_DIR std::string{std::getenv("CONDA_PREFIX")} + "/include/libcudf"
-  #endif
+#ifndef LIBCUDF_INCLUDE_DIR
+#define LIBCUDF_INCLUDE_DIR \
+  std::string{std::getenv("CONDA_PREFIX")} + "/include/libcudf"
+#endif
 
-  // env var always overrides the default value of LIBCUDF_INCLUDE_DIR
-  const char* env_dir = std::getenv("LIBCUDF_INCLUDE_DIR");
-  const std::string libcudf_include_dir = env_dir != NULL ? env_dir : LIBCUDF_INCLUDE_DIR;
+// env var always overrides the default value of LIBCUDF_INCLUDE_DIR
+const char* env_dir = std::getenv("LIBCUDF_INCLUDE_DIR");
+const std::string libcudf_include_dir =
+    env_dir != NULL ? env_dir : LIBCUDF_INCLUDE_DIR;
 
-  const std::string hash = "prog_binop.experimental";
+const std::string hash = "prog_binop.experimental";
 
-  const std::vector<std::string> compiler_flags { "-std=c++14",
-                                                  // suppress all NVRTC warnings
-                                                  "-w",
-                                                  // force libcudacxx to not include system headers
-                                                  "-D__CUDACC_RTC__",
-                                                  // __CHAR_BIT__ is from GCC, but libcxx uses it
-                                                  "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
-                                                  // enable temporary workarounds to compile libcudacxx with nvrtc
-                                                  "-D_LIBCUDACXX_HAS_NO_CTIME",
-                                                  "-D_LIBCUDACXX_HAS_NO_WCHAR",
-                                                  "-D_LIBCUDACXX_HAS_NO_CFLOAT",
-                                                  "-D_LIBCUDACXX_HAS_NO_STDINT",
-                                                  "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
-                                                  "-D_LIBCUDACXX_HAS_NO_CLIMITS",
-                                                  "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
-                                                  "-I" + libcudf_include_dir + "/libcudacxx",
-                                                };
-  const std::vector<std::string> headers_name
-        { "operation.h" , "traits.h", cudf_types_hpp, cudf_wrappers_timestamps_hpp };
-  
-  std::istream* headers_code(std::string filename, std::iostream& stream) {
-      if (filename == "operation.h") {
-          stream << code::operation;
-          return &stream;
-      }
-      if (filename == "traits.h") {
-          stream << code::traits;
-          return &stream;
-      }
-      return nullptr;
+const std::vector<std::string> compiler_flags{
+    "-std=c++14",
+    // suppress all NVRTC warnings
+    "-w",
+    // force libcudacxx to not include system headers
+    "-D__CUDACC_RTC__",
+    // __CHAR_BIT__ is from GCC, but libcxx uses it
+    "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
+    // enable temporary workarounds to compile libcudacxx with nvrtc
+    "-D_LIBCUDACXX_HAS_NO_CTIME",
+    "-D_LIBCUDACXX_HAS_NO_WCHAR",
+    "-D_LIBCUDACXX_HAS_NO_CFLOAT",
+    "-D_LIBCUDACXX_HAS_NO_STDINT",
+    "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
+    "-D_LIBCUDACXX_HAS_NO_CLIMITS",
+    "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
+    "-I" + libcudf_include_dir + "/libcudacxx",
+};
+const std::vector<std::string> header_names{
+    "operation.h", "traits.h", cudf_types_hpp, cudf_wrappers_timestamps_hpp};
+
+std::istream* headers_code(std::string filename, std::iostream& stream) {
+  if (filename == "operation.h") {
+    stream << code::operation;
+    return &stream;
   }
+  if (filename == "traits.h") {
+    stream << code::traits;
+    return &stream;
+  }
+  return nullptr;
+}
 
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,
                       column_view const& rhs,
                       binary_operator op,
                       cudaStream_t stream) {
-  
-  cudf::jit::launcher(
-    hash, code::kernel, headers_name, compiler_flags, headers_code, stream
-  ).set_kernel_inst(
-    "cudf::experimental::kernel_v_s", // name of the kernel we are launching
-    { cudf::jit::get_type_name(out.type()), // list of template arguments
-      cudf::jit::get_type_name(rhs.type()),
-      cudf::jit::get_type_name(lhs.type()),
-      get_operator_name(op, OperatorType::Reverse) } 
-  ).launch(
-    out.size(),
-    cudf::jit::get_data_ptr(out),
-    cudf::jit::get_data_ptr(rhs),
-    cudf::jit::get_data_ptr(lhs)
-  );
-
+  cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
+                      headers_code, stream)
+      .set_kernel_inst(
+          "cudf::experimental::kernel_v_s",       // name of the kernel we are
+                                                  // launching
+          {cudf::jit::get_type_name(out.type()),  // list of template arguments
+           cudf::jit::get_type_name(rhs.type()),
+           cudf::jit::get_type_name(lhs.type()),
+           get_operator_name(op, OperatorType::Reverse)})
+      .launch(out.size(), cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(rhs), cudf::jit::get_data_ptr(lhs));
 }
 
 void binary_operation(mutable_column_view& out,
@@ -111,22 +109,17 @@ void binary_operation(mutable_column_view& out,
                       scalar const& rhs,
                       binary_operator op,
                       cudaStream_t stream) {
-  
-  cudf::jit::launcher(
-    hash, code::kernel, headers_name, compiler_flags, headers_code, stream
-  ).set_kernel_inst(
-    "cudf::experimental::kernel_v_s", // name of the kernel we are launching
-    { cudf::jit::get_type_name(out.type()), // list of template arguments
-      cudf::jit::get_type_name(lhs.type()),
-      cudf::jit::get_type_name(rhs.type()),
-      get_operator_name(op, OperatorType::Direct) } 
-  ).launch(
-    out.size(),
-    cudf::jit::get_data_ptr(out),
-    cudf::jit::get_data_ptr(lhs),
-    cudf::jit::get_data_ptr(rhs)
-  );
-
+  cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
+                      headers_code, stream)
+      .set_kernel_inst(
+          "cudf::experimental::kernel_v_s",       // name of the kernel we are
+                                                  // launching
+          {cudf::jit::get_type_name(out.type()),  // list of template arguments
+           cudf::jit::get_type_name(lhs.type()),
+           cudf::jit::get_type_name(rhs.type()),
+           get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(), cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs), cudf::jit::get_data_ptr(rhs));
 }
 
 void binary_operation(mutable_column_view& out,
@@ -134,22 +127,17 @@ void binary_operation(mutable_column_view& out,
                       column_view const& rhs,
                       binary_operator op,
                       cudaStream_t stream) {
-
-  cudf::jit::launcher(
-    hash, code::kernel, headers_name, compiler_flags, headers_code, stream
-  ).set_kernel_inst(
-    "cudf::experimental::kernel_v_v", // name of the kernel we are launching
-    { cudf::jit::get_type_name(out.type()), // list of template arguments
-      cudf::jit::get_type_name(lhs.type()),
-      cudf::jit::get_type_name(rhs.type()),
-      get_operator_name(op, OperatorType::Direct) } 
-  ).launch(
-    out.size(),
-    cudf::jit::get_data_ptr(out),
-    cudf::jit::get_data_ptr(lhs),
-    cudf::jit::get_data_ptr(rhs)
-  );
-
+  cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
+                      headers_code, stream)
+      .set_kernel_inst(
+          "cudf::experimental::kernel_v_v",       // name of the kernel we are
+                                                  // launching
+          {cudf::jit::get_type_name(out.type()),  // list of template arguments
+           cudf::jit::get_type_name(lhs.type()),
+           cudf::jit::get_type_name(rhs.type()),
+           get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(), cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs), cudf::jit::get_data_ptr(rhs));
 }
 
 void binary_operation(mutable_column_view& out,
@@ -157,31 +145,27 @@ void binary_operation(mutable_column_view& out,
                       column_view const& rhs,
                       const std::string& ptx,
                       cudaStream_t stream) {
-
   std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
-  std::string ptx_hash = 
-    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type_name)); 
+  std::string ptx_hash =
+      hash + "." +
+      std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source = "\n#include <cudf/types.hpp>\n" +
-    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP",
-                                         output_type_name)
-    + code::kernel;
+                            cudf::jit::parse_single_function_ptx(
+                                ptx, "GENERIC_BINARY_OP", output_type_name) +
+                            code::kernel;
 
-  cudf::jit::launcher(
-    ptx_hash, cuda_source, headers_name, compiler_flags, headers_code, stream
-  ).set_kernel_inst(
-    "cudf::experimental::kernel_v_v", // name of the kernel we are launching
-    { output_type_name,                     // list of template arguments
-      cudf::jit::get_type_name(lhs.type()),
-      cudf::jit::get_type_name(rhs.type()),
-      get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct) } 
-  ).launch(
-    out.size(),
-    cudf::jit::get_data_ptr(out),
-    cudf::jit::get_data_ptr(lhs),
-    cudf::jit::get_data_ptr(rhs)
-  );
-
+  cudf::jit::launcher(ptx_hash, cuda_source, header_names, compiler_flags,
+                      headers_code, stream)
+      .set_kernel_inst("cudf::experimental::kernel_v_v",  // name of the kernel
+                                                          // we are launching
+                       {output_type_name,  // list of template arguments
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(binary_operator::GENERIC_BINARY,
+                                          OperatorType::Direct)})
+      .launch(out.size(), cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs), cudf::jit::get_data_ptr(rhs));
 }
 
 }  // namespace jit
@@ -191,10 +175,10 @@ namespace {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-auto scalar_col_valid_mask_and(column_view const& col, scalar const& s,
+auto scalar_col_valid_mask_and(column_view const& col,
+                               scalar const& s,
                                cudaStream_t stream,
-                               rmm::mr::device_memory_resource *mr)
-{
+                               rmm::mr::device_memory_resource* mr) {
   if (col.size() == 0) {
     return rmm::device_buffer{};
   }
@@ -207,17 +191,16 @@ auto scalar_col_valid_mask_and(column_view const& col, scalar const& s,
     return rmm::device_buffer{};
   }
 }
-} // namespace
+}  // namespace
 
 namespace detail {
 
-std::unique_ptr<column> binary_operation( scalar const& lhs,
-                                          column_view const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream)
-{
+std::unique_ptr<column> binary_operation(scalar const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // Check for datatype
   CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
@@ -227,21 +210,21 @@ std::unique_ptr<column> binary_operation( scalar const& lhs,
   auto out = make_numeric_column(output_type, rhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
-  if (rhs.size() == 0)
+  if (rhs.size() == 0) {
     return out;
+  }
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
 }
 
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          scalar const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream)
-{
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         scalar const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // Check for datatype
   CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
@@ -251,24 +234,26 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
-  if (lhs.size() == 0)
+  if (lhs.size() == 0) {
     return out;
+  }
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-  return out;  
+  return out;
 }
 
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          column_view const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream)
-{
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // Check for datatype
-  CUDF_EXPECTS(is_numeric(lhs.type()) || is_timestamp(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_numeric(rhs.type()) || is_timestamp(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_numeric(lhs.type()) || is_timestamp(lhs.type()),
+               "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_numeric(rhs.type()) || is_timestamp(rhs.type()),
+               "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
@@ -278,29 +263,32 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
-  if (lhs.size() == 0) // also rhs.size() == 0
+  if (lhs.size() == 0 || rhs.size() == 0) {
     return out;
+  }
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
 }
 
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          column_view const& rhs,
-                                          std::string const& ptx,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream)
-{
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         std::string const& ptx,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // Check for datatype
-  auto is_type_supported_ptx = [] (data_type type) -> bool {
-    return (is_numeric(type) or is_timestamp(type)) and 
-           type.id() != type_id::INT8; // Numba PTX doesn't support int8
+  auto is_type_supported_ptx = [](data_type type) -> bool {
+    return (is_numeric(type) or is_timestamp(type)) and
+           type.id() != type_id::INT8;  // Numba PTX doesn't support int8
   };
-  CUDF_EXPECTS(is_type_supported_ptx(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_type_supported_ptx(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_type_supported_ptx(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_type_supported_ptx(lhs.type()),
+               "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_type_supported_ptx(rhs.type()),
+               "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_type_supported_ptx(output_type),
+               "Invalid/Unsupported output datatype");
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
@@ -309,51 +297,48 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
-  if (lhs.size() == 0) // also rhs.size() == 0
+  if (lhs.size() == 0 || rhs.size() == 0) {
     return out;
+  }
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
   return out;
 }
 
-} // namespace detail
+}  // namespace detail
 
-std::unique_ptr<column> binary_operation( scalar const& lhs,
-                                          column_view const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr)
-{
-  return detail::binary_operation(lhs, rhs, op, output_type, mr);
-}
-
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          scalar const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr)
-{
-  return detail::binary_operation(lhs, rhs, op, output_type, mr);
-}
-
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          column_view const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr)
-{
+std::unique_ptr<column> binary_operation(scalar const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr) {
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
-                                          column_view const& rhs,
-                                          std::string const& ptx,
-                                          data_type output_type,
-                                          rmm::mr::device_memory_resource *mr)
-{
+                                         scalar const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr) {
+  return detail::binary_operation(lhs, rhs, op, output_type, mr);
+}
+
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr) {
+  return detail::binary_operation(lhs, rhs, op, output_type, mr);
+}
+
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         std::string const& ptx,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr) {
   return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
 }
 
-} // namespace experimental
-} // namespace cudf
+}  // namespace experimental
+}  // namespace cudf

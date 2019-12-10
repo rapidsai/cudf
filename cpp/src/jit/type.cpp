@@ -50,6 +50,7 @@ struct get_data_ptr_functor {
     auto s1 = static_cast<ScalarType const*>(&s);
     return static_cast<const void*>(s1->data());
   }
+
   template <typename T>
   std::enable_if_t<not is_fixed_width<T>(), const void *>
   operator()(scalar const& s) {

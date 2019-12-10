@@ -168,7 +168,6 @@ void ASSERT_BINOP(column_view const& out,
     else {
         ASSERT_FALSE(out.nullable());
     }
-    
 }
 
 /**
