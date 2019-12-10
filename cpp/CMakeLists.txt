@@ -244,7 +244,7 @@ message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
-option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" OFF)
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 if(JITIFY_USE_CACHE)
     message(STATUS "Using file cache for JIT compiled kernels")
     add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
