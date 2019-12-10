@@ -83,12 +83,13 @@ bool constexpr is_hash_aggregation(aggregation::Kind t) {
  */
 bool can_use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests) {
-  return std::all_of(
-      requests.begin(), requests.end(), [](aggregation_request const& r) {
-        return std::all_of(
-            r.aggregations.begin(), r.aggregations.end(),
-            [](auto const& a) { return is_hash_aggregation(a->kind); });
-      });
+  return false;
+  // return std::all_of(
+  //     requests.begin(), requests.end(), [](aggregation_request const& r) {
+  //       return std::all_of(
+  //           r.aggregations.begin(), r.aggregations.end(),
+  //           [](auto const& a) { return is_hash_aggregation(a->kind); });
+  //     });
 }
 
 // Hash-based groupby
