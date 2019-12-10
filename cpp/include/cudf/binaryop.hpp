@@ -120,7 +120,7 @@ std::unique_ptr<column> binary_operation(
  * @param mr          Memory resource for allocating output column
  * @return std::unique_ptr<column> Output column
  * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
- * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric or timestamp
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
 std::unique_ptr<column> binary_operation(

@@ -250,9 +250,9 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
-  CUDF_EXPECTS(is_numeric(lhs.type()) || is_timestamp(lhs.type()),
+  CUDF_EXPECTS(is_fixed_width(lhs.type()),
                "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_numeric(rhs.type()) || is_timestamp(rhs.type()),
+  CUDF_EXPECTS(is_fixed_width(rhs.type()),
                "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
 
