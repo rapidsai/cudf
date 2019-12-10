@@ -15,6 +15,8 @@
  */
 
 #include "sort_helper.hpp"
+#include "result_cache.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/groupby.hpp>
@@ -22,15 +24,55 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/aggregation.hpp>
+#include <cudf/detail/aggregation.hpp>
+#include <cudf/column/column_factories.hpp>
 
 #include <memory>
 #include <utility>
+#include <unordered_map>
 
 namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
 namespace sort {
+
+// constexpr bool is_single_pass_reduction(aggregation::Kind k) {
+//   return (k == aggregation::SUM) ||
+//          (k == aggregation::MIN) ||
+//          (k == aggregation::MAX) ||
+//          (k == aggregation::COUNT);
+// }
+
+// void compute_single_pass_reductions(
+//     helper &sort_helper,
+//     std::vector<aggregation_request> const& requests,
+//     std::vector<aggregation_result> & results,
+//     cudaStream_t &stream)
+// {
+//   for (size_t i = 0; i < requests.size(); i++) {
+//     // std::unique_ptr<column> sorted_values;
+//     // rmm::device_vector<size_type> group_sizes;
+//     // std::tie(sorted_values, group_sizes) =
+//     //   sort_helper.sorted_values_and_num_valids(requests[i].values);
+
+//     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
+//       if (is_single_pass_reduction(requests[i].aggregations[j]->kind)) {
+//         switch (requests[i].aggregations[j]->kind) {
+//         case aggregation::SUM:
+//           // doo something
+//           break;
+        
+//         default:
+//           break;
+//         }
+//       }
+//     }
+//   }
+// }
+
+
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
@@ -44,6 +86,25 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   // TODO (dm): sort helper should be stored in groupby object
   // TODO (dm): convert sort helper's include_nulls to ignore_nulls
   helper sorter(keys, not ignore_null_keys, null_precedence, keys_are_sorted);
+
+  // We're going to start by creating a cache of results so that aggs that
+  // depend on other aggs will not have to be recalculated. e.g. mean depends on
+  // sum and count. std depends on mean and count
+  result_cache cache(requests.size());
+
+  // auto col = make_numeric_column(data_type{type_id::INT32}, 10);
+  // cache.add_result(0, requests[0].aggregations[0], std::move(col));
+  // bool hasagg1 = cache.has_result(0, requests[0].aggregations[0]);
+  // auto agg_q1 = make_quantile_aggregation({0.4}, interpolation::HIGHER);
+  // auto agg_q2 = make_quantile_aggregation({0.3}, interpolation::HIGHER);
+  // cache.add_result(0, agg_q1, std::move(col));
+  // bool hasagg1 = cache.has_result(0, agg_q1);
+  // bool hasagg2 = cache.has_result(0, agg_q2);
+
+  
+  // Phase 1: All single pass reductions
+  
+  
 
   return std::make_pair(std::make_unique<table>(),
                         std::vector<aggregation_result>{});

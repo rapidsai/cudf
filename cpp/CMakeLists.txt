@@ -539,6 +539,7 @@ add_library(cudf
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
             src/groupby/sort/sort_helper.cu
+            src/groupby/sort/result_cache.cpp
             src/aggregation/aggregation.cpp
 )
 
