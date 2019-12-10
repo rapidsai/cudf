@@ -511,6 +511,7 @@ class concurrent_unordered_multimap {
       init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream>>>(
           m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
       CUDA_TRY(cudaGetLastError());
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
   }
 };
