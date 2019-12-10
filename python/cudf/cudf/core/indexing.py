@@ -201,6 +201,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         # Step 1: Gather columns
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
+            if isinstance(columns_df, Series):
+                return columns_df
         else:
             columns = self._get_column_selection(arg[1])
             columns_df = DataFrame(index=self._df.index)
@@ -330,9 +332,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             df = DataFrame()
-            for key in columns_df.columns:
+            for col_num in range(len(columns_df.columns)):
                 # need Series() in case a scalar is returned
-                df[key] = Series(columns_df[key].iloc[arg[0]])
+                df[col_num] = Series(columns_df._columns[col_num][arg[0]])
+            df.index = as_index(columns_df.index.as_column()[arg[0]])
             df.columns = columns_df.columns
 
         # Iloc Step 3:
@@ -359,12 +362,15 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     result.index = df.columns
                     return result
                 elif not isinstance(arg[0], slice):
-                    result_series = list(df._cols.values())[0]
-                    result_series.index = df.columns
-                    result_series.name = arg[0]
-                    return result_series
+                    if len(df._cols) == 0:
+                        return Series([], index=df.columns, name=arg[0])
+                    else:
+                        result_series = df[df.columns[0]]
+                        result_series.index = df.columns
+                        result_series.name = arg[0]
+                        return result_series
                 else:
-                    return list(df._cols.values())[0]
+                    return df[df.columns[0]]
             return self._downcast_to_series(df, arg)
         if df.shape[0] == 0 and df.shape[1] == 0:
             from cudf.core.index import RangeIndex

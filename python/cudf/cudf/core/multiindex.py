@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
@@ -290,9 +291,12 @@ class MultiIndex(Index):
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
         for k in range(size, len(index._source_data.columns)):
+            if index.names is None:
+                name = k
+            else:
+                name = index.names[k]
             out_index.add_column(
-                index.names[k],
-                index._source_data[index._source_data.columns[k]],
+                name, index._source_data[index._source_data.columns[k]],
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
@@ -300,12 +304,6 @@ class MultiIndex(Index):
             # directly, return a Series with a tuple as name.
             result = result.T
             result = result[result.columns[0]]
-            # convert to Series
-            series_name = []
-            for idx, code in enumerate(index._source_data.columns):
-                series_name.append(result.columns._source_data[code][0])
-            result = Series(list(result._cols.values())[0], index=result.index)
-            result.name = tuple(series_name)
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
@@ -364,7 +362,7 @@ class MultiIndex(Index):
             result.columns = result_columns
         elif len(row_tuple) < len(self.levels) and (
             not slice(None) in row_tuple
-            and not isinstance(row_tuple[0], slice)
+            and not isinstance(row_tuple[0], (slice, numbers.Number))
         ):
             columns = self._popn(len(row_tuple))
             result.columns = columns.take(valid_indices)
@@ -376,7 +374,10 @@ class MultiIndex(Index):
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
             result.columns = as_index(columns, name=name)
-
+        if len(row_tuple) == len(self.levels) and len(result.columns) == 1:
+            result = cudf.Series(
+                result._cols[0], name=row_tuple, index=result.index
+            )
         return result
 
     def _split_tuples(self, tuples):

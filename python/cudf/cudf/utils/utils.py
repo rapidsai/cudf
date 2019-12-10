@@ -86,6 +86,9 @@ def scalar_broadcast_to(scalar, shape, dtype=None):
             dtype = "object"
         return column_empty(np.prod(shape), dtype=dtype, masked=True)
 
+    if isinstance(scalar, pd.Categorical):
+        return scalar_broadcast_to(scalar.categories[0], shape).astype(dtype)
+
     if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
         dtype = "object"
     else:

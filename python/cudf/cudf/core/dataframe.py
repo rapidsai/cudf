@@ -3345,37 +3345,37 @@ class DataFrame(object):
 
         df = cls()
         # Set columns
-        for colk in dataframe.columns:
+        for i, colk in enumerate(dataframe.columns):
             vals = dataframe[colk].values
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(vals.shape) == 1:
-                df[colk] = Series(vals, nan_as_null=nan_as_null)
+                df[i] = Series(vals, nan_as_null=nan_as_null)
             else:
                 vals = vals.T
                 if vals.shape[0] == 1:
-                    df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
+                    df[i] = Series(vals.flatten(), nan_as_null=nan_as_null)
                 else:
                     # TODO fix multiple column with same name with different
                     # method.
                     if isinstance(colk, tuple):
                         colk = str(colk)
                     for idx in range(len(vals.shape)):
-                        df[colk + str(idx)] = Series(
-                            vals[idx], nan_as_null=nan_as_null
-                        )
+                        df[i] = Series(vals[idx], nan_as_null=nan_as_null)
+
+        # Set columns
+        if isinstance(dataframe.columns, pd.MultiIndex):
+            df.columns = cudf.MultiIndex.from_pandas(dataframe.columns)
+        else:
+            df.columns = dataframe.columns
+
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
-            import cudf
-
             index = cudf.from_pandas(dataframe.index)
         else:
             index = dataframe.index
         result = df.set_index(index)
-        if isinstance(dataframe.columns, pd.MultiIndex):
-            import cudf
 
-            result.columns = cudf.from_pandas(dataframe.columns)
         return result
 
     def to_arrow(self, preserve_index=True):

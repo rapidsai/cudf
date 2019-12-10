@@ -1016,6 +1016,10 @@ def as_index(arbitrary, **kwargs):
         return RangeIndex(
             start=arbitrary._start, stop=arbitrary._stop, **kwargs
         )
+    elif isinstance(arbitrary, cudf.MultiIndex):
+        return arbitrary
+    elif isinstance(arbitrary, pd.MultiIndex):
+        return cudf.MultiIndex.from_pandas(arbitrary)
     else:
         return as_index(column.as_column(arbitrary), **kwargs)
 
