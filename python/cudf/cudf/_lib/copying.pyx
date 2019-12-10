@@ -254,7 +254,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def scatter_to_frames(source, maps, index=None):
+def scatter_to_frames(source, maps, index=None, names=None):
     """
     Scatters rows to 'n' dataframes according to maps
 
@@ -278,13 +278,14 @@ def scatter_to_frames(source, maps, index=None):
         for i in range(len(index)):
             index[i].name = ind_names_tmp[i]
             in_cols.append(index[i])
+            names.append(index[i].name)
     col_count=len(in_cols)
     if col_count == 0:
         return []
 
     cats = {}
     for i, in_col in enumerate(in_cols):
-        in_cols[i] = column.as_column(in_cols[i])
+        in_cols[i] = column.as_column(in_cols[i], name=names[i])
         if is_categorical_dtype(in_cols[i]):
             cats[in_cols[i].name] = (
                 Series(in_cols[i].categories),

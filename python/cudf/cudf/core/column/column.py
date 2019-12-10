@@ -54,6 +54,7 @@ class ColumnBase(Column):
             mask=mask,
             offset=offset,
             children=children,
+            name=name,
         )
         self._data = data
         self.size = size
@@ -999,8 +1000,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     if name is None and hasattr(arbitrary, "name"):
         name = arbitrary.name
+    else:
+        name = name
 
     if isinstance(arbitrary, ColumnBase):
+        arbitrary.name = name
         return arbitrary
 
     elif isinstance(arbitrary, Series):
@@ -1273,8 +1277,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         np.array(arbitrary, dtype=np.dtype(dtype)),
                         nan_as_null=nan_as_null,
                     )
-    if hasattr(data, "name") and (name is not None):
-        data.name = name
+    data.name = name
     return data
 
 
