@@ -352,7 +352,7 @@ struct transformer_pair_meanvar
     ResultType operator()(thrust::pair<ElementType, bool> const& pair)
     {
         ElementType v = pair.first;
-        return {{v, v*v, (pair.second)? 1 : 0 }, pair.second};
+        return {{v, static_cast<ElementType>(v*v), (pair.second)? 1 : 0 }, pair.second};
     };
 };
 
@@ -465,12 +465,12 @@ TYPED_TEST(IteratorTest, error_handling) {
   std::unique_ptr<cudf::scalar> s(new ScalarType{T{1}, false});
   CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_scalar_iterator<T>(*s)),
                             "the scalar value must be valid");
-  CUDF_EXPECT_NO_THROW((cudf::experimental::detail::make_scalar_pair_iterator<T>(*s)));
+  CUDF_EXPECT_NO_THROW((cudf::experimental::detail::make_pair_iterator<T>(*s)));
   // expects error: data type mismatch
   if (!(std::is_same<T, double>::value)) {
     CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_scalar_iterator<double>(*s)),
                               "the data type mismatch");
-    CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_scalar_pair_iterator<double>(*s)),
+    CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_pair_iterator<double>(*s)),
                               "the data type mismatch");
   }
 }
@@ -608,7 +608,7 @@ TYPED_TEST(IteratorTest, scalar_iterator) {
   auto it_dev = cudf::experimental::detail::make_scalar_iterator<T>(*s);
   this->iterator_test_thrust(host_values, it_dev, host_values.size());
 
-  auto it_pair_dev = cudf::experimental::detail::make_scalar_pair_iterator<T>(*s);
+  auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }
 
@@ -630,6 +630,6 @@ TYPED_TEST(IteratorTest, null_scalar_iterator) {
                  [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
 
   // GPU test
-  auto it_pair_dev = cudf::experimental::detail::make_scalar_pair_iterator<T>(*s);
+  auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }

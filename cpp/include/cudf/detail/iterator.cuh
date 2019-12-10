@@ -82,41 +82,6 @@ struct null_replaced_value_accessor
 };
 
 /** -------------------------------------------------------------------------*
- * @brief pair accessor of column with null bitmask
- * A unary functor returns pair with scalar value at `id` and boolean validity
- * `operator() (cudf::size_type id)` computes `element` and valid flag at `id`
- * returns a `pair(element, valid)`
- * This functor is only allowed for nullable columns.
- *
- * the return value for element `i` will return `pair(column[i], true)`  
- * if it is valid, or `pair(null_replacement, false)` if it is null.
- *
- * @throws `cudf::logic_error` if the column is not nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
- *
- * @tparam Element The type of elements in the column
- * -------------------------------------------------------------------------**/
-template <typename Element>
-struct null_replaced_pair_accessor: public null_replaced_value_accessor<Element>
-{
-  /** -------------------------------------------------------------------------*
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
-   * @param[in] null_replacement The value to return for null elements
-   * -------------------------------------------------------------------------**/
-  null_replaced_pair_accessor(column_device_view const& _col, Element null_val)
-      : null_replaced_value_accessor<Element>{_col, null_val}
-  { }
-
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<Element, bool> operator()(cudf::size_type i) const {
-    return this->col.is_valid_nocheck(i)
-               ? thrust::make_pair(this->col.template element<Element>(i), true)
-               : thrust::make_pair(this->null_replacement, false);
-  }
-};
-
-/** -------------------------------------------------------------------------*
  * @brief pair accessor of column with/without null bitmask
  * A unary functor returns pair with scalar value at `id` and boolean validity
  * `operator() (cudf::size_type id)` computes `element`  and
@@ -303,7 +268,7 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
  * @return auto Iterator that returns scalar, and validity of the scalar in a pair
  */
 template <typename Element>
-auto inline make_scalar_pair_iterator(scalar const& scalar_value) {
+auto inline make_pair_iterator(scalar const& scalar_value) {
   CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   using ScalarType = experimental::scalar_type_t<Element>;
   return thrust::make_constant_iterator(
