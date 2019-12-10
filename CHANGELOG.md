@@ -245,6 +245,8 @@
 - PR #3532 Fix potential use-after-free in cudf parquet reader
 - PR #3540 Fix unary_op null_mask bug and add missing test cases
 - PR #3559 Use HighLevelGraph api in DataFrame constructor (Fix upstream compatibility)
+- PR #3572 Fix CI Issue with hypothesis tests that are flaky
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 
