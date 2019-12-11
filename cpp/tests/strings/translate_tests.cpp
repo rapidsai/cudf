@@ -33,7 +33,8 @@ struct StringsTranslateTest : public cudf::test::BaseFixture {};
 
 std::pair<cudf::char_utf8,cudf::char_utf8> make_entry( const char* from, const char* to )
 {
-    cudf::char_utf8 in, out = 0;
+    cudf::char_utf8 in = 0;
+    cudf::char_utf8 out = 0;
     cudf::strings::detail::to_char_utf8(from, in);
     if( to )
         cudf::strings::detail::to_char_utf8(to, out);
@@ -47,11 +48,10 @@ TEST_F(StringsTranslateTest, Translate)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    std::vector< std::pair<cudf::char_utf8,cudf::char_utf8> > translate_table;
-    translate_table.push_back( make_entry("b",0) );
-    translate_table.push_back( make_entry("a","A") );
-    translate_table.push_back( make_entry("é","E") );
-    translate_table.push_back( make_entry("e","_") );
+    std::vector< std::pair<cudf::char_utf8,cudf::char_utf8> > translate_table{make_entry("b",0),
+                                                                              make_entry("a","A"),
+                                                                              make_entry("é","E"),
+                                                                              make_entry("e","_")};
     auto results = cudf::strings::translate(strings_view,translate_table);
 
     std::vector<const char*> h_expected{ "___ ddd", " cc", nullptr, "", "AA", "dEd" };
