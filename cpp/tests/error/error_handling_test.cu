@@ -56,8 +56,8 @@ TEST(CudaTryTest, TryCatch) {
 }
 
 TEST(StreamCheck, success) {
-  EXPECT_NO_THROW(cudf::detail::check_cuda_error(__FILE__, __LINE__, true, 0));
-  EXPECT_NO_THROW(cudf::detail::check_cuda_error(__FILE__, __LINE__, false, 0));
+  EXPECT_NO_THROW(cudf::detail::check_cuda<true>(__FILE__, __LINE__, 0));
+  EXPECT_NO_THROW(cudf::detail::check_cuda<false>(__FILE__, __LINE__, 0));
 }
 
 namespace {
@@ -72,7 +72,7 @@ TEST(StreamCheck, FailedKernel) {
   cudaStreamCreate(&stream);
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  EXPECT_THROW(cudf::detail::check_cuda_error(__FILE__, __LINE__, true, stream),
+  EXPECT_THROW(cudf::detail::check_cuda<true>(__FILE__, __LINE__, stream),
                cudf::cuda_error);
   cudaStreamDestroy(stream);
 }
@@ -82,8 +82,8 @@ TEST(StreamCheck, CatchFailedKernel) {
   cudaStreamCreate(&stream);
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_cuda_error(__FILE__, __LINE__,
-                                                           true, stream),
+  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_cuda<true>(
+                              __FILE__, __LINE__, stream),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
   cudaStreamDestroy(stream);
