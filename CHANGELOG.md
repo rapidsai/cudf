@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3284 Add gpu-accelerated parquet writer
+- PR #3254 Python redesign for libcudf++
 
 ## Improvements
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
