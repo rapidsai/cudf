@@ -115,14 +115,6 @@ set(SCALAR_TEST_SRC
 
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
 
-# - bool8 wrapper tests ---------------------------------------------------------------------------
-
-set(BOOLS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
-
-ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
-
-
 ###################################################################################################
 # - timestamps tests ----------------------------------------------------------------------------------
 
