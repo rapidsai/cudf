@@ -351,6 +351,27 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
     ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = cudf::timestamp_ms;
+  using TypeRhs = cudf::timestamp_s;
+
+  using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
+
+  auto itr = cudf::test::make_counting_transform_iterator(
+      0, [this](auto row) { return this->generate() * 1000; });
+
+  auto lhs = cudf::test::fixed_width_column_wrapper<TypeLhs>(
+      itr, itr + 100, make_validity_iter());
+
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::GREATER,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
+}
+
 } // namespace binop
 } // namespace test
 } // namespace cudf
