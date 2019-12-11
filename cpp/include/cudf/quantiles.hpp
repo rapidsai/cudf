@@ -27,25 +27,6 @@ namespace experimental {
 
 /* @brief Computes a quantile of a given column.
  *
- * @param[in] in            Column used to compute quantile.
- * @param[in] quantile      Requested quantile in range [0, 1].
- * @param[in] interpolation Interpolation strategy for quantiles lying between
- *                          two points.
- * @param[in] mr            Optional. The resource to use for all allocations.
- * @param[in] stream        Stream on which to perform computations.
- *
- * @returns The quantile. Null if column is empty.
- */
-std::unique_ptr<scalar>
-quantile(column_view const& in,
-         double quantile,
-         interpolation interpolation  = interpolation::LINEAR,
-         bool is_sorted = false,
-         order order = order::ASCENDING,
-         null_order null_order = null_order::AFTER);
-
-/* @brief Computes a quantile of a given column.
- *
  * @param[in] in            Table containing columns used to compute quantiles.
  * @param[in] quantile      Requested quantile in range [0, 1].
  * @param[in] interpolation Interpolation strategy for quantiles lying between
@@ -60,7 +41,7 @@ quantile(column_view const& in,
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& in,
           double quantile,
-          interpolation interpolation  = interpolation::LINEAR,
+          interpolation interpolation = interpolation::LINEAR,
           bool is_sorted = false,
           std::vector<order> order = {},
           std::vector<null_order> = {});

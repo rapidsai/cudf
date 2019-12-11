@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
+#include "arrow/type_fwd.h"
 #include "cudf/legacy/reduction.hpp"
+#include "cudf/table/row_operators.cuh"
+#include "cudf/table/table_device_view.cuh"
 #include "cudf/types.hpp"
 #include "cudf/utilities/bit.hpp"
+#include "thrust/iterator/counting_iterator.h"
 #include "thrust/iterator/transform_iterator.h"
 #include "thrust/iterator/zip_iterator.h"
 #include "thrust/transform.h"
@@ -152,32 +156,49 @@ trampoline(column_view const& in,
         auto result_value = get_array_value(in.begin<T>(), 0);
         return std::make_unique<numeric_scalar<TResult>>(static_cast<TResult>(result_value));    }
 
-    if (not is_sorted) {
-
-        // using TScalar = cudf::experimental::scalar_type_t<T>;
-        // data_type type{type_to_id<T>()};
-
-        if (quantile >= 1.0)
-        {
-            // T const * value_p = thrust::max_element(rmm::exec_policy(stream)->on(stream), data, data + size);
-            // T value = cudf::detail::get_array_value(value_p, 0);
-            // auto result = make_numeric_scalar(type);
-            // auto result_sc = static_cast<TScalar *>(result.get());
-            // result_sc->set_value(value);
-            // return result;
-        }
+    if (not is_sorted)
+    {
 
         if (quantile <= 0.0)
         {
-            // T const * value_p = thrust::min_element(rmm::exec_policy(stream)->on(stream), data, data + size);
-            // T value = cudf::detail::get_array_value(value_p, 0);
-            // auto result = make_numeric_scalar(type);
-            // auto result_sc = static_cast<TScalar *>(result.get());
-            // result_sc->set_value(value);
-            // return result;
+            std::vector<cudf::null_order> h_null_order{ null_order };
+            std::vector<cudf::order> h_order{ order };
+
+            rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
+            rmm::device_vector<cudf::order> d_order( h_order );
+
+            table_view in_table ({ in });
+            auto in_table_d = table_device_view::create(in_table);
+
+            if (in.nullable()) {
+                auto comparator = row_lexicographic_comparator<true>(
+                    *in_table_d,
+                    *in_table_d,
+                    d_order.data().get(),
+                    d_null_order.data().get());
+
+                auto it = thrust::make_counting_iterator<size_type>(0);
+                auto idx = thrust::min_element(rmm::exec_policy(stream)->on(stream),
+                                            it,
+                                            it + in.size(),
+                                            comparator);
+
+                T value = get_array_value(in.begin<T>(), *idx);
+
+                return std::make_unique<numeric_scalar<TResult>>(value);
+            }
         }
 
-        table_view unsorted {{ in }};
+        if (quantile >= 1.0)
+        {
+            // T const * value = thrust::min_element(rmm::exec_policy(stream)->on(stream),
+            //                                       in.begin<T>(),
+            //                                       in.begin<T>() + in.size());
+
+            // return std::make_unique<numeric_scalar<TResult>>(*value);
+        }
+
+        table_view unsorted{ { in } };
         auto sorted_idx = sorted_order(unsorted, { order }, { null_order });
         auto sorted = gather(unsorted, sorted_idx->view());
         auto sorted_col = sorted->view().column(0);
