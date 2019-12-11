@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <hash/concurrent_unordered_multimap.cuh>
 
 #include <limits>
 #include <memory>
@@ -166,6 +167,46 @@ get_indices_table(
         std::move(r)));
   return std::make_unique<cudf::experimental::table>(std::move(columns));
 }
+
+inline bool is_trivial_join(table_view const& left,
+                            table_view const& right,
+                            std::vector<size_type> const& left_on,
+                            std::vector<size_type> const& right_on,
+                            JoinType join_type) {
+
+  // If there is nothing to join, then send empty table with all columns
+  if (left_on.empty() || right_on.empty()) {
+      return true;
+  }
+
+  // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
+  // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
+  // If the inputs are empty, immediately return
+  if ((0 == left.num_rows()) && (0 == right.num_rows())) {
+      return true;
+  }
+
+  // If left join and the left table is empty, return immediately
+  if ((JoinType::LEFT_JOIN == join_type) && (0 == left.num_rows())) {
+      return true;
+  }
+
+  // If Inner Join and either table is empty, return immediately
+  if ((JoinType::INNER_JOIN == join_type) &&
+      ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+      return true;
+  }
+
+  // If left semi join (contains) and right table is empty,
+  // return immediately
+  if ((JoinType::LEFT_SEMI_JOIN == join_type) &&
+      (0 == right.num_rows())) {
+    return true;
+  }
+
+  return false;
+}
+
 
 }//namespace detail
 

@@ -7,6 +7,8 @@
 #include <cudf/detail/gather.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
+#include <join/join_common_utils.hpp>
+
 #include <cudf/detail/gather.cuh>
 #include <join/hash_join.cuh>
 
@@ -25,14 +27,15 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
 
   CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
-  CUDF_EXPECTS (0 != return_columns.size(), "Number of returned columns is 0");
   CUDF_EXPECTS (left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
 
-#if 0
+  if (0 == return_columns.size()) {
+    return experimental::empty_like(left.select(return_columns));
+  }
+
   if (is_trivial_join(left, right, left_on, right_on, join_type)) {
     return experimental::empty_like(left.select(return_columns));
   }
-#endif
 
   if ((JoinType::LEFT_ANTI_JOIN == join_type) && (0 == right.num_rows())) {
     // Everything matches, just copy the proper columns from the left table

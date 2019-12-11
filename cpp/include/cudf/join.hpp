@@ -191,17 +191,17 @@ std::unique_ptr<cudf::experimental::table> full_join(
    *          return_columns: { 1 }
    * Result: { c: {1, 2} }
    *
-   * @throws cudf::logic_error 
-   * if either table is empty or if number of rows in either table exceeds INT_MAX
-   * if number of elements in `right_on` and `left_on` are not equal
+   * @throws cudf::logic_error if either table is empty
+   * @throws cudf::logic_error if number of returned columns is 0
+   * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
    *
    * @param[in] left             The left table
    * @param[in] right            The right table
-   * @param[in] left_on          The column's indices from `left` to join on.
+   * @param[in] left_on          The column indices from `left` to join on.
    *                             The column from `left` indicated by `left_on[i]`
    *                             will be compared against the column from `right`
    *                             indicated by `right_on[i]`.
-   * @param[in] right_on         The column's indices from `right` to join on.
+   * @param[in] right_on         The column indices from `right` to join on.
    *                             The column from `right` indicated by `right_on[i]`
    *                             will be compared against the column from `left`
    *                             indicated by `left_on[i]`.
@@ -241,17 +241,17 @@ std::unique_ptr<cudf::experimental::table> full_join(
    *          return_columns: { 1 }
    * Result: { c: {1} }
    *
-   * @throws cudf::logic_error 
-   * if either table is empty or if number of rows in either table exceeds INT_MAX
-   * if number of elements in `right_on` and `left_on` are not equal
+   * @throws cudf::logic_error if either table is empty
+   * @throws cudf::logic_error if number of returned columns is 0
+   * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
    *
    * @param[in] left             The left table
    * @param[in] right            The right table
-   * @param[in] left_on          The column's indices from `left` to join on.
+   * @param[in] left_on          The column indices from `left` to join on.
    *                             The column from `left` indicated by `left_on[i]`
    *                             will be compared against the column from `right`
    *                             indicated by `right_on[i]`.
-   * @param[in] right_on         The column's indices from `right` to join on.
+   * @param[in] right_on         The column indices from `right` to join on.
    *                             The column from `right` indicated by `right_on[i]`
    *                             will be compared against the column from `left`
    *                             indicated by `left_on[i]`.
