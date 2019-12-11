@@ -82,7 +82,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id) {
       return TypeKind::FLOAT;
     case cudf::type_id::FLOAT64:
       return TypeKind::DOUBLE;
-    case cudf::type_id::BOOL:
+    case cudf::type_id::BOOL8:
       return TypeKind::BOOLEAN;
     case cudf::type_id::TIMESTAMP_DAYS:
       return TypeKind::DATE;

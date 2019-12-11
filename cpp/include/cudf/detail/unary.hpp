@@ -45,7 +45,7 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
                            rmm::mr::device_memory_resource * mr =
                                rmm::mr::get_default_resource(),
                            cudaStream_t stream = 0) {
-    auto output = make_numeric_column(data_type(BOOL), size, UNALLOCATED, stream, mr);
+    auto output = make_numeric_column(data_type(BOOL8), size, UNALLOCATED, stream, mr);
     auto output_mutable_view = output->mutable_view();
     auto output_data = output_mutable_view.data<cudf::experimental::bool8>();
 

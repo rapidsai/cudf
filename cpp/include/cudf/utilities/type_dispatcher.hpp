@@ -100,7 +100,7 @@ using id_to_type = typename id_to_type_impl<Id>::type;
  * @brief Defines all of the mappings between C++ types and their corresponding
  * `cudf::type_id` values.
  *---------------------------------------------------------------------------**/
-CUDF_TYPE_MAPPING(bool, type_id::BOOL);
+CUDF_TYPE_MAPPING(bool, type_id::BOOL8);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
 CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
@@ -269,8 +269,8 @@ template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     cudf::data_type dtype, Functor f, Ts&&... args) {
   switch (dtype.id()) {
-    case BOOL:
-      return f.template operator()<typename IdTypeMap<BOOL>::type>(
+    case BOOL8:
+      return f.template operator()<typename IdTypeMap<BOOL8>::type>(
           std::forward<Ts>(args)...);
     case INT8:
       return f.template operator()<typename IdTypeMap<INT8>::type>(

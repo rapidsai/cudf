@@ -169,14 +169,14 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
 {
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return make_numeric_column( data_type{BOOL}, 0 );
+        return make_numeric_column( data_type{BOOL8}, 0 );
 
     CUDF_EXPECTS( target.is_valid() && target.size()>0, "Parameter target must not be empty.");
     auto d_target = string_view( target.data(), target.size());
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
     // create output column
-    auto results = make_numeric_column( data_type{BOOL}, strings_count,
+    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr ), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<experimental::bool8>();

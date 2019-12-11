@@ -29,7 +29,7 @@ data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
         case GDF_INT64:     return data_type{INT64};
         case GDF_FLOAT32:   return data_type{FLOAT32};
         case GDF_FLOAT64:   return data_type{FLOAT64};
-        case GDF_BOOL8:     return data_type{BOOL};
+        case GDF_BOOL8:     return data_type{BOOL8};
         case GDF_DATE32:    return data_type{TIMESTAMP_DAYS};
         case GDF_DATE64:    return data_type{TIMESTAMP_MILLISECONDS};
         case GDF_TIMESTAMP: return data_type{TIMESTAMP_MILLISECONDS};
@@ -47,7 +47,7 @@ gdf_dtype data_type_to_gdf_dtype( data_type type) {
     case INT64:                  return GDF_INT64;
     case FLOAT32:                return GDF_FLOAT32;
     case FLOAT64:                return GDF_FLOAT64;
-    case BOOL:                   return GDF_BOOL8;
+    case BOOL8:                  return GDF_BOOL8;
     case TIMESTAMP_DAYS:         return GDF_DATE32;
     case TIMESTAMP_SECONDS:      return GDF_TIMESTAMP;
     case TIMESTAMP_MILLISECONDS: return GDF_TIMESTAMP;

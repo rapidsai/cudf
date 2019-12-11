@@ -144,7 +144,7 @@ class parquet_column_view {
         _physical_type = Type::DOUBLE;
         _stats_dtype = statistics_dtype::dtype_float64;
         break;
-      case cudf::type_id::BOOL:
+      case cudf::type_id::BOOL8:
         _physical_type = Type::BOOLEAN;
         _stats_dtype = statistics_dtype::dtype_bool;
         break;

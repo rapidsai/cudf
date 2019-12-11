@@ -201,7 +201,7 @@ TEST_F(CsvReaderTest, Booleans) {
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
   ASSERT_EQ(cudf::type_id::INT32, view.column(1).type().id());
   ASSERT_EQ(cudf::type_id::INT16, view.column(2).type().id());
-  ASSERT_EQ(cudf::type_id::BOOL,  view.column(3).type().id());
+  ASSERT_EQ(cudf::type_id::BOOL8, view.column(3).type().id());
 
   expect_column_data_equal(std::vector<int32_t>{1, 0, 0, 0, 1}, view.column(0));
   expect_column_data_equal(std::vector<int16_t>{0, 1, 1, 0, 1}, view.column(2));
