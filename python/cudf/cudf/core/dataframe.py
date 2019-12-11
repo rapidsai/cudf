@@ -29,6 +29,7 @@ from cudf.core.column import CategoricalColumn, StringColumn
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
+from cudf.core.table import Table
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -85,7 +86,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(object):
+class DataFrame(Table):
     """
     A GPU Dataframe object.
 
@@ -159,7 +160,8 @@ class DataFrame(object):
     """
 
     def __init__(self, data=None, index=None, columns=None, dtype=None):
-        self._cols = OrderedDict()
+        super().__init__()
+        self._cols = self._data
 
         if isinstance(columns, cudf.MultiIndex):
             self.multi_cols = columns
@@ -987,33 +989,6 @@ class DataFrame(object):
         if not self.index.equals(other.index):
             return False
         return True
-
-    def sin(self):
-        return self._apply_op("sin")
-
-    def cos(self):
-        return self._apply_op("cos")
-
-    def tan(self):
-        return self._apply_op("tan")
-
-    def asin(self):
-        return self._apply_op("asin")
-
-    def acos(self):
-        return self._apply_op("acos")
-
-    def atan(self):
-        return self._apply_op("atan")
-
-    def exp(self):
-        return self._apply_op("exp")
-
-    def log(self):
-        return self._apply_op("log")
-
-    def sqrt(self):
-        return self._apply_op("sqrt")
 
     def iteritems(self):
         """ Iterate over column names and series pairs """

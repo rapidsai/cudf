@@ -10,7 +10,9 @@ from cudf._libxx.lib cimport *
 
 cdef class _Table:
 
-    def __init__(self, data, names=None):
+    def __init__(self, data=None, names=None):
+        if data is None:
+            data = OrderedDict()
         if isinstance(data, OrderedDict):
             self._data = data
         else:
