@@ -105,25 +105,19 @@ inline void throw_cuda_error(cudaError_t error, const char* file,
 }
 
 template <bool sync_on_stream>
-inline std::enable_if_t<sync_on_stream, void>
-check_cuda_error(char const* file, unsigned int line, cudaStream_t stream=0) {
+inline void check_cuda(char const* file, unsigned int line,
+                       cudaStream_t stream=0) {
   cudaError_t error{cudaSuccess};
-
-  error = cudaStreamSynchronize(stream);
-  if (cudaSuccess != error) {
-    throw_cuda_error(error, file, line);
+  if (sync_on_stream) {
+    error = cudaStreamSynchronize(stream);
+    if (cudaSuccess == error) {
+      error = cudaGetLastError();
+    }
+  }
+  else {
+    error = cudaGetLastError();
   }
 
-  error = cudaGetLastError();
-  if (cudaSuccess != error) {
-    throw_cuda_error(error, file, line);
-  }
-}
-
-template <bool sync_on_stream>
-inline std::enable_if_t<not sync_on_stream, void>
-check_cuda(char const* file, unsigned int line, cudaStream_t stream=0) {
-  auto error = cudaGetLastError();
   if (cudaSuccess != error) {
     throw_cuda_error(error, file, line);
   }
