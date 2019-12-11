@@ -118,7 +118,7 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
   thrust::host_vector<char> h_chars(strings_data.first);
   thrust::host_vector<size_type> h_offsets(strings_data.second);
-  
+
   // build std::string vector from chars and offsets
   if( !h_chars.empty() ) { // check for all nulls case
     std::vector<std::string> host_data;
