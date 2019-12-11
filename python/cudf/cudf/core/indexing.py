@@ -356,13 +356,13 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 if len(df) > 0 and not (
                     isinstance(arg[0], slice) or isinstance(arg[1], slice)
                 ):
-                    return list(df._cols.values())[0][0]
+                    return list(df._data.values())[0][0]
                 elif df.shape[1] > 1:
                     result = self._downcast_to_series(df, arg)
                     result.index = df.columns
                     return result
                 elif not isinstance(arg[0], slice):
-                    if len(df._cols) == 0:
+                    if len(df._data) == 0:
                         return Series([], index=df.columns, name=arg[0])
                     else:
                         result_series = df[df.columns[0]]
@@ -403,6 +403,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 def _normalize_dtypes(df):
     dtypes = df.dtypes.values.tolist()
     normalized_dtype = np.result_type(*dtypes)
-    for name, col in df._cols.items():
+    for name, col in df._data.items():
         df[name] = col.astype(normalized_dtype)
     return df

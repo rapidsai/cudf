@@ -242,7 +242,7 @@ class Rolling:
             if self.obj._column.null_count > 0:
                 has_nulls = True
         else:
-            for col in self.obj._cols:
+            for col in self.obj._data:
                 if self.obj[col].null_count > 0:
                     has_nulls = True
         if has_nulls:

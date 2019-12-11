@@ -627,7 +627,7 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
 
     got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
-    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._cols)]
+    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._data)]
 
     utils.assert_eq(expect, got)
 

@@ -40,13 +40,13 @@ def transpose(df):
 
     if any(t != dtype for t in df.dtypes):
         raise ValueError('all columns must have the same dtype')
-    has_null = any(c.null_count for c in df._cols.values())
+    has_null = any(c.null_count for c in df._data.values())
 
     out_df = cudf.DataFrame()
 
     ncols = len(df.columns)
     cdef vector[gdf_column*] cols
-    for col in df._cols:
+    for col in df._data:
         cols.push_back(column_view_from_column(df[col]._column))
 
     new_nrow = ncols
