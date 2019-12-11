@@ -29,6 +29,8 @@ extensions = [
             "../../cpp/include/cudf",
             "../../cpp/include",
             "../../cpp/build/include",
+            "../../thirdparty/cub",
+            "../../thirdparty/libcudacxx/include",
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
             cuda_include_dir,

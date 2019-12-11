@@ -24,8 +24,6 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-// Decimal output type (0: INT64, 1: FLOAT64)
-#define DECIMALS_AS_FLOAT64 1
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -79,6 +77,10 @@ struct DictionaryEntry {
     uint32_t len;   // Length in data stream
 };
 
+/**
+ * @brief Mask to indicate conversion from decimals to float64
+ **/
+#define ORC_DECIMAL2FLOAT64_SCALE           0x80
 
 /**
  * @brief Struct to describe per stripe's column information
@@ -100,7 +102,7 @@ struct ColumnDesc
     uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
-    uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type
+    uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type (bit 7 set if converting to float64)
     int32_t ts_clock_rate;                      // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
@@ -261,7 +263,7 @@ cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry
  **/
 cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0,
                                 size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0,
-                                RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
+                                const RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
 
 
 /**

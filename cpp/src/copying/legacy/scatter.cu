@@ -19,17 +19,17 @@
 #include <cudf/legacy/filling.hpp>
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/legacy/table.hpp>
 
 #include <copying/legacy/gather.hpp>
 
 #include <cudf/types.h>
-#include <utilities/bit_util.cuh>
-#include <utilities/cuda_utils.hpp>
+#include <utilities/legacy/bit_util.cuh>
+#include <utilities/legacy/cuda_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <reductions/legacy/reduction_functions.cuh>
 #include <stream_compaction/legacy/copy_if.cuh>

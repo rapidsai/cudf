@@ -16,6 +16,7 @@ from dask.dataframe import from_delayed
 from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
@@ -74,6 +75,8 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         return type(self), (self._name, self._meta, self.divisions)
 
     def __init__(self, dsk, name, meta, divisions):
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
         meta = dd.core.make_meta(meta)
@@ -268,6 +271,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         from dask_cudf.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
+
+    def to_orc(self, path, **kwargs):
+        """ Calls dask_cudf.io.to_orc """
+        from dask_cudf.io import to_orc
+
+        return to_orc(self, path, **kwargs)
 
     @derived_from(pd.DataFrame)
     def var(

@@ -281,7 +281,7 @@ class ColumnBase(Column):
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             objs = [o.nvstrings for o in objs]
-            return as_column(nvstrings.from_strings(*objs))
+            return as_column(nvstrings.from_strings(*objs), name=head.name)
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]

@@ -349,7 +349,6 @@ class MultiIndex(Index):
             df.columns, row_tuple, len(df._cols)
         )
         result = df._take_columns(valid_indices)
-
         if isinstance(row_tuple, (numbers.Number, slice)):
             row_tuple = [row_tuple]
         if len(result) == 0 and len(result.columns) == 0:
@@ -376,7 +375,9 @@ class MultiIndex(Index):
             result.columns = as_index(columns, name=name)
         if len(row_tuple) == len(self.levels) and len(result.columns) == 1:
             result = cudf.Series(
-                result._cols[0], name=row_tuple, index=result.index
+                next(iter(result._cols.values())),
+                name=row_tuple,
+                index=result.index,
             )
         return result
 

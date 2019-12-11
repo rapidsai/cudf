@@ -29,7 +29,7 @@ enum class JoinType {
 #include <table/legacy/device_table_row_operators.cuh>
 #include <hash/concurrent_unordered_multimap.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <utilities/bit_util.cuh>
+#include <utilities/legacy/bit_util.cuh>
 
 #include <cub/cub.cuh>
 

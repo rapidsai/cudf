@@ -201,7 +201,7 @@ class row_equality_comparator {
                  "Mismatched number of columns.");
   }
 
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) {
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept{
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::experimental::type_dispatcher(
           l.type(),
@@ -327,8 +327,8 @@ class row_lexicographic_comparator {
    * columns.
    *---------------------------------------------------------------------------**/
   row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               order* column_order = nullptr,
-                               null_order* null_precedence = nullptr)
+                               order const* column_order = nullptr,
+                               null_order const* null_precedence = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
         _column_order{column_order},

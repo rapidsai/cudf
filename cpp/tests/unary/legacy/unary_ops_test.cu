@@ -2,7 +2,7 @@
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
 #include <cudf/legacy/unary.hpp>
@@ -2383,16 +2383,18 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 
 	std::vector<cudf::bool8> h_expect_v{colSize};
 
-	// compute NOT
-	for (cudf::size_type i = 0; i < colSize; ++i)
-		h_expect_v[i] = static_cast<cudf::bool8>( !h_input_v[i] );
+	std::transform(
+		std::begin(h_input_v),
+		std::end(h_input_v),
+		std::begin(h_expect_v),
+		[] (TypeParam e) -> cudf::bool8 {
+			return static_cast<cudf::bool8>(!e);
+		});
 
 	// Use vector to build expected output
-	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
-
-	auto output = cudf::unary_operation(inputCol, cudf::unary_op::NOT);
-
+	auto output    = cudf::unary_operation(inputCol, cudf::unary_op::NOT);
 	auto outputCol = cudf::test::column_wrapper<cudf::bool8>(output);
+	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
 
 	EXPECT_EQ(expectCol, outputCol);
 }

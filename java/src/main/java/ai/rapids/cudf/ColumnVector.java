@@ -292,10 +292,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the Device memory buffer size.
+   * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
     return offHeap != null ? offHeap.getDeviceMemoryLength(type, false) : 0;
+  }
+
+  /**
+   * Returns the amount of host memory used to store column/validity data (not metadata).
+   */
+  public long getHostMemorySize() {
+    return offHeap != null ? offHeap.getHostMemoryLength() : 0;
   }
 
   /**
@@ -458,6 +465,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (offHeap.hostData != null) {
       offHeap.hostData.close();
       offHeap.hostData = null;
+      // Host data tracking happens on a per buffer basis.
     }
   }
 
@@ -473,6 +481,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       MemoryListener.deviceDeallocation(amount, internalId);
       // Just do it to make sure the cache is updated
       offHeap.getDeviceMemoryLength(type, true);
+      // We have to free the cudf column to handle Strings properly
+      if (offHeap.nativeCudfColumnHandle != 0) {
+        freeCudfColumn(offHeap.nativeCudfColumnHandle, false);
+        offHeap.nativeCudfColumnHandle = 0;
+      }
+
     }
   }
 
@@ -487,20 +501,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         assert (offHeap.getHostData().offsets != null);
       }
 
-      BufferEncapsulator<HostMemoryBuffer> host = offHeap.getHostData();
-      long amount = 0;
-      if (host.offsets != null) {
-        amount += host.offsets.length;
-      }
-      if (host.data != null) {
-        amount += host.data.length;
-      }
-      if (host.valid != null) {
-        amount += host.valid.length;
-      }
-
       try (DevicePrediction prediction =
-               new DevicePrediction(amount, "ensureOnDevice");
+               new DevicePrediction(getHostMemorySize(), "ensureOnDevice");
            NvtxRange toDev = new NvtxRange("ensureOnDevice", NvtxColor.BLUE)) {
         DeviceMemoryBuffer deviceDataBuffer = null;
         DeviceMemoryBuffer deviceValidityBuffer = null;
@@ -567,7 +569,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (offHeap.getHostData() == null && rows != 0) {
       checkHasDeviceData();
 
-      try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+      try (HostPrediction prediction =
+               new HostPrediction(getDeviceMemorySize(), "ensureOnHost");
+          NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
         HostMemoryBuffer hostDataBuffer = null;
         HostMemoryBuffer hostValidityBuffer = null;
         HostMemoryBuffer hostOffsetsBuffer = null;
@@ -1258,6 +1262,109 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Splits a column (including null values) into a set of columns
+   * according to a set of indices. The caller owns the ColumnVectors and is responsible
+   * closing them.
+   *
+   * The "split" function divides the input column into multiple intervals
+   * of rows using the splits indices values and it stores the intervals into the
+   * output columns. Regarding the interval of indices, a pair of values are taken
+   * from the indices array in a consecutive manner. The pair of indices are
+   * left-closed and right-open.
+   *
+   * The indices array ('splits') is require to be a monotonic non-decreasing set.
+   * The indices in the array are required to comply with the following conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of a is less or equal to the position of b.
+   *
+   * The split function will take a pair of indices from the indices array
+   * ('splits') in a consecutive manner. For the first pair, the function will
+   * take the value 0 and the first element of the indices array. For the last pair,
+   * the function will take the last element of the indices array and the size of
+   * the input column.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function return an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty vector of columns is returned.
+   *
+   * The input columns may have different sizes. The number of
+   * columns must be equal to the number of indices in the array plus one.
+   *
+   * Example:
+   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+   * splits: {2, 5, 9}
+   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   *
+   * Note that this is very similar to the output from a PartitionedTable.
+   *
+   * @param indices the indexes to split with
+   * @return A new ColumnVector array with slices from the original ColumnVector
+   */
+  public ColumnVector[] split(int... indices) {
+    try (ColumnVector cv = ColumnVector.fromInts(indices)) {
+      return split(cv);
+    }
+  }
+
+  /**
+   * Splits a column (including null values) into a set of columns
+   * according to a set of indices. The caller owns the ColumnVectors and is responsible
+   * closing them.
+   *
+   * The "split" function divides the input column into multiple intervals
+   * of rows using the splits indices values and it stores the intervals into the
+   * output columns. Regarding the interval of indices, a pair of values are taken
+   * from the indices array in a consecutive manner. The pair of indices are
+   * left-closed and right-open.
+   *
+   * The indices array ('splits') is require to be a monotonic non-decreasing set.
+   * The indices in the array are required to comply with the following conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of a is less or equal to the position of b.
+   *
+   * The split function will take a pair of indices from the indices array
+   * ('splits') in a consecutive manner. For the first pair, the function will
+   * take the value 0 and the first element of the indices array. For the last pair,
+   * the function will take the last element of the indices array and the size of
+   * the input column.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function return an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty vector of columns is returned.
+   *
+   * The input columns may have different sizes. The number of
+   * columns must be equal to the number of indices in the array plus one.
+   *
+   * Example:
+   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+   * splits: {2, 5, 9}
+   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   *
+   * Note that this is very similar to the output from a PartitionedTable.
+   *
+   * @param indices the indexes to split with
+   * @return A new ColumnVector array with slices from the original ColumnVector
+   */
+  public ColumnVector[] split(ColumnVector indices) {
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "split")) {
+      long[] nativeHandles = split(this.getNativeCudfColumnAddress(), indices.getNativeCudfColumnAddress());
+      ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
+      for (int i = 0; i < nativeHandles.length; i++) {
+        columnVectors[i] = new ColumnVector(nativeHandles[i]);
+      }
+      return columnVectors;
+    }
+  }
+
+  /**
    * Fill the current vector (note this is in-place) with a Scalar value.
    *
    * String categories are not supported by cudf::fill. Additionally, Scalar
@@ -1808,6 +1915,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private native long[] cudfSlice(long nativeHandle, long indices) throws CudfException;
 
+  private native long[] split(long nativeHandle, long indices) throws CudfException;
+
   private native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   /**
@@ -2065,6 +2174,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         deviceDataSize = 0;
       }
       return deviceDataSize;
+    }
+
+    /**
+     * This returns total memory allocated on the host for the ColumnVector.
+     */
+    public long getHostMemoryLength() {
+      long total = 0;
+      if (hostData != null) {
+        if (hostData.valid != null) {
+          total += hostData.valid.length;
+        }
+        if (hostData.data != null) {
+          total += hostData.data.length;
+        }
+        if (hostData.offsets != null) {
+          total += hostData.offsets.length;
+        }
+      }
+      return total;
     }
 
     public void setDeviceData(BufferEncapsulator<DeviceMemoryBuffer> deviceData) {
@@ -2544,14 +2672,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           // We need at least one byte or we will get NULL back for data
           stringBufferSize = 1;
         }
-        this.data = HostMemoryBuffer.allocate(stringBufferSize);
         // The offsets are ints and there is 1 more than the number of rows.
-        this.offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
+        long offsetsLen = (rows + 1) * OFFSET_SIZE;
+        try (HostPrediction prediction = new HostPrediction(stringBufferSize + offsetsLen, "stringBuilder")) {
+          this.data = HostMemoryBuffer.allocate(stringBufferSize);
+          this.offsets = HostMemoryBuffer.allocate(offsetsLen);
+        }
         // The first offset is always 0
         this.offsets.setInt(0, 0);
         this.stringBufferSize = stringBufferSize;
       } else {
-        this.data = HostMemoryBuffer.allocate(rows * type.sizeInBytes);
+        long size = rows * type.sizeInBytes;
+        try (HostPrediction prediction = new HostPrediction(size, "Builder")) {
+          this.data = HostMemoryBuffer.allocate(size);
+        }
       }
     }
 
@@ -2656,7 +2790,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
       long oldLen = data.getLength();
-      long newLen = oldLen;
+      long newLen = Math.max(oldLen, 1);
       while (currentStringByteIndex + length > newLen) {
         newLen *= 2;
       }
@@ -2665,15 +2799,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       }
       if (newLen != oldLen) {
         // need to grow the size of the buffer.
-        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
-        try {
-          newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
-          data.close();
-          data = newData;
-          newData = null;
-        } finally {
-          if (newData != null) {
-            newData.close();
+        try (HostPrediction prediciton = new HostPrediction(newLen, "growStringData")) {
+          HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
+          try {
+            newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
+            data.close();
+            data = newData;
+            newData = null;
+          } finally {
+            if (newData != null) {
+              newData.close();
+            }
           }
         }
       }
@@ -2904,8 +3040,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     private void allocateBitmaskAndSetDefaultValues() {
       long bitmaskSize = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-      valid = HostMemoryBuffer.allocate(bitmaskSize);
-      valid.setMemory(0, bitmaskSize, (byte) 0xFF);
+      try (HostPrediction prediciton = new HostPrediction(bitmaskSize, "allocateValidity")) {
+        valid = HostMemoryBuffer.allocate(bitmaskSize);
+        valid.setMemory(0, bitmaskSize, (byte) 0xFF);
+      }
     }
 
     /**

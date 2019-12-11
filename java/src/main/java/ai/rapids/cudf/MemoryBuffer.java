@@ -21,18 +21,35 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Abstract class for representing the Memory Buffer
  */
 abstract class MemoryBuffer implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(MemoryBuffer.class);
+  private static final AtomicLong idGen = new AtomicLong(0);
   protected final long address;
   protected final long length;
   protected boolean closed = false;
   protected int refCount = 0;
-  protected final MemoryCleaner.Cleaner cleaner;
+  protected final MemoryBufferCleaner cleaner;
+  protected final long id = idGen.getAndIncrement();
 
-  private static final class SlicedBufferCleaner extends MemoryCleaner.Cleaner {
+  public static abstract class MemoryBufferCleaner extends MemoryCleaner.Cleaner {
+    private long id;
+
+    public long getId() {
+      return id;
+    }
+
+    public void setId(long id) {
+      this.id = id;
+    }
+  }
+
+
+  private static final class SlicedBufferCleaner extends MemoryBufferCleaner {
     private MemoryBuffer parent;
 
     SlicedBufferCleaner(MemoryBuffer parent) {
@@ -70,10 +87,11 @@ abstract class MemoryBuffer implements AutoCloseable {
    * @param address location in memory
    * @param length  size of this buffer
    */
-  protected MemoryBuffer(long address, long length, MemoryCleaner.Cleaner cleaner) {
+  protected MemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {
     this.address = address;
     this.length = length;
     this.cleaner = cleaner;
+    cleaner.setId(id);
     refCount++;
     cleaner.addRef();
     MemoryCleaner.register(this, cleaner);
@@ -89,6 +107,7 @@ abstract class MemoryBuffer implements AutoCloseable {
     this.address = address;
     this.length = length;
     this.cleaner = new SlicedBufferCleaner(parent);
+    cleaner.setId(id);
     refCount++;
     cleaner.addRef();
     MemoryCleaner.register(this, cleaner);

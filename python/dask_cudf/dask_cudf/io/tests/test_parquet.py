@@ -1,12 +1,13 @@
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 
 import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 import dask_cudf
 
@@ -178,13 +179,69 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
     df["month"] = [1, 2, 3, 3, 3, 2]
     df["day"] = [1, 1, 1, 2, 2, 1]
     df["data"] = [0, 0, 0, 0, 0, 0]
+    df.index.name = "index"
     ddf2 = dd.from_pandas(df, npartitions=2)
 
     ddf2.to_parquet(tmpdir, engine="pyarrow", partition_on=parts)
-    df_read = dd.read_parquet(tmpdir, engine="pyarrow")
-    gdf_read = dask_cudf.read_parquet(tmpdir)
+    df_read = dd.read_parquet(tmpdir, engine="pyarrow", index="index")
+    gdf_read = dask_cudf.read_parquet(tmpdir, index="index")
 
     assert_eq(
         df_read.compute(scheduler=dask.get),
         gdf_read.compute(scheduler=dask.get),
     )
+
+
+@pytest.mark.parametrize("metadata", [True, False])
+@pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
+def test_chunksize(tmpdir, chunksize, metadata):
+    nparts = 2
+    df_size = 100
+    row_group_size = 5
+    row_group_byte_size = 451  # Empirically measured
+
+    df = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "index": np.arange(0, df_size),
+        }
+    ).set_index("index")
+
+    ddf1 = dd.from_pandas(df, npartitions=nparts)
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        row_group_size=row_group_size,
+        write_metadata_file=metadata,
+    )
+
+    if metadata:
+        path = str(tmpdir)
+    else:
+        dirname = str(tmpdir)
+        files = os.listdir(dirname)
+        assert "_metadata" not in files
+        path = os.path.join(dirname, "*.parquet")
+
+    ddf2 = dask_cudf.read_parquet(
+        path,
+        chunksize=chunksize,
+        split_row_groups=True,
+        gather_statistics=True,
+        index="index",
+    )
+
+    assert_eq(ddf1, ddf2, check_divisions=False)
+
+    num_row_groups = df_size // row_group_size
+    if not chunksize:
+        assert ddf2.npartitions == num_row_groups
+    else:
+        # Check that we are really aggregating
+        df_byte_size = row_group_byte_size * num_row_groups
+        expected = df_byte_size // parse_bytes(chunksize)
+        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
+        expected += int(remainder) * nparts
+        assert ddf2.npartitions == max(nparts, expected)

@@ -74,7 +74,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ T const* data() const noexcept {
     return head<T>() + _offset;
   }
-
+ 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
    *---------------------------------------------------------------------------**/
@@ -236,7 +236,7 @@ class alignas(16) column_device_view_base {
 
 //Forward declaration
 template <typename T>
-class value_accessor; 
+struct value_accessor; 
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
@@ -503,6 +503,11 @@ class alignas(16) mutable_column_device_view
    * @brief Updates the null mask to indicate that the specified element is
    * valid
    *
+   * @note This operation requires a global atomic operation. Therefore, it is
+   * not reccomended to use this function in performance critical regions. When
+   * possible, it is more efficient to compute and update an entire word at
+   * once using `set_mask_word`.
+   * 
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -515,6 +520,11 @@ class alignas(16) mutable_column_device_view
   /**---------------------------------------------------------------------------*
    * @brief Updates the null mask to indicate that the specified element is null
    *
+   * @note This operation requires a global atomic operation. Therefore, it is
+   * not reccomended to use this function in performance critical regions. When
+   * possible, it is more efficient to compute and update an entire word at
+   * once using `set_mask_word`.
+   * 
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *

@@ -298,7 +298,8 @@ class DataFrame(object):
         frames.extend(index_frames)
 
         # Use the column directly to avoid duplicating the index
-        header["column_names"] = tuple(self._cols.keys())
+        # need to pickle column names to handle numpy integer columns
+        header["column_names"] = pickle.dumps(tuple(self._cols.keys()))
         column_header, column_frames = column.serialize_columns(self._columns)
         header["columns"] = column_header
         frames.extend(column_frames)
@@ -316,7 +317,7 @@ class DataFrame(object):
         # Reconstruct the columns
         column_frames = frames[header["index_frame_count"] :]
 
-        column_names = header["column_names"]
+        column_names = pickle.loads(header["column_names"])
         columns = column.deserialize_columns(header["columns"], column_frames)
 
         return cls(dict(zip(column_names, columns)), index=index)
@@ -444,8 +445,8 @@ class DataFrame(object):
             df = DataFrame()
 
             if mask.dtype == "bool":
-                index = as_index(self.index.as_column()[mask])
                 # New df-wide index
+                index = self.index.take(mask)
                 for col in self._cols:
                     df[col] = self._cols[col][arg]
                 df = df.set_index(index)
@@ -478,18 +479,81 @@ class DataFrame(object):
             df[col] = df[col].set_mask(boolbits)
         return df
 
-    def __setitem__(self, name, col):
-        """Add/set column by *name or DataFrame*
+    def __setitem__(self, arg, value):
+        """Add/set column by *arg or DataFrame*
         """
-        if isinstance(name, DataFrame):
-            for col_name in self._cols:
-                mask = name[col_name]
-                self._cols[col_name][mask] = col
+        if isinstance(arg, DataFrame):
+            # not handling set_item where arg = df & value = df
+            if isinstance(value, DataFrame):
+                msg = (
+                    "__setitem__ with arg = {!r} and "
+                    "value = {!r} is not supported"
+                )
+                raise TypeError(msg.format(type(value), type(arg)))
+            else:
+                for col_name in self._cols:
+                    scatter_map = arg[col_name]
+                    self._cols[col_name][scatter_map] = column.as_column(value)
+        elif is_scalar(arg) or isinstance(arg, tuple):
+            if isinstance(value, DataFrame):
+                _setitem_with_dataframe(
+                    input_df=self,
+                    replace_df=value,
+                    input_cols=[arg],
+                    mask=None,
+                )
+            else:
+                if arg in self._cols:
+                    if is_scalar(value):
+                        value = utils.scalar_broadcast_to(value, len(self))
+                    self._cols[arg] = column.as_column(value)
+                else:
+                    # disc. with pandas here
+                    # pandas raises key error here
+                    self.insert(len(self._cols), arg, value)
 
-        elif name in self._cols:
-            self._cols[name] = column.as_column(col)
+        elif isinstance(
+            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
+        ):
+            mask = arg
+            if isinstance(mask, list):
+                mask = np.array(mask)
+
+            if is_scalar(value):
+                value = column.as_column(
+                    utils.scalar_broadcast_to(value, len(self))
+                )
+
+            if mask.dtype == "bool":
+                if isinstance(value, DataFrame):
+                    _setitem_with_dataframe(
+                        input_df=self,
+                        replace_df=value,
+                        input_cols=None,
+                        mask=mask,
+                    )
+                else:
+                    for col_name in self._cols:
+                        self._cols[col_name][mask] = column.as_column(value)[
+                            mask
+                        ]
+            else:
+                if isinstance(value, DataFrame):
+                    _setitem_with_dataframe(
+                        input_df=self,
+                        replace_df=value,
+                        input_cols=arg,
+                        mask=None,
+                    )
+                else:
+                    for col in arg:
+                        # we will raise a key error if col not in dataframe
+                        # this behavior will make it
+                        # consistent to pandas >0.21.0
+                        self._cols[col] = column.as_column(value)
         else:
-            self.insert(len(self._cols), name, col)
+            msg = "__setitem__ on type {!r} is not supported"
+            raise TypeError(msg.format(type(arg)))
 
     def __delitem__(self, name):
         """
@@ -660,22 +724,28 @@ class DataFrame(object):
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
-            else 15
+            else pd.options.display.width / 2
         )
-        if len(self) <= nrows or len(self.columns) <= ncols:
+        if len(self) <= nrows and len(self.columns) <= ncols:
             output = self.copy(deep=False)
         else:
-            uppercols = len(self.columns) - ncols - 1
-            upper_left = self.head(nrows).iloc[:, :ncols]
-            upper_right = self.head(nrows).iloc[:, uppercols:]
-            lower_left = self.tail(nrows).iloc[:, :ncols]
-            lower_right = self.tail(nrows).iloc[:, uppercols:]
-            output = cudf.concat(
-                [
-                    cudf.concat([upper_left, upper_right], axis=1),
-                    cudf.concat([lower_left, lower_right], axis=1),
-                ]
-            )
+            left_cols = len(self.columns)
+            right_cols = 0
+            upper_rows = len(self)
+            lower_rows = 0
+            if len(self) > nrows and nrows > 0:
+                upper_rows = int(nrows / 2.0) + 1
+                lower_rows = upper_rows + (nrows % 2)
+            if len(self.columns) > ncols:
+                right_cols = len(self.columns) - int(ncols / 2.0) - 1
+                left_cols = int(ncols / 2.0) + 1
+            upper_left = self.head(upper_rows).iloc[:, :left_cols]
+            upper_right = self.head(upper_rows).iloc[:, right_cols:]
+            lower_left = self.tail(lower_rows).iloc[:, :left_cols]
+            lower_right = self.tail(lower_rows).iloc[:, right_cols:]
+            upper = cudf.concat([upper_left, upper_right], axis=1)
+            lower = cudf.concat([lower_left, lower_right], axis=1)
+            output = cudf.concat([upper, lower])
         temp_mi_columns = output.columns
         for col in output._cols:
             if (
@@ -1562,7 +1632,14 @@ class DataFrame(object):
 
         self.insert(len(self.columns), name, data)
 
-    def drop(self, labels=None, axis=None, columns=None, errors="raise"):
+    def drop(
+        self,
+        labels=None,
+        axis=None,
+        columns=None,
+        errors="raise",
+        inplace=False,
+    ):
         """Drop column(s)
 
         Parameters
@@ -1574,6 +1651,8 @@ class DataFrame(object):
         columns: array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
+        inplace : bool, default False
+            If True, do operation inplace and return `self`.
 
         Returns
         -------
@@ -1622,7 +1701,10 @@ class DataFrame(object):
             if isinstance(target, (str, numbers.Number))
             else list(target)
         )
-        outdf = self.copy()
+        if inplace:
+            outdf = self
+        else:
+            outdf = self.copy()
         for c in columns:
             outdf._drop_column(c)
         return outdf
@@ -1884,7 +1966,7 @@ class DataFrame(object):
         # Concatenate cudf.series for all columns
 
         data = {
-            c: Series._concat(
+            i: Series._concat(
                 [
                     o[c]
                     if c in o.columns
@@ -1893,11 +1975,18 @@ class DataFrame(object):
                 ],
                 index=index,
             )
-            for c in unique_columns_ordered_ls
+            for i, c in enumerate(unique_columns_ordered_ls)
         }
 
         out = cls(data)
+
         out.index = index
+
+        if isinstance(objs[0].columns, cudf.MultiIndex):
+            out.columns = objs[0].columns
+        else:
+            out.columns = unique_columns_ordered_ls
+
         libcudf.nvtx.nvtx_range_pop()
         return out
 
@@ -4123,6 +4212,10 @@ class DataFrame(object):
         else:
             index = None
 
+        # Make sure every column has the correct name
+        for col, name in zip(self._columns, self.columns):
+            col.name = name
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
             self._columns,
@@ -4224,6 +4317,23 @@ class DataFrame(object):
         else:
             return result
 
+    def cov(self, **kwargs):
+        """Compute the covariance matrix of a DataFrame.
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments to be passed to cupy.cov
+        Returns
+        -------
+        cov : DataFrame
+        """
+        cov = cupy.cov(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
+
 
 def from_pandas(obj):
     """
@@ -4309,3 +4419,36 @@ def _align_indices(lhs, rhs):
                 rhs_out[col] = df[col]
 
     return lhs_out, rhs_out
+
+
+def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
+    """
+        This function sets item dataframes relevant columns with replacement df
+        :param input_df: Dataframe to be modified inplace
+        :param replace_df: Replacement DataFrame to replace values with
+        :param input_cols: columns to replace in the input dataframe
+        :param mask: boolean mask in case of masked replacing
+    """
+
+    if input_cols is None:
+        input_cols = input_df.columns
+
+    if len(input_cols) != len(replace_df.columns):
+        raise ValueError(
+            "Number of Input Columns must be same replacement Dataframe"
+        )
+
+    for col_1, col_2 in zip(input_cols, replace_df.columns):
+        if col_1 in input_df.columns:
+            if mask is not None:
+                input_df._cols[col_1][mask] = column.as_column(
+                    replace_df[col_2]
+                )
+            else:
+                input_df._cols[col_1] = column.as_column(replace_df[col_2])
+        else:
+            if mask is not None:
+                raise ValueError("Can not insert new column with a bool mask")
+            else:
+                # handle append case
+                input_df.insert(len(input_df._cols), col_1, replace_df[col_2])

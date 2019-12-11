@@ -16,8 +16,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-
 #include <vector>
 
 namespace cudf {
@@ -86,7 +84,6 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* begin() const noexcept {
-    // static_assert(is_fixed_width<T>(), "column_view::begin only supports fixed-width types");
     return data<T>();
   }
 
@@ -99,7 +96,6 @@ class column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* end() const noexcept {
-    // static_assert(is_fixed_width<T>(), "column_view::end only supports fixed-width types");
     return begin<T>() + size();
   }
 
@@ -107,6 +103,11 @@ class column_view_base {
    * @brief Returns the number of elements in the column
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return _size; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns true if `size()` returns zero, or false otherwise
+   *---------------------------------------------------------------------------**/
+  size_type is_empty() const noexcept { return size() == 0; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the element `data_type`
@@ -135,6 +136,21 @@ class column_view_base {
   size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the count of null elements in the range [begin, end)
+   *
+   * @note If `null_count() != 0`, every invocation of `null_count(begin, end)`
+   * will recompute the count of null elements indicated by the `null_mask` in
+   * the range [begin, end).
+   *
+   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * `begin > end`, `begin >= size()`, or `end > size()`).
+   *
+   * @param[in] begin The starting index of the range (inclusive).
+   * @param[in] end The index of the last element in the range (exlusive).
+   *---------------------------------------------------------------------------**/
+  size_type null_count(size_type begin, size_type end) const;
+
+  /**---------------------------------------------------------------------------*
    * @brief Indicates if the column contains null elements,
    * i.e., `null_count() > 0`
    *
@@ -142,6 +158,22 @@ class column_view_base {
    * @return false All elements are valid
    *---------------------------------------------------------------------------**/
   bool has_nulls() const { return null_count() > 0; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Indicates if the column contains null elements in the range
+   * [begin, end), i.e., `null_count(begin, end) > 0`
+   *
+   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * `begin > end`, `begin >= size()`, or `end > size()`).
+   *
+   * @param begin The starting index of the range (inclusive).
+   * @param end The index of the last element in the range (exlusive).
+   * @return true One or more elements are null in the range [begin, end)
+   * @return false All elements are valid in the range [begin, end)
+   *---------------------------------------------------------------------------**/
+  bool has_nulls(size_type begin, size_type end) const {
+    return null_count(begin, end) > 0;
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -377,7 +409,7 @@ class mutable_column_view : public detail::column_view_base {
    * column, and instead, accessing the elements should be done via `data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   T* head() const noexcept {
@@ -393,11 +425,11 @@ class mutable_column_view : public detail::column_view_base {
    * @TODO Clarify behavior for variable-width types.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* data() const noexcept {
-    return head<T>() + _offset;
+    return const_cast<T*>(detail::column_view_base::data<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -405,12 +437,11 @@ class mutable_column_view : public detail::column_view_base {
    * casted to the specified type.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to the first element after casting
+   * @return T* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* begin() const noexcept {
-    // static_assert(is_fixed_width<T>(), "mutable_column_view::begin only supports fixed-width types");
-    return data<T>();
+    return const_cast<T*>(detail::column_view_base::begin<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -418,12 +449,11 @@ class mutable_column_view : public detail::column_view_base {
    * the specified type.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to one past the last element after casting
+   * @return T* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
   T* end() const noexcept {
-    // static_assert(is_fixed_width<T>(), "mutable_column_view::end only supports fixed-width types");
-    return begin<T>() + size();
+    return const_cast<T*>(detail::column_view_base::end<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -480,45 +510,4 @@ class mutable_column_view : public detail::column_view_base {
  *---------------------------------------------------------------------------**/
 size_type count_descendants(column_view parent);
 
-namespace detail {
-/**---------------------------------------------------------------------------*
- * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
- * elements in the range `[begin,end)` in `input`.
- *
- * @note It is the caller's responsibility to ensure that the returned view
- * does not outlive the viewed device memory.
- *
- * @throws `cudf::logic_error` if `begin < 0`, `end < begin` or
- * `end > input.size()`.
- *
- * @param input View of input column to slice
- * @param begin Index of the first desired element in the slice (inclusive).
- * @param end Index of the last desired element in the slice (exclusive).
- *
- * @return ColumnView View of the elements `[begin,end)` from `input`.
- *---------------------------------------------------------------------------**/
-template <typename ColumnView>
-ColumnView slice(ColumnView const& input,
-                  cudf::size_type begin,
-                  cudf::size_type end) {
-   // static_assert(std::is_same<ColumnView, cudf::column_view>::value or
-   // std::is_same<ColumnView, cudf::mutable_column_view>::value,
-  // "slice can be performed only on column_view and mutable_column_view");
-   CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
-   CUDF_EXPECTS(end >= begin, "Invalid end of range.");
-   CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
-
-   std::vector<ColumnView> children {};
-   children.reserve(input.num_children());
-   for (size_type index = 0; index < input.num_children(); index++) {
-       children.emplace_back(input.child(index));
-   }
-
-   return ColumnView(input.type(), end - begin,
-                     input.head(), input.null_mask(),
-                     cudf::UNKNOWN_NULL_COUNT,
-                     input.offset() + begin, children);
-}
-
-}//namespace detail
 }// namespace cudf
