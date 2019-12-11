@@ -14,6 +14,7 @@
 - PR #3550 Update Java package to 0.12
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
+- PR #3588 Remove avro reader column order reversal
 
 
 # cuDF 0.11.0 (11 Dec 2019)
