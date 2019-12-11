@@ -5,8 +5,8 @@
 - PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
-- PR #3561 Rework contains implementation in search
 
+- PR #3561 Rework contains implementation in search
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 
 ## Bug Fixes
