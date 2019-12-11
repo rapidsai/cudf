@@ -111,13 +111,13 @@ inline void check_cuda_error(char const* file, unsigned int line,
   if (sync_on_stream) {
     error = cudaStreamSynchronize(stream);
     if (cudaSuccess != error) {
-      cudf::detail::throw_cuda_error(error, file, line);
+      throw_cuda_error(error, file, line);
     }
   }
 
   error = cudaGetLastError();
   if (cudaSuccess != error) {
-    cudf::detail::throw_cuda_error(error, file, line);
+    throw_cuda_error(error, file, line);
   }
 }
 }  // namespace detail
