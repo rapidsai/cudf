@@ -70,8 +70,10 @@ struct in_place_copy_range_dispatch {
   std::enable_if_t<cudf::is_fixed_width<T>(), void>
   operator()(cudf::size_type source_begin, cudf::size_type source_end,
              cudf::size_type target_begin, cudaStream_t stream = 0) {
-    in_place_copy_range<T>(
-      source, target, source_begin, source_end, target_begin, stream);
+    if (source_end != source_begin) {  // otherwise no-op
+      in_place_copy_range<T>(
+        source, target, source_begin, source_end, target_begin, stream);
+    }
   }
 
   template <typename T>
