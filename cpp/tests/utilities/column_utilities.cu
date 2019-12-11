@@ -73,7 +73,6 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
                                    corresponding_rows_unequal(*d_lhs, *d_rhs));
 
   CUDA_TRY(cudaDeviceSynchronize());
-  CUDA_CHECK_LAST();
 
   differences.resize(thrust::distance(differences.begin(), diff_iter));
 
