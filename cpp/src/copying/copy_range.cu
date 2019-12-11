@@ -70,7 +70,7 @@ struct in_place_copy_range_dispatch {
   std::enable_if_t<cudf::is_fixed_width<T>(), void>
   operator()(cudf::size_type source_begin, cudf::size_type source_end,
              cudf::size_type target_begin, cudaStream_t stream = 0) {
-    if (source_end != source_begin) {  // otherwise no-op
+    if ((source_end - source_begin) > 0) {  // otherwise no-op
       in_place_copy_range<T>(
         source, target, source_begin, source_end, target_begin, stream);
     }
@@ -101,7 +101,7 @@ struct out_of_place_copy_range_dispatch {
         cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
     }
 
-    if (source_end != source_begin) {  // otherwise no-op
+    if ((source_end - source_begin) > 0) {  // otherwise no-op
       auto ret_view = p_ret->mutable_view();
       in_place_copy_range<T>(
         source, ret_view, source_begin, source_end, target_begin, stream);
@@ -169,7 +169,7 @@ void copy_range(column_view const& source, mutable_column_view& target,
   CUDF_EXPECTS((target.nullable() == true) || (source.has_nulls() == false),
                "target should be nullable if source has null values.");
 
-  if (source_end != source_begin) {  // otherwise no-op
+  if ((source_end - source_begin) > 0) {  // otherwise no-op
     cudf::experimental::type_dispatcher(
       target.type(),
       in_place_copy_range_dispatch{source, target},

@@ -151,6 +151,10 @@ void copy_range(SourceValueIterator source_value_begin,
   // this code assumes that source and target have the same type.
   CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
 
+  if ((target_end - target_begin) <= 0) {
+    return;
+  }
+
   auto warp_aligned_begin_lower_bound =
     cudf::util::round_down_safe(target_begin, warp_size);
   auto warp_aligned_end_upper_bound =

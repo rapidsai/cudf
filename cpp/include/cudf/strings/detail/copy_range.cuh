@@ -107,7 +107,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
                  (target_end <= target.size()),
                "Range is out of bounds.");
 
-  if (target_end == target_begin) {
+  if ((target_end - target_begin) <= 0) {
     return std::make_unique<column>(target.parent(), stream, mr);
   }
   else {
