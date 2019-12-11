@@ -131,7 +131,7 @@ int32_t reprog::starts_count() const
 }
 
 // Converts pattern into regex classes
-class RegParser
+class regex_parser
 {
     reprog& m_prog;
 
@@ -552,7 +552,7 @@ public:
 
     bool m_has_counted;
 
-    RegParser(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
+    regex_parser(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
     {
         exprp = pattern;
         lexdone = false;
@@ -580,7 +580,7 @@ public:
 /**
  * @brief The compiler converts class list into instructions.
  */
-class RegCompiler
+class regex_compiler
 {
     reprog& m_prog;
 
@@ -768,7 +768,7 @@ class RegCompiler
     char32_t yy;
     int yyclass_id;
 
-    void expand_counted(const std::vector<RegParser::Item>& in, std::vector<RegParser::Item>& out)
+    void expand_counted(const std::vector<regex_parser::Item>& in, std::vector<regex_parser::Item>& out)
     {
         std::vector<int> lbra_stack;
         int rep_start = -1;
@@ -799,7 +799,7 @@ class RegCompiler
                 if (rep_start < 0) // broken regex
                     return;
 
-                RegParser::Item item = in[i];
+                regex_parser::Item item = in[i];
                 if (item.d.yycount.n <= 0)
                 {
                     // need to erase
@@ -819,7 +819,7 @@ class RegCompiler
                 {
                     for (int j = item.d.yycount.n; j < item.d.yycount.m; j++)
                     {
-                        RegParser::Item o_item;
+                        regex_parser::Item o_item;
                         o_item.t = LBRA_NC;
                         o_item.d.yy = 0;
                         out.push_back(o_item);
@@ -828,7 +828,7 @@ class RegCompiler
                     }
                     for (int j = item.d.yycount.n; j < item.d.yycount.m; j++)
                     {
-                        RegParser::Item o_item;
+                        regex_parser::Item o_item;
                         o_item.t = RBRA;
                         o_item.d.yy = 0;
                         out.push_back(o_item);
@@ -846,7 +846,7 @@ class RegCompiler
                 }
                 else // infinite repeat
                 {
-                    RegParser::Item o_item;
+                    regex_parser::Item o_item;
                     o_item.d.yy = 0;
 
                     if (item.d.yycount.n > 0) // put '+' after last repetition
@@ -885,12 +885,12 @@ class RegCompiler
 
 
 public:
-    RegCompiler(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
+    regex_compiler(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
     {
         // Parse
-        std::vector<RegParser::Item> items;
+        std::vector<regex_parser::Item> items;
         {
-            RegParser parser(pattern, dot_type, m_prog);
+            regex_parser parser(pattern, dot_type, m_prog);
 
             // Expand counted repetitions
             if (parser.m_has_counted)
@@ -910,7 +910,7 @@ public:
 
         for (int i = 0; i < (int)items.size(); i++)
         {
-            RegParser::Item item = items[i];
+            regex_parser::Item item = items[i];
             int token = item.t;
             if (token == CCLASS || token == NCCLASS)
                 yyclass_id = item.d.yyclass_id;
@@ -953,7 +953,7 @@ public:
 reprog reprog::create_from(const char32_t* pattern)
 {
     reprog rtn;
-    RegCompiler compiler(pattern, ANY, rtn); // future feature: ANYNL
+    regex_compiler compiler(pattern, ANY, rtn); // future feature: ANYNL
     //rtn->print();
     return rtn;
 }
