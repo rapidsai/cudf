@@ -104,18 +104,26 @@ inline void throw_cuda_error(cudaError_t error, const char* file,
                   cudaGetErrorName(error) + " " + cudaGetErrorString(error)});
 }
 
-inline void check_cuda_error(char const* file, unsigned int line,
-                             bool sync_on_stream, cudaStream_t stream=0) {
+template <bool sync_on_stream>
+inline std::enable_if_t<sync_on_stream, void>
+check_cuda_error(char const* file, unsigned int line, cudaStream_t stream=0) {
   cudaError_t error{cudaSuccess};
 
-  if (sync_on_stream) {
-    error = cudaStreamSynchronize(stream);
-    if (cudaSuccess != error) {
-      throw_cuda_error(error, file, line);
-    }
+  error = cudaStreamSynchronize(stream);
+  if (cudaSuccess != error) {
+    throw_cuda_error(error, file, line);
   }
 
   error = cudaGetLastError();
+  if (cudaSuccess != error) {
+    throw_cuda_error(error, file, line);
+  }
+}
+
+template <bool sync_on_stream>
+inline std::enable_if_t<not sync_on_stream, void>
+check_cuda(char const* file, unsigned int line, cudaStream_t stream=0) {
+  auto error = cudaGetLastError();
   if (cudaSuccess != error) {
     throw_cuda_error(error, file, line);
   }
@@ -157,8 +165,8 @@ inline void check_cuda_error(char const* file, unsigned int line,
  *---------------------------------------------------------------------------**/
 #ifndef NDEBUG
 #define CHECK_CUDA(stream) \
-  cudf::detail::check_cuda_error(__FILE__, __LINE__, true, stream)
+  cudf::detail::check_cuda<true>(__FILE__, __LINE__, stream)
 #else
 #define CHECK_CUDA(stream) \
-  cudf::detail::check_cuda_error(__FILE__, __LINE__, false, stream)
+  cudf::detail::check_cuda<false>(__FILE__, __LINE__, stream)
 #endif
