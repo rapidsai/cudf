@@ -130,7 +130,7 @@ struct launch_kernel{
       );
     }
     cudaDeviceSynchronize();
-    CHECK_CUDA_ERROR(0);
+    CHECK_CUDA(0);
     return GDF_SUCCESS;
   }
 };

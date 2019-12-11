@@ -85,7 +85,7 @@ struct BinaryOp {
 
         nvtx::range_pop();
 
-        CHECK_CUDA_ERROR(0);
+        CHECK_CUDA(0);
         return GDF_SUCCESS;
     }
 };

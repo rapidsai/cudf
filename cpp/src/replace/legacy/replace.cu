@@ -310,7 +310,7 @@ namespace detail {
                           output,
                           stream);
 
-    CHECK_CUDA_ERROR(stream);
+    CHECK_CUDA(stream);
     return output;
   }
 

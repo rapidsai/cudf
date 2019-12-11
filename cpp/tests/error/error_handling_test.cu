@@ -89,10 +89,10 @@ TEST(StreamCheck, CatchFailedKernel) {
   cudaStreamDestroy(stream);
 }
 
-// In a release build and without explicit synchronization, CHECK_CUDA_ERROR may
+// In a release build and without explicit synchronization, CHECK_CUDA may
 // or may not fail on erroneous asynchronous CUDA calls. Invoke
 // cudaStreamSynchronize to guarantee failure on error. In a non-release build,
-// CHECK_CUDA_ERROR deterministically fails on erroneous asynchronous CUDA
+// CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
 // calls.
 TEST(StreamCheck, ReleaseFailedKernel) {
   cudaStream_t stream;
@@ -102,6 +102,6 @@ TEST(StreamCheck, ReleaseFailedKernel) {
 #ifdef NDEBUG
   cudaStreamSynchronize(stream);
 #endif
-  EXPECT_THROW(CHECK_CUDA_ERROR(stream), cudf::cuda_error);
+  EXPECT_THROW(CHECK_CUDA(stream), cudf::cuda_error);
   cudaStreamDestroy(stream);
 }

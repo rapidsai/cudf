@@ -218,7 +218,7 @@ struct scalar_scatterer {
                      const_iter + num_scatter_rows, scatter_map, 
                      destination_data);
     
-    CHECK_CUDA_ERROR(stream);
+    CHECK_CUDA(stream);
   
   }
 };

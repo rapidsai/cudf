@@ -156,9 +156,9 @@ inline void check_cuda_error(char const* file, unsigned int line,
  *
  *---------------------------------------------------------------------------**/
 #ifndef NDEBUG
-#define CHECK_CUDA_ERROR(stream) \
+#define CHECK_CUDA(stream) \
   cudf::detail::check_cuda_error(__FILE__, __LINE__, true, stream)
 #else
-#define CHECK_CUDA_ERROR(stream) \
+#define CHECK_CUDA(stream) \
   cudf::detail::check_cuda_error(__FILE__, __LINE__, false, stream)
 #endif
