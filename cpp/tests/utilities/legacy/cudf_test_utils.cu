@@ -184,6 +184,8 @@ struct elements_equal {
 template <typename T>
 bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
 {
+  CUDA_TRY(cudaDeviceSynchronize());
+  CUDA_CHECK_LAST();
   if (left.size != right.size) return false;
   if (left.dtype != right.dtype) return false;
   if (left.null_count != right.null_count) return false;
