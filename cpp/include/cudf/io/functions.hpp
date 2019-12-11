@@ -212,6 +212,12 @@ struct read_orc_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
+  /// Whether to convert decimals to float64
+  bool decimals_as_float = true;
+  /// For decimals as int, optional forced decimal scale;
+  /// -1 is auto (column scale), >=0: number of fractional digits
+  int forced_decimals_scale = -1;
+
   explicit read_orc_args(source_info const& src) : source(src) {}
 };
 
