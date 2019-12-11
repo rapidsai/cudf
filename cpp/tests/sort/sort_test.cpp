@@ -31,15 +31,18 @@
 template <typename T>
 struct SortedOrder : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(SortedOrder, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(SortedOrder, cudf::test::NumericTypes);
 
 TYPED_TEST(SortedOrder, WithNullMax)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
+    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8, 5});
+    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2, 10});
+    std::vector<bool> validity = {1, 1, 0, 1, 1, 1};
+    cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend(), validity.cbegin());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend(), validity.cbegin());
     cudf::table_view input {{col1, col2, col3}};
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{1, 0, 5, 3, 4, 2}};
@@ -49,12 +52,12 @@ TYPED_TEST(SortedOrder, WithNullMax)
 
     auto got = cudf::experimental::sorted_order(input, column_order, null_precedence);
 
-    if (!std::is_same<T, cudf::experimental::bool8>::value) {
+    if (!std::is_same<T, bool>::value) {
         cudf::test::expect_columns_equal(expected, got->view());
     } else {
         // for bools only validate that the null element landed at the back, since
         // the rest of the values are equivalent and yields random sorted order.
-        auto to_host = [](cudf::column_view const& col) {
+        auto to_host = [](cudf::column_view const& col) { // #CH already have this fn?
             std::vector<int32_t> h_data(col.size());
             cudaMemcpy(h_data.data(), col.data<int32_t>(),
                        h_data.size() * sizeof(int32_t),
@@ -72,9 +75,12 @@ TYPED_TEST(SortedOrder, WithNullMin)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
+    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    std::vector<bool> validity = {1, 1, 0, 1, 1};
+    cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend(), validity.cbegin());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 1, 0, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend(), validity.cbegin());
     cudf::table_view input {{col1, col2, col3}};
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
@@ -82,7 +88,7 @@ TYPED_TEST(SortedOrder, WithNullMin)
 
     auto got = cudf::experimental::sorted_order(input, column_order);
 
-    if (!std::is_same<T, cudf::experimental::bool8>::value) {
+    if (!std::is_same<T, bool>::value) {
         cudf::test::expect_columns_equal(expected, got->view());
     } else {
         // for bools only validate that the null element landed at the front, since
@@ -105,9 +111,13 @@ TYPED_TEST(SortedOrder, WithMixedNullOrder)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8},    {0, 0, 1, 1, 0}};
+    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    std::vector<bool> validity1 = {0, 0, 1, 1, 0};
+    std::vector<bool> validity2 = {1, 0, 1, 0, 1};
+    cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend(), validity1.cbegin());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {0, 1, 0, 0, 1});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 0, 1, 0, 1}};
+    cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend(), validity2.cbegin());
     cudf::table_view input {{col1, col2, col3}};
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 3, 0, 1, 4}};
@@ -116,7 +126,7 @@ TYPED_TEST(SortedOrder, WithMixedNullOrder)
 
     auto got = cudf::experimental::sorted_order(input, column_order, null_precedence);
 
-    if (!std::is_same<T, cudf::experimental::bool8>::value) {
+    if (!std::is_same<T, bool>::value) {
         cudf::test::expect_columns_equal(expected, got->view());
     } else {
         // for bools only validate that the null element landed at the front, since
@@ -130,8 +140,7 @@ TYPED_TEST(SortedOrder, WithMixedNullOrder)
         };
         std::vector<int32_t> h_exp = to_host(expected);
         std::vector<int32_t> h_got = to_host(got->view());
-        EXPECT_EQ(h_exp.at(0),
-                  h_got.at(0));
+        EXPECT_EQ(h_exp.at(0), h_got.at(0));
     }
 }
 
@@ -139,9 +148,11 @@ TYPED_TEST(SortedOrder, WithAllValid)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
+    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
+    cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend());;
     cudf::table_view input {{col1, col2, col3}};
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
@@ -151,7 +162,7 @@ TYPED_TEST(SortedOrder, WithAllValid)
 
     // Skip validating bools order. Valid true bools are all
     // equivalent, and yield random order after thrust::sort
-    if (!std::is_same<T, cudf::experimental::bool8>::value) {
+    if (!std::is_same<T, bool>::value) {
         cudf::test::expect_columns_equal(expected, got->view());
     }
 }
@@ -160,9 +171,11 @@ TYPED_TEST(SortedOrder, MisMatchInColumnOrderSize)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
+    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
+    cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend());;
     cudf::table_view input {{col1, col2, col3}};
 
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING};
@@ -174,9 +187,11 @@ TYPED_TEST(SortedOrder, MisMatchInNullPrecedenceSize)
 {
     using T = TypeParam;
 
-    cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
+    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
-    cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
+    cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend());;
     cudf::table_view input {{col1, col2, col3}};
 
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING, cudf::order::DESCENDING};
