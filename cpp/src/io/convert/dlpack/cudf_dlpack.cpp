@@ -15,7 +15,12 @@
  */
 #include <cudf/detail/dlpack.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/device_buffer.hpp>
+
+#include <algorithm>
 
 namespace cudf {
 
@@ -44,16 +49,55 @@ data_type DLDataType_to_data_type(DLDataType type)
   }
 }
 
+struct data_type_to_DLDataType_impl {
+  template <typename T, std::enable_if_t<is_numeric<T>()>* = nullptr>
+  DLDataType operator()() {
+    uint8_t const bits{sizeof(T) * 8};
+    uint16_t const lanes{1};
+    if (std::is_floating_point<T>::value) {
+      return DLDataType{kDLFloat, bits, lanes};
+    } else if (std::is_signed<T>::value) {
+      return DLDataType{kDLInt, bits, lanes};
+    } else {
+      return DLDataType{kDLUInt, bits, lanes};
+    }
+  }
+
+  template <typename T, std::enable_if_t<not is_numeric<T>()>* = nullptr>
+  DLDataType operator()() {
+    CUDF_FAIL("Conversion of non-numeric types to DLPack is unsupported");
+  }
+};
+
+DLDataType data_type_to_DLDataType(data_type type)
+{
+  return experimental::type_dispatcher(type, data_type_to_DLDataType_impl{});
+}
+
+// Context object to own memory allocated for DLManagedTensor
+struct dltensor_context {
+  int64_t shape[2];
+  int64_t strides[2];
+  rmm::device_buffer buffer;
+
+  static void deleter(DLManagedTensor* arg)
+  {
+    auto context = static_cast<dltensor_context*>(arg->manager_ctx);
+    delete context;
+    delete arg;
+  }
+};
+
 }  // namespace
 
 namespace detail {
 
-std::vector<std::unique_ptr<column>> from_dlpack(
-    DLManagedTensor const& managed_tensor,
+std::unique_ptr<experimental::table> from_dlpack(
+    DLManagedTensor const* managed_tensor,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
-  auto const& tensor = managed_tensor.dl_tensor;
+  auto const& tensor = managed_tensor->dl_tensor;
 
   // We can copy from host or device pointers
   CUDF_EXPECTS(kDLGPU == tensor.ctx.device_type ||
@@ -98,8 +142,8 @@ std::vector<std::unique_ptr<column>> from_dlpack(
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data) + tensor.byte_offset;
 
   // Allocate columns and copy data from tensor
-  std::vector<std::unique_ptr<column>> output(num_columns);
-  for (auto& col : output) {
+  std::vector<std::unique_ptr<column>> columns(num_columns);
+  for (auto& col : columns) {
     col = make_numeric_column(dtype, num_rows, UNALLOCATED, stream, mr);
 
     CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
@@ -108,16 +152,87 @@ std::vector<std::unique_ptr<column>> from_dlpack(
     tensor_data += col_stride;
   }
 
-  return output;
+  return std::make_unique<experimental::table>(std::move(columns));
+}
+
+DLManagedTensor* to_dlpack(table_view const& input,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
+  auto const num_rows = input.num_rows();
+  auto const num_cols = input.num_columns();
+  if (num_rows == 0) {
+    return nullptr;
+  }
+
+  auto managed_tensor = std::make_unique<DLManagedTensor>();
+  DLTensor& tensor = managed_tensor->dl_tensor;
+
+  // First column determines datatype
+  data_type const type = input.column(0).type();
+  tensor.dtype = data_type_to_DLDataType(type);
+
+  // Ensure all columns are the same type
+  CUDF_EXPECTS(std::all_of(input.begin(), input.end(),
+    [type](auto const& col) { return col.type() == type; }),
+    "All columns required to have same data type");
+
+  auto context = std::make_unique<dltensor_context>();
+
+  tensor.ndim = (num_cols > 1) ? 2 : 1;
+  tensor.shape = context->shape;
+  tensor.shape[0] = num_rows;
+  if (tensor.ndim > 1) {
+    tensor.shape[1] = num_cols;
+    tensor.strides = context->strides;
+    tensor.strides[0] = 1;
+    tensor.strides[1] = num_rows;
+  }
+
+  CUDA_TRY(cudaGetDevice(&tensor.ctx.device_id));
+  tensor.ctx.device_type = kDLGPU;
+
+  // If there is only one column, then a 1D tensor can just copy the pointer
+  // to the data in the column, and the deleter should not delete the original
+  // data. However, this is inconsistent with the 2D cases where we must do a
+  // copy of each column's data into the dense tensor array. Also, if we don't
+  // copy, then the original column data could be changed, which would change
+  // the contents of the tensor, which might be surprising or cause issues.
+  // Therefore, for now we ALWAYS do a copy of the data. If this becomes
+  // a performance issue we can reevaluate in the future.
+
+  size_t const stride_bytes = num_rows * size_of(type);
+  size_t const total_bytes = stride_bytes * num_cols;
+
+  auto buffer = std::make_unique<rmm::device_buffer>(total_bytes, stream, mr);
+  tensor.data = buffer->data();
+
+  auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
+  for (auto const& col : input) {
+    CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
+      col.head<void>(), stride_bytes, cudaMemcpyDefault, stream));
+    tensor_data += stride_bytes;
+  }
+
+  managed_tensor->deleter = dltensor_context::deleter;
+
+  // Defer ownership of managed tensor to caller
+  managed_tensor->manager_ctx = buffer.release();
+  return managed_tensor.release();
 }
 
 }  // namespace detail
 
-std::vector<std::unique_ptr<column>> from_dlpack(
-    DLManagedTensor const& managed_tensor,
+std::unique_ptr<experimental::table> from_dlpack(
+    DLManagedTensor const* managed_tensor,
     rmm::mr::device_memory_resource* mr)
 {
   return detail::from_dlpack(managed_tensor, mr);
+}
+
+DLManagedTensor* to_dlpack(table_view const& input,
+    rmm::mr::device_memory_resource* mr)
+{
+  return detail::to_dlpack(input, mr);
 }
 
 }  // namespace cudf

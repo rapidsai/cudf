@@ -32,8 +32,8 @@ namespace detail {
  * 
  * @return Columns converted from DLPack
  */
-std::vector<std::unique_ptr<column>> from_dlpack(
-    DLManagedTensor const& managed_tensor,
+std::unique_ptr<experimental::table> from_dlpack(
+    DLManagedTensor const* managed_tensor,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
@@ -46,7 +46,8 @@ std::vector<std::unique_ptr<column>> from_dlpack(
  * 
  * @return 1D or 2D DLPack tensor (single or multiple columns)
  */
-DLManagedTensor to_dlpack(std::vector<column_view> const& columns,
+DLManagedTensor* to_dlpack(table_view const& input,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
 }  // namespace detail
