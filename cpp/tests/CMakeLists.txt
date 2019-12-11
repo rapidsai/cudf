@@ -57,7 +57,7 @@ endfunction(ConfigureBench)
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 endif()
 
 include_directories("${CMAKE_BINARY_DIR}/include"
@@ -245,6 +245,15 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 ###################################################################################################
 # - hashing tests ---------------------------------------------------------------------------------
 
+set(HASHING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+
+ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - legacy hashing tests ---------------------------------------------------------------------------------
+
 set(LEGACY_HASHING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_partition_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hash_test.cu")
@@ -301,7 +310,17 @@ set(REPLACE_TEST_SRC
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
-#################################################################################f##################
+set(REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cu")
+
+ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+
+set(NORMALIZE_REPLACE_TEST_SRC
+	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")
+	
+ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
@@ -387,9 +406,12 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")
 set(ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
+set(PARQUET_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
+ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -438,7 +460,9 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
@@ -473,7 +497,7 @@ set(LEGACY_NVSTRING_SCATTER_TEST_SRC
 
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
@@ -567,6 +591,15 @@ set(LEGACY_MERGE_TEST_SRC
 ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 
 ###################################################################################################
+# - sorted-merge new tests ----------------------------------------------------------------------------
+
+set(MERGE_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu")
+
+ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
+
+
+###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -587,12 +620,20 @@ set(LEGACY_STREAM_COMPACTION_TEST_SRC
 ConfigureTest(LEGACY_STREAM_COMPACTION_TEST "${LEGACY_STREAM_COMPACTION_TEST_SRC}")
 
 ###################################################################################################
-# - rolling tests ---------------------------------------------------------------------------------
+# - legacy rolling tests ---------------------------------------------------------------------------------
 
 set(LEGACY_ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/legacy/rolling_test.cu")
 
 ConfigureTest(LEGACY_ROLLING_TEST "${LEGACY_ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - rolling tests ---------------------------------------------------------------------------------
+
+set(ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp")
+
+ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -625,7 +666,7 @@ ConfigureTest(LEGACY_SEARCH_TEST "${LEGACY_SEARCH_TEST_SRC}")
 # - search test -----------------------------------------------------------------------------------
 
 set(SEARCH_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cpp")
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
@@ -678,11 +719,13 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")

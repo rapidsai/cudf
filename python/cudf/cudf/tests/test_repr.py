@@ -128,6 +128,7 @@ def test_integer_series(x):
 
 
 @given(st.lists(st.floats()))
+@settings(deadline=None)
 def test_float_dataframe(x):
     gdf = cudf.DataFrame({"x": cudf.Series(x, nan_as_null=False)})
     pdf = gdf.to_pandas()
@@ -135,6 +136,7 @@ def test_float_dataframe(x):
 
 
 @given(st.lists(st.floats()))
+@settings(deadline=None)
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
     ps = pd.Series(x)
@@ -199,11 +201,7 @@ def test_MI():
 @pytest.mark.parametrize("ncols", [0, 1, 2, 3])
 def test_groupby_MI(nrows, ncols):
     gdf = cudf.DataFrame(
-        {
-            "a": np.random.randint(0, 4, 10),
-            "b": np.random.randint(0, 4, 10),
-            "c": np.random.randint(0, 4, 10),
-        }
+        {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
     )
     pdf = gdf.to_pandas()
     gdg = gdf.groupby(["a", "b"]).count()
