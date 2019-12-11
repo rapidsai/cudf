@@ -5,6 +5,7 @@
 - PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
+- PR #3502 ORC reader: add option to read DECIMALs as INT64
 
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 
