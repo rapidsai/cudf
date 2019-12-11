@@ -9,8 +9,8 @@
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 
 ## Bug Fixes
-
--PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3562 Fix 4GB limit for gzipped-compressed csv files
 
 
 # cuDF 0.11.0 (11 Dec 2019)
