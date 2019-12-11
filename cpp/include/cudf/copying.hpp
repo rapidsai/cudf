@@ -326,6 +326,37 @@ std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices);
 
 /**
+ * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
+ * The returned views of `input` are constructed from an even number indices where
+ * the `i`th returned `table_view` views the elements in `input` indicated by the range
+ * `[indices[2*i], indices[(2*i)+1])`.
+ *
+ * For all `i` it is expected `indices[i] <= input.size()`
+ * For all `i%2==0`, it is expected that `indices[i] <= indices[i+1]`
+ *
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
+ *
+ * @example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
+ * indices: {1, 3, 5, 9, 2, 4, 8, 8}
+ * output:  [{{12, 14}, {20, 22, 24, 26}, {14, 16}, {}},
+ *           {{52, 54}, {60, 22, 24, 26}, {14, 16}, {}}]
+ *
+ * @throws `cudf::logic_error` if `indices` size is not even.
+ * @throws `cudf::logic_error` When the values in the pair are strictly decreasing.
+ * @throws `cudf::logic_error` When any of the values in the pair don't belong to
+ * the range [0, input.size()).
+ *
+ * @param input View of table to slice
+ * @param indices A vector of indices used to take slices of `input`.
+ * @return Vector of views of `input` indicated by the ranges in `indices`.
+ */
+std::vector<table_view> slice(table_view const& input,
+                               std::vector<size_type> const& indices);
+
+/**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
  * derived from expected splits.
  *
@@ -354,6 +385,84 @@ std::vector<column_view> slice(column_view const& input,
  */
 std::vector<column_view> split(column_view const& input,
                                std::vector<size_type> const& splits);
+
+/**
+ * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
+ * derived from expected splits.
+ *
+ * The returned views of `input` are constructed from vector of splits, which indicates
+ * where the split should occur. The `i`th returned `table_view` is sliced as
+ * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
+ * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ *
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ *
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory.
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
+ * splits:  {2, 5, 9}
+ * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
+ *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
+ *           
+ *
+ * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
+ * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ *
+ * @param input View of a table to split
+ * @param splits A vector of indices where the view will be split
+ * @return The set of requested views of `input` indicated by the `splits`.
+ */
+std::vector<table_view> split(table_view const& input,
+                               std::vector<size_type> const& splits);
+
+/**
+ * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s according 
+ * to a set of indices derived from expected splits. The memory is allocated in a single
+ * contiguous block owned by the `all_data` field in the returned contiguous_split_result. There
+ * is no top level owning table.
+ *
+ * The returned views of `input` are constructed from vector of splits, which indicates
+ * where the split should occur. The `i`th returned `table_view` is sliced as
+ * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
+ * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ *
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ *
+ * @note It is the caller's responsibility to ensure that the returned view
+ * does not outlive the viewed device memory contained in the `all_data` field of the
+ * returned contiguous_split_result.   
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
+ * splits:  {2, 5, 9}
+ * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
+ *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
+ *           
+ *
+ * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
+ * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ *
+ * @param input View of a table to split
+ * @param splits A vector of indices where the view will be split
+ * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @return The set of requested views of `input` indicated by the `splits`.
+ */
+struct contiguous_split_result {
+   cudf::table_view                    table;
+   std::unique_ptr<rmm::device_buffer> all_data;
+
+   operator table_view() const { return table; };
+};
+std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
+                                                      std::vector<size_type> const& splits,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 

@@ -744,6 +744,6 @@ enable_testing()
 # - iterator benchmarks----------------------------------------------------------------------------
 
 set(LEGACY_ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/legacy/iterator_bench.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
 
   ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")
