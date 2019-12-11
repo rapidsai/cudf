@@ -141,8 +141,6 @@ inline void check_cuda_error(char const* file, unsigned int line,
     }                                                             \
   } while (0);
 
-#define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
-
 /**---------------------------------------------------------------------------*
  * @brief Debug macro to check for CUDA errors
  *

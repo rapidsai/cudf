@@ -70,7 +70,7 @@ struct launcher {
             output_view.begin<Tout>(),
             F{});
 
-        CUDA_CHECK_LAST();
+        CHECK_CUDA_ERROR(stream);
 
         return output;
     }

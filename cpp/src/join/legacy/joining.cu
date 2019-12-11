@@ -141,7 +141,7 @@ void trivial_full_join(
                               right_result->dtype_info,
                               right_result->col_name);
 
-    CUDA_CHECK_LAST();
+    CHECK_CUDA_ERROR(0);
 }
 
 /* --------------------------------------------------------------------------*/
