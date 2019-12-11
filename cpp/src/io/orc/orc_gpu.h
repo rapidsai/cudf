@@ -29,23 +29,25 @@ namespace gpu {
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
-  explicit constexpr CompressedStreamInfo(uint8_t *compressed_data_,
+  explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_,
                                           size_t compressed_size_)
       : compressed_data(compressed_data_),
         compressed_data_size(compressed_size_),
         uncompressed_data(nullptr),
         decctl(nullptr),
         decstatus(nullptr),
-        max_compressed_blocks(0),
+        copyctl(nullptr),
         num_compressed_blocks(0),
+        num_uncompressed_blocks(0),
         max_uncompressed_size(0) {}
-  uint8_t *compressed_data;         // [in] base ptr to compressed stream data
+  const uint8_t *compressed_data;   // [in] base ptr to compressed stream data
   uint8_t *uncompressed_data;       // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream
   gpu_inflate_input_s *decctl;      // [in] base ptr to decompression structure to be filled
   gpu_inflate_status_s *decstatus;  // [in] results of decompression
-  uint32_t max_compressed_blocks;   // [in] number of entries in decctl
-  uint32_t num_compressed_blocks;   // [out] total number of compressed blocks in this stream
+  gpu_inflate_input_s *copyctl;     // [in] base ptr to copy structure to be filled for uncompressed blocks
+  uint32_t num_compressed_blocks;   // [in,out] number of entries in decctl(in), number of compressed blocks(out)
+  uint32_t num_uncompressed_blocks; // [in,out] number of entries in copyctl(in), number of uncompressed blocks(out)
   uint64_t max_uncompressed_size;   // [out] maximum uncompressed data size
 };
 
@@ -259,7 +261,7 @@ cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry
  **/
 cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0,
                                 size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0,
-                                RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
+                                const RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
 
 
 /**

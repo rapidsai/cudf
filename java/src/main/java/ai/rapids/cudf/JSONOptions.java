@@ -18,6 +18,9 @@
 
 package ai.rapids.cudf;
 
+/**
+ * Options for reading in JSON encoded data.
+ */
 public final class JSONOptions  extends ColumnFilterOptions {
 
   public static JSONOptions DEFAULT = new JSONOptions(builder());

@@ -14,53 +14,66 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
-#include <jit/type.h>
-#include <nvstrings/NVCategory.h>
-#include <utilities/cudf_utils.h>
-#include <bitmask/legacy/bitmask_ops.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <utilities/error_utils.hpp>
-
-#include <utilities/column_utils.hpp>
-
-#include <cudf/legacy/column.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/detail/transform.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 
-#include <types.h.jit>
+#include <types.hpp.jit>
 
 namespace cudf {
+namespace experimental {
 namespace transformation {
-
-/**---------------------------------------------------------------------------*
- * @brief Computes output valid mask for op between a column and a scalar
- *
- * @param out_null_coun[out] number of nulls in output
- * @param valid_out preallocated output mask
- * @param valid_col input mask of column
- * @param num_values number of values in input mask valid_col
- *---------------------------------------------------------------------------**/
 
 namespace jit {
 
-void unary_operation(gdf_column& output, const gdf_column& input,
-                     const std::string& udf, gdf_dtype output_type, bool is_ptx) {
+
+/**
+ * @brief Functor to enable the internal working of `get_data_ptr`
+ * @ref get_data_ptr
+ */
+struct get_data_ptr_functor {
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), const void *>
+  operator()(column_view const& view) {
+    return static_cast<const void*>(view.template data<T>());
+  }
+  template <typename T>
+  std::enable_if_t<not is_fixed_width<T>(), const void *>
+  operator()(column_view const& view) {
+    CUDF_FAIL("Invalid data type for transform operation");
+  }
+};
+
+/**
+ * @brief Get the raw pointer to data in a (mutable_)column_view
+ */
+auto get_data_ptr(column_view const& view) {
+  return experimental::type_dispatcher(view.type(),
+                         get_data_ptr_functor{}, view);
+}
+
+
+void unary_operation(mutable_column_view output, column_view input,
+                     const std::string& udf, data_type output_type, bool is_ptx,
+                     cudaStream_t stream) {
  
-  std::string hash = "prog_tranform." 
+  std::string hash = "prog_transform.experimental" 
     + std::to_string(std::hash<std::string>{}(udf));
 
   std::string cuda_source;
   if(is_ptx){
-    cuda_source = 
+    cuda_source = "\n#include <cudf/types.hpp>\n" +
       cudf::jit::parse_single_function_ptx(
           udf, "GENERIC_UNARY_OP", 
-          cudf::jit::getTypeName(output_type), {0}
+          cudf::jit::get_type_name(output_type), {0}
           ) + code::kernel;
   }else{  
     cuda_source = 
@@ -71,53 +84,60 @@ void unary_operation(gdf_column& output, const gdf_column& input,
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
-    { cudf_types_h },
-    { "-std=c++14" }, nullptr
+    { cudf_types_hpp },
+    { "-std=c++14" }, nullptr, stream
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
-    { cudf::jit::getTypeName(output.dtype), // list of template arguments
-      cudf::jit::getTypeName(input.dtype) }
+    { cudf::jit::get_type_name(output.type()), // list of template arguments
+      cudf::jit::get_type_name(input.type()) }
   ).launch(
-    output.size,
-    output.data,
-    input.data
+    output.size(),
+    get_data_ptr(output),
+    get_data_ptr(input)
   );
 
 }
 
-}  // namespace jit
+} // namespace jit
+} // namespace transformation
 
-}  // namespace transformation
 
-gdf_column transform(const gdf_column& input,
-                     const std::string& unary_udf,
-                     gdf_dtype output_type, bool is_ptx) {
-  
-  // First create a gdf_column and then call the above function
-  gdf_column output = allocate_column(output_type, input.size, input.valid != nullptr);
-  
-  output.null_count = input.null_count;
+namespace detail {
 
-  // Check for 0 sized data
-  if (input.size == 0){
-      return output;
+std::unique_ptr<column> transform(column_view const& input,
+                                  std::string const& unary_udf,
+                                  data_type output_type, bool is_ptx,
+                                  rmm::mr::device_memory_resource *mr,
+                                  cudaStream_t stream)
+{
+  CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
+
+  std::unique_ptr<column> output =
+    make_numeric_column(output_type, input.size(), copy_bitmask(input),
+                        cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+  if (input.size() == 0) {
+    return output;
   }
 
-  // Check for null data pointer
-  CUDF_EXPECTS((input.data != nullptr), "Input column data pointers are null");
+  mutable_column_view output_view = *output;
 
-  // Check for datatype
-  CUDF_EXPECTS( input.dtype != GDF_STRING && input.dtype != GDF_CATEGORY, 
-      "Invalid/Unsupported input datatype" );
-  
-  if (input.valid != nullptr) {
-    gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
-    CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));
-  }
-
-  transformation::jit::unary_operation(output, input, unary_udf, output_type, is_ptx);
+  // transform
+  transformation::jit::unary_operation(output_view, input, unary_udf,
+                                       output_type, is_ptx, stream);
 
   return output;
 }
 
-}  // namespace cudf
+} // namespace detail
+
+std::unique_ptr<column> transform(column_view const& input,
+                                  std::string const& unary_udf,
+                                  data_type output_type, bool is_ptx,
+                                  rmm::mr::device_memory_resource *mr)
+{
+  return detail::transform(input, unary_udf, output_type, is_ptx, mr);
+}
+
+} // namespace experimental
+} // namespace cudf

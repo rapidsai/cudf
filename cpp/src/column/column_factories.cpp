@@ -16,8 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <utilities/error_utils.hpp>
 
 namespace cudf {
 namespace {
@@ -37,7 +37,12 @@ struct size_of_helper {
 
 std::size_t size_of(data_type element_type) {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::exp::type_dispatcher(element_type, size_of_helper{});
+  return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
+}
+
+// Empty column of specified type
+std::unique_ptr<column> make_empty_column(data_type type) {
+  return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
 // Allocate storage for a specified number of numeric elements
@@ -51,4 +56,17 @@ std::unique_ptr<column> make_numeric_column(
       create_null_mask(size, state, stream, mr), state_null_count(state, size),
       std::vector<std::unique_ptr<column>>{});
 }
+
+// Allocate storage for a specified number of timestamp elements
+std::unique_ptr<column> make_timestamp_column(
+    data_type type, size_type size, mask_state state, cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
+  CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
+
+  return std::make_unique<column>(
+      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      create_null_mask(size, state, stream, mr), state_null_count(state, size),
+      std::vector<std::unique_ptr<column>>{});
+}
+
 }  // namespace cudf

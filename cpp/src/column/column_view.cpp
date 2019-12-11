@@ -18,7 +18,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <exception>
 #include <vector>
@@ -61,9 +61,17 @@ column_view_base::column_view_base(data_type type, size_type size,
 // If null count is known, returns it. Else, compute and return it
 size_type column_view_base::null_count() const {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::count_unset_bits(null_mask(), offset(), size());
+    _null_count = cudf::count_unset_bits(null_mask(), offset(), offset()+size());
   }
   return _null_count;
+}
+
+size_type column_view_base::null_count(size_type begin, size_type end) const {
+  CUDF_EXPECTS((begin <= end) && (begin >= 0) && (begin <  size()) &&
+                 (end <= size()),
+               "Range is out of bounds.");
+  return (null_count() == 0) ?
+    0 : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
 }
 }  // namespace detail
 

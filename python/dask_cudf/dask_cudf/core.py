@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import warnings
-from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -17,13 +16,14 @@ from dask.dataframe import from_delayed
 from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import batcher_sortnet, join_impl
+from dask_cudf import batcher_sortnet
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
@@ -75,6 +75,8 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         return type(self), (self._name, self._meta, self.divisions)
 
     def __init__(self, dsk, name, meta, divisions):
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
         meta = dd.core.make_meta(meta)
@@ -137,242 +139,33 @@ class DataFrame(_Frame, dd.core.DataFrame):
             do_apply_rows, func, incols, outcols, kwargs, meta=meta
         )
 
-    def merge(
-        self,
-        other,
-        on=None,
-        how="left",
-        left_index=False,
-        right_index=False,
-        suffixes=("_x", "_y"),
-    ):
-        """Merging two dataframes on the column(s) indicated in *on*.
-        """
-        if (
-            left_index
-            or right_index
-            or not dask.is_dask_collection(other)
-            or self.npartitions == 1
-            and how in ("inner", "right")
-            or other.npartitions == 1
-            and how in ("inner", "left")
-        ):
-            return dd.merge(
-                self,
-                other,
-                how=how,
-                suffixes=suffixes,
-                left_index=left_index,
-                right_index=right_index,
-            )
-
-        if not on and not left_index and not right_index:
-            on = [c for c in self.columns if c in other.columns]
-            if not on:
-                left_index = right_index = True
-
-        return join_impl.join_frames(
-            left=self,
-            right=other,
-            on=on,
-            how=how,
-            lsuffix=suffixes[0],
-            rsuffix=suffixes[1],
-        )
-
-    def join(self, other, how="left", lsuffix="", rsuffix=""):
-        """Join two datatframes
-
-        *on* is not supported.
-        """
-        if how == "right":
-            return other.join(
-                other=self, how="left", lsuffix=rsuffix, rsuffix=lsuffix
-            )
-
-        same_names = set(self.columns) & set(other.columns)
-        if same_names and not (lsuffix or rsuffix):
+    def merge(self, other, **kwargs):
+        if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
-                "there are overlapping columns but "
-                "lsuffix and rsuffix are not defined"
+                "Dask-cudf only supports task based shuffling, got %s"
+                % kwargs["shuffle"]
+            )
+        on = kwargs.pop("on", None)
+        if isinstance(on, tuple):
+            on = list(on)
+        return super().merge(other, on=on, shuffle="tasks", **kwargs)
+
+    def join(self, other, **kwargs):
+        if kwargs.pop("shuffle", "tasks") != "tasks":
+            raise ValueError(
+                "Dask-cudf only supports task based shuffling, got %s"
+                % kwargs["shuffle"]
             )
 
-        left, leftuniques = self._align_divisions()
-        right, rightuniques = other._align_to_indices(leftuniques)
+        # CuDF doesn't support "right" join yet
+        how = kwargs.pop("how", "left")
+        if how == "right":
+            return other.join(other=self, how="left", **kwargs)
 
-        leftparts = left.to_delayed()
-        rightparts = right.to_delayed()
-
-        @delayed
-        def part_join(left, right, how):
-            return left.join(
-                right, how=how, sort=True, lsuffix=lsuffix, rsuffix=rsuffix
-            )
-
-        def inner_selector():
-            pivot = 0
-            for i in range(len(leftparts)):
-                for j in range(pivot, len(rightparts)):
-                    if leftuniques[i] & rightuniques[j]:
-                        yield leftparts[i], rightparts[j]
-                        pivot = j + 1
-                        break
-
-        def left_selector():
-            pivot = 0
-            for i in range(len(leftparts)):
-                for j in range(pivot, len(rightparts)):
-                    if leftuniques[i] & rightuniques[j]:
-                        yield leftparts[i], rightparts[j]
-                        pivot = j + 1
-                        break
-                else:
-                    yield leftparts[i], None
-
-        selector = {"left": left_selector, "inner": inner_selector}[how]
-
-        rhs_dtypes = [(k, other._meta.dtypes[k]) for k in other._meta.columns]
-
-        @delayed
-        def fix_column(lhs):
-            df = cudf.DataFrame()
-            for k in lhs.columns:
-                df[k + lsuffix] = lhs[k]
-
-            for k, dtype in rhs_dtypes:
-                data = np.zeros(len(lhs), dtype=dtype)
-                mask_size = cudf.utils.utils.calc_chunk_size(
-                    data.size, cudf.utils.utils.mask_bitsize
-                )
-                mask = np.zeros(mask_size, dtype=cudf.utils.utils.mask_dtype)
-                sr = cudf.Series.from_masked_array(
-                    data=data, mask=mask, null_count=data.size
-                )
-
-                df[k + rsuffix] = sr.set_index(df.index)
-
-            return df
-
-        joinedparts = [
-            (
-                part_join(lhs, rhs, how=how)
-                if rhs is not None
-                else fix_column(lhs)
-            )
-            for lhs, rhs in selector()
-        ]
-
-        meta = self._meta.join(
-            other._meta, how=how, lsuffix=lsuffix, rsuffix=rsuffix
-        )
-        return from_delayed(joinedparts, meta=meta)
-
-    def _align_divisions(self):
-        """Align so that the values do not split across partitions
-        """
-        parts = self.to_delayed()
-        uniques = self._get_unique_indices(parts=parts)
-        originals = list(map(frozenset, uniques))
-
-        changed = True
-        while changed:
-            changed = False
-            for i in range(len(uniques))[:-1]:
-                intersect = uniques[i] & uniques[i + 1]
-                if intersect:
-                    smaller = min(uniques[i], uniques[i + 1], key=len)
-                    bigger = max(uniques[i], uniques[i + 1], key=len)
-                    smaller |= intersect
-                    bigger -= intersect
-                    changed = True
-
-        # Fix empty partitions
-        uniques = list(filter(bool, uniques))
-
-        return self._align_to_indices(
-            uniques, originals=originals, parts=parts
-        )
-
-    def _get_unique_indices(self, parts=None):
-        if parts is None:
-            parts = self.to_delayed()
-
-        @delayed
-        def unique(x):
-            return set(x.index.as_column().unique().to_array())
-
-        parts = self.to_delayed()
-        return compute(*map(unique, parts))
-
-    def _align_to_indices(self, uniques, originals=None, parts=None):
-        uniques = list(map(set, uniques))
-
-        if parts is None:
-            parts = self.to_delayed()
-
-        if originals is None:
-            originals = self._get_unique_indices(parts=parts)
-            allindices = set()
-            for x in originals:
-                allindices |= x
-            for us in uniques:
-                us &= allindices
-            uniques = list(filter(bool, uniques))
-
-        extras = originals[-1] - uniques[-1]
-        extras = {x for x in extras if x > max(uniques[-1])}
-
-        if extras:
-            uniques.append(extras)
-
-        remap = OrderedDict()
-        for idxset in uniques:
-            remap[tuple(sorted(idxset))] = bins = []
-            for i, orig in enumerate(originals):
-                if idxset & orig:
-                    bins.append(parts[i])
-
-        @delayed
-        def take(indices, depends):
-            first = min(indices)
-            last = max(indices)
-            others = []
-            for d in depends:
-                # TODO: this can be replaced with searchsorted
-                # Normalize to index data in range before selection.
-                firstindex = d.index[0]
-                lastindex = d.index[-1]
-                s = max(first, firstindex)
-                e = min(last, lastindex)
-                others.append(d.loc[s:e])
-            return cudf.concat(others)
-
-        newparts = []
-        for idx, depends in remap.items():
-            newparts.append(take(idx, depends))
-
-        divisions = list(map(min, uniques))
-        divisions.append(max(uniques[-1]))
-
-        newdd = from_delayed(newparts, meta=self._meta)
-        return newdd, uniques
-
-    def _compute_divisions(self):
-        if self.known_divisions:
-            return self
-
-        @delayed
-        def first_index(df):
-            return df.index[0]
-
-        @delayed
-        def last_index(df):
-            return df.index[-1]
-
-        parts = self.to_delayed()
-        divs = [first_index(p) for p in parts] + [last_index(parts[-1])]
-        divisions = compute(*divs)
-        return type(self)(self.dask, self._name, self._meta, divisions)
+        on = kwargs.pop("on", None)
+        if isinstance(on, tuple):
+            on = list(on)
+        return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
 
     def set_index(self, other, **kwargs):
         if kwargs.pop("shuffle", "tasks") != "tasks":
@@ -472,6 +265,18 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         results = [p for i, p in enumerate(parts) if uniques[i]]
         return from_delayed(results, meta=self._meta).reset_index()
+
+    def to_parquet(self, path, *args, **kwargs):
+        """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
+        from dask_cudf.io import to_parquet
+
+        return to_parquet(self, path, *args, **kwargs)
+
+    def to_orc(self, path, **kwargs):
+        """ Calls dask_cudf.io.to_orc """
+        from dask_cudf.io import to_orc
+
+        return to_orc(self, path, **kwargs)
 
     @derived_from(pd.DataFrame)
     def var(

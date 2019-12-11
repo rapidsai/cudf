@@ -16,13 +16,17 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "types.hpp"
+#include <cudf/types.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/table/table.hpp>
+
 #include <vector>
 
 namespace cudf {
+namespace experimental {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find smallest indices in a sorted table where values should be 
  *  inserted to maintain order
  * 
@@ -47,21 +51,22 @@ namespace cudf {
  *             { 61 }}
  *   result =  {  3 }
  * 
- * @param t             Table to search
- * @param values        Find insert locations for these values
- * @param desc_flags    Vector of column sort order. False indicates the 
- *  corresponding column is sorted ascending
- * @param nulls_as_largest If true, nulls are considered larger than valid
- *  values, otherwise, nulls are considered smaller than valid values
- * 
- * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
- *---------------------------------------------------------------------------**/
-gdf_column lower_bound(table const& t,
-                       table const& values,
-                       std::vector<bool> const& desc_flags,
-                       bool nulls_as_largest = true);
+ * @param t               Table to search
+ * @param values          Find insert locations for these values
+ * @param column_order    Vector of column sort order
+ * @param null_precedence Vector of null_precedence enums
+ * values
+ * @param mr              Device memory resource to use for device memory allocation
+ * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
+ * containing the insertion points.
+ */
+std::unique_ptr<column> lower_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find largest indices in a sorted table where values should be 
  *  inserted to maintain order
  * 
@@ -85,41 +90,74 @@ gdf_column lower_bound(table const& t,
  *             { .7 },
  *             { 61 }}
  *   result =  {  5  *   * 
- * @param column        Table to search
- * @param values        Find insert locations for these values
- * @param desc_flags    Vector of column sort order. False indicates the 
- *  corresponding column is sorted ascending
- * @param nulls_as_largest If true, nulls are considered larger than valid
- *  values, otherwise, nulls are considered smaller than valid values
- * 
- * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
- *---------------------------------------------------------------------------**/
-gdf_column upper_bound(table const& t,
-                       table const& values,
-                       std::vector<bool> const& desc_flags,
-                       bool nulls_as_largest = true);
+ * @param column          Table to search
+ * @param values          Find insert locations for these values
+ * @param column_order    Vector of column sort order
+ * @param null_precedence Vector of null_precedence enums
+ * values
+ * @param mr              Device memory resource to use for device memory allocation
+ * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
+ * containing the insertion points.
+ */
+std::unique_ptr<column> upper_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
- * @brief Find if the `value` is present in the `column` and dtype of both
- * `value` and `column` should match.
+/**
+ * @brief Find if the `value` is present in the `col`
  *
  * @throws cudf::logic_error
- * If dtype of `column` and `value` doesn't match
+ * If `col.type() != values.type()`
  *
  * @example:
  *
  *  Single Column:
  *      idx      0   1   2   3   4
- *   column = { 10, 20, 20, 30, 50 }
+ *      col = { 10, 20, 20, 30, 50 }
  *  Scalar:
  *   value = { 20 }
  *   result = true
  *
- * @param column   A gdf column
- * @param value    A scalar value to search for in `column`
+ * @param col      A column object
+ * @param value    A scalar value to search for in `col`
+ * @param mr       Device memory resource to use for device memory allocation
  *
  * @return bool    If `value` is found in `column` true, else false.
- *---------------------------------------------------------------------------**/
-bool contains(gdf_column const& column, gdf_scalar const& value);
+ */
+bool contains(column_view const& col, scalar const& value,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief  Returns a new column of type bool8 identifying for each element of @p haystack column,
+ *         if that element is contained in @p needles column.
+ *
+ * The new column will have the same dimension and null status as the @p haystack column.  That is,
+ * any element that is invalid in the @p haystack column will be invalid in the returned column.
+ *
+ * @throws cudf::logic_error
+ * If `haystack.type() != needles.type()`
+ *
+ * @example:
+ *
+ *   haystack = { 10, 20, 30, 40, 50 }
+ *   needles  = { 20, 40, 60, 80 }
+ *
+ *   result = { false, true, false, true, false }
+ *
+ * @param haystack  A column object
+ * @param needles   A column of values to search for in `col`
+ * @param mr         Device memory resource to use for device memory allocation
+ *
+ * @return std::unique_ptr<column> A column of bool8 elements containing
+ * true if the corresponding entry in haystack is contained in needles and false
+ * if it is not.
+ */
+std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+} // namespace experimental
 } // namespace cudf
+
 

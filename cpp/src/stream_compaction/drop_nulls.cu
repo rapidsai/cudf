@@ -14,112 +14,97 @@
  * limitations under the License.
  */
 
-#include "copy_if.cuh"
-#include <cudf/legacy/table.hpp>
-#include <thrust/logical.h>
-#include <thrust/count.h>
- 
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/copy_if.cuh>
+
 namespace {
 
-using bit_mask_t = bit_mask::bit_mask_t;
-
-// Returns true if the valid mask is true for index i in at least keep_threshold
+// Returns true if the mask is true for index i in at least keep_threshold
 // columns
 struct valid_table_filter
 {
-  __device__ inline 
-  bool operator()(gdf_index_type i)
+  __device__ inline
+  bool operator()(cudf::size_type i)
   {
-    auto valid = [i](auto mask) { 
-      return (mask == nullptr) || bit_mask::is_valid(mask, i);
+    auto valid = [i](auto column_device_view) {
+      return column_device_view.is_valid(i);
     };
 
     auto count =
-      thrust::count_if(thrust::seq, d_masks, d_masks + num_columns, valid);
+      thrust::count_if(thrust::seq, keys_device_view.begin(), keys_device_view.end(), valid);
 
     return (count >= keep_threshold);
-  }
-
-  static auto create(cudf::table const &table,
-                     gdf_size_type keep_threshold,
-                     cudaStream_t stream = 0)
-  {
-    std::vector<bit_mask_t*> h_masks(table.num_columns());
-
-    std::transform(std::cbegin(table), std::cend(table), std::begin(h_masks),
-      [](auto col) { return reinterpret_cast<bit_mask_t*>(col->valid); }
-    );    
-    
-    size_t masks_size = sizeof(bit_mask_t*) * table.num_columns();
-
-    bit_mask_t **device_masks = nullptr;
-    RMM_TRY(RMM_ALLOC(&device_masks, masks_size, stream));
-    CUDA_TRY(cudaMemcpyAsync(device_masks, h_masks.data(), masks_size,
-                             cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
-
-    auto deleter = [stream](valid_table_filter* f) { f->destroy(stream); };
-    std::unique_ptr<valid_table_filter, decltype(deleter)> p {
-      new valid_table_filter(device_masks, table.num_columns(), keep_threshold),
-      deleter
-    };
-
-    CHECK_STREAM(stream);
-
-    return p;
-  }
-
-  __host__ void destroy(cudaStream_t stream = 0) {
-    RMM_FREE(d_masks, stream);
-    delete this;
   }
 
   valid_table_filter() = delete;
   ~valid_table_filter() = default;
 
+  valid_table_filter(cudf::table_device_view const& keys_device_view,
+                     cudf::size_type keep_threshold)
+  : keep_threshold(keep_threshold),
+    keys_device_view(keys_device_view) {}
+
 protected:
 
-  valid_table_filter(bit_mask_t **masks,
-                     gdf_size_type num_columns,
-                     gdf_size_type keep_threshold) 
-  : keep_threshold(keep_threshold),
-    num_columns(num_columns),
-    d_masks(masks) {}
-
-  gdf_size_type keep_threshold;
-  gdf_size_type num_columns;
-  bit_mask_t **d_masks;
+  cudf::size_type keep_threshold;
+  cudf::size_type num_columns;
+  cudf::table_device_view keys_device_view;
 };
 
 }  // namespace
 
 namespace cudf {
+namespace experimental {
+namespace detail {
 
 /*
  * Filters a table to remove null elements.
  */
-table drop_nulls(table const &input,
-                 table const &keys,
-                 gdf_size_type keep_threshold) {
-  if (keys.num_columns() == 0 || keys.num_rows() == 0 ||
-      not cudf::has_nulls(keys))
-    return cudf::copy(input);
+std::unique_ptr<experimental::table>
+  drop_nulls(table_view const& input,
+             std::vector<size_type> const& keys,
+             cudf::size_type keep_threshold,
+             rmm::mr::device_memory_resource *mr,
+             cudaStream_t stream) {
 
-  CUDF_EXPECTS(keys.num_rows() <= input.num_rows(), 
-               "Column size mismatch");
+  auto keys_view = input.select(keys);
+  if (keys_view.num_columns() == 0 ||
+      keys_view.num_rows() == 0 ||
+      not cudf::has_nulls(keys_view)) {
+      return std::make_unique<table>(input, stream, mr);
+  }
 
-  auto filter = valid_table_filter::create(keys, keep_threshold);
+  auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
 
-  return detail::copy_if(input, *filter.get());
+  return cudf::experimental::detail::copy_if(input, valid_table_filter{*keys_device_view, keep_threshold}, mr, stream);
 }
 
+} //namespace detail
+
 /*
  * Filters a table to remove null elements.
  */
-table drop_nulls(table const &input,
-                 table const &keys)
+std::unique_ptr<experimental::table>
+  drop_nulls(table_view const& input,
+             std::vector<size_type> const& keys,
+             cudf::size_type keep_threshold,
+             rmm::mr::device_memory_resource *mr) {
+    return cudf::experimental::detail::drop_nulls(input, keys, keep_threshold, mr);
+}
+/*
+ * Filters a table to remove null elements.
+ */
+std::unique_ptr<experimental::table>
+  drop_nulls(table_view const &input,
+             std::vector<size_type> const& keys,
+             rmm::mr::device_memory_resource *mr)
 {
-  return drop_nulls(input, keys, keys.num_columns());
+    return cudf::experimental::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 
-}  // namespace cudf
+} //namespace experimental
+} //namespace cudf

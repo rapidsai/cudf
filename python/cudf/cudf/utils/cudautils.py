@@ -5,7 +5,6 @@ from functools import lru_cache
 import numpy as np
 from numba import cuda, int32, numpy_support
 
-import nvstrings
 import rmm
 
 from cudf.utils.utils import (
@@ -366,52 +365,6 @@ def gpu_fill_masked(value, validity, out):
         valid = mask_get(validity, tid)
         if not valid:
             out[tid] = value
-
-
-@cuda.jit
-def gpu_isnull(validity, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        valid = mask_get(validity, tid)
-        if valid:
-            out[tid] = False
-        else:
-            out[tid] = True
-
-
-def isnull_mask(data, mask):
-    # necessary due to rapidsai/custrings#263
-    if isinstance(data, nvstrings.nvstrings):
-        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
-    else:
-        output_dary = rmm.device_array(data.size, dtype=np.bool_)
-
-    if output_dary.size > 0:
-        gpu_isnull.forall(output_dary.size)(mask, output_dary)
-    return output_dary
-
-
-@cuda.jit
-def gpu_notna(validity, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        valid = mask_get(validity, tid)
-        if valid:
-            out[tid] = True
-        else:
-            out[tid] = False
-
-
-def notna_mask(data, mask):
-    # necessary due to rapidsai/custrings#263
-    if isinstance(data, nvstrings.nvstrings):
-        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
-    else:
-        output_dary = rmm.device_array(data.size, dtype=np.bool_)
-
-    if output_dary.size > 0:
-        gpu_notna.forall(output_dary.size)(mask, output_dary)
-    return output_dary
 
 
 #
@@ -860,9 +813,7 @@ def row_matrix(cols, nrow, ncol, dtype):
     for colidx, col in enumerate(cols):
         data = matrix[:, colidx]
         if data.size > 0:
-            gpu_row_matrix.forall(data.size)(
-                data, col.to_gpu_array(), nrow, ncol
-            )
+            gpu_row_matrix.forall(data.size)(data, col.data.mem, nrow, ncol)
     return matrix
 
 

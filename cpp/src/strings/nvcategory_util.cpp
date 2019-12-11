@@ -1,37 +1,26 @@
 #include <utility>
-#include <utilities/column_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <cudf/replace.hpp>
+#include <cudf/legacy/replace.hpp>
 #include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
-#include <cudf/binaryop.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/utilities/error.hpp>
+#include <utilities/legacy/error_utils.hpp>
+#include <cudf/legacy/binaryop.hpp>
+#include <cudf/legacy/copying.hpp>
 
 namespace {
   NVCategory * combine_column_categories(const gdf_column* const input_columns[], int num_columns){
-    NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
+    std::vector<NVCategory *> cats;
+    std::transform(input_columns, input_columns + num_columns, std::back_inserter(cats), 
+      [&](const gdf_column* c) {
+        return const_cast<NVCategory *>(static_cast<const NVCategory *>(c->dtype_info.category));
+      });
 
-      for(int column_index = 1; column_index < num_columns; column_index++){
-        NVCategory * temp = combined_category;
-        if(input_columns[column_index]->size > 0){
-          gdf_column* in_col = const_cast<gdf_column*>(input_columns[column_index]);
-          combined_category = combined_category->merge_and_remap(
-              * static_cast<NVCategory *>(
-                  in_col->dtype_info.category));
-          if(column_index > 1){
-            NVCategory::destroy(temp);
-          }
-        }
-      }
-      if(combined_category == static_cast<NVCategory *>(input_columns[0]->dtype_info.category)){
-        return combined_category->copy();
-      }else{
-        return combined_category;
-      }
+    return NVCategory::create_from_categories(cats);
   }
 
 
@@ -129,7 +118,7 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category){
   return GDF_SUCCESS;
 }
 
-gdf_error validate_categories(const gdf_column* const input_columns[], int num_columns, gdf_size_type & total_count){
+gdf_error validate_categories(const gdf_column* const input_columns[], int num_columns, cudf::size_type & total_count){
   total_count = 0;
   for (int i = 0; i < num_columns; ++i) {
     const gdf_column* current_column = input_columns[i];
@@ -145,7 +134,7 @@ gdf_error validate_categories(const gdf_column* const input_columns[], int num_c
 
 gdf_error concat_categories(const gdf_column* const input_columns[], gdf_column* output_column, int num_columns){
 
-  gdf_size_type total_count;
+  cudf::size_type total_count;
   gdf_error err = validate_categories(input_columns,num_columns,total_count);
   GDF_REQUIRE(err == GDF_SUCCESS,err);
   GDF_REQUIRE(total_count <= output_column->size,GDF_COLUMN_SIZE_MISMATCH);
@@ -169,7 +158,7 @@ gdf_error concat_categories(const gdf_column* const input_columns[], gdf_column*
 gdf_error sync_column_categories(const gdf_column* const input_columns[], gdf_column* output_columns[], int num_columns){
 
   GDF_REQUIRE(num_columns > 0,GDF_DATASET_EMPTY);
-  gdf_size_type total_count;
+  cudf::size_type total_count;
 
   gdf_error err = validate_categories(input_columns,num_columns,total_count);
   GDF_REQUIRE(GDF_SUCCESS == err, err);
@@ -183,10 +172,10 @@ gdf_error sync_column_categories(const gdf_column* const input_columns[], gdf_co
 
   NVCategory * combined_category = combine_column_categories(input_columns,num_columns);
 
-  gdf_size_type current_column_start_position = 0;
+  cudf::size_type current_column_start_position = 0;
   for(int column_index = 0; column_index < num_columns; column_index++){
-    gdf_size_type column_size = output_columns[column_index]->size;
-    gdf_size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
+    cudf::size_type column_size = output_columns[column_index]->size;
+    cudf::size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
     CUDA_TRY( cudaMemcpy(output_columns[column_index]->data,
                           combined_category->values_cptr() + current_column_start_position,
                          size_to_copy,

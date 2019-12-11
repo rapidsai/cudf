@@ -42,11 +42,12 @@ class CudfEngine(ArrowEngine):
                 piece, open_file_func=partial(fs.open, mode="rb")
             )
         else:
-            # `piece` contains (path, row_group, partition_keys)
+            # `piece` = (path, row_group, partition_keys)
+            (path, row_group, partition_keys) = piece
             piece = pq.ParquetDatasetPiece(
-                piece[0],
-                row_group=piece[1],
-                partition_keys=piece[2],
+                path,
+                row_group=row_group,
+                partition_keys=partition_keys,
                 open_file_func=partial(fs.open, mode="rb"),
             )
 
@@ -71,7 +72,7 @@ class CudfEngine(ArrowEngine):
                     **kwargs.get("read", {}),
                 )
 
-        if index is not None and index[0] in df.columns:
+        if index and index[0] in df.columns:
             df = df.set_index(index[0])
 
         if len(piece.partition_keys) > 0:
@@ -88,8 +89,60 @@ class CudfEngine(ArrowEngine):
 
         return df
 
+    @staticmethod
+    def write_partition(
+        df,
+        path,
+        fs,
+        filename,
+        partition_on,
+        return_metadata,
+        fmd=None,
+        compression=None,
+        index_cols=None,
+        **kwargs,
+    ):
+        # TODO: Replace `pq.write_table` with gpu-accelerated
+        #       write after cudf.io.to_parquet is supported.
 
-def read_parquet(path, **kwargs):
+        md_list = []
+        preserve_index = False
+        if index_cols:
+            df = df.set_index(index_cols)
+            preserve_index = True
+
+        # NOTE: `to_arrow` does not accept `schema` argument
+        t = df.to_arrow(preserve_index=preserve_index)
+        if partition_on:
+            pq.write_to_dataset(
+                t,
+                path,
+                partition_cols=partition_on,
+                filesystem=fs,
+                metadata_collector=md_list,
+                **kwargs,
+            )
+        else:
+            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
+                pq.write_table(
+                    t,
+                    fil,
+                    compression=compression,
+                    metadata_collector=md_list,
+                    **kwargs,
+                )
+            if md_list:
+                md_list[0].set_file_path(filename)
+        # Return the schema needed to write the metadata
+        if return_metadata:
+            return [{"schema": t.schema, "meta": md_list[0]}]
+        else:
+            return []
+
+
+def read_parquet(
+    path, columns=None, split_row_groups=True, gather_statistics=None, **kwargs
+):
     """ Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
@@ -107,8 +160,18 @@ def read_parquet(path, **kwargs):
     --------
     cudf.read_parquet
     """
-
-    columns = kwargs.pop("columns", None)
     if isinstance(columns, str):
         columns = [columns]
-    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)
+    if split_row_groups:
+        gather_statistics = True
+    return dd.read_parquet(
+        path,
+        columns=columns,
+        split_row_groups=split_row_groups,
+        gather_statistics=gather_statistics,
+        engine=CudfEngine,
+        **kwargs,
+    )
+
+
+to_parquet = partial(dd.to_parquet, engine=CudfEngine)

@@ -17,11 +17,11 @@
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cassert>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/table.hpp>
-#include <utilities/column_utils.hpp>
-#include <utilities/error_utils.hpp>
-#include <utilities/integer_utils.hpp>
+#include <utilities/legacy/column_utils.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <algorithm>
 
 namespace cudf {
@@ -37,10 +37,10 @@ table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
 table::table(std::initializer_list<gdf_column*> list)
     : table{std::vector<gdf_column*>(list)} {}
 
-table::table(gdf_column* cols[], gdf_size_type num_cols)
+table::table(gdf_column* cols[], cudf::size_type num_cols)
     : table{std::vector<gdf_column*>(cols, cols + num_cols)} {}
 
-table::table(gdf_size_type num_rows,
+table::table(cudf::size_type num_rows,
              std::vector<gdf_dtype> const& dtypes,
              std::vector<gdf_dtype_extra_info> const& dtype_infos,
              bool allocate_bitmasks, bool all_valid, cudaStream_t stream)
@@ -72,12 +72,12 @@ table::table(gdf_size_type num_rows,
 
           RMM_ALLOC(
               &col->valid,
-              gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
+              gdf_valid_allocation_size(num_rows) * sizeof(cudf::valid_type),
               stream);
 
           CUDA_TRY(cudaMemsetAsync(
               col->valid, fill_value,
-              gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
+              gdf_valid_allocation_size(num_rows) * sizeof(cudf::valid_type),
               stream));
         }
         return col;
@@ -98,7 +98,7 @@ void table::destroy(void) {
   }
 }
 
-table table::select(std::vector<gdf_size_type> const& column_indices) const {
+table table::select(std::vector<cudf::size_type> const& column_indices) const {
     CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
 
     std::vector<gdf_column*> desired_columns;

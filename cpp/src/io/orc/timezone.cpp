@@ -17,6 +17,9 @@
 #include <algorithm>
 #include "timezone.h"
 
+namespace cudf {
+namespace io {
+
 // NOTE: Assumes little-endian platform
 #ifdef _MSC_VER
 #define bswap_32(v)    _byteswap_ulong(v)
@@ -506,8 +509,8 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
             fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
         }
         fin.close();
-        // Allocate transition table, add one entry for ancient rule, and 801 entries for future rules (2 transitions/year)
-        table.resize((1 + (size_t)tzh.timecnt + 400 * 2 + 1) * 2 + 1);
+        // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules (2 transitions/year)
+        table.resize((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
         earliest_std_idx = 0;
         for (size_t t = 0; t < tzh.timecnt; t++)
         {
@@ -597,4 +600,8 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
     }
     return true;
 }
+
+
+} // namespace io
+} // namespace cudf
 

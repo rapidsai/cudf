@@ -98,7 +98,14 @@ class MultiIndex(Index):
         self._source_data = DataFrame()
         for i, name in enumerate(self._codes.columns):
             codes = as_index(self._codes[name]._column)
-            level = DataFrame({name: self._levels[i]})
+            if -1 in self._codes[name].values:
+                # Must account for null(s) in _source_data column
+                level = DataFrame(
+                    {name: [None] + list(self._levels[i])},
+                    index=range(-1, len(self._levels[i])),
+                )
+            else:
+                level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
             self._source_data[name] = level[name].reset_index(drop=True)
 
@@ -194,6 +201,7 @@ class MultiIndex(Index):
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
+            cats.name = None
             cats = cats.reset_index(drop=True)._copy_construct(name=None)
             levels.append(cats)
 
@@ -292,12 +300,6 @@ class MultiIndex(Index):
             # directly, return a Series with a tuple as name.
             result = result.T
             result = result[result.columns[0]]
-            # convert to Series
-            series_name = []
-            for idx, code in enumerate(index._source_data.columns):
-                series_name.append(result.columns._source_data[code][0])
-            result = Series(list(result._cols.values())[0], index=result.index)
-            result.name = tuple(series_name)
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
@@ -343,7 +345,6 @@ class MultiIndex(Index):
             df.columns, row_tuple, len(df._cols)
         )
         result = df._take_columns(valid_indices)
-
         if isinstance(row_tuple, (numbers.Number, slice)):
             row_tuple = [row_tuple]
         if len(result) == 0 and len(result.columns) == 0:
@@ -368,6 +369,8 @@ class MultiIndex(Index):
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
             result.columns = as_index(columns, name=name)
+        if len(row_tuple) == len(self.levels) and len(result.columns) == 1:
+            result = list(result._cols.values())[0]
         return result
 
     def _split_tuples(self, tuples):
@@ -430,7 +433,9 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            indices = indices.to_gpu_array()
+            if indices.null_count != 0:
+                raise ValueError("Column must have no nulls.")
+            indices = indices.data.mem
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)

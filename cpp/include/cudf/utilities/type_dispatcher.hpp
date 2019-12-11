@@ -17,9 +17,11 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/cuda.cuh>
-#include <utilities/error_utils.hpp>
-#include <utilities/release_assert.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/wrappers/bool.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+#include <string>
 
 /**---------------------------------------------------------------------------*
  * @file type_dispatcher.hpp
@@ -27,7 +29,7 @@
  * and concrete C++ types.
  *---------------------------------------------------------------------------**/
 namespace cudf {
-namespace exp {
+namespace experimental {
 /**---------------------------------------------------------------------------*
  * @brief Maps a C++ type to it's corresponding `cudf::type_id`
  *
@@ -45,6 +47,13 @@ namespace exp {
 template <typename T>
 inline constexpr type_id type_to_id() {
   return EMPTY;
+};
+
+struct type_to_name {
+  template <typename T>
+  inline std::string operator()() {
+    return "void";
+  }
 };
 
 template <cudf::type_id t>
@@ -77,6 +86,11 @@ using id_to_type = typename id_to_type_impl<Id>::type;
     return Id;                                  \
   }                                             \
   template <>                                   \
+  inline std::string                            \
+  type_to_name::operator()<Type>() {            \
+    return CUDF_STRINGIFY(Type);                \
+  }                                             \
+  template <>                                   \
   struct id_to_type_impl<Id> {                  \
     using type = Type;                          \
   }
@@ -86,6 +100,7 @@ using id_to_type = typename id_to_type_impl<Id>::type;
  * @brief Defines all of the mappings between C++ types and their corresponding
  * `cudf::type_id` values.
  *---------------------------------------------------------------------------**/
+CUDF_TYPE_MAPPING(cudf::experimental::bool8, type_id::BOOL8);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
 CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
@@ -93,6 +108,66 @@ CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
 CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
+CUDF_TYPE_MAPPING(timestamp_D, type_id::TIMESTAMP_DAYS);
+CUDF_TYPE_MAPPING(timestamp_s, type_id::TIMESTAMP_SECONDS);
+CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
+CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
+CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
+
+
+template <typename T>
+struct type_to_scalar_type_impl {
+  using ScalarType = cudf::scalar;
+};
+
+#ifndef MAP_NUMERIC_SCALAR
+#define MAP_NUMERIC_SCALAR(Type)                    \
+template <>                                         \
+struct type_to_scalar_type_impl<Type> {             \
+  using ScalarType = cudf::numeric_scalar<Type>;    \
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<Type>; \
+};
+#endif
+
+MAP_NUMERIC_SCALAR(int8_t)
+MAP_NUMERIC_SCALAR(int16_t)
+MAP_NUMERIC_SCALAR(int32_t)
+MAP_NUMERIC_SCALAR(int64_t)
+MAP_NUMERIC_SCALAR(float)
+MAP_NUMERIC_SCALAR(double)
+MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
+
+template <>
+struct type_to_scalar_type_impl<cudf::string_view> {
+  using ScalarType = cudf::string_scalar;
+  using ScalarDeviceType = cudf::string_scalar_device_view;
+};
+
+#ifndef MAP_TIMESTAMP_SCALAR
+#define MAP_TIMESTAMP_SCALAR(Type)                  \
+template <>                                         \
+struct type_to_scalar_type_impl<Type> {             \
+  using ScalarType = cudf::timestamp_scalar<Type>;  \
+  using ScalarDeviceType = cudf::timestamp_scalar_device_view<Type>;       \
+};
+#endif
+
+MAP_TIMESTAMP_SCALAR(timestamp_D)
+MAP_TIMESTAMP_SCALAR(timestamp_s)
+MAP_TIMESTAMP_SCALAR(timestamp_ms)
+MAP_TIMESTAMP_SCALAR(timestamp_us)
+MAP_TIMESTAMP_SCALAR(timestamp_ns)
+
+/**
+ * @brief Maps a C++ type to the scalar type required to hold its value
+ * 
+ * @tparam T The concrete C++ type to map
+ */
+template <typename T>
+using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
+
+template <typename T>
+using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
@@ -194,6 +269,9 @@ template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     cudf::data_type dtype, Functor f, Ts&&... args) {
   switch (dtype.id()) {
+    case BOOL8:
+      return f.template operator()<typename IdTypeMap<BOOL8>::type>(
+          std::forward<Ts>(args)...);
     case INT8:
       return f.template operator()<typename IdTypeMap<INT8>::type>(
           std::forward<Ts>(args)...);
@@ -215,6 +293,21 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     case STRING:
       return f.template operator()<typename IdTypeMap<STRING>::type>(
           std::forward<Ts>(args)...);
+    case TIMESTAMP_DAYS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_DAYS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_SECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_SECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_MILLISECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_MILLISECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_MICROSECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_MICROSECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_NANOSECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
+          std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
@@ -235,5 +328,5 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
   }
 }
 
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

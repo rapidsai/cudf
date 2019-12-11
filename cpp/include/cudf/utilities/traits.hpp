@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/chrono.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/string_view.cuh>
 
@@ -40,6 +42,15 @@ template <typename L, typename R>
 struct is_relationally_comparable_impl<
     L, R, void_t<less_comparable<L, R>, greater_comparable<L, R> > >
     : std::true_type {};
+
+template <typename T>
+using is_timestamp_t = simt::std::disjunction<
+  std::is_same<cudf::timestamp_D, T>,
+  std::is_same<cudf::timestamp_s, T>,
+  std::is_same<cudf::timestamp_ms, T>,
+  std::is_same<cudf::timestamp_us, T>,
+  std::is_same<cudf::timestamp_ns, T>
+>;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether objects of types `L` and `R` can be relationally
@@ -82,14 +93,81 @@ struct is_numeric_impl {
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
  * or `FLOAT*`. Types that wrap a numeric type are not considered numeric, e.g.,
- *`TIMESTAMP` or `DATE32`.
+ *`TIMESTAMP`.
  *
  * @param type The `data_type` to verify
  * @return true `type` is numeric
  * @return false `type` is not numeric
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_numeric(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_numeric_impl{});
+  return cudf::experimental::type_dispatcher(type, is_numeric_impl{});
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether `T` is a Boolean type.
+ *
+ * `cudf::bool8` is cudf's Boolean type.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is Boolean
+ * @return false `type` is not Boolean
+ *---------------------------------------------------------------------------**/
+template <typename T>
+constexpr inline bool is_boolean() {
+  return std::is_same<T, cudf::experimental::bool8>::value ||
+         std::is_same<T, bool>::value;
+}
+
+struct is_boolean_impl {
+  template <typename T>
+  bool operator()() {
+    return is_boolean<T>();
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether `type` is a Boolean `data_type`.
+ *
+ * `cudf::bool8` is cudf's Boolean type.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a Boolean
+ * @return false `type` is not a Boolean
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_boolean(data_type type) {
+  return cudf::experimental::type_dispatcher(type, is_boolean_impl{});
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether the type `T` is a timestamp type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a timestamp
+ * @return false  `T` is not a timestamp
+ *---------------------------------------------------------------------------**/
+template <typename T>
+constexpr inline bool is_timestamp() {
+  return is_timestamp_t<T>::value;
+}
+
+struct is_timestamp_impl {
+  template <typename T>
+  bool operator()() {
+    return is_timestamp<T>();
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether `type` is a timestamp `data_type`.
+ *
+ * "Timestamp" types are int32_t or int64_t durations since the unix epoch.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a timestamp
+ * @return false `type` is not a timestamp
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_timestamp(data_type type) {
+  return cudf::experimental::type_dispatcher(type, is_timestamp_impl{});
 }
 
 /**---------------------------------------------------------------------------*
@@ -105,7 +183,7 @@ template <typename T>
 constexpr inline bool is_fixed_width() {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>();
+  return cudf::is_numeric<T>() || cudf::is_timestamp<T>();
 }
 
 struct is_fixed_width_impl {
@@ -125,7 +203,7 @@ struct is_fixed_width_impl {
  * @return false  `type` is variable-width
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_fixed_width(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_fixed_width_impl{});
+  return cudf::experimental::type_dispatcher(type, is_fixed_width_impl{});
 }
 
 /**---------------------------------------------------------------------------*
@@ -165,7 +243,7 @@ struct is_compound_impl {
  * @return false `type` is a simple type
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_compound(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_compound_impl{});
+  return cudf::experimental::type_dispatcher(type, is_compound_impl{});
 }
 
 /**---------------------------------------------------------------------------*

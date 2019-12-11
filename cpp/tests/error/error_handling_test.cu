@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <cstring>
 

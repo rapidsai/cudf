@@ -164,6 +164,24 @@ def pdfIndex():
     return pdfIndex
 
 
+@pytest.fixture
+def pdfIndexNulls():
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+        ],
+        [
+            [0, 0, 0, -1, 1, 1, 2],
+            [1, -1, 1, 1, 0, 0, -1],
+            [-1, 0, 2, 2, 2, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather"]
+    return pdfIndex
+
+
 def test_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     gdf = cudf.from_pandas(pdf)
@@ -329,20 +347,6 @@ def test_multiindex_columns(pdf, gdf, pdfIndex):
     assert_eq(pdf[("a", "store", "storm")], gdf[("a", "store", "storm")])
     assert_eq(pdf[("a",)], gdf[("a",)])
     assert_eq(pdf[("c", "forest", "clear")], gdf[("c", "forest", "clear")])
-
-
-@pytest.mark.xfail(
-    reason="Slicing MultiIndexes not supported yet", raises=TypeError
-)
-def test_multiindex_column_slice(pdf, gdf, pdfIndex):
-    pdf = pdf.T
-    gdf = cudf.from_pandas(pdf)
-    gdfIndex = cudf.from_pandas(pdfIndex)
-    pdf.columns = pdfIndex
-    gdf.columns = gdfIndex
-    assert_eq(
-        pdf[("a", "store"):("b", "house")], gdf[("a", "store"):("b", "house")]
-    )
 
 
 def test_multiindex_from_tuples():
@@ -655,9 +659,25 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         assert_eq(presult, gresult, check_index_type=False)
 
 
-def test_multiindex_to_frame(pdfIndex):
+def test_multicolumn_item():
+    gdf = cudf.DataFrame(
+        {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10)}
+    )
+    gdg = gdf.groupby(["x", "y"]).min()
+    gdgT = gdg.T
+    pdgT = gdgT.to_pandas()
+    assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
+
+
+def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
+
+    gdfIndex = cudf.from_pandas(pdfIndexNulls)
+    assert_eq(
+        pdfIndexNulls.to_frame().fillna("nan"),
+        gdfIndex.to_frame().fillna("nan"),
+    )
 
 
 def test_multiindex_groupby_to_frame():

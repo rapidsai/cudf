@@ -21,6 +21,9 @@
 #include <zlib.h> // uncompress
 #include "unbz2.h" // bz2 uncompress
 
+namespace cudf {
+namespace io {
+
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
 #define GZ_FLG_FEXTRA   0x04    // Extra fields present
@@ -284,7 +287,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst)
+gdf_error io_uncompress_single_h2d(const void *src, cudf::size_type src_size, int strm_type, std::vector<char>& dst)
 {
     const uint8_t *raw = (const uint8_t *)src;
     const uint8_t *comp_data = nullptr;
@@ -327,8 +330,8 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
                         // Bad cdir
                         break;
                     }
-                    // For now, only accept with non-zero file sizes and v2.0 DEFLATE
-                    if (cdfh->min_ver <= 20 && cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0)
+                    // For now, only accept with non-zero file sizes and DEFLATE
+                    if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0)
                     {
                         size_t lfh_ofs = cdfh->hdr_ofs;
                         const zip_lfh_s *lfh = (const zip_lfh_s *)(raw + lfh_ofs);
@@ -336,7 +339,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
                          && lfh->sig == 0x04034b50
                          && lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size)
                         {
-                            if (lfh->ver <= 20 && lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0)
+                            if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0)
                             {
                                 size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
                                 size_t file_end = file_start + lfh->comp_size;
@@ -652,3 +655,8 @@ HostDecompressor *HostDecompressor::Create(int stream_type)
     }
     return decompressor;
 }
+
+
+} // namespace io
+} // namespace cudf
+

@@ -16,9 +16,9 @@
 
 #include <iostream>
 #include <cudf/cudf.h>
-#include <cudf/unary.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/datetime.hpp>
+#include <cudf/legacy/unary.hpp>
+#include <cudf/legacy/copying.hpp>
+#include <cudf/legacy/datetime.hpp>
 
 namespace cudf {
 namespace datetime {

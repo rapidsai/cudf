@@ -15,6 +15,7 @@
  */
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <io/utilities/block_utils.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -26,32 +27,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)        __shfl_sync(~0, v, 0)
-#define SHFL(v, t)      __shfl_sync(~0, v, t)
-#define SHFL_XOR(v, m)  __shfl_xor_sync(~0, v, m)
-#define SYNCWARP()      __syncwarp()
-#define BALLOT(v)       __ballot_sync(~0, v)
-#else
-#define SHFL0(v)        __shfl(v, 0)
-#define SHFL(v, t)      __shfl(v, t)
-#define SHFL_XOR(v, m)  __shfl_xor(v, m)
-#define SYNCWARP()
-#define BALLOT(v)       __ballot(v)
-#endif
-
-#define WARP_REDUCE_SUM_2(sum)      sum += SHFL_XOR(sum, 1)
-#define WARP_REDUCE_SUM_4(sum)      WARP_REDUCE_SUM_2(sum); sum += SHFL_XOR(sum, 2)
-#define WARP_REDUCE_SUM_8(sum)      WARP_REDUCE_SUM_4(sum); sum += SHFL_XOR(sum, 4)
-#define WARP_REDUCE_SUM_16(sum)     WARP_REDUCE_SUM_8(sum); sum += SHFL_XOR(sum, 8)
-#define WARP_REDUCE_SUM_32(sum)     WARP_REDUCE_SUM_16(sum); sum += SHFL_XOR(sum, 16)
-
-#define WARP_REDUCE_POS_2(pos, tmp, t)  tmp = SHFL(pos, t & 0x1e); pos += (t & 1) ? tmp : 0;
-#define WARP_REDUCE_POS_4(pos, tmp, t)  WARP_REDUCE_POS_2(pos, tmp, t); tmp = SHFL(pos, (t & 0x1c) | 1); pos += (t & 2) ? tmp : 0;
-#define WARP_REDUCE_POS_8(pos, tmp, t)  WARP_REDUCE_POS_4(pos, tmp, t); tmp = SHFL(pos, (t & 0x18) | 3); pos += (t & 4) ? tmp : 0;
-#define WARP_REDUCE_POS_16(pos, tmp, t) WARP_REDUCE_POS_8(pos, tmp, t); tmp = SHFL(pos, (t & 0x10) | 7); pos += (t & 8) ? tmp : 0;
-#define WARP_REDUCE_POS_32(pos, tmp, t) WARP_REDUCE_POS_16(pos, tmp, t); tmp = SHFL(pos, 0xf); pos += (t & 16) ? tmp : 0;
 
 #define MAX_SHORT_DICT_ENTRIES      (10*1024)
 #define INIT_HASH_BITS              12
@@ -186,8 +161,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
         if (t < 32)
         {
             uint32_t nnz = s->scratch_red[16 + (t & 0xf)];
-            uint32_t nnz_pos = nnz, tmp;
-            WARP_REDUCE_POS_16(nnz_pos, tmp, t);
+            uint32_t nnz_pos = WarpReducePos16(nnz, t);
             if (t == 0xf)
             {
                 s->nnz += nnz_pos;
@@ -215,7 +189,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  *
  **/
 // blockDim {512,1,1}
-extern "C" __global__ void __launch_bounds__(512, 3)
+extern "C" __global__ void __launch_bounds__(512, 2)
 gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 {
     __shared__ __align__(16) dictinit_state_s state_g;
@@ -261,13 +235,12 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
             len = ck_data[ck_row].count;
             hash = nvstr_init_hash(ptr, len);
         }
-        WARP_REDUCE_SUM_16(len);
+        len = WarpReduceSum16(len);
         s->scratch_red[t >> 4] = len;
         __syncthreads();
         if (t < 32)
         {
-            len = s->scratch_red[t];
-            WARP_REDUCE_SUM_32(len);
+            len = WarpReduceSum32(s->scratch_red[t]);
             if (t == 0)
                 s->chunk.string_char_count += len;
         }
@@ -297,7 +270,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
         sum45 += (sum23 >> 16) * 0x10001;
         sum67 += (sum45 >> 16) * 0x10001;
         sum_w = sum67 >> 16;
-        WARP_REDUCE_POS_16(sum_w, tmp, t);
+        sum_w = WarpReducePos16(sum_w, t);
         if ((t & 0xf) == 0xf)
         {
             s->scratch_red[t >> 4] = sum_w;
@@ -305,8 +278,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
         __syncthreads();
         if (t < 32)
         {
-            uint32_t sum_b = s->scratch_red[t];
-            WARP_REDUCE_POS_32(sum_b, tmp, t);
+            uint32_t sum_b = WarpReducePos32(s->scratch_red[t], t);
             s->scratch_red[t] = sum_b;
         }
         __syncthreads();
@@ -409,8 +381,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
         if (t < 32)
         {
             uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
-            uint32_t warp_pos = warp_dupes, tmp;
-            WARP_REDUCE_POS_16(warp_pos, tmp, t);
+            uint32_t warp_pos = WarpReducePos16(warp_dupes, t);
             if (t == 0xf)
             {
                 s->total_dupes += warp_pos;
@@ -434,7 +405,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
             }
         }
     }
-    WARP_REDUCE_SUM_32(dict_char_count);
+    dict_char_count = WarpReduceSum32(dict_char_count);
     if (!(t & 0x1f))
     {
         s->scratch_red[t >> 5] = dict_char_count;
@@ -442,8 +413,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
     __syncthreads();
     if (t < 32)
     {
-        dict_char_count = (t < 16) ? s->scratch_red[t] : 0;
-        WARP_REDUCE_SUM_16(dict_char_count);
+        dict_char_count = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0);
     }
     if (!t)
     {
@@ -484,6 +454,10 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
         ((volatile uint32_t *)&stripe_g)[t] = ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
     }
     __syncthreads();
+    if (!stripe_g.dict_data)
+    {
+        return;
+    }
     if (t < sizeof(DictionaryChunk) / sizeof(uint32_t))
     {
         ((volatile uint32_t *)&chunk_g)[t] = ((const uint32_t *)&chunks[stripe_g.start_chunk * num_columns + col_id])[t];
@@ -591,8 +565,7 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
         if (t < 32)
         {
             uint32_t warp_dupes = s->scratch_red[t];
-            uint32_t warp_pos = warp_dupes, tmp;
-            WARP_REDUCE_POS_32(warp_pos, tmp, t);
+            uint32_t warp_pos = WarpReducePos32(warp_dupes, t);
             if (t == 0x1f)
             {
                 s->total_dupes += warp_pos;
@@ -611,7 +584,7 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
         }
         __syncthreads();
     }
-    WARP_REDUCE_SUM_32(dict_char_count);
+    dict_char_count = WarpReduceSum32(dict_char_count);
     if (!(t & 0x1f))
     {
         s->scratch_red[t >> 5] = dict_char_count;
@@ -619,8 +592,7 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
     __syncthreads();
     if (t < 32)
     {
-        dict_char_count = s->scratch_red[t];
-        WARP_REDUCE_SUM_32(dict_char_count);
+        dict_char_count = WarpReduceSum32(s->scratch_red[t]);
     }
     if (t == 0)
     {

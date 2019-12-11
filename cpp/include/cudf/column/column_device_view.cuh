@@ -16,10 +16,13 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 
@@ -71,7 +74,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ T const* data() const noexcept {
     return head<T>() + _offset;
   }
-
+ 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
    *---------------------------------------------------------------------------**/
@@ -110,7 +113,7 @@ class alignas(16) column_device_view_base {
    * @return false All elements are valid
    *---------------------------------------------------------------------------**/
   __host__ __device__ bool has_nulls() const noexcept {
-    return _null_count > 0;
+    return null_count() > 0;
   }
 
   /**---------------------------------------------------------------------------*
@@ -132,24 +135,46 @@ class alignas(16) column_device_view_base {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns whether the specified element holds a valid value (i.e., not
-   * null)
+   * null).
    *
-   * @note It is undefined behavior to call this function if `nullable() ==
-   * false`.
+   * Checks first for the existence of the null bitmask. If `nullable() ==
+   * false`, this function always returns true.
+   *
+   * @note If `nullable() == true` can be guaranteed, then it is more performant
+   * to use `is_valid_nocheck()`.
    *
    * @param element_index The index of the element to query
    * @return true The element is valid
    * @return false The element is null
    *---------------------------------------------------------------------------**/
   __device__ bool is_valid(size_type element_index) const noexcept {
-    return bit_is_set(_null_mask, element_index);
+    return not nullable() or is_valid_nocheck(element_index);
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns whether the specified element is null
+   * @brief Returns whether the specified element holds a valid value (i.e., not
+   * null)
    *
-   * @note It is undefined behavior to call this function if `nullable() ==
-   * false`.
+   * This function does *not* verify the existence of the bitmask before
+   * attempting to read it. Therefore, it is undefined behavior to call this
+   * function if `nullable() == false`.
+   *
+   * @param element_index The index of the element to query
+   * @return true The element is valid
+   * @return false The element is null
+   *---------------------------------------------------------------------------**/
+  __device__ bool is_valid_nocheck(size_type element_index) const noexcept {
+    return bit_is_set(_null_mask, offset()+element_index);
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns whether the specified element is null.
+   *
+   * Checks first for the existence of the null bitmask. If `nullable() ==
+   * false`, this function always returns false.
+   *
+   * @note If `nullable() == true` can be guaranteed, then it is more performant
+   * to use `is_null_nocheck()`.
    *
    * @param element_index The index of the element to query
    * @return true The element is null
@@ -157,6 +182,21 @@ class alignas(16) column_device_view_base {
    *---------------------------------------------------------------------------**/
   __device__ bool is_null(size_type element_index) const noexcept {
     return not is_valid(element_index);
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns whether the specified element is null
+   *
+   * This function does *not* verify the existence of the bitmask before
+   * attempting to read it. Therefore, it is undefined behavior to call this
+   * function if `nullable() == false`.
+   *
+   * @param element_index The index of the element to query
+   * @return true The element is null
+   * @return false The element is valid
+   *---------------------------------------------------------------------------**/
+  __device__ bool is_null_nocheck(size_type element_index) const noexcept {
+    return not is_valid_nocheck(element_index);
   }
 
   /**---------------------------------------------------------------------------*
@@ -193,6 +233,10 @@ class alignas(16) column_device_view_base {
         _null_count{null_count},
         _offset{offset} {}
 };
+
+//Forward declaration
+template <typename T>
+struct value_accessor; 
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
@@ -210,20 +254,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
   /**---------------------------------------------------------------------------*
    * @brief Creates an instance of this class using the specified host memory
-   * pointer (h_ptr) to store child objects and the device memory pointer (d_ptr)
-   * as a base for any child object pointers.
+   * pointer (h_ptr) to store child objects and the device memory pointer
+   *(d_ptr) as a base for any child object pointers.
    *
    * @param column Column view from which to create this instance.
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
-  column_device_view( column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr );
- 
+  column_device_view(column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr);
+
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
-   * 
-   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
-   * then any attempt to use the result will lead to undefined behavior. 
+   *
+   * If the element at the specified index is NULL, i.e.,
+   *`is_null(element_index) == true`, then any attempt to use the result will
+   *lead to undefined behavior.
    *
    * This function accounts for the offset.
    *
@@ -233,6 +278,38 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T>
   __device__ T const element(size_type element_index) const noexcept {
     return data<T>()[element_index];
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Iterator for navigating this column
+   *---------------------------------------------------------------------------**/
+  using count_it = thrust::counting_iterator<size_type>;
+  template <typename T>
+  using const_iterator =
+      thrust::transform_iterator<detail::value_accessor<T>, count_it>;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return an iterator to the first element of the column.
+   * 
+   * This iterator only supports columns where `has_nulls() == false`. 
+   * For columns with null elements, use `make_null_replacement_iterator`.
+   * @throws `cudf::logic_error` if `has_nulls() == true`
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  const_iterator<T> begin() const {
+    return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return an iterator to the element following the last element of the column. 
+   *
+   * This iterator only supports columns where `has_nulls() == false`.
+   * For columns with null elements, use `make_null_replacement_iterator`.
+   * @throws `cudf::logic_error` if `has_nulls() == true`
+   *---------------------------------------------------------------------------**/
+  template<typename T>
+  const_iterator<T> end() const {
+    return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
 
   /**---------------------------------------------------------------------------*
@@ -268,8 +345,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
   /**---------------------------------------------------------------------------*
    * @brief Return the size in bytes of the amount of memory needed to hold a
-   * device view of the specified column and it's children. 
-   * 
+   * device view of the specified column and it's children.
+   *
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
   static size_type extent(column_view source_view);
@@ -319,14 +396,15 @@ class alignas(16) mutable_column_device_view
 
   /**---------------------------------------------------------------------------*
    * @brief Creates an instance of this class using the specified host memory
-   * pointer (h_ptr) to store child objects and the device memory pointer (d_ptr)
-   * as a base for any child object pointers.
+   * pointer (h_ptr) to store child objects and the device memory pointer
+   *(d_ptr) as a base for any child object pointers.
    *
    * @param column Column view from which to create this instance.
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
-  mutable_column_device_view( mutable_column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr );
+  mutable_column_device_view(mutable_column_view column, ptrdiff_t h_ptr,
+                             ptrdiff_t d_ptr);
 
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a column view that is usable in device memory.
@@ -347,8 +425,9 @@ class alignas(16) mutable_column_device_view
    * @return A `unique_ptr` to a `mutable_column_device_view` that makes the
    *data from `source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>
-    create(mutable_column_view source_view, cudaStream_t stream = 0);
+  static std::unique_ptr<mutable_column_device_view,
+                         std::function<void(mutable_column_device_view*)>>
+  create(mutable_column_view source_view, cudaStream_t stream = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -361,11 +440,11 @@ class alignas(16) mutable_column_device_view
    *`data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   __host__ __device__ T* head() const noexcept {
-    return const_cast<T*>(detail::column_device_view_base::head());
+    return const_cast<T*>(detail::column_device_view_base::head<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -377,11 +456,11 @@ class alignas(16) mutable_column_device_view
    * @TODO Clarify behavior for variable-width types.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
   __host__ __device__ T* data() const noexcept {
-    return head<T>() + _offset;
+    return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -424,6 +503,11 @@ class alignas(16) mutable_column_device_view
    * @brief Updates the null mask to indicate that the specified element is
    * valid
    *
+   * @note This operation requires a global atomic operation. Therefore, it is
+   * not reccomended to use this function in performance critical regions. When
+   * possible, it is more efficient to compute and update an entire word at
+   * once using `set_mask_word`.
+   * 
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -436,6 +520,11 @@ class alignas(16) mutable_column_device_view
   /**---------------------------------------------------------------------------*
    * @brief Updates the null mask to indicate that the specified element is null
    *
+   * @note This operation requires a global atomic operation. Therefore, it is
+   * not reccomended to use this function in performance critical regions. When
+   * possible, it is more efficient to compute and update an entire word at
+   * once using `set_mask_word`.
+   * 
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -462,8 +551,8 @@ class alignas(16) mutable_column_device_view
 
   /**---------------------------------------------------------------------------*
    * @brief Return the size in bytes of the amount of memory needed to hold a
-   * device view of the specified column and it's children. 
-   * 
+   * device view of the specified column and it's children.
+   *
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
   static size_type extent(mutable_column_view source_view);
@@ -493,14 +582,13 @@ class alignas(16) mutable_column_device_view
    * allocated to hold the child views.
    *---------------------------------------------------------------------------**/
   void destroy();
-
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Returns `string_view` to the string element at the specified index.
  *
- * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
- * then any attempt to use the result will lead to undefined behavior. 
+ * If the element at the specified index is NULL, i.e., `is_null(element_index)
+ *== true`, then any attempt to use the result will lead to undefined behavior.
  *
  * This function accounts for the offset.
  *
@@ -510,11 +598,46 @@ class alignas(16) mutable_column_device_view
 template <>
 __device__ inline string_view const column_device_view::element<string_view>(
     size_type element_index) const noexcept {
-      size_type index = element_index + offset(); // account for this view's _offset
-      const int32_t* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
-      const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
-      size_type offset = d_offsets[index];
-      return string_view{d_strings + offset, d_offsets[index+1] - offset};
+  size_type index =
+      element_index + offset();  // account for this view's _offset
+  const int32_t* d_offsets =
+      d_children[strings_column_view::offsets_column_index].data<int32_t>();
+  const char* d_strings =
+      d_children[strings_column_view::chars_column_index].data<char>();
+  size_type offset = d_offsets[index];
+  return string_view{d_strings + offset, d_offsets[index + 1] - offset};
 }
 
+namespace detail {
+/** -------------------------------------------------------------------------*
+ * @brief value accessor of column without null bitmask
+ * A unary functor returns scalar value at `id`.
+ * `operator() (cudf::size_type id)` computes `element`
+ * This functor is only allowed for non-nullable columns.
+ *
+ * the return value for element `i` will return `column[i]`
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ *
+ * @tparam T The type of elements in the column
+ * -------------------------------------------------------------------------**/
+
+template <typename T>
+struct value_accessor {
+  column_device_view const col;  ///< column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  value_accessor(column_device_view const& _col) : col{_col} {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
+                 "the data type mismatch");
+    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
+  }
+
+  __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
+};
+}  // namespace detail
 }  // namespace cudf

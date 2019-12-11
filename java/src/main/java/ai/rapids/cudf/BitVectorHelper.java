@@ -79,14 +79,14 @@ final class BitVectorHelper {
   }
 
   /**
-   * This method returns the allocation size of the validity vector which is long aligned
-   * e.g. getValidityAllocationSizeInBytes(5) => 8 bytes
-   * getValidityAllocationSizeInBytes(14) => 8 bytes
-   * getValidityAllocationSizeInBytes(65) => 16 bytes
+   * This method returns the allocation size of the validity vector which is 64-byte aligned
+   * e.g. getValidityAllocationSizeInBytes(5) => 64 bytes
+   * getValidityAllocationSizeInBytes(14) => 64 bytes
+   * getValidityAllocationSizeInBytes(65) => 128 bytes
    */
   static long getValidityAllocationSizeInBytes(long rows) {
     long numBytes = getValidityLengthInBytes(rows);
-    return ((numBytes + 7) / 8) * 8;
+    return ((numBytes + 63) / 64) * 64;
   }
 
   /**

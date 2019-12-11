@@ -32,6 +32,20 @@ public class ColumnVectorTest extends CudfTestBase {
   public static final double DELTA = 0.0001;
 
   @Test
+  void testDataMovement() {
+    try (ColumnVector vec = ColumnVector.fromBoxedInts(1, 2, 3, 4, null, 6)) {
+      assert vec.hasDeviceData();
+      assert vec.hasHostData();
+      vec.dropHostData();
+      assert !vec.hasHostData();
+      assert vec.hasDeviceData();
+      vec.dropDeviceData();
+      assert vec.hasHostData();
+      assert !vec.hasDeviceData();
+    }
+  }
+
+  @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
     long expectedLeakCount = MemoryCleaner.leakCount.get() + 1;
@@ -118,7 +132,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(); 
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
          ColumnVector result = v.isNotNull()) {
       assertColumnsAreEqual(result, expected);
     }
@@ -157,6 +171,24 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
          ColumnVector result = v.isNull()) {
       assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testGetDeviceMemorySizeNonStrings() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
+      assertEquals(24, v0.getDeviceMemorySize()); // (6*4B)
+      assertEquals(96, v1.getDeviceMemorySize()); // (8*4B) + 64B(for validity vector)
+    }
+  }
+
+  @Test
+  void testGetDeviceMemorySizeStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings("onetwothree", "four", "five");
+         ColumnVector v1 = ColumnVector.fromStrings("onetwothree", "four", null, "five")) {
+      assertEquals(80, v0.getDeviceMemorySize()); //32B + 24B + 24B
+      assertEquals(168, v1.getDeviceMemorySize()); //32B + 24B + 24B + 24B + 64B(for validity vector)
     }
   }
 
@@ -385,6 +417,43 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSplitWithArray() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
+      Integer[][] expectedData = {
+          {10},
+          {12, null},
+          {null, 18},
+          {20, 22, 24, 26},
+          {28}};
+
+      ColumnVector[] splits = cv.split(1, 3, 5, 9);
+      try {
+        assertEquals(expectedData.length, splits.length);
+        for (int splitIndex = 0; splitIndex < splits.length; splitIndex++) {
+          ColumnVector subVec = splits[splitIndex];
+          subVec.ensureOnHost();
+          assertEquals(expectedData[splitIndex].length, subVec.getRowCount());
+          for (int subIndex = 0; subIndex < expectedData[splitIndex].length; subIndex++) {
+            Integer expected = expectedData[splitIndex][subIndex];
+            if (expected == null) {
+              assertTrue(subVec.isNull(subIndex));
+            } else {
+              assertEquals(expected, subVec.getInt(subIndex));
+            }
+          }
+        }
+      } finally {
+        for (int i = 0 ; i < splits.length ; i++) {
+          if (splits[i] != null) {
+            splits[i].close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testWithOddSlices() {
     try (ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
       assertThrows(CudfException.class, () -> cv.slice(1, 3, 5, 9, 2, 4, 8));
@@ -427,7 +496,7 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     }
   }
-  
+
   @Test
   void testAppendStrings() {
     try (ColumnVector cv = ColumnVector.build(DType.STRING, 10, 0, (b) -> {
@@ -577,7 +646,8 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(-1, index.getInt());
 
       try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
-        Table filtered = new Table(cv).filter(mask)) {
+           Table input = new Table(cv);
+           Table filtered = input.filter(mask)) {
         assertEquals(0, filtered.getColumn(0).getRowCount());
       }
 

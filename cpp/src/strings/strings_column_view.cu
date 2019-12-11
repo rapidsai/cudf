@@ -17,13 +17,15 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <utilities/error_utils.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/copy.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf {
+namespace cudf 
+{
 
 //
 strings_column_view::strings_column_view( column_view strings_column )
@@ -39,14 +41,23 @@ column_view strings_column_view::parent() const
 
 column_view strings_column_view::offsets() const
 {
-    return child(offsets_column_index);
+    CUDF_EXPECTS( num_children()>0, "strings column has no children" );
+    return experimental::detail::slice( child(offsets_column_index), offset(), offset() + size()+1 );
 }
 
 column_view strings_column_view::chars() const
 {
-    return child(chars_column_index);
+    auto offsets_column = column_device_view::create(offsets());
+    auto d_offsets = thrust::device_pointer_cast(offsets_column->data<int32_t>());
+    return experimental::detail::slice( child(chars_column_index), d_offsets[0], d_offsets[size()] );
 }
 
+size_type strings_column_view::chars_size() const noexcept
+{
+    if( size()==0 )
+        return 0;
+    return chars().size();
+}
 
 namespace strings
 {
@@ -61,8 +72,7 @@ void print( strings_column_view strings,
         end = count;
     if( start < 0 )
         start = 0;
-    if( start >= end )
-        throw std::invalid_argument("invalid parameter value");
+    CUDF_EXPECTS( ((start >= 0) && (start < end)), "invalid start parameter");
     count = end - start;
 
     // stick with the default stream for this odd/rare stdout function
@@ -80,7 +90,7 @@ void print( strings_column_view strings,
         thrust::make_counting_iterator<size_type>(end),
         d_output_offsets+1,
         [d_column, max_width] __device__ (size_type idx) {
-            if( d_column.nullable() && d_column.is_null(idx) )
+            if( d_column.is_null(idx) )
                 return 0;
             string_view d_str = d_column.element<string_view>(idx);
             size_type bytes = d_str.size_bytes();

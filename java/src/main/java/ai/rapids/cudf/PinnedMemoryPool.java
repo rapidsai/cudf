@@ -40,7 +40,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
   // These static fields should only ever be accessed when class-synchronized.
   // Do NOT use singleton_ directly!  Use the getSingleton accessor instead.
   private static volatile PinnedMemoryPool singleton_ = null;
-  private static ExecutorService initService = null;
   private static Future<PinnedMemoryPool> initFuture = null;
 
   private long pinnedPoolBase;
@@ -99,11 +98,13 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
   }
 
-  private static final class PinnedHostBufferCleaner extends MemoryCleaner.Cleaner {
+  private static final class PinnedHostBufferCleaner extends MemoryBuffer.MemoryBufferCleaner {
     private MemorySection section;
+    private final long origLength;
 
-    PinnedHostBufferCleaner(MemorySection section) {
+    PinnedHostBufferCleaner(MemorySection section, long length) {
       this.section = section;
+      origLength = length;
     }
 
     @Override
@@ -111,6 +112,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
       boolean neededCleanup = false;
       if (section != null) {
         PinnedMemoryPool.freeInternal(section);
+        if (origLength > 0) {
+          MemoryListener.hostDeallocation(origLength, getId());
+        }
         section = null;
         neededCleanup = true;
       }
@@ -130,8 +134,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
       synchronized (PinnedMemoryPool.class) {
         if (singleton_ == null) {
-          initService.shutdown();
-          initService = null;
           try {
             singleton_ = initFuture.get();
           } catch (Exception e) {
@@ -156,8 +158,13 @@ public final class PinnedMemoryPool implements AutoCloseable {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
-    initService = Executors.newSingleThreadExecutor();
+    ExecutorService initService = Executors.newSingleThreadExecutor(runnable -> {
+      Thread t = new Thread(runnable, "pinned pool init");
+      t.setDaemon(true);
+      return t;
+    });
     initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize));
+    initService.shutdown();
   }
 
   /**
@@ -256,8 +263,8 @@ public final class PinnedMemoryPool implements AutoCloseable {
     numAllocatedSections++;
     availableBytes -= allocated.size;
     log.debug("Allocated {} free {} outstanding {}", allocated, freeHeap, numAllocatedSections);
-    return new HostMemoryBuffer(allocated.baseAddress, allocated.size,
-        new PinnedHostBufferCleaner(allocated));
+    return new HostMemoryBuffer(allocated.baseAddress, bytes,
+        new PinnedHostBufferCleaner(allocated, bytes));
   }
 
   private synchronized void free(MemorySection section) {

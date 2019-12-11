@@ -27,8 +27,8 @@
 
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <utilities/error_utils.hpp>
-#include <utilities/device_atomics.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 
 
 __global__ static void init_curand(curandState * state, const int nstates)

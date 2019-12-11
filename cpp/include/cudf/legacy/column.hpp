@@ -45,9 +45,9 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
 /**
  * @brief Return the size of the gdf_column data type.
  *
- * @returns gdf_size_type Size of the gdf_column data type.
+ * @returns cudf::size_type Size of the gdf_column data type.
  */
-gdf_size_type gdf_column_sizeof();
+cudf::size_type gdf_column_sizeof();
 
 /**
  * @brief Create a GDF column given data and validity bitmask pointers, size,
@@ -61,8 +61,8 @@ gdf_size_type gdf_column_sizeof();
  *
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
-gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
-                          gdf_size_type size, gdf_dtype dtype);
+gdf_error gdf_column_view(gdf_column *column, void *data, cudf::valid_type *valid,
+                          cudf::size_type size, gdf_dtype dtype);
 
 /** 
  * @brief Create a GDF column given data and validity bitmask pointers, size, and
@@ -80,8 +80,8 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
 gdf_error gdf_column_view_augmented(gdf_column *column, void *data,
-                                    gdf_valid_type *valid, gdf_size_type size,
-                                    gdf_dtype dtype, gdf_size_type null_count,
+                                    cudf::valid_type *valid, cudf::size_type size,
+                                    gdf_dtype dtype, cudf::size_type null_count,
                                     gdf_dtype_extra_info extra_info,
                                     const char *name = nullptr);
 
@@ -122,7 +122,7 @@ void allocate_column_fields(gdf_column& column,
  * @param stream Optional stream in which to perform allocation
  * @return gdf_column An allocated column of given size and type
  */
-gdf_column allocate_column(gdf_dtype dtype, gdf_size_type size,
+gdf_column allocate_column(gdf_dtype dtype, cudf::size_type size,
                            bool allocate_mask = true,
                            gdf_dtype_extra_info info = gdf_dtype_extra_info{},
                            cudaStream_t stream = 0);

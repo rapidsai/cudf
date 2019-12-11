@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef CUDF_TRANSFORM_HPP
-#define CUDF_TRANSFORM_HPP
+#pragma once
 
-#include "cudf.h"
-#include "types.h"
+#include <cudf/types.hpp>
+
+#include <memory>
 
 namespace cudf {
+namespace experimental {
 
 /**
  * @brief Creates a new column by applying a unary function against every
@@ -28,31 +29,24 @@ namespace cudf {
  *
  * Computes:
  * `out[i] = F(in[i])`
- *
- * Support all GDF data types except for GDF_CATEGORY or GDF_STRING.
- * For GDF_STRING_CATEGORY the UDF is only applied to the indices, after
- * which the underlying category is cleared and remapped.
- *
- * @param input               The input column to transform
- * @param unary_udf           The PTX/CUDA string of the unary function to apply
- * @param outout_type         The output type that is compatible with the output type in the PTX code
- * @param is_ptx              If true the UDF is treated as a piece of PTX code; if fasle the UDF is treated as a piece of CUDA code
- * @return gdf_column         The column resulting from applying the unary function to
- *                            every element of the input
- **/
-gdf_column transform(const gdf_column &input,
-                     const std::string &unary_udf,
-                     gdf_dtype output_type, bool is_ptx);
-
-/**
- * @brief Given a column with floating point values, generate a bitmask where every NaN
- * is indicated as the corresponding null bit.
  * 
- * @param input The input column to generate bitmask from
- * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
-*/
-std::pair<bit_mask::bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input);
+ * The output null mask is the same is the input null mask so if input[i] is 
+ * null then output[i] is also null
+ *
+ * @param input         An immutable view of the input column to transform
+ * @param unary_udf     The PTX/CUDA string of the unary function to apply
+ * @param outout_type   The output type that is compatible with the output type in the UDF
+ * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param mr            The memory resource to use for for all device allocations
+ * @return cudf::column The column resulting from applying the unary function to
+ *                      every element of the input
+ **/
+std::unique_ptr<column> transform(
+  column_view const& input,
+  std::string const& unary_udf,
+  data_type output_type,
+  bool is_ptx,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
+}  // namespace experimental
 }  // namespace cudf
-
-#endif
