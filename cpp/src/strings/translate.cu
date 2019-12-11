@@ -58,9 +58,8 @@ struct translate_fn
         char* out_ptr = nullptr;
         if( d_offsets )
             out_ptr = d_chars + d_offsets[idx];
-        for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
+        for( auto chr : d_str )
         {
-            auto chr = *itr;
             auto entry = thrust::find_if( thrust::seq, table, table+table_size,
                 [chr] __device__ ( auto te ) { return te.first==chr; } );
             if( entry < table + table_size )
