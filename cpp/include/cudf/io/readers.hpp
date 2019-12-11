@@ -320,6 +320,8 @@ struct reader_options {
   bool use_index = true;
   bool use_np_dtypes = true;
   data_type timestamp_type{EMPTY};
+  bool decimals_as_float = true;
+  int forced_decimals_scale = -1;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -333,11 +335,14 @@ struct reader_options {
    * @param timestamp_type Cast timestamp columns to a specific type
    */
   reader_options(std::vector<std::string> columns, bool use_index_lookup,
-                 bool np_compat, data_type timestamp_type)
+                 bool np_compat, data_type timestamp_type,
+                 bool decimals_as_float_ = true, int forced_decimals_scale_ = -1)
       : columns(std::move(columns)),
         use_index(use_index_lookup),
         use_np_dtypes(np_compat),
-        timestamp_type(timestamp_type) {}
+        timestamp_type(timestamp_type),
+        decimals_as_float(decimals_as_float_),
+        forced_decimals_scale(forced_decimals_scale_) {}
 };
 
 /**
