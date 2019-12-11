@@ -56,7 +56,8 @@ TEST(CudaTryTest, TryCatch) {
 }
 
 TEST(StreamCheck, success) {
-  EXPECT_NO_THROW(cudf::detail::check_stream(0, __FILE__, __LINE__));
+  EXPECT_NO_THROW(cudf::detail::check_cuda_error(__FILE__, __LINE__, true, 0));
+  EXPECT_NO_THROW(cudf::detail::check_cuda_error(__FILE__, __LINE__, false, 0));
 }
 
 namespace {
@@ -71,7 +72,7 @@ TEST(StreamCheck, FailedKernel) {
   cudaStreamCreate(&stream);
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  EXPECT_THROW(cudf::detail::check_stream(0, __FILE__, __LINE__),
+  EXPECT_THROW(cudf::detail::check_cuda_error(__FILE__, __LINE__, true, stream),
                cudf::cuda_error);
   cudaStreamDestroy(stream);
 }
@@ -81,25 +82,26 @@ TEST(StreamCheck, CatchFailedKernel) {
   cudaStreamCreate(&stream);
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_stream(0, __FILE__, __LINE__),
+  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_cuda_error(__FILE__, __LINE__,
+                                                           true, stream),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
   cudaStreamDestroy(stream);
 }
 
-// CHECK_STREAM should do nothing in a release build, even if there's an error
-#ifdef NDEBUG
+// In a release build and without explicit synchronization, CHECK_CUDA_ERROR may
+// or may not fail on erroneous asynchronous CUDA calls. Invoke
+// cudaStreamSynchronize to guarantee failure on error. In a non-release build,
+// CHECK_CUDA_ERROR deterministically fails on erroneous asynchronous CUDA
+// calls.
 TEST(StreamCheck, ReleaseFailedKernel) {
   cudaStream_t stream;
   cudaStreamCreate(&stream);
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  EXPECT_NO_THROW(CHECK_STREAM(0));
+#ifdef NDEBUG
+  cudaStreamSynchronize(stream);
+#endif
+  EXPECT_THROW(CHECK_CUDA_ERROR(stream), cudf::cuda_error);
   cudaStreamDestroy(stream);
 }
-#endif
-
-// STREAM_CHECK only works in a non-Release build
-#ifndef NDEBUG
-TEST(StreamCheck, test) { EXPECT_NO_THROW(CHECK_STREAM(0)); }
-#endif

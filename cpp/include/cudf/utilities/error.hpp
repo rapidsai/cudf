@@ -104,17 +104,20 @@ inline void throw_cuda_error(cudaError_t error, const char* file,
                   cudaGetErrorName(error) + " " + cudaGetErrorString(error)});
 }
 
-inline void check_stream(cudaStream_t stream, const char* file,
-                         unsigned int line) {
+inline void check_cuda_error(char const* file, unsigned int line,
+                             bool sync_on_stream, cudaStream_t stream=0) {
   cudaError_t error{cudaSuccess};
-  error = cudaStreamSynchronize(stream);
-  if (cudaSuccess != error) {
-    throw_cuda_error(error, file, line);
+
+  if (sync_on_stream) {
+    error = cudaStreamSynchronize(stream);
+    if (cudaSuccess != error) {
+      cudf::detail::throw_cuda_error(error, file, line);
+    }
   }
 
   error = cudaGetLastError();
   if (cudaSuccess != error) {
-    throw_cuda_error(error, file, line);
+    cudf::detail::throw_cuda_error(error, file, line);
   }
 }
 }  // namespace detail
@@ -141,10 +144,11 @@ inline void check_stream(cudaStream_t stream, const char* file,
 #define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
 
 /**---------------------------------------------------------------------------*
- * @brief Debug macro to synchronize a stream and check for CUDA errors
+ * @brief Debug macro to check for CUDA errors
  *
- * In a non-release build, this macro will synchronize the specified stream, and
- * check for any CUDA errors returned from cudaGetLastError. If an error is
+ * In a non-release build, this macro will synchronize the specified stream
+ * before error checking. In both release and non-release builds, this macro
+ * checks for any CUDA errors returned from cudaGetLastError. If an error is
  * reported, an exception is thrown detailing the CUDA error that occurred.
  *
  * The intent of this macro is to provide a mechanism for synchronous and
@@ -152,12 +156,11 @@ inline void check_stream(cudaStream_t stream, const char* file,
  * be used after any asynchronous CUDA call, e.g., cudaMemcpyAsync, or an
  * asynchronous kernel launch.
  *
- * Similar to assert(), it is only present in non-Release builds.
- *
  *---------------------------------------------------------------------------**/
 #ifndef NDEBUG
-#define CHECK_STREAM(stream) \
-  cudf::detail::check_stream((stream), __FILE__, __LINE__)
+#define CHECK_CUDA_ERROR(stream) \
+  cudf::detail::check_cuda_error(__FILE__, __LINE__, true, stream)
 #else
-#define CHECK_STREAM(stream) static_cast<void>(0)
+#define CHECK_CUDA_ERROR(stream) \
+  cudf::detail::check_cuda_error(__FILE__, __LINE__, false, stream)
 #endif

@@ -203,7 +203,7 @@ public:
           index
         );
 
-        CHECK_STREAM(stream);
+        CHECK_CUDA_ERROR(stream);
 
         // Update the other fields in the output column
         cudf::size_type num_nulls;
