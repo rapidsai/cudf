@@ -129,6 +129,7 @@ def test_integer_series(x):
 
 @settings(deadline=None)
 @given(st.lists(st.floats()))
+@settings(deadline=None)
 def test_float_dataframe(x):
     gdf = cudf.DataFrame({"x": cudf.Series(x, nan_as_null=False)})
     pdf = gdf.to_pandas()
@@ -137,6 +138,7 @@ def test_float_dataframe(x):
 
 @settings(deadline=None)
 @given(st.lists(st.floats()))
+@settings(deadline=None)
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
     ps = pd.Series(x)
