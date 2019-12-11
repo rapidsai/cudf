@@ -25,7 +25,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <type_traits>
 
@@ -75,8 +75,7 @@ struct DeviceCount {
 
 /* @brief binary `min` operator */
 struct DeviceMin {
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
+  template <typename T>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
     return std::min(lhs, rhs);
   }
@@ -87,26 +86,12 @@ struct DeviceMin {
     return std::numeric_limits<T>::max();
   }
 
-  // @brief min op specialized for string_view (with null string_view as identity)
-  // because min op identity should const largest string, which does not exist
-  template <typename T,
-            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
-    if (lhs.is_null())
-      return rhs;
-    else if (rhs.is_null())
-      return lhs;
-    else
-      return std::min(lhs, rhs);
-    //return lhs <= rhs ? lhs : rhs;
-  }
-
   // @brief identity specialized for string_view 
-  // because string_view constructor requires 2 arguments
+  // (sentinel value which is the highest possible valid UTF-8 encoded character)
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
-    return T{nullptr, 0};
+    return string_scalar("\xF7\xBF\xBF\xBF").value();
   }
 };
 

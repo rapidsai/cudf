@@ -651,7 +651,9 @@ TEST_P(ReductionParamTest, std_var)
 }
 
 //-------------------------------------------------------------------
-struct StringReductionTest : public cudf::test::BaseFixture {
+struct StringReductionTest : public cudf::test::BaseFixture,
+  public testing::WithParamInterface<std::vector<std::string> >
+{
   // Min/Max
   StringReductionTest() {}
 
@@ -671,6 +673,7 @@ struct StringReductionTest : public cudf::test::BaseFixture {
           cudf::experimental::reduce(underlying_column, op, output_dtype, ddof);
       using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
       auto result1 = static_cast<ScalarType*>(result.get());
+      EXPECT_TRUE(result1->is_valid());
       //std::cout<<"e="<<expected_value<<",r="<<result1->to_string()<<std::endl;
       EXPECT_EQ(expected_value, result1->to_string());
     };
@@ -684,10 +687,19 @@ struct StringReductionTest : public cudf::test::BaseFixture {
 };
 
 // ------------------------------------------------------------------------
-TEST_F(StringReductionTest, MinMax)
+std::vector<std::string> string_list[] = {
+{"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
+{"", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
+{"one", "", "three", "four", "five", "six", "seven", "eight", "nine"},
+{"", "", "", "four", "five", "six", "seven", "eight", "nine"},
+{"", "", "", "", "", "", "", "", ""},
+};
+INSTANTIATE_TEST_CASE_P(string_cases, StringReductionTest,
+                         testing::ValuesIn(string_list));
+TEST_P(StringReductionTest, MinMax)
 {
   // data and valid arrays
-  std::vector<std::string> host_strings({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+  std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools(         {    1,     0,       1,      1,      1,     1,       0,       0,      1});
   bool succeed(true);
 
@@ -699,7 +711,6 @@ TEST_F(StringReductionTest, MinMax)
 
   // string column with nulls
   cudf::test::strings_column_wrapper col_nulls(host_strings.begin(), host_strings.end(), host_bools.begin());
-  cudf::size_type valid_count = cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
 
   std::vector<std::string> r_strings;
   std::copy_if(host_strings.begin(), host_strings.end(), 
@@ -710,9 +721,27 @@ TEST_F(StringReductionTest, MinMax)
   std::string expected_max_null_result = *( std::max_element(r_strings.begin(), r_strings.end()) );
 
   //MIN
-  std::cout<<"min: "; this->reduction_test(col, expected_min_result, succeed, reduction_op::MIN);
-  std::cout<<"min: "; this->reduction_test(col_nulls, expected_min_null_result, succeed, reduction_op::MIN);
+  this->reduction_test(col, expected_min_result, succeed, reduction_op::MIN);
+  this->reduction_test(col_nulls, expected_min_null_result, succeed, reduction_op::MIN);
   //MAX
-  std::cout<<"max: "; this->reduction_test(col, expected_max_result, succeed, reduction_op::MAX);
-  std::cout<<"max: "; this->reduction_test(col_nulls, expected_max_null_result, succeed, reduction_op::MAX);
+  this->reduction_test(col, expected_max_result, succeed, reduction_op::MAX);
+  this->reduction_test(col_nulls, expected_max_null_result, succeed, reduction_op::MAX);
+}
+
+TEST_F(StringReductionTest, AllNull)
+{
+  // data and all null arrays
+  std::vector<std::string> host_strings({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+  std::vector<bool> host_bools(host_strings.size(), false);
+
+  // string column with nulls
+  cudf::test::strings_column_wrapper col_nulls(host_strings.begin(), host_strings.end(), host_bools.begin());
+  cudf::data_type output_dtype = cudf::column_view(col_nulls).type();
+
+  //MIN
+  std::unique_ptr<cudf::scalar> minresult = cudf::experimental::reduce(col_nulls, reduction_op::MIN, output_dtype, 1);
+  EXPECT_FALSE(minresult->is_valid());
+  //MAX
+  std::unique_ptr<cudf::scalar> maxresult = cudf::experimental::reduce(col_nulls, reduction_op::MAX, output_dtype, 1);
+  EXPECT_FALSE(maxresult->is_valid());
 }
