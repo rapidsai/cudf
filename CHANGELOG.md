@@ -5,13 +5,14 @@
 - PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
+- PR #3502 ORC reader: add option to read DECIMALs as INT64
 
 - PR #3561 Rework contains implementation in search
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 
 ## Bug Fixes
-
--PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3562 Fix 4GB limit for gzipped-compressed csv files
 
 
 # cuDF 0.11.0 (11 Dec 2019)
