@@ -68,6 +68,13 @@ void result_cache::add_result(size_t col_idx,
   _cache[col_idx].emplace(std::move(key), std::unique_ptr<column>(col_ptr));
 }
 
+column_view result_cache::get_result(size_t col_idx,
+                                     std::unique_ptr<aggregation> const& agg)
+{
+  auto key = copy_to_shared_ptr(agg);
+  auto result_it = _cache[col_idx].find(key);
+  return result_it->second->view();
+}
 
 }  // namespace detail
 }  // namespace groupby

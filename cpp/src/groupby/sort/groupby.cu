@@ -28,6 +28,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/binaryop.hpp>
 
 #include <memory>
 #include <utility>
@@ -93,26 +94,16 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   // sum and count. std depends on mean and count
   result_cache cache(requests.size());
 
-  // auto col = make_numeric_column(data_type{type_id::INT32}, 10);
-  // cache.add_result(0, requests[0].aggregations[0], std::move(col));
-  // bool hasagg1 = cache.has_result(0, requests[0].aggregations[0]);
-  // auto agg_q1 = make_quantile_aggregation({0.4}, interpolation::HIGHER);
-  // auto agg_q2 = make_quantile_aggregation({0.3}, interpolation::HIGHER);
-  // cache.add_result(0, agg_q1, std::move(col));
-  // bool hasagg1 = cache.has_result(0, agg_q1);
-  // bool hasagg2 = cache.has_result(0, agg_q2);
-
-  
   for (size_t i = 0; i < requests.size(); i++) {
+    // TODO (dm): Not all aggs require sorted values. Only sort if there is an 
+    //            agg that requires sorted result
+    // TODO (dm): Use key_sorted_order to make permutation iterator and avoid
+    //            generating value columns
     std::unique_ptr<column> sorted_values;
     rmm::device_vector<size_type> group_sizes;
     std::tie(sorted_values, group_sizes) =
       sorter.sorted_values_and_num_valids(requests[i].values);
 
-    for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
-      switch (requests[i].aggregations[j]->kind) {
-        // TODO (dm): single pass compute all supported reductions
-      case aggregation::SUM:
         auto store_sum = [&] (size_type col_idx,
                               std::unique_ptr<aggregation> const& agg)
         {
@@ -123,9 +114,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
                                     sorter.group_labels(),
                                     sorter.num_groups(), stream));
         };
-        store_sum(i, requests[i].aggregations[j]);
-        break;
-      case aggregation::COUNT:
+
         auto store_count = [&] (size_type col_idx,
                                 std::unique_ptr<aggregation> const& agg)
         {
@@ -136,12 +125,39 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
                           group_sizes.size(),
                           rmm::device_buffer(group_sizes.data().get(),
                             group_sizes.size() * sizeof(size_type)));
-          cache.add_result(col_idx, agg,
-                          std::move(counts));
+      cache.add_result(col_idx, agg, std::move(counts));
+    };
+
+    auto store_mean = [&] (size_type col_idx,
+                           std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(col_idx, agg))
+        return;
+      auto sum_agg = make_sum_aggregation();
+      auto count_agg = make_count_aggregation();
+      store_sum(col_idx, sum_agg);
+      store_count(col_idx, count_agg);
+      column_view sum_result = cache.get_result(col_idx, sum_agg);
+      column_view count_result = cache.get_result(col_idx, count_agg);
+      // TODO (dm): Special case for timestamp. Add target_type_impl for it
+      auto result = cudf::experimental::detail::binary_operation(
+        sum_result, count_result, binary_operator::DIV, 
+        cudf::experimental::detail::target_type(
+          requests[col_idx].values.type(), aggregation::MEAN), mr, stream);
+      cache.add_result(col_idx, agg, std::move(result));
         };
+
+    for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
+      switch (requests[i].aggregations[j]->kind) {
+        // TODO (dm): single pass compute all supported reductions
+      case aggregation::SUM:
+        store_sum(i, requests[i].aggregations[j]);
+        break;
+      case aggregation::COUNT:
         store_count(i, requests[i].aggregations[j]);
         break;
       case aggregation::MEAN:
+        store_mean(i, requests[i].aggregations[j]);
         break;
       case aggregation::QUANTILE:
   
@@ -152,6 +168,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     }
   }  
   
+  // TODO (dm): construct aggregation_result's by extracting from result_cache
 
   return std::make_pair(std::make_unique<table>(),
                         std::vector<aggregation_result>{});
