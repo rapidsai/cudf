@@ -37,7 +37,7 @@ TYPED_TEST(UniqueCountCommon, NoNull)
 {
     using T = TypeParam;
 
-    std::vector<T> input = cudf::test::detail::make_type_param_vector<T>(
+    std::vector<T> input = cudf::test::make_type_param_vector<T>(
         {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
 
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end()};

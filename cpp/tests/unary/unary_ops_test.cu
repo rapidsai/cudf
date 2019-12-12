@@ -93,7 +93,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
 TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
 {
     using T = TypeParam;
-    auto temp_input = cudf::test::detail::make_type_param_vector<T>({ true, true, true, true });
+    auto temp_input = cudf::test::make_type_param_vector<T>({ true, true, true, true });
     std::vector<bool> temp_mask = { 1, 0, 1, 1 };
     cudf::test::fixed_width_column_wrapper<T> input (temp_input.cbegin(), temp_input.cend(), temp_mask.cbegin());
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {{ false, true, false, false }, { 1, 0, 1, 1 }};
@@ -171,8 +171,8 @@ TYPED_TEST(cudf_math_test, SQRT)
 TYPED_TEST(cudf_math_test, SimpleABS)
 {
     using T = TypeParam;
-    auto input_temp  = cudf::test::detail::make_type_param_vector<T>({ -2, -1, 1, 2 });
-    auto output_temp = cudf::test::detail::make_type_param_vector<T>({ -2,  1, 1, 2 });
+    auto input_temp  = cudf::test::make_type_param_vector<T>({ -2, -1, 1, 2 });
+    auto output_temp = cudf::test::make_type_param_vector<T>({ -2,  1, 1, 2 });
     cudf::test::fixed_width_column_wrapper<T> const input    {input_temp.begin(),  input_temp.end()};
     cudf::test::fixed_width_column_wrapper<T> const expected {output_temp.begin(), output_temp.end()};
     auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::ABS);
@@ -182,8 +182,8 @@ TYPED_TEST(cudf_math_test, SimpleABS)
 TYPED_TEST(cudf_math_test, SimpleSQRT)
 {
     using T = TypeParam;
-    auto input_temp  = cudf::test::detail::make_type_param_vector<T>({ 1, 4, 9, 16 });
-    auto output_temp = cudf::test::detail::make_type_param_vector<T>({ 1, 2, 3, 4  });
+    auto input_temp  = cudf::test::make_type_param_vector<T>({ 1, 4, 9, 16 });
+    auto output_temp = cudf::test::make_type_param_vector<T>({ 1, 2, 3, 4  });
     cudf::test::fixed_width_column_wrapper<T> const input    {input_temp.begin(),  input_temp.end()};
     cudf::test::fixed_width_column_wrapper<T> const expected {output_temp.begin(), output_temp.end()};
     auto const output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::SQRT);
@@ -193,8 +193,8 @@ TYPED_TEST(cudf_math_test, SimpleSQRT)
 TYPED_TEST(cudf_math_test, SimpleSQRTWithNullMask)
 {
     using T = TypeParam;
-    auto temp_input = cudf::test::detail::make_type_param_vector<T>({ 1, 4, 9, 16 });
-    auto temp_expected = cudf::test::detail::make_type_param_vector<T>({ 1, 4, 9, 4 });
+    auto temp_input = cudf::test::make_type_param_vector<T>({ 1, 4, 9, 16 });
+    auto temp_expected = cudf::test::make_type_param_vector<T>({ 1, 4, 9, 4 });
     std::vector<bool> temp_mask = { 1, 1, 0, 1 };
     cudf::test::fixed_width_column_wrapper<T> input    (temp_input.cbegin(),    temp_input.cend(),    temp_mask.cbegin());
     cudf::test::fixed_width_column_wrapper<T> expected (temp_expected.cbegin(), temp_expected.cend(), temp_mask.cbegin());

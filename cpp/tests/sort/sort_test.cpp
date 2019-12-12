@@ -37,8 +37,8 @@ TYPED_TEST(SortedOrder, WithNullMax)
 {
     using T = TypeParam;
 
-    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8, 5});
-    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2, 10});
+    auto col1_tmp = cudf::test::make_type_param_vector<T>({5, 4, 3, 5, 8, 5});
+    auto col3_tmp = cudf::test::make_type_param_vector<T>({10, 40, 70, 5, 2, 10});
     std::vector<bool> validity = {1, 1, 0, 1, 1, 1};
     cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend(), validity.cbegin());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
@@ -75,8 +75,8 @@ TYPED_TEST(SortedOrder, WithNullMin)
 {
     using T = TypeParam;
 
-    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
-    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    auto col1_tmp = cudf::test::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::make_type_param_vector<T>({10, 40, 70, 5, 2});
     std::vector<bool> validity = {1, 1, 0, 1, 1};
     cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend(), validity.cbegin());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
@@ -111,8 +111,8 @@ TYPED_TEST(SortedOrder, WithMixedNullOrder)
 {
     using T = TypeParam;
 
-    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
-    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    auto col1_tmp = cudf::test::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::make_type_param_vector<T>({10, 40, 70, 5, 2});
     std::vector<bool> validity1 = {0, 0, 1, 1, 0};
     std::vector<bool> validity2 = {1, 0, 1, 0, 1};
     cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend(), validity1.cbegin());
@@ -148,8 +148,8 @@ TYPED_TEST(SortedOrder, WithAllValid)
 {
     using T = TypeParam;
 
-    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
-    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    auto col1_tmp = cudf::test::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::make_type_param_vector<T>({10, 40, 70, 5, 2});
     cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
     cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend());;
@@ -171,8 +171,8 @@ TYPED_TEST(SortedOrder, MisMatchInColumnOrderSize)
 {
     using T = TypeParam;
 
-    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
-    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    auto col1_tmp = cudf::test::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::make_type_param_vector<T>({10, 40, 70, 5, 2});
     cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
     cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend());;
@@ -187,8 +187,8 @@ TYPED_TEST(SortedOrder, MisMatchInNullPrecedenceSize)
 {
     using T = TypeParam;
 
-    auto col1_tmp = cudf::test::detail::make_type_param_vector<T>({5, 4, 3, 5, 8});
-    auto col3_tmp = cudf::test::detail::make_type_param_vector<T>({10, 40, 70, 5, 2});
+    auto col1_tmp = cudf::test::make_type_param_vector<T>({5, 4, 3, 5, 8});
+    auto col3_tmp = cudf::test::make_type_param_vector<T>({10, 40, 70, 5, 2});
     cudf::test::fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
     cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"});
     cudf::test::fixed_width_column_wrapper<T> col3(col3_tmp.cbegin(), col3_tmp.cend());;

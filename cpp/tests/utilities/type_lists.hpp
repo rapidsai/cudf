@@ -62,6 +62,9 @@ constexpr auto types_to_ids() {
   return types_to_ids_impl<TYPES>(std::make_index_sequence<N>());
 }
 
+}  // namespace detail
+
+// #CH TODO add documentation
 // use this to make std::vector with NumericTypes to avoid narrowing conversion with bool
 template <typename TypeParam, typename T>
 auto make_type_param_vector(std::initializer_list<T> const& init_list) {
@@ -73,8 +76,6 @@ auto make_type_param_vector(std::initializer_list<T> const& init_list) {
     [] (auto const& e) { return static_cast<T>(e); });
   return vec;
 }
-
-}  // namespace detail
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all numeric types supported in libcudf for use in a

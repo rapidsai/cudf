@@ -207,9 +207,9 @@ void ReplaceNullsScalar(cudf::test::fixed_width_column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 {
-  std::vector<TypeParam> inputColumn = cudf::test::detail::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
+  std::vector<TypeParam> inputColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
   std::vector<cudf::valid_type> inputValid{0,0,0,0,0,1,1,1,1,1};
-  std::vector<TypeParam> replacementColumn = cudf::test::detail::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
+  std::vector<TypeParam> replacementColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
@@ -226,9 +226,9 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn_Empty) {
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
-  std::vector<TypeParam> inputColumn = cudf::test::detail::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
+  std::vector<TypeParam> inputColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
   std::vector<cudf::valid_type> inputValid {0,0,0,0,0,1,1,1,1,1};
-  std::vector<TypeParam> expectedColumn = cudf::test::detail::make_type_param_vector<TypeParam>({1,1,1,1,1,5,6,7,8,9});
+  std::vector<TypeParam> expectedColumn = cudf::test::make_type_param_vector<TypeParam>({1,1,1,1,1,5,6,7,8,9});
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(
@@ -241,9 +241,9 @@ TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls) {
 
   using T = TypeParam;
 
-  std::vector<T> input_column   = cudf::test::detail::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
-  std::vector<T> replace_column = cudf::test::detail::make_type_param_vector<T>({4, 5, 6, 7, 8, 9, 0, 1});
-  std::vector<T> result_column  = cudf::test::detail::make_type_param_vector<T>({4, 5, 6, 3, 1, 2, 8, 4});
+  std::vector<T> input_column   = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
+  std::vector<T> replace_column = cudf::test::make_type_param_vector<T>({4, 5, 6, 7, 8, 9, 0, 1});
+  std::vector<T> result_column  = cudf::test::make_type_param_vector<T>({4, 5, 6, 3, 1, 2, 8, 4});
 
   std::vector<cudf::valid_type> input_valid   {0, 0, 1, 1, 1, 1, 1, 1};
   std::vector<cudf::valid_type> replace_valid {1, 0, 1, 1, 1, 1, 1, 1};
