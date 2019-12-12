@@ -23,6 +23,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 
@@ -486,6 +487,32 @@ class alignas(16) mutable_column_device_view
   __host__ __device__ bitmask_type* null_mask() const noexcept {
     return const_cast<bitmask_type*>(
         detail::column_device_view_base::null_mask());
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return first element (accounting for offset) after underlying data
+   * is casted to the specified type.
+   *
+   * @tparam T The desired type
+   * @return T* Pointer to the first element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T, std::enable_if_t<is_fixed_width<T>()> * = nullptr>
+  T* begin() const {
+    return data<T>();
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief This will always fail as begin can't be supported for non fixed width
+   * types.
+   *
+   * @throws `cudf::logic_error`, for non-fixed width types
+   *
+   * @tparam T The desired type
+   * @return T* Pointer to the first element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T, std::enable_if_t<not is_fixed_width<T>()> * = nullptr>
+  T* begin() const {
+      CUDF_FAIL("Mutable device view can't use begin for non-fixed width types");
   }
 
   /**---------------------------------------------------------------------------*
