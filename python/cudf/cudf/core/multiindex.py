@@ -341,16 +341,16 @@ class MultiIndex(Index):
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
 
-    def _get_column_major(self, df, row_tuple):
+    def _get_column_major(self, df, column_tuple):
         from cudf import Series
         from cudf import DataFrame
 
         valid_indices = self._get_valid_indices_by_tuple(
-            df.columns, row_tuple, len(df._data)
+            df.columns, column_tuple, len(df._data)
         )
         result = df._take_columns(valid_indices)
-        if isinstance(row_tuple, (numbers.Number, slice)):
-            row_tuple = [row_tuple]
+        if isinstance(column_tuple, (numbers.Number, slice)):
+            column_tuple = [column_tuple]
         if len(result) == 0 and len(result.columns) == 0:
             result_columns = df.columns.copy(deep=False)
             clear_codes = DataFrame()
@@ -359,11 +359,11 @@ class MultiIndex(Index):
             result_columns._codes = clear_codes
             result_columns._source_data = clear_codes
             result.columns = result_columns
-        elif len(row_tuple) < len(self.levels) and (
-            not slice(None) in row_tuple
-            and not isinstance(row_tuple[0], (slice, numbers.Number))
+        elif len(column_tuple) < len(self.levels) and (
+            not slice(None) in column_tuple
+            and not isinstance(column_tuple[0], (slice, numbers.Number))
         ):
-            columns = self._popn(len(row_tuple))
+            columns = self._popn(len(column_tuple))
             result.columns = columns.take(valid_indices)
         else:
             result.columns = self.take(valid_indices)
@@ -373,10 +373,10 @@ class MultiIndex(Index):
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
             result.columns = as_index(columns, name=name)
-        if len(row_tuple) == len(self.levels) and len(result.columns) == 1:
+        if len(column_tuple) == len(self.levels) and len(result.columns) == 1:
             result = cudf.Series(
                 next(iter(result._data.values())),
-                name=row_tuple,
+                name=column_tuple,
                 index=result.index,
             )
         return result
