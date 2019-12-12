@@ -921,14 +921,14 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
         data = None
         children = (
             build_column(
-                data=Buffer.empty(row_count * np.dtype("int8").itemsize),
-                dtype="int8",
-            ),
-            build_column(
                 data=Buffer.empty(
                     (row_count + 1) * np.dtype("int32").itemsize
                 ),
                 dtype="int32",
+            ),
+            build_column(
+                data=Buffer.empty(row_count * np.dtype("int8").itemsize),
+                dtype="int8",
             ),
         )
     else:
