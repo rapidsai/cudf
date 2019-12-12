@@ -130,7 +130,8 @@ std::unique_ptr<table> read_orc(read_orc_args const& args,
   namespace orc = cudf::experimental::io::detail::orc;
 
   orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes,
-                              args.timestamp_type};
+                              args.timestamp_type, args.decimals_as_float,
+                              args.forced_decimals_scale};
   auto reader = make_reader<orc::reader>(args.source, options, mr);
 
   if (args.stripe != -1) {
@@ -170,6 +171,17 @@ std::unique_ptr<table> read_parquet(read_parquet_args const& args,
   } else {
     return reader->read_all();
   }
+}
+
+// Freeform API wraps the detail writer class API
+void write_parquet(write_parquet_args const& args,
+               rmm::mr::device_memory_resource* mr) {
+  namespace parquet = cudf::experimental::io::detail::parquet;
+
+  parquet::writer_options options{args.compression, args.stats_level};
+  auto writer = make_writer<parquet::writer>(args.sink, options, mr);
+
+  writer->write_all(args.table);
 }
 
 }  // namespace io

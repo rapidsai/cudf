@@ -159,4 +159,3 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
-
