@@ -32,6 +32,7 @@ namespace groupby {
 namespace detail { 
 namespace sort {
 
+// TODO (dm): update documentation for whole file
 /**
  * @brief Helper class for computing sort-based groupby
  * 

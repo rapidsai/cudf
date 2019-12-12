@@ -23,6 +23,7 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -232,7 +233,7 @@ column_view helper::keys_bitmask_column(cudaStream_t stream) {
 
   return _keys_bitmask_column->view();
 }
-  
+
 helper::index_vector helper::count_valids_in_groups(
   column const& grouped_values,
   rmm::mr::device_memory_resource* mr,
@@ -240,22 +241,29 @@ helper::index_vector helper::count_valids_in_groups(
 {
   // Get number of valid values in each group
   helper::index_vector val_group_sizes(num_groups());
-  auto col_view = column_device_view::create(grouped_values.view());
-  auto d_col_view = col_view.get();
-  
-  auto bitmask_iterator = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), 
-    [d_col_view] __device__ (size_type i) -> int { 
-      return d_col_view->is_valid(i);
-    });
 
-  thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                        group_labels().begin(),
-                        group_labels().end(),
-                        bitmask_iterator,
-                        thrust::make_discard_iterator(),
-                        val_group_sizes.begin());
+  if (grouped_values.nullable()) {
+    auto col_view = column_device_view::create(grouped_values.view());
+    
+    auto bitmask_iterator = experimental::detail::make_validity_iterator(
+                                                    *col_view);
 
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+                          group_labels().begin(),
+                          group_labels().end(),
+                          bitmask_iterator,
+                          thrust::make_discard_iterator(),
+                          val_group_sizes.begin());
+  } else {
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+                          group_labels().begin(),
+                          group_labels().end(),
+                          thrust::make_constant_iterator(1),
+                          thrust::make_discard_iterator(),
+                          val_group_sizes.begin());
+  }
+
+  return val_group_sizes;
 }
 
 std::pair<helper::column_ptr, helper::index_vector >
@@ -265,7 +273,7 @@ helper::sorted_values_and_num_valids(column_view const& values,
 {
   auto sorted_values = this->sorted_values(values, mr, stream);
   auto val_group_sizes = count_valids_in_groups(*sorted_values, mr, stream); 
-  return std::make_pair(sorted_values, val_group_sizes);
+  return std::make_pair(std::move(sorted_values), val_group_sizes);
 }
 
 helper::column_ptr helper::sorted_values(column_view const& values, 

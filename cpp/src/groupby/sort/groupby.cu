@@ -16,6 +16,7 @@
 
 #include "sort_helper.hpp"
 #include "result_cache.hpp"
+#include "group_reductions.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -102,8 +103,54 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   // bool hasagg2 = cache.has_result(0, agg_q2);
 
   
-  // Phase 1: All single pass reductions
+  for (size_t i = 0; i < requests.size(); i++) {
+    std::unique_ptr<column> sorted_values;
+    rmm::device_vector<size_type> group_sizes;
+    std::tie(sorted_values, group_sizes) =
+      sorter.sorted_values_and_num_valids(requests[i].values);
+
+    for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
+      switch (requests[i].aggregations[j]->kind) {
+        // TODO (dm): single pass compute all supported reductions
+      case aggregation::SUM:
+        auto store_sum = [&] (size_type col_idx,
+                              std::unique_ptr<aggregation> const& agg)
+        {
+          if (cache.has_result(col_idx, agg))
+            return;
+          cache.add_result(col_idx, agg, 
+                          group_sum(sorted_values->view(), 
+                                    sorter.group_labels(),
+                                    sorter.num_groups(), stream));
+        };
+        store_sum(i, requests[i].aggregations[j]);
+        break;
+      case aggregation::COUNT:
+        auto store_count = [&] (size_type col_idx,
+                                std::unique_ptr<aggregation> const& agg)
+        {
+          if (cache.has_result(col_idx, agg))
+            return;
+          auto counts = std::make_unique<column>(
+                          data_type(type_to_id<size_type>()),
+                          group_sizes.size(),
+                          rmm::device_buffer(group_sizes.data().get(),
+                            group_sizes.size() * sizeof(size_type)));
+          cache.add_result(col_idx, agg,
+                          std::move(counts));
+        };
+        store_count(i, requests[i].aggregations[j]);
+        break;
+      case aggregation::MEAN:
+        break;
+      case aggregation::QUANTILE:
   
+        break;
+      default:
+        break;
+      }
+    }
+  }  
   
 
   return std::make_pair(std::make_unique<table>(),
