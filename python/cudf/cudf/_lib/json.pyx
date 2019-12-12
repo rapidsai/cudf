@@ -9,6 +9,7 @@
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.includes.json cimport (
+    Conf as KafkaConf,
     reader as json_reader,
     reader_options as json_reader_options
 )
@@ -30,7 +31,7 @@ def is_file_like(obj):
     return True
 
 
-cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
+cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range, kafka_configs):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -41,6 +42,7 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
     """
 
     # Setup arguments
+    print("Before args")
     cdef json_reader_options args = json_reader_options()
     args.lines = lines
     if compression is not None:
@@ -57,18 +59,51 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
             for col_dtype in dtype:
                 args.dtype.push_back(str(col_dtype).encode())
 
+    print("After args")
     # Create reader from source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef const unsigned char[::1] buffer
     cdef string filepath
-    if buffer is None:
-        if os.path.isfile(filepath_or_buffer):
-            filepath = <string>str(filepath_or_buffer).encode()
-        else:
-            buffer = filepath_or_buffer.encode()
+
+    # Kafka execution path variables
+    print("Before Kafka configuration")
+    cdef KafkaConf.ConfType gk = KafkaConf.ConfType.CONF_GLOBAL
+    cdef KafkaConf *gkc
+    cdef vector[string] topics
+
+    if kafka_configs is not None:
+        print("Making kafka configurations")
+        errstr=""
+        gkc = KafkaConf.create(KafkaConf.ConfType.CONF_GLOBAL)
+
+        for kafka_conf_key in kafka_configs:
+            if kafka_conf_key == 'cudf.topic.list':
+                tops = kafka_configs[kafka_conf_key].split(',')
+                for t in tops:
+                    topics.push_back(t.encode())
+            elif kafka_conf_key == 'cudf.start.offset':
+                args.cudf_start_offset = kafka_configs[kafka_conf_key]
+            elif kafka_conf_key == 'cudf.end.offset':
+                args.cudf_end_offset = kafka_configs[kafka_conf_key]
+            else:
+                gkc.set(kafka_conf_key.encode(), kafka_configs[kafka_conf_key].encode(), errstr.encode())
+        print("End kafka configuration")
+    else:
+        print("Taking file path approach")
+        buffer = view_of_buffer(filepath_or_buffer)
+        if buffer is None:
+            if os.path.isfile(filepath_or_buffer):
+                filepath = <string>str(filepath_or_buffer).encode()
+            else:
+                buffer = filepath_or_buffer.encode()
 
     cdef unique_ptr[json_reader] reader
+    print("Right here")
     with nogil:
-        if buffer is None:
+        if kafka_configs is not None:
+            reader = unique_ptr[json_reader](
+                new json_reader(gkc, topics, args)
+            )
+        elif buffer is None:
             reader = unique_ptr[json_reader](
                 new json_reader(filepath, args)
             )

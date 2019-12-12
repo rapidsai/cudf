@@ -749,6 +749,10 @@ void reader::Impl::setDataTypes() {
   }
 }
 
+reader::reader(RdKafka::Conf *global_configs, std::vector<std::string> kafka_topics, reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(global_configs, kafka_topics), "",
+                                   options)) {}
+
 reader::reader(std::string filepath, reader_options const &options)
     : impl_(std::make_unique<Impl>(nullptr, filepath, options)) {
   // Delay actual instantiation of data source until read to allow for

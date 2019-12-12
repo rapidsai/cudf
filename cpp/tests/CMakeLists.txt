@@ -398,8 +398,11 @@ set(LEGACY_JSON_TEST_SRC
 set(LEGACY_ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/orc_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
-set(LEGACY_KAFKA_IO_TEST_SRC
+set(LEGACY_KAFKA_CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_kafka_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+set(LEGACY_KAFKA_JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/json_kafka_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
@@ -407,7 +410,8 @@ ConfigureTest(LEGACY_AVRO_TEST "${LEGACY_AVRO_TEST_SRC}")
 ConfigureTest(LEGACY_CSV_TEST "${LEGACY_CSV_TEST_SRC}")
 ConfigureTest(LEGACY_JSON_TEST "${LEGACY_JSON_TEST_SRC}")
 ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
-ConfigureTest(LEGACY_KAFKA_IO_TEST_SRC "${LEGACY_KAFKA_IO_TEST_SRC}")
+ConfigureTest(LEGACY_KAFKA_CSV_TEST_SRC "${LEGACY_KAFKA_CSV_TEST_SRC}")
+ConfigureTest(LEGACY_KAFKA_JSON_TEST_SRC "${LEGACY_KAFKA_JSON_TEST_SRC}")
 
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")

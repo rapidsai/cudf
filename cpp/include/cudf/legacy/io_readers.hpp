@@ -109,6 +109,10 @@ struct reader_options {
   bool lines = false;
   std::string compression = "infer";
   std::vector<std::string> dtype;
+  RdKafka::Conf *kafka_configs;
+  std::vector<std::string> kafka_topics;
+  int64_t cudf_start_offset;
+  int64_t cudf_end_offset;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -134,6 +138,13 @@ class reader {
   std::unique_ptr<Impl> impl_;
 
  public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a Kafka source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(RdKafka::Conf *kafka_configs,
+                  std::vector<std::string> kafka_topics,
+                  reader_options const &options);
+
   /**---------------------------------------------------------------------------*
    * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/

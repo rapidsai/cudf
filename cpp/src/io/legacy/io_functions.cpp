@@ -118,6 +118,12 @@ table read_json(json_read_arg const &args) {
                                             args.source.buffer.second, options);
     } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
       return std::make_unique<json::reader>(args.source.file, options);
+    } else if (args.source.type == KAFKA_TOPIC) {
+      options.kafka_topics = args.kafka_topics;
+      options.cudf_start_offset = args.cudf_start_offset;
+      options.cudf_end_offset = args.cudf_end_offset;
+      return std::make_unique<json::reader>(args.kafka_configs,
+                                            args.kafka_topics, options);
     } else {
       CUDF_FAIL("Unsupported source type");
     }

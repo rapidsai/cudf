@@ -12,12 +12,13 @@ from cudf.utils import ioutils
 
 @ioutils.doc_read_json()
 def read_json(
-    path_or_buf,
+    path_or_buf=None,
     engine="auto",
     dtype=True,
     lines=False,
     compression="infer",
     byte_range=None,
+    kafka_configs=None,
     *args,
     **kwargs,
 ):
@@ -33,7 +34,7 @@ def read_json(
     )
     if engine == "cudf":
         df = libcudf.json.read_json(
-            path_or_buf, dtype, lines, compression, byte_range
+            path_or_buf, dtype, lines, compression, byte_range, kafka_configs,
         )
     else:
         warnings.warn(

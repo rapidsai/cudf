@@ -251,6 +251,14 @@ struct json_read_arg {
   size_t byte_range_offset = 0;  ///< Bytes to skip from the start
   size_t byte_range_size = 0;    ///< Bytes to read; always reads complete rows
 
+  RdKafka::Conf* kafka_configs;  ///< Defines global Kafka configurations that
+                                 ///< apply across an entire connected session.
+  std::vector<std::string>
+      kafka_topics;  ///< Topics that should be consumed from
+
+  int64_t cudf_start_offset;
+  int64_t cudf_end_offset;
+
   explicit json_read_arg(const source_info& src) : source(src) {}
 };
 

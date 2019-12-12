@@ -53,7 +53,7 @@ class kafka_io_source : public datasource {
 
     RdKafka::ErrorCode err = consumer_->subscribe(topics_);
     CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
-                 "Failed to subscribe to Kafka Topics");
+                 RdKafka::err2str(err));
 
     // The csv_reader implementation will call 'empty()' to determine how maby
     // bytes are available. With files this works, with Kafka we don't yet have
