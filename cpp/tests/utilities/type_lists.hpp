@@ -69,8 +69,8 @@ constexpr auto types_to_ids() {
  *
  * Example:
  * ```
- * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
+ * // Invokes all typed fixture tests for all floating point types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FloatingPointTypes);
  * ```
  */
 using FloatingPointTypes = cudf::test::Types<float, double>;
