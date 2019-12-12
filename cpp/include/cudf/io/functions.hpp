@@ -46,16 +46,13 @@ struct read_avro_args {
 
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
-  /// Optional output location for table metadata
-  table_metadata *output_metadata = nullptr;
 
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
   size_type num_rows = -1;
 
-  explicit read_avro_args(source_info const& src, table_metadata *metadata = nullptr)
-      : source(src), output_metadata(metadata) {}
+  explicit read_avro_args(source_info const& src) : source(src) {}
 };
 
 /**
@@ -74,9 +71,9 @@ struct read_avro_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_avro(
+table_with_metadata read_avro(
     read_avro_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -166,11 +163,7 @@ struct read_csv_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
-  /// Optional output location for table metadata
-  table_metadata *output_metadata = nullptr;
-
-  explicit read_csv_args(source_info const& src, table_metadata *metadata = nullptr)
-      : source(src), output_metadata(metadata) {}
+  explicit read_csv_args(source_info const& src) : source(src) {}
 };
 
 /**
@@ -189,9 +182,9 @@ struct read_csv_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_csv(
+table_with_metadata read_csv(
     read_csv_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -203,8 +196,6 @@ struct read_orc_args {
 
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
-  /// Optional output location for table metadata
-  table_metadata *output_metadata = nullptr;
 
   /// Stripe to read; -1 is all
   size_type stripe = -1;
@@ -227,8 +218,7 @@ struct read_orc_args {
   /// -1 is auto (column scale), >=0: number of fractional digits
   int forced_decimals_scale = -1;
 
-  explicit read_orc_args(source_info const& src, table_metadata *metadata = nullptr)
-      : source(src), output_metadata(metadata) {}
+  explicit read_orc_args(source_info const& src) : source(src) {}
 };
 
 /**
@@ -249,7 +239,7 @@ struct read_orc_args {
  *
  * @return The set of columns
  */
-std::unique_ptr<table> read_orc(
+table_with_metadata read_orc(
     read_orc_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -313,11 +303,8 @@ struct read_parquet_args {
   bool use_pandas_metadata = true;
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
-  /// Optional output location for table metadata
-  table_metadata *output_metadata = nullptr;
 
-  explicit read_parquet_args(source_info const& src, table_metadata *metadata = nullptr)
-      : source(src), output_metadata(metadata) {}
+  explicit read_parquet_args(source_info const& src) : source(src) {}
 };
 
 /**
@@ -336,9 +323,9 @@ struct read_parquet_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_parquet(
+table_with_metadata read_parquet(
     read_parquet_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

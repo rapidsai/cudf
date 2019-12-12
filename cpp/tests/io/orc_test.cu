@@ -128,7 +128,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
@@ -154,7 +154,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
@@ -181,7 +181,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
@@ -208,7 +208,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, MultiColumn) {
@@ -254,13 +254,12 @@ TEST_F(OrcWriterTest, MultiColumn) {
                                    expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
 
-  cudf_io::table_metadata result_metadata;
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}, &result_metadata};
+  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
-  EXPECT_EQ(expected_metadata.column_names, result_metadata.column_names);
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(OrcWriterTest, MultiColumnWithNulls) {
@@ -316,13 +315,12 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
                                    expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
 
-  cudf_io::table_metadata result_metadata;
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}, &result_metadata};
+  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
-  EXPECT_EQ(expected_metadata.column_names, result_metadata.column_names);
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(OrcWriterTest, Strings) {
@@ -356,11 +354,10 @@ TEST_F(OrcWriterTest, Strings) {
                                    expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
 
-  cudf_io::table_metadata result_metadata;
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}, &result_metadata};
+  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
-  EXPECT_EQ(expected_metadata.column_names, result_metadata.column_names);
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }

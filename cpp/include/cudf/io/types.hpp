@@ -25,6 +25,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <cudf/types.hpp>
 
 // Forward declarations
 namespace arrow {
@@ -101,6 +102,15 @@ struct table_metadata {
   std::vector<std::string> column_names; //!< Names of columns contained in the table
   std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs
 };
+
+/**
+ * @brief Table with table metadata used by io readers to return the metadata by value
+ */
+struct table_with_metadata {
+  std::unique_ptr<table> tbl;
+  table_metadata metadata;
+};
+
 
 /**
  * @brief Source information for read interfaces

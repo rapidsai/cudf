@@ -121,12 +121,10 @@ class reader {
    * @brief Reads the entire dataset.
    *
    * @param stream Optional stream to use for device memory alloc and kernels
-   * @param metadata Optional location to return table metadata
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
-                                  cudaStream_t stream = 0);
+  table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
@@ -136,11 +134,10 @@ class reader {
    * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
-                                   table_metadata *metadata = nullptr,
-                                   cudaStream_t stream = 0);
+  table_with_metadata read_rows(size_type skip_rows, size_type num_rows,
+                                cudaStream_t stream = 0);
 };
 
 }  // namespace avro
@@ -276,12 +273,10 @@ class reader {
    * @brief Reads the entire dataset.
    *
    * @param metadata Optional location to return table metadata
-   * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
-                                  cudaStream_t stream = 0);
+  table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads all the rows within a byte range.
@@ -292,14 +287,12 @@ class reader {
    *
    * @param offset Byte offset from the start
    * @param size Number of bytes from the offset; set to 0 for all remaining
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_byte_range(size_t offset, size_t size,
-                                         table_metadata *metadata = nullptr,
-                                         cudaStream_t stream = 0);
+  table_with_metadata read_byte_range(size_t offset, size_t size,
+                                      cudaStream_t stream = 0);
 
   /**
    * @brief Reads a range of rows.
@@ -307,15 +300,13 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param skip_rows_end Number of rows to skip from the end
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_rows(size_type skip_rows, size_type skip_rows_end,
-                                   size_type num_rows,
-                                   table_metadata *metadata = nullptr,
-                                   cudaStream_t stream = 0);
+  table_with_metadata read_rows(size_type skip_rows, size_type skip_rows_end,
+                                size_type num_rows,
+                                cudaStream_t stream = 0);
 };
 
 }  // namespace csv
@@ -408,40 +399,34 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
-                                  cudaStream_t stream = 0);
+  table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a specific stripe.
    *
    * @param stripe Index of the stripe
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_stripe(size_type stripe,
-                                     table_metadata *metadata = nullptr,
-                                     cudaStream_t stream = 0);
+  table_with_metadata read_stripe(size_type stripe,
+                                  cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
-                                   table_metadata *metadata = nullptr,
-                                   cudaStream_t stream = 0);
+  table_with_metadata read_rows(size_type skip_rows, size_type num_rows,
+                                cudaStream_t stream = 0);
 };
 
 }  // namespace orc
@@ -537,39 +522,33 @@ class reader {
    * @brief Reads the entire dataset.
    *
    * @param stream Optional stream to use for device memory alloc and kernels
-   * @param metadata Optional location to return table metadata
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_all(table_metadata *metadata = nullptr,
-                                  cudaStream_t stream = 0);
+  table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
    * @brief Reads a specific group of rows.
    *
    * @param row_group Index of the row group
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_row_group(size_type row_group,
-                                        table_metadata *metadata = nullptr,
-                                        cudaStream_t stream = 0);
+  table_with_metadata read_row_group(size_type row_group,
+                                     cudaStream_t stream = 0);
 
   /**
    * @brief Reads a range of rows.
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param metadata Optional location to return table metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with table metadata
    */
-  std::unique_ptr<table> read_rows(size_type skip_rows, size_type num_rows,
-                                   table_metadata *metadata = nullptr,
-                                   cudaStream_t stream = 0);
+  table_with_metadata read_rows(size_type skip_rows, size_type num_rows,
+                                cudaStream_t stream = 0);
 };
 
 }  // namespace parquet

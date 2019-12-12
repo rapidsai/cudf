@@ -127,7 +127,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn) {
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls) {
@@ -152,7 +152,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls) {
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
@@ -178,7 +178,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls) {
@@ -204,7 +204,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TEST_F(ParquetWriterTest, MultiColumn) {
@@ -250,12 +250,11 @@ TEST_F(ParquetWriterTest, MultiColumn) {
                                        expected->view(), &expected_metadata};
   cudf_io::write_parquet(out_args);
 
-  cudf_io::table_metadata result_metadata;
-  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}, &result_metadata};
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
-  EXPECT_EQ(expected_metadata.column_names, result_metadata.column_names);
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(ParquetWriterTest, MultiColumnWithNulls) {
@@ -311,12 +310,11 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls) {
                                        expected->view(), &expected_metadata};
   cudf_io::write_parquet(out_args);
 
-  cudf_io::table_metadata result_metadata;
-  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}, &result_metadata};
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
-  EXPECT_EQ(expected_metadata.column_names, result_metadata.column_names);
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(ParquetWriterTest, Strings) {
@@ -350,10 +348,9 @@ TEST_F(ParquetWriterTest, Strings) {
                                        expected->view(), &expected_metadata};
   cudf_io::write_parquet(out_args);
 
-  cudf_io::table_metadata result_metadata;
-  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}, &result_metadata};
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
-  EXPECT_EQ(expected_metadata.column_names, result_metadata.column_names);
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }

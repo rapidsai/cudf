@@ -58,22 +58,22 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 }  // namespace
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_avro(read_avro_args const& args,
-                                 rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_avro(read_avro_args const& args,
+                              rmm::mr::device_memory_resource* mr) {
   namespace avro = cudf::experimental::io::detail::avro;
 
   avro::reader_options options{args.columns};
   auto reader = make_reader<avro::reader>(args.source, options, mr);
 
   if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows, args.output_metadata);
+    return reader->read_rows(args.skip_rows, args.num_rows);
   } else {
-    return reader->read_all(args.output_metadata);
+    return reader->read_all();
   }
 }
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_csv(read_csv_args const& args,
+table_with_metadata read_csv(read_csv_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace csv = cudf::experimental::io::detail::csv;
 
@@ -116,18 +116,16 @@ std::unique_ptr<table> read_csv(read_csv_args const& args,
 
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
     return reader->read_byte_range(args.byte_range_offset,
-                                   args.byte_range_size,
-                                   args.output_metadata);
+                                   args.byte_range_size);
   } else if (args.skiprows != -1 || args.skipfooter != -1 || args.nrows != -1) {
-    return reader->read_rows(args.skiprows, args.skipfooter, args.nrows,
-                             args.output_metadata);
+    return reader->read_rows(args.skiprows, args.skipfooter, args.nrows);
   } else {
-    return reader->read_all(args.output_metadata);
+    return reader->read_all();
   }
 }
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_orc(read_orc_args const& args,
+table_with_metadata read_orc(read_orc_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace orc = cudf::experimental::io::detail::orc;
 
@@ -137,11 +135,11 @@ std::unique_ptr<table> read_orc(read_orc_args const& args,
   auto reader = make_reader<orc::reader>(args.source, options, mr);
 
   if (args.stripe != -1) {
-    return reader->read_stripe(args.stripe, args.output_metadata);
+    return reader->read_stripe(args.stripe);
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows, args.output_metadata);
+    return reader->read_rows(args.skip_rows, args.num_rows);
   } else {
-    return reader->read_all(args.output_metadata);
+    return reader->read_all();
   }
 }
 
@@ -157,7 +155,7 @@ void write_orc(write_orc_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_parquet(read_parquet_args const& args,
+table_with_metadata read_parquet(read_parquet_args const& args,
                                     rmm::mr::device_memory_resource* mr) {
   namespace parquet = cudf::experimental::io::detail::parquet;
 
@@ -167,11 +165,11 @@ std::unique_ptr<table> read_parquet(read_parquet_args const& args,
   auto reader = make_reader<parquet::reader>(args.source, options, mr);
 
   if (args.row_group != -1) {
-    return reader->read_row_group(args.row_group, args.output_metadata);
+    return reader->read_row_group(args.row_group);
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows, args.output_metadata);
+    return reader->read_rows(args.skip_rows, args.num_rows);
   } else {
-    return reader->read_all(args.output_metadata);
+    return reader->read_all();
   }
 }
 

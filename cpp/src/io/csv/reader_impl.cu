@@ -264,12 +264,12 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
   return col_names;
 }
 
-std::unique_ptr<table> reader::impl::read(size_t range_offset,
-                                          size_t range_size, int skip_rows,
-                                          int skip_end_rows, int num_rows,
-                                          table_metadata *metadata,
-                                          cudaStream_t stream) {
+table_with_metadata reader::impl::read(size_t range_offset,
+                                       size_t range_size, int skip_rows,
+                                       int skip_end_rows, int num_rows,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata metadata;
 
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
@@ -281,11 +281,6 @@ std::unique_ptr<table> reader::impl::read(size_t range_offset,
     map_range_size = range_size + calculateMaxRowSize(num_columns);
   }
 
-  if (metadata) {
-    metadata->column_names.clear();
-    metadata->user_data.clear();
-  }
-
   // Support delayed opening of the file if using memory mapping datasource
   // This allows only mapping of a subset of the file if using byte range
   if (source_ == nullptr) {
@@ -295,7 +290,7 @@ std::unique_ptr<table> reader::impl::read(size_t range_offset,
 
   // Return an empty dataframe if no data and no column metadata to process
   if (source_->empty() && (args_.names.empty() || args_.dtype.empty())) {
-    return std::make_unique<table>(std::move(out_columns));
+    return { std::make_unique<table>(std::move(out_columns)), std::move(metadata) };
   }
 
   // Transfer source data to GPU
@@ -410,7 +405,7 @@ std::unique_ptr<table> reader::impl::read(size_t range_offset,
 
   // Return empty table rather than exception if nothing to load
   if (num_active_cols == 0) {
-    return std::make_unique<table>(std::move(out_columns));
+    return { std::make_unique<table>(std::move(out_columns)), std::move(metadata) };
   }
 
   std::vector<data_type> column_types = gather_column_types(stream);
@@ -421,9 +416,7 @@ std::unique_ptr<table> reader::impl::read(size_t range_offset,
     if (h_column_flags[col] & column_parse::enabled) {
       out_buffers.emplace_back(column_types[active_col], num_records, stream,
                                mr_);
-      if (metadata) {
-        metadata->column_names.emplace_back(col_names[col]);
-      }
+      metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
   }
@@ -454,7 +447,7 @@ std::unique_ptr<table> reader::impl::read(size_t range_offset,
     }
   }*/
 
-  return std::make_unique<table>(std::move(out_columns));
+  return { std::make_unique<table>(std::move(out_columns)), std::move(metadata) };
 }
 
 void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
@@ -831,27 +824,25 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(table_metadata *metadata, cudaStream_t stream) {
-  return _impl->read(0, 0, 0, 0, -1, metadata, stream);
+table_with_metadata reader::read_all(cudaStream_t stream) {
+  return _impl->read(0, 0, 0, 0, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_byte_range(size_t offset, size_t size,
-                                               table_metadata *metadata,
-                                               cudaStream_t stream) {
-  return _impl->read(offset, size, 0, 0, -1, metadata, stream);
+table_with_metadata reader::read_byte_range(size_t offset, size_t size,
+                                            cudaStream_t stream) {
+  return _impl->read(offset, size, 0, 0, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type num_skip_header,
-                                         size_type num_skip_footer,
-                                         size_type num_rows,
-                                         table_metadata *metadata,
-                                         cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type num_skip_header,
+                                      size_type num_skip_footer,
+                                      size_type num_rows,
+                                      cudaStream_t stream) {
   CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
                "Cannot use both `num_rows` and `num_skip_footer`");
 
-  return _impl->read(0, 0, num_skip_header, num_skip_footer, num_rows, metadata, stream);
+  return _impl->read(0, 0, num_skip_header, num_skip_footer, num_rows, stream);
 }
 
 }  // namespace csv
