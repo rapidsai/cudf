@@ -74,6 +74,19 @@ namespace sort {
 //   }
 // }
 
+std::vector<aggregation_result> extract_results(
+    std::vector<aggregation_request> const& requests,
+    result_cache& cache)
+{
+  std::vector<aggregation_result> results(requests.size());
+
+  for (size_t i = 0; i < requests.size(); i++) {
+    for (auto &&agg : requests[i].aggregations) {
+      results[i].results.emplace_back( cache.release_result(i, agg) );      
+    }
+  }
+  return results;
+}
 
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
@@ -93,7 +106,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
   result_cache cache(requests.size());
-
+  
   for (size_t i = 0; i < requests.size(); i++) {
     // TODO (dm): Not all aggs require sorted values. Only sort if there is an 
     //            agg that requires sorted result
@@ -104,27 +117,27 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     std::tie(sorted_values, group_sizes) =
       sorter.sorted_values_and_num_valids(requests[i].values);
 
-        auto store_sum = [&] (size_type col_idx,
-                              std::unique_ptr<aggregation> const& agg)
-        {
-          if (cache.has_result(col_idx, agg))
-            return;
-          cache.add_result(col_idx, agg, 
-                          group_sum(sorted_values->view(), 
-                                    sorter.group_labels(),
-                                    sorter.num_groups(), stream));
-        };
+    auto store_sum = [&] (size_type col_idx,
+                          std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(col_idx, agg))
+        return;
+      cache.add_result(col_idx, agg, 
+                      group_sum(sorted_values->view(), 
+                                sorter.group_labels(),
+                                sorter.num_groups(), stream));
+    };
 
-        auto store_count = [&] (size_type col_idx,
-                                std::unique_ptr<aggregation> const& agg)
-        {
-          if (cache.has_result(col_idx, agg))
-            return;
-          auto counts = std::make_unique<column>(
-                          data_type(type_to_id<size_type>()),
-                          group_sizes.size(),
-                          rmm::device_buffer(group_sizes.data().get(),
-                            group_sizes.size() * sizeof(size_type)));
+    auto store_count = [&] (size_type col_idx,
+                            std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(col_idx, agg))
+        return;
+      auto counts = std::make_unique<column>(
+                      data_type(type_to_id<size_type>()),
+                      group_sizes.size(),
+                      rmm::device_buffer(group_sizes.data().get(),
+                        group_sizes.size() * sizeof(size_type)));
       cache.add_result(col_idx, agg, std::move(counts));
     };
 
@@ -145,7 +158,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
         cudf::experimental::detail::target_type(
           requests[col_idx].values.type(), aggregation::MEAN), mr, stream);
       cache.add_result(col_idx, agg, std::move(result));
-        };
+    };
 
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       switch (requests[i].aggregations[j]->kind) {
@@ -168,10 +181,10 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     }
   }  
   
-  // TODO (dm): construct aggregation_result's by extracting from result_cache
-
-  return std::make_pair(std::make_unique<table>(),
-                        std::vector<aggregation_result>{});
+  auto results = extract_results(requests, cache);
+  
+  return std::make_pair(sorter.unique_keys(),
+                        std::move(results));
 }
 }  // namespace sort
 }  // namespace detail

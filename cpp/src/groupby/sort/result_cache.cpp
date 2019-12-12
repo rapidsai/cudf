@@ -76,6 +76,19 @@ column_view result_cache::get_result(size_t col_idx,
   return result_it->second->view();
 }
 
+std::unique_ptr<column> 
+result_cache::release_result(size_t col_idx,
+                             std::unique_ptr<aggregation> const& agg)
+{
+  auto key = copy_to_shared_ptr(agg);
+
+  // unordered_map.extract() is a c++17 feature so we do this:
+  auto result_it = _cache[col_idx].find(key);
+  column* raw_column = result_it->second.release();
+  _cache[col_idx].erase(result_it);
+  return std::unique_ptr<column>(raw_column);
+}
+
 }  // namespace detail
 }  // namespace groupby
 }  // namespace experimental
