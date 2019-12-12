@@ -20,9 +20,11 @@
 #include "cudf/table/table_device_view.cuh"
 #include "cudf/types.hpp"
 #include "cudf/utilities/bit.hpp"
+#include "thrust/detail/execute_with_allocator.h"
 #include "thrust/iterator/counting_iterator.h"
 #include "thrust/iterator/transform_iterator.h"
 #include "thrust/iterator/zip_iterator.h"
+#include "thrust/system/cuda/detail/par.h"
 #include "thrust/transform.h"
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
@@ -48,10 +50,9 @@
 
 namespace cudf {
 namespace experimental {
-namespace detail {
 namespace {
 
-template <typename T>
+template <typename T, typename TResult>
 CUDA_HOST_DEVICE_CALLABLE
 T get_array_value(T const* devarr, size_type location)
 {
@@ -61,7 +62,7 @@ T get_array_value(T const* devarr, size_type location)
 #else
     CUDA_TRY( cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost) );
 #endif
-    return result;
+    return static_cast<TResult>(result);
 }
 
 struct quantile_index
@@ -83,7 +84,10 @@ struct quantile_index
     }
 };
 
-} // anonymous namespace
+enum class extrema {
+    min,
+    max
+};
 
 template<typename T, typename TResult, typename TSortMap, bool sortmap_is_gpu>
 std::unique_ptr<scalar>
@@ -95,7 +99,7 @@ select_quantile(T const * begin,
 {
     
     if (size < 2) {
-        auto result_value = get_array_value(begin, 0);
+        auto result_value = get_array_value<T, TResult>(begin, 0);
         return std::make_unique<numeric_scalar<TResult>>(result_value);
     }
 
@@ -107,30 +111,27 @@ select_quantile(T const * begin,
 
     switch (interpolation) {
     case interpolation::LINEAR:
-        a = get_array_value(begin, sortmap[idx.lower_bound]);
-        b = get_array_value(begin, sortmap[idx.upper_bound]);
-        cudf::interpolate::linear<TResult>(value, a, b, idx.fraction);
+        a = get_array_value<T, T>(begin, sortmap[idx.lower_bound]);
+        b = get_array_value<T, T>(begin, sortmap[idx.upper_bound]);
+        interpolate::linear<TResult>(value, a, b, idx.fraction);
         break;
 
     case interpolation::MIDPOINT:
-        a = get_array_value(begin, sortmap[idx.lower_bound]);
-        b = get_array_value(begin, sortmap[idx.upper_bound]);
-        cudf::interpolate::midpoint<TResult>(value, a, b);
+        a = get_array_value<T, T>(begin, sortmap[idx.lower_bound]);
+        b = get_array_value<T, T>(begin, sortmap[idx.upper_bound]);
+        interpolate::midpoint<TResult>(value, a, b);
         break;
 
     case interpolation::LOWER:
-        a = get_array_value(begin, sortmap[idx.lower_bound]);
-        value = static_cast<TResult>(a);
+        value = get_array_value<T, TResult>(begin, sortmap[idx.lower_bound]);
         break;
 
     case interpolation::HIGHER:
-        a = get_array_value(begin, sortmap[idx.upper_bound]);
-        value = static_cast<TResult>(a);
+        value = get_array_value<T, TResult>(begin, sortmap[idx.upper_bound]);
         break;
 
     case interpolation::NEAREST:
-        a = get_array_value(begin, sortmap[idx.nearest]);
-        value = static_cast<TResult>(a);
+        value = get_array_value<T, TResult>(begin, sortmap[idx.nearest]);
         break;
 
     default:
@@ -138,6 +139,36 @@ select_quantile(T const * begin,
     }
 
     return std::make_unique<numeric_scalar<TResult>>(value);
+}
+
+template<typename T, typename TResult, extrema minmax, bool nullable>
+std::unique_ptr<scalar>
+extrema(column_view const & in,
+        order order,
+        null_order null_order,
+        cudaStream_t stream)
+{
+    std::vector<cudf::order> h_order{ order };
+    std::vector<cudf::null_order> h_null_order{ null_order };
+    rmm::device_vector<cudf::order> d_order( h_order );
+    rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
+    table_view in_table({ in });
+    auto in_table_d = table_device_view::create(in_table);
+    auto policy = rmm::exec_policy(stream);
+    auto it = thrust::make_counting_iterator<size_type>(0);
+    auto comparator = row_lexicographic_comparator<nullable>(
+        *in_table_d,
+        *in_table_d,
+        d_order.data().get(),
+        d_null_order.data().get());
+
+    auto extrema_id = minmax == extrema::min
+        ? thrust::min_element(policy->on(stream), it, it + in.size(), comparator)
+        : thrust::max_element(policy->on(stream), it, it + in.size(), comparator);
+
+    auto extrema_value = get_array_value<T, TResult>(in.begin<T>(), *extrema_id);
+
+    return std::make_unique<numeric_scalar<TResult>>(extrema_value);
 }
 
 template<typename T, typename TResult>
@@ -153,52 +184,29 @@ trampoline(column_view const& in,
            cudaStream_t stream = 0)
 {
     if (in.size() == 1) {
-        auto result_value = get_array_value(in.begin<T>(), 0);
-        return std::make_unique<numeric_scalar<TResult>>(static_cast<TResult>(result_value));    }
+        auto result = get_array_value<T, TResult>(in.begin<T>(), 0);
+        auto result_casted = static_cast<TResult>(result);
+        return std::make_unique<numeric_scalar<TResult>>(result_casted);
+    }
 
     if (not is_sorted)
     {
+        table_view unsorted{ { in } };
 
         if (quantile <= 0.0)
         {
-            std::vector<cudf::null_order> h_null_order{ null_order };
-            std::vector<cudf::order> h_order{ order };
-
-            rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
-            rmm::device_vector<cudf::order> d_order( h_order );
-
-            table_view in_table ({ in });
-            auto in_table_d = table_device_view::create(in_table);
-
-            if (in.nullable()) {
-                auto comparator = row_lexicographic_comparator<true>(
-                    *in_table_d,
-                    *in_table_d,
-                    d_order.data().get(),
-                    d_null_order.data().get());
-
-                auto it = thrust::make_counting_iterator<size_type>(0);
-                auto idx = thrust::min_element(rmm::exec_policy(stream)->on(stream),
-                                            it,
-                                            it + in.size(),
-                                            comparator);
-
-                T value = get_array_value(in.begin<T>(), *idx);
-
-                return std::make_unique<numeric_scalar<TResult>>(value);
-            }
+            return in.nullable()
+                ? extrema<T, TResult, extrema::min, true>(in, order, null_order, stream)
+                : extrema<T, TResult, extrema::min, false>(in, order, null_order, stream);
         }
 
-        if (quantile >= 1.0)
+        if (quantile >= 0.0)
         {
-            // T const * value = thrust::min_element(rmm::exec_policy(stream)->on(stream),
-            //                                       in.begin<T>(),
-            //                                       in.begin<T>() + in.size());
-
-            // return std::make_unique<numeric_scalar<TResult>>(*value);
+            return in.nullable()
+                ? extrema<T, TResult, extrema::max, true>(in, order, null_order, stream)
+                : extrema<T, TResult, extrema::max, false>(in, order, null_order, stream);
         }
 
-        table_view unsorted{ { in } };
         auto sorted_idx = sorted_order(unsorted, { order }, { null_order });
         auto sorted = gather(unsorted, sorted_idx->view());
         auto sorted_col = sorted->view().column(0);
@@ -207,12 +215,12 @@ trampoline(column_view const& in,
             ? sorted_col.begin<T>()
             : sorted_col.begin<T>() + sorted_col.null_count();
 
-            return select_quantile<T, TResult, thrust::counting_iterator<size_type>, true>(
-                data_begin,
-                thrust::make_counting_iterator<size_type>(0),
-                in.size() - in.null_count(),
-                quantile,
-                interpolation);
+        return select_quantile<T, TResult, thrust::counting_iterator<size_type>, true>(
+            data_begin,
+            thrust::make_counting_iterator<size_type>(0),
+            in.size() - in.null_count(),
+            quantile,
+            interpolation);
     }
 
     auto data_begin = null_order == null_order::AFTER
@@ -256,11 +264,12 @@ struct trampoline_functor
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
-        return trampoline<T, double>(in, quantile, is_sorted, order, null_order, interpolation, mr, stream);
+        return trampoline<T, double>(in, quantile, is_sorted, order, null_order,
+                                     interpolation, mr, stream);
     }
 };
 
-} // namespace detail
+} // anonymous namespace
 
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& in,
@@ -276,7 +285,7 @@ quantiles(table_view const& in,
         if (in_col.size() == in_col.null_count()) {
             out[i] = std::make_unique<numeric_scalar<double>>(0, false);
         } else {
-            out[i] = type_dispatcher(in_col.type(), detail::trampoline_functor{},
+            out[i] = type_dispatcher(in_col.type(), trampoline_functor{},
                                      in_col, quantile, is_sorted, orders[i], null_orders[i], interpolation);
         }
         
