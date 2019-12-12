@@ -53,8 +53,8 @@ using TScalarResult = double;
 
 struct quantile_index
 {
-    size_type lower_bound;
-    size_type upper_bound;
+    size_type lower;
+    size_type higher;
     size_type nearest;
     double fraction;
 
@@ -63,10 +63,10 @@ struct quantile_index
         quantile = std::min(std::max(quantile, 0.0), 1.0);
 
         double val = quantile * (count - 1);
-        lower_bound = std::floor(val);
-        upper_bound = static_cast<size_t>(std::ceil(val));
+        lower = std::floor(val);
+        higher = static_cast<size_t>(std::ceil(val));
         nearest = static_cast<size_t>(std::nearbyint(val));
-        fraction = val - lower_bound;
+        fraction = val - lower;
     }
 };
 
@@ -91,23 +91,23 @@ select_quantile(T const * begin,
 
     switch (interpolation) {
     case interpolation::LINEAR:
-        a = get_array_value<T>(begin, idx.lower_bound);
-        b = get_array_value<T>(begin, idx.upper_bound);
+        a = get_array_value<T>(begin, idx.lower);
+        b = get_array_value<T>(begin, idx.higher);
         value = interpolate::linear<TScalarResult>(a, b, idx.fraction);
         break;
 
     case interpolation::MIDPOINT:
-        a = get_array_value<T>(begin, idx.lower_bound);
-        b = get_array_value<T>(begin, idx.upper_bound);
+        a = get_array_value<T>(begin, idx.lower);
+        b = get_array_value<T>(begin, idx.higher);
         value = interpolate::midpoint<TScalarResult>(a, b);
         break;
 
     case interpolation::LOWER:
-        value = get_array_value<TScalarResult>(begin, idx.lower_bound);
+        value = get_array_value<TScalarResult>(begin, idx.lower);
         break;
 
     case interpolation::HIGHER:
-        value = get_array_value<TScalarResult>(begin, idx.upper_bound);
+        value = get_array_value<TScalarResult>(begin, idx.higher);
         break;
 
     case interpolation::NEAREST:
@@ -143,7 +143,6 @@ size_type extrema(column_view const & in,
     auto policy = rmm::exec_policy(stream);
 
     if (in.nullable()) {
-        
         auto comparator = row_lexicographic_comparator<true>(
             *in_table_d,
             *in_table_d,
@@ -156,7 +155,6 @@ size_type extrema(column_view const & in,
 
         return *extrema_id;
     } else {
-
         auto comparator = row_lexicographic_comparator<false>(
             *in_table_d,
             *in_table_d,
@@ -173,49 +171,21 @@ size_type extrema(column_view const & in,
 
 template<typename T>
 std::unique_ptr<scalar>
-trampoline(column_view const& in,
-           double quantile,
-           bool is_sorted,
-           order order,
-           null_order null_order,
-           interpolation interpolation,
-           rmm::mr::device_memory_resource *mr =
-            rmm::mr::get_default_resource(),
-           cudaStream_t stream = 0)
-{
-    return select_quantile<T>(
-        null_order == null_order::AFTER ? in.begin<T>() : in.begin<T>() + in.null_count(),
-        in.size() - in.null_count(),
-        quantile,
-        interpolation);
+pick(column_view const& in, size_type index) {
+    auto result = get_array_value<TScalarResult>(in.begin<T>(), index);
+    return std::make_unique<numeric_scalar<TScalarResult>>(result);
 }
-
-struct pick_functor
-{
-    template<typename T>
-    typename std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(column_view const& in, size_type index)
-    {
-        CUDF_FAIL("non-arithmetic types are unsupported");
-    }
-
-    template<typename T>
-    typename std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(column_view const& in, size_type index) {
-        auto result = get_array_value<TScalarResult>(in.begin<T>(), index);
-        auto result_casted = static_cast<TScalarResult>(result);
-        return std::make_unique<numeric_scalar<TScalarResult>>(result_casted);
-    }
-};
 
 struct quantile_functor
 {
     template<typename T>
     typename std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& in,
-               size_type null_offset,
                double quantile,
                interpolation interpolation,
+               bool is_sorted,
+               order order,
+               null_order null_order,
                rmm::mr::device_memory_resource *mr =
                rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
@@ -226,17 +196,49 @@ struct quantile_functor
     template<typename T>
     typename std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& in,
-               size_type null_offset,
                double quantile,
                interpolation interpolation,
+               bool is_sorted,
+               order order,
+               null_order null_order,
                rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
-        return select_quantile<T>(in.begin<T>() + null_offset,
-                                  in.size(),
-                                  quantile,
-                                  interpolation);
+        if (in.size() == 1) {
+            return pick<T>(in, 0);
+        }
+    
+        auto null_offset = null_order == null_order::AFTER ? 0 : in.null_count();
+        
+        if (not is_sorted)
+        {
+            if (quantile <= 0.0) {
+                return pick<T>(in, extrema(in, order, null_order, extrema::min, stream));
+            }
+    
+            if (quantile >= 1.0) {
+                return pick<T>(in, extrema(in, order, null_order, extrema::max, stream));
+            }
+    
+            table_view const in_table { { in } };
+            auto sorted_idx = sorted_order(in_table, { order }, { null_order });
+
+            // TODO: select_quantile can use the sortmap without gather.
+            auto sorted = gather(in_table, sorted_idx->view());
+            auto sorted_col = sorted->view().column(0);
+
+            return select_quantile<T>(sorted_col.begin<T>() + null_offset,
+                                      sorted_col.size() - sorted_col.null_count(),
+                                      quantile,
+                                      interpolation);
+    
+        } else {
+            return select_quantile<T>(in.begin<T>() + null_offset,
+                                      in.size() - in.null_count(),
+                                      quantile,
+                                      interpolation);
+        }
     }
 };
 
@@ -250,40 +252,12 @@ quantile(column_view const& in,
          order order,
          null_order null_order)
 {
-
-    if (in.size() == in.null_count()) {
-        return std::make_unique<numeric_scalar<double>>(0, false);
-    }
-
-    if (in.size() == 1) {
-        return type_dispatcher(in.type(), detail::pick_functor{}, in, 0);
-    }
-
-    auto null_offset = null_order == null_order::AFTER ? 0 : in.null_count();
-    
-    if (not is_sorted)
-    {
-        if (quantile <= 0.0) {
-            auto extrema_idx = extrema(in, order, null_order, extrema::min, 0);
-            return type_dispatcher(in.type(), detail::pick_functor{}, in, extrema_idx);
+        if (in.size() == in.null_count()) {
+            return std::make_unique<numeric_scalar<TScalarResult>>(0, false);
         }
 
-        if (quantile >= 1.0) {
-            auto extrema_idx = extrema(in, order, null_order, extrema::max, 0);
-            return type_dispatcher(in.type(), detail::pick_functor{}, in, extrema_idx);
-        }
-
-        table_view in_table { { in } };
-        auto sorted_idx = sorted_order(in_table, { order }, { null_order });
-        auto sorted = gather(in_table, sorted_idx->view());
-        auto sorted_col = sorted->view().column(0);
-
-        return type_dispatcher(sorted_col.type(), detail::quantile_functor{},
-                               sorted_col, null_offset, quantile, interpolation);
-    } else {
         return type_dispatcher(in.type(), detail::quantile_functor{},
-                               in, null_offset, quantile, interpolation);
-    }
+                               in,  quantile, interpolation, is_sorted, order, null_order);
 }
 
 } // namspace detail
@@ -298,7 +272,12 @@ quantiles(table_view const& in,
 {
     std::vector<std::unique_ptr<scalar>> out(in.num_columns());
     for (size_type i = 0; i < in.num_columns(); i++) {
-        out[i] = detail::quantile(in.column(i), quantile, interpolation, is_sorted, orders[i], null_orders[i]);
+        out[i] = detail::quantile(in.column(i),
+                                  quantile,
+                                  interpolation,
+                                  is_sorted,
+                                  orders[i],
+                                  null_orders[i]);
     }
     return out;
 }
