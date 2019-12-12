@@ -81,6 +81,19 @@ struct MurmurHash3_32
       return compute(key);
     }
 
+    // compute wrapper for floating point types
+    template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+    hash_value_type CUDA_HOST_DEVICE_CALLABLE compute_floating_point(T const& key) const {
+      if (key == T{0.0}) {
+        return 0;
+      } else if (isnan(key)) {
+        T nan = std::numeric_limits<T>::quiet_NaN();
+        return compute(nan);
+      } else {
+        return compute(key);
+      }
+    }
+
     template <typename TKey>
     result_type
     CUDA_HOST_DEVICE_CALLABLE compute(TKey const& key) const {
@@ -186,30 +199,14 @@ hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<cudf::string_view>::ope
   return h1;
 }
 
-// Specialization for float, make sure 0.0 and NaN hash consistently
 template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<float>::operator()(float const& key) const {
-  if (key == 0.0f) {
-    return 0;
-  } else if (isnan(key)) {
-    float nan = std::numeric_limits<float>::quiet_NaN();
-    return this->compute(nan);
-  } else {
-    return this->compute(key);
-  }
+  return this->compute_floating_point(key);
 }
 
-// Specialization for double, make sure 0.0 and NaN hash consistently
 template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double const& key) const {
-  if (key == 0.0) {
-    return 0;
-  } else if (isnan(key)) {
-    double nan = std::numeric_limits<double>::quiet_NaN();
-    return this->compute(nan);
-  } else {
-    return this->compute(key);
-  }
+  return this->compute_floating_point(key);
 }
 
 /* --------------------------------------------------------------------------*/
