@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 
 import nvstrings
 import rmm
@@ -652,7 +653,9 @@ class StringColumn(column.TypedColumnBase):
         arrays = []
 
         for each_frame in frames:
-            if isinstance(each_frame, memoryview):
+            if hasattr(each_frame, "__cuda_array_interface__"):
+                each_frame = cuda.as_cuda_array(each_frame)
+            elif isinstance(each_frame, memoryview):
                 each_frame = np.asarray(each_frame)
                 each_frame = cudautils.to_device(each_frame)
 
