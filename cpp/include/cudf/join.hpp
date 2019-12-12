@@ -30,7 +30,7 @@ namespace experimental {
  * @brief  Performs an inner join on the specified columns of two
  * tables (left, right)
  *
- * Inner Join selects rows from both tables as long as the values
+ * Inner Join returns rows from both tables as long as the values
  * in the columns being joined on match.
  *
  * @example Left a: {0, 1, 2}
@@ -47,15 +47,15 @@ namespace experimental {
  *          columns_in_common: { }
  * Result: { a: {1, 2}, b: {1, 2}, c: {1, 2} }
  *
- * @throws cudf::logic_error
- * If `columns_in_common` contains a pair of indices (L, R) if L does not exist
- * in `left_on` or R does not exist in `right_on`.
- * If `columns_in_common` contains a pair of indices (L, R) such that the
- * location of `L` within `left_on` is not equal to location of R within
- * `right_on`
- * If number of elements in `left_on` or `right_on` mismatch.
- * If number of columns in either `left` or `right` table is 0 or exceeds
- * MAX_JOIN_SIZE
+ * @throws cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (L, R) if L does not exist in `left_on` or R does not exist in `right_on`.
+ * @throws cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (L, R) such that the location of `L` within `left_on` is not equal to
+ * location of R within `right_on`
+ * @throws cudf::logic_error if number of elements in `left_on` or `right_on`
+ * mismatch.
+ * @throws cudf::logic_error if number of columns in either `left` or `right`
+ * table is 0 or exceeds MAX_JOIN_SIZE
  * @throws std::out_of_range if element of `left_on` or `right_on` exceed the
  * number of columns in the left or right table.
  *
@@ -90,7 +90,7 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
  *
- * Left Join selects all the rows from the left table and those rows
+ * Left Join returns all the rows from the left table and those rows
  * from the right table that match on the joined columns
  *
  * @example Left a: {0, 1, 2}
@@ -107,15 +107,15 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  *          columns_in_common: { }
  * Result: { a: {0, 1, 2}, b: {NULL, 1, 2}, c: {NULL, 1, 2} }
  *
- * @throws cudf::logic_error
- * If `columns_in_common` contains a pair of indices (L, R) if L does not exist
- * in `left_on` or R does not exist in `right_on`.
- * If `columns_in_common` contains a pair of indices (L, R) such that the
- * location of `L` within `left_on` is not equal to location of R within
- * `right_on`
- * If number of elements in `left_on` or `right_on` mismatch.
- * If number of columns in either `left` or `right` table is 0 or exceeds
- * MAX_JOIN_SIZE
+ * @throws cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (L, R) if L does not exist in `left_on` or R does not exist in `right_on`.
+ * @throws cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (L, R) such that the location of `L` within `left_on` is not equal to
+ * location of R within `right_on`
+ * @throws cudf::logic_error if number of elements in `left_on` or `right_on`
+ * mismatch.
+ * @throws cudf::logic_error if number of columns in either `left` or `right`
+ * table is 0 or exceeds MAX_JOIN_SIZE
  * @throws std::out_of_range if element of `left_on` or `right_on` exceed the
  * number of columns in the left or right table.
  *
@@ -150,8 +150,8 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two tables (left, right)
  *
- * Full Join returns a combination of the rows returned by left join
- * as well as those rows on the right table that do not have a match
+ * Full Join returns the rows that would be returned by a left join
+ * and those rows from the right table that do not have a match.
  *
  * @example Left a: {0, 1, 2}
  *          Right b: {1, 2, 3}, c: {1, 2, 5}
@@ -167,15 +167,15 @@ std::unique_ptr<cudf::experimental::table> left_join(
  *          columns_in_common: { }
  * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
  *
- * @throws cudf::logic_error
- * If `columns_in_common` contains a pair of indices (L, R) if L does not exist
- * in `left_on` or R does not exist in `right_on`.
- * If `columns_in_common` contains a pair of indices (L, R) such that the
- * location of `L` within `left_on` is not equal to location of R within
- * `right_on`
- * If number of elements in `left_on` or `right_on` mismatch.
- * If number of columns in either `left` or `right` table is 0 or exceeds
- * MAX_JOIN_SIZE
+ * @throws cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (L, R) if L does not exist in `left_on` or R does not exist in `right_on`.
+ * @throws cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (L, R) such that the location of `L` within `left_on` is not equal to
+ * location of R within `right_on`
+ * @throws cudf::logic_error if number of elements in `left_on` or `right_on`
+ * mismatch.
+ * @throws cudf::logic_error if number of columns in either `left` or `right`
+ * table is 0 or exceeds MAX_JOIN_SIZE
  * @throws std::out_of_range if element of `left_on` or `right_on` exceed the
  * number of columns in the left or right table.
  *

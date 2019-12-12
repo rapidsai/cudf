@@ -100,9 +100,11 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
                          table_view const& right,
                          std::vector<std::pair<size_type, size_type>> const& columns_in_common) {
   std::vector<size_type> right_columns_in_common (columns_in_common.size());
-  for (unsigned int i = 0; i < columns_in_common.size(); ++i) {
-      right_columns_in_common [i] = columns_in_common[i].second;
-  }
+  std::transform(
+      columns_in_common.begin(),
+      columns_in_common.end(),
+      right_columns_in_common.begin(),
+      [](auto& col) { return col.second; } );
   std::unique_ptr<experimental::table> empty_left = experimental::empty_like(left);
   std::unique_ptr<experimental::table> empty_right = experimental::empty_like(right);
   std::vector <size_type> right_non_common_indices =
@@ -271,7 +273,7 @@ get_base_join_indices(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Combines the non common left, common left and non commmon right
+* @Synopsis  Combines the non common left, common left and non common right
 * columns in the correct order to form the join output table.
 *
 * @param left_noncommon_cols Columns obtained by gathering non common left

@@ -232,8 +232,6 @@ get_base_hash_join_indices(
     return get_trivial_left_join_indices(left, stream);
   }
 
-  //TODO : attach stream to hash map class according to PR discussion #3272
-
   auto build_table = table_device_view::create(right, stream);
   const size_type build_table_num_rows{build_table->num_rows()};
 
@@ -245,7 +243,13 @@ get_base_hash_join_indices(
   // probing phase in the event of an outer join
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
-  auto hash_table = multimap_type::create(hash_table_size);
+  auto hash_table = multimap_type::create(
+      hash_table_size, true,
+      multimap_type::hasher(),
+      multimap_type::key_equal(),
+      multimap_type::allocator_type(),
+      stream
+      );
 
   // build the hash table
   if (build_table_num_rows > 0) {
@@ -283,7 +287,7 @@ get_base_hash_join_indices(
 
   rmm::device_vector<size_type> left_indices;
   rmm::device_vector<size_type> right_indices;
-  while (true) {
+  do {
     left_indices.resize(estimated_size);
     right_indices.resize(estimated_size);
 
@@ -316,10 +320,8 @@ get_base_hash_join_indices(
     join_size = write_index.value();
     if (estimated_size < join_size) {
       estimated_size *= 2;
-    } else {
-      break;
     }
-  }
+  } while (estimated_size < join_size) ;
 
   left_indices.resize(join_size);
   right_indices.resize(join_size);
