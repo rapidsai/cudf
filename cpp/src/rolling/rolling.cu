@@ -29,10 +29,9 @@
 #include <jit/type.h>
 #include <jit/launcher.h>
 #include <jit/parser.h>
-#include "jit/code/code.h"
-#include "jit/util/type.h"
+#include <rolling/jit/code/code.h>
+#include <rolling/jit/util/type.h>
 
-#include <types.h.jit>
 #include <types.hpp.jit>
 
 #include <rmm/device_scalar.hpp>
@@ -303,15 +302,15 @@ std::unique_ptr<column> rolling_window(column_view const &input,
     switch(op){
       case rolling_operator::NUMBA_UDF:
         cuda_source = cudf::jit::parse_single_function_ptx(user_defined_aggregator, 
-                                                           rolling::jit::get_function_name(op), 
+                                                           cudf::rolling::jit::get_function_name(op), 
                                                            cudf::jit::get_type_name(output_type),
                                                            {0, 5}); // args 0 and 5 are pointers.
-        cuda_source += rolling::jit::code::kernel;
+        cuda_source += cudf::experimental::rolling::jit::code::kernel;
         break; 
       case rolling_operator::CUDA_UDF:
         cuda_source = cudf::jit::parse_single_function_cuda(user_defined_aggregator, 
-                                                            rolling::jit::get_function_name(op));
-        cuda_source += rolling::jit::code::kernel;
+                                                            cudf::rolling::jit::get_function_name(op));
+        cuda_source += cudf::experimental::rolling::jit::code::kernel;
         break;
       default:
         CUDF_FAIL("Unsupported UDF type.");
@@ -325,9 +324,11 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
+    std::cout << "SOURCE\n" << cuda_source << "\n";
+
     // Launch the jitify kernel
     cudf::jit::launcher(hash, cuda_source,
-                        { cudf::rolling::jit::code::operation_h , cudf_types_h, cudf_types_hpp },
+                        { cudf::experimental::rolling::jit::code::operation_h , cudf_types_hpp },
                         { "-std=c++14" }, nullptr)
        .set_kernel_inst("gpu_rolling", // name of the kernel we are launching
                         { cudf::jit::get_type_name(output->type()), // list of template arguments

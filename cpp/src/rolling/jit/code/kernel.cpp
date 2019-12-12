@@ -25,7 +25,7 @@ R"***(
 #include <cudf/types.hpp>
 #include "operation.h"
 
-template <typename OutType, typename InType, typename WindoIterator, class agg_op, int block_size>
+template <typename OutType, typename InType, typename WindoIterator, class agg_op>
 __global__
 void gpu_rolling(column_device_view input,
                  mutable_column_device_view output,
