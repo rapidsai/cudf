@@ -36,16 +36,22 @@ data_type DLDataType_to_data_type(DLDataType type)
       case 16: return data_type(INT16);
       case 32: return data_type(INT32);
       case 64: return data_type(INT64);
-      default: CUDF_FAIL("Unsupported DLPack integer bitsize");
+      default: CUDF_FAIL("Unsupported bitsize for kDLInt");
+    }
+  } else if (type.code == kDLUInt) {
+    switch (type.bits)
+    {
+    case 8:  return data_type(BOOL8);
+    default: CUDF_FAIL("Unsupported bitsize for kDLUInt");
     }
   } else if (type.code == kDLFloat) {
     switch (type.bits) {
       case 32: return data_type(FLOAT32);
       case 64: return data_type(FLOAT64);
-      default: CUDF_FAIL("Unsupported DLPack float bitsize");
+      default: CUDF_FAIL("Unsupported bitsize for kDLFloat");
     }
   } else {
-    CUDF_FAIL("Unsupported DLPack unsigned type");
+    CUDF_FAIL("Invalid DLPack type code");
   }
 }
 
