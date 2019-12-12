@@ -651,7 +651,7 @@ class StringColumn(column.TypedColumnBase):
         # Deserialize the mask, value, and offset frames
         arrays = []
 
-        for i, frame in enumerate(frames):
+        for frame in frames:
             if isinstance(frame, memoryview):
                 frame = np.asarray(frame)
                 frame = cudautils.to_device(frame)
