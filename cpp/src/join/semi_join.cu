@@ -16,6 +16,42 @@ namespace cudf {
 
 namespace detail {
 
+  /** 
+   * @brief  Performs a left semi or anti join on the specified columns of two 
+   * tables (left, right)
+   *
+   * The semi and anti joins only return data from the left table. A left semi join
+   * returns rows that exist in the right table, a left anti join returns rows
+   * that do not exist in the right table.
+   *
+   * The basic approach is to create a hash table containing the contents of the right
+   * table and then select only rows that exist (or don't exist) to be included in
+   * the return set.
+   *
+   * @throws cudf::logic_error if either table is empty
+   * @throws cudf::logic_error if number of returned columns is 0
+   * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
+   *
+   * @param[in] left             The left table
+   * @param[in] right            The right table
+   * @param[in] left_on          The column indices from `left` to join on.
+   *                             The column from `left` indicated by `left_on[i]`
+   *                             will be compared against the column from `right`
+   *                             indicated by `right_on[i]`.
+   * @param[in] right_on         The column indices from `right` to join on.
+   *                             The column from `right` indicated by `right_on[i]`
+   *                             will be compared against the column from `left`
+   *                             indicated by `left_on[i]`.
+   * @param[in] return_columns   A vector of column indices from `left` to
+   *                             include in the returned table.
+   * @param[in] join_type        Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
+   * @param[in] mr               Device memory resource to use for device memory allocation
+   * @param[in] stream           Cuda stream
+   *
+   * @returns                    Result of joining `left` and `right` tables on the columns
+   *                             specified by `left_on` and `right_on`. The resulting table
+   *                             will contain `return_columns` from `left` that match in right.
+   */
 std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view const& left,
                                                                cudf::table_view const& right,
                                                                std::vector<cudf::size_type> const& left_on,
@@ -80,6 +116,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
 
   rmm::device_vector<size_type> gather_map(left.num_rows());
 
+  // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                                         thrust::make_counting_iterator<size_type>(0),
                                         thrust::make_counting_iterator<size_type>(left.num_rows()),
@@ -89,8 +126,6 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
                                           auto pos = hash_table.find(idx);
                                           return (pos != hash_table.end()) == join_type_boolean;
                                         });
-
-  gather_map.resize(thrust::distance(gather_map.begin(), gather_map_end));
 
   return cudf::experimental::detail::gather(left.select(return_columns), gather_map.begin(), gather_map_end,
                                             false, false, true, mr);
