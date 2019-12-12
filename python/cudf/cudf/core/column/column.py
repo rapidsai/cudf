@@ -34,7 +34,7 @@ from cudf.utils.utils import (
 
 class ColumnBase(Column):
     def __init__(
-        self, data, size, dtype, mask=None, offset=None, name=None, children=()
+        self, data, size, dtype, mask=None, offset=0, name=None, children=()
     ):
         """
         Parameters
@@ -1028,8 +1028,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
         children = (
-            build_column(sbuf, dtype="int8"),
             build_column(obuf, dtype="int32"),
+            build_column(sbuf, dtype="int8"),
         )
         data = build_column(
             data=None, dtype="object", mask=nbuf, children=children
@@ -1108,8 +1108,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         if isinstance(arbitrary, pa.StringArray):
             nbuf, obuf, sbuf = buffers_from_pyarrow(arbitrary)
             children = (
-                build_column(data=sbuf, dtype="int8"),
                 build_column(data=obuf, dtype="int32"),
+                build_column(data=sbuf, dtype="int8"),
             )
 
             data = string.StringColumn(mask=nbuf, children=children)

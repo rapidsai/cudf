@@ -445,7 +445,7 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, offset=None, children=(), name=None):
+    def __init__(self, mask=None, offset=0, children=(), name=None):
         """
         Parameters
         ----------
@@ -454,7 +454,8 @@ class StringColumn(column.ColumnBase):
         offset : int
             Data offset
         children : Tuple[Column]
-            Two non-null columns containing the string data and offsets respectively
+            Two non-null columns containing the string data and offsets
+            respectively
         name
             Name of the Column
         """
@@ -462,12 +463,12 @@ class StringColumn(column.ColumnBase):
         data = Buffer.from_device_buffer(rmm.DeviceBuffer(0, 0))
         dtype = np.dtype("object")
 
-        if children[1].size == 0:
+        if children[0].size == 0:
             size = 0
         else:
             # one less because the last element of offsets is the number of
             # bytes in the data buffer
-            size = children[1].size - 1
+            size = children[0].size - 1
 
         super().__init__(
             data, size, dtype, mask=mask, name=name, children=children,
@@ -504,8 +505,8 @@ class StringColumn(column.ColumnBase):
                 self._nvstrings = nvstrings.to_device([])
             else:
                 self._nvstrings = nvstrings.from_offsets(
-                    self.children[0].data.ptr,
                     self.children[1].data.ptr,
+                    self.children[0].data.ptr,
                     self.size,
                     mask,
                     ncount=self.null_count,
