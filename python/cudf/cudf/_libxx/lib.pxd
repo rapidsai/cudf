@@ -13,7 +13,7 @@ cdef extern from "types.hpp" namespace "cudf" nogil:
     ctypedef uint32_t bitmask_type
 
     cdef enum:
-        UNKOWN_NULL_COUNT = -1
+        UNKNOWN_NULL_COUNT = -1
 
     cdef enum type_id:
         EMPTY = 0
@@ -43,7 +43,7 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
         unique_ptr[device_buffer] data
         unique_ptr[device_buffer] null_mask
-        vector[column] children
+        vector[unique_ptr[column]] children
     
     cdef cppclass column:
         column()
@@ -66,6 +66,14 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         column_view(data_type type, size_type size, const void* data)
         column_view(data_type type, size_type size, const void* data,
                     const bitmask_type* null_mask)
+        column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask, size_type null_count)
+        column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask, size_type null_count,
+                            size_type offset)
+        column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask, size_type null_count,
+                            size_type offset, vector[column_view] children)
         T* data[T]()
         bitmask_type* null_mask()
         size_type size()
@@ -74,6 +82,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         size_type null_count()
         bool has_nulls()
         size_type offset()
+        size_type num_children()
 
     cdef cppclass mutable_column_view:
         mutable_column_view()
@@ -82,6 +91,14 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         mutable_column_view(data_type type, size_type size, const void* data)
         mutable_column_view(data_type type, size_type size, const void* data,
                             const bitmask_type* null_mask)
+        mutable_column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask, size_type null_count)
+        mutable_column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask, size_type null_count,
+                            size_type offset)
+        mutable_column_view(data_type type, size_type size, const void* data,
+                            const bitmask_type* null_mask, size_type null_count,
+                            size_type offset, vector[mutable_column_view] children)
         T* data[T]()
         bitmask_type* null_mask()
         size_type size()
@@ -90,7 +107,8 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         size_type null_count()
         bool has_nulls()
         size_type offset()
-
+        size_type num_children()
+        
 cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
     cdef cppclass table_view:
         table_view()

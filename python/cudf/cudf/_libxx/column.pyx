@@ -46,7 +46,7 @@ cudf_to_np_types = {INT8: np.dtype('int8'),
 @cython.auto_pickle(True)
 cdef class Column:
 
-    def __init__(self, data, size, dtype, mask=None, offset=None, children=(), name=None):
+    def __init__(self, data, size, dtype, mask=None, offset=0, children=(), name=None):
         if not isinstance(data, Buffer):
             raise TypeError("Expected a Buffer for data, got " + type(data).__name__)
         if mask is not None and not isinstance(mask, Buffer):
@@ -55,51 +55,78 @@ cdef class Column:
         self.size = size
         self.dtype = dtype
         self.mask = mask
+        self.offset = offset
+        self.children = children
         self.name = name
-        
+
     @property
     def null_count(self):
         return self.null_count()
 
-    @property
-    def _data_dtype(self):
-        if is_categorical_dtype(self.dtype):
-            return self.dtype.data_dtype
-        else:
-            return self.dtype
-    
     cdef size_type null_count(self) except? 0:
         return self.view().null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
-        cdef type_id tid = np_to_cudf_types[np.dtype(self._data_dtype)]
+        if is_categorical_dtype(self.dtype):
+            data_dtype = self.dtype.data_dtype
+        else:
+            data_dtype = self.dtype
+        cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef data_type dtype = data_type(tid)
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
+        cdef size_type offset = self.offset
+        cdef vector[mutable_column_view] children
+
+        cdef Column child_column
+        if self.children:
+            for child_column in self.children:
+                children.push_back(child_column.mutable_view())
+
         cdef bitmask_type* mask
         if self.mask is not None:
             mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL
+
         return mutable_column_view(
             dtype,
             self.size,
             data,
-            mask)
+            mask,
+            UNKNOWN_NULL_COUNT,
+            offset,
+            children)
 
     cdef column_view view(self) except *:
-        cdef type_id tid = np_to_cudf_types[np.dtype(self._data_dtype)]
+        if is_categorical_dtype(self.dtype):
+            data_dtype = self.dtype.data_dtype
+        else:
+            data_dtype = self.dtype
+        cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef data_type dtype = data_type(tid)
         cdef void* data = <void*><uintptr_t>(self.data.ptr)
+        cdef size_type offset = self.offset
+        cdef vector[column_view] children
+
+        cdef Column child_column
+        if self.children:
+            for child_column in self.children:
+                children.push_back(child_column.view())
+
         cdef bitmask_type* mask
         if self.mask is not None:
             mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL
+
         return column_view(
             dtype,
             self.size,
             data,
-            mask)
+            mask,
+            UNKNOWN_NULL_COUNT,
+            offset,
+            children)
 
     @staticmethod
     cdef Column from_ptr(unique_ptr[column] c_col):
@@ -108,12 +135,23 @@ cdef class Column:
         size = c_col.get()[0].size()
         dtype = cudf_to_np_types[c_col.get()[0].type().id()]
         has_nulls = c_col.get()[0].has_nulls()
+
+        # After call to release(), c_col is unusable
         cdef column_contents contents = c_col.get()[0].release()
+        
         data = DeviceBuffer.from_unique_ptr(move(contents.data))
         data = Buffer.from_device_buffer(data)
+        
         if has_nulls:
             mask = DeviceBuffer.from_unique_ptr(move(contents.null_mask))
             mask = Buffer.from_device_buffer(mask)
         else:
             mask = None
-        return build_column(data, dtype=dtype, mask=mask)
+
+        cdef vector[unique_ptr[column]] c_children = move(contents.children)
+        children = None
+        if c_children.size() != 0:
+            children = tuple(Column.from_ptr(move(c_children[i]))
+                             for i in range(c_children.size()))
+
+        return build_column(data, dtype=dtype, mask=mask, children=children)

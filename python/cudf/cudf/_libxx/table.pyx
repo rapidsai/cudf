@@ -19,12 +19,12 @@ cdef class _Table:
             if names is None:
                 names = range(len(data))
             self._data = OrderedDict(zip(names, data))
-    
+
     cdef table_view view(self) except *:
         cdef vector[column_view] column_views
 
         cdef Column col
-        for col in self.columns:
+        for col in self._data.values():
             column_views.push_back(col.view())
         
         return table_view(column_views)
@@ -33,7 +33,7 @@ cdef class _Table:
         cdef vector[mutable_column_view] column_views
 
         cdef Column col
-        for col in self.columns:
+        for col in self._data.values():
             column_views.push_back(col.mutable_view())
         
         return mutable_table_view(column_views)
