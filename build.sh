@@ -141,10 +141,10 @@ if buildAll || hasArg nvstrings; then
 
     cd ${REPODIR}/python/nvstrings
     if [[ ${INSTALL_TARGET} != "" ]]; then
-      python setup.py build_ext
-      python setup.py install --single-version-externally-managed --record=record.txt
+        python setup.py build_ext
+        python setup.py install --single-version-externally-managed --record=record.txt
     else
-      python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+        python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
     fi
 fi
 
@@ -170,10 +170,10 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-      python setup.py build_ext --inplace
-      python setup.py install --single-version-externally-managed --record=record.txt
+        python setup.py build_ext --inplace
+        python setup.py install --single-version-externally-managed --record=record.txt
     else
-      python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
