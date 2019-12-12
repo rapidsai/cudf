@@ -96,11 +96,16 @@ struct column_buf_size_functor {
    }
 };
 
+struct column_copy_functor {
+   template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+   void operator()(strings_column_view const& in, char*& dst, std::vector<column_view>& out_cols) 
+   {
+      CUDF_FAIL("contiguous_split for strings not implemented yet");
+   }
 
-template<typename T>
-struct column_copy_functor_impl {
+   template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
    void operator()(column_view const& in, char*& dst, std::vector<column_view>& out_cols)
-   {      
+   {
       // there's some unnecessary recomputation of sizes happening here, but it really shouldn't affect much.
       size_t data_size = 0;
       size_t validity_size = 0;      
@@ -147,32 +152,15 @@ struct column_copy_functor_impl {
    }
 };
 
-template<>
-struct column_copy_functor_impl<string_view> {
-   void operator()(column_view const& in, char*& dst, std::vector<column_view>& out_cols) 
-   {
-      CUDF_FAIL("contiguous_split for strings not implemented yet");
-   };
-};
-
-struct column_copy_functor {
-   template<typename T>   
-   void operator()(column_view const& in, char*& dst, std::vector<column_view>& out_cols)
-   {
-      column_copy_functor_impl<T> fn{};      
-      fn(in, dst, out_cols);
-   }
-};
-
 contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
    size_t data_size = 0;
    size_t validity_size = 0;      
 
-   // compute sizes
+   // compute sizes   
    std::for_each(t.begin(), t.end(), [&data_size, &validity_size](cudf::column_view const& c){
       cudf::experimental::type_dispatcher(c.type(), column_buf_size_functor{}, c, data_size, validity_size);
-   });
+   });   
 
    // allocate 
    auto device_buf = std::make_unique<rmm::device_buffer>(rmm::device_buffer{data_size + validity_size, stream, mr});   
