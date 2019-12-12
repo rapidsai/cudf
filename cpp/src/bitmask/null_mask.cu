@@ -324,7 +324,9 @@ rmm::device_buffer bitmask_and(bitmask_type const *mask1, size_type begin_bit1,
       begin_bit1, begin_bit1 + size,
       begin_bit2, begin_bit2 + size,
       number_of_mask_words);
-  CUDA_CHECK_LAST()
+  
+  CHECK_STREAM(stream);
+  CUDA_CHECK_LAST();
 
   return dest_mask;
 }
