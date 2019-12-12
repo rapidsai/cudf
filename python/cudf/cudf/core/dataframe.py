@@ -2196,10 +2196,8 @@ class DataFrame(object):
                 rtn = dtype_l
             elif how == "left":
 
-                check_col = rhs._cols[rcol][rhs._cols[rcol].notna()]
-                if not (
-                    Series(check_col) == Series(check_col).astype(dtype_l)
-                ).all():
+                check_col = rhs._cols[rcol].fillna(0)
+                if not check_col._column.overflow_safe_to(dtype_l):
                     rtn = casting_rules(dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
@@ -2207,10 +2205,8 @@ class DataFrame(object):
                 else:
                     rtn = dtype_l
             elif how == "right":
-                check_col = lhs._cols[lcol][lhs._cols[lcol].notna()]
-                if not (
-                    Series(check_col) == Series(check_col).astype(dtype_r)
-                ).all():
+                check_col = lhs._cols[lcol].fillna(0)
+                if not check_col._column.overflow_safe_to(dtype_r):
                     rtn = casting_rules(dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
