@@ -24,7 +24,7 @@ _numpy_to_pandas_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, offset=None, name=None):
+    def __init__(self, data, dtype, mask=None, offset=0, name=None):
         """
         Parameters
         ----------

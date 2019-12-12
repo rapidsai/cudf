@@ -231,7 +231,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     def __init__(
-        self, data, dtype, mask=None, offset=None, children=(), name=None
+        self, data, dtype, mask=None, offset=0, children=(), name=None
     ):
         """
         Parameters
