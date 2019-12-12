@@ -209,8 +209,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
   size_t const stride_bytes = num_rows * size_of(type);
   size_t const total_bytes = stride_bytes * num_cols;
 
-  auto buffer = std::make_unique<rmm::device_buffer>(total_bytes, stream, mr);
-  tensor.data = buffer->data();
+  context->buffer = rmm::device_buffer(total_bytes, stream, mr);
+  tensor.data = context->buffer.data();
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
@@ -222,7 +222,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
   managed_tensor->deleter = dltensor_context::deleter;
 
   // Defer ownership of managed tensor to caller
-  managed_tensor->manager_ctx = buffer.release();
+  managed_tensor->manager_ctx = context.release();
   return managed_tensor.release();
 }
 
