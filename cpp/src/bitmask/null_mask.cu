@@ -184,8 +184,7 @@ __device__ bitmask_type get_mask_offset_word(
   bitmask_type const *__restrict__ source,
   size_type destination_word_index,
   size_type source_begin_bit,
-  size_type source_end_bit,
-  size_type number_of_mask_words)
+  size_type source_end_bit)
 {
   size_type source_word_index = destination_word_index + word_index(source_begin_bit);
   bitmask_type curr_word = source[source_word_index];
@@ -209,6 +208,7 @@ __device__ bitmask_type get_mask_offset_word(
  * @param source The mask to copy from
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
+ * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
  *---------------------------------------------------------------------------**/
 // TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
@@ -220,7 +220,7 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
     destination[destination_word_index] =
-      get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit, number_of_mask_words);
+      get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
   }
 }
 
@@ -291,12 +291,10 @@ __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
-    bitmask_type source1_word =
-      get_mask_offset_word(source1, destination_word_index, begin_bit1, end_bit1,
-                           number_of_mask_words);
-    bitmask_type source2_word =
-      get_mask_offset_word(source2, destination_word_index, begin_bit2, end_bit2,
-                           number_of_mask_words);
+    bitmask_type source1_word = get_mask_offset_word(
+        source1, destination_word_index, begin_bit1, end_bit1);
+    bitmask_type source2_word = get_mask_offset_word(
+        source2, destination_word_index, begin_bit2, end_bit2);
 
     destination[destination_word_index] = source1_word & source2_word;
   }
