@@ -2,6 +2,7 @@
 
 ## New Features
 - PR #3284 Add gpu-accelerated parquet writer
+- PR #3594 Adding clamp support to libcudf++
 
 ## Improvements
 
