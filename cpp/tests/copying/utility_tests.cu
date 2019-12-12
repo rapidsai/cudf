@@ -21,6 +21,7 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <string>
 
 template <typename T>
@@ -158,4 +159,3 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
-

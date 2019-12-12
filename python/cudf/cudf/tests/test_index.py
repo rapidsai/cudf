@@ -190,6 +190,40 @@ def test_index_rename():
     assert_eq(pds, gds)
 
 
+def test_index_rename_inplace():
+    pds = pd.Index([1, 2, 3], name="asdf")
+    gds = as_index(pds)
+
+    # inplace=False should yield a deep copy
+    gds_renamed_deep = gds.rename("new_name", inplace=False)
+    gds._values.data.mem = GenericIndex([2, 3, 4])._values.data.mem
+
+    assert (gds_renamed_deep.values == [1, 2, 3]).all()
+
+    # inplace=True returns none
+    gds_to_rename = gds
+    gds.rename("new_name", inplace=True)
+    gds._values.data.mem = GenericIndex([3, 4, 5])._values.data.mem
+
+    assert (gds_to_rename.values == [3, 4, 5]).all()
+
+
+def test_index_rename_preserves_arg():
+    idx1 = GenericIndex([1, 2, 3], name="orig_name")
+
+    # this should be an entirely new object
+    idx2 = idx1.rename("new_name", inplace=False)
+
+    assert idx2.name == "new_name"
+    assert idx1.name == "orig_name"
+
+    # a new object but referencing the same data
+    idx3 = as_index(idx1, name="last_name")
+
+    assert idx3.name == "last_name"
+    assert idx1.name == "orig_name"
+
+
 def test_set_index_as_property():
     cdf = DataFrame()
     col1 = np.arange(10)
@@ -245,3 +279,10 @@ def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.GenericIndex(idx, name="idx")
     assert_eq(gidx.notna().to_array(), pidx.notna())
+
+
+def test_rangeindex_slice_attr_name():
+    start, stop = 0, 10
+    rg = RangeIndex(start, stop, "myindex")
+    sliced_rg = rg[0:9]
+    assert_eq(rg.name, sliced_rg.name)
