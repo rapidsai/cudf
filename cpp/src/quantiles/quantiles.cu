@@ -87,7 +87,7 @@ select_quantile(T const * begin,
 
     T a;
     T b;
-    TScalarResult value;
+    TScalarResult value{};
 
     switch (interpolation) {
     case interpolation::LINEAR:
@@ -228,16 +228,16 @@ struct quantile_functor
             auto sorted = gather(in_table, sorted_idx->view());
             auto sorted_col = sorted->view().column(0);
 
-            return select_quantile<T>(sorted_col.begin<T>() + null_offset,
-                                      sorted_col.size() - sorted_col.null_count(),
-                                      quantile,
-                                      interpolation);
+            return select_quantile(sorted_col.begin<T>() + null_offset,
+                                   sorted_col.size() - sorted_col.null_count(),
+                                   quantile,
+                                   interpolation);
     
         } else {
-            return select_quantile<T>(in.begin<T>() + null_offset,
-                                      in.size() - in.null_count(),
-                                      quantile,
-                                      interpolation);
+            return select_quantile(in.begin<T>() + null_offset,
+                                   in.size() - in.null_count(),
+                                   quantile,
+                                   interpolation);
         }
     }
 };
