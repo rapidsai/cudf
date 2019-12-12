@@ -15,11 +15,10 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <dlpack/dlpack.h>
+struct DLManagedTensor;
 
 namespace cudf {
 

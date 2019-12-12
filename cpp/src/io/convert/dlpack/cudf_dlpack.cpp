@@ -18,7 +18,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/device_buffer.hpp>
+#include <dlpack/dlpack.h>
 
 #include <algorithm>
 
