@@ -250,17 +250,16 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(lhs.type()),
-               "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_fixed_width(rhs.type()),
-               "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_fixed_width(output_type),
+               "Invalid/Unsupported output datatype");
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
   auto new_mask = bitmask_and(lhs, rhs, stream, mr);
-  auto out = make_numeric_column(output_type, lhs.size(), new_mask,
-                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
+                                     cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) {
@@ -280,7 +279,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          cudaStream_t stream) {
   // Check for datatype
   auto is_type_supported_ptx = [](data_type type) -> bool {
-    return (is_numeric(type) or is_timestamp(type)) and
+    return is_fixed_width(type) and
            type.id() != type_id::INT8;  // Numba PTX doesn't support int8
   };
   CUDF_EXPECTS(is_type_supported_ptx(lhs.type()),
@@ -293,8 +292,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
   auto new_mask = bitmask_and(lhs, rhs, stream, mr);
-  auto out = make_numeric_column(output_type, lhs.size(), new_mask,
-                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
+                                     cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) {
