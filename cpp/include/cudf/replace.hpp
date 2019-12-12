@@ -73,6 +73,48 @@ std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
                                              column_view const& replacement_values,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+
+/**
+ * @brief Returns a column formed from `input`, where values less than
+ * `lower` will be replaced with `lower` and greater than `upper` with
+ * `upper`.
+ *
+ * if `lower` is invalid, then lower will not be considered while
+ * evaluating the input (Essentially considered minimum value of that type).
+ * if `upper` is invalid, then upper will not be considered while
+ * evaluating the input (Essentially considered maximum value of that type).
+ *
+ * Example:
+ *    input: {1, 2, 3, NULL, 5, 6, 7}
+ *
+ *    valid lower and upper
+ *    lower: 3, upper: 5
+ *    output:{3, 3, 3, NULL, 5, 5, 5}
+ *
+ *    invalid lower
+ *    lower: NULL, upper:5
+ *    output:{1, 2, 3, NULL, 5, 5, 5}
+ *
+ *    invalid upper
+ *    lower: 3, upper:NULL
+ *    output:{3, 3, 3, NULL, 5, 6, 7}
+ *
+ * @throws cudf::logic_error if `type` of lower, upper mismatch
+ * @throws cudf::logic_error if `type` of lower, input mismatch
+ *
+ * @param[in] input column_view which gets clamped
+ * @param[in] lower lower boundary to clamp `input`
+ * @param[in] upper upper boundary to clamp `input`
+ * @param[in] mr Optional resource to use for device memory
+ *           allocation of the scalar's `data` and `is_valid` bool.
+ *
+ * @return Returns a clamped column as per `lower` and `upper` boundaries
+ */
+std::unique_ptr<column> clamp(column_view const& input,
+                              scalar const& lower,
+                              scalar const& upper,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 } // namespace experimental
 
 /**
