@@ -89,10 +89,9 @@ enum class extrema {
     max
 };
 
-template<typename T, typename TResult, typename TSortMap, bool sortmap_is_gpu>
+template<typename T, typename TResult>
 std::unique_ptr<scalar>
 select_quantile(T const * begin,
-                TSortMap sortmap,
                 size_t size,
                 double quantile,
                 interpolation interpolation)
@@ -111,27 +110,27 @@ select_quantile(T const * begin,
 
     switch (interpolation) {
     case interpolation::LINEAR:
-        a = get_array_value<T, T>(begin, sortmap[idx.lower_bound]);
-        b = get_array_value<T, T>(begin, sortmap[idx.upper_bound]);
+        a = get_array_value<T, T>(begin, idx.lower_bound);
+        b = get_array_value<T, T>(begin, idx.upper_bound);
         interpolate::linear<TResult>(value, a, b, idx.fraction);
         break;
 
     case interpolation::MIDPOINT:
-        a = get_array_value<T, T>(begin, sortmap[idx.lower_bound]);
-        b = get_array_value<T, T>(begin, sortmap[idx.upper_bound]);
+        a = get_array_value<T, T>(begin, idx.lower_bound);
+        b = get_array_value<T, T>(begin, idx.upper_bound);
         interpolate::midpoint<TResult>(value, a, b);
         break;
 
     case interpolation::LOWER:
-        value = get_array_value<T, TResult>(begin, sortmap[idx.lower_bound]);
+        value = get_array_value<T, TResult>(begin, idx.lower_bound);
         break;
 
     case interpolation::HIGHER:
-        value = get_array_value<T, TResult>(begin, sortmap[idx.upper_bound]);
+        value = get_array_value<T, TResult>(begin, idx.upper_bound);
         break;
 
     case interpolation::NEAREST:
-        value = get_array_value<T, TResult>(begin, sortmap[idx.nearest]);
+        value = get_array_value<T, TResult>(begin, idx.nearest);
         break;
 
     default:
@@ -189,47 +188,41 @@ trampoline(column_view const& in,
         return std::make_unique<numeric_scalar<TResult>>(result_casted);
     }
 
-    if (not is_sorted)
+    if (is_sorted)
     {
-        table_view unsorted{ { in } };
-
-        if (quantile <= 0.0)
-        {
-            return in.nullable()
-                ? extrema<T, TResult, extrema::min, true>(in, order, null_order, stream)
-                : extrema<T, TResult, extrema::min, false>(in, order, null_order, stream);
-        }
-
-        if (quantile >= 0.0)
-        {
-            return in.nullable()
-                ? extrema<T, TResult, extrema::max, true>(in, order, null_order, stream)
-                : extrema<T, TResult, extrema::max, false>(in, order, null_order, stream);
-        }
-
-        auto sorted_idx = sorted_order(unsorted, { order }, { null_order });
-        auto sorted = gather(unsorted, sorted_idx->view());
-        auto sorted_col = sorted->view().column(0);
-
-        auto data_begin = null_order == null_order::AFTER
-            ? sorted_col.begin<T>()
-            : sorted_col.begin<T>() + sorted_col.null_count();
-
-        return select_quantile<T, TResult, thrust::counting_iterator<size_type>, true>(
-            data_begin,
-            thrust::make_counting_iterator<size_type>(0),
+        return select_quantile<T, TResult>(
+            null_order == null_order::AFTER ? in.begin<T>() : in.begin<T>() + in.null_count(),
             in.size() - in.null_count(),
             quantile,
             interpolation);
     }
 
-    auto data_begin = null_order == null_order::AFTER
-        ? in.begin<T>()
-        : in.begin<T>() + in.null_count();
+    table_view unsorted{ { in } };
 
-    return select_quantile<T, TResult, thrust::counting_iterator<size_type>, false>(
+    if (quantile <= 0.0)
+    {
+        return in.nullable()
+            ? extrema<T, TResult, extrema::min, true>(in, order, null_order, stream)
+            : extrema<T, TResult, extrema::min, false>(in, order, null_order, stream);
+    }
+
+    if (quantile >= 0.0)
+    {
+        return in.nullable()
+            ? extrema<T, TResult, extrema::max, true>(in, order, null_order, stream)
+            : extrema<T, TResult, extrema::max, false>(in, order, null_order, stream);
+    }
+
+    auto sorted_idx = sorted_order(unsorted, { order }, { null_order });
+    auto sorted = gather(unsorted, sorted_idx->view());
+    auto sorted_col = sorted->view().column(0);
+
+    auto data_begin = null_order == null_order::AFTER
+        ? sorted_col.begin<T>()
+        : sorted_col.begin<T>() + sorted_col.null_count();
+
+    return select_quantile<T, TResult>(
         data_begin,
-        thrust::make_counting_iterator<size_type>(0),
         in.size() - in.null_count(),
         quantile,
         interpolation);
