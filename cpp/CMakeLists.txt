@@ -532,6 +532,9 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cu
             src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
+            src/rolling/jit/util/type.cpp
             src/sort/sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
