@@ -90,8 +90,10 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
  *
- * Left Join returns all the rows from the left table and those rows
- * from the right table that match on the joined columns
+ * Left Join returns all the rows from the left table and those rows from the
+ * right table that match on the joined columns.
+ * For rows from the right table that do not have a match, the corresponding
+ * values in the left columns will be null.
  *
  * @example Left a: {0, 1, 2}
  *          Right b: {1, 2, 3}, a: {1 ,2 ,5}
@@ -150,8 +152,10 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two tables (left, right)
  *
- * Full Join returns the rows that would be returned by a left join
- * and those rows from the right table that do not have a match.
+ * Full Join returns the rows that would be returned by a left join and those
+ * rows from the right table that do not have a match.
+ * For rows from the right table that do not have a match, the corresponding
+ * values in the left columns will be null.
  *
  * @example Left a: {0, 1, 2}
  *          Right b: {1, 2, 3}, c: {1, 2, 5}

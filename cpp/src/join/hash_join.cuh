@@ -53,11 +53,11 @@ namespace detail {
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind,
           typename multimap_type>
-std::unique_ptr<rmm::device_scalar<size_type>>
+size_type
 estimate_join_output_size(
     table_device_view build_table,
     table_device_view probe_table,
-    multimap_type hash_table,
+    multimap_type const& hash_table,
     cudaStream_t stream) {
 
   const size_type build_table_num_rows{build_table.num_rows()};
@@ -78,16 +78,12 @@ estimate_join_output_size(
 
       // Inner join with an empty table will have no output
       case join_kind::INNER_JOIN:
-        { return std::make_unique<rmm::device_scalar<size_type>>(
-            0, stream);
-        }
+        return 0;
 
       // Left join with an empty table will have an output of NULL rows
       // equal to the number of rows in the probe table
       case join_kind::LEFT_JOIN:
-        { return std::make_unique<rmm::device_scalar<size_type>>(
-            probe_table_num_rows, stream);
-        }
+        return probe_table_num_rows;
 
       default:
         CUDF_FAIL("Unsupported join type");
@@ -175,9 +171,7 @@ estimate_join_output_size(
 
   } while(true);
 
-  size_estimate.set_value(h_size_estimate);
-  return std::make_unique<rmm::device_scalar<size_type>>(
-        std::move(size_estimate));
+  return h_size_estimate;
 }
 
 std::pair<rmm::device_vector<size_type>,
@@ -195,7 +189,7 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
       right_indices.begin(),
       right_indices.end(),
       JoinNoneValue);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  return std::make_pair(left_indices, right_indices);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -267,11 +261,10 @@ get_base_hash_join_indices(
     if (failure.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
   }
 
-  auto estimated_join_output_size =
+  size_type estimated_size =
     estimate_join_output_size<JoinKind, multimap_type>(
         *build_table, *probe_table, *hash_table, stream);
 
-  size_type estimated_size = estimated_join_output_size->value(stream);
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
     rmm::device_vector<size_type> left_empty, right_empty;
@@ -318,9 +311,7 @@ get_base_hash_join_indices(
     CUDA_CHECK_LAST();
 
     join_size = write_index.value();
-    if (estimated_size < join_size) {
-      estimated_size *= 2;
-    }
+    estimated_size *= 2;
   } while (estimated_size < join_size) ;
 
   left_indices.resize(join_size);

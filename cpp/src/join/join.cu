@@ -156,7 +156,7 @@ struct valid_range {
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Creates a table containing the complement of left join indices.
+* @brief  Creates a table containing the complement of left join indices.
 * This table has two columns. The first one is filled with JoinNoneValue(-1)
 * and the second one contains values from 0 to right_table_row_count - 1
 * excluding those found in the right_indices column.
@@ -273,7 +273,7 @@ get_base_join_indices(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Combines the non common left, common left and non common right
+* @brief  Combines the non common left, common left and non common right
 * columns in the correct order to form the join output table.
 *
 * @param left_noncommon_cols Columns obtained by gathering non common left
