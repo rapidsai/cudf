@@ -38,24 +38,22 @@ struct compare_scalar_functor
     typename std::enable_if_t<not std::is_arithmetic<T>::value, void>
     operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
-        using TScalar = cudf::experimental::scalar_type_t<T>;
+        using Scalar = cudf::experimental::scalar_type_t<T>;
+        auto lhs_t = static_cast<Scalar const&>(lhs);
+        auto rhs_t = static_cast<Scalar const&>(rhs);
 
-        TScalar const* lhs_t = static_cast<TScalar const*>((void*) &lhs);
-        TScalar const* rhs_t = static_cast<TScalar const*>((void*) &rhs);
-
-        EXPECT_EQ(lhs_t->value(), rhs_t->value());
+        EXPECT_EQ(lhs_t.value(), rhs_t.value());
     }
 
     template<typename T>
     typename std::enable_if_t<std::is_arithmetic<T>::value, void>
     operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
-        using TScalar = cudf::experimental::scalar_type_t<T>;
+        using Scalar = cudf::experimental::scalar_type_t<T>;
+        auto lhs_t = static_cast<Scalar const&>(lhs);
+        auto rhs_t = static_cast<Scalar const&>(rhs);
 
-        TScalar const* lhs_t = static_cast<TScalar const*>((void*) &lhs);
-        TScalar const* rhs_t = static_cast<TScalar const*>((void*) &rhs);
-
-        EXPECT_NEAR(lhs_t->value(), rhs_t->value(), 1.0e-7);
+        EXPECT_NEAR(lhs_t.value(), rhs_t.value(), 1.0e-7);
     }
 };
 

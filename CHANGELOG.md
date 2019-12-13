@@ -10,6 +10,7 @@
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 
