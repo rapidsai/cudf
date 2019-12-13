@@ -556,6 +556,7 @@ class ColumnBase(Column):
                     raise IndexError(
                         f"index out of bounds for column of size {len(self)}"
                     )
+                raise
 
         self._assign(out)
         # self._mimic_inplace(out, inplace=True)
