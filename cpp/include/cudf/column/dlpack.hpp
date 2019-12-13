@@ -23,29 +23,42 @@ struct DLManagedTensor;
 namespace cudf {
 
 /**
- * @brief Convert a DLPack DLTensor into cudf::columns
+ * @brief Convert a DLPack DLTensor into a cudf table
+ *
+ * The `device_type` of the DLTensor must be `kDLGPU`, `kDLCPU`, or
+ * `kDLCPUPinned`, and `device_id` must match the current device. The `ndim`
+ * must be set to 1 or 2. The `dtype` must have 1 lane and the bitsize must
+ * match a supported `cudf::data_type`.
  *
  * @note The managed tensor is not deleted by this function.
  *
- * @throw TODO
- * 
+ * @throw cudf::logic_error if the any of the DLTensor fields are unsupported
+ *
  * @param managed_tensor a 1D or 2D column-major (Fortran order) tensor
  * @param mr Optional resource to use for device memory allocation
- * 
- * @return Columns converted from DLPack
+ *
+ * @return Table with a copy of the tensor data
  */
 std::unique_ptr<experimental::table> from_dlpack(
     DLManagedTensor const* managed_tensor,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Convert cudf::columns into a DLPack DLTensor
+ * @brief Convert a cudf table into a DLPack DLTensor
  * 
- * @throw TODO
+ * All columns must have the same data type and this type must be numeric. The
+ * columns may be nullable, but the null count must be zero.
+ * 
+ * @note The `deleter` method of the returned `DLManagedTensor` must be used to
+ * free the memory allocated for the tensor.
+ * 
+ * @throw cudf::logic_error if the data types are not equal or not numeric,
+ * or if any of columns have non-zero null count
  * 
  * @param input Table to convert to DLPack
+ * @param mr Optional resource to use for device memory allocation
  * 
- * @return 1D or 2D DLPack tensor (single or multiple columns)
+ * @return 1D or 2D DLPack tensor with a copy of the table data
  */
 DLManagedTensor* to_dlpack(table_view const& input,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
