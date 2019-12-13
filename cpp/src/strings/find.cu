@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -68,7 +68,7 @@ std::unique_ptr<column> find_fn( strings_column_view const& strings,
     auto d_strings = *strings_column;
     auto strings_count = strings.size();
     // create output column
-    auto results = make_numeric_column( data_type{INT32}, strings_count,
+    auto results = cudf::experimental::detail::make_numeric_column( data_type{INT32}, strings_count,
         copy_bitmask( strings.parent(), stream, mr ), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int32_t>();
@@ -176,7 +176,7 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
     // create output column
-    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
+    auto results = cudf::experimental::detail::make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr ), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<experimental::bool8>();

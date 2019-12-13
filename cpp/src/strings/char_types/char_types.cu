@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -42,7 +42,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     auto d_column = *strings_column;
 
     // create output column
-    auto results = make_numeric_column( data_type{BOOL8}, strings_count,
+    auto results = cudf::experimental::detail::make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<experimental::bool8>();

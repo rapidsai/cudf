@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -412,7 +412,7 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_column = *strings_column;
 
-    auto results = make_timestamp_column( timestamp_type, strings_count,
+    auto results = cudf::experimental::detail::make_timestamp_column( timestamp_type, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     cudf::experimental::type_dispatcher( timestamp_type, dispatch_to_timestamps_fn(),

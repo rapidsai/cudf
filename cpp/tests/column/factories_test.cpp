@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -133,7 +133,7 @@ TYPED_TEST(NumericFactoryTest, AllNullMask) {
 TYPED_TEST(NumericFactoryTest, NullMaskAsParm) {
   rmm::device_buffer null_mask{
       create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column = cudf::make_numeric_column(
+  auto column = cudf::experimental::detail::make_numeric_column(
       cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
       this->size(), null_mask, this->size(), this->stream(), this->mr());
   EXPECT_EQ(column->type(),
@@ -147,7 +147,7 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsParm) {
 
 TYPED_TEST(NumericFactoryTest, NullMaskAsEmptyParm) {
   rmm::device_buffer null_mask{};
-  auto column = cudf::make_numeric_column(
+  auto column = cudf::experimental::detail::make_numeric_column(
       cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
       this->size(), null_mask, 0, this->stream(), this->mr());
   EXPECT_EQ(column->type(),
@@ -284,7 +284,7 @@ TYPED_TEST(FixedWidthFactoryTest, AllNullMask) {
 TYPED_TEST(FixedWidthFactoryTest, NullMaskAsParm) {
   rmm::device_buffer null_mask{
       create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column = cudf::make_fixed_width_column(
+  auto column = cudf::experimental::detail::make_fixed_width_column(
       cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->size(),
       null_mask, this->size(), this->stream(), this->mr());
   EXPECT_EQ(column->type(),
@@ -298,7 +298,7 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsParm) {
 
 TYPED_TEST(FixedWidthFactoryTest, NullMaskAsEmptyParm) {
   rmm::device_buffer null_mask{};
-  auto column = cudf::make_fixed_width_column(
+  auto column = cudf::experimental::detail::make_fixed_width_column(
       cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->size(),
       null_mask, 0, this->stream(), this->mr());
   EXPECT_EQ(column->type(),

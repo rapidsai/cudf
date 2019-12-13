@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/legacy/binaryop.hpp>
 #include <cudf/utilities/chrono.hpp>
 
@@ -168,7 +168,7 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode) {
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm) {
   rmm::device_buffer null_mask{
       create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column = cudf::make_timestamp_column(
+  auto column = cudf::experimental::detail::make_timestamp_column(
       cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
       this->size(), null_mask, this->size(), this->stream(), this->mr());
   EXPECT_EQ(column->type(),
@@ -182,7 +182,7 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm) {
 
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm) {
   rmm::device_buffer null_mask{};
-  auto column = cudf::make_timestamp_column(
+  auto column = cudf::experimental::detail::make_timestamp_column(
       cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
       this->size(), null_mask, 0, this->stream(), this->mr());
   EXPECT_EQ(column->type(),

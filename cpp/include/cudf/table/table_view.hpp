@@ -167,6 +167,7 @@ public:
    * @param views The vector of table views to construct the table from
    *---------------------------------------------------------------------------**/
   table_view(std::vector<table_view> const &views);
+  table_view() {}
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a table_view with set of specified columns.
@@ -220,6 +221,7 @@ public:
    * @param views The vector of table views to construct the table from
    *---------------------------------------------------------------------------**/
   mutable_table_view(std::vector<mutable_table_view> const &views);
+  mutable_table_view() {}
 };
 
 inline bool has_nulls(table_view view) {

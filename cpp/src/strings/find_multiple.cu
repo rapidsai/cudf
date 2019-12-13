@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -49,7 +49,7 @@ std::unique_ptr<column> find_multiple( strings_column_view const& strings,
 
     // create output column
     auto total_count = strings_count * targets_count;
-    auto results = make_numeric_column( data_type{INT32}, total_count,
+    auto results = cudf::experimental::detail::make_numeric_column( data_type{INT32}, total_count,
         rmm::device_buffer{0,stream,mr}, 0, stream, mr ); // no nulls
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<int32_t>();

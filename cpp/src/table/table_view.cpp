@@ -87,4 +87,5 @@ table_view::table_view(std::vector<table_view> const &views) :
 mutable_table_view::mutable_table_view(std::vector<mutable_table_view> const &views) :
   mutable_table_view{concatenate_column_views(views)} {}
 
+
 }  // namespace cudf

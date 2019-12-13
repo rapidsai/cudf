@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/null_mask.hpp>
@@ -113,7 +113,7 @@ std::unique_ptr<column> transform(column_view const& input,
   CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
 
   std::unique_ptr<column> output =
-    make_numeric_column(output_type, input.size(), copy_bitmask(input),
+    detail::make_numeric_column(output_type, input.size(), copy_bitmask(input),
                         cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (input.size() == 0) {

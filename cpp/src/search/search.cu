@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/legacy/copying.hpp>
@@ -220,7 +221,7 @@ struct multi_contains_dispatch {
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
 
-    std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
+    std::unique_ptr<column> result = detail::make_numeric_column(data_type{experimental::type_to_id<bool8>()},
                                                          haystack.size(),
                                                          copy_bitmask(haystack),
                                                          haystack.null_count(),

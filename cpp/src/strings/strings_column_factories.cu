@@ -15,7 +15,7 @@
  */
 
 #include <bitmask/legacy/valid_if.cuh>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/legacy/functions.h>
 #include <cudf/null_mask.hpp>

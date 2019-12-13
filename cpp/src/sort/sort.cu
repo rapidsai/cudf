@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/detail/sorting.hpp>
@@ -38,7 +39,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
-    return cudf::make_numeric_column(data_type{INT32}, 0);
+    return make_numeric_column(data_type{INT32}, 0);
   }
 
   if (not column_order.empty()) {

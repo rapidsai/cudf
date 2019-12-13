@@ -15,7 +15,7 @@
  */
 
 #include <bitmask/legacy/valid_if.cuh>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/strings_column_view.hpp>

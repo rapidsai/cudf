@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/column_factories.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -139,7 +139,7 @@ std::unique_ptr<column> hex_to_integers( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_strings = *strings_column;
     // create integer output column copying the strings null-mask
-    auto results = make_numeric_column( output_type, strings_count,
+    auto results = cudf::experimental::detail::make_numeric_column( output_type, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     // fill output column with integers
