@@ -499,7 +499,6 @@ class alignas(16) mutable_column_device_view
   using iterator =
       thrust::transform_iterator<detail::mutable_value_accessor<T>, count_it>;
 
-
   /**---------------------------------------------------------------------------*
    * @brief Return first element (accounting for offset) after underlying data
    * is casted to the specified type.
