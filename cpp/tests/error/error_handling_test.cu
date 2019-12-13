@@ -103,5 +103,5 @@ TEST(StreamCheck, ReleaseFailedKernel) {
   CUDA_TRY(cudaStreamSynchronize(stream));
 #endif
   EXPECT_THROW(CHECK_CUDA(stream), cudf::cuda_error);
-  CUDDA_TRY(cudaStreamDestroy(stream));
+  CUDA_TRY(cudaStreamDestroy(stream));
 }
