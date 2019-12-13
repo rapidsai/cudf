@@ -39,6 +39,8 @@ class aggregation {
 
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
+
+  bool operator==(aggregation const& other) const { return kind == other.kind; }
 };
 namespace detail {
 /**
@@ -50,6 +52,13 @@ struct quantile_aggregation : aggregation {
       : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
   std::vector<double> _quantiles;              ///< Desired quantile(s)
   experimental::interpolation _interpolation;  ///< Desired interpolation
+
+  bool operator==(quantile_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _interpolation == other._interpolation 
+       and std::equal(_quantiles.begin(), _quantiles.end(),
+                      other._quantiles.begin());
+  }
 };
 
 /**
@@ -129,6 +138,25 @@ struct target_type_impl<SourceType, aggregation::MEDIAN> {
  */
 template <typename SourceType, aggregation::Kind k>
 using target_type_t = typename target_type_impl<SourceType, k>::type;
+
+template <aggregation::Kind k>
+struct kind_to_type_impl {
+  using type = aggregation;
+};
+
+template <aggregation::Kind k>
+using kind_to_type = typename kind_to_type_impl<k>::type;
+
+#ifndef AGG_KIND_MAPPING
+#define AGG_KIND_MAPPING(k, Type)               \
+  template <>                                   \
+  struct kind_to_type_impl<k> {                 \
+    using type = Type;                          \
+  }
+#endif
+
+AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
+AGG_KIND_MAPPING(aggregation::MEDIAN, quantile_aggregation);
 
 /**
  * @brief Dispatches  k as a non-type template parameter to a callable,  f.
