@@ -25,7 +25,7 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.column import CategoricalColumn, StringColumn
+from cudf.core.column import CategoricalColumn, StringColumn, column_empty
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -784,7 +784,6 @@ class DataFrame(object):
                     result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             other_cols = dict(other.to_pandas())
-
             result_cols = list(self.columns)
             for new_col in other_cols.keys():
                 if new_col not in result_cols:
@@ -795,11 +794,11 @@ class DataFrame(object):
                     r_opr = other_cols[col]
                 else:
                     if col not in self.columns:
-                        l_opr = Series([np.nan] * len(self))
                         r_opr = other_cols[col]
+                        l_opr = Series(column_empty(len(self), masked=True, dtype=r_opr.dtype))
                     if col not in other.index:
-                        l_opr = self._cols[col]
                         r_opr = None
+                        l_opr = self._cols[col]
                 result[col] = op(l_opr, r_opr)
 
         elif isinstance(other, numbers.Number):
