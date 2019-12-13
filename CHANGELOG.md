@@ -9,6 +9,8 @@
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
+- PR #3553 Support Python NoneType in numeric binops
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 
@@ -173,7 +175,6 @@
 - PR #3387 Strings column gather function
 - PR #3440 Strings column scatter function
 - PR #3389 Move quantiles.hpp + group_quantiles.hpp files to legacy
-- PR #3402 Define and implement new quantiles APIs
 - PR #3397 Port unary cast to libcudf++
 - PR #3398 Move reshape.hpp files to legacy
 - PR #3423 Port NVStrings htoi to cudf strings column
