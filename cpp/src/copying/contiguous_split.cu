@@ -87,53 +87,6 @@ struct column_buf_size_functor {
    }
 };
 
-cudaStream_t stream1, stream2;
-
-__global__ void _copy_offset_bitmask(bitmask_type *__restrict__ destination,
-                                    bitmask_type const *__restrict__ source,
-                                    size_type source_begin_bit,
-                                    size_type source_end_bit,
-                                    size_type number_of_mask_words) {
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-       destination_word_index < number_of_mask_words;
-       destination_word_index += blockDim.x * gridDim.x) {
-    size_type source_word_index =
-        destination_word_index + word_index(source_begin_bit);
-    bitmask_type curr_word = source[source_word_index];
-    bitmask_type next_word = 0;
-    if ((word_index(source_begin_bit) != 0) &&
-        (word_index(source_end_bit) >
-          word_index(source_begin_bit +
-            destination_word_index * cudf::detail::size_in_bits<bitmask_type>()))) {
-      next_word = source[source_word_index + 1];
-    }
-    bitmask_type write_word =
-      __funnelshift_r(curr_word, next_word, source_begin_bit);
-    destination[destination_word_index] = write_word;
-  }
-}
-
-// Create a bitmask from a specific range
-void _copy_bitmask(bitmask_type *dest_mask, bitmask_type const *mask, size_type begin_bit,
-                                size_type end_bit, cudaStream_t stream) {
-  CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
-  CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");  
-  auto num_bytes = bitmask_allocation_size_bytes(end_bit - begin_bit);  
-    
-   auto number_of_mask_words = cudf::util::div_rounding_up_safe(
-      static_cast<size_t>(end_bit - begin_bit),
-      cudf::detail::size_in_bits<bitmask_type>());
-   
-   if (begin_bit == 0) {
-      cudaMemcpyAsync(dest_mask, mask, num_bytes, cudaMemcpyDeviceToDevice, stream); 
-  } else {     
-      cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
-      _copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
-                           stream>>>(dest_mask, mask, begin_bit, end_bit, number_of_mask_words);
-  }
-   CUDA_CHECK_LAST();    
-}
-
 struct column_copy_functor {   
    template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
    void operator()(column_view const& in, char*& dst, std::vector<column_view>& out_cols) 
@@ -160,13 +113,6 @@ struct column_copy_functor {
       cudf::size_type num_els = cudf::util::round_up_safe(in.size(), cudf::experimental::detail::warp_size);
       constexpr int block_size = 256;
       cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
-                                          
-      cudaMemcpyAsync(data, in.data<T>(), data_size, cudaMemcpyDeviceToDevice, stream1);
-      if(in.nullable()){           
-         _copy_bitmask(validity, in.null_mask(), in.offset(), in.offset() + in.size(), (cudaStream_t)stream2);
-      }
-      mutable_column_view  mcv{in.type(), in.size(), data, 
-                               validity, UNKNOWN_NULL_COUNT };             
       
       // so there's a significant performance issue that comes up. our incoming column_view objects
       // are the result of a slice.  because of this, they have an UNKNOWN_NULL_COUNT.  because of that,
@@ -176,8 +122,7 @@ struct column_copy_functor {
       //
       // so to get around this, I am manually constructing a fake-ish view here where the null
       // count is arbitrarily bashed to 0.            
-      //      
-      /*
+      //            
       column_view   in_wrapped{in.type(), in.size(), in.head<T>(), 
                                in.null_mask(), in.null_mask() == nullptr ? UNKNOWN_NULL_COUNT : 0,
                                in.offset() };
@@ -193,15 +138,13 @@ struct column_copy_functor {
                            *mutable_column_device_view::create(mcv));
       }
       mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);                  
-      */
 
       out_cols.push_back(mcv);
    }
 };
 
-#include <inttypes.h>
-contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
-{      
+contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::mr::device_memory_resource* mr, cudaStream_t stream)      
+{   
    // compute sizes  
    auto sizes = std::accumulate(t.begin(), t.end(), std::pair<size_t, size_t>(0, 0), [](std::pair<size_t, size_t> sizes, cudf::column_view const& c){
       return cudf::experimental::type_dispatcher(c.type(), column_buf_size_functor{}, sizes, c);
@@ -210,7 +153,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::mr::devic
    size_t validity_size = sizes.second;   
 
    // allocate 
-   auto device_buf = std::make_unique<rmm::device_buffer>(rmm::device_buffer{data_size + validity_size, stream1, mr});   
+   auto device_buf = std::make_unique<rmm::device_buffer>(rmm::device_buffer{data_size + validity_size, stream, mr});   
    char *buf = static_cast<char*>(device_buf->data());
 
    // copy
@@ -229,12 +172,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       std::vector<size_type> const& splits,
                                                       rmm::mr::device_memory_resource* mr,
                                                       cudaStream_t stream)
-{    
-   cudaStreamCreate(&stream1);
-   cudaStreamCreate(&stream2);
-
-   printf("%" PRIx64 ", %" PRIx64 "\n", (long unsigned int)stream1, (long unsigned int)stream2);
-
+{          
    auto subtables = cudf::experimental::split(input, splits);      
 
    std::vector<contiguous_split_result> result;
@@ -242,9 +180,6 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
       return alloc_and_copy(t, mr, stream);
    });
 
-   cudaStreamSynchronize(stream1);
-   cudaStreamSynchronize(stream2);
-   
    return result;
 }
 
