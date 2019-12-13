@@ -5,14 +5,19 @@
 - PR #3284 Add gpu-accelerated parquet writer
 
 ## Improvements
-- PR #3502 ORC reader: add option to read DECIMALs as INT64
 
+- PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+- PR #3569 Use `np.asarray` in `StringColumn.deserialize`
+- PR #3553 Support Python NoneType in numeric binops
 
 ## Bug Fixes
+
+- PR #3550 Update Java package to 0.12
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
-- PR #2981 enable build all targets without installation
+- PR #2981 enable build.sh to build all targets without installation
+- PR #3563 Use `__cuda_array_interface__` for serialization
 
 
 # cuDF 0.11.0 (11 Dec 2019)
