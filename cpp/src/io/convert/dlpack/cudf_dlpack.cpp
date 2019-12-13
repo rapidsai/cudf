@@ -26,6 +26,16 @@ namespace cudf {
 
 namespace {
 
+struct get_column_data_impl {
+  template <typename T>
+  void const* operator()(column_view const& col) { return col.data<T>(); }
+};
+
+void const* get_column_data(column_view const& col)
+{
+  return experimental::type_dispatcher(col.type(), get_column_data_impl{}, col);
+}
+
 data_type DLDataType_to_data_type(DLDataType type)
 {
   CUDF_EXPECTS(type.lanes == 1, "Unsupported DLPack vector type");
@@ -170,19 +180,20 @@ DLManagedTensor* to_dlpack(table_view const& input,
     return nullptr;
   }
 
-  auto managed_tensor = std::make_unique<DLManagedTensor>();
-  DLTensor& tensor = managed_tensor->dl_tensor;
-
-  // First column determines datatype
+  // Ensure that type is convertible to DLDataType
   data_type const type = input.column(0).type();
-  tensor.dtype = data_type_to_DLDataType(type);
+  DLDataType const dltype = data_type_to_DLDataType(type);
 
   // Ensure all columns are the same type
   CUDF_EXPECTS(std::all_of(input.begin(), input.end(),
     [type](auto const& col) { return col.type() == type; }),
     "All columns required to have same data type");
 
+  auto managed_tensor = std::make_unique<DLManagedTensor>();
   auto context = std::make_unique<dltensor_context>();
+
+  DLTensor& tensor = managed_tensor->dl_tensor;
+  tensor.dtype = dltype;
 
   tensor.ndim = (num_cols > 1) ? 2 : 1;
   tensor.shape = context->shape;
@@ -215,13 +226,12 @@ DLManagedTensor* to_dlpack(table_view const& input,
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
     CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
-      col.head<void>(), stride_bytes, cudaMemcpyDefault, stream));
+      get_column_data(col), stride_bytes, cudaMemcpyDefault, stream));
     tensor_data += stride_bytes;
   }
 
-  managed_tensor->deleter = dltensor_context::deleter;
-
   // Defer ownership of managed tensor to caller
+  managed_tensor->deleter = dltensor_context::deleter;
   managed_tensor->manager_ctx = context.release();
   return managed_tensor.release();
 }
