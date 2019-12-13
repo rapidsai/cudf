@@ -27,7 +27,7 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 namespace {
-struct dispacth_clamp {
+struct dispatch_clamp {
     template <typename T, typename Predicate>
     void apply_transform (column_device_view  input,
                           mutable_column_device_view output,
@@ -68,7 +68,7 @@ struct dispacth_clamp {
         if (input.nullable()){
             output = make_fixed_width_column(input.type(), input.size(),
                                              copy_bitmask(input, stream, mr),
-                                             input.null_count(), stream, mr);
+                                             UNKNOWN_NULL_COUNT, stream, mr);
         } else {
             output = allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
         }
@@ -78,19 +78,18 @@ struct dispacth_clamp {
 
         if (lo.is_valid(stream) and hi.is_valid(stream)) {
             auto pred = [lo_value, hi_value] __device__ (T input, bool is_valid = true){
-              if (is_valid) {
-                  if (input < lo_value) {
-                      return lo_value;
-                  } else if (input > hi_value) {
-                      return hi_value;
-                  }
-              }
+                if (is_valid) {
+                    if (input < lo_value) {
+                        return lo_value;
+                    } else if (input > hi_value) {
+                        return hi_value;
+                    }
+                }
 
-              return input;
+                return input;
             };
 
             apply_transform<T>(*input_device_view, *output_device_view, pred, stream);
-
         } else if (not lo.is_valid(stream)) {
             auto pred = [hi_value] __device__ (T input, bool is_valid = true){
                 if (is_valid and input > hi_value) {
@@ -101,11 +100,9 @@ struct dispacth_clamp {
             };
 
             apply_transform<T>(*input_device_view, *output_device_view, pred, stream);
-
         } else {
 
             auto pred = [lo_value] __device__ (T input, bool is_valid = true){
-
                 if (is_valid and input < lo_value) {
                     return lo_value;
                 }
@@ -114,7 +111,6 @@ struct dispacth_clamp {
             };
 
             apply_transform<T>(*input_device_view, *output_device_view, pred, stream);
-
         }
         
         return output;
@@ -127,12 +123,11 @@ struct dispacth_clamp {
               scalar const& hi,
               rmm::mr::device_memory_resource* mr,
               cudaStream_t stream) {
-        CUDF_FAIL("Not yet implemented for string");
-
+        CUDF_FAIL("Clamp is not yet supporting non-fixed types");
     }
 
 };
-}
+} //namespace
 
 /**
  * @brief Returns a column formed from `input`, where values less than
@@ -185,10 +180,9 @@ std::unique_ptr<column> clamp(column_view const& input,
         return std::make_unique<column>(input, stream, mr);
     }
 
-    return cudf::experimental::type_dispatcher(input.type(), dispacth_clamp{},
+    return cudf::experimental::type_dispatcher(input.type(), dispatch_clamp{},
                                                input, lo, hi,
                                                mr, stream);
-
 }   
 
 }// namespace detail

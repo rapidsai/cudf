@@ -75,44 +75,43 @@ std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
 
 
 /**
- * @brief Returns a column formed from `input`, where values less than
- * `lower` will be replaced with `lower` and greater than `upper` with
- * `upper`.
+ * @brief Replaces values less than `lo` in `input` with `lo`, 
+ * and values greater than `hi` with `hi`.
  *
- * if `lower` is invalid, then lower will not be considered while
+ * if `lo` is invalid, then lo will not be considered while
  * evaluating the input (Essentially considered minimum value of that type).
- * if `upper` is invalid, then upper will not be considered while
+ * if `hi` is invalid, then hi will not be considered while
  * evaluating the input (Essentially considered maximum value of that type).
  *
  * Example:
  *    input: {1, 2, 3, NULL, 5, 6, 7}
  *
- *    valid lower and upper
- *    lower: 3, upper: 5
+ *    valid lo and hi
+ *    lo: 3, hi: 5
  *    output:{3, 3, 3, NULL, 5, 5, 5}
  *
- *    invalid lower
- *    lower: NULL, upper:5
+ *    invalid lo
+ *    lo: NULL, hi:5
  *    output:{1, 2, 3, NULL, 5, 5, 5}
  *
- *    invalid upper
- *    lower: 3, upper:NULL
+ *    invalid hi
+ *    lo: 3, hi:NULL
  *    output:{3, 3, 3, NULL, 5, 6, 7}
  *
- * @throws cudf::logic_error if `type` of lower, upper mismatch
- * @throws cudf::logic_error if `type` of lower, input mismatch
+ * @throws cudf::logic_error if `type` of lo, hi mismatch
+ * @throws cudf::logic_error if `type` of lo, input mismatch
  *
  * @param[in] input column_view which gets clamped
- * @param[in] lower lower boundary to clamp `input`
- * @param[in] upper upper boundary to clamp `input`
+ * @param[in] lo lo boundary to clamp `input`
+ * @param[in] hi hi boundary to clamp `input`
  * @param[in] mr Optional resource to use for device memory
  *           allocation of the scalar's `data` and `is_valid` bool.
  *
- * @return Returns a clamped column as per `lower` and `upper` boundaries
+ * @return Returns a clamped column as per `lo` and `hi` boundaries
  */
 std::unique_ptr<column> clamp(column_view const& input,
-                              scalar const& lower,
-                              scalar const& upper,
+                              scalar const& lo,
+                              scalar const& hi,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace experimental
