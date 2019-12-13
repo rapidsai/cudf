@@ -494,7 +494,11 @@ class DataFrame(Table):
             else:
                 for col_name in self._data:
                     scatter_map = arg[col_name]
-                    self._data[col_name][scatter_map] = column.as_column(value)
+                    if is_scalar(value):
+                        value = utils.scalar_broadcast_to(value, len(self))
+                    self._data[col_name][scatter_map] = column.as_column(
+                        value
+                    )[scatter_map]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -1161,6 +1165,8 @@ class DataFrame(Table):
             self._rename_columns(new_names)
             """
             self.multi_cols = columns
+        elif isinstance(columns, pd.MultiIndex):
+            self.columns = cudf.MultiIndex.from_pandas(columns)
         else:
             if hasattr(self, "multi_cols"):
                 delattr(self, "multi_cols")
@@ -1419,7 +1425,7 @@ class DataFrame(Table):
             for k in self._data:
                 data[k] = self._data[k]
 
-        out = DataFrame(data=data, columns=self.columns.copy(deep))
+        out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
 
         out.index = index
 
@@ -1438,100 +1444,6 @@ class DataFrame(Table):
         if memo is None:
             memo = {}
         return self.copy(deep=True)
-
-    def _sanitize_columns(self, series):
-        """Sanitize pre-appended
-           col values
-        """
-
-        if (is_list_like(series)) or (isinstance(series, Series)):
-            """
-            This case should handle following three scenarios:
-
-            1. when series is not a series and list-like.
-            Reason we will have to guard this with not Series check
-            is because we are converting non-scalars to cudf Series.
-
-            2. When series is scalar and of type list.
-
-            3. When series is a cudf Series
-            """
-            series = Series(series)
-        else:
-            # Case when series is just a non-list
-            return
-
-        if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
-            ind = series.index
-
-            dtype = np.float64
-            if self[next(iter(self._data))].dtype == np.dtype("object"):
-                dtype = "object"
-
-            col = column.column_empty(len(ind), dtype=dtype, masked=True)
-
-            for name in self._data:
-                self._data[name] = Series(col)
-
-            self.index = series.index
-
-    def _sanitize_values(self, series, SCALAR):
-        """Sanitize col values before
-           being added
-        """
-        if SCALAR:
-            if hasattr(series, "dtype") and np.issubdtype(
-                series.dtype, np.datetime64
-            ):
-                series = series.astype("datetime64[ms]")
-            col = series
-
-        if (is_list_like(series)) or (isinstance(series, Series)):
-            """
-            This case should handle following three scenarios:
-
-            1. when series is not a series and list-like.
-            Reason we will have to guard this with not Series check
-            is because we are converting non-scalars to cudf Series.
-
-            2. When series is scalar and of type list.
-
-            3. When series is a cudf Series
-            """
-            series = Series(series)
-        else:
-            # Case when series is just a non-list
-            series = Series(series)
-            if (
-                (len(self.index) == 0)
-                and (series.index > 0)
-                and len(self.columns) == 0
-            ):
-                # When self has 0 columns and series has values
-                # we can safely go ahead and assign.
-                return series
-            elif (
-                (len(self.index) == 0)
-                and (series.index > 0)
-                and len(self.columns) > 0
-            ):
-                # When self has 1 or more columns and series has values
-                # we cannot assign a non-list, hence returning empty series.
-                return Series(dtype=series.dtype)
-
-        index = self._index
-        sind = series.index
-        if len(self) > 0 and len(series) == 1 and SCALAR:
-            if series.dtype == np.dtype("object"):
-                gather_map = cudautils.zeros(len(index), "int32")
-                return series[gather_map]
-            else:
-                arr = rmm.device_array(shape=len(index), dtype=series.dtype)
-                cudautils.gpu_fill_value.forall(arr.size)(arr, col)
-                return Series(arr)
-        elif len(self) > 0 and len(sind) != len(index):
-            raise ValueError("Length of values does not match index length")
-        return series
 
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
@@ -3971,7 +3883,6 @@ class DataFrame(Table):
         """
         Return a subset of the DataFrame's columns as a view.
         """
-        columns = as_index(columns)
         result_columns = OrderedDict({})
         for col in columns:
             result_columns[col] = self[col]
