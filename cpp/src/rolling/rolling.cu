@@ -294,7 +294,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 
     min_periods = std::max(min_periods, 1);
 
-    std::string hash = "prog_rolling." 
+    std::string hash = "prog_experimental_rolling." 
       + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
 
     

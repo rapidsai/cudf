@@ -32,9 +32,9 @@ namespace jit {
     std::string get_operator_name(cudf::experimental::rolling_operator op) {
         switch (op) {
             case cudf::experimental::rolling_operator::CUDA_UDF:
-                return "cuda_generic_aggregator";
+                return "cuda_rolling_udf";
             case cudf::experimental::rolling_operator::NUMBA_UDF:
-                return "numba_generic_aggregator";
+                return "numba_rolling_udf";
             default:
                 return "None";
         }
@@ -49,9 +49,9 @@ namespace jit {
     std::string get_function_name(cudf::experimental::rolling_operator op) {
         switch (op) {
             case cudf::experimental::rolling_operator::CUDA_UDF:
-                return "CUDA_GENERIC_AGGREGATOR";
+                return "CUDA_ROLLING_UDF";
             case cudf::experimental::rolling_operator::NUMBA_UDF:
-                return "NUMBA_GENERIC_AGGREGATOR";
+                return "NUMBA_ROLLING_UDF";
             default:
                 return "None";
         }

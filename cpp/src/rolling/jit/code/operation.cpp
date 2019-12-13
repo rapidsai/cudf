@@ -26,25 +26,25 @@ namespace code {
 const char* operation_h =
 R"***(operation.h
 #pragma once
-  struct numba_generic_aggregator {
+  struct numba_rolling_udf {
     template <typename OutType, typename InType>
     static OutType operate(
       const InType* in_col, cudf::size_type start, cudf::size_type count)
     {
       OutType ret;
-      NUMBA_GENERIC_AGGREGATOR(
+      NUMBA_ROLLING_UDF(
         &ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
       return ret;
     }
   };
 
-  struct cuda_generic_aggregator {
+  struct cuda_rolling_udf {
     template <typename OutType, typename InType>
     static OutType operate(
       const InType* in_col, cudf::size_type start, cudf::size_type count)
     {
       OutType ret;
-      CUDA_GENERIC_AGGREGATOR(
+      CUDA_ROLLING_UDF(
         &ret, in_col, start, count);
       return ret;
     }
