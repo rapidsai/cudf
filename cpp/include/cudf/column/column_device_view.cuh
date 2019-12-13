@@ -502,17 +502,15 @@ class alignas(16) mutable_column_device_view
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief This will always fail as begin can't be supported for non fixed width
-   * types.
-   *
-   * @throws `cudf::logic_error`, for non-fixed width types
+   * @brief Return one past the last element after underlying data is casted to
+   * the specified type.
    *
    * @tparam T The desired type
-   * @return T* Pointer to the first element after casting
+   * @return T const* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
-  template <typename T, std::enable_if_t<not is_fixed_width<T>()> * = nullptr>
-  T* begin() const {
-      CUDF_FAIL("Mutable device view can't use begin for non-fixed width types");
+  template <typename T, std::enable_if_t<is_fixed_width<T>()> * = nullptr>
+  T* end() const {
+    return begin<T>() + size();
   }
 
   /**---------------------------------------------------------------------------*
