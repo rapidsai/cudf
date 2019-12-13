@@ -113,6 +113,7 @@ std::unique_ptr<experimental::table> from_dlpack(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
+  CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
 
   // We can copy from host or device pointers
@@ -122,10 +123,12 @@ std::unique_ptr<experimental::table> from_dlpack(
                "DLTensor must be GPU, CPU, or pinned type");
 
   // Make sure the current device ID matches the Tensor's device ID
-  int device_id = 0;
-  CUDA_TRY(cudaGetDevice(&device_id));
-  CUDF_EXPECTS(tensor.ctx.device_id == device_id, 
-               "DLTensor device ID must be current device");
+  if (tensor.ctx.device_type != kDLCPU) {
+    int device_id = 0;
+    CUDA_TRY(cudaGetDevice(&device_id));
+    CUDF_EXPECTS(tensor.ctx.device_id == device_id, 
+                 "DLTensor device ID must be current device");
+  }
 
   // Currently only 1D and 2D tensors are supported
   CUDF_EXPECTS(tensor.ndim > 0 && tensor.ndim <= 2,
