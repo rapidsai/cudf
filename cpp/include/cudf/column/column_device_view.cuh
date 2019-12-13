@@ -683,7 +683,7 @@ struct mutable_value_accessor {
 
   /** -------------------------------------------------------------------------*
    * @brief constructor
-   * @param[in] _col column device view of cudf column
+   * @param[in] _col mutable column device view of cudf column
    * -------------------------------------------------------------------------**/
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col} {
     CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
