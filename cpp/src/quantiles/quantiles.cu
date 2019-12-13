@@ -22,7 +22,7 @@
 #include <cudf/types.hpp>
 #include <quantiles/quantiles_util.hpp>
 
-using TScalarResult = double;
+using ScalarResult = double;
 
 namespace cudf {
 namespace experimental {
@@ -49,14 +49,14 @@ struct quantile_index
 };
 
 template<typename T>
-TScalarResult
+ScalarResult
 select_quantile(T const * begin,
                 size_t size,
                 double quantile,
                 interpolation interpolation)
 {
     if (size < 2) {
-        return get_array_value<TScalarResult>(begin, 0);
+        return get_array_value<ScalarResult>(begin, 0);
     }
 
     quantile_index idx(size, quantile);
@@ -65,23 +65,23 @@ select_quantile(T const * begin,
     case interpolation::LINEAR: {
         auto a = get_array_value<T>(begin, idx.lower);
         auto b = get_array_value<T>(begin, idx.higher);
-        return interpolate::linear<TScalarResult>(a, b, idx.fraction);
+        return interpolate::linear<ScalarResult>(a, b, idx.fraction);
     }
 
     case interpolation::MIDPOINT: {
         auto a = get_array_value<T>(begin, idx.lower);
         auto b = get_array_value<T>(begin, idx.higher);
-        return interpolate::midpoint<TScalarResult>(a, b);
+        return interpolate::midpoint<ScalarResult>(a, b);
     }
 
     case interpolation::LOWER:
-        return get_array_value<TScalarResult>(begin, idx.lower);
+        return get_array_value<ScalarResult>(begin, idx.lower);
 
     case interpolation::HIGHER:
-        return get_array_value<TScalarResult>(begin, idx.higher);
+        return get_array_value<ScalarResult>(begin, idx.higher);
 
     case interpolation::NEAREST:
-        return get_array_value<TScalarResult>(begin, idx.nearest);
+        return get_array_value<ScalarResult>(begin, idx.nearest);
 
     default:
         throw new cudf::logic_error("not implemented");
@@ -138,8 +138,8 @@ select_quantile(T const * begin,
 template<typename T>
 std::unique_ptr<scalar>
 pick(column_view const& in, size_type index) {
-    auto result = get_array_value<TScalarResult>(in.begin<T>(), index);
-    return std::make_unique<numeric_scalar<TScalarResult>>(result);
+    auto result = get_array_value<ScalarResult>(in.begin<T>(), index);
+    return std::make_unique<numeric_scalar<ScalarResult>>(result);
 }
 
 struct quantile_functor
@@ -199,7 +199,7 @@ struct quantile_functor
                                           quantile,
                                           interpolation);
 
-            return std::make_unique<numeric_scalar<TScalarResult>>(result);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result);
     
         } else {
             auto result = select_quantile(in.begin<T>() + null_offset,
@@ -207,7 +207,7 @@ struct quantile_functor
                                           quantile,
                                           interpolation);
 
-            return std::make_unique<numeric_scalar<TScalarResult>>(result);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result);
         }
     }
 };
@@ -223,7 +223,7 @@ quantile(column_view const& in,
          null_order null_order)
 {
         if (in.size() == in.null_count()) {
-            return std::make_unique<numeric_scalar<TScalarResult>>(0, false);
+            return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
         }
 
         return type_dispatcher(in.type(), detail::quantile_functor{},

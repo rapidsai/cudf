@@ -18,11 +18,17 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/quantiles.hpp>
+#include <limits>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/scalar_utilities.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <type_traits>
+#include "cudf/scalar/scalar_factories.hpp"
+#include "cudf/utilities/error.hpp"
+#include "cudf/utilities/traits.hpp"
+#include "cudf/wrappers/timestamps.hpp"
 
 using std::vector;
 using cudf::experimental::bool8;
@@ -65,7 +71,7 @@ struct test_case {
     cudf::null_order null_order;
 };
 
-// all numerics
+// most numerics
 
 template<typename T>
 test_case<T>
@@ -78,6 +84,38 @@ empty() {
             q_expect{  0.5 },
             q_expect{  1.0 },
             q_expect{  2.0 }
+        }
+    };
+}
+
+template<typename T>
+test_case<T>
+interpolate_center() {
+    auto low = std::numeric_limits<T>::lowest();
+    auto max = std::numeric_limits<T>::max();
+    auto mid_d = std::is_floating_point<T>::value ? 0.0 : -0.5;
+    auto low_d = static_cast<double>(low);
+    auto max_d = static_cast<double>(max);
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ low, max }),
+        {
+            q_expect{ 0.50, max_d, low_d, low_d, mid_d, mid_d }
+        }
+    };
+}
+
+template<typename T>
+test_case<T>
+interpolate_edge_high() {
+    T a = std::numeric_limits<T>::max();
+    T b = a - 200;
+    auto a_d = static_cast<double>(a);
+    auto b_d = static_cast<double>(b);
+    auto exact_d = static_cast<double>(a - 100);
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ a, b }),
+        {
+            q_expect{ 0.50, b_d, a_d, a_d, exact_d, exact_d }
         }
     };
 }
@@ -196,6 +234,28 @@ unsorted() {
     };
 }
 
+template<>
+test_case<bool8>
+interpolate_center() {
+    auto low = std::numeric_limits<bool8>::lowest();
+    auto max = std::numeric_limits<bool8>::max();
+    auto mid_d = 0.5;
+    auto low_d = static_cast<double>(low);
+    auto max_d = static_cast<double>(max);
+    return test_case<bool8> {
+        fixed_width_column_wrapper<bool8> ({ low, max }),
+        {
+            q_expect{ 0.5, max_d, low_d, low_d, mid_d, mid_d }
+        }
+    };
+}
+
+template<>
+test_case<bool8>
+interpolate_edge_high() {
+    return interpolate_center<bool8>();
+}
+
 } // namespace testdata
 
 // =============================================================================
@@ -226,8 +286,8 @@ template <typename T>
 struct QuantilesTest : public cudf::test::BaseFixture {
 };
 
-// using TestTypes = test::Types<int, float, double, bool8>;
-// using TestTypes = AllTypes;
+// using TestTypes = cudf::test::Types<int64_t>;
+// using TestTypes = cudf::test::AllTypes;
 using TestTypes = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(QuantilesTest, TestTypes);
@@ -252,7 +312,8 @@ TYPED_TEST(QuantilesTest, TestUnsorted)
     test(testdata::unsorted<TypeParam>());
 }
 
-// TYPED_TEST(QuantilesTest, TestUnsortedWithInvalids)
-// {
-//     test(testdata::unsorted_with_invalids<TypeParam>());
-// }
+TYPED_TEST(QuantilesTest, TestInterpolate)
+{
+    // test(testdata::interpolate_center<TypeParam>());
+    test(testdata::interpolate_edge_high<TypeParam>());
+}

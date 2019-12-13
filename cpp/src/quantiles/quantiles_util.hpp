@@ -54,7 +54,6 @@ TResult linear(T lhs, T rhs, double frac)
     return static_cast<TResult>(one_minus_frac * dlhs + frac * drhs);
 }
 
-
 template <typename TResult, typename T>
 CUDA_HOST_DEVICE_CALLABLE
 TResult midpoint(T lhs, T rhs)
@@ -75,7 +74,6 @@ TResult midpoint(int64_t lhs, int64_t rhs)
     return static_cast<TResult>(static_cast<TResult>(half) +
                                 static_cast<TResult>(rest) * 0.5);
 }
-
 
 template <>
 CUDA_HOST_DEVICE_CALLABLE
