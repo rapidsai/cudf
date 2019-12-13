@@ -69,24 +69,24 @@ void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 // a kernel fails
 TEST(StreamCheck, FailedKernel) {
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  CUDA_TRY(cudaStreamCreate(&stream));
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
   EXPECT_THROW(cudf::detail::check_cuda<true>(__FILE__, __LINE__, stream),
                cudf::cuda_error);
-  cudaStreamDestroy(stream);
+  CUDA_TRY(cudaStreamDestroy(stream));
 }
 
 TEST(StreamCheck, CatchFailedKernel) {
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  CUDA_TRY(cudaStreamCreate(&stream));
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
   CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_cuda<true>(
                               __FILE__, __LINE__, stream),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
-  cudaStreamDestroy(stream);
+  CUDA_TRY(cudaStreamDestroy(stream));
 }
 
 // In a release build and without explicit synchronization, CHECK_CUDA may
@@ -96,12 +96,12 @@ TEST(StreamCheck, CatchFailedKernel) {
 // calls.
 TEST(StreamCheck, ReleaseFailedKernel) {
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  CUDA_TRY(cudaStreamCreate(&stream));
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
 #ifdef NDEBUG
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaStreamSynchronize(stream));
 #endif
   EXPECT_THROW(CHECK_CUDA(stream), cudf::cuda_error);
-  cudaStreamDestroy(stream);
+  CUDDA_TRY(cudaStreamDestroy(stream));
 }
