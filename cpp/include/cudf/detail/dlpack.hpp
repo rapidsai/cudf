@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/column/dlpack.hpp>
+#include <cudf/dlpack.hpp>
 
 namespace cudf {
 namespace detail {

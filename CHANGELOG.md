@@ -3,7 +3,7 @@
 ## New Features
 
 - PR #3284 Add gpu-accelerated parquet writer
-- PR #3336 Add `from_dlpack` and `do_dlpack`
+- PR #3336 Add `from_dlpack` and `to_dlpack`
 
 ## Improvements
 
