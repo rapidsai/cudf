@@ -799,7 +799,7 @@ class DataFrame(object):
                         r_opr = other_cols[col]
                     if col not in other.index:
                         l_opr = self._cols[col]
-                        r_opr = np.nan
+                        r_opr = None
                 result[col] = op(l_opr, r_opr)
 
         elif isinstance(other, numbers.Number):
