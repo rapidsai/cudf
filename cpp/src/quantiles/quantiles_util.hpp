@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime_api.h>
-#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace experimental {

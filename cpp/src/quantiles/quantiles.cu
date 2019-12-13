@@ -14,42 +14,20 @@
  * limitations under the License.
  */
 
-#include <algorithm>
 #include <memory>
-#include <stdexcept>
-#include <thrust/detail/execute_with_allocator.h>
-#include <thrust/extrema.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/sort.h>
-#include <thrust/system/cuda/detail/par.h>
-#include <thrust/transform.h>
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/legacy/reduction.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/table/table_view.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <quantiles/quantiles_util.hpp>
+
+using TScalarResult = double;
 
 namespace cudf {
 namespace experimental {
 namespace detail {
 namespace {
-
-using TScalarResult = double;
 
 struct quantile_index
 {
@@ -71,103 +49,91 @@ struct quantile_index
 };
 
 template<typename T>
-std::unique_ptr<scalar>
+TScalarResult
 select_quantile(T const * begin,
                 size_t size,
                 double quantile,
                 interpolation interpolation)
 {
-    
     if (size < 2) {
-        auto result_value = get_array_value<TScalarResult>(begin, 0);
-        return std::make_unique<numeric_scalar<TScalarResult>>(result_value);
+        return get_array_value<TScalarResult>(begin, 0);
     }
 
     quantile_index idx(size, quantile);
 
-    T a;
-    T b;
-    TScalarResult value{};
-
     switch (interpolation) {
-    case interpolation::LINEAR:
-        a = get_array_value<T>(begin, idx.lower);
-        b = get_array_value<T>(begin, idx.higher);
-        value = interpolate::linear<TScalarResult>(a, b, idx.fraction);
-        break;
+    case interpolation::LINEAR: {
+        auto a = get_array_value<T>(begin, idx.lower);
+        auto b = get_array_value<T>(begin, idx.higher);
+        return interpolate::linear<TScalarResult>(a, b, idx.fraction);
+    }
 
-    case interpolation::MIDPOINT:
-        a = get_array_value<T>(begin, idx.lower);
-        b = get_array_value<T>(begin, idx.higher);
-        value = interpolate::midpoint<TScalarResult>(a, b);
-        break;
+    case interpolation::MIDPOINT: {
+        auto a = get_array_value<T>(begin, idx.lower);
+        auto b = get_array_value<T>(begin, idx.higher);
+        return interpolate::midpoint<TScalarResult>(a, b);
+    }
 
     case interpolation::LOWER:
-        value = get_array_value<TScalarResult>(begin, idx.lower);
-        break;
+        return get_array_value<TScalarResult>(begin, idx.lower);
 
     case interpolation::HIGHER:
-        value = get_array_value<TScalarResult>(begin, idx.higher);
-        break;
+        return get_array_value<TScalarResult>(begin, idx.higher);
 
     case interpolation::NEAREST:
-        value = get_array_value<TScalarResult>(begin, idx.nearest);
-        break;
+        return get_array_value<TScalarResult>(begin, idx.nearest);
 
     default:
         throw new cudf::logic_error("not implemented");
     }
-
-    return std::make_unique<numeric_scalar<TScalarResult>>(value);
 }
 
-enum class extrema {
-    min,
-    max
-};
+// enum class extrema {
+//     min,
+//     max
+// };
 
+// size_type extrema(column_view const & in,
+//                   order order,
+//                   null_order null_order,
+//                   extrema minmax,
+//                   cudaStream_t stream)
+// {
+//     std::vector<cudf::order> h_order{ order };
+//     std::vector<cudf::null_order> h_null_order{ null_order };
+//     rmm::device_vector<cudf::order> d_order( h_order );
+//     rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
+//     table_view in_table({ in });
+//     auto in_table_d = table_device_view::create(in_table);
+//     auto it = thrust::make_counting_iterator<size_type>(0);
+//     auto policy = rmm::exec_policy(stream);
 
-size_type extrema(column_view const & in,
-          order order,
-          null_order null_order,
-          extrema minmax,
-          cudaStream_t stream)
-{
-    std::vector<cudf::order> h_order{ order };
-    std::vector<cudf::null_order> h_null_order{ null_order };
-    rmm::device_vector<cudf::order> d_order( h_order );
-    rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
-    table_view in_table({ in });
-    auto in_table_d = table_device_view::create(in_table);
-    auto it = thrust::make_counting_iterator<size_type>(0);
-    auto policy = rmm::exec_policy(stream);
-
-    if (in.nullable()) {
-        auto comparator = row_lexicographic_comparator<true>(
-            *in_table_d,
-            *in_table_d,
-            d_order.data().get(),
-            d_null_order.data().get());
+//     if (in.nullable()) {
+//         auto comparator = row_lexicographic_comparator<true>(
+//             *in_table_d,
+//             *in_table_d,
+//             d_order.data().get(),
+//             d_null_order.data().get());
         
-        auto extrema_id = minmax == extrema::min
-            ? thrust::min_element(policy->on(stream), it, it + in.size(), comparator)
-            : thrust::max_element(policy->on(stream), it, it + in.size(), comparator);
+//         auto extrema_id = minmax == extrema::min
+//             ? thrust::min_element(policy->on(stream), it, it + in.size(), comparator)
+//             : thrust::max_element(policy->on(stream), it, it + in.size(), comparator);
 
-        return *extrema_id;
-    } else {
-        auto comparator = row_lexicographic_comparator<false>(
-            *in_table_d,
-            *in_table_d,
-            d_order.data().get(),
-            d_null_order.data().get());
+//         return *extrema_id;
+//     } else {
+//         auto comparator = row_lexicographic_comparator<false>(
+//             *in_table_d,
+//             *in_table_d,
+//             d_order.data().get(),
+//             d_null_order.data().get());
         
-        auto extrema_idx = minmax == extrema::min
-            ? thrust::min_element(policy->on(stream), it, it + in.size(), comparator)
-            : thrust::max_element(policy->on(stream), it, it + in.size(), comparator);
+//         auto extrema_idx = minmax == extrema::min
+//             ? thrust::min_element(policy->on(stream), it, it + in.size(), comparator)
+//             : thrust::max_element(policy->on(stream), it, it + in.size(), comparator);
 
-        return *extrema_idx;
-    }
-}
+//         return *extrema_idx;
+//     }
+// }
 
 template<typename T>
 std::unique_ptr<scalar>
@@ -213,13 +179,13 @@ struct quantile_functor
         
         if (not is_sorted)
         {
-            if (quantile <= 0.0) {
-                return pick<T>(in, extrema(in, order, null_order, extrema::min, stream));
-            }
+            // if (quantile <= 0.0) {
+            //     return pick<T>(in, extrema(in, order, null_order, extrema::min, stream));
+            // }
     
-            if (quantile >= 1.0) {
-                return pick<T>(in, extrema(in, order, null_order, extrema::max, stream));
-            }
+            // if (quantile >= 1.0) {
+            //     return pick<T>(in, extrema(in, order, null_order, extrema::max, stream));
+            // }
     
             table_view const in_table { { in } };
             auto sorted_idx = sorted_order(in_table, { order }, { null_order });
@@ -228,16 +194,20 @@ struct quantile_functor
             auto sorted = gather(in_table, sorted_idx->view());
             auto sorted_col = sorted->view().column(0);
 
-            return select_quantile(sorted_col.begin<T>() + null_offset,
-                                   sorted_col.size() - sorted_col.null_count(),
-                                   quantile,
-                                   interpolation);
+            auto result = select_quantile(sorted_col.begin<T>() + null_offset,
+                                          sorted_col.size() - sorted_col.null_count(),
+                                          quantile,
+                                          interpolation);
+
+            return std::make_unique<numeric_scalar<TScalarResult>>(result);
     
         } else {
-            return select_quantile(in.begin<T>() + null_offset,
-                                   in.size() - in.null_count(),
-                                   quantile,
-                                   interpolation);
+            auto result = select_quantile(in.begin<T>() + null_offset,
+                                          in.size() - in.null_count(),
+                                          quantile,
+                                          interpolation);
+
+            return std::make_unique<numeric_scalar<TScalarResult>>(result);
         }
     }
 };
