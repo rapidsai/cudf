@@ -45,11 +45,11 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
         new cudf::test::TempDirTestEnvironment));
 
 // Base test fixture for tests
-struct OrcWriterTest : public cudf::test::BaseFixture {};
+struct ParquetWriterTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for numeric type tests
 template <typename T>
-struct OrcWriterNumericTypeTest : public OrcWriterTest {
+struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
   auto type() {
     return cudf::data_type{cudf::experimental::type_to_id<T>()};
   }
@@ -57,18 +57,18 @@ struct OrcWriterNumericTypeTest : public OrcWriterTest {
 
 // Typed test fixture for timestamp type tests
 template <typename T>
-struct OrcWriterTimestampTypeTest : public OrcWriterTest {
+struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
   auto type() {
     return cudf::data_type{cudf::experimental::type_to_id<T>()};
   }
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(OrcWriterNumericTypeTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(ParquetWriterNumericTypeTest, cudf::test::NumericTypes);
 using SupportedTimestampTypes = cudf::test::RemoveIf<
-    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D>>,
+    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_s>>,
     cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(OrcWriterTimestampTypeTest, SupportedTimestampTypes);
+TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 namespace {
 
@@ -105,7 +105,7 @@ void expect_tables_equal(cudf::table_view const& lhs,
 
 }  // namespace
 
-TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn) {
   auto sequence = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(
@@ -119,19 +119,18 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcSingleColumn.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
+  auto filepath = temp_env->get_temp_filepath("SingleColumn.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
                                    expected->view()};
-  cudf_io::write_orc(out_args);
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
-  auto result = cudf_io::read_orc(in_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls) {
   auto sequence = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(
@@ -145,21 +144,20 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcSingleColumnWithNulls.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view()};
-  cudf_io::write_orc(out_args);
+  auto filepath = temp_env->get_temp_filepath("SingleColumnWithNulls.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
+                                       expected->view()};
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
-  auto result = cudf_io::read_orc(in_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
+TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
   auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return TypeParam(std::rand() / 10); });
+      0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
 
@@ -171,22 +169,21 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcTimestamps.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view()};
-  cudf_io::write_orc(out_args);
+  auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
+                                       expected->view()};
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   in_args.timestamp_type = this->type();
-  auto result = cudf_io::read_orc(in_args);
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls) {
   auto sequence = cudf::test::make_counting_transform_iterator(
-      0, [](auto i) { return TypeParam(std::rand() / 10); });
+      0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return (i > 30) && (i < 60); });
 
@@ -198,20 +195,19 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcTimestampsWithNulls.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
+  auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
                                    expected->view()};
-  cudf_io::write_orc(out_args);
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   in_args.timestamp_type = this->type();
-  auto result = cudf_io::read_orc(in_args);
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TEST_F(OrcWriterTest, MultiColumn) {
+TEST_F(ParquetWriterTest, MultiColumn) {
   constexpr auto num_rows = 100;
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -249,20 +245,19 @@ TEST_F(OrcWriterTest, MultiColumn) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(5, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view(), &expected_metadata};
-  cudf_io::write_orc(out_args);
+  auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
+                                       expected->view(), &expected_metadata};
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
-  auto result = cudf_io::read_orc(in_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(OrcWriterTest, MultiColumnWithNulls) {
+TEST_F(ParquetWriterTest, MultiColumnWithNulls) {
   constexpr auto num_rows = 100;
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -310,20 +305,19 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(5, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view(), &expected_metadata};
-  cudf_io::write_orc(out_args);
+  auto filepath = temp_env->get_temp_filepath("MultiColumnWithNulls.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
+                                       expected->view(), &expected_metadata};
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
-  auto result = cudf_io::read_orc(in_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(OrcWriterTest, Strings) {
+TEST_F(ParquetWriterTest, Strings) {
   std::vector<const char*> strings{"Monday", "Monday", "Friday", "Monday",
                                    "Friday", "Friday", "Friday", "Funday"};
   const auto num_rows = strings.size();
@@ -349,14 +343,13 @@ TEST_F(OrcWriterTest, Strings) {
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(3, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
-  cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view(), &expected_metadata};
-  cudf_io::write_orc(out_args);
+  auto filepath = temp_env->get_temp_filepath("Strings.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
+                                       expected->view(), &expected_metadata};
+  cudf_io::write_parquet(out_args);
 
-  cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
-  in_args.use_index = false;
-  auto result = cudf_io::read_orc(in_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
