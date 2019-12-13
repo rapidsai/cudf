@@ -81,6 +81,14 @@ TEST_F(DLPackUntypedTests, MultipleTypesToDlpack)
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }
 
+TEST_F(DLPackUntypedTests, InvalidNullsToDlpack)
+{
+  fixed_width_column_wrapper<int32_t> col1({1, 2, 3, 4});
+  fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4}, {1, 0, 1, 1});
+  cudf::table_view input({col1, col2});
+  EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
+}
+
 TEST_F(DLPackUntypedTests, StringTypeToDlpack)
 {
   strings_column_wrapper col({"foo", "bar", "baz"});
@@ -209,8 +217,12 @@ TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
 
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {
-  fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4});
+  // Test nullable column with no nulls
+  fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4}, {1, 1, 1, 1});
   auto const col_view = static_cast<cudf::column_view>(col);
+  EXPECT_FALSE(col_view.has_nulls());
+  EXPECT_TRUE(col_view.nullable());
+
   cudf::table_view input({col});
   unique_managed_tensor result(cudf::to_dlpack(input));
 
@@ -226,7 +238,8 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 
   // Verify that data matches input column
   constexpr cudf::data_type type{cudf::experimental::type_to_id<TypeParam>()};
-  cudf::column_view const result_view(type, tensor.shape[0], tensor.data);
+  cudf::column_view const result_view(type, tensor.shape[0], tensor.data,
+    col_view.null_mask());
   expect_columns_equal(col_view, result_view);
 }
 

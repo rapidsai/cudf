@@ -189,6 +189,11 @@ DLManagedTensor* to_dlpack(table_view const& input,
     [type](auto const& col) { return col.type() == type; }),
     "All columns required to have same data type");
 
+  // Ensure none of the columns have nulls
+  CUDF_EXPECTS(std::none_of(input.begin(), input.end(),
+    [](auto const& col) { return col.has_nulls(); }),
+    "Input required to have null count zero");
+
   auto managed_tensor = std::make_unique<DLManagedTensor>();
   auto context = std::make_unique<dltensor_context>();
 
