@@ -488,9 +488,9 @@ class RangeIndex(Index):
             start += self._start
             stop += self._start
             if sln == 0:
-                return RangeIndex(0)
+                return RangeIndex(0, None, self.name)
             elif step == 1:
-                return RangeIndex(start, stop)
+                return RangeIndex(start, stop, self.name)
             else:
                 return index_from_range(start, stop, step)
 
