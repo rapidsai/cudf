@@ -24,35 +24,29 @@
 #include <jit/type.h>
 #include <type_traits>
 
+using cudf::experimental::scalar_type_t;
+
 namespace cudf {
 namespace test {
-
 namespace {
-
-template<typename T>
-using scalar_type_t = cudf::experimental::scalar_type_t<T>;
 
 struct compare_scalar_functor
 {
     template<typename T>
-    typename std::enable_if_t<not std::is_arithmetic<T>::value, void>
+    typename std::enable_if_t<not std::is_floating_point<T>::value, void>
     operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
-        using Scalar = cudf::experimental::scalar_type_t<T>;
-        auto lhs_t = static_cast<Scalar const&>(lhs);
-        auto rhs_t = static_cast<Scalar const&>(rhs);
-
+        auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
+        auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
         EXPECT_EQ(lhs_t.value(), rhs_t.value());
     }
 
     template<typename T>
-    typename std::enable_if_t<std::is_arithmetic<T>::value, void>
+    typename std::enable_if_t<std::is_floating_point<T>::value, void>
     operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
-        using Scalar = cudf::experimental::scalar_type_t<T>;
-        auto lhs_t = static_cast<Scalar const&>(lhs);
-        auto rhs_t = static_cast<Scalar const&>(rhs);
-
+        auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
+        auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
         EXPECT_NEAR(lhs_t.value(), rhs_t.value(), 1.0e-7);
     }
 };
@@ -65,7 +59,7 @@ void expect_scalars_equal(cudf::scalar const& lhs,
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 
-    if (lhs.is_valid() and lhs.type() == rhs.type()) {
+    if (lhs.type() == rhs.type()) {
         experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
     }
 }
