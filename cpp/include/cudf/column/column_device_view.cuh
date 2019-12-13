@@ -496,8 +496,9 @@ class alignas(16) mutable_column_device_view
    * @tparam T The desired type
    * @return T* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
-  template <typename T, std::enable_if_t<is_fixed_width<T>()> * = nullptr>
-  T* begin() const {
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), T*>
+  begin() const {
     return data<T>();
   }
 
@@ -508,8 +509,9 @@ class alignas(16) mutable_column_device_view
    * @tparam T The desired type
    * @return T const* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
-  template <typename T, std::enable_if_t<is_fixed_width<T>()> * = nullptr>
-  T* end() const {
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), T*>
+  end() const {
     return begin<T>() + size();
   }
 
