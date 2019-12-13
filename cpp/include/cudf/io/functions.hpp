@@ -71,9 +71,9 @@ struct read_avro_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_avro(
+table_with_metadata read_avro(
     read_avro_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -182,9 +182,9 @@ struct read_csv_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_csv(
+table_with_metadata read_csv(
     read_csv_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -205,7 +205,7 @@ struct read_orc_args {
   size_type num_rows = -1;
 
   /// Whether to use row index to speed-up reading
-  bool use_index = false;
+  bool use_index = true;
 
   /// Whether to use numpy-compatible dtypes
   bool use_np_dtypes = true;
@@ -239,7 +239,7 @@ struct read_orc_args {
  *
  * @return The set of columns
  */
-std::unique_ptr<table> read_orc(
+table_with_metadata read_orc(
     read_orc_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -253,10 +253,13 @@ struct write_orc_args {
   compression_type compression;
   /// Set of columns to output
   table_view table;
+  /// Optional associated metadata
+  const table_metadata *metadata;
 
   explicit write_orc_args(sink_info const& snk, table_view const& table_,
+                          const table_metadata *metadata_ = nullptr,
                           compression_type compression_ = compression_type::AUTO)
-      : sink(snk), table(table_), compression(compression_) {}
+      : sink(snk), table(table_), metadata(metadata_), compression(compression_) {}
 };
 
 /**
@@ -320,9 +323,9 @@ struct read_parquet_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_parquet(
+table_with_metadata read_parquet(
     read_parquet_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -338,11 +341,14 @@ struct write_parquet_args {
   statistics_freq stats_level;
   /// Set of columns to output
   table_view table;
+  /// Optional associated metadata
+  const table_metadata *metadata;
 
   explicit write_parquet_args(sink_info const& sink_, table_view const& table_,
+                              const table_metadata *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,
                               statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-      : sink(sink_), table(table_), compression(compression_), stats_level(stats_lvl_) {}
+      : sink(sink_), table(table_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
 };
 
 /**
