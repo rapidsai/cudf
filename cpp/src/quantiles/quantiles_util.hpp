@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cmath>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -21,9 +22,9 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-template <typename TResult, typename T>
+template <typename Result, typename T>
 CUDA_HOST_DEVICE_CALLABLE
-TResult get_array_value(T const* devarr, size_type location)
+Result get_array_value(T const* devarr, size_type location)
 {
     T result;
 #if defined(__CUDA_ARCH__)
@@ -31,14 +32,14 @@ TResult get_array_value(T const* devarr, size_type location)
 #else
     CUDA_TRY( cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost) );
 #endif
-    return static_cast<TResult>(result);
+    return static_cast<Result>(result);
 }
 
 namespace interpolate {
 
-template <typename TResult, typename T>
+template <typename Result, typename T>
 CUDA_HOST_DEVICE_CALLABLE
-TResult linear(T lhs, T rhs, double frac)
+Result linear(T lhs, T rhs, double frac)
 {
     // TODO: safe operation to avoid overflow/underflow
     // double can fully represent int8-32 value range.
@@ -50,29 +51,29 @@ TResult linear(T lhs, T rhs, double frac)
     double dlhs = static_cast<double>(lhs);
     double drhs = static_cast<double>(rhs);
     double one_minus_frac = 1.0 - frac;
-//    result = static_cast<TResult>(static_cast<TResult>(lhs) + frac*static_cast<TResult>(rhs-lhs));
-    return static_cast<TResult>(one_minus_frac * dlhs + frac * drhs);
+//    result = static_cast<Result>(static_cast<Result>(lhs) + frac*static_cast<Result>(rhs-lhs));
+    return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
 }
 
-template <typename TResult, typename T>
+template <typename Result, typename T>
 CUDA_HOST_DEVICE_CALLABLE
-TResult midpoint(T lhs, T rhs)
+Result midpoint(T lhs, T rhs)
 {
     // TODO: try std::midpoint (C++20) if available
     double dlhs = static_cast<double>(lhs);
     double drhs = static_cast<double>(rhs);
-    return static_cast<TResult>(dlhs / 2 + drhs / 2);
+    return static_cast<Result>(dlhs / 2 + drhs / 2);
 }
 
-template <typename TResult>
+template <typename Result>
 CUDA_HOST_DEVICE_CALLABLE
-TResult midpoint(int64_t lhs, int64_t rhs)
+Result midpoint(int64_t lhs, int64_t rhs)
 {
-    // caring to avoid integer overflow and underflow between int64_t and TResult( double )
+    // caring to avoid integer overflow and underflow between int64_t and Result( double )
     int64_t half = lhs / 2 + rhs / 2;
     int64_t rest = lhs % 2 + rhs % 2;
-    return static_cast<TResult>(static_cast<TResult>(half) +
-                                static_cast<TResult>(rest) * 0.5);
+    return static_cast<Result>(static_cast<Result>(half) +
+                                static_cast<Result>(rest) * 0.5);
 }
 
 template <>
@@ -92,6 +93,65 @@ int64_t midpoint(int64_t lhs, int64_t rhs)
 }
 
 } // namespace interpolate
+
+struct quantile_index
+{
+    size_type lower;
+    size_type higher;
+    size_type nearest;
+    double fraction;
+
+    quantile_index(size_type count, double quantile)
+    {
+        quantile = std::min(std::max(quantile, 0.0), 1.0);
+
+        double val = quantile * (count - 1);
+        lower = std::floor(val);
+        higher = static_cast<size_t>(std::ceil(val));
+        nearest = static_cast<size_t>(std::nearbyint(val));
+        fraction = val - lower;
+    }
+};
+
+template<typename Result, typename Source>
+Result
+select_quantile(Source source,
+                size_t size,
+                double quantile,
+                interpolation interpolation)
+{
+    if (size < 2) {
+        return source(0);
+    }
+
+    quantile_index idx(size, quantile);
+
+    switch (interpolation) {
+    case interpolation::LINEAR:
+        return interpolate::linear<Result>(source(idx.lower),
+                                           source(idx.higher),
+                                           idx.fraction);
+
+    case interpolation::MIDPOINT:
+        return interpolate::midpoint<Result>(source(idx.lower),
+                                             source(idx.higher));
+
+    case interpolation::LOWER:
+        return source(idx.lower);
+
+    case interpolation::HIGHER:
+        return source(idx.higher);
+
+    case interpolation::NEAREST:
+        return source(idx.nearest);
+
+    default:
+        throw new cudf::logic_error("not implemented");
+    }
+}
+
+
+
 } // namespace detail
 } // namespace experimental
 } // namespace cudf

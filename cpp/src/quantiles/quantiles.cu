@@ -21,6 +21,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <quantiles/quantiles_util.hpp>
+#include "thrust/functional.h"
+#include "thrust/iterator/counting_iterator.h"
 
 using ScalarResult = double;
 
@@ -28,65 +30,6 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 namespace {
-
-struct quantile_index
-{
-    size_type lower;
-    size_type higher;
-    size_type nearest;
-    double fraction;
-
-    quantile_index(size_type count, double quantile)
-    {
-        quantile = std::min(std::max(quantile, 0.0), 1.0);
-
-        double val = quantile * (count - 1);
-        lower = std::floor(val);
-        higher = static_cast<size_t>(std::ceil(val));
-        nearest = static_cast<size_t>(std::nearbyint(val));
-        fraction = val - lower;
-    }
-};
-
-template<typename T>
-ScalarResult
-select_quantile(T const * begin,
-                size_t size,
-                double quantile,
-                interpolation interpolation)
-{
-    if (size < 2) {
-        return get_array_value<ScalarResult>(begin, 0);
-    }
-
-    quantile_index idx(size, quantile);
-
-    switch (interpolation) {
-    case interpolation::LINEAR: {
-        auto a = get_array_value<T>(begin, idx.lower);
-        auto b = get_array_value<T>(begin, idx.higher);
-        return interpolate::linear<ScalarResult>(a, b, idx.fraction);
-    }
-
-    case interpolation::MIDPOINT: {
-        auto a = get_array_value<T>(begin, idx.lower);
-        auto b = get_array_value<T>(begin, idx.higher);
-        return interpolate::midpoint<ScalarResult>(a, b);
-    }
-
-    case interpolation::LOWER:
-        return get_array_value<ScalarResult>(begin, idx.lower);
-
-    case interpolation::HIGHER:
-        return get_array_value<ScalarResult>(begin, idx.higher);
-
-    case interpolation::NEAREST:
-        return get_array_value<ScalarResult>(begin, idx.nearest);
-
-    default:
-        throw new cudf::logic_error("not implemented");
-    }
-}
 
 // enum class extrema {
 //     min,
@@ -188,24 +131,35 @@ struct quantile_functor
             // }
     
             table_view const in_table { { in } };
-            auto sorted_idx = sorted_order(in_table, { order }, { null_order });
+            auto in_sortmap = sorted_order(in_table, { order }, { null_order });
+            auto in_sortmap_begin = in_sortmap->view().begin<size_type>();
+            auto in_begin = in.begin<T>() + null_offset;
 
-            // TODO: select_quantile can use the sortmap without gather.
-            auto sorted = gather(in_table, sorted_idx->view());
-            auto sorted_col = sorted->view().column(0);
+            auto source = [&](size_type location) {
+                auto idx = get_array_value<size_type>(in_sortmap_begin, location);
+                auto res = get_array_value<T>(in_begin, idx);
+                return res;
+            };
 
-            auto result = select_quantile(sorted_col.begin<T>() + null_offset,
-                                          sorted_col.size() - sorted_col.null_count(),
-                                          quantile,
-                                          interpolation);
+            auto result = select_quantile<double>(source,
+                                                  in.size() + in.null_count(),
+                                                  quantile,
+                                                  interpolation);
 
             return std::make_unique<numeric_scalar<ScalarResult>>(result);
     
         } else {
-            auto result = select_quantile(in.begin<T>() + null_offset,
-                                          in.size() - in.null_count(),
-                                          quantile,
-                                          interpolation);
+
+            auto in_begin = in.begin<T>() + null_offset;
+            auto source = [&](size_type location) {
+                auto res = get_array_value<T>(in_begin, location);
+                return res;
+            };
+
+            auto result = select_quantile<double>(source,
+                                                  in.size() - in.null_count(),
+                                                  quantile,
+                                                  interpolation);
 
             return std::make_unique<numeric_scalar<ScalarResult>>(result);
         }
