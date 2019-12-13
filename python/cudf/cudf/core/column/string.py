@@ -485,6 +485,15 @@ class StringColumn(column.TypedColumnBase):
     def str(self, index=None):
         return StringMethods(self, index=index)
 
+    def _memory_usage(self, deep=False):
+        if deep:
+            n = np.sum(self._data.len()) * 8
+            if self._mask:
+                n += self._mask.__sizeof__()
+            return n
+        else:
+            return self.__sizeof__()
+
     def __len__(self):
         return self._data.size()
 

@@ -696,6 +696,9 @@ class GenericIndex(Index):
     def __sizeof__(self):
         return self._values.__sizeof__()
 
+    def _memory_usage(self, deep=False):
+        return self._values._memory_usage(deep=deep)
+
     def __reduce__(self):
         return self.__class__, tuple([self._values])
 
