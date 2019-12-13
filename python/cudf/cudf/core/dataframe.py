@@ -258,38 +258,6 @@ class DataFrame(Table):
             "_constructor_expanddim not supported for DataFrames!"
         )
 
-    def _add_rows(self, data, index, keys):
-        if keys is None:
-            data = {i: element for i, element in enumerate(data)}.items()
-        else:
-            data = dict(zip(keys, data)).items()
-            self.index = as_index(RangeIndex(start=0))
-        for i, (col_name, series) in enumerate(data):
-            self.insert(i, col_name, series, forceindex=index is not None)
-        transposed = self.T
-        self._data = OrderedDict()
-        self.index = as_index(transposed.index)
-        for i, col_name in enumerate(transposed.columns):
-            self.insert(
-                i,
-                col_name,
-                transposed._data[col_name],
-                forceindex=index is not None,
-            )
-
-    def _add_empty_columns(self, columns, index):
-        if columns is not None:
-            for col_name in columns:
-                if col_name not in self._data:
-                    self.insert(
-                        len(self._data),
-                        col_name,
-                        column.column_empty(
-                            len(self), dtype="object", masked=True
-                        ),
-                        forceindex=index is not None,
-                    )
-
     def serialize(self):
         header = {}
         frames = []
