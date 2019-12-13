@@ -24,6 +24,7 @@
 #include <strings/utilities.cuh>
 
 #include <algorithm>
+#include <thrust/find.h>
 
 namespace cudf
 {
@@ -44,8 +45,8 @@ namespace
 struct translate_fn
 {
     column_device_view const d_strings;
-    translate_table const* table;
-    size_type table_size;
+    rmm::device_vector<translate_table>::iterator table_begin;
+    rmm::device_vector<translate_table>::iterator table_end;
     int32_t const* d_offsets{};
     char* d_chars{};
 
@@ -55,18 +56,16 @@ struct translate_fn
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
         size_type bytes = d_str.size_bytes();
-        char* out_ptr = nullptr;
-        if( d_offsets )
-            out_ptr = d_chars + d_offsets[idx];
+        char* out_ptr = d_offsets ? d_chars + d_offsets[idx] : nullptr;
         for( auto chr : d_str )
         {
-            auto entry = thrust::find_if( thrust::seq, table, table+table_size,
-                [chr] __device__ ( auto te ) { return te.first==chr; } );
-            if( entry < table + table_size )
+            auto entry = thrust::find_if( thrust::seq, table_begin, table_end,
+                [chr] __device__ ( auto const& te ) { return te.first==chr; } );
+            if( entry != table_end )
             {
                 bytes -= bytes_in_char_utf8(chr);
-                chr = entry->second;
-                if( chr ) // if null, remove character
+                chr = static_cast<translate_table>(*entry).second;
+                if( chr ) // if null, skip the character
                     bytes += bytes_in_char_utf8(chr);
             }
             if( chr && out_ptr )
@@ -76,7 +75,7 @@ struct translate_fn
     }
 };
 
-}
+} // namespace
 
 //
 std::unique_ptr<column> translate( strings_column_view const& strings,
@@ -95,7 +94,6 @@ std::unique_ptr<column> translate( strings_column_view const& strings,
         [] ( auto entry ) { return translate_table{entry.first,entry.second}; });
     // copy translate table to device memory
     rmm::device_vector<translate_table> table(htable);
-    translate_table* d_table = table.data().get();
 
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -104,7 +102,7 @@ std::unique_ptr<column> translate( strings_column_view const& strings,
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
     // create offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        translate_fn{d_strings,d_table,table_size} );
+         translate_fn{d_strings,table.begin(),table.end()});
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                                     offsets_transformer_itr+strings_count,
                                                     mr, stream);
@@ -115,12 +113,11 @@ std::unique_ptr<column> translate( strings_column_view const& strings,
     auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
     auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
-        translate_fn{d_strings,d_table,table_size,d_offsets,d_chars});
+        translate_fn{d_strings,table.begin(),table.end(),d_offsets,d_chars});
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
 }
-
 
 } // namespace detail
 
