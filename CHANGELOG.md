@@ -61,6 +61,7 @@
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
+- PR #3504 Add Kafka Datasource with CSV parser
 
 ## Improvements
 

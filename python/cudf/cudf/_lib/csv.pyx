@@ -214,7 +214,9 @@ cpdef read_csv(
             elif kafka_conf_key == 'cudf.end.offset':
                 args.cudf_end_offset = kafka_configs[kafka_conf_key]
             else:
-                gkc.set(kafka_conf_key.encode(), kafka_configs[kafka_conf_key].encode(), errstr.encode())
+                gkc.set(kafka_conf_key.encode(),
+                        kafka_configs[kafka_conf_key].encode(),
+                        errstr.encode())
     else:
         buffer = view_of_buffer(filepath_or_buffer)
         if buffer is None:
