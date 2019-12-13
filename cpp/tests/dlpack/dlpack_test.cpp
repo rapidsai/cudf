@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/dlpack.hpp>
+#include <cudf/dlpack.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_utilities.hpp>
