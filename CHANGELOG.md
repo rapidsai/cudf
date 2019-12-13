@@ -57,6 +57,7 @@
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
+- PR #3557 Add contiguous_split() function. 
 
 ## Improvements
 
