@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3284 Add gpu-accelerated parquet writer
+- PR #3555 Add column names support to libcudf++ io readers and writers
 
 ## Improvements
 

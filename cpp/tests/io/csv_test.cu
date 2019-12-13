@@ -130,7 +130,7 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn) {
   in_args.header = -1;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   expect_column_data_equal(
       std::vector<TypeParam>(sequence, sequence + num_rows), view.column(0));
 }
@@ -165,7 +165,7 @@ TEST_F(CsvReaderTest, MultiColumn) {
   in_args.header = -1;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   expect_column_data_equal(int8_values, view.column(0));
   expect_column_data_equal(int16_values, view.column(1));
   expect_column_data_equal(int16_values, view.column(2));
@@ -196,7 +196,7 @@ TEST_F(CsvReaderTest, Booleans) {
   auto result = cudf_io::read_csv(in_args);
 
   // Booleans are the same (integer) data type, but valued at 0 or 1
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(4, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
   ASSERT_EQ(cudf::type_id::INT32, view.column(1).type().id());
@@ -229,7 +229,7 @@ TEST_F(CsvReaderTest, Dates) {
   in_args.header = -1;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
 
@@ -257,7 +257,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampSeconds) {
   in_args.timestamp_type = cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_SECONDS, view.column(0).type().id());
 
@@ -286,7 +286,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMilliSeconds) {
       cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
 
@@ -315,7 +315,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMicroSeconds) {
       cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MICROSECONDS, view.column(0).type().id());
 
@@ -345,7 +345,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds) {
       cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_NANOSECONDS, view.column(0).type().id());
 
@@ -372,7 +372,7 @@ TEST_F(CsvReaderTest, FloatingPoint) {
   in_args.header = -1;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::FLOAT32, view.column(0).type().id());
 
@@ -400,7 +400,7 @@ TEST_F(CsvReaderTest, Strings) {
   in_args.quoting = cudf_io::quote_style::NONE;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(2, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
   ASSERT_EQ(cudf::type_id::STRING, view.column(1).type().id());
@@ -429,7 +429,7 @@ TEST_F(CsvReaderTest, DISABLED_StringsQuotes) {
   in_args.quotechar = '`';
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(2, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
   ASSERT_EQ(cudf::type_id::STRING, view.column(1).type().id());
@@ -459,7 +459,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored) {
   in_args.doublequote = false;  // do not replace double quotechar with single
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(2, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
   ASSERT_EQ(cudf::type_id::STRING, view.column(1).type().id());
@@ -486,7 +486,7 @@ TEST_F(CsvReaderTest, SkiprowsNrows) {
   in_args.nrows = 2;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
 
@@ -508,7 +508,7 @@ TEST_F(CsvReaderTest, ByteRange) {
   in_args.byte_range_size = 15;
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
 
@@ -530,7 +530,7 @@ TEST_F(CsvReaderTest, BlanksAndComments) {
   in_args.comment = '#';
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
 
@@ -548,7 +548,7 @@ TEST_F(CsvReaderTest, EmptyFile) {
   cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -562,7 +562,7 @@ TEST_F(CsvReaderTest, NoDataFile) {
   cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
 
@@ -580,7 +580,7 @@ TEST_F(CsvReaderTest, ArrowFileSource) {
   in_args.dtype = {"int8"};
   auto result = cudf_io::read_csv(in_args);
 
-  const auto view = result->view();
+  const auto view = result.tbl->view();
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::INT8, view.column(0).type().id());
 
