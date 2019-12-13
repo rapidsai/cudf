@@ -177,25 +177,6 @@ std::unique_ptr<column> merge_dictionaries( dictionary_column_view const& dictio
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a new dictionary column by copying the dictionary from the provided
- * dictionary_column and setting the indices from the provided indices parameter.
- *
- * ```
- * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = gather(d1,[1,0,0,2,2])
- * d2 is now {["a","c","d"],[1,0,0,2,2]}
- * ```
- *
- * @param dictionary_column Existing dictionary column.
- * @param indices Indices to use for the new dictionary column.
- * @param mr Resource for allocating memory for the output.
- * @return New dictionary column.
- */
-std::unique_ptr<column> gather( dictionary_column_view const& dictionary_column,
-                                column_view const& indices,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
  * @brief Create a column by gathering the elements from the provided
  * dictionary_column using the specified indices.
  *

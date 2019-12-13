@@ -15,11 +15,9 @@
  */
 #pragma once
 
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
 
 
 namespace cudf
@@ -47,6 +45,30 @@ std::unique_ptr<column> make_dictionary_column(
     column_view const& column,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
+
+/**
+ * @brief Construct a dictionary column by using the provided keys
+ * and indices.
+ * 
+ * The keys_column must contain no nulls. The keys should be
+ * unique and sorted in ascending order.
+ * The indices values must be in the range [0,keys_column.size()).
+ *
+ * ```
+ * k = ["a","c","d"]
+ * i = [1,0,0,2,2]
+ * d = make_dictionary_column(k,i)
+ * d is now {["a","c","d"],[1,0,0,2,2]}
+ * ```
+ *
+ * @param keys_column Existing dictionary column.
+ * @param indices_column Indices to use for the new dictionary column.
+ * @param mr Resource for allocating memory for the output.
+ * @return New dictionary column.
+ */
+std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
+                                                column_view const& indices_column,
+                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Construct a dictionary column from a series of data.
