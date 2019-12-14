@@ -131,7 +131,7 @@ struct quantile_functor
             };
 
             result = select_quantile<double>(source,
-                                             in.size() + in.null_count(),
+                                             in.size() - in.null_count(),
                                              quantile,
                                              interpolation);
         } else {

@@ -189,6 +189,22 @@ all_invalid() {
 
 template<typename T>
 typename std::enable_if_t<std::is_floating_point<T>::value, test_case<T>>
+some_invalid() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7 },
+                                       { 0,      1,   0,    0,    0,    0,     1,   0,   0 }),
+        {
+            q_expect{ -1.0,  -1.01,  -1.01,  -1.01,  -1.01,  -1.01 },
+            q_expect{  0.0,  -1.01,  -1.01,  -1.01,  -1.01,  -1.01 },
+            q_expect{  0.5,   0.15,  -1.01,  -0.43,  -0.43,  -1.01 },
+            q_expect{  1.0,   0.15,   0.15,   0.15,   0.15,   0.15 },
+            q_expect{  2.0,   0.15,   0.15,   0.15,   0.15,   0.15 }
+        }
+    };
+}
+
+template<typename T>
+typename std::enable_if_t<std::is_floating_point<T>::value, test_case<T>>
 unsorted() {
     return test_case<T> {
         fixed_width_column_wrapper<T> ({ 6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7 }),
@@ -209,6 +225,21 @@ single() {
             q_expect{ 0.7, 7, 7, 7, 7, 7 }
         }
     };
+}
+
+template<typename T>
+typename std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
+some_invalid() {
+    return empty<T>();
+    // return test_case<T> {
+    //     fixed_width_column_wrapper<T> ({ 6, 0, 3, 4, 2, 1, -1, 1, 6 },
+    //                                    { 0, 0, 1, 0, 0, 0,  0, 0, 1}),
+    //     {
+    //         q_expect{ 0.0, 3.0, 3.0, 3.0, 3.0, 3.0 },
+    //         q_expect{ 0.5, 6.0, 3.0, 4.5, 4.5, 3.0 },
+    //         q_expect{ 1.0, 6.0, 6.0, 6.0, 6.0, 6.0 }
+    //     }
+    // };
 }
 
 template<typename T>
@@ -245,6 +276,21 @@ single() {
             q_expect{ 0.7, 1.0, 1.0, 1.0, 1.0, 1.0 }
         }
     };
+}
+
+template<typename T>
+typename std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
+some_invalid() {
+    return empty<T>();
+    // return test_case<T> {
+    //     fixed_width_column_wrapper<T> ({ 1, 0, 1, 1, 0, 1, 0, 1, 1 },
+    //                                    { 0, 0, 1, 0, 1, 0, 0, 0, 0}),
+    //     {
+    //         q_expect{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
+    //         q_expect{ 0.5, 1.0, 0.0, 0.5, 0.5, 0.0 },
+    //         q_expect{ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }
+    //     }
+    // };
 }
 
 template<typename T>
@@ -347,6 +393,11 @@ TYPED_TEST(QuantilesTest, TestEmpty)
 TYPED_TEST(QuantilesTest, TestSingle)
 {
     test(testdata::single<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestSomeElementsInvalid)
+{
+    test(testdata::some_invalid<TypeParam>());
 }
 
 TYPED_TEST(QuantilesTest, TestAllElementsInvalid)
