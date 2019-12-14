@@ -106,8 +106,8 @@ struct quantile_index
 
         double val = quantile * (count - 1);
         lower = std::floor(val);
-        higher = static_cast<size_t>(std::ceil(val));
-        nearest = static_cast<size_t>(std::nearbyint(val));
+        higher = static_cast<size_type>(std::ceil(val));
+        nearest = static_cast<size_type>(std::nearbyint(val));
         fraction = val - lower;
     }
 };
@@ -115,7 +115,7 @@ struct quantile_index
 template<typename Result, typename Source>
 Result
 select_quantile(Source source,
-                size_t size,
+                size_type size,
                 double quantile,
                 interpolation interp)
 {

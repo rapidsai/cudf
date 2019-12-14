@@ -32,37 +32,37 @@ namespace experimental {
 namespace detail {
 namespace {
 
-enum class extrema {
-    min,
-    max
-};
+// enum class extrema {
+//     min,
+//     max
+// };
 
-template<extrema minmax, bool is_nullable>
-size_type extrema(column_view const & in,
-                  order order,
-                  null_order null_order,
-                  cudaStream_t stream)
-{
-    std::vector<cudf::order> h_order{ order };
-    std::vector<cudf::null_order> h_null_order{ null_order };
-    rmm::device_vector<cudf::order> d_order( h_order );
-    rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
-    table_view in_table({ in });
-    auto in_table_d = table_device_view::create(in_table);
-    auto it = thrust::make_counting_iterator<size_type>(0);
+// template<extrema minmax, bool is_nullable>
+// size_type extrema(column_view const & in,
+//                   cudf::order order,
+//                   cudf::null_order null_order,
+//                   cudaStream_t stream)
+// {
+//     std::vector<cudf::order> h_order{ order };
+//     std::vector<cudf::null_order> h_null_order{ null_order };
+//     rmm::device_vector<cudf::order> d_order( h_order );
+//     rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
+//     table_view in_table({ in });
+//     auto in_table_d = table_device_view::create(in_table);
+//     auto it = thrust::make_counting_iterator<size_type>(0);
 
-    auto comparator = row_lexicographic_comparator<is_nullable>(
-        *in_table_d,
-        *in_table_d,
-        d_order.data().get(),
-        d_null_order.data().get());
+//     auto comparator = row_lexicographic_comparator<is_nullable>(
+//         *in_table_d,
+//         *in_table_d,
+//         d_order.data().get(),
+//         d_null_order.data().get());
 
-    auto extrema_id = minmax == extrema::min
-        ? thrust::min_element(rmm::exec_policy(stream)->on(stream), it, it + in.size(), comparator)
-        : thrust::max_element(rmm::exec_policy(stream)->on(stream), it, it + in.size(), comparator);
+//     auto extrema_id = minmax == extrema::min
+//         ? thrust::min_element(rmm::exec_policy(stream)->on(stream), it, it + in.size(), comparator)
+//         : thrust::max_element(rmm::exec_policy(stream)->on(stream), it, it + in.size(), comparator);
 
-    return *extrema_id;
-}
+//     return *extrema_id;
+// }
 
 template<typename T>
 std::unique_ptr<scalar>
@@ -94,8 +94,8 @@ struct quantile_functor
                double quantile,
                interpolation interp,
                bool is_sorted,
-               order order,
-               null_order null_order,
+               cudf::order order,
+               cudf::null_order null_order,
                rmm::mr::device_memory_resource *mr =
                rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
@@ -109,13 +109,13 @@ struct quantile_functor
                double quantile,
                interpolation interp,
                bool is_sorted,
-               order order,
-               null_order null_order,
+               cudf::order order,
+               cudf::null_order null_order,
                rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
-        auto null_offset = null_order == null_order::AFTER ? 0 : in.null_count();
+        auto null_offset = null_order == cudf::null_order::AFTER ? 0 : in.null_count();
         double result{};
 
         if (not is_sorted)
@@ -126,8 +126,8 @@ struct quantile_functor
             auto in_begin = in.begin<T>() + null_offset;
 
             auto source = [&](size_type location) {
-                auto idx = get_array_value<size_type>(in_sortmap_begin, location);
-                return get_array_value<T>(in_begin, idx);
+                auto idx = detail::get_array_value<size_type>(in_sortmap_begin, location);
+                return detail::get_array_value<T>(in_begin, idx);
             };
 
             result = select_quantile<double>(source,
@@ -137,7 +137,7 @@ struct quantile_functor
         } else {
             auto in_begin = in.begin<T>() + null_offset;
             auto source = [&](size_type location) {
-                return get_array_value<T>(in_begin, location);
+                return detail::get_array_value<T>(in_begin, location);
             };
 
             result = select_quantile<double>(source,
@@ -157,8 +157,8 @@ quantile(column_view const& in,
          double quantile,
          interpolation interp,
          bool is_sorted,
-         order order,
-         null_order null_order)
+         cudf::order order,
+         cudf::null_order null_order)
 {
         if (in.size() == in.null_count()) {
             return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
@@ -199,8 +199,8 @@ quantiles(table_view const& in,
           double quantile,
           interpolation interp,
           bool is_sorted,
-          std::vector<order> orders,
-          std::vector<null_order> null_orders)
+          std::vector<cudf::order> orders,
+          std::vector<cudf::null_order> null_orders)
 {
     std::vector<std::unique_ptr<scalar>> out(in.num_columns());
     for (size_type i = 0; i < in.num_columns(); i++) {
