@@ -51,7 +51,6 @@ Result linear(T lhs, T rhs, double frac)
     double dlhs = static_cast<double>(lhs);
     double drhs = static_cast<double>(rhs);
     double one_minus_frac = 1.0 - frac;
-//    result = static_cast<Result>(static_cast<Result>(lhs) + frac*static_cast<Result>(rhs-lhs));
     return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
 }
 
@@ -73,7 +72,7 @@ Result midpoint(int64_t lhs, int64_t rhs)
     int64_t half = lhs / 2 + rhs / 2;
     int64_t rest = lhs % 2 + rhs % 2;
     return static_cast<Result>(static_cast<Result>(half) +
-                                static_cast<Result>(rest) * 0.5);
+                               static_cast<Result>(rest) * 0.5);
 }
 
 template <>
@@ -86,8 +85,8 @@ int64_t midpoint(int64_t lhs, int64_t rhs)
     int64_t result = half;
 
     // rounding toward zero
-    result += ( half >= 0 && rest != 0 )? rest/2 : 0;
-    result += ( half < 0  && rest != 0 )? 1 : 0;
+    result += ( half >= 0 && rest != 0 ) ? rest/2 : 0;
+    result += ( half <  0 && rest != 0 ) ? 1 : 0;
 
     return result;
 }
@@ -137,20 +136,18 @@ select_quantile(Source source,
                                              source(idx.higher));
 
     case interpolation::LOWER:
-        return source(idx.lower);
+        return static_cast<Result>(source(idx.lower));
 
     case interpolation::HIGHER:
-        return source(idx.higher);
+        return static_cast<Result>(source(idx.higher));
 
     case interpolation::NEAREST:
-        return source(idx.nearest);
+        return static_cast<Result>(source(idx.nearest));
 
     default:
-        throw new cudf::logic_error("not implemented");
+        CUDF_FAIL("Invalid interpolation operation for quantiles");
     }
 }
-
-
 
 } // namespace detail
 } // namespace experimental

@@ -74,13 +74,13 @@ pick(column_view const& in, size_type index) {
 struct pick_functor
 {
     template<typename T>
-    typename std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<scalar>>
+    typename std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& in, size_type location) {
         CUDF_FAIL("non-arithmetic types are unsupported");
     }
 
     template<typename T>
-    typename std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<scalar>>
+    typename std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& in, size_type location) {
         return pick<T>(in, location);
     }

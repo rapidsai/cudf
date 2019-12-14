@@ -34,7 +34,7 @@ struct compare_scalar_functor
 {
     template<typename T>
     typename std::enable_if_t<not std::is_floating_point<T>::value, void>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs, double tolerance)
     {
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
         auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
@@ -43,24 +43,25 @@ struct compare_scalar_functor
 
     template<typename T>
     typename std::enable_if_t<std::is_floating_point<T>::value, void>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs, double tolerance)
     {
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
         auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
-        EXPECT_NEAR(lhs_t.value(), rhs_t.value(), 1.0e-7);
+        EXPECT_NEAR(lhs_t.value(), rhs_t.value(), tolerance);
     }
 };
 
 } // anonymous namespace
 
 void expect_scalars_equal(cudf::scalar const& lhs,
-                          cudf::scalar const& rhs)
+                          cudf::scalar const& rhs,
+                          double tolerance)
 {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 
     if (lhs.type() == rhs.type()) {
-        experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
+        experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs, tolerance);
     }
 }
 

@@ -27,7 +27,9 @@
 #include <type_traits>
 #include "cudf/scalar/scalar_factories.hpp"
 #include "cudf/utilities/error.hpp"
+#include "cudf/utilities/legacy/wrapper_types.hpp"
 #include "cudf/utilities/traits.hpp"
+#include "cudf/wrappers/bool.hpp"
 #include "cudf/wrappers/timestamps.hpp"
 
 using std::vector;
@@ -38,6 +40,19 @@ using cudf::test::expect_scalars_equal;
 using cudf::test::fixed_width_column_wrapper;
 
 using q_res = cudf::numeric_scalar<double>;
+
+// ----- test precision --------------------------------------------------------
+// Used as the delta when calling `expect_scalar_equals`
+
+template<typename T>
+struct precision {
+    constexpr static double delta = 1.0e-9;
+};
+
+template<>
+struct precision<float> {
+    constexpr static double delta = 1.0e-7;
+};
 
 // ----- test data -------------------------------------------------------------
 
@@ -94,28 +109,49 @@ interpolate_center() {
     auto low = std::numeric_limits<T>::lowest();
     auto max = std::numeric_limits<T>::max();
     auto mid_d = std::is_floating_point<T>::value ? 0.0 : -0.5;
-    auto low_d = static_cast<double>(low);
+
+    // int64_t is internally casted to a double, meaning the center point is float-like.
+    auto lin_d = std::is_floating_point<T>::value ||
+                 std::is_same<T, int64_t>::value ? 0.0 : -0.5;
     auto max_d = static_cast<double>(max);
+    auto low_d = static_cast<double>(low);
     return test_case<T> {
         fixed_width_column_wrapper<T> ({ low, max }),
         {
-            q_expect{ 0.50, max_d, low_d, low_d, mid_d, mid_d }
+            q_expect{ 0.50, max_d, low_d, lin_d, mid_d, low_d }
         }
     };
 }
 
 template<typename T>
 test_case<T>
-interpolate_edge_high() {
-    T a = std::numeric_limits<T>::max();
-    T b = a - 200;
+interpolate_extrema_high() {
+    T max = std::numeric_limits<T>::max();
+    T low = max - 2;
+    auto low_d = static_cast<double>(low);
+    auto max_d = static_cast<double>(max);
+    auto exact_d = static_cast<double>(max - 1);
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ low, max }),
+        {
+            q_expect{ 0.50, max_d, low_d, exact_d, exact_d, low_d }
+        }
+    };
+}
+
+template<typename T>
+test_case<T>
+interpolate_extrema_low() {
+    T lowest = std::numeric_limits<T>::lowest();
+    T a = lowest;
+    T b = lowest + 2;
     auto a_d = static_cast<double>(a);
     auto b_d = static_cast<double>(b);
-    auto exact_d = static_cast<double>(a - 100);
+    auto exact_d = static_cast<double>(a + 1);
     return test_case<T> {
         fixed_width_column_wrapper<T> ({ a, b }),
         {
-            q_expect{ 0.50, b_d, a_d, a_d, exact_d, exact_d }
+            q_expect{ 0.50, b_d, a_d, exact_d, exact_d, a_d }
         }
     };
 }
@@ -245,14 +281,20 @@ interpolate_center() {
     return test_case<bool8> {
         fixed_width_column_wrapper<bool8> ({ low, max }),
         {
-            q_expect{ 0.5, max_d, low_d, low_d, mid_d, mid_d }
+            q_expect{ 0.5, max_d, low_d, mid_d, mid_d, low_d }
         }
     };
 }
 
 template<>
 test_case<bool8>
-interpolate_edge_high() {
+interpolate_extrema_high<bool8>() {
+    return interpolate_center<bool8>();
+}
+
+template<>
+test_case<bool8>
+interpolate_extrema_low<bool8>() {
     return interpolate_center<bool8>();
 }
 
@@ -264,18 +306,25 @@ interpolate_edge_high() {
 template<typename T>
 void test(testdata::test_case<T> test_case) {
     using namespace cudf::experimental;
+
+    cudf::table_view in_table { { test_case.column } };
+
     for (auto & expected : test_case.expectations) {
-        cudf::table_view in_table { { test_case.column } };
-        auto actual_higher   = quantiles(in_table, expected.quantile, interpolation::HIGHER,   test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        auto actual_lower    = quantiles(in_table, expected.quantile, interpolation::LOWER,    test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        auto actual_nearest  = quantiles(in_table, expected.quantile, interpolation::NEAREST,  test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+
+        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        expect_scalars_equal(expected.higher, *actual_higher[0], precision<T>::delta);
+
+        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        expect_scalars_equal(expected.lower, *actual_lower[0], precision<T>::delta);
+
+        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        expect_scalars_equal(expected.linear, *actual_linear[0], precision<T>::delta);
+
         auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        auto actual_linear   = quantiles(in_table, expected.quantile, interpolation::LINEAR,   test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        expect_scalars_equal(expected.higher,   *actual_higher[0]);
-        expect_scalars_equal(expected.lower,    *actual_lower[0]);
-        expect_scalars_equal(expected.linear,   *actual_nearest[0]);
-        expect_scalars_equal(expected.midpoint, *actual_midpoint[0]);
-        expect_scalars_equal(expected.nearest,  *actual_linear[0]);
+        expect_scalars_equal(expected.midpoint, *actual_midpoint[0], precision<T>::delta);
+
+        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        expect_scalars_equal(expected.nearest, *actual_nearest[0], precision<T>::delta);
     }
 }
 
@@ -286,8 +335,6 @@ template <typename T>
 struct QuantilesTest : public cudf::test::BaseFixture {
 };
 
-// using TestTypes = cudf::test::Types<int64_t>;
-// using TestTypes = cudf::test::AllTypes;
 using TestTypes = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(QuantilesTest, TestTypes);
@@ -312,8 +359,17 @@ TYPED_TEST(QuantilesTest, TestUnsorted)
     test(testdata::unsorted<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestInterpolate)
+TYPED_TEST(QuantilesTest, TestInterpolateCenter)
 {
-    // test(testdata::interpolate_center<TypeParam>());
-    test(testdata::interpolate_edge_high<TypeParam>());
+    test(testdata::interpolate_center<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestInterpolateExtremaHigh)
+{
+    test(testdata::interpolate_extrema_high<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestInterpolateExtremaLow)
+{
+    test(testdata::interpolate_extrema_low<TypeParam>());
 }
