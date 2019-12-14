@@ -36,7 +36,7 @@ class Buffer:
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
-            dbuf = DeviceBuffer(ptr, size)
+            dbuf = DeviceBuffer(ptr=ptr, size=size)
             return Buffer.from_device_buffer(dbuf)
         else:
             raise TypeError(
@@ -50,7 +50,7 @@ class Buffer:
 
     @classmethod
     def empty(cls, size):
-        dbuf = DeviceBuffer(size=size)
+        dbuf = DeviceBuffer(ptr=None, size=size)
         return Buffer.from_device_buffer(dbuf)
 
 

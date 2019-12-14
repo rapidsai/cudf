@@ -460,7 +460,7 @@ class StringColumn(column.ColumnBase):
             Name of the Column
         """
 
-        data = Buffer.from_device_buffer(rmm.DeviceBuffer(0, 0))
+        data = Buffer.empty(0)
         dtype = np.dtype("object")
 
         if children[0].size == 0:
