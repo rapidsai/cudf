@@ -4110,3 +4110,26 @@ def test_cov_nans():
     gdf = gd.from_pandas(pdf)
 
     assert_eq(pdf.cov(), gdf.cov())
+
+
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("deep", [True, False])
+def test_memory_usage(index, deep):
+    rows = int(1e3)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int32"),
+            "B": np.arange(rows, dtype="int64"),
+            "C": np.arange(rows, dtype="float64"),
+        }
+    ).set_index("A")
+    gdf = gd.from_pandas(df)
+
+    assert df["B"].memory_usage(index=index, deep=deep) == gdf[
+        "B"
+    ].memory_usage(index=index, deep=deep)
+
+    assert_eq(
+        df.memory_usage(index=index, deep=deep).sort_index(),
+        gdf.memory_usage(index=index, deep=deep).sort_index(),
+    )

@@ -488,10 +488,8 @@ class StringColumn(column.TypedColumnBase):
 
     def _memory_usage(self, deep=False):
         if deep:
-            n = np.sum(self._data.len()) * 8
-            if self._mask:
-                n += self._mask.__sizeof__()
-            return n
+            # TODO: __sizeof__ not working for nvstrings
+            return self.__sizeof__()
         else:
             return self.__sizeof__()
 
