@@ -29,6 +29,11 @@ export HOME=$WORKSPACE
 cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+export FULL_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+\.[0-9]+)'`
+# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to a unique path for
+# this CI job, e.g. `/tmp/cudf_0.12.0/gpu-v100-32-sm06-3-1234-jitify-cache`
+export LIBCUDF_KERNEL_CACHE_PATH="/tmp/cudf_$FULL_VERSION/\
+${NODE_NAME:+$NODE_NAME-}${EXECUTOR_NUMBER:+$EXECUTOR_NUMBER-}${BUILD_ID:+$BUILD_ID-}jitify-cache"
 
 ################################################################################
 # SETUP - Check environment

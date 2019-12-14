@@ -20,51 +20,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <regex>
 
 namespace cudf {
 namespace jit {
-
-std::string getCacheDir()
-{
-    char const *tmpdir_path;
-    std::string cache_dir{"cudf"};
-    cache_dir = cache_dir + '_' + CUDF_STRINGIFY(CUDF_VERSION) + '/';
-
-    // When running in GOAI CI, store the JIT cache in a subfolder with the
-    // pattern: `{node_name}-{executor_number}-{build_id}`
-    auto build_url = std::getenv("BUILD_URL");
-    auto node_name = std::getenv("NODE_NAME");
-    auto executor_number = std::getenv("EXECUTOR_NUMBER");
-    auto build_id = std::getenv("BUILD_ID");
-
-    if (build_url != NULL && node_name != NULL && executor_number != NULL && build_id != NULL) {
-        if (std::regex_search(build_url,
-                              std::regex{"https://gpuci.gpuopenanalytics.com"})) {
-            cache_dir = cache_dir + node_name + "-" + executor_number + "-" + build_id + "/";
-        }
-    }
-
-    #if defined(__unix__)
-
-        (tmpdir_path = std::getenv("TMPDIR" )) ||
-        (tmpdir_path = std::getenv("TMP"    )) ||
-        (tmpdir_path = std::getenv("TEMP"   )) ||
-        (tmpdir_path = std::getenv("TEMPDIR"));
-
-        tmpdir_path = ( tmpdir_path != 0 ) ? tmpdir_path : "/tmp";
-        
-        cache_dir = std::string(tmpdir_path) + '/' + cache_dir;
-
-        // if it doesn't exist, make it
-        mkdir(cache_dir.c_str(), S_IRWXU);
-
-        return cache_dir;
-    #elif
-        #error Only unix is supported
-    #endif // __unix__
-}
 
 cudfJitCache::cudfJitCache() { }
 

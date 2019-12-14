@@ -17,11 +17,13 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
+#include <cudf/utilities/error.hpp>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
 #include <memory>
 #include <mutex>
+#include <sys/stat.h>
 
 namespace cudf {
 namespace jit {
@@ -29,18 +31,66 @@ namespace jit {
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
-/**---------------------------------------------------------------------------*
- * @brief Get the string path to Cache Directory
+// Define a default value for `LIBCUDF_KERNEL_CACHE_PATH` on *nix.
+// Uses TMPDIR,TMP,TEMP,TEMPDIR environment variables in that order
+// If none are defined, fall back to `/tmp`. Then create a directory
+// under temp with the name `cudf_$CUDF_VERSION`.
+// This value is used in the `getCacheDir()` function below.
+#if !defined(LIBCUDF_KERNEL_CACHE_PATH) && defined(__unix__)
+#define LIBCUDF_KERNEL_CACHE_PATH std::string{ \
+  (std::getenv("TMPDIR" ) != NULL) ? std::getenv("TMPDIR" ) :         \
+  (std::getenv("TMP"    ) != NULL) ? std::getenv("TMP"    ) :         \
+  (std::getenv("TEMP"   ) != NULL) ? std::getenv("TEMP"   ) :         \
+  (std::getenv("TEMPDIR") != NULL) ? std::getenv("TEMPDIR") : "/tmp"} \
+  + "/cudf_" + CUDF_STRINGIFY(CUDF_VERSION) + "/"
+#else
+  #error Kernel cache only supported on unix
+#endif
+
+/**
+ * @brief Get the string path to the JITIFY kernel cache directory.
  * 
- * This will return a path to the cache directory and will create the directory
- * if it doesn't exist
+ * This path can be overridden at runtime by defining an environment variable
+ * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
+ * under which the process' user has read/write priveleges.
  * 
- * The cache directory is kept in the same place as the output of C++17's 
- * std::filesystem::temp_directory_path()
- * @todo: replace the logic to find the cache dir with the above method after 
+ * This function returns a path to the cache directory, creating it if it
+ * doesn't exist.
+ * 
+ * By default, the cache directory is kept in the same place as C++17's
+ * `std::filesystem::temp_directory_path()`.
+ * 
+ * @todo: replace the logic to find the cache dir with the above method after
  *  transitioning to C++17
- *---------------------------------------------------------------------------**/
-std::string getCacheDir();
+ **/
+static const std::string& getCacheDir() {
+  static std::string libcudf_kernel_cache_dir("");
+  static auto mkdirp = [](const char* dir, mode_t mode) {
+    char* p = NULL;
+    char tmp[PATH_MAX];
+    size_t len = snprintf(tmp, sizeof(tmp), "%s", dir);
+    if (tmp[len - 1] == '/') tmp[len - 1] = 0;
+    for (p = tmp + 1; *p; p++) {
+      if (*p == '/') {
+        *p = 0;
+        mkdir(tmp, mode);
+        *p = '/';
+      }
+    }
+    mkdir(tmp, mode);
+  };
+
+  if (libcudf_kernel_cache_dir == "") {
+    // env var always overrides the default value of LIBCUDF_KERNEL_CACHE_PATH
+    const char* kernel_cache_env_var = std::getenv("LIBCUDF_KERNEL_CACHE_PATH");
+    libcudf_kernel_cache_dir = kernel_cache_env_var != NULL
+                                                    ? kernel_cache_env_var
+                                                    : LIBCUDF_KERNEL_CACHE_PATH;
+    // if it doesn't exist, make it
+    mkdirp(libcudf_kernel_cache_dir.c_str(), S_IRWXU);
+  }
+  return libcudf_kernel_cache_dir;
+}
 
 class cudfJitCache
 {
