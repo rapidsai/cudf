@@ -117,7 +117,7 @@ Result
 select_quantile(Source source,
                 size_t size,
                 double quantile,
-                interpolation interpolation)
+                interpolation interp)
 {
     if (size < 2) {
         return source(0);
@@ -125,7 +125,7 @@ select_quantile(Source source,
 
     quantile_index idx(size, quantile);
 
-    switch (interpolation) {
+    switch (interp) {
     case interpolation::LINEAR:
         return interpolate::linear<Result>(source(idx.lower),
                                            source(idx.higher),

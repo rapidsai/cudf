@@ -92,7 +92,7 @@ struct quantile_functor
     typename std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& in,
                double quantile,
-               interpolation interpolation,
+               interpolation interp,
                bool is_sorted,
                order order,
                null_order null_order,
@@ -107,7 +107,7 @@ struct quantile_functor
     typename std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& in,
                double quantile,
-               interpolation interpolation,
+               interpolation interp,
                bool is_sorted,
                order order,
                null_order null_order,
@@ -133,7 +133,7 @@ struct quantile_functor
             result = select_quantile<double>(source,
                                              in.size() - in.null_count(),
                                              quantile,
-                                             interpolation);
+                                             interp);
         } else {
             auto in_begin = in.begin<T>() + null_offset;
             auto source = [&](size_type location) {
@@ -143,7 +143,7 @@ struct quantile_functor
             result = select_quantile<double>(source,
                                              in.size() - in.null_count(),
                                              quantile,
-                                             interpolation);
+                                             interp);
         }
 
         return std::make_unique<numeric_scalar<ScalarResult>>(result);
@@ -155,7 +155,7 @@ struct quantile_functor
 std::unique_ptr<scalar>
 quantile(column_view const& in,
          double quantile,
-         interpolation interpolation,
+         interpolation interp,
          bool is_sorted,
          order order,
          null_order null_order)
@@ -189,7 +189,7 @@ quantile(column_view const& in,
         // }
 
         return type_dispatcher(in.type(), detail::quantile_functor{},
-                               in,  quantile, interpolation, is_sorted, order, null_order);
+                               in,  quantile, interp, is_sorted, order, null_order);
 }
 
 } // namspace detail
@@ -197,7 +197,7 @@ quantile(column_view const& in,
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& in,
           double quantile,
-          interpolation interpolation,
+          interpolation interp,
           bool is_sorted,
           std::vector<order> orders,
           std::vector<null_order> null_orders)
@@ -206,7 +206,7 @@ quantiles(table_view const& in,
     for (size_type i = 0; i < in.num_columns(); i++) {
         out[i] = detail::quantile(in.column(i),
                                   quantile,
-                                  interpolation,
+                                  interp,
                                   is_sorted,
                                   orders[i],
                                   null_orders[i]);
