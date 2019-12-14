@@ -359,7 +359,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
             ptr=data_ptr,
             size=dtype.itemsize * c_col.size,
         )
-        data = Buffer.from_device_buffer(dbuf)
+        data = Buffer(dbuf)
         mask = None
         if c_col.valid:
             mask_ptr = int(<uintptr_t>c_col.valid)
@@ -367,12 +367,12 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
                 ptr=mask_ptr,
                 size=calc_chunk_size(c_col.size,mask_bitsize)
             )
-            mask = Buffer.from_device_buffer(mbuf)
+            mask = Buffer(mbuf)
 
         result = build_column(data=data,
-                            dtype=dtype,
-                            mask=mask,
-                            name=name)
+                              dtype=dtype,
+                              mask=mask,
+                              name=name)
     return result
 
 

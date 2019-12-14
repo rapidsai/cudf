@@ -201,7 +201,7 @@ def array_to_series(array):
             ordered=array.type.ordered,
         )
         if mask is not None:
-            mask = Buffer.from_array_like(mask)
+            mask = Buffer(mask)
         data = build_column(data=codes.data, dtype=dtype, mask=mask)
 
     elif pa.types.is_string(array.type):

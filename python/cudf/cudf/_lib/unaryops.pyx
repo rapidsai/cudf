@@ -159,7 +159,7 @@ def nans_to_nulls(Column py_col):
     mask = None
     if result.second:
         mask_ptr = int(<uintptr_t>result.first)
-        mask = Buffer(ptr=mask_ptr, size=len(py_col))
+        mask = Buffer(data=mask_ptr, size=len(py_col))
 
     free_column(c_col)
 

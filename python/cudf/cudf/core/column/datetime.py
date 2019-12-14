@@ -74,11 +74,9 @@ class DatetimeColumn(column.ColumnBase):
             array, masked=True, newsize=1
         )
         col = libcudf.replace.replace(
-            as_column(Buffer.from_array_like(array), dtype=array.dtype),
+            as_column(Buffer(array), dtype=array.dtype),
             as_column(
-                Buffer.from_array_like(
-                    np.array([np.datetime64("NaT")], dtype=array.dtype)
-                ),
+                Buffer(np.array([np.datetime64("NaT")], dtype=array.dtype)),
                 dtype=array.dtype,
             ),
             null,
@@ -87,11 +85,7 @@ class DatetimeColumn(column.ColumnBase):
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
 
-        return cls(
-            data=Buffer.from_array_like(array),
-            mask=col.mask,
-            dtype=array.dtype,
-        )
+        return cls(data=Buffer(array), mask=col.mask, dtype=array.dtype,)
 
     @property
     def time_unit(self):
@@ -148,9 +142,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-        return column.build_column(
-            data=Buffer.from_array_like(ary), dtype=self.dtype
-        )
+        return column.build_column(data=Buffer(ary), dtype=self.dtype)
 
     @property
     def as_numerical(self):

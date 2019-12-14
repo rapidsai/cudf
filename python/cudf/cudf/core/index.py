@@ -148,9 +148,7 @@ class Index(object):
     def _find_segments(self):
         seg, markers = cudautils.find_segments(self.gpu_values)
         return (
-            column.build_column(
-                data=Buffer.from_array_like(seg), dtype=seg.dtype
-            ),
+            column.build_column(data=Buffer(seg), dtype=seg.dtype),
             markers,
         )
 
@@ -602,7 +600,7 @@ class RangeIndex(Index):
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
         return column.build_column(
-            data=Buffer.from_array_like(vals), dtype=vals.dtype, name=self.name
+            data=Buffer(vals), dtype=vals.dtype, name=self.name
         )
 
     @copy_docstring(_to_frame)
@@ -909,7 +907,7 @@ class CategoricalIndex(GenericIndex):
         ):
             codes_data = values.cat.codes.values
             values = column.build_column(
-                data=Buffer.from_array_like(codes_data),
+                data=Buffer(codes_data),
                 dtype=cudf.CategoricalDtype(
                     data_dtype=codes_data.dtype,
                     categories=values.cat.categories,
@@ -919,7 +917,7 @@ class CategoricalIndex(GenericIndex):
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             codes_data = values.codes
             values = column.build_column(
-                data=Buffer.from_array_like(codes_data),
+                data=Buffer(codes_data),
                 dtype=cudf.CategoricalDtype(
                     data_dtype=codes_data.dtype,
                     categories=values.categories,

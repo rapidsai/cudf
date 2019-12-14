@@ -76,9 +76,9 @@ def rolling(inp, window, min_periods, center, op):
             inp._data_view.size, fill_value, inp._data_view().dtype
         )
         
-        out_col = build_column(Buffer.from_array_like(data),
+        out_col = build_column(Buffer(data),
                                dtype=data.dtype,
-                               mask=Buffer.from_array_like(mask),
+                               mask=Buffer(mask),
                                name=inp.name)
     else:
         if callable(op):

@@ -77,7 +77,7 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10)
-    buf = Buffer.from_array_like(arr)
+    buf = Buffer(arr)
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)

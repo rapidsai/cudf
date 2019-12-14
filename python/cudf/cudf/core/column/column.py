@@ -185,7 +185,7 @@ class ColumnBase(Column):
 
                 (mask[idx // 8] >> (idx % 8)) & 1
         """
-        mask = Buffer.from_array_like(mask)
+        mask = Buffer(mask)
         return build_column(self.data, self.dtype, mask=mask, name=self.name)
 
     def rename(self, name, copy=True):
@@ -293,12 +293,12 @@ class ColumnBase(Column):
         else:
             data_dtype = head.dtype
         mem = rmm.device_array(shape=newsize, dtype=data_dtype)
-        data = Buffer.from_array_like(mem)
+        data = Buffer(mem)
 
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = Buffer.from_array_like(utils.make_mask(newsize))
+            mask = Buffer(utils.make_mask(newsize))
 
         col = build_column(data=data, dtype=head.dtype, mask=mask)
 
@@ -463,18 +463,18 @@ class ColumnBase(Column):
             else:
                 if arg.step is not None and arg.step != 1:
                     slice_data = cudautils.as_contiguous(slice_data)
-                    slice_data = Buffer.from_array_like(slice_data)
+                    slice_data = Buffer(slice_data)
                 else:
                     # data Buffer lifetime is tied to self:
                     slice_data = Buffer(
-                        ptr=slice_data.device_ctypes_pointer.value,
+                        data=slice_data.device_ctypes_pointer.value,
                         size=slice_data.nbytes,
                         owner=self,
                     )
 
                 # mask Buffer lifetime is not:
                 if slice_mask is not None:
-                    slice_mask = Buffer.from_array_like(slice_mask)
+                    slice_mask = Buffer(slice_mask)
 
                 return build_column(
                     slice_data, self.dtype, mask=slice_mask, name=self.name
@@ -521,9 +521,7 @@ class ColumnBase(Column):
 
                 data = rmm.device_array(nelem, dtype=self.dtype.data_dtype)
                 fill_value(data, self._encode(value))
-                value = build_column(
-                    data=Buffer.from_array_like(data), dtype=self.dtype,
-                )
+                value = build_column(data=Buffer(data), dtype=self.dtype,)
             elif value is None:
                 value = column.column_empty(nelem, self.dtype, masked=True)
             else:
@@ -879,10 +877,10 @@ class ColumnBase(Column):
     @classmethod
     def deserialize(cls, header, frames):
         dtype = header["dtype"]
-        data = Buffer.from_array_like(frames[0])
+        data = Buffer(frames[0])
         mask = None
         if header["frame_count"] > 1:
-            mask = Buffer.from_array_like(frames[1])
+            mask = Buffer(frames[1])
         return build_column(data=data, dtype=dtype, mask=mask)
 
 
@@ -936,7 +934,7 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
         data = Buffer.empty(row_count * dtype.itemsize)
 
     if masked:
-        mask = Buffer.from_array_like(cudautils.make_empty_mask(row_count))
+        mask = Buffer(cudautils.make_empty_mask(row_count))
     else:
         mask = None
 
@@ -1043,9 +1041,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = build_column(arbitrary, dtype=dtype)
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-        data = as_column(
-            Buffer.from_array_like(arbitrary), dtype=arbitrary.dtype
-        )
+        data = as_column(Buffer(arbitrary), dtype=arbitrary.dtype)
         if (
             data.dtype in [np.float16, np.float32, np.float64]
             and arbitrary.size > 0
@@ -1057,19 +1053,15 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         elif data.dtype.kind == "M":
             null = column_empty_like(data, masked=True, newsize=1)
             col = libcudf.replace.replace(
+                as_column(Buffer(arbitrary), dtype=arbitrary.dtype),
                 as_column(
-                    Buffer.from_array_like(arbitrary), dtype=arbitrary.dtype
-                ),
-                as_column(
-                    Buffer.from_array_like(
-                        np.array([np.datetime64("NaT")], dtype=data.dtype)
-                    ),
+                    Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype)),
                     dtype=arbitrary.dtype,
                 ),
                 null,
             )
             data = datetime.DatetimeColumn(
-                data=Buffer.from_array_like(arbitrary),
+                data=Buffer(arbitrary),
                 dtype=data.dtype,
                 mask=col.mask,
                 name=name,
@@ -1339,7 +1331,7 @@ def _data_from_cuda_array_interface_desc(desc):
     data = rmm.device_array_from_ptr(
         ptr, nelem=nelem, dtype=dtype, finalizer=None
     )
-    data = Buffer.from_array_like(data)
+    data = Buffer(data)
     return data
 
 
@@ -1363,7 +1355,7 @@ def _mask_from_cuda_array_interface_desc(desc):
                 finalizer=None,
             )
             # TODO: this can be done more efficiently
-            mask = Buffer.from_array_like(mask)
+            mask = Buffer(mask)
         elif typecode == "b":
             dtype = np.dtype(typestr)
             mask = compact_mask_bytes(
@@ -1372,7 +1364,7 @@ def _mask_from_cuda_array_interface_desc(desc):
                 )
             )
             # TODO: this can be done more efficiently
-            mask = Buffer.from_array_like(mask)
+            mask = Buffer(mask)
         else:
             raise NotImplementedError(
                 f"Cannot infer mask from typestr {typestr}"

@@ -292,9 +292,7 @@ class CategoricalColumn(column.ColumnBase):
         )
         mask = None
         if header["frame_count"] > n_dtype_frames + n_data_frames:
-            mask = Buffer.from_array_like(
-                frames[n_dtype_frames + n_data_frames]
-            )
+            mask = Buffer(frames[n_dtype_frames + n_data_frames])
         return column.build_column(data=data.data, dtype=dtype, mask=mask)
 
     @property
@@ -371,7 +369,7 @@ class CategoricalColumn(column.ColumnBase):
         ary = utils.scalar_broadcast_to(
             self._encode(other), shape=len(self), dtype=self.dtype.data_dtype
         )
-        data = Buffer.from_array_like(ary)
+        data = Buffer(ary)
         col = column.build_column(
             data=data,
             dtype=CategoricalDtype(
@@ -596,7 +594,7 @@ def pandas_categorical_as_column(categorical, codes=None):
     #       https://github.com/pandas-dev/pandas/issues/14711
     #       https://github.com/pandas-dev/pandas/pull/16015
     valid_codes = codes != -1
-    buf = Buffer.from_array_like(codes)
+    buf = Buffer(codes)
     dtype = CategoricalDtype(
         data_dtype=codes.dtype,
         categories=categorical.categories,
@@ -606,6 +604,6 @@ def pandas_categorical_as_column(categorical, codes=None):
     mask = None
     if not np.all(valid_codes):
         mask = cudautils.compact_mask_bytes(valid_codes)
-        mask = Buffer.from_array_like(mask)
+        mask = Buffer(mask)
 
     return column.build_column(data=buf, dtype=dtype, mask=mask)

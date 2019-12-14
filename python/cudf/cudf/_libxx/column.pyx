@@ -139,12 +139,12 @@ cdef class Column:
         # After call to release(), c_col is unusable
         cdef column_contents contents = c_col.get()[0].release()
         
-        data = DeviceBuffer.from_unique_ptr(move(contents.data))
-        data = Buffer.from_device_buffer(data)
+        data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
+        data = Buffer(data)
         
         if has_nulls:
-            mask = DeviceBuffer.from_unique_ptr(move(contents.null_mask))
-            mask = Buffer.from_device_buffer(mask)
+            mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
+            mask = Buffer(mask)
         else:
             mask = None
 

@@ -249,9 +249,7 @@ class NumericalColumn(column.ColumnBase):
         if np.issubdtype(self.dtype, np.integer):
             return self
 
-        data = Buffer.from_array_like(
-            cudautils.apply_round(self._data_view(), decimals)
-        )
+        data = Buffer(cudautils.apply_round(self._data_view(), decimals))
         return column.build_column(
             data=data, dtype=self.dtype, mask=self.mask, name=self.name
         )
@@ -547,6 +545,6 @@ def digitize(column, bins, right=False):
     A device array containing the indices
     """
     assert column.dtype == bins.dtype
-    bins_buf = Buffer.from_array_like(rmm.to_device(bins))
+    bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return libcudf.sort.digitize(column, bin_col, right)

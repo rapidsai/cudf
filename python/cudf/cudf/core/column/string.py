@@ -105,7 +105,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer.from_array_like(out_dev_arr), np.dtype("int32"), mask=mask
+            Buffer(out_dev_arr), np.dtype("int32"), mask=mask
         )
         return Series(col, index=self._index, name=self._parent.name)
 
@@ -329,9 +329,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer.from_array_like(out_dev_arr),
-            dtype=np.dtype("bool"),
-            mask=mask,
+            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask,
         )
 
         return Series(col, index=self._index, name=self._parent.name)
@@ -574,7 +572,7 @@ class StringColumn(column.ColumnBase):
             out_mask_arr = rmm.device_array(mask_size, dtype="int8")
             out_mask_ptr = libcudf.cudf.get_ctype_ptr(out_mask_arr)
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            mask = Buffer.from_array_like(out_mask_arr)
+            mask = Buffer(out_mask_arr)
             out_col.mask = mask
 
         return out_col.astype(out_dtype)
@@ -705,7 +703,7 @@ class StringColumn(column.ColumnBase):
         )
 
         col_inds = column.build_column(
-            Buffer.from_array_like(idx_dev_arr), idx_dev_arr.dtype, mask=None
+            Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
         )
 
         col_keys = self[col_inds._data_view()]

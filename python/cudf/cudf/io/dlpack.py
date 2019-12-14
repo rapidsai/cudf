@@ -44,12 +44,10 @@ def from_dlpack(pycapsule_obj):
     for idx in range(len(valids)):
         mask = None
         if valids[idx]:
-            mask = Buffer.from_array_like(valids[idx])
+            mask = Buffer(valids[idx])
         cols.append(
             column.build_column(
-                Buffer.from_array_like(res[idx]),
-                dtype=res[idx].dtype,
-                mask=mask,
+                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask,
             )
         )
     if len(cols) == 1:
