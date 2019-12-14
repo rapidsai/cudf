@@ -21,7 +21,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-
 namespace experimental {
 
 /* @brief Computes a quantile of a given column.
@@ -29,22 +28,20 @@ namespace experimental {
  * @param[in] in            Table containing columns used to compute quantiles.
  * @param[in] quantile      Requested quantile in range [0, 1].
  * @param[in] interpolation Interpolation strategy for quantiles lying between
- *                          two points.
- * @param[in] mr            Optional. The resource to use for all allocations.
- * @param[in] stream        Stream on which to perform computations.
+ * @param[in] is_sorted     Whether the input has been pre-sorted.
+ * @param[in] order         Order of pre-sorted values.
+ * @param[in] null_order    precendence of pre-sorted nulls.
  *
  * @returns Quantiles for each column. Elements are null if columns are empty.
  */
 
- 
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& in,
           double quantile,
           interpolation interpolation = interpolation::LINEAR,
           bool is_sorted = false,
-          std::vector<order> order = {},
-          std::vector<null_order> = {});
+          std::vector<cudf::order> order = {},
+          std::vector<cudf::null_order> null_order = {});
 
 } // namespace experimental
-
 } // namespace cudf
