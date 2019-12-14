@@ -42,17 +42,22 @@ using cudf::test::fixed_width_column_wrapper;
 using q_res = cudf::numeric_scalar<double>;
 
 // ----- test precision --------------------------------------------------------
-// Used as the delta when calling `expect_scalar_equals`
+// Used when calling `expect_scalar_equals`
 
 template<typename T>
 struct precision {
-    constexpr static double delta = 1.0e-9;
+    constexpr static double tolerance = std::numeric_limits<T>::epsilon();
 };
 
 template<>
-struct precision<float> {
-    constexpr static double delta = 1.0e-7;
+struct precision<bool8> {
+    constexpr static double tolerance = 0;
 };
+
+// template<>
+// struct precision<float> {
+//     constexpr static double tolerance = 1.0e-7;
+// };
 
 // ----- test data -------------------------------------------------------------
 
@@ -220,9 +225,9 @@ template<typename T>
 typename std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
 single() {
     return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 7 }),
+        fixed_width_column_wrapper<T> ({ 1 }),
         {
-            q_expect{ 0.7, 7, 7, 7, 7, 7 }
+            q_expect{ 0.7, 1, 1, 1, 1, 1 }
         }
     };
 }
@@ -230,16 +235,15 @@ single() {
 template<typename T>
 typename std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
 some_invalid() {
-    return empty<T>();
-    // return test_case<T> {
-    //     fixed_width_column_wrapper<T> ({ 6, 0, 3, 4, 2, 1, -1, 1, 6 },
-    //                                    { 0, 0, 1, 0, 0, 0,  0, 0, 1}),
-    //     {
-    //         q_expect{ 0.0, 3.0, 3.0, 3.0, 3.0, 3.0 },
-    //         q_expect{ 0.5, 6.0, 3.0, 4.5, 4.5, 3.0 },
-    //         q_expect{ 1.0, 6.0, 6.0, 6.0, 6.0, 6.0 }
-    //     }
-    // };
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 6, 0, 3, 4, 2, 1, -1, 1, 6 },
+                                       { 0, 0, 1, 0, 0, 0,  0, 0, 1}),
+        {
+            q_expect{ 0.0, 3.0, 3.0, 3.0, 3.0, 3.0 },
+            q_expect{ 0.5, 6.0, 3.0, 4.5, 4.5, 3.0 },
+            q_expect{ 1.0, 6.0, 6.0, 6.0, 6.0, 6.0 }
+        }
+    };
 }
 
 template<typename T>
@@ -281,16 +285,15 @@ single() {
 template<typename T>
 typename std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
 some_invalid() {
-    return empty<T>();
-    // return test_case<T> {
-    //     fixed_width_column_wrapper<T> ({ 1, 0, 1, 1, 0, 1, 0, 1, 1 },
-    //                                    { 0, 0, 1, 0, 1, 0, 0, 0, 0}),
-    //     {
-    //         q_expect{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
-    //         q_expect{ 0.5, 1.0, 0.0, 0.5, 0.5, 0.0 },
-    //         q_expect{ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }
-    //     }
-    // };
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 1, 0, 1, 1, 0, 1, 0, 1, 1 },
+                                       { 0, 0, 1, 0, 1, 0, 0, 0, 0}),
+        {
+            q_expect{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
+            q_expect{ 0.5, 1.0, 0.0, 0.5, 0.5, 0.0 },
+            q_expect{ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }
+        }
+    };
 }
 
 template<typename T>
@@ -358,19 +361,19 @@ void test(testdata::test_case<T> test_case) {
     for (auto & expected : test_case.expectations) {
 
         auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        expect_scalars_equal(expected.higher, *actual_higher[0], precision<T>::delta);
+        expect_scalars_equal(expected.higher, *actual_higher[0], precision<T>::tolerance);
 
         auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        expect_scalars_equal(expected.lower, *actual_lower[0], precision<T>::delta);
+        expect_scalars_equal(expected.lower, *actual_lower[0], precision<T>::tolerance);
 
         auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        expect_scalars_equal(expected.linear, *actual_linear[0], precision<T>::delta);
+        expect_scalars_equal(expected.linear, *actual_linear[0], precision<T>::tolerance);
 
         auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        expect_scalars_equal(expected.midpoint, *actual_midpoint[0], precision<T>::delta);
+        expect_scalars_equal(expected.midpoint, *actual_midpoint[0], precision<T>::tolerance);
 
         auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
-        expect_scalars_equal(expected.nearest, *actual_nearest[0], precision<T>::delta);
+        expect_scalars_equal(expected.nearest, *actual_nearest[0], precision<T>::tolerance);
     }
 }
 
