@@ -19,6 +19,7 @@
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
 - PR #3563 Use `__cuda_array_interface__` for serialization
+- PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 
 
 # cuDF 0.11.0 (11 Dec 2019)
