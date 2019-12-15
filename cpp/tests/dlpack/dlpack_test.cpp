@@ -73,6 +73,14 @@ TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
   EXPECT_EQ(nullptr, cudf::to_dlpack(empty));
 }
 
+TEST_F(DLPackUntypedTests, EmptyColsToDlpack)
+{
+  fixed_width_column_wrapper<int32_t> col1({});
+  fixed_width_column_wrapper<int32_t> col2({});
+  cudf::table_view input({col1, col2});
+  EXPECT_EQ(nullptr, cudf::to_dlpack(input));
+}
+
 TEST_F(DLPackUntypedTests, NullTensorFromDlpack)
 {
   EXPECT_THROW(cudf::from_dlpack(nullptr), cudf::logic_error);

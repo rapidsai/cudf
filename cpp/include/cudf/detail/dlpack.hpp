@@ -47,7 +47,8 @@ std::unique_ptr<experimental::table> from_dlpack(
  * @brief Convert a cudf table into a DLPack DLTensor
  * 
  * All columns must have the same data type and this type must be numeric. The
- * columns may be nullable, but the null count must be zero.
+ * columns may be nullable, but the null count must be zero. If the input table
+ * is empty or has zero rows, the result will be nullptr.
  * 
  * @note The `deleter` method of the returned `DLManagedTensor` must be used to
  * free the memory allocated for the tensor.
@@ -59,7 +60,7 @@ std::unique_ptr<experimental::table> from_dlpack(
  * @param mr Optional resource to use for device memory allocation
  * @param stream Optional stream on which to execute
  * 
- * @return 1D or 2D DLPack tensor with a copy of the table data
+ * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
 DLManagedTensor* to_dlpack(table_view const& input,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
