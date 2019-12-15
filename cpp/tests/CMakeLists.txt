@@ -449,6 +449,14 @@ ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 ###################################################################################################
 # - DLPack tests ----------------------------------------------------------------------------------
 
+set(DLPACK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/dlpack/dlpack_test.cpp")
+
+ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
+
+###################################################################################################
+# - legacy DLPack tests ----------------------------------------------------------------------------------
+
 set(LEGACY_DLPACK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/convert/legacy/dlpack_test.cu")
 
