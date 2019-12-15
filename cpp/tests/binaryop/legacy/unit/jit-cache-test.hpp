@@ -44,7 +44,7 @@ struct JitCacheTest : public cudf::test::BaseFixture
 
     void purgeFileCache() {
         #if defined(JITIFY_USE_CACHE)
-            std::string cachedir = cudf::jit::getCacheDir();
+            auto cachedir = cudf::jit::getCacheDir();
             nftw(cachedir.c_str(), rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
         #endif
     }
