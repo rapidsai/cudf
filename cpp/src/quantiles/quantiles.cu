@@ -15,15 +15,15 @@
  */
 
 #include <memory>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <quantiles/quantiles_util.hpp>
-#include "cudf/utilities/traits.hpp"
-#include "thrust/functional.h"
-#include "thrust/iterator/counting_iterator.h"
 
 using ScalarResult = double;
 

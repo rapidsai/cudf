@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/table/table.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
