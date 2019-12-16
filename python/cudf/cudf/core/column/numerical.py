@@ -100,7 +100,7 @@ class NumericalColumn(column.TypedColumnBase):
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
         return _numeric_column_binop(
-            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect,
+            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
     def unary_operator(self, unaryop):
