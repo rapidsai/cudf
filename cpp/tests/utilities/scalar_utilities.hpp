@@ -28,11 +28,9 @@ namespace test {
  *
  * @param lhs                   The first scalar
  * @param rhs                   The second scalar
- * @param tolerance             The maximum tolerable delta between lhs and rhs.
  *---------------------------------------------------------------------------**/
 void expect_scalars_equal(cudf::scalar const& lhs,
-                          cudf::scalar const& rhs,
-                          double tolerance);
+                          cudf::scalar const& rhs);
 
 } // namespace test
 } // namespace cudf

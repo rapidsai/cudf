@@ -28,6 +28,7 @@ namespace experimental {
  * @param[in] in            Table containing columns used to compute quantiles.
  * @param[in] quantile      Requested quantile in range [0, 1].
  * @param[in] interpolation Interpolation strategy for quantiles lying between
+ *                          two values.
  * @param[in] is_sorted     Whether the input has been pre-sorted.
  * @param[in] order         Order of pre-sorted values.
  * @param[in] null_order    precendence of pre-sorted nulls.

@@ -25,12 +25,12 @@
 #include <cudf/utilities/traits.hpp>
 #include <quantiles/quantiles_util.hpp>
 
-using ScalarResult = double;
-
 namespace cudf {
 namespace experimental {
 namespace detail {
 namespace {
+
+using ScalarResult = double;
 
 struct quantile_functor
 {

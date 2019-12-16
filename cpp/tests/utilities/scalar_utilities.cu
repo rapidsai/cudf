@@ -23,6 +23,7 @@
 #include <sstream>
 #include <jit/type.h>
 #include <type_traits>
+#include "gtest/gtest.h"
 
 using cudf::experimental::scalar_type_t;
 
@@ -34,7 +35,7 @@ struct compare_scalar_functor
 {
     template<typename T>
     typename std::enable_if_t<not std::is_floating_point<T>::value, void>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs, double tolerance)
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
         auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
@@ -42,26 +43,34 @@ struct compare_scalar_functor
     }
 
     template<typename T>
-    typename std::enable_if_t<std::is_floating_point<T>::value, void>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs, double tolerance)
+    std::enable_if_t<std::is_same<T, float>::value>
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
         auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
-        EXPECT_NEAR(lhs_t.value(), rhs_t.value(), tolerance);
+        EXPECT_FLOAT_EQ(lhs_t.value(), rhs_t.value());
+    }
+
+    template<typename T>
+    std::enable_if_t<std::is_same<T, double>::value>
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    {
+        auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
+        auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
+        EXPECT_DOUBLE_EQ(lhs_t.value(), rhs_t.value());
     }
 };
 
 } // anonymous namespace
 
 void expect_scalars_equal(cudf::scalar const& lhs,
-                          cudf::scalar const& rhs,
-                          double tolerance)
+                          cudf::scalar const& rhs)
 {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 
     if (lhs.is_valid() && rhs.is_valid() && lhs.type() == rhs.type()) {
-        experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs, tolerance);
+        experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
     }
 }
 
