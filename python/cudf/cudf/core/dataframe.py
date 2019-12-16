@@ -38,6 +38,7 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 
 
@@ -661,7 +662,76 @@ class DataFrame(object):
             "astype", dtype=dtype, errors=errors, **kwargs
         )
 
+    def _repr_pandas025_formatting(self, nrows, ncols, dtype=None):
+        """
+        With Pandas > 0.25 there are some new conditional formatting for some 
+        datatypes and column/row configurations. This fixes most of them in context
+        to match the expected Pandas repr of the same content.
+
+        Examples
+        --------
+        >>> gdf.__repr__()
+            0   ...  19
+        0   46  ...  48
+        ..  ..  ...  ..
+        19  40  ...  29
+
+        [20 rows x 20 columns]
+
+        >>> nrows, ncols = _repr_pandas025_formatting(2, 2, dtype="category")
+        >>> pd.options.display.max_rows = nrows 
+        >>> pd.options.display.max_columns = ncols
+        >>> gdf.__repr__()
+             0  ...  19
+        0   46  ...  48
+        ..  ..  ...  ..
+        19  40  ...  29
+
+        [20 rows x 20 columns]
+        """
+        ncols = 1 if ncols in [0, 2] and dtype == "datetime64[ns]" else ncols
+        ncols = (
+            1
+            if ncols == 0
+            and nrows == 1
+            and dtype in ["int8", "str", "category"]
+            else ncols
+        )
+        ncols = (
+            1
+            if nrows == 1 and dtype in ["int8", "int16", "str", "category"]
+            else ncols
+        )
+        ncols = 0 if ncols == 2 else ncols
+        ncols = 19 if ncols in [20, 21] else ncols
+        return nrows, ncols
+
+    def clean_renderable_dataframe(self, output):
+        """
+        the below is permissible: null in a datetime to_pandas() becomes
+        NaT, which is then replaced with null in this processing step.
+        It is not possible to have a mix of nulls and NaTs in datetime
+        columns because we do not support NaT - pyarrow as_column
+        preprocessing converts NaT input values from numpy or pandas into
+        null.
+        """
+        output = output.to_pandas().__repr__().replace(" NaT", "null")
+        lines = output.split("\n")
+
+        if lines[-1].startswith("["):
+            lines = lines[:-1]
+            lines.append(
+                "[%d rows x %d columns]" % (len(self), len(self.columns))
+            )
+        return "\n".join(lines)
+
     def get_renderable_dataframe(self):
+        """
+        takes rows and columns from pandas settings or estimation from size.
+        pulls quadrents based off of some known parameters then style for
+        multiindex as well producing an efficient representative string
+        for printing with the dataframe. 
+        """
         nrows = np.max([pd.options.display.max_rows, 1])
         if pd.options.display.max_rows == 0:
             nrows = len(self)
@@ -670,6 +740,7 @@ class DataFrame(object):
             if pd.options.display.max_columns
             else pd.options.display.width / 2
         )
+
         if len(self) <= nrows and len(self.columns) <= ncols:
             output = self.copy(deep=False)
         else:
@@ -691,6 +762,7 @@ class DataFrame(object):
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
         temp_mi_columns = output.columns
+
         for col in output._cols:
             if (
                 self._cols[col].null_count > 0
@@ -708,20 +780,7 @@ class DataFrame(object):
 
     def __repr__(self):
         output = self.get_renderable_dataframe()
-        # the below is permissible: null in a datetime to_pandas() becomes
-        # NaT, which is then replaced with null in this processing step.
-        # It is not possible to have a mix of nulls and NaTs in datetime
-        # columns because we do not support NaT - pyarrow as_column
-        # preprocessing converts NaT input values from numpy or pandas into
-        # null.
-        output = output.to_pandas().__repr__().replace(" NaT", "null")
-        lines = output.split("\n")
-        if lines[-1].startswith("["):
-            lines = lines[:-1]
-            lines.append(
-                "[%d rows x %d columns]" % (len(self), len(self.columns))
-            )
-        return "\n".join(lines)
+        return self.clean_renderable_dataframe(output)
 
     def _repr_html_(self):
         lines = (

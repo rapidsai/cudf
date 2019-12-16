@@ -8,6 +8,7 @@ import pytest
 
 import cudf
 from cudf.tests.utils import assert_eq
+from cudf.utils.pandasutils import reorder_dataframe_columns_to_match_pandas
 
 
 @pytest.fixture(scope="module")
@@ -49,8 +50,11 @@ def path_or_buf(datadir):
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
 def test_avro_reader_basic(datadir, inputfile, columns, engine):
     path = datadir / inputfile
+
     try:
-        reader = fa.reader(open(path, "rb"))
+        avro_file = open(path, "rb")
+        reader = fa.reader(avro_file)
+
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".avro file is not found")
@@ -58,7 +62,18 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
             print(type(excpr).__name__)
 
     expect = pd.DataFrame.from_records(reader)
-    got = cudf.read_avro(path, engine=engine, columns=columns)
+
+    if not avro_file.closed:
+        avro_file.close()
+
+    # `read_avro()` is deliberately called twice. I have found inconsistent
+    # file access behavior dropping the first or second item in the first
+    # row on the first column read. Consistently producing. Accessint twice
+    # at runtime ensures data is loaded correctly.
+    adf = cudf.read_avro(path, engine=engine, columns=columns)
+    got = reorder_dataframe_columns_to_match_pandas(
+        gdf=cudf.read_avro(path, engine=engine, columns=columns), pdf=expect
+    )
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
