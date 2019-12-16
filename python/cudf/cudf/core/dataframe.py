@@ -37,8 +37,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
     is_list_like,
-    is_scalar,
-    is_string_dtype,
+    is_scalar
 )
 
 
@@ -664,9 +663,9 @@ class DataFrame(object):
 
     def _repr_pandas025_formatting(self, nrows, ncols, dtype=None):
         """
-        With Pandas > 0.25 there are some new conditional formatting for some 
-        datatypes and column/row configurations. This fixes most of them in context
-        to match the expected Pandas repr of the same content.
+        With Pandas > 0.25 there are some new conditional formatting for some
+        datatypes and column/row configurations. This fixes most of them in
+        context to match the expected Pandas repr of the same content.
 
         Examples
         --------
@@ -679,7 +678,7 @@ class DataFrame(object):
         [20 rows x 20 columns]
 
         >>> nrows, ncols = _repr_pandas025_formatting(2, 2, dtype="category")
-        >>> pd.options.display.max_rows = nrows 
+        >>> pd.options.display.max_rows = nrows
         >>> pd.options.display.max_columns = ncols
         >>> gdf.__repr__()
              0  ...  19
@@ -730,7 +729,7 @@ class DataFrame(object):
         takes rows and columns from pandas settings or estimation from size.
         pulls quadrents based off of some known parameters then style for
         multiindex as well producing an efficient representative string
-        for printing with the dataframe. 
+        for printing with the dataframe.
         """
         nrows = np.max([pd.options.display.max_rows, 1])
         if pd.options.display.max_rows == 0:

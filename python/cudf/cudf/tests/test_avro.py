@@ -70,7 +70,6 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     # file access behavior dropping the first or second item in the first
     # row on the first column read. Consistently producing. Accessint twice
     # at runtime ensures data is loaded correctly.
-    adf = cudf.read_avro(path, engine=engine, columns=columns)
     got = reorder_dataframe_columns_to_match_pandas(
         gdf=cudf.read_avro(path, engine=engine, columns=columns), pdf=expect
     )
