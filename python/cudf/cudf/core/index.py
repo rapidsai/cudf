@@ -905,24 +905,23 @@ class CategoricalIndex(GenericIndex):
         elif isinstance(values, pd.Series) and (
             is_categorical_dtype(values.dtype)
         ):
-            codes_data = values.cat.codes.values
+            codes_data = column.as_column(values.cat.codes.values)
             values = column.build_column(
-                data=Buffer(codes_data),
+                data=None,
                 dtype=cudf.CategoricalDtype(
-                    data_dtype=codes_data.dtype,
                     categories=values.cat.categories,
                     ordered=values.cat.ordered,
                 ),
+                children=(codes_data,),
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
-            codes_data = values.codes
+            codes_data = column.as_column(values.codes)
             values = column.build_column(
-                data=Buffer(codes_data),
+                data=None,
                 dtype=cudf.CategoricalDtype(
-                    data_dtype=codes_data.dtype,
-                    categories=values.categories,
-                    ordered=values.ordered,
+                    categories=values.categories, ordered=values.ordered,
                 ),
+                children=(codes_data,),
             )
         elif isinstance(values, (list, tuple)):
             values = column.as_column(

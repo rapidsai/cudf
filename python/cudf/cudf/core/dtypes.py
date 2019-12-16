@@ -63,7 +63,7 @@ class CategoricalDtype(ExtensionDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
-        elif self.categories is None or other.categories is None:
+        elif self._categories is None or other._categories is None:
             return True
         else:
             return (

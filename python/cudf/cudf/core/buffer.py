@@ -26,7 +26,11 @@ class Buffer:
             is passed for `data` to prevent memory being freed
             from under us.
         """
-        if hasattr(data, "__array_interface__") or hasattr(
+        if isinstance(data, Buffer):
+            self.ptr = data.ptr
+            self.size = data.size
+            self._owner = owner or data
+        elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
         ):
 

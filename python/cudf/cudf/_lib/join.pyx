@@ -72,19 +72,21 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     cdef cudf_table result
 
-    with nogil:
-        if how == 'left':
-            result = left_join(
-                list_lhs[0],
-                list_rhs[0],
-                left_on_ind,
-                right_on_ind,
-                columns_in_common,
-                <cudf_table*> NULL,
-                context
-            )
 
-        elif how == 'inner':
+    if how == 'left':
+        with nogil:
+            result = left_join(
+                    list_lhs[0],
+                    list_rhs[0],
+                    left_on_ind,
+                    right_on_ind,
+                    columns_in_common,
+                    <cudf_table*> NULL,
+                    context
+                )
+
+    elif how == 'inner':
+        with nogil:
             result = inner_join(
                 list_lhs[0],
                 list_rhs[0],
@@ -95,7 +97,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 context
             )
 
-        elif how == 'outer':
+    elif how == 'outer':
+        with nogil:
             result = full_join(
                 list_lhs[0],
                 list_rhs[0],

@@ -326,7 +326,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self):
-        return self.children[0]
+        return self.children[0].set_mask(self.mask)
 
     @property
     def ordered(self):
@@ -593,7 +593,7 @@ class CategoricalColumn(column.ColumnBase):
                 dtype=self.dtype,
                 mask=self.mask,
                 name=self.name,
-                children=(self.children,),
+                children=self.children,
             )
 
 

@@ -103,13 +103,13 @@ def groupby(
         if is_categorical_dtype(inp_key_col.dtype):
             codes = result_key_cols[i]
             dtype = cudf.CategoricalDtype(
-                data_dtype=codes.dtype,
                 categories=inp_key_col.cat().categories,
                 ordered=inp_key_col.cat().ordered)
             result_key_cols[i] = build_column(
-                data=codes.data,
+                data=None,
                 dtype=dtype,
-                mask=result_key_cols[i].mask)
+                mask=result_key_cols[i].mask,
+                children=(codes,))
 
     return (result_key_cols, result_value_cols)
 
@@ -166,13 +166,13 @@ def groupby_without_aggregations(cols, key_cols):
         if is_categorical_dtype(inp_col.dtype):
             codes = sorted_cols[i]
             dtype = cudf.CategoricalDtype(
-                data_dtype=codes.dtype,
                 categories=inp_col.cat().categories,
                 ordered=inp_col.cat().ordered)
             sorted_cols[i] = build_column(
-                data=codes.data,
+                data=None,
                 dtype=dtype,
-                mask=sorted_cols[i].mask)
+                mask=sorted_cols[i].mask,
+                children=(codes,))
 
     del c_in_table
 

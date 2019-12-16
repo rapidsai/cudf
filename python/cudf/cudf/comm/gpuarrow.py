@@ -196,13 +196,13 @@ def array_to_series(array):
         codes = array_to_series(array.indices)
         categories = array_to_series(array.dictionary)
         dtype = cudf.CategoricalDtype(
-            data_dtype=codes.dtype,
-            categories=categories,
-            ordered=array.type.ordered,
+            categories=categories, ordered=array.type.ordered,
         )
         if mask is not None:
             mask = Buffer(mask)
-        data = build_column(data=codes.data, dtype=dtype, mask=mask)
+        data = build_column(
+            data=None, dtype=dtype, mask=mask, children=(codes._column,)
+        )
 
     elif pa.types.is_string(array.type):
         import nvstrings

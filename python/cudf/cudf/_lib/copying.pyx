@@ -321,7 +321,7 @@ def scatter_to_frames(source, maps, index=None, names=None):
                 build_column(
                     data=None,
                     dtype=dtype,
-                    children=(df[name],)
+                    children=(df[name]._column,)
                 )
             )
         if index:

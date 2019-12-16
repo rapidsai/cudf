@@ -227,12 +227,9 @@ def melt(
 
     mdata[var_name] = Series(
         build_column(
-            data=temp._column.data,
-            dtype=cudf.CategoricalDtype(
-                data_dtype=temp._column.dtype,
-                categories=value_vars,
-                ordered=False,
-            ),
+            data=None,
+            dtype=cudf.CategoricalDtype(categories=value_vars, ordered=False,),
+            children=(temp._column,),
         )
     )
 

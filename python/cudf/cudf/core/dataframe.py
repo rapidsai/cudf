@@ -2418,6 +2418,13 @@ class DataFrame(Table):
         for col, name in result:
             if is_string_dtype(col):
                 df[name] = col
+            elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
+                df[name] = column.build_column(
+                    data=None,
+                    dtype=categorical_dtypes.get(name, col.dtype),
+                    mask=col.mask,
+                    children=(col,),
+                )
             else:
                 df[name] = column.build_column(
                     col.data,
@@ -2604,14 +2611,14 @@ class DataFrame(Table):
         )
 
         for name, cats in cat_join:
+            dtype = cudf.CategoricalDtype(categories=cats, ordered=False,)
             if is_categorical_dtype(df[name]):
-                data_dtype = df[name].dtype.data_dtype
+                children = (df[name]._column.codes,)
             else:
-                data_dtype = df[name].dtype
-            dtype = cudf.CategoricalDtype(
-                data_dtype=data_dtype, categories=cats, ordered=False,
+                children = (df[name]._column,)
+            df[name] = column.build_column(
+                data=None, dtype=dtype, children=children
             )
-            df[name] = column.build_column(data=df[name].data, dtype=dtype)
 
         if sort and len(df):
             df = df.sort_values(idx_col_names)

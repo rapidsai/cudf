@@ -117,8 +117,6 @@ cdef class Column:
             data = <void*><uintptr_t>(self.codes.data.ptr)
         else:
             data = <void*><uintptr_t>(self.data.ptr)
-
-
         
         cdef Column child_column
         if self.children:

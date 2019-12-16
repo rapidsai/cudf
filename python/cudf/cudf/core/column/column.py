@@ -185,8 +185,17 @@ class ColumnBase(Column):
 
                 (mask[idx // 8] >> (idx % 8)) & 1
         """
+        if mask is None:
+            return self
         mask = Buffer(mask)
-        return build_column(self.data, self.dtype, mask=mask, name=self.name)
+        return build_column(
+            self.data,
+            self.dtype,
+            mask=mask,
+            name=self.name,
+            offset=self.offset,
+            children=self.children,
+        )
 
     def rename(self, name, copy=True):
         result = self.copy(deep=copy)
@@ -211,7 +220,7 @@ class ColumnBase(Column):
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
-            if isinstance(dtype, "category"):
+            if is_categorical_dtype(dtype):
                 dtype = CategoricalDtype()
             return column_empty(0, dtype=dtype, masked=True)
 
@@ -282,18 +291,27 @@ class ColumnBase(Column):
         newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
-            data_dtype = head.dtype.data_dtype
+            data = None
+            data_dtype = head.codes.dtype
+            children = (
+                as_column(
+                    rmm.device_array(shape=newsize, dtype=head.codes.dtype)
+                ),
+            )
         else:
             data_dtype = head.dtype
-        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
-        data = Buffer(mem)
+            mem = rmm.device_array(shape=newsize, dtype=data_dtype)
+            data = Buffer(mem)
+            children = None
 
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
             mask = Buffer(utils.make_mask(newsize))
 
-        col = build_column(data=data, dtype=head.dtype, mask=mask)
+        col = build_column(
+            data=data, dtype=head.dtype, mask=mask, children=children
+        )
 
         # Performance the actual concatenation
         if newsize > 0:
@@ -432,6 +450,17 @@ class ColumnBase(Column):
             arg = int(arg)
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
+
+            if is_categorical_dtype(self):
+                codes = self.codes[arg]
+                return build_column(
+                    data=None,
+                    dtype=self.dtype,
+                    mask=codes.mask,
+                    name=self.name,
+                    children=(codes,),
+                )
+
             start, stop, stride = arg.indices(len(self))
             if start == stop:
                 return column_empty(0, self.dtype, masked=True)
@@ -512,9 +541,11 @@ class ColumnBase(Column):
                 from cudf.core.buffer import Buffer
                 from cudf.utils.cudautils import fill_value
 
-                data = rmm.device_array(nelem, dtype=self.dtype.data_dtype)
+                data = rmm.device_array(nelem, dtype=self.codes.dtype)
                 fill_value(data, self._encode(value))
-                value = build_column(data=Buffer(data), dtype=self.dtype,)
+                value = build_column(
+                    data=None, dtype=self.dtype, children=(as_column(data),)
+                )
             elif value is None:
                 value = column.column_empty(nelem, self.dtype, masked=True)
             else:
@@ -785,14 +816,13 @@ class ColumnBase(Column):
             cats = cats.dropna()
             labels = labels - 1
 
-        dtype = CategoricalDtype(
-            data_dtype=labels.dtype, categories=cats, ordered=ordered
-        )
+        dtype = CategoricalDtype(categories=cats, ordered=ordered)
         return build_column(
-            data=labels._column.data,
+            data=None,
             dtype=dtype,
             mask=self.mask,
             name=self.name,
+            children=(labels._column,),
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -883,7 +913,17 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     if dtype is None:
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
-    categories = None
+
+    if (
+        hasattr(column, "dtype")
+        and is_categorical_dtype(column.dtype)
+        and dtype == column.dtype
+    ):
+        codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
+        return build_column(
+            data=None, dtype=dtype, mask=codes.mask, children=(codes,)
+        )
+
     return column_empty(row_count, dtype, masked)
 
 
@@ -901,7 +941,7 @@ def column_empty_like_same_mask(column, dtype):
     return result
 
 
-def column_empty(row_count, dtype, masked, categories=None, name=None):
+def column_empty(row_count, dtype, masked, name=None):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
