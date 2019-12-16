@@ -87,8 +87,8 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
 {
     auto count = input_column.size();
     auto execpol = rmm::exec_policy(stream);
-    auto column = column_device_view::create(input_column,stream);
-    auto d_column = *column;
+    auto d_view = column_device_view::create(input_column,stream);
+    auto d_column = *d_view;
 
     // Example using a strings column:  [e,a,d,b,c,c,c,e,a]
     //    row positions for reference:   0,1,2,3,4,5,6,7,8
@@ -101,7 +101,8 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     //  ordinals: [1,8,3,4,5,6,2,0,7]  => these represent sorted strings as: [a,a,b,c,c,c,d,e,e]
     // create empty indices_column
     auto indices_column = make_numeric_column( data_type{INT32}, count,
-         copy_bitmask( input_column, stream, mr), input_column.null_count(), stream, mr);
+                                               mask_state::UNALLOCATED, // nulls managed by parent
+                                               stream, mr);
     auto indices = indices_column->mutable_view();
     auto d_indices = indices.data<int32_t>();
     // build indices map and initialize indices
@@ -138,11 +139,17 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     auto d_keys_indices = keys_indices.data().get();
     auto table_keys = experimental::detail::gather( table_view{std::vector<column_view>{input_column}},
                                                     d_keys_indices, d_keys_indices+unique_count,
-                                                    false, false, false, mr, stream).release();
-    auto keys_column = std::move(table_keys[0]);
+                                                    false, false, false, mr, stream)->release();
+    std::shared_ptr<const column> keys_column = std::move(table_keys[0]);
 
     // create column with keys_column and indices_column
-    return nullptr;
+    std::vector<std::unique_ptr<column>> children;
+    children.emplace_back(std::move(indices_column));
+    return std::make_unique<column>(
+        data_type{DICTIONARY32}, count, rmm::device_buffer{0,stream,mr},
+        copy_bitmask( input_column, stream, mr), input_column.null_count(),
+        std::move(children),
+        std::move(keys_column));
 }
 
 }  // namespace cudf
