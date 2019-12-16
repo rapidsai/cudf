@@ -540,6 +540,7 @@ add_library(cudf
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/dictionary_factories.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
