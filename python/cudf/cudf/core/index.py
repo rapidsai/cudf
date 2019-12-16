@@ -410,6 +410,9 @@ class Index(object):
         assert axis in (None, 0)
         return as_index(self._values.repeat(repeats))
 
+    def memory_usage(self, deep=False):
+        return self._values._memory_usage(deep=deep)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -635,6 +638,9 @@ class RangeIndex(Index):
     def __cuda_array_interface__(self):
         return self._values.__cuda_array_interface__
 
+    def memory_usage(self, **kwargs):
+        return 0
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
@@ -695,9 +701,6 @@ class GenericIndex(Index):
 
     def __sizeof__(self):
         return self._values.__sizeof__()
-
-    def _memory_usage(self, deep=False):
-        return self._values._memory_usage(deep=deep)
 
     def __reduce__(self):
         return self.__class__, tuple([self._values])

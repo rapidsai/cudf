@@ -517,7 +517,7 @@ class DataFrame(object):
         ]
         if index:
             ind.append("Index")
-            sizes.append(self._index._memory_usage(deep=deep))
+            sizes.append(self._index.memory_usage(deep=deep))
         return Series(sizes, index=ind)
 
     def __len__(self):

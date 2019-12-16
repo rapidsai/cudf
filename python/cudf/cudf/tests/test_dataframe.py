@@ -4112,48 +4112,92 @@ def test_cov_nans():
     assert_eq(pdf.cov(), gdf.cov())
 
 
+@pytest.mark.parametrize("set_index", [None, "A", "C", "D"])
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-def test_memory_usage(index, deep):
-    rows = int(1e3)
-    df = pd.DataFrame(
-        {
-            "A": np.arange(rows, dtype="int32"),
-            "B": np.arange(rows, dtype="int64"),
-            "C": np.arange(rows, dtype="float64"),
-        }
-    ).set_index("A")
-    gdf = gd.from_pandas(df)
-
-    assert df["B"].memory_usage(index=index, deep=deep) == gdf[
-        "B"
-    ].memory_usage(index=index, deep=deep)
-
-    assert_eq(
-        df.memory_usage(index=index, deep=deep).sort_index(),
-        gdf.memory_usage(index=index, deep=deep).sort_index(),
-    )
-
-
-@pytest.mark.parametrize("index", [True, False])
-def test_memory_usage_strings(index):
-    rows = int(4)
+def test_memory_usage(deep, index, set_index):
+    # Testing numerical/datetime by comparing with pandas
+    # (string and categorical columns will be different)
+    rows = int(100)
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int64"),
             "B": np.arange(rows, dtype="int32"),
-            "C": np.random.choice(["apple", "banana", "orange"], rows),
+            "C": np.arange(rows, dtype="float64"),
         }
-    ).set_index("A")
+    )
+    df["D"] = pd.to_datetime(df.A)
+    if set_index:
+        df = df.set_index(set_index)
+
     gdf = gd.from_pandas(df)
 
-    # Pandas and cudf match for deep=False (default)
-    assert_eq(
-        df.memory_usage(index=index).sort_index(),
-        gdf.memory_usage(index=index).sort_index(),
+    if index and set_index is None:
+
+        # Special Case: Assume RangeIndex size == 0
+        assert gdf.index.memory_usage(deep=deep) == 0
+
+    else:
+
+        # Check for Series only
+        assert df["B"].memory_usage(index=index, deep=deep) == gdf[
+            "B"
+        ].memory_usage(index=index, deep=deep)
+
+        # Check for entire DataFrame
+        assert_eq(
+            df.memory_usage(index=index, deep=deep).sort_index(),
+            gdf.memory_usage(index=index, deep=deep).sort_index(),
+        )
+
+
+def test_memory_usage_string():
+    rows = int(100)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int32"),
+            "B": np.random.choice(["apple", "banana", "orange"], rows),
+        }
+    )
+    df["C"] = df.B.astype("category")
+    gdf = gd.from_pandas(df)
+
+    # Check deep=False (should match pandas)
+    assert gdf.B.memory_usage(deep=False, index=False) == df.B.memory_usage(
+        deep=False, index=False
     )
 
-    # cuDF gets actual memory footprint for deep=False
-    # (doesn't match pandas)
-    deep_mem = gdf.C.memory_usage(deep=True, index=False)
-    assert deep_mem == gdf.C._column._data.device_memory()
+    # Check string column
+    assert (
+        gdf.B.memory_usage(deep=True, index=False)
+        == gdf.B._column._data.device_memory()
+    )
+
+    # Check string index
+    assert (
+        gdf.set_index("B").index.memory_usage(deep=True)
+        == gdf.B._column._data.device_memory()
+    )
+
+
+def test_memory_usage_cat():
+    rows = int(100)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int32"),
+            "B": np.random.choice(["apple", "banana", "orange"], rows),
+        }
+    )
+    df["B"] = df.B.astype("category")
+    gdf = gd.from_pandas(df)
+
+    expected = (
+        gdf.B._column._categories.__sizeof__()
+        + gdf.B._column.cat().codes.__sizeof__()
+    )
+
+    # Check cat column
+    assert gdf.B.memory_usage(deep=True, index=False) == expected
+
+    # Check cat index
+    assert gdf.set_index("B").index.memory_usage(deep=True) == expected

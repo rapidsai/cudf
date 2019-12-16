@@ -382,7 +382,7 @@ class Series(object):
     def memory_usage(self, index=True, deep=False):
         n = self._column._memory_usage(deep=deep)
         if index:
-            n += self._index._memory_usage(deep=deep)
+            n += self._index.memory_usage(deep=deep)
         return n
 
     def __len__(self):
