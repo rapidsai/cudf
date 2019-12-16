@@ -3,11 +3,16 @@
 ## New Features
 
 - PR #3284 Add gpu-accelerated parquet writer
+- PR #3336 Add `from_dlpack` and `to_dlpack`
+- PR #3555 Add column names support to libcudf++ io readers and writers
 
 ## Improvements
 
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+- PR #3590 Specialize hash functions for floating point
+- PR #3569 Use `np.asarray` in `StringColumn.deserialize`
+- PR #3553 Support Python NoneType in numeric binops
 - PR #3593 Adding begin for mutable_column_deivce_view
 
 ## Bug Fixes
@@ -15,6 +20,8 @@
 - PR #3550 Update Java package to 0.12
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
+- PR #3563 Use `__cuda_array_interface__` for serialization
+- PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 
 
 # cuDF 0.11.0 (11 Dec 2019)
