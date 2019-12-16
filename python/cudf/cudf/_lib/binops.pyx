@@ -113,11 +113,32 @@ def apply_op(lhs, rhs, out, op):
             <gdf_column*> c_out,
             op
         )
+    elif lhs is None:
+        check_gdf_compatibility(rhs)
+        c_rhs = column_view_from_column(rhs)
+        c_scalar = gdf_scalar_from_scalar(lhs, rhs.dtype)
+        nullct = apply_op_s_v(
+            <gdf_scalar*> c_scalar,
+            <gdf_column*> c_rhs,
+            <gdf_column*> c_out,
+            op
+        )
 
     elif np.isscalar(rhs):
         check_gdf_compatibility(lhs)
         c_lhs = column_view_from_column(lhs)
         c_scalar = gdf_scalar_from_scalar(rhs)
+        nullct = apply_op_v_s(
+            <gdf_column*> c_lhs,
+            <gdf_scalar*> c_scalar,
+            <gdf_column*> c_out,
+            op
+        )
+
+    elif rhs is None:
+        check_gdf_compatibility(lhs)
+        c_lhs = column_view_from_column(lhs)
+        c_scalar = gdf_scalar_from_scalar(rhs, lhs.dtype)
         nullct = apply_op_v_s(
             <gdf_column*> c_lhs,
             <gdf_scalar*> c_scalar,
