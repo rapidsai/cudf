@@ -558,9 +558,10 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _strings_to_categorical = options.strings_to_categorical;
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          int row_group, cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_group,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata out_metadata;
 
   // Select only row groups required
   const auto selected_row_groups =
@@ -687,7 +688,17 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
-  return std::make_unique<table>(std::move(out_columns));
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_selected_columns.size());
+  for (size_t i = 0; i < _selected_columns.size(); i++) {
+    out_metadata.column_names[i] = _selected_columns[i].second;
+  }
+  // Return user metadata
+  for (const auto& kv : _metadata->key_value_metadata) {
+    out_metadata.user_data.insert({kv.key, kv.value});
+  }
+
+  return { std::make_unique<table>(std::move(out_columns)), std::move(out_metadata) };
 }
 
 // Forward to implementation
@@ -715,20 +726,20 @@ reader::~reader() = default;
 std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_row_group(size_type row_group,
-                                              cudaStream_t stream) {
+table_with_metadata reader::read_row_group(size_type row_group,
+                                           cudaStream_t stream) {
   return _impl->read(0, -1, row_group, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type skip_rows,
-                                         size_type num_rows,
-                                         cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type skip_rows,
+                                      size_type num_rows,
+                                      cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
 }
 
