@@ -602,10 +602,10 @@ ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 # - sorted-merge new tests ----------------------------------------------------------------------------
 
 set(MERGE_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
-
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
