@@ -4202,24 +4202,23 @@ def test_memory_usage_cat():
     assert gdf.set_index("B").index.memory_usage(deep=True) == expected
 
 
-@pytest.mark.parametrize("set_index", [["B", "C"], ["B", "D"]])
-def test_memory_usage_multi(set_index):
+def test_memory_usage_multi():
     rows = int(100)
     deep = True
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
-            "B": np.random.choice([0, 10, 100, 1000], rows),
-            "C": np.random.choice([1.1, 2.2, 3.3], rows),
-            "D": np.random.choice(["dog", "cat", "bird"], rows),
+            "B": np.random.choice(np.arange(3, dtype="int64"), rows),
+            "C": np.random.choice(np.arange(3, dtype="float64"), rows),
         }
-    ).set_index(set_index)
+    ).set_index(["B", "C"])
     gdf = gd.from_pandas(df)
 
     # Assume MultiIndex memory footprint is just that
-    # of the underlying columns
-    expect = 0
-    for col in gdf.index._source_data._columns:
-        expect += col._memory_usage(deep=deep)
+    # of the underlying columns, levels, and codes
+    expect = rows * 16  # Source Columns
+    expect += rows * 16  # Codes
+    expect += 3 * 8  # Level 0
+    expect += 3 * 8  # Level 1
 
     assert expect == gdf.index.memory_usage(deep=deep)
