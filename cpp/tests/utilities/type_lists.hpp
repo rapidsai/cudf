@@ -63,6 +63,18 @@ constexpr auto types_to_ids() {
 }
 }  // namespace detail
 
+/**
+ * @brief Provides a list of all floating point types supported in libcudf for
+ * use in a GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all floating point types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FloatingPointTypes);
+ * ```
+ */
+using FloatingPointTypes = cudf::test::Types<float, double>;
+
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all numeric types supported in libcudf for use in a
  * GTest typed test.
