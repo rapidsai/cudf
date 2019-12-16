@@ -36,12 +36,12 @@ namespace experimental {
  */
 
 std::vector<std::unique_ptr<scalar>>
-quantiles(table_view const& in,
-          double quantile,
-          interpolation interpolation = interpolation::LINEAR,
-          bool is_sorted = false,
-          std::vector<cudf::order> order = {},
-          std::vector<cudf::null_order> null_order = {});
+quantiles(table_view const& input,
+          double q,
+          interpolation interp = interpolation::LINEAR,
+          bool col_is_sorted = false,
+          std::vector<cudf::order> col_order = {},
+          std::vector<cudf::null_order> col_null_order = {});
 
 } // namespace experimental
 } // namespace cudf
