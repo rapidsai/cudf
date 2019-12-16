@@ -66,37 +66,35 @@ struct quantile_functor
             return std::make_unique<numeric_scalar<ScalarResult>>(result);
         }
 
-        auto null_offset = col_null_order == cudf::null_order::AFTER ? 0 : input.null_count();
-        double result{};
+        auto valid_count = input.size() - input.null_count();
 
         if (not is_sorted)
         {
             table_view const in_table { { input } };
-            auto in_sortmap = sorted_order(in_table, { col_order }, { col_null_order });
-            auto in_sortmap_begin = in_sortmap->view().begin<size_type>();
-            auto in_begin = input.begin<T>() + null_offset;
+            auto sortmap = sorted_order(in_table, { order::ASCENDING }, { null_order::AFTER });
+            auto sortmap_begin = sortmap->view().begin<size_type>();
+            auto input_begin = input.begin<T>();
 
-            auto source = [&](size_type location) {
-                auto idx = detail::get_array_value<size_type>(in_sortmap_begin, location);
-                return detail::get_array_value<T>(in_begin, idx);
+            auto selector = [&](size_type location) {
+                auto idx = detail::get_array_value<size_type>(sortmap_begin, location);
+                return detail::get_array_value<T>(input_begin, idx);
             };
 
-            result = select_quantile<double>(source,
-                                             input.size() - input.null_count(),
-                                             q,
-                                             interp);
-        } else {
-            auto in_begin = input.begin<T>() + null_offset;
-            auto source = [&](size_type location) {
-                return detail::get_array_value<T>(in_begin, location);
-            };
-
-            result = select_quantile<double>(source,
-                                             input.size() - input.null_count(),
-                                             q,
-                                             interp);
+            auto result = select_quantile<ScalarResult>(selector, valid_count, q, interp);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result);
         }
 
+        using Selector = std::function<T(size_type)>;
+
+        auto input_begin = col_order == order::ASCENDING
+            ? input.begin<T>() + (col_null_order == null_order::BEFORE ? valid_count : 0)
+            : input.begin<T>() - (col_null_order == null_order::AFTER ? valid_count : 0) + input.size() - 1;
+
+        Selector selector = col_order == order::ASCENDING
+            ? Selector([&](size_type location){ return get_array_value<T>(input_begin, location); })
+            : Selector([&](size_type location){ return get_array_value<T>(input_begin, - location); });
+
+        auto result = select_quantile<ScalarResult>(selector, valid_count, q, interp);
         return std::make_unique<numeric_scalar<ScalarResult>>(result);
     }
 };

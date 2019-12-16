@@ -86,9 +86,9 @@ template<typename T>
 struct test_case {
     fixed_width_column_wrapper<T> column;
     vector<q_expect> expectations;
-    bool is_sorted;
-    cudf::order order;
-    cudf::null_order null_order;
+    bool col_is_sorted;
+    cudf::order col_order;
+    cudf::null_order col_null_order;
 };
 
 // most numerics
@@ -157,6 +157,18 @@ interpolate_extrema_low() {
         fixed_width_column_wrapper<T> ({ a, b }),
         {
             q_expect{ 0.50, b_d, a_d, exact_d, exact_d, a_d }
+        }
+    };
+}
+
+template<typename T>
+test_case<T>
+sorted_descending_null_after() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 9, 8, 7, 6, 5, 4, 3, 2, 1 },
+                                       { 1, 1, 1, 1, 0, 0, 0, 0, 0}),
+        {
+            q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 }
         }
     };
 }
@@ -347,6 +359,18 @@ interpolate_extrema_low<bool8>() {
     return interpolate_center<bool8>();
 }
 
+template<>
+test_case<bool8>
+sorted_descending_null_after() {
+    return test_case<bool8> {
+        fixed_width_column_wrapper<bool8> ({ 1, 0, 1, },
+                                       { 1, 1, 0, }),
+        {
+            q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 }
+        }
+    };
+}
+
 } // namespace testdata
 
 // =============================================================================
@@ -360,19 +384,19 @@ void test(testdata::test_case<T> test_case) {
 
     for (auto & expected : test_case.expectations) {
 
-        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
         expect_scalars_equal(expected.higher, *actual_higher[0], precision<T>::tolerance);
 
-        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
         expect_scalars_equal(expected.lower, *actual_lower[0], precision<T>::tolerance);
 
-        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
         expect_scalars_equal(expected.linear, *actual_linear[0], precision<T>::tolerance);
 
-        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
         expect_scalars_equal(expected.midpoint, *actual_midpoint[0], precision<T>::tolerance);
 
-        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, test_case.is_sorted, { order::ASCENDING }, { null_order::AFTER });
+        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
         expect_scalars_equal(expected.nearest, *actual_nearest[0], precision<T>::tolerance);
     }
 }
@@ -426,4 +450,9 @@ TYPED_TEST(QuantilesTest, TestInterpolateExtremaHigh)
 TYPED_TEST(QuantilesTest, TestInterpolateExtremaLow)
 {
     test(testdata::interpolate_extrema_low<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestSortedDescendingNullAfter)
+{
+    test(testdata::sorted_descending_null_after<TypeParam>());
 }
