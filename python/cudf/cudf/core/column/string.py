@@ -487,7 +487,7 @@ class StringColumn(column.TypedColumnBase):
         return StringMethods(self, index=index)
 
     def __sizeof__(self):
-        n = self.str().len().sum() * self.dtype.itemsize
+        n = self._data.device_memory()
         if self._mask:
             n += self._mask.__sizeof__()
         return n

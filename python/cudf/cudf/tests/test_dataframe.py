@@ -4147,9 +4147,13 @@ def test_memory_usage_strings(index):
     ).set_index("A")
     gdf = gd.from_pandas(df)
 
+    # Pandas and cudf match for deep=False (default)
     assert_eq(
         df.memory_usage(index=index).sort_index(),
         gdf.memory_usage(index=index).sort_index(),
     )
+
+    # cuDF gets actual memory footprint for deep=False
+    # (doesn't match pandas)
     deep_mem = gdf.C.memory_usage(deep=True, index=False)
-    assert deep_mem == (gdf.C._column.str().len().sum() * gdf.C.dtype.itemsize)
+    assert deep_mem == gdf.C._column._data.device_memory()
