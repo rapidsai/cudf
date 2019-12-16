@@ -68,7 +68,7 @@ struct dispatch_clamp {
         if (input.nullable()){
             output = make_fixed_width_column(input.type(), input.size(),
                                              copy_bitmask(input, stream, mr),
-                                             UNKNOWN_NULL_COUNT, stream, mr);
+                                             input.null_count(), stream, mr);
         } else {
             output = allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
         }
@@ -130,41 +130,9 @@ struct dispatch_clamp {
 } //namespace
 
 /**
- * @brief Returns a column formed from `input`, where values less than
- * `lo` will be replaced with `lo` and greater than `hi` with
- * `hi`.
+ * @copydoc cudf::experimental::clamp
  *
- * if `lo` is invalid, then `lo` will not be considered while
- * evaluating the input (Essentially considered minimum value of that type).
- * if `hi` is invalid, then `hi` will not be considered while
- * evaluating the input (Essentially considered maximum value of that type).
- *
- * Example:
- *    input: {1, 2, 3, NULL, 5, 6, 7}
- * 
- *    valid lo and hi
- *    lo: 3, hi: 5
- *    output:{3, 3, 3, NULL, 5, 5, 5}
- *
- *    invalid lo
- *    lo: NULL, hi:5
- *    output:{1, 2, 3, NULL, 5, 5, 5}
- *
- *    invalid hi
- *    lo: 3, hi:NULL
- *    output:{3, 3, 3, NULL, 5, 6, 7}
- *
- * @throws cudf::logic_error if `type` of lo, hi mismatch
- * @throws cudf::logic_error if `type` of lo, input mismatch
- *
- * @param[in] input column_view which gets clamped
- * @param[in] lo lower boundary to clamp `input`
- * @param[in] hi higer boundary to clamp `input`
- * @param[in] mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid` bool.
  * @param[in] stream Optional stream on which to issue all memory allocations
- *
- * @return Returns a clamped column as per `lo` and `hi` boundaries
  */
 std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
