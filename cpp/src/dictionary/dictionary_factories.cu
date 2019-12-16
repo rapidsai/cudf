@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -82,8 +83,8 @@ struct copy_unique_functor
  *
  */
 std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                cudaStream_t stream = 0)
+                                                rmm::mr::device_memory_resource* mr,
+                                                cudaStream_t stream)
 {
     auto count = input_column.size();
     auto execpol = rmm::exec_policy(stream);
@@ -150,6 +151,26 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
         copy_bitmask( input_column, stream, mr), input_column.null_count(),
         std::move(children),
         std::move(keys_column));
+}
+
+std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
+                                                column_view const& indices_column,
+                                                rmm::device_buffer& null_mask,
+                                                size_type null_count,
+                                                rmm::mr::device_memory_resource* mr,
+                                                cudaStream_t stream)
+{
+    auto indices_copy = std::make_unique<column>( indices_column, stream, mr);
+    std::shared_ptr<const column> keys_copy = std::make_unique<column>(keys_column, stream, mr);
+
+    std::vector<std::unique_ptr<column>> children;
+    children.emplace_back(std::move(indices_copy));
+    return std::make_unique<column>(
+        data_type{DICTIONARY32}, indices_column.size(),
+        rmm::device_buffer{0,stream,mr},
+        null_mask, null_count,
+        std::move(children),
+        std::move(keys_copy));
 }
 
 }  // namespace cudf
