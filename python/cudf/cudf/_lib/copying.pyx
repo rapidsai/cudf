@@ -109,14 +109,14 @@ def gather(source, maps, bounds_check=True):
     for i, in_col in enumerate(in_cols):
         if isinstance(in_col, CategoricalColumn):
             dtype = cudf.CategoricalDtype(
-                data_dtype=out_cols[i].dtype,
                 categories=in_col.cat().categories,
                 ordered=in_col.cat().ordered
             )
             out_cols[i] = column.build_column(
-                data=out_cols[i].data,
+                data=None,
                 mask=out_cols[i].mask,
-                dtype=dtype)
+                dtype=dtype,
+                children=(out_cols[i],))
 
     free_column(c_maps)
     free_table(c_in_table)
@@ -168,14 +168,14 @@ def scatter(source, maps, target, bounds_check=True):
     for i, in_col in enumerate(target_cols):
         if is_categorical_dtype(in_col.dtype):
             dtype = cudf.CategoricalDtype(
-                data_dtype=result_cols[i].dtype,
                 categories=in_col.cat().categories,
                 ordered=in_col.cat().ordered
             )
             result_cols[i] = column.build_column(
-                data=result_cols[i].data,
+                data=None,
                 mask=result_cols[i].mask,
-                dtype=dtype)
+                dtype=dtype,
+                children=(result_cols[i],))
     
 
     del c_source_table
@@ -311,17 +311,17 @@ def scatter_to_frames(source, maps, index=None, names=None):
         df = table_to_dataframe(&tab, int_col_names=False)
         for name, cat_info in cats.items():
             if is_categorical_dtype(df[name].dtype):
-                data_dtype = df[name].dtype.data_dtype
+                data_dtype = df[name].codes.dtype
             else:
                 data_dtype = df[name].dtype
             dtype = cudf.CategoricalDtype(
-                data_dtype=data_dtype,
                 categories=cat_info[0],
                 ordered=cat_info[1])
             df[name] = Series(
                 build_column(
-                    data=df[name].data,
-                    dtype=dtype
+                    data=None,
+                    dtype=dtype,
+                    children=(df[name],)
                 )
             )
         if index:

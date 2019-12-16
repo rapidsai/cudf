@@ -140,7 +140,7 @@ cdef np_dtype_from_gdf_column(gdf_column* col):
 cdef gdf_dtype gdf_dtype_from_dtype(dtype) except? GDF_invalid:
     # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
     if is_categorical_dtype(dtype):
-        return gdf_dtype_from_dtype(dtype.data_dtype)
+        raise NotImplementedError()
     # if dtype is np.datetime64, interrogate the dtype's time_unit resolution
     if pd.api.types.is_datetime64_dtype(dtype):
         time_unit, _ = np.datetime_data(dtype)
@@ -255,7 +255,12 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
     cdef uintptr_t category
-    cdef gdf_dtype c_dtype = gdf_dtype_from_dtype(col.dtype)
+    cdef gdf_dtype c_dtype
+
+    if is_categorical_dtype(col.dtype):
+        c_dtype = gdf_dtype_from_dtype(col.codes.dtype)
+    else:
+        c_dtype = gdf_dtype_from_dtype(col.dtype)
 
     if col_name is None:
         col_name = col.name
@@ -270,7 +275,10 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
         category = 0
 
         if len(col) > 0:
-            data_ptr = col.data.ptr
+            if is_categorical_dtype(col.dtype):
+                data_ptr = col.codes.data.ptr
+            else:
+                data_ptr = col.data.ptr
         else:
             data_ptr = 0
 
@@ -287,7 +295,7 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
         time_unit=c_time_unit,
         category=<void*>category
     )
-
+    
     with nogil:
         gdf_column_view_augmented(
             <gdf_column*>c_col,

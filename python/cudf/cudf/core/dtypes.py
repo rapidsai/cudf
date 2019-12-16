@@ -6,19 +6,20 @@ import cudf
 
 
 class CategoricalDtype(ExtensionDtype):
-    def __init__(self, data_dtype, categories=None, ordered=None):
+    def __init__(self, categories=None, ordered=None):
         """
         dtype similar to pd.CategoricalDtype with the categories
         stored on the GPU.
         """
-        self.data_dtype = np.dtype(data_dtype)
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 
     @property
     def categories(self):
         if self._categories is None:
-            return None
+            return cudf.core.index.as_index(
+                cudf.core.column.column_empty(0, dtype="object", masked=False)
+            )
         return cudf.core.index.as_index(self._categories)
 
     @property
@@ -32,6 +33,12 @@ class CategoricalDtype(ExtensionDtype):
     @property
     def str(self):
         return "|O08"
+
+    @classmethod
+    def from_pandas(cls, dtype):
+        return CategoricalDtype(
+            categories=dtype.categories, ordered=dtype.ordered
+        )
 
     def to_pandas(self):
         if self.categories is None:
@@ -60,8 +67,7 @@ class CategoricalDtype(ExtensionDtype):
             return True
         else:
             return (
-                self.data_dtype == other.data_dtype
-                and self._categories.dtype == other._categories.dtype
+                self._categories.dtype == other._categories.dtype
                 and self._categories.equals(other._categories)
             )
 
@@ -71,7 +77,6 @@ class CategoricalDtype(ExtensionDtype):
     def serialize(self):
         header = {}
         frames = []
-        header["data_dtype"] = self.data_dtype.str
         header["ordered"] = self.ordered
         categories_buffer = []
         if self.categories is not None:
@@ -81,9 +86,6 @@ class CategoricalDtype(ExtensionDtype):
 
     @classmethod
     def deserialize(cls, header, frames):
-        data_dtype = header["data_dtype"]
         ordered = header["ordered"]
         categories = frames[0]
-        return cls(
-            data_dtype=data_dtype, categories=categories, ordered=ordered
-        )
+        return cls(categories=categories, ordered=ordered)

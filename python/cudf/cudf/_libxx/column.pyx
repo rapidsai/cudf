@@ -68,15 +68,20 @@ cdef class Column:
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
-            data_dtype = self.dtype.data_dtype
+            data_dtype = self.codes.dtype
         else:
             data_dtype = self.dtype
         cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef data_type dtype = data_type(tid)
-        cdef void* data = <void*><uintptr_t>(self.data.ptr)
         cdef size_type offset = self.offset
         cdef vector[mutable_column_view] children
+        cdef void* data
 
+        if is_categorical_dtype(self.dtype):
+            data = <void*><uintptr_t>(self.codes.data.ptr)
+        else:
+            data = <void*><uintptr_t>(self.data.ptr)
+            
         cdef Column child_column
         if self.children:
             for child_column in self.children:
@@ -99,15 +104,22 @@ cdef class Column:
 
     cdef column_view view(self) except *:
         if is_categorical_dtype(self.dtype):
-            data_dtype = self.dtype.data_dtype
+            data_dtype = self.codes.dtype
         else:
             data_dtype = self.dtype
         cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef data_type dtype = data_type(tid)
-        cdef void* data = <void*><uintptr_t>(self.data.ptr)
         cdef size_type offset = self.offset
         cdef vector[column_view] children
+        cdef void* data
 
+        if is_categorical_dtype(self.dtype):
+            data = <void*><uintptr_t>(self.codes.data.ptr)
+        else:
+            data = <void*><uintptr_t>(self.data.ptr)
+
+
+        
         cdef Column child_column
         if self.children:
             for child_column in self.children:

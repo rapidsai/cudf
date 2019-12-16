@@ -102,7 +102,7 @@ class ColumnBase(Column):
             return self.nvstrings
 
         if is_categorical_dtype(self.dtype):
-            dtype = self.dtype.data_dtype
+            return self.codes._data_view()
         else:
             dtype = self.dtype
 
@@ -211,16 +211,9 @@ class ColumnBase(Column):
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
-            if dtype.type in (np.object_, np.str_):
-                return as_column([], dtype="object")
-            elif is_categorical_dtype(dtype):
-                return CategoricalColumn(
-                    data=as_column(Buffer.null(np.dtype("int8"))),
-                    null_count=0,
-                    ordered=False,
-                )
-            else:
-                return as_column(Buffer.empty(0), dtype=dtype)
+            if isinstance(dtype, "category"):
+                dtype = CategoricalDtype()
+            return column_empty(0, dtype=dtype, masked=True)
 
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
@@ -915,7 +908,13 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     children = ()
 
     if is_categorical_dtype(dtype):
-        data = Buffer.empty(row_count * dtype.data_dtype.itemsize)
+        data = None
+        children = (
+            build_column(
+                data=Buffer.empty(row_count * np.dtype("int32").itemsize),
+                dtype="int32",
+            ),
+        )
     elif dtype.kind in "OU":
         data = None
         children = (
@@ -941,8 +940,28 @@ def column_empty(row_count, dtype, masked, categories=None, name=None):
     return build_column(data, dtype, mask=mask, children=children, name=name)
 
 
-def build_column(data, dtype, mask=None, offset=None, children=(), name=None):
+def build_column(
+    data, dtype, mask=None, offset=0, children=(), name=None, categories=None,
+):
+    """
+    Build a Column of the appropriate type from the given parameters
 
+    Parameters
+    ----------
+    data : Buffer
+        The data buffer (can be None if constructin certain Column
+        types like StringColumn or CategoricalColumn)
+    dtype
+        The dtype associated with the Column to construct
+    mask : Buffer, optionapl
+        The mask buffer
+    offset : int, optional
+    children : tuple, optional
+    name : optional
+    categories : Column, optional
+        If constructing a CategoricalColumn, a Column containing
+        the categories
+    """
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.categorical import CategoricalColumn
@@ -951,8 +970,13 @@ def build_column(data, dtype, mask=None, offset=None, children=(), name=None):
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if is_categorical_dtype(dtype):
+        if not len(children) == 1:
+            raise ValueError(
+                "Must specify exactly one child column for CategoricalColumn"
+            )
+        if not isinstance(children[0], ColumnBase):
+            raise TypeError("children must be a tuple of Columns")
         return CategoricalColumn(
-            data=data,
             dtype=dtype,
             mask=mask,
             offset=offset,
@@ -1132,19 +1156,16 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         )
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary.indices)
-            categories_dtype = None
+            codes = as_column(arbitrary.indices)
             if isinstance(arbitrary.dictionary, pa.NullArray):
                 categories = as_column([], dtype="object")
             else:
                 categories = as_column(arbitrary.dictionary)
             dtype = CategoricalDtype(
-                arbitrary.type.index_type.to_pandas_dtype(),
-                categories=categories,
-                ordered=arbitrary.type.ordered,
+                categories=categories, ordered=arbitrary.type.ordered,
             )
             data = categorical.CategoricalColumn(
-                data=padata, dtype=dtype, mask=pamask,
+                dtype=dtype, mask=codes.mask, children=(codes,)
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))

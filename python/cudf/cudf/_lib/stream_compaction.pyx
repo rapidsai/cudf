@@ -187,12 +187,13 @@ def drop_nulls(cols, how="any", subset=None, thresh=None):
         if is_categorical_dtype(inp_col.dtype):
             codes = result_cols[i]
             dtype = cudf.CategoricalDtype(
-                data_dtype=codes.dtype,
                 categories=inp_col.cat().categories,
                 ordered=inp_col.cat().ordered)
             result_cols[i] = build_column(
-                data=codes.data,
+                data=None,
                 dtype=dtype,
-                mask=codes.mask)
+                mask=codes.mask,
+                children=(codes,)
+            )
 
     return result_cols
