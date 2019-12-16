@@ -16,6 +16,7 @@
 - PR #3608 Update OPS codeowner group name
 
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3620 Add stream parameter to unary ops' internal API
 
 ## Bug Fixes
 
