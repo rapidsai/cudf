@@ -63,7 +63,7 @@ struct dispatch_clamp {
         auto hi_scalar = static_cast<ScalarType const&>(hi);
         auto lo_value = lo_scalar.value(stream);
         auto hi_value = hi_scalar.value(stream);
-        auto output = detail::allocate_like(input, input.size(), mask_allocation_policy::RETAIN, mr, stream);
+        auto output = detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
         // mask will not change
         if (input.nullable()){
             output->set_null_mask(copy_bitmask(input), input.null_count());
