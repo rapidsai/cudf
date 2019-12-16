@@ -111,7 +111,6 @@ mutable_column_device_view::mutable_column_device_view( mutable_column_view sour
                                       source.null_count(), source.offset()}
 {
   // TODO children may not be actually possible for mutable columns
-  CUDF_EXPECTS(source.num_children()==0, "Mutable columns with children are not currently supported.");
 }
 
 mutable_column_device_view::mutable_column_device_view( mutable_column_view source, ptrdiff_t h_ptr, ptrdiff_t d_ptr )
@@ -120,7 +119,6 @@ mutable_column_device_view::mutable_column_device_view( mutable_column_view sour
                                       source.null_count(), source.offset()}
 {
   // TODO children may not be actually possible for mutable columns
-  CUDF_EXPECTS(source.num_children()==0, "Mutable columns with children are not currently supported.");
 }
 
 // Handle freeing children
@@ -133,7 +131,6 @@ void mutable_column_device_view::destroy() {
 std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>
   mutable_column_device_view::create(mutable_column_view source, cudaStream_t stream) {
   // TODO children may not be actually possible for mutable columns
-  CUDF_EXPECTS(source.num_children()==0, "Mutable columns with children are not currently supported.");
   auto deleter = [](mutable_column_device_view* v) { v->destroy(); };
   std::unique_ptr<mutable_column_device_view, decltype(deleter)> p{
       new mutable_column_device_view(source), deleter};
