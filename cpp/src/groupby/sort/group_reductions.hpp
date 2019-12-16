@@ -62,10 +62,20 @@ struct reduce_functor {
   }
 };
 
+// TODO (dm): take memory resource
 std::unique_ptr<column> group_sum(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
     size_type num_groups,
+    cudaStream_t stream = 0);
+
+std::unique_ptr<column> group_var(
+    column_view const& values,
+    column_view const& group_means,
+    rmm::device_vector<size_type> const& group_labels,
+    rmm::device_vector<size_type> const& group_sizes,
+    size_type ddof,
+    rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
 }  // namespace detail

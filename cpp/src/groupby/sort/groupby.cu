@@ -29,6 +29,7 @@
 #include <cudf/detail/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/unary.hpp>
 
 #include <memory>
 #include <utility>
@@ -160,6 +161,37 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
       cache.add_result(col_idx, agg, std::move(result));
     };
 
+    auto store_var = [&] (size_type col_idx,
+                          std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(col_idx, agg))
+        return;
+      auto var_agg =
+        static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
+      auto mean_agg = make_mean_aggregation();
+      store_mean(col_idx, mean_agg);
+      column_view mean_result = cache.get_result(col_idx, mean_agg);
+      auto result = group_var(sorted_values->view(), mean_result, 
+                              sorter.group_labels(), group_sizes, var_agg->_ddof,
+                              mr, stream);
+      cache.add_result(col_idx, agg, std::move(result));
+    };
+    
+    auto store_std = [&] (size_type col_idx,
+                          std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(col_idx, agg))
+        return;
+      auto std_agg =
+        static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
+      auto var_agg = make_variance_aggregation(std_agg->_ddof);
+      store_var(col_idx, var_agg);
+      column_view var_result = cache.get_result(col_idx, var_agg);
+      auto result = experimental::detail::unary_operation(
+        var_result, experimental::unary_op::SQRT, mr, stream);
+      cache.add_result(col_idx, agg, std::move(result));
+    };
+
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       switch (requests[i].aggregations[j]->kind) {
         // TODO (dm): single pass compute all supported reductions
@@ -171,6 +203,12 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
         break;
       case aggregation::MEAN:
         store_mean(i, requests[i].aggregations[j]);
+        break;
+      case aggregation::STD:
+        store_std(i, requests[i].aggregations[j]);
+        break;
+      case aggregation::VARIANCE:
+        store_var(i, requests[i].aggregations[j]);
         break;
       case aggregation::QUANTILE:
   

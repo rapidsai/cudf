@@ -566,6 +566,7 @@ add_library(cudf
             src/groupby/sort/sort_helper.cu
             src/groupby/sort/result_cache.cpp
             src/groupby/sort/group_sum.cu
+            src/groupby/sort/group_std.cu
             src/aggregation/aggregation.cpp
 )
 

@@ -35,7 +35,7 @@ class aggregation {
   /**
    * @brief Possible aggregation operations
    */
-  enum Kind { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
+  enum Kind { SUM, MIN, MAX, COUNT, MEAN, VARIANCE, STD, MEDIAN, QUANTILE };
 
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
@@ -58,6 +58,20 @@ struct quantile_aggregation : aggregation {
        and _interpolation == other._interpolation 
        and std::equal(_quantiles.begin(), _quantiles.end(),
                       other._quantiles.begin());
+  }
+};
+
+/**
+ * @brief Derived class for specifying a quantile aggregation
+ */
+struct std_var_aggregation : aggregation {
+  std_var_aggregation(aggregation::Kind k, size_type ddof)
+      : aggregation{k}, _ddof{ddof} {}
+  size_type _ddof;              ///< Delta degrees of freedom
+
+  bool operator==(std_var_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _ddof == other._ddof;
   }
 };
 
@@ -101,6 +115,7 @@ template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::COUNT> { using type = cudf::size_type; };
 
 // Always use `double` for MEAN
+// TODO (dm): Except for timestamp where result is timestamp. (Use FloorDiv)
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::MEAN> { using type = double; };
 
@@ -118,6 +133,14 @@ struct target_type_impl<
     std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
 };
+
+// Always use `double` for VARIANCE
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::VARIANCE> { using type = double; };
+
+// Always use `double` for STD
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::STD> { using type = double; };
 
 // Always use `double` for quantile 
 template <typename SourceType>
@@ -157,6 +180,8 @@ using kind_to_type = typename kind_to_type_impl<k>::type;
 
 AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
 AGG_KIND_MAPPING(aggregation::MEDIAN, quantile_aggregation);
+AGG_KIND_MAPPING(aggregation::STD, std_var_aggregation);
+AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
 
 /**
  * @brief Dispatches  k as a non-type template parameter to a callable,  f.
@@ -175,6 +200,8 @@ decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f){
         case aggregation::MAX:      return f.template operator()<aggregation::MAX>();
         case aggregation::COUNT:    return f.template operator()<aggregation::COUNT>();
         case aggregation::MEAN:     return f.template operator()<aggregation::MEAN>();
+        case aggregation::VARIANCE: return f.template operator()<aggregation::VARIANCE>();
+        case aggregation::STD:      return f.template operator()<aggregation::STD>();
         case aggregation::MEDIAN:   return f.template operator()<aggregation::MEDIAN>();
         case aggregation::QUANTILE: return f.template operator()<aggregation::QUANTILE>();
     }
