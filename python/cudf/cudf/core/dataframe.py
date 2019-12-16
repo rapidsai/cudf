@@ -37,7 +37,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
     is_list_like,
-    is_scalar
+    is_scalar,
 )
 
 
