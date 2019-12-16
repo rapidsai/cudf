@@ -14,6 +14,7 @@
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
 - PR #3567 Include `strides` in `__cuda_array_interface__`
+- PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
 
 ## Bug Fixes
