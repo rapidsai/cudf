@@ -674,8 +674,10 @@ class MultiIndex(Index):
         n = 0
         for col in self._source_data._columns:
             n += col._memory_usage(deep=deep)
-        for level in self._levels:
-            n += level.memory_usage(deep=deep)
-        for col in self._codes._columns:
-            n += col._memory_usage(deep=deep)
+        if self._levels:
+            for level in self._levels:
+                n += level.memory_usage(deep=deep)
+        if self._codes:
+            for col in self._codes._columns:
+                n += col._memory_usage(deep=deep)
         return n
