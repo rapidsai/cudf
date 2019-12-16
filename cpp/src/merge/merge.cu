@@ -38,9 +38,9 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-//#include <cudf/strings/detail/merge.cuh> // <- TODO: separate PR for strings support
 
 #include <cudf/detail/merge.cuh>
+#include <cudf/strings/detail/merge.cuh>
 
 namespace { // anonym.
 
@@ -330,36 +330,31 @@ struct column_merger
     return p_merged_col;
   }
 
-  //specialization for string...?
-  //or should use `cudf::string_view` instead?
+  //specialization for strings
   //
   template<typename Element>//required: column type
   std::enable_if_t<not cudf::is_fixed_width<Element>(),
                    std::unique_ptr<cudf::column>>
   operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
   {
-    //for now...
-    CUDF_FAIL("Non fixed-width types are not supported");
-
-    // TODO: separate PR for strins support:
-    //
-    // auto column = strings::detail::merge( strings_column_view(lcol),
-    //                                       strings_column_view(rcol),
-    //                                       dv_row_order_.begin(),
-    //                                       dv_row_order_.end(),
-    //                                       mr_,
-    //                                       stream_);
     
-    // if (lcol.has_nulls() || rcol.has_nulls())
-    //   {
-    //     auto merged_view = column->mutable_view();
-    //     materialize_bitmask(lcol,
-    //                         rcol,
-    //                         merged_view,
-    //                         dv_row_order_.data().get(),
-    //                         stream_);
-    //   }
-    // return column;
+    auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
+                                                      strings_column_view(rcol),
+                                                      dv_row_order_.begin(),
+                                                      dv_row_order_.end(),
+                                                      mr_,
+                                                      stream_);
+    
+    if (lcol.has_nulls() || rcol.has_nulls())
+      {
+        auto merged_view = column->mutable_view();
+        materialize_bitmask(lcol,
+                            rcol,
+                            merged_view,
+                            dv_row_order_.data().get(),
+                            stream_);
+      }
+    return column;
   }
 
 private:
