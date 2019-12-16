@@ -28,10 +28,10 @@ namespace experimental {
 namespace detail {
 namespace {
 struct dispatch_clamp {
-    template <typename T, typename Predicate>
+    template <typename T, typename Transformer>
     void apply_transform (column_device_view  input,
                           mutable_column_device_view output,
-                          Predicate pred,
+                          Transformer trans,
                           cudaStream_t stream)
     {
         if (input.nullable()){
@@ -41,13 +41,13 @@ struct dispatch_clamp {
                               input_begin+input.size(),
                               detail::make_validity_iterator(input),
                               output.begin<T>(),
-                              pred);
+                              trans);
         } else {
             thrust::transform(rmm::exec_policy(stream)->on(stream),
                               input.begin<T>(),
                               input.end<T>(),
                               output.begin<T>(),
-                              pred);
+                              trans);
         }
     }
 
@@ -59,25 +59,21 @@ struct dispatch_clamp {
               rmm::mr::device_memory_resource* mr,
               cudaStream_t stream) {
         using ScalarType = cudf::experimental::scalar_type_t<T>;
-        auto lo_scalar = static_cast<ScalarType const*>(&lo);
-        auto hi_scalar = static_cast<ScalarType const*>(&hi);
-        auto lo_value = lo_scalar->value(stream);
-        auto hi_value = hi_scalar->value(stream);
+        auto lo_scalar = static_cast<ScalarType const&>(lo);
+        auto hi_scalar = static_cast<ScalarType const&>(hi);
+        auto lo_value = lo_scalar.value(stream);
+        auto hi_value = hi_scalar.value(stream);
+        auto output = detail::allocate_like(input, input.size(), mask_allocation_policy::RETAIN, mr, stream);
         // mask will not change
-        std::unique_ptr<column> output {nullptr};
         if (input.nullable()){
-            output = make_fixed_width_column(input.type(), input.size(),
-                                             copy_bitmask(input, stream, mr),
-                                             input.null_count(), stream, mr);
-        } else {
-            output = allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+            output->set_null_mask(copy_bitmask(input), input.null_count());
         }
 
         auto output_device_view  = cudf::mutable_column_device_view::create(output->mutable_view(), stream);
         auto input_device_view  = cudf::column_device_view::create(input, stream);
 
         if (lo.is_valid(stream) and hi.is_valid(stream)) {
-            auto pred = [lo_value, hi_value] __device__ (T input, bool is_valid = true){
+            auto trans = [lo_value, hi_value] __device__ (T input, bool is_valid = true){
                 if (is_valid) {
                     if (input < lo_value) {
                         return lo_value;
@@ -89,9 +85,9 @@ struct dispatch_clamp {
                 return input;
             };
 
-            apply_transform<T>(*input_device_view, *output_device_view, pred, stream);
+            apply_transform<T>(*input_device_view, *output_device_view, trans, stream);
         } else if (not lo.is_valid(stream)) {
-            auto pred = [hi_value] __device__ (T input, bool is_valid = true){
+            auto trans = [hi_value] __device__ (T input, bool is_valid = true){
                 if (is_valid and input > hi_value) {
                     return hi_value;
                 }
@@ -99,10 +95,10 @@ struct dispatch_clamp {
                 return input;
             };
 
-            apply_transform<T>(*input_device_view, *output_device_view, pred, stream);
+            apply_transform<T>(*input_device_view, *output_device_view, trans, stream);
         } else {
 
-            auto pred = [lo_value] __device__ (T input, bool is_valid = true){
+            auto trans = [lo_value] __device__ (T input, bool is_valid = true){
                 if (is_valid and input < lo_value) {
                     return lo_value;
                 }
@@ -110,7 +106,7 @@ struct dispatch_clamp {
                 return input;
             };
 
-            apply_transform<T>(*input_device_view, *output_device_view, pred, stream);
+            apply_transform<T>(*input_device_view, *output_device_view, trans, stream);
         }
         
         return output;

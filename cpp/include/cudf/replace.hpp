@@ -83,6 +83,7 @@ std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
  * if `hi` is invalid, then hi will not be considered while
  * evaluating the input (Essentially considered maximum value of that type).
  *
+ * ```
  * Example:
  *    input: {1, 2, 3, NULL, 5, 6, 7}
  *
@@ -97,15 +98,16 @@ std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
  *    invalid hi
  *    lo: 3, hi:NULL
  *    output:{3, 3, 3, NULL, 5, 6, 7}
+ * ```
  *
- * @throws cudf::logic_error if `type` of lo, hi mismatch
- * @throws cudf::logic_error if `type` of lo, input mismatch
+ * @throws cudf::logic_error if `lo.type() != hi.type()`
+ * @throws cudf::logic_error if `lo.type() != input.type()`
  *
- * @param[in] input column_view which gets clamped
- * @param[in] lo lo boundary to clamp `input`
- * @param[in] hi hi boundary to clamp `input`
+ * @param[in] input Column whose elements will be clamped
+ * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo`. Ignored if null.
+ * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`. Ignored if null.
  * @param[in] mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid` bool.
+ *           allocation of the returned result column.
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
  */
