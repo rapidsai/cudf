@@ -180,6 +180,14 @@ public:
 
     /**
      * @brief Converts tokenized list of strings into instance with ngrams.
+     *
+     * ```
+     * Example:
+     * s = ['a','b','c','d']
+     * g = create_ngrams(s,2,'_')
+     * g is now ['a_b','b_c','c_d']
+     * ```
+     *
      * @param strs Tokens to make into ngrams.
      * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.
      * @param separator String used to join tokens.
@@ -189,9 +197,17 @@ public:
 
     /**
      * @brief Creates ngrams of the tokens in each string.
-     * 
-     * @param strs Tokens to make into ngrams.
-     * @param delimiter String used to determine tokens.
+     *
+     * ```
+     * Example:
+     * s = ['a b','c d e']
+     * g = create_ngrams(s,' ',2,'_')
+     * g is now ['a_b','c_d','d_e']
+     * (note that there is no 'b_c' ngram in g)
+     * ```
+     *
+     * @param strs Strings to tokenize and make into ngrams.
+     * @param delimiter String used to determine tokens. If null, whitespace is used as the delimiter.
      * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.
      * @param separator String used to join tokens.
      * @return The tokens as ngrams.

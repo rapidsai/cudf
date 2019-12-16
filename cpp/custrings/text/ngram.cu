@@ -160,7 +160,7 @@ struct base_string_tokenize
     }
 };
 
-// per string
+// Count the number of tokens within a string.
 struct string_token_counter_fn : base_string_tokenize
 {
     string_token_counter_fn( custring_view_array d_strings,
@@ -185,7 +185,7 @@ struct string_token_counter_fn : base_string_tokenize
     }
 };
 
-// per string
+// Record the byte positions of each token within each string.
 struct string_tokens_positions_fn : base_string_tokenize
 {
     const int32_t* d_token_offsets;
@@ -217,88 +217,51 @@ struct string_tokens_positions_fn : base_string_tokenize
     }
 };
 
-// per string
-struct string_ngram_counts_fn
-{
-    const int32_t* d_token_offsets;
-    int32_t ngrams; // always >=2
-    __device__ int32_t operator()(int32_t idx)
-    {
-        auto token_count = d_token_offsets[idx+1] - d_token_offsets[idx];
-        return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
-    }
-};
-
-// per string
+// Compute the size of each ngram that will be created for each string.
+// Adjacent token position-pairs are used to calculate the total ngram sizes.
 struct ngram_sizes_fn
 {
     custring_view* d_separator;
     int32_t ngrams; // always >=2
-    //const int32_t* d_token_counts;
     const int32_t* d_token_offsets;
     const position_pair* d_token_positions;
     const int32_t* d_ngram_offsets;
-    //int32_t* d_ngram_sizes;
-
-    //ngram_sizes_fn( custring_view* d_separator,
-    //    int32_t ngrams, //  const int32_t* d_token_counts,
-    //    const int32_t* d_token_offsets,
-    //    const position_pair* d_token_positions, const int32_t* d_ngram_offsets)
-    //    //int32_t* d_ngram_sizes )
-    //    : d_separator(d_separator), ngrams(ngrams), // d_token_counts(d_token_counts),
-    //      d_token_offsets(d_token_offsets), d_token_positions(d_token_positions),
-    //      d_ngram_offsets(d_ngram_offsets) {}//, d_ngram_sizes(d_ngram_sizes) {}
 
     __device__ int32_t operator()(unsigned int idx)
     {
         auto token_positions = d_token_positions + d_token_offsets[idx];
         auto token_count = d_token_offsets[idx+1] - d_token_offsets[idx];
-        //auto ngram_sizes = d_ngram_sizes + d_ngram_offsets[idx];
-        //int ngram_index = 0;
         int32_t bytes = 0;
         for( int token_index = (ngrams-1); token_index < token_count; ++token_index )
         {
             int32_t length = 0;
-            for( int n = (ngrams-1); n >= 0; --n )
+            for( int n = (ngrams-1); n >= 0; --n ) // sliding window of tokens
             {
                 position_pair item = token_positions[token_index-n];
-                length += item.second - item.first;
-                length += d_separator->size();
+                length += item.second - item.first; // size of this token in bytes
+                length += d_separator->size(); // add size of the separator
             }
             length -= d_separator->size(); // remove trailing separator
-            //ngram_sizes[ngram_index++] = length;
             bytes += length;
         }
         return bytes;
     }
 };
 
-// per string
+// Build the ngrams for each string.
+// The ngrams for each string are placed contiguously within the section of memory
+// assigned for the string. And an index_pair is recorded for each ngram.
 struct ngram_builder_fn
 {
     custring_view_array d_strings;
     custring_view* d_separator;
     int32_t ngrams;
-    //const int32_t* d_token_counts;
     const int32_t* d_token_offsets;
     const position_pair* d_token_positions;
     const int32_t* d_ngram_offsets;
     const int32_t* d_chars_offsets;
-    char* d_chars;
-    index_pair* d_indices;
-
-    //ngram_builder_fn( custring_view_array d_strings,
-    //    custring_view* d_separator,
-    //    int32_t ngrams, //const int32_t* d_token_counts,
-    //    const int32_t* d_token_offsets,
-    //    const position_pair* d_token_positions, const int32_t* d_ngram_offsets,
-    //    const int32_t* d_chars_offsets, char* d_chars,
-    //    index_pair* d_indices )
-    //    : d_strings(d_strings), d_separator(d_separator),
-    //     ngrams(ngrams), //d_token_counts(d_token_counts),
-    //      d_token_offsets(d_token_offsets), d_token_positions(d_token_positions),
-    //      d_ngram_offsets(d_ngram_offsets), d_indices(d_indices),
-    //      d_chars_offsets(d_chars_offsets), d_chars(d_chars) {}
+    char* d_chars;  // write ngram strings to here
+    index_pair* d_indices; // output ngram index-pairs here
 
     __device__ void operator()(int32_t idx)
     {
@@ -318,7 +281,7 @@ struct ngram_builder_fn
                 out_ptr = copy_and_incr(out_ptr, dstr->data() + item.first, item.second - item.first);
                 length += item.second - item.first;
                 if( n > 0 )
-                {   // copy separator
+                {   // copy separator (except for the last one)
                     out_ptr = copy_and_incr( out_ptr, d_separator->data(), d_separator->size() );
                     length += d_separator->size();
                 }
@@ -328,6 +291,7 @@ struct ngram_builder_fn
     }
 };
 
+// This will create ngrams for each string and not across strings.
 NVStrings* NVText::ngrams_tokenize(NVStrings const& strs, const char* delimiter, int32_t ngrams, const char* separator )
 {
     auto count = strs.size();
@@ -335,9 +299,9 @@ NVStrings* NVText::ngrams_tokenize(NVStrings const& strs, const char* delimiter,
         return strs.copy();
     if( ngrams==1 )
         return NVText::tokenize(strs,delimiter);
-    if( ngrams==0 )
+    if( ngrams==0 ) // default is 2
         ngrams = 2;
-    if( !separator )
+    if( !separator ) // no separator specified
         separator = "";
 
     auto execpol = rmm::exec_policy(0);
