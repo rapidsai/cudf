@@ -22,7 +22,10 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <string>
+#include <map>
+#include <cudf/types.hpp>
 
 // Forward declarations
 namespace arrow {
@@ -79,6 +82,35 @@ enum statistics_freq {
   STATISTICS_ROWGROUP = 1, //!< Per-Rowgroup column statistics
   STATISTICS_PAGE = 2,     //!< Per-page column statistics
 };
+
+/**
+ * @brief Table metadata for io readers/writers (primarily column names)
+ * For nested types (structs, maps, unions), the ordering of names in the column_names vector
+ * corresponds to a pre-order traversal of the column tree.
+ * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
+ *  column_names = {"col1", "s3", "f5", "f6", "f4", "col2"}.
+ *
+ *     col1     col2 
+ *      / \ 
+ *     /   \ 
+ *   s3    f4 
+ *   / \ 
+ *  /   \ 
+ * f5    f6 
+ */
+struct table_metadata {
+  std::vector<std::string> column_names; //!< Names of columns contained in the table
+  std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs
+};
+
+/**
+ * @brief Table with table metadata used by io readers to return the metadata by value
+ */
+struct table_with_metadata {
+  std::unique_ptr<table> tbl;
+  table_metadata metadata;
+};
+
 
 /**
  * @brief Source information for read interfaces
