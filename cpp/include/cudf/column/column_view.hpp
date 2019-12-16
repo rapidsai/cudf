@@ -17,6 +17,7 @@
 
 #include <cudf/types.hpp>
 #include <vector>
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -307,11 +308,13 @@ class column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
-   *---------------------------------------------------------------------------**/
+   * @param keys optional, keys for dictionary column
+   */
   column_view(data_type type, size_type size, void const* data,
               bitmask_type const* null_mask = nullptr,
               size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
-              std::vector<column_view> const& children = {});
+              std::vector<column_view> const& children = {},
+              std::shared_ptr<column_view> keys = {} );
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -323,6 +326,11 @@ class column_view : public detail::column_view_base {
     return _children[child_index];
   }
 
+  /**
+   * @brief Returns the keys column.
+   */
+  std::shared_ptr<column_view> keys()  { return _keys; }
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of child columns.
    *---------------------------------------------------------------------------**/
@@ -331,7 +339,8 @@ class column_view : public detail::column_view_base {
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-};                                       // namespace cudf
+  std::shared_ptr<column_view> _keys;    ///< Keys for dictionary column
+};
 
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, mutable view of device data as a column of elements,

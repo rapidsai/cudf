@@ -79,9 +79,10 @@ size_type column_view_base::null_count(size_type begin, size_type end) const {
 column_view::column_view(data_type type, size_type size, void const* data,
                          bitmask_type const* null_mask, size_type null_count,
                          size_type offset,
-                         std::vector<column_view> const& children)
+                         std::vector<column_view> const& children,
+                         std::shared_ptr<column_view> keys)
     : detail::column_view_base{type, size, data, null_mask, null_count, offset},
-      _children{children} {
+      _children{children}, _keys{keys} {
   if (type.id() == EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
