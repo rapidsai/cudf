@@ -344,6 +344,10 @@ class CategoricalColumn(column.TypedColumnBase):
         val = self.as_numerical.element_indexing(index)
         return self._decode(val) if val is not None else val
 
+    @property
+    def __cuda_array_interface__(self):
+        return self.cat().codes.__cuda_array_interface__
+
     def to_pandas(self, index=None):
         codes = self.cat().codes.fillna(-1).to_array()
         categories = self._categories.to_pandas()
