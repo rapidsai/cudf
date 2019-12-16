@@ -4,6 +4,7 @@
 
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3610 Add memory_usage to DataFrame and Series APIs
 
 ## Improvements
 

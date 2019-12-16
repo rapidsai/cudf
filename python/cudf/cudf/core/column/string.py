@@ -486,12 +486,17 @@ class StringColumn(column.TypedColumnBase):
     def str(self, index=None):
         return StringMethods(self, index=index)
 
+    def __sizeof__(self):
+        n = self.str().len().sum() * self.dtype.itemsize
+        if self._mask:
+            n += self._mask.__sizeof__()
+        return n
+
     def _memory_usage(self, deep=False):
         if deep:
-            # TODO: __sizeof__ not working for nvstrings
             return self.__sizeof__()
         else:
-            return self.__sizeof__()
+            return self.str().size() * self.dtype.itemsize
 
     def __len__(self):
         return self._data.size()

@@ -4133,3 +4133,23 @@ def test_memory_usage(index, deep):
         df.memory_usage(index=index, deep=deep).sort_index(),
         gdf.memory_usage(index=index, deep=deep).sort_index(),
     )
+
+
+@pytest.mark.parametrize("index", [True, False])
+def test_memory_usage_strings(index):
+    rows = int(4)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int64"),
+            "B": np.arange(rows, dtype="int32"),
+            "C": np.random.choice(["apple", "banana", "orange"], rows),
+        }
+    ).set_index("A")
+    gdf = gd.from_pandas(df)
+
+    assert_eq(
+        df.memory_usage(index=index).sort_index(),
+        gdf.memory_usage(index=index).sort_index(),
+    )
+    deep_mem = gdf.C.memory_usage(deep=True, index=False)
+    assert deep_mem == (gdf.C._column.str().len().sum() * gdf.C.dtype.itemsize)
