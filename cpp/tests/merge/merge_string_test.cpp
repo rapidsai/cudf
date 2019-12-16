@@ -23,22 +23,11 @@
 
 #include <gtest/gtest.h>
 
-#define DEBUG_
-
-#ifdef DEBUG_
-#endif
-
-#ifdef DEBUG_
-#include <iostream>
-#endif
-
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 template <typename T>
 class MergeStringTest : public cudf::test::BaseFixture {};
-
-///class MergeStringOnlyTest : public cudf::test::BaseFixture {}; // <- use with TEST_F
 
 TYPED_TEST_CASE(MergeStringTest, cudf::test::FixedWidthTypes);
 
