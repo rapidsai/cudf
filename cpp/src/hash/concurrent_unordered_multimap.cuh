@@ -17,21 +17,20 @@
 #ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
 #define CONCURRENT_UNORDERED_MULTIMAP_CUH
 
-#include <cudf/cudf.h>
+#include <hash/managed.cuh>
+#include <hash/hash_allocator.cuh>
+#include <hash/helper_functions.cuh>
+#include <utilities/legacy/device_atomics.cuh>
+
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
+
+#include <thrust/pair.h>
+
 #include <cassert>
 #include <iostream>
 #include <iterator>
 #include <type_traits>
-
-#include <thrust/pair.h>
-
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include "managed.cuh"
-#include "hash_allocator.cuh"
-
-#include "helper_functions.cuh"
-
-#include <utilities/legacy/device_atomics.cuh>
 
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
@@ -502,8 +501,8 @@ class concurrent_unordered_multimap {
       if (cudaSuccess == status &&
           isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_RT_CALL(cudaGetDevice(&dev_id));
-        CUDA_RT_CALL(cudaMemPrefetchAsync(
+        CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDA_TRY(cudaMemPrefetchAsync(
             m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream));
       }
     }
@@ -511,8 +510,7 @@ class concurrent_unordered_multimap {
     if (init) {
       init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream>>>(
           m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
-      CUDA_RT_CALL(cudaGetLastError());
-      CUDA_RT_CALL(cudaStreamSynchronize(stream));
+      CUDA_TRY(cudaGetLastError());
     }
   }
 };

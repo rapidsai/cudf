@@ -1,6 +1,34 @@
-# cuDF 0.11.0 (Date TBD)
+# cuDF 0.12.0 (Date TBD)
 
 ## New Features
+
+- PR #3284 Add gpu-accelerated parquet writer
+- PR #3336 Add `from_dlpack` and `to_dlpack`
+- PR #3555 Add column names support to libcudf++ io readers and writers
+
+## Improvements
+
+- PR #3502 ORC reader: add option to read DECIMALs as INT64
+- PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
+- PR #3590 Specialize hash functions for floating point
+- PR #3569 Use `np.asarray` in `StringColumn.deserialize`
+- PR #3553 Support Python NoneType in numeric binops
+
+- PR #3431 Port NVStrings translate to cudf strings column
+
+## Bug Fixes
+
+- PR #3550 Update Java package to 0.12
+- PR #3549 Fix index name issue with iloc with RangeIndex
+- PR #3562 Fix 4GB limit for gzipped-compressed csv files
+- PR #3563 Use `__cuda_array_interface__` for serialization
+- PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
+
+
+# cuDF 0.11.0 (11 Dec 2019)
+
+## New Features
+
 - PR #2905 Added `Series.median()` and null support for `Series.quantile()`
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
 - PR #2956 Add `cudf::stack` and `cudf::tile`
@@ -50,6 +78,7 @@
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
+- PR #3527 Add string functionality for merge API
 
 ## Improvements
 
@@ -244,6 +273,9 @@
 - PR #3523 Fix lgenfe issue with debug build
 - PR #3532 Fix potential use-after-free in cudf parquet reader
 - PR #3540 Fix unary_op null_mask bug and add missing test cases
+- PR #3559 Use HighLevelGraph api in DataFrame constructor (Fix upstream compatibility)
+- PR #3572 Fix CI Issue with hypothesis tests that are flaky
+
 
 # cuDF 0.10.0 (16 Oct 2019)
 

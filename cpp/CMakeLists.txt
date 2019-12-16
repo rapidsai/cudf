@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -437,6 +437,7 @@ add_library(cudf
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
+            src/dlpack/dlpack.cpp
             src/io/convert/dlpack/legacy/cudf_dlpack.cpp
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -460,9 +461,12 @@ add_library(cudf
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
+            src/io/parquet/page_enc.cu
+            src/io/parquet/page_dict.cu
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/parquet/reader_impl.cu
+            src/io/parquet/writer_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
@@ -471,6 +475,7 @@ add_library(cudf
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/functions.cpp
+            src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
@@ -532,6 +537,7 @@ add_library(cudf
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/substring.cu
+            src/strings/translate.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
