@@ -67,11 +67,12 @@ namespace experimental {
  * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column
  * from `left` indicated by `left_on[i]`.
- * @param[in] columns_in_common is a vector of pairs of column indices from
- * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left` and `right`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
- * an output column will be produced.
+ * an output column will be produced.  For each of these pairs (L, R), L
+ * should exist in `left_on` and R should exist in `right_on`.
  * @param mr Memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
@@ -129,11 +130,12 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column
  * from `left` indicated by `left_on[i]`.
- * @param[in] columns_in_common is a vector of pairs of column indices from
- * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left` and `right`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
- * an output column will be produced.
+ * an output column will be produced.  For each of these pairs (L, R), L
+ * should exist in `left_on` and R should exist in `right_on`.
  * @param mr Memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
@@ -191,11 +193,12 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column
  * from `left` indicated by `left_on[i]`.
- * @param[in] columns_in_common is a vector of pairs of column indices from
- * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left` and `right`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
- * from respective columns in `left_on` and `right_on`. Else, for every column in
- * `left_on` and `right_on`, an output column will be produced.
+ * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
+ * an output column will be produced.  For each of these pairs (L, R), L
+ * should exist in `left_on` and R should exist in `right_on`.
  * @param mr Memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns

@@ -23,6 +23,7 @@
 
 #include <join/hash_join.cuh>
 #include <algorithm>
+#include <iterator>
 
 namespace cudf {
 
@@ -41,8 +42,6 @@ bool is_trivial_join(
       return true;
   }
 
-  // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
-  // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
   // If the inputs are empty, immediately return
   if ((0 == left.num_rows()) && (0 == right.num_rows())) {
       return true;
@@ -160,7 +159,7 @@ struct valid_range {
 * This table has two columns. The first one is filled with JoinNoneValue(-1)
 * and the second one contains values from 0 to right_table_row_count - 1
 * excluding those found in the right_indices column.
-* 
+*
 * @Param right_indices Vector of indices
 * @Param left_table_row_count Number of rows of left table
 * @Param right_table_row_count Number of rows of right table
@@ -297,9 +296,9 @@ combine_join_columns(
     std::vector<std::unique_ptr<column>>&& left_common_cols,
     std::vector<size_type> const& left_common_col_indices,
     std::vector<std::unique_ptr<column>>&& right_noncommon_cols) {
+
   std::vector<std::unique_ptr<column>> combined_cols(
       left_noncommon_cols.size() +
-      right_noncommon_cols.size() +
       left_common_cols.size());
   for(size_t i = 0; i < left_noncommon_cols.size(); ++i) {
     combined_cols.at(left_noncommon_col_indices.at(i)) =
@@ -308,10 +307,9 @@ combine_join_columns(
   for(size_t i = 0; i < left_common_cols.size(); ++i) {
     combined_cols.at(left_common_col_indices.at(i)) = std::move(left_common_cols.at(i));
   }
-  for(size_t i = 0; i < right_noncommon_cols.size(); ++i) {
-    combined_cols.at(left_noncommon_cols.size() + left_common_cols.size() + i) =
-      std::move(right_noncommon_cols.at(i));
-  }
+  combined_cols.insert(combined_cols.end(),
+      std::make_move_iterator(right_noncommon_cols.begin()),
+      std::make_move_iterator(right_noncommon_cols.end()));
   return combined_cols;
 }
 
@@ -332,7 +330,6 @@ combine_join_columns(
 * `left`. For a full join, the result will be gathered from both common
 * columns in `left` and `right` and concatenated to form a single column.
 *
-* @Returns  Table containing rearranged columns.
 * @Returns `table` containing the concatenation of rows from `left` and
 * `right` specified by `joined_indices`.
 * For any columns indicated by `columns_in_common`, only the corresponding

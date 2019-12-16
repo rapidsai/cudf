@@ -58,11 +58,11 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Builds a hash table from a table_device_view that maps the hash
+* @brief  Builds a hash table from a row hasher that maps the hash
 * values of each row to its respective row index.
 *
 * @param[in,out] multi_map The hash table to be built to insert rows into
-* @param[in] build_table The table to build the hash table on
+* @param[in] hash_build Row hasher for the build table
 * @param[in] build_table_num_rows The number of rows in the build table
 * @tparam multimap_type The type of the hash table
 *
@@ -70,7 +70,6 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 /* ----------------------------------------------------------------------------*/
 template<typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
-                                 table_device_view build_table,
                                  row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
                                  int* error)

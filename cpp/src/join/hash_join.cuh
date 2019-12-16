@@ -174,6 +174,20 @@ estimate_join_output_size(
   return h_size_estimate;
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief  Computes the trivial left join operation for the case when the
+ * right table is empty. In this case all the valid indices of the left table
+ * are returned with their corresponding right indices being set to
+ * JoinNoneValue, i.e. -1.
+ *
+ * @param left  Table of left columns to join
+ * @param stream stream on which all memory allocations and copies
+ * will be performed
+ *
+ * @returns Join output indices vector pair
+ */
+/* ----------------------------------------------------------------------------*/
 std::pair<rmm::device_vector<size_type>,
 rmm::device_vector<size_type>>
 get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
@@ -218,6 +232,8 @@ get_base_hash_join_indices(
     bool flip_join_indices,
     cudaStream_t stream) {
 
+  // The `right` table is always used for building the hash map. We want to build the hash map
+  // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
     return get_base_hash_join_indices<JoinKind>(right, left, true, stream);
   }
@@ -232,9 +248,6 @@ get_base_hash_join_indices(
   // Probe with the left table
   auto probe_table = table_device_view::create(left, stream);
 
-  // Hash table size must be at least 1 in order to have a valid allocation.
-  // Even if the hash table will be empty, it still must be allocated for the
-  // probing phase in the event of an outer join
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(
@@ -253,7 +266,6 @@ get_base_hash_join_indices(
     experimental::detail::grid_1d config(build_table_num_rows, block_size);
     build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         *hash_table,
-        *build_table,
         hash_build,
         build_table_num_rows,
         failure.data());
@@ -267,8 +279,7 @@ get_base_hash_join_indices(
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    rmm::device_vector<size_type> left_empty, right_empty;
-    return std::make_pair(left_empty, right_empty);
+    return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
   }
 
   // Because we are approximating the number of joined elements, our approximation
@@ -316,7 +327,7 @@ get_base_hash_join_indices(
 
   left_indices.resize(join_size);
   right_indices.resize(join_size);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  return std::make_pair(left_indices, right_indices);
 
 }
 
