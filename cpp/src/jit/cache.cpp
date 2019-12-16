@@ -56,7 +56,7 @@ boost::filesystem::path getCacheDir() {
       kernel_cache_path_env != NULL ? kernel_cache_path_env
                                     : LIBCUDF_KERNEL_CACHE_PATH);
   // `mkdir -p` the kernel cache path if it doesn't exist
-  boost::filesystem::create_directory(kernel_cache_path);
+  boost::filesystem::create_directories(kernel_cache_path);
   return kernel_cache_path;
 }
 
