@@ -64,8 +64,6 @@ constexpr auto types_to_ids() {
 
 }  // namespace detail
 
-// #CH TODO add documentation
-// use this to make std::vector with NumericTypes to avoid narrowing conversion with bool
 template <typename TypeParam, typename T>
 auto make_type_param_vector(std::initializer_list<T> const& init_list) {
   std::vector<TypeParam> vec(init_list.size());
@@ -76,6 +74,18 @@ auto make_type_param_vector(std::initializer_list<T> const& init_list) {
     [] (auto const& e) { return static_cast<T>(e); });
   return vec;
 }
+
+/**
+ * @brief Provides a list of all floating point types supported in libcudf for
+ * use in a GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all floating point types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FloatingPointTypes);
+ * ```
+ */
+using FloatingPointTypes = cudf::test::Types<float, double>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all numeric types supported in libcudf for use in a

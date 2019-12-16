@@ -363,9 +363,10 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata metadata_out;
 
   // Select and read partial metadata / schema within the subset of rows
   _metadata->init_and_select_rows(skip_rows, num_rows);
@@ -456,7 +457,15 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
-  return std::make_unique<table>(std::move(out_columns));
+  // Return column names (must match order of returned columns)
+  metadata_out.column_names.resize(selected_columns.size());
+  for (size_t i = 0; i < selected_columns.size(); i++) {
+    metadata_out.column_names[i] = selected_columns[i].second;
+  }
+  // Return user metadata
+  metadata_out.user_data = _metadata->user_data;
+
+  return { std::make_unique<table>(std::move(out_columns)), std::move(metadata_out) };
 }
 
 // Forward to implementation
@@ -481,12 +490,12 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type skip_rows,
+table_with_metadata reader::read_rows(size_type skip_rows,
                                          size_type num_rows,
                                          cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, stream);
