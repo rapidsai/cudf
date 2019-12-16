@@ -18,11 +18,14 @@
 #define CONCURRENT_UNORDERED_MAP_CUH
 
 #include <utilities/legacy/device_atomics.cuh>
+#include <hash/helper_functions.cuh>
+#include <hash/hash_allocator.cuh>
+
+#include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include "helper_functions.cuh"
-#include "hash_allocator.cuh"
 
 #include <thrust/pair.h>
+
 #include <cassert>
 #include <iostream>
 #include <iterator>
@@ -422,16 +425,15 @@ class concurrent_unordered_map {
       if (cudaSuccess == status &&
           isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_RT_CALL(cudaGetDevice(&dev_id));
-        CUDA_RT_CALL(cudaMemPrefetchAsync(
+        CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDA_TRY(cudaMemPrefetchAsync(
             m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
       }
     }
 
     init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream>>>(
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
-    CUDA_RT_CALL(cudaGetLastError());
-    CUDA_RT_CALL(cudaStreamSynchronize(stream));
+    CUDA_TRY(cudaGetLastError());
   }
 };
 

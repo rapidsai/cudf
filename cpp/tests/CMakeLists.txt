@@ -406,9 +406,12 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")
 set(ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
+set(PARQUET_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
+ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -445,6 +448,14 @@ ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
 # - DLPack tests ----------------------------------------------------------------------------------
+
+set(DLPACK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/dlpack/dlpack_test.cpp")
+
+ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
+
+###################################################################################################
+# - legacy DLPack tests ----------------------------------------------------------------------------------
 
 set(LEGACY_DLPACK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/convert/legacy/dlpack_test.cu")
@@ -586,6 +597,15 @@ set(LEGACY_MERGE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/merge/legacy/merge-test.cu")
 
 ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
+
+###################################################################################################
+# - sorted-merge new tests ----------------------------------------------------------------------------
+
+set(MERGE_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu")
+
+ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
+
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
