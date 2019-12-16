@@ -275,8 +275,16 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                              min_periods, op, mr, stream);
 }
 
+std::istream* headers_code(std::string filename, std::iostream& stream) {
+  if (filename == "operation.h") {
+    stream << cudf::experimental::rolling::jit::code::operation_h;
+    return &stream;
+  }
+  return nullptr;
+}
+
 // Applies a user-defined rolling window function to the values in a column.
-template <typename WindowIterator>
+template <bool static_window, typename WindowIterator>
 std::unique_ptr<column> rolling_window(column_view const &input,
                                        WindowIterator preceding_window_begin,
                                        WindowIterator following_window_begin,
@@ -301,15 +309,17 @@ std::unique_ptr<column> rolling_window(column_view const &input,
     std::string cuda_source;
     switch(op){
       case rolling_operator::NUMBA_UDF:
-        cuda_source = cudf::jit::parse_single_function_ptx(user_defined_aggregator, 
-                                                           cudf::rolling::jit::get_function_name(op), 
-                                                           cudf::jit::get_type_name(output_type),
-                                                           {0, 5}); // args 0 and 5 are pointers.
+        cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
+        cuda_source += cudf::jit::parse_single_function_ptx(user_defined_aggregator, 
+                                                            cudf::rolling::jit::get_function_name(op), 
+                                                            cudf::jit::get_type_name(output_type),
+                                                            {0, 5}); // args 0 and 5 are pointers.
         cuda_source += cudf::experimental::rolling::jit::code::kernel;
         break; 
       case rolling_operator::CUDA_UDF:
-        cuda_source = cudf::jit::parse_single_function_cuda(user_defined_aggregator, 
-                                                            cudf::rolling::jit::get_function_name(op));
+        cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
+        cuda_source += cudf::jit::parse_single_function_cuda(user_defined_aggregator, 
+                                                             cudf::rolling::jit::get_function_name(op));
         cuda_source += cudf::experimental::rolling::jit::code::kernel;
         break;
       default:
@@ -319,24 +329,25 @@ std::unique_ptr<column> rolling_window(column_view const &input,
     std::unique_ptr<column> output = make_numeric_column(output_type, input.size(),
                                                          cudf::UNINITIALIZED, stream, mr);
 
-    auto input_device_view = column_device_view::create(input);
-    auto output_device_view = mutable_column_device_view::create(*output);
-
+    auto output_view = output->mutable_view();
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
     std::cout << "SOURCE\n" << cuda_source << "\n";
 
     // Launch the jitify kernel
     cudf::jit::launcher(hash, cuda_source,
-                        { cudf::experimental::rolling::jit::code::operation_h , cudf_types_hpp },
-                        { "-std=c++14" }, nullptr)
-       .set_kernel_inst("gpu_rolling", // name of the kernel we are launching
+                        { cudf_types_hpp, cudf::experimental::rolling::jit::code::operation_h },
+                        { "-std=c++14" }, nullptr, stream)
+       .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
                         { cudf::jit::get_type_name(output->type()), // list of template arguments
                           cudf::jit::get_type_name(input.type()),
-                          cudf::rolling::jit::get_operator_name(op) })
+                          cudf::rolling::jit::get_operator_name(op),
+                          static_window ? "true" : "false"})
 
        // launch the JITed kernel
-       .launch(*input_device_view, *output_device_view, device_valid_count.data(),
+       .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
+               cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
+               device_valid_count.data(),
                preceding_window_begin, following_window_begin, min_periods);
 
     output->set_null_count(output->size() - device_valid_count.value(stream));
@@ -406,9 +417,10 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
   auto following_window_begin = thrust::make_constant_iterator(following_window);
 
-  return cudf::experimental::detail::rolling_window(input, preceding_window_begin,
-                                                    following_window_begin, min_periods,
-                                                    user_defined_aggregator, op, output_type, mr, 0);
+  return cudf::experimental::detail::rolling_window<true>(input, preceding_window_begin,
+                                                          following_window_begin, min_periods,
+                                                          user_defined_aggregator, op, output_type,
+                                                          mr, 0);
 }
 
 // Applies a variable-size user-defined rolling window function to the values in a column.
@@ -429,9 +441,11 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   CUDF_EXPECTS(preceding_window.size() != input.size() && following_window.size() != input.size(),
                "preceding_window/following_window size must match input size");
 
-  return cudf::experimental::detail::rolling_window(input, preceding_window.begin<size_type>(),
-                                                    following_window.begin<size_type>(), min_periods,
-                                                    user_defined_aggregator, op, output_type, mr, 0);
+  return cudf::experimental::detail::rolling_window<false>(input,
+                                                           preceding_window.begin<size_type>(),
+                                                           following_window.begin<size_type>(),
+                                                           min_periods, user_defined_aggregator, op,
+                                                           output_type, mr, 0);
 }
 
 } // namespace experimental 

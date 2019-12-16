@@ -28,9 +28,7 @@ R"***(operation.h
 #pragma once
   struct numba_rolling_udf {
     template <typename OutType, typename InType>
-    static OutType operate(
-      const InType* in_col, cudf::size_type start, cudf::size_type count)
-    {
+    static OutType operate(const InType* in_col, cudf::size_type start, cudf::size_type count) {
       OutType ret;
       NUMBA_ROLLING_UDF(
         &ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
@@ -40,9 +38,7 @@ R"***(operation.h
 
   struct cuda_rolling_udf {
     template <typename OutType, typename InType>
-    static OutType operate(
-      const InType* in_col, cudf::size_type start, cudf::size_type count)
-    {
+    static OutType operate(const InType* in_col, cudf::size_type start, cudf::size_type count) {
       OutType ret;
       CUDA_ROLLING_UDF(
         &ret, in_col, start, count);
