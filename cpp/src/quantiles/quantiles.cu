@@ -32,60 +32,6 @@ namespace experimental {
 namespace detail {
 namespace {
 
-// enum class extrema {
-//     min,
-//     max
-// };
-
-// template<extrema minmax, bool is_nullable>
-// size_type extrema(column_view const & in,
-//                   cudf::order order,
-//                   cudf::null_order null_order,
-//                   cudaStream_t stream)
-// {
-//     std::vector<cudf::order> h_order{ order };
-//     std::vector<cudf::null_order> h_null_order{ null_order };
-//     rmm::device_vector<cudf::order> d_order( h_order );
-//     rmm::device_vector<cudf::null_order> d_null_order( h_null_order );
-//     table_view in_table({ in });
-//     auto in_table_d = table_device_view::create(in_table);
-//     auto it = thrust::make_counting_iterator<size_type>(0);
-
-//     auto comparator = row_lexicographic_comparator<is_nullable>(
-//         *in_table_d,
-//         *in_table_d,
-//         d_order.data().get(),
-//         d_null_order.data().get());
-
-//     auto extrema_id = minmax == extrema::min
-//         ? thrust::min_element(rmm::exec_policy(stream)->on(stream), it, it + in.size(), comparator)
-//         : thrust::max_element(rmm::exec_policy(stream)->on(stream), it, it + in.size(), comparator);
-
-//     return *extrema_id;
-// }
-
-template<typename T>
-std::unique_ptr<scalar>
-pick(column_view const& in, size_type index) {
-    auto result = get_array_value<ScalarResult>(in.begin<T>(), index);
-    return std::make_unique<numeric_scalar<ScalarResult>>(result);
-}
-
-struct pick_functor
-{
-    template<typename T>
-    std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(column_view const& in, size_type location) {
-        CUDF_FAIL("non-arithmetic types are unsupported");
-    }
-
-    template<typename T>
-    std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(column_view const& in, size_type location) {
-        return pick<T>(in, location);
-    }
-};
-
 struct quantile_functor
 {
     template<typename T>
@@ -115,6 +61,11 @@ struct quantile_functor
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
+        if (in.size() == 1){
+            auto result = get_array_value<ScalarResult>(in.begin<T>(), 0);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result);
+        }
+
         auto null_offset = null_order == cudf::null_order::AFTER ? 0 : in.null_count();
         double result{};
 
@@ -163,30 +114,6 @@ quantile(column_view const& in,
         if (in.size() == in.null_count()) {
             return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
         }
-
-        if (in.size() == 1) {
-            return type_dispatcher(in.type(), detail::pick_functor{}, in, 0);
-        }
-
-        // if (not is_sorted) {
-        //     if (quantile <= 0.0) {
-        //         auto idx = in.nullable()
-        //             ? extrema<extrema::min, true>(in, order, null_order, 0)
-        //             : extrema<extrema::min, false>(in, order, null_order, 0);
-
-        //         return type_dispatcher(in.type(), detail::pick_functor{},
-        //                                in, idx);
-        //     }
-
-        //     if (quantile >= 1.0) {
-        //         auto idx = in.nullable()
-        //             ? extrema<extrema::max, true>(in, order, null_order, 0)
-        //             : extrema<extrema::max, false>(in, order, null_order, 0);
-
-        //         return type_dispatcher(in.type(), detail::pick_functor{},
-        //                                in, idx);
-        //     }
-        // }
 
         return type_dispatcher(in.type(), detail::quantile_functor{},
                                in,  quantile, interp, is_sorted, order, null_order);
