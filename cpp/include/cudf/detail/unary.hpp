@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-#include <cudf/types.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/column/column_factories.hpp>
 
 namespace cudf {
@@ -54,6 +53,19 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
     return output;
 }
 
+/**
+ * @brief Performs unary op on all values in column
+ *
+ * @param[in] input A `column_view` as input
+ * @param[in] op operation to perform
+ *
+ * @returns std::unique_ptr<cudf::column> Result of the operation
+ */
+std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
+                                              cudf::experimental::unary_op op,
+                                              rmm::mr::device_memory_resource* mr =
+                                              rmm::mr::get_default_resource(),
+                                              cudaStream_t stream = 0);
 
 } // namespace detail
 } // namespace experimental

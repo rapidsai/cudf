@@ -94,16 +94,14 @@ class NumericalColumn(column.TypedColumnBase):
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
                     out_dtype = np.dtype("float_")
-            return _numeric_column_binop(
-                lhs=self,
-                rhs=rhs,
-                op=binop,
-                out_dtype=out_dtype,
-                reflect=reflect,
-            )
+        elif rhs is None:
+            out_dtype = self.dtype
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
+        return _numeric_column_binop(
+            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect,
+        )
 
     def unary_operator(self, unaryop):
         return _numeric_column_unaryop(self, op=unaryop)
@@ -120,6 +118,8 @@ class NumericalColumn(column.TypedColumnBase):
         return out_col
 
     def normalize_binop_value(self, other):
+        if other is None:
+            return other
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
@@ -441,6 +441,12 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
         masked = lhs.has_null_mask
         row_count = len(lhs)
         name = lhs.name
+    elif rhs is None:
+        masked = True
+        row_count = len(lhs)
+    elif lhs is None:
+        masked = True
+        row_count = len(rhs)
     else:
         masked = lhs.has_null_mask or rhs.has_null_mask
         row_count = len(lhs)
