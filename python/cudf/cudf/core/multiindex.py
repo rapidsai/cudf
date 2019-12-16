@@ -669,3 +669,9 @@ class MultiIndex(Index):
         return MultiIndex.from_frame(
             self._source_data.repeat(repeats), names=self.names
         )
+
+    def memory_usage(self, deep=False):
+        n = 0
+        for col in self._source_data._columns:
+            n += col._memory_usage(deep=deep)
+        return n
