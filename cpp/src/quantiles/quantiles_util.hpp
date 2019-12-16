@@ -112,40 +112,57 @@ struct quantile_index
     }
 };
 
-template<typename Result, typename Source>
+/* @brief computes a quantile / percentile.
+ *
+ * Computes a value for a quantile by interpolating between two values on either
+ * side of a percent-based location.
+ *
+ * `get_value` must have signature: `T <T>(size_type)` where T can be
+ * `static_cast` to `Result`.
+ *
+ * @param[in] get_value Gets the value at a given index in range [0, size].
+ * @param[in] size      Number of values indexed by `get_value`.
+ * @param[in] percent   Percent-based location of desired quantile value.
+ * @param[in] interp    Strategy used to interpolate between the two values
+ *                      on either side of the percent-based location.
+ *
+ * @returns Quantile value at the given percent-based location.
+ */
+
+template<typename Result, typename ValueAccessor>
 Result
-select_quantile(Source source,
+select_quantile(ValueAccessor get_value,
                 size_type size,
-                double quantile,
+                double percent,
                 interpolation interp)
 {
     if (size < 2) {
-        return source(0);
+        return get_value(0);
     }
 
-    quantile_index idx(size, quantile);
+    quantile_index idx(size, percent);
 
     switch (interp) {
     case interpolation::LINEAR:
-        return interpolate::linear<Result>(source(idx.lower),
-                                           source(idx.higher),
+        return interpolate::linear<Result>(get_value(idx.lower),
+                                           get_value(idx.higher),
                                            idx.fraction);
 
     case interpolation::MIDPOINT:
-        return interpolate::midpoint<Result>(source(idx.lower),
-                                             source(idx.higher));
+        return interpolate::midpoint<Result>(get_value(idx.lower),
+                                             get_value(idx.higher));
 
     case interpolation::LOWER:
-        return static_cast<Result>(source(idx.lower));
+        return static_cast<Result>(get_value(idx.lower));
 
     case interpolation::HIGHER:
-        return static_cast<Result>(source(idx.higher));
+        return static_cast<Result>(get_value(idx.higher));
 
     case interpolation::NEAREST:
-        return static_cast<Result>(source(idx.nearest));
+        return static_cast<Result>(get_value(idx.nearest));
 
     default:
-        CUDF_FAIL("Invalid interpolation operation for quantiles");
+        CUDF_FAIL("Invalid interpolation operation for quantiles.");
     }
 }
 

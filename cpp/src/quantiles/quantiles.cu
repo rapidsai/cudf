@@ -34,25 +34,17 @@ using ScalarResult = double;
 
 struct quantile_functor
 {
-    template<typename T>
-    std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(column_view const& input,
-               double q,
-               interpolation interp,
-               bool is_sorted,
-               cudf::order col_order,
-               cudf::null_order col_null_order,
-               rmm::mr::device_memory_resource *mr =
-               rmm::mr::get_default_resource(),
-               cudaStream_t stream = 0)
+    template<typename T, typename... Args>
+    std::enable_if_t<not std::is_arithmetic<T>::value, void>
+    operator()(Args&&... args)
     {
-        CUDF_FAIL("non-arithmetic types are unsupported");
+        CUDF_FAIL("Only numeric types are supported in quantiles.");
     }
 
     template<typename T>
     std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& input,
-               double q,
+               double percent,
                interpolation interp,
                bool is_sorted,
                cudf::order col_order,
@@ -80,8 +72,8 @@ struct quantile_functor
                 return detail::get_array_value<T>(input_begin, idx);
             };
 
-            auto result = select_quantile<ScalarResult>(selector, valid_count, q, interp);
-            return std::make_unique<numeric_scalar<ScalarResult>>(result);
+            auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
         }
 
         using Selector = std::function<T(size_type)>;
@@ -94,7 +86,7 @@ struct quantile_functor
             ? Selector([&](size_type location){ return get_array_value<T>(input_begin, location); })
             : Selector([&](size_type location){ return get_array_value<T>(input_begin, - location); });
 
-        auto result = select_quantile<ScalarResult>(selector, valid_count, q, interp);
+        auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
         return std::make_unique<numeric_scalar<ScalarResult>>(result);
     }
 };
@@ -103,7 +95,7 @@ struct quantile_functor
 
 std::unique_ptr<scalar>
 quantile(column_view const& input,
-         double q,
+         double percent,
          interpolation interp,
          bool is_sorted,
          cudf::order col_order,
@@ -114,14 +106,14 @@ quantile(column_view const& input,
         }
 
         return type_dispatcher(input.type(), detail::quantile_functor{},
-                               input, q, interp, is_sorted, col_order, col_null_order);
+                               input, percent, interp, is_sorted, col_order, col_null_order);
 }
 
 } // namspace detail
 
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& input,
-          double q,
+          double percent,
           interpolation interp,
           bool col_is_sorted,
           std::vector<cudf::order> col_order,
@@ -130,7 +122,7 @@ quantiles(table_view const& input,
     std::vector<std::unique_ptr<scalar>> out(input.num_columns());
     for (size_type i = 0; i < input.num_columns(); i++) {
         out[i] = detail::quantile(input.column(i),
-                                  q,
+                                  percent,
                                   interp,
                                   col_is_sorted,
                                   col_order[i],
