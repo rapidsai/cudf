@@ -40,7 +40,8 @@ column::column(column const &other)
       _size{other._size},
       _data{other._data},
       _null_mask{other._null_mask},
-      _null_count{other._null_count} {
+      _null_count{other._null_count},
+      _keys{other._keys} {
   _children.reserve(other.num_children());
   for (auto const &c : other._children) {
     _children.emplace_back(std::make_unique<column>(*c));
@@ -54,7 +55,8 @@ column::column(column const &other, cudaStream_t stream,
       _size{other._size},
       _data{other._data, stream, mr},
       _null_mask{other._null_mask, stream, mr},
-      _null_count{other._null_count} {
+      _null_count{other._null_count},
+      _keys{other._keys} {
   _children.reserve(other.num_children());
   for (auto const &c : other._children) {
     _children.emplace_back(std::make_unique<column>(*c, stream, mr));
@@ -68,7 +70,8 @@ column::column(column &&other) noexcept
       _data{std::move(other._data)},
       _null_mask{std::move(other._null_mask)},
       _null_count{other._null_count},
-      _children{std::move(other._children)} {
+      _children{std::move(other._children)},
+      _keys{std::move(other._keys)} {
   other._size = 0;
   other._null_count = 0;
   other._type = data_type{EMPTY};
@@ -82,7 +85,7 @@ column::contents column::release() noexcept {
   return column::contents{
       std::make_unique<rmm::device_buffer>(std::move(_data)),
       std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
-      std::move(_children)};
+      std::move(_children), std::move(_keys)};
 }
 
 // Create immutable view
@@ -93,12 +96,15 @@ column_view column::view() const {
   for (auto const &c : _children) {
     child_views.emplace_back(*c);
   }
+  std::shared_ptr<column_view> keys = nullptr;
+  if( _keys )
+    keys = std::make_shared<column_view>(_keys->view());
 
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
       null_count(), 0,
-      child_views};
+      child_views, keys};
 }
 
 // Create mutable view
