@@ -26,10 +26,7 @@ struct tile_functor {
 } // anonymous namespace
 
 std::unique_ptr<table>
-tile(const table_view &in,
-    size_type count,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0)
+tile(const table_view &in, size_type count)
 {
     CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
@@ -45,7 +42,7 @@ tile(const table_view &in,
     auto tiled_it = thrust::make_transform_iterator(counting_it,
                                                     tile_functor{in_num_rows});
 
-    return detail::gather(in, tiled_it, tiled_it + out_num_rows, mr, stream);
+    return detail::gather(in, tiled_it, tiled_it + out_num_rows);
 }
 
 } // namespace experimental
