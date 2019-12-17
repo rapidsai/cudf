@@ -65,16 +65,15 @@ std::vector<char32_t> string_to_char32_vector( std::string const& pattern )
 
 // Copy reprog primitive values
 reprog_device::reprog_device(reprog& prog)
-{
-    _startinst_id = prog.get_start_inst();
-    _num_capturing_groups = prog.groups_count();
-    _insts_count = prog.insts_count();
-    _starts_count = prog.starts_count();
-    _classes_count = prog.classes_count();
-    _relists_mem = nullptr;
-    _stack_mem1 = nullptr;
-    _stack_mem2 = nullptr;
-}
+              : _startinst_id{prog.get_start_inst()},
+                _num_capturing_groups{prog.groups_count()},
+                _insts_count{prog.insts_count()},
+                _starts_count{prog.starts_count()},
+                _classes_count{prog.classes_count()},
+                _relists_mem{nullptr},
+                _stack_mem1{nullptr},
+                _stack_mem2{nullptr}
+{}
 
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
@@ -99,7 +98,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     {
         auto relist_alloc_size = relist::alloc_size(insts_count);
         size_t rlm_size = relist_alloc_size*2L*strings_count; // reljunk has 2 relist ptrs
-        size_t freeSize=0, totalSize=0;
+        size_t freeSize = 0;
+        size_t totalSize = 0;
         rmmGetInfo(&freeSize,&totalSize,stream);
         if( rlm_size + memsize > freeSize ) // do not allocate more than we have
         {                                   // otherwise, this is unrecoverable
