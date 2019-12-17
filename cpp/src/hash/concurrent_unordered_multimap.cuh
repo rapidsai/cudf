@@ -17,21 +17,20 @@
 #ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
 #define CONCURRENT_UNORDERED_MULTIMAP_CUH
 
-#include <cudf/cudf.h>
+#include <hash/managed.cuh>
+#include <hash/hash_allocator.cuh>
+#include <hash/helper_functions.cuh>
+#include <utilities/legacy/device_atomics.cuh>
+
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
+
+#include <thrust/pair.h>
+
 #include <cassert>
 #include <iostream>
 #include <iterator>
 #include <type_traits>
-
-#include <thrust/pair.h>
-
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include "managed.cuh"
-#include "managed_allocator.cuh"
-
-#include "helper_functions.cuh"
-
-#include <utilities/legacy/device_atomics.cuh>
 
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
@@ -83,21 +82,23 @@ class concurrent_unordered_multimap {
    * @param hash_function The hash function to use for hashing keys
    * @param equal The equality comparison function for comparing if two keys are
    * equal
-   * @param allocator The allocator to use for allocation of the map's storage.
+   * @param allocator The allocator to use for allocation of the map's storage
+   * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
   static auto create(size_type capacity, const bool init = true,
                      const Hasher& hash_function = hasher(),
                      const Equality& equal = key_equal(),
-                     const allocator_type& allocator = allocator_type()) {
+                     const allocator_type& allocator = allocator_type(),
+                     cudaStream_t stream = 0) {
     using Self =
         concurrent_unordered_multimap<Key, Element, size_type, unused_key,
                                       unused_element, Hasher, Equality,
                                       Allocator, count_collisions>;
 
-    auto deleter = [](Self* p) { p->destroy(); };
+    auto deleter = [stream](Self* p) { p->destroy(stream); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
-        new Self(capacity, init, hash_function, equal, allocator), deleter};
+        new Self(capacity, init, hash_function, equal, allocator, stream), deleter};
   }
 
   /**---------------------------------------------------------------------------*
@@ -105,9 +106,11 @@ class concurrent_unordered_multimap {
    *
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
+   * 
+   * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
-  void destroy() {
-    m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity);
+  void destroy(cudaStream_t stream = 0) {
+    m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity, stream);
     delete this;
   }
 
@@ -402,11 +405,11 @@ class concurrent_unordered_multimap {
     if (other.m_hashtbl_size <= m_hashtbl_capacity) {
       m_hashtbl_size = other.m_hashtbl_size;
     } else {
-      m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity);
+      m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity, stream);
       m_hashtbl_capacity = other.m_hashtbl_size;
       m_hashtbl_size = other.m_hashtbl_size;
 
-      m_hashtbl_values = m_allocator.allocate(m_hashtbl_capacity);
+      m_hashtbl_values = m_allocator.allocate(m_hashtbl_capacity, stream);
     }
     CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values, other.m_hashtbl_values,
                              m_hashtbl_size * sizeof(value_type),
@@ -474,19 +477,21 @@ class concurrent_unordered_multimap {
    * @param[in] hash_function An optional hashing function
    * @param[in] equal An optional functor for comparing if two keys are equal
    * @param[in] a An optional functor for allocating the hash table memory
+   * @param[in] stream CUDA stream to use for device opertions. 
    */
   explicit concurrent_unordered_multimap(
       size_type n, const bool init = true,
       const Hasher& hash_function = hasher(),
       const Equality& equal = key_equal(),
-      const allocator_type& a = allocator_type())
+      const allocator_type& a = allocator_type(),
+      cudaStream_t stream = 0)
       : m_hf(hash_function),
         m_equal(equal),
         m_allocator(a),
         m_hashtbl_size(n),
         m_hashtbl_capacity(n),
         m_collisions(0) {
-    m_hashtbl_values = m_allocator.allocate(m_hashtbl_capacity);
+    m_hashtbl_values = m_allocator.allocate(m_hashtbl_capacity, stream);
     constexpr int block_size = 128;
     {
       cudaPointerAttributes hashtbl_values_ptr_attributes;
@@ -496,17 +501,16 @@ class concurrent_unordered_multimap {
       if (cudaSuccess == status &&
           isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_RT_CALL(cudaGetDevice(&dev_id));
-        CUDA_RT_CALL(cudaMemPrefetchAsync(
-            m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, 0));
+        CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDA_TRY(cudaMemPrefetchAsync(
+            m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream));
       }
     }
 
     if (init) {
-      init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size>>>(
+      init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream>>>(
           m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
-      CUDA_RT_CALL(cudaGetLastError());
-      CUDA_RT_CALL(cudaStreamSynchronize(0));
+      CUDA_TRY(cudaGetLastError());
     }
   }
 };

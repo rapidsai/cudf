@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -363,6 +363,7 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
+            src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/orderby/legacy/orderby.cu
@@ -403,6 +404,7 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
+            src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
@@ -436,6 +438,7 @@ add_library(cudf
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
+            src/dlpack/dlpack.cpp
             src/io/convert/dlpack/legacy/cudf_dlpack.cpp
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -459,9 +462,12 @@ add_library(cudf
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
+            src/io/parquet/page_enc.cu
+            src/io/parquet/page_dict.cu
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/parquet/reader_impl.cu
+            src/io/parquet/writer_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
@@ -470,11 +476,12 @@ add_library(cudf
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/functions.cpp
+            src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/utilities/legacy/column_utils.cpp
-	        src/copying/gather.cu
+            src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
@@ -508,6 +515,7 @@ add_library(cudf
             src/table/table_device_view.cu
             src/table/table.cpp
             src/bitmask/null_mask.cu
+            src/rolling/rolling.cu
             src/sort/sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
@@ -517,17 +525,21 @@ add_library(cudf
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
+            src/strings/find_multiple.cu
             src/strings/filling/fill.cu
             src/strings/padding.cu
+            src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/substring.cu
+            src/strings/translate.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
@@ -589,11 +601,11 @@ if(USE_NVTX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 endif(USE_NVTX)
 
-option(HT_LEGACY_ALLOCATOR "Use the legacy allocator for hash tables" ON)
-if(HT_LEGACY_ALLOCATOR)
-    message(STATUS "Using legacy allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
-endif(HT_LEGACY_ALLOCATOR)
+option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
+if(HT_DEFAULT_ALLOCATOR)
+    message(STATUS "Using default allocator for hash tables")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
