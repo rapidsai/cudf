@@ -43,7 +43,7 @@ struct element_wise_aggregator_impl {
   __device__ inline void operator()(mutable_column_device_view target,
                                     size_type target_index,
                                     column_device_view source,
-                                    size_type source_index) {}
+                                    size_type source_index) const noexcept {}
 };
 
 struct elementwise_aggregator {
@@ -52,7 +52,7 @@ struct elementwise_aggregator {
                                     size_type target_index,
                                     column_device_view source,
                                     size_type source_index,
-                                    aggregation::Kind k) {
+                                    aggregation::Kind k) const noexcept {
     return aggregation_dispatcher(k, element_wise_aggregator_impl<Source>{},
                                   target, target_index, source, source_index);
   }
@@ -78,11 +78,23 @@ struct elementwise_aggregator {
  * and `source` rows. Must contain at least `target.num_columns()` valid
  * `aggregation::Kind` values.
  */
+template <bool target_has_nulls = true, bool source_has_nulls = true>
 __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
                                      size_type source_index,
-                                     aggregation::Kind* aggs) {}
+                                     aggregation::Kind* aggs) {
+  thrust::transform(
+      thrust::seq, target.begin(), target.end(), source.begin(),
+      thrust::make_discard_iterator(),
+      [target_index, source_index, aggs](auto target_column,
+                                         auto source_column) {
+        cudf::type_dispatcher(
+            target.type(),
+            elementwise_aggregator<target_has_nulls, source_has_nulls>{},
+            target_column, target_index, source_column, source_index);
+      });
+}
 
 }  // namespace detail
 }  // namespace experimental
