@@ -53,26 +53,26 @@ struct helper {
   /**
    * @brief Construct a new helper object
    * 
-   * If `include_nulls == false`, then any row in `keys` containing a null value
+   * If `ignore_null_keys == true`, then any row in `keys` containing a null value
    * will effectively be discarded. I.e., any values corresponding to discarded
    * rows in `keys` will not contribute to any aggregation. 
    *
    * @param keys table to group by
-   * @param include_nulls whether to include null keys in groupby
+   * @param ignore_null_keys ignore rows in keys with nulls
    * @param null_sort_behavior whether to put nulls before valid values or after
    * @param keys_pre_sorted if the keys are already sorted
    * @param stream used for all the computation in this helper object
    */
-  helper(table_view const& keys, bool include_nulls = false,
+  helper(table_view const& keys, bool ignore_null_keys = true,
           std::vector<null_order> null_sort_order = {},
           bool keys_pre_sorted = false)
   : _keys(keys)
   , _num_keys(-1)
-  , _include_nulls(include_nulls)
+  , _ignore_null_keys(ignore_null_keys)
   , _keys_pre_sorted(keys_pre_sorted)
   {
     if (keys_pre_sorted and
-        not include_nulls and
+        ignore_null_keys and
         std::any_of(null_sort_order.begin(), null_sort_order.end(), 
           [] (null_order order) { return order == null_order::BEFORE;})
        )
@@ -137,8 +137,8 @@ struct helper {
   /**
    * @brief Return the effective number of keys
    * 
-   * When include_nulls = true, returned value is same as `keys.num_rows()`
-   * When include_nulls = false, returned value is the number of rows in `keys`
+   * When ignore_null_keys = false, returned value is same as `keys.num_rows()`
+   * When ignore_null_keys = true, returned value is the number of rows in `keys`
    *  in which no element is null
    */
   size_type num_keys();
@@ -183,8 +183,8 @@ struct helper {
    * @brief Get the group labels for unsorted keys
    * 
    * Returns the group label for every row in the original `keys` table. For a given unique key row,
-   * it's group label is equivalent to what is returned by `group_labels()`. However, 
-   * if a row contains a null value, and `include_nulls == false`, then it's label is NULL. 
+   * its group label is equivalent to what is returned by `group_labels()`. However, 
+   * if a row contains a null value, and `ignore_null_keys == true`, then its label is NULL. 
    * 
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
@@ -223,7 +223,7 @@ struct helper {
 
   size_type           _num_keys;
   bool                _keys_pre_sorted;
-  bool                _include_nulls;
+  bool                _ignore_null_keys;
 };
 
 }  // namespace sort

@@ -90,9 +90,9 @@ size_type helper::num_keys() {
   if (_num_keys > -1)
     return _num_keys;
 
-  if (not _include_nulls and has_nulls(_keys)) {
+  if (_ignore_null_keys and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
-    // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
+    // in the row bitmask. When `_ignore_null_keys == true`, then only rows `[0, n)` 
     // in the sorted order are considered for grouping. 
     _num_keys = keys_bitmask_column().size() - keys_bitmask_column().null_count();
   } else {
@@ -119,7 +119,7 @@ column_view helper::key_sort_order(cudaStream_t stream) {
     return _key_sorted_order->view();
   }
 
-  if (_include_nulls || !cudf::has_nulls(_keys)) {  // SQL style
+  if (not _ignore_null_keys || !cudf::has_nulls(_keys)) {  // SQL style
     _key_sorted_order = cudf::experimental::detail::sorted_order(_keys, {},
       std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
       rmm::mr::get_default_resource(), stream);
