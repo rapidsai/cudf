@@ -15,13 +15,15 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <vector>
-#include <cstring>
+
+#include <thrust/iterator/constant_iterator.h>
 
 
 struct DictionaryFactoriesTest : public cudf::test::BaseFixture {};
@@ -32,22 +34,14 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumn)
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
 
     auto dictionary = cudf::make_dictionary_column( strings );
-    printf("size = %d\n", (int)dictionary->size());
-    printf("children = %d\n", (int)dictionary->num_children());
-    printf("null_count = %d\n", (int)dictionary->null_count());
+    cudf::dictionary_column_view view(dictionary->view());
+    auto keys = *(view.keys());
+
+    std::vector<const char*> h_keys{ "aaa", "bbb", "ccc", "ddd", "eee" };
+    cudf::test::strings_column_wrapper keys_strings( h_keys.begin(), h_keys.end(), thrust::make_constant_iterator(1) );
+    cudf::test::expect_columns_equal(keys, keys_strings);
+
+    std::vector<int32_t> h_expected{4,0,3,1,2,2,2,4,0};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
+    cudf::test::expect_columns_equal(view.indices(), expected);
 }
-
-
-//TEST_F(DictionaryFactoriesTest, EmptyStringsColumn)
-//{
-//    rmm::device_vector<char> d_chars;
-//    rmm::device_vector<cudf::size_type> d_offsets(1,0);
-//    rmm::device_vector<cudf::bitmask_type> d_nulls;
-//
-//    auto results = cudf::make_strings_column( d_chars, d_offsets, d_nulls, 0 );
-//    cudf::test::expect_strings_empty(results->view());
-//
-//    rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings;
-//    results = cudf::make_strings_column( d_strings );
-//    cudf::test::expect_strings_empty(results->view());
-//}
