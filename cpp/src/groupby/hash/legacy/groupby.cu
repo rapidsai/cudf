@@ -87,9 +87,11 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   using map_type =
       concurrent_unordered_map<cudf::size_type, cudf::size_type, decltype(hasher),
                                decltype(rows_equal)>;
+  using allocator_type = typename map_type::allocator_type;
 
   auto map = map_type::create(compute_hash_table_size(input_keys.num_rows()),
-                              unused_key, unused_value, hasher, rows_equal);
+                              unused_key, unused_value, hasher, rows_equal,
+                              allocator_type(), stream);
 
   // TODO: Explore optimal block size and work per thread.
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};

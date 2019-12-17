@@ -437,6 +437,7 @@ add_library(cudf
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
+            src/dlpack/dlpack.cpp
             src/io/convert/dlpack/legacy/cudf_dlpack.cpp
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -536,6 +537,7 @@ add_library(cudf
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/substring.cu
+            src/strings/translate.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
