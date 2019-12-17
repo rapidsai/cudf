@@ -6,6 +6,9 @@ if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
 endif()
 
+# Test options
+option(ENABLE_KAFKA_TESTS "Run Kafka integration tests" OFF)
+
 ###################################################################################################
 # - common test utils -----------------------------------------------------------------------------
 
@@ -398,16 +401,20 @@ set(LEGACY_JSON_TEST_SRC
 set(LEGACY_ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/orc_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
-set(LEGACY_KAFKA_IO_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_kafka_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(LEGACY_AVRO_TEST "${LEGACY_AVRO_TEST_SRC}")
 ConfigureTest(LEGACY_CSV_TEST "${LEGACY_CSV_TEST_SRC}")
 ConfigureTest(LEGACY_JSON_TEST "${LEGACY_JSON_TEST_SRC}")
 ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
-ConfigureTest(LEGACY_KAFKA_IO_TEST_SRC "${LEGACY_KAFKA_IO_TEST_SRC}")
+
+# Kafka integration tests are disabled by default.
+if(ENABLE_KAFKA_TESTS)
+    set(LEGACY_KAFKA_IO_TEST_SRC
+        "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_kafka_test.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
+    ConfigureTest(LEGACY_KAFKA_IO_TEST_SRC "${LEGACY_KAFKA_IO_TEST_SRC}")
+endif(ENABLE_KAFKA_TESTS)
 
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")

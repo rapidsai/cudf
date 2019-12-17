@@ -28,6 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
    benchmarks   - build benchmarks
+   kafka_tests  - run kafka integration tests
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
@@ -49,6 +50,7 @@ VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
 BENCHMARKS=OFF
+ENABLE_KAFKA_TESTS=OFF
 BUILD_ALL_GPU_ARCH=0
 
 # Set defaults for vars that may not have been defined externally
@@ -91,6 +93,9 @@ if hasArg --allgpuarch; then
 fi
 if hasArg benchmarks; then
     BENCHMARKS="ON"
+fi
+if hasArg kafka_tests; then
+    ENABLE_KAFKA_TESTS="ON"
 fi
 
 # If clean given, run it prior to any other steps
@@ -152,6 +157,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
+          -ENABLE_KAFKA_TESTS=${ENABLE_KAFKA_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
