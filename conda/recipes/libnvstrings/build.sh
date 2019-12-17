@@ -7,4 +7,4 @@ printenv
 # Cleanup local git
 git clean -xdf
 # build libnvstrings with verbose output
-./build.sh -v -x libnvstrings --allgpuarch
+./build.sh -v libnvstrings --allgpuarch
