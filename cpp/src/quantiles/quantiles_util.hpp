@@ -43,9 +43,9 @@ Result linear(T lhs, T rhs, double frac)
 {
     // TODO: safe operation to avoid overflow/underflow
     // double can fully represent int8-32 value range.
-    // Since the fractoin part of double is 52 bits,
+    // Since the fraction part of double is 52 bits,
     // double cannot fully represent int64.
-    // The underflow will be occurs at converting int64 to double
+    // Underflow may occur when converting int64 to double
     // detail: https://github.com/rapidsai/cudf/issues/1417
 
     double dlhs = static_cast<double>(lhs);
