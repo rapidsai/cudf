@@ -33,6 +33,8 @@ using cudf::experimental::bool8;
 using cudf::null_order;
 using cudf::order;
 
+namespace {
+
 using q_res = cudf::numeric_scalar<double>;
 
 // ----- test data -------------------------------------------------------------
@@ -546,6 +548,21 @@ TYPED_TEST(QuantilesTest, TestMismatchedSortOrderCount)
                  cudf::logic_error);
 }
 
+TYPED_TEST(QuantilesTest, TestImplicitlyUnsortedInputs)
+{
+    auto a_val = std::numeric_limits<TypeParam>::lowest();
+    auto b_val = std::numeric_limits<TypeParam>::max();
+
+    fixed_width_column_wrapper<TypeParam> a ({ b_val, a_val });
+
+    cudf::table_view input{{ a }};
+
+    auto q_values = cudf::experimental::quantiles(input, 0);
+    auto q_expected = q_res(a_val);
+    cudf::scalar * q_actual = q_values.at(0).get();
+    expect_scalars_equal(q_expected, *q_actual);
+}
+
 template <typename T>
 struct QuantilesUnsupportedTypesTest : public BaseFixture {
 };
@@ -579,3 +596,5 @@ TYPED_TEST(QuantilesUnsupportedTypesTest, TestMultipleElements)
     EXPECT_THROW(cudf::experimental::quantiles(input, 0),
                  cudf::logic_error);
 }
+
+} // anonymous namespace
