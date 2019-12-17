@@ -52,7 +52,11 @@ struct quantile_functor
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
-        if (input.size() == 1){
+        if (input.size() == input.null_count()) {
+            return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
+        }
+
+        if (input.size() == 1) {
             auto result = get_array_value<ScalarResult>(input.begin<T>(), 0);
             return std::make_unique<numeric_scalar<ScalarResult>>(result);
         }
@@ -98,10 +102,6 @@ quantile(column_view const& input,
          interpolation interp,
          order_info col_order)
 {
-        if (input.size() == input.null_count()) {
-            return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
-        }
-
         return type_dispatcher(input.type(), detail::quantile_functor{},
                                input, percent, interp, col_order);
 }

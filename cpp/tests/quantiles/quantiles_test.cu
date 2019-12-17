@@ -25,26 +25,15 @@
 #include <tests/utilities/type_list_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <type_traits>
-#include "cudf/scalar/scalar_factories.hpp"
-#include "cudf/utilities/error.hpp"
-#include "cudf/utilities/legacy/wrapper_types.hpp"
-#include "cudf/utilities/traits.hpp"
-#include "cudf/wrappers/bool.hpp"
-#include "cudf/wrappers/timestamps.hpp"
+
+using namespace cudf::test;
 
 using std::vector;
 using cudf::experimental::bool8;
 using cudf::null_order;
 using cudf::order;
-using cudf::test::expect_scalars_equal;
-using cudf::test::fixed_width_column_wrapper;
 
 using q_res = cudf::numeric_scalar<double>;
-
-// template<>
-// struct precision<float> {
-//     constexpr static double tolerance = 1.0e-7;
-// };
 
 // ----- test data -------------------------------------------------------------
 
@@ -491,15 +480,10 @@ void test(testdata::test_case<T> test_case) {
 // ----- tests -----------------------------------------------------------------
 
 template <typename T>
-struct QuantilesTest : public cudf::test::BaseFixture {
+struct QuantilesTest : public BaseFixture {
 };
 
-using TestTypes = cudf::test::NumericTypes;
-// using TestTypes = cudf::test::Types<int8_t>;
-// using TestTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
-// using TestTypes = cudf::test::Types<float, double>;
-// using TestTypes = cudf::test::Types<cudf::experimental::bool8>;
-
+using TestTypes = NumericTypes;
 TYPED_TEST_CASE(QuantilesTest, TestTypes);
 
 TYPED_TEST(QuantilesTest, TestEmpty)
@@ -547,8 +531,51 @@ TYPED_TEST(QuantilesTest, TestSortedAscendingNullBefore)
     test(testdata::sorted_ascending_null_after<TypeParam>());
 }
 
-
 TYPED_TEST(QuantilesTest, TestSortedDescendingNullAfter)
 {
     test(testdata::sorted_descending_null_after<TypeParam>());
+}
+
+TYPED_TEST(QuantilesTest, TestMismatchedSortOrderCount)
+{
+    fixed_width_column_wrapper<TypeParam> a ({});
+    fixed_width_column_wrapper<TypeParam> b ({});
+    cudf::table_view input{{ a, b }};
+
+    EXPECT_THROW(cudf::experimental::quantiles(input, 0, cudf::experimental::interpolation::LINEAR, { { false } }),
+                 cudf::logic_error);
+}
+
+template <typename T>
+struct QuantilesUnsupportedTypesTest : public BaseFixture {
+};
+
+using UnsupportedTestTypes = RemoveIf<ContainedIn<TestTypes>, AllTypes>;
+TYPED_TEST_CASE(QuantilesUnsupportedTypesTest, UnsupportedTestTypes);
+
+TYPED_TEST(QuantilesUnsupportedTypesTest, TestZeroElements)
+{
+    fixed_width_column_wrapper<TypeParam> a ({ });
+    cudf::table_view input{{ a }};
+
+    EXPECT_THROW(cudf::experimental::quantiles(input, 0),
+                 cudf::logic_error);
+}
+
+TYPED_TEST(QuantilesUnsupportedTypesTest, TestOneElements)
+{
+    fixed_width_column_wrapper<TypeParam> a ({ 0 });
+    cudf::table_view input{{ a }};
+
+    EXPECT_THROW(cudf::experimental::quantiles(input, 0),
+                 cudf::logic_error);
+}
+
+TYPED_TEST(QuantilesUnsupportedTypesTest, TestMultipleElements)
+{
+    fixed_width_column_wrapper<TypeParam> a ({ 0, 1, 2 });
+    cudf::table_view input{{ a }};
+
+    EXPECT_THROW(cudf::experimental::quantiles(input, 0),
+                 cudf::logic_error);
 }
