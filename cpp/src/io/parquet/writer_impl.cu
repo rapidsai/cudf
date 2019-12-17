@@ -106,7 +106,7 @@ class parquet_column_view {
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
    **/
-  explicit parquet_column_view(size_t id, column_view const &col, cudaStream_t stream)
+  explicit parquet_column_view(size_t id, column_view const &col, const table_metadata *metadata, cudaStream_t stream)
       : _id(id),
         _string_type(col.type().id() == type_id::STRING),
         _type_width(_string_type ? 0 : cudf::size_of(col.type())),
@@ -195,8 +195,13 @@ class parquet_column_view {
       _data = _indexes.data();
       cudaStreamSynchronize(stream);
     }
-    // TODO: column_view::name() - currently generating default name
-    _name = "_col" + std::to_string(_id);
+    // Generating default name if name isn't present in metadata
+    if (metadata && _id < metadata->column_names.size()) {
+      _name = metadata->column_names[_id];
+    }
+    else {
+      _name = "_col" + std::to_string(_id);
+    }
   }
 
   auto is_string() const noexcept { return _string_type; }
@@ -382,7 +387,7 @@ writer::impl::impl(std::string filepath, writer_options const &options,
   CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
 }
 
-void writer::impl::write(table_view const &table, cudaStream_t stream) {
+void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
@@ -394,7 +399,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     const auto current_id = parquet_columns.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    parquet_columns.emplace_back(current_id, col, stream);
+    parquet_columns.emplace_back(current_id, col, metadata, stream);
   }
 
   // Initialize column description
@@ -408,6 +413,11 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   md.schema[0].name = "schema";
   md.schema[0].num_children = num_columns;
   md.column_order_listsize = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+  if (metadata) {
+    for (auto it = metadata->user_data.begin(); it != metadata->user_data.end(); it++) {
+      md.key_value_metadata.push_back({it->first, it->second});
+    }
+  }
   for (auto i = 0; i < num_columns; i++) {
     auto& col = parquet_columns[i];
     // Column metadata
@@ -680,8 +690,8 @@ writer::writer(std::string filepath, writer_options const &options,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, cudaStream_t stream) {
-  _impl->write(table, stream);
+void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
+  _impl->write(table, metadata, stream);
 }
 
 }  // namespace parquet
