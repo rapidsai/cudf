@@ -16,6 +16,8 @@
 - PR #3553 Support Python NoneType in numeric binops
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3507 Define and implement new binary operation APIs
+- PR #3601 Port UDF functionality for rolling windows
 
 ## Bug Fixes
 
@@ -81,7 +83,6 @@
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
-- PR #3507 Define and implement new binary operation APIs
 
 ## Improvements
 
