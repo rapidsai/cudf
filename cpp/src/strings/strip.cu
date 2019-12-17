@@ -47,72 +47,21 @@ enum TwoPass
     ExecuteOp     ///< run the string operation
 };
 
-template <TwoPass Pass=SizeOnly>
-struct left_strip_fn
-{
-    column_device_view const d_strings;
-    string_view d_to_strip;
-    int32_t* d_offsets{};
-    char* d_chars{};
-
-    __device__ size_type operator()( size_type idx )
-    {
-        if( d_strings.is_null(idx) )
-            return 0;
-        string_view d_str = d_strings.element<string_view>(idx);
-        size_type bytes_offset = 0;
-        for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
-        {
-            char_utf8 chr = *itr;
-            if( (d_to_strip.empty() && (chr > ' ')) || // whitespace
-                thrust::none_of( thrust::seq, d_to_strip.begin(), d_to_strip.end(),
-                    [chr] __device__ (char_utf8 c) {return c==chr;} ) )
-                break;
-            bytes_offset = itr.byte_offset();
-        }
-        auto bytes = d_str.size_bytes() - bytes_offset;
-        if( Pass==ExecuteOp )
-            memcpy( d_chars + d_offsets[idx], d_str.data() + bytes_offset, bytes );
-        return bytes;
-    }
-};
-
-template <TwoPass Pass=SizeOnly>
-struct right_strip_fn
-{
-    column_device_view const d_strings;
-    string_view d_to_strip;
-    int32_t* d_offsets{};
-    char* d_chars{};
-
-    __device__ size_type operator()( size_type idx )
-    {
-        if( d_strings.is_null(idx) )
-            return 0;
-        string_view d_str = d_strings.element<string_view>(idx);
-        size_type bytes = d_str.size_bytes();
-        auto itr = d_str.end();
-        size_type length = d_str.length();
-        for( size_type n=0; n < length; ++n )
-        {
-            char_utf8 chr = *(--itr);
-            if( (d_to_strip.empty() && (chr > ' ')) || // whitespace
-                thrust::none_of( thrust::seq, d_to_strip.begin(), d_to_strip.end(),
-                    [chr] __device__ (char_utf8 c) {return c==chr;} ) )
-                break;
-            bytes = itr.byte_offset();
-        }
-        if( Pass==ExecuteOp )
-            memcpy( d_chars + d_offsets[idx], d_str.data(), bytes );
-        return bytes;
-    }
-};
-
+/**
+ * @brief Strip characters from the beginning and/or end of a string.
+ *
+ * This functor strips the beginning and/or end of each string
+ * of any characters found in d_to_strip or whitespace if
+ * d_to_strip is empty.
+ *
+ * @tparam Pass Allows computing only the size of the output
+ *              or writing the output to device memory.
+ */
 template <TwoPass Pass=SizeOnly>
 struct strip_fn
 {
     column_device_view const d_strings;
-    strip_type stype;
+    strip_type stype; // right, left, or both
     string_view d_to_strip;
     int32_t const* d_offsets{};
     char* d_chars{};
