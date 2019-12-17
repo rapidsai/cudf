@@ -73,9 +73,7 @@ template<typename T>
 struct test_case {
     fixed_width_column_wrapper<T> column;
     vector<q_expect> expectations;
-    bool col_is_sorted;
-    cudf::order col_order;
-    cudf::null_order col_null_order;
+    cudf::order_info col_order;
 };
 
 // empty
@@ -183,6 +181,53 @@ interpolate_extrema_low<bool8>() {
     return interpolate_center<bool8>();
 }
 
+// sorted_ascending_null_before
+
+template<typename T>
+std::enable_if_t<std::is_floating_point<T>::value, test_case<T>>
+sorted_ascending_null_after() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 1, 2, 3, 4, 5, 6, 7, 8, 9 },
+                                       { 0, 0, 0, 0, 0, 1, 1, 1, 1 }),
+        {
+            q_expect{ 0.00, 6, 6, 6, 6, 6 },
+            q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 },
+            q_expect{ 1.00, 9, 9, 9, 9, 9 }
+        },
+        { true, cudf::order::ASCENDING, cudf::null_order::BEFORE }
+    };
+}
+
+template<typename T>
+std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
+sorted_ascending_null_after() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 1, 2, 3, 4, 5, 6, 7, 8, 9 },
+                                       { 0, 0, 0, 0, 0, 1, 1, 1, 1 }),
+        {
+            q_expect{ 0.00, 6, 6, 6, 6, 6 },
+            q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 },
+            q_expect{ 1.00, 9, 9, 9, 9, 9 }
+        },
+        { true, cudf::order::ASCENDING, cudf::null_order::BEFORE }
+    };
+}
+
+template<typename T>
+std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
+sorted_ascending_null_after() {
+    return test_case<T> {
+        fixed_width_column_wrapper<T> ({ 1, 0, 1, },
+                                       { 0, 1, 1, }),
+        {
+            q_expect{ 0.00, 0, 0, 0, 0, 0 },
+            q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 },
+            q_expect{ 1.50, 1, 1, 1, 1, 1 }
+        },
+        { true, cudf::order::ASCENDING, cudf::null_order::BEFORE }
+    };
+}
+
 // sorted_descending_null_after
 
 template<typename T>
@@ -192,8 +237,11 @@ sorted_descending_null_after() {
         fixed_width_column_wrapper<T> ({ 9, 8, 7, 6, 5, 4, 3, 2, 1 },
                                        { 1, 1, 1, 1, 0, 0, 0, 0, 0 }),
         {
-            q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 }
-        }
+            q_expect{ 0.00, 6, 6, 6, 6, 6 },
+            q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 },
+            q_expect{ 1.00, 9, 9, 9, 9, 9 }
+        },
+        { true, cudf::order::DESCENDING, cudf::null_order::AFTER }
     };
 }
 
@@ -204,8 +252,11 @@ sorted_descending_null_after() {
         fixed_width_column_wrapper<T> ({ 9, 8, 7, 6, 5, 4, 3, 2, 1 },
                                        { 1, 1, 1, 1, 0, 0, 0, 0, 0 }),
         {
-            q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 }
-        }
+            q_expect{ 0.00, 6, 6, 6, 6, 6 },
+            q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 },
+            q_expect{ 1.00, 9, 9, 9, 9, 9 }
+        },
+        { true, cudf::order::DESCENDING, cudf::null_order::AFTER }
     };
 }
 
@@ -217,7 +268,8 @@ sorted_descending_null_after() {
                                        { 1, 1, 0, }),
         {
             q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 }
-        }
+        },
+        { true, cudf::order::DESCENDING, cudf::null_order::AFTER }
     };
 }
 
@@ -418,19 +470,19 @@ void test(testdata::test_case<T> test_case) {
 
     for (auto & expected : test_case.expectations) {
 
-        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
+        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, { test_case.col_order });
         expect_scalars_equal(expected.higher, *actual_higher[0]);
 
-        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
+        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, { test_case.col_order });
         expect_scalars_equal(expected.lower, *actual_lower[0]);
 
-        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
+        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, { test_case.col_order });
         expect_scalars_equal(expected.linear, *actual_linear[0]);
 
-        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
+        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, { test_case.col_order });
         expect_scalars_equal(expected.midpoint, *actual_midpoint[0]);
 
-        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, test_case.col_is_sorted, { test_case.col_order }, { test_case.col_null_order });
+        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, { test_case.col_order });
         expect_scalars_equal(expected.nearest, *actual_nearest[0]);
     }
 }
@@ -443,6 +495,10 @@ struct QuantilesTest : public cudf::test::BaseFixture {
 };
 
 using TestTypes = cudf::test::NumericTypes;
+// using TestTypes = cudf::test::Types<int8_t>;
+// using TestTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+// using TestTypes = cudf::test::Types<float, double>;
+// using TestTypes = cudf::test::Types<cudf::experimental::bool8>;
 
 TYPED_TEST_CASE(QuantilesTest, TestTypes);
 
@@ -485,6 +541,12 @@ TYPED_TEST(QuantilesTest, TestInterpolateExtremaLow)
 {
     test(testdata::interpolate_extrema_low<TypeParam>());
 }
+
+TYPED_TEST(QuantilesTest, TestSortedAscendingNullBefore)
+{
+    test(testdata::sorted_ascending_null_after<TypeParam>());
+}
+
 
 TYPED_TEST(QuantilesTest, TestSortedDescendingNullAfter)
 {

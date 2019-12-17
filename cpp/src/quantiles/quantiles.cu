@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <quantiles/quantiles_util.hpp>
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace experimental {
@@ -35,7 +36,7 @@ using ScalarResult = double;
 struct quantile_functor
 {
     template<typename T, typename... Args>
-    std::enable_if_t<not std::is_arithmetic<T>::value, void>
+    std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(Args&&... args)
     {
         CUDF_FAIL("Only numeric types are supported in quantiles.");
@@ -46,9 +47,7 @@ struct quantile_functor
     operator()(column_view const& input,
                double percent,
                interpolation interp,
-               bool is_sorted,
-               cudf::order col_order,
-               cudf::null_order col_null_order,
+               order_info col_order,
                rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
@@ -60,7 +59,7 @@ struct quantile_functor
 
         auto valid_count = input.size() - input.null_count();
 
-        if (not is_sorted)
+        if (not col_order.is_ordered)
         {
             table_view const in_table { { input } };
             auto sortmap = sorted_order(in_table, { order::ASCENDING }, { null_order::AFTER });
@@ -78,13 +77,13 @@ struct quantile_functor
 
         using Selector = std::function<T(size_type)>;
 
-        auto input_begin = col_order == order::ASCENDING
-            ? input.begin<T>() + (col_null_order == null_order::BEFORE ? valid_count : 0)
-            : input.begin<T>() - (col_null_order == null_order::AFTER ? valid_count : 0) + input.size() - 1;
+        auto input_begin = col_order.ordering == order::ASCENDING
+            ? input.begin<T>() + (col_order.null_ordering == null_order::BEFORE ? input.null_count() : 0)
+            : input.begin<T>() - (col_order.null_ordering == null_order::AFTER  ? input.null_count() : 0) + input.size() - 1;
 
-        Selector selector = col_order == order::ASCENDING
-            ? Selector([&](size_type location){ return get_array_value<T>(input_begin, location); })
-            : Selector([&](size_type location){ return get_array_value<T>(input_begin, - location); });
+        Selector selector = col_order.ordering == order::ASCENDING
+            ? Selector([&](size_type location){ return get_array_value<T>(input_begin,  location); })
+            : Selector([&](size_type location){ return get_array_value<T>(input_begin, -location); });
 
         auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
         return std::make_unique<numeric_scalar<ScalarResult>>(result);
@@ -97,16 +96,14 @@ std::unique_ptr<scalar>
 quantile(column_view const& input,
          double percent,
          interpolation interp,
-         bool is_sorted,
-         cudf::order col_order,
-         cudf::null_order col_null_order)
+         order_info col_order)
 {
         if (input.size() == input.null_count()) {
             return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
         }
 
         return type_dispatcher(input.type(), detail::quantile_functor{},
-                               input, percent, interp, is_sorted, col_order, col_null_order);
+                               input, percent, interp, col_order);
 }
 
 } // namspace detail
@@ -115,18 +112,21 @@ std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& input,
           double percent,
           interpolation interp,
-          bool col_is_sorted,
-          std::vector<cudf::order> col_order,
-          std::vector<cudf::null_order> col_null_order)
+          std::vector<order_info> col_order)
 {
+    if (col_order.size() == 0) {
+        col_order = std::vector<order_info>(input.num_columns(), { false });
+    } else {
+        CUDF_EXPECTS(col_order.size() == static_cast<uint32_t>(input.num_columns()),
+                     "Must provide order_info for each column.");
+    }
+
     std::vector<std::unique_ptr<scalar>> out(input.num_columns());
     for (size_type i = 0; i < input.num_columns(); i++) {
         out[i] = detail::quantile(input.column(i),
                                   percent,
                                   interp,
-                                  col_is_sorted,
-                                  col_order[i],
-                                  col_null_order[i]);
+                                  col_order[i]);
     }
     return out;
 }
