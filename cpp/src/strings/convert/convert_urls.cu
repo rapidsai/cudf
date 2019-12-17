@@ -60,6 +60,14 @@ struct url_encoder_fn
         hex[1] = byte < 10 ? '0'+byte : 'A'+(byte-10);
     }
 
+    __device__ bool should_not_url_encode( char ch )
+    {
+        return ( (ch>='0' && ch<='9') || // these are the characters
+                 (ch>='A' && ch<='Z') || // that are not to be url encoded
+                 (ch>='a' && ch<='z') || // reference: docs.python.org/3/library/urllib.parse.html#urllib.parse.quote
+                 (ch=='.') || (ch=='_') || (ch=='~') || (ch=='-') );
+    }
+
     // main part of the functor the performs the url-encoding
     __device__ size_type operator()( size_type idx )
     {
@@ -67,9 +75,7 @@ struct url_encoder_fn
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
         //
-        char* out_ptr = nullptr;
-        if( d_chars )
-            out_ptr = d_chars + d_offsets[idx];
+        char* out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
         size_type nbytes = 0;
         char hex[2]; // two-byte hex max
         for( auto itr = d_str.begin(); itr!=d_str.end(); ++itr )
@@ -77,10 +83,7 @@ struct url_encoder_fn
             auto ch = *itr;
             if( ch < 128 )
             {
-                if( (ch>='0' && ch<='9') || // these are the characters
-                    (ch>='A' && ch<='Z') || // that are not to be url encoded
-                    (ch>='a' && ch<='z') || // reference: docs.python.org/3/library/urllib.parse.html#urllib.parse.quote
-                    (ch=='.') || (ch=='_') || (ch=='~') || (ch=='-') )
+                if( should_not_url_encode( static_cast<char>(ch) ) )
                 {
                     nbytes++;
                     if( out_ptr )
@@ -181,24 +184,17 @@ struct url_decoder_fn
     int32_t const* d_offsets{};
     char* d_chars{};
 
-    // utility to convert 2 hex chars into a single byte
-    __device__ char hex_to_byte( char ch1, char ch2 )
+    // utility to convert a hex char into a single byte
+    __device__ u_char hex_char_to_byte( char ch )
     {
         u_char result = 0;
-        if( ch1 >= '0' && ch1 <= '9' )
-            result += (ch1-48);
-        else if( ch1 >= 'A' && ch1 <= 'Z' )
-            result += (ch1-55);
-        else if( ch1 >='a' && ch1 <= 'z' )
-            result += (ch1-87);
-        result *= 16;
-        if( ch2 >= '0' && ch2 <= '9' )
-            result += (ch2-48);
-        else if( ch2 >= 'A' && ch2 <= 'Z' )
-            result += (ch2-55);
-        else if( ch2 >='a' && ch2 <= 'z' )
-            result += (ch2-87);
-        return static_cast<char>(result);
+        if( ch >= '0' && ch <= '9' )
+            result = (ch-48);
+        else if( ch >= 'A' && ch <= 'Z' )
+            result = (ch-55);
+        else if( ch >='a' && ch <= 'z' )
+            result = (ch-87);
+        return result;
     }
 
     // main functor method executed on each string
@@ -207,9 +203,7 @@ struct url_decoder_fn
         if( d_strings.is_null(idx) )
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
-        char* out_ptr = nullptr;
-        if( d_chars )
-            out_ptr = d_chars + d_offsets[idx];
+        char* out_ptr = d_chars ? out_ptr = d_chars + d_offsets[idx] : nullptr;
         size_type nbytes = 0;
         const char* in_ptr = d_str.data();
         const char* end = in_ptr + d_str.size_bytes();
@@ -218,8 +212,8 @@ struct url_decoder_fn
             char ch = *in_ptr++;
             if( (ch == '%') && ((in_ptr+1) < end) )
             {   // found '%', convert hex to byte
-                ch = *in_ptr++;
-                ch = hex_to_byte( ch, *in_ptr++ );
+                ch =  static_cast<char>(16 * hex_char_to_byte(*in_ptr++));
+                ch += static_cast<char>(hex_char_to_byte(*in_ptr++));
             }
             ++nbytes; // keeping track of bytes and chars
             if( out_ptr )
