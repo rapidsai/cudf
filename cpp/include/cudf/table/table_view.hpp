@@ -226,4 +226,19 @@ inline bool has_nulls(table_view view) {
   return std::any_of(view.begin(), view.end(),
                      [](column_view col) { return col.has_nulls(); });
 }
+
+/**---------------------------------------------------------------------------*
+   * @brief Checks if two `table_view`s have columns of same types
+   *
+   * @param lhs left-side table_view operand
+   * @param rhs right-side table_view operand
+   * @return boolean comparison result
+   *---------------------------------------------------------------------------**/
+inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
+  return std::equal(lhs.begin(), lhs.end(),
+                    rhs.begin(), rhs.end(),
+                    [](column_view const& lcol, column_view const& rcol){
+                      return (lcol.type() == rcol.type());
+                    });
+}
 }  // namespace cudf
