@@ -5,6 +5,7 @@
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3610 Add memory_usage to DataFrame and Series APIs
 
 ## Improvements
 
@@ -26,6 +27,7 @@
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 - PR #3622 Fix new warnings and errors when building with gcc-8
+- PR #3588 Remove avro reader column order reversal
 
 
 # cuDF 0.11.0 (11 Dec 2019)
