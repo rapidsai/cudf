@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3284 Add gpu-accelerated parquet writer
+- PR #3628 Define and implement non equi join
 
 ## Improvements
 
