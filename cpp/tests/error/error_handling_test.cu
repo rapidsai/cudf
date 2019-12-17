@@ -56,8 +56,8 @@ TEST(CudaTryTest, TryCatch) {
 }
 
 TEST(StreamCheck, success) {
-  EXPECT_NO_THROW(cudf::detail::check_cuda<true>(__FILE__, __LINE__, 0));
-  EXPECT_NO_THROW(cudf::detail::check_cuda<false>(__FILE__, __LINE__, 0));
+  cudaStream_t stream = 0;
+  EXPECT_NO_THROW(CHECK_CUDA(stream));
 }
 
 namespace {
