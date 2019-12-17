@@ -177,7 +177,7 @@ interpolate_extrema_low<bool8>() {
 
 template<typename T>
 std::enable_if_t<std::is_floating_point<T>::value, test_case<T>>
-sorted_ascending_null_after() {
+sorted_ascending_null_before() {
     return test_case<T> {
         fixed_width_column_wrapper<T> ({ 1, 2, 3, 4, 5, 6, 7, 8, 9 },
                                        { 0, 0, 0, 0, 0, 1, 1, 1, 1 }),
@@ -192,7 +192,7 @@ sorted_ascending_null_after() {
 
 template<typename T>
 std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
-sorted_ascending_null_after() {
+sorted_ascending_null_before() {
     return test_case<T> {
         fixed_width_column_wrapper<T> ({ 1, 2, 3, 4, 5, 6, 7, 8, 9 },
                                        { 0, 0, 0, 0, 0, 1, 1, 1, 1 }),
@@ -207,7 +207,7 @@ sorted_ascending_null_after() {
 
 template<typename T>
 std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
-sorted_ascending_null_after() {
+sorted_ascending_null_before() {
     return test_case<T> {
         fixed_width_column_wrapper<T> ({ 1, 0, 1, },
                                        { 0, 1, 1, }),
@@ -531,7 +531,7 @@ TYPED_TEST(QuantilesTest, TestInterpolateExtremaLow)
 
 TYPED_TEST(QuantilesTest, TestSortedAscendingNullBefore)
 {
-    test(testdata::sorted_ascending_null_after<TypeParam>());
+    test(testdata::sorted_ascending_null_before<TypeParam>());
 }
 
 TYPED_TEST(QuantilesTest, TestSortedDescendingNullAfter)
