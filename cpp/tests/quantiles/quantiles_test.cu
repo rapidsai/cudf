@@ -548,6 +548,14 @@ TYPED_TEST(QuantilesTest, TestMismatchedSortOrderCount)
                  cudf::logic_error);
 }
 
+TYPED_TEST(QuantilesTest, TestEmptyTable)
+{
+    std::vector<cudf::column_view> input_columns = {};
+    cudf::table_view input{ input_columns };
+    auto q_values = cudf::experimental::quantiles(input, 0);
+    EXPECT_EQ(0u, q_values.size());
+}
+
 TYPED_TEST(QuantilesTest, TestImplicitlyUnsortedInputs)
 {
     auto a_val = std::numeric_limits<TypeParam>::lowest();
