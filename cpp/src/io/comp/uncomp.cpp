@@ -272,6 +272,47 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
     return (zerr == Z_STREAM_END) ? Z_OK : zerr;
 }
 
+/**
+ * @Brief Uncompresses a raw DEFLATE stream to a char vector.
+ * The vector will be grown to match the uncompressed size
+ * Optimized for the case where the initial size is the uncompressed
+ * size truncated to 32-bit, and grows the buffer in 1GB increments.
+ *
+ * @param dst[out] Destination vector
+ * @param comp_data[in] Raw compressed data
+ * @param comp_len[in] Compressed data size
+ */
+int cpu_inflate_vector(std::vector<char>& dst, const uint8_t *comp_data, size_t comp_len)
+{
+    int zerr;
+    z_stream strm;
+
+    memset(&strm, 0, sizeof(strm));
+    strm.next_in = (Bytef *)comp_data;
+    strm.avail_in = comp_len;
+    strm.total_in = 0;
+    strm.next_out = reinterpret_cast<uint8_t*>(dst.data());
+    strm.avail_out = dst.size();
+    strm.total_out = 0;
+    zerr = inflateInit2(&strm, -15); // -15 for raw data without GZIP headers
+    if (zerr != 0)
+    {
+        dst.resize(0);
+        return zerr;
+    }
+    do {
+        if (strm.avail_out == 0) {
+            dst.resize(strm.total_out + (1 << 30));
+            strm.avail_out = dst.size() - strm.total_out;
+            strm.next_out = reinterpret_cast<uint8_t*>(dst.data()) + strm.total_out;
+        }
+        zerr = inflate(&strm, Z_SYNC_FLUSH);
+    } while ((zerr == Z_BUF_ERROR || zerr == Z_OK) && strm.avail_out == 0 && strm.total_out == dst.size());
+    dst.resize(strm.total_out);
+    inflateEnd(&strm);
+    return (zerr == Z_STREAM_END) ? Z_OK : zerr;
+}
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -392,9 +433,8 @@ gdf_error io_uncompress_single_h2d(const void *src, cudf::size_type src_size, in
     {
         // INFLATE
         dst.resize(uncomp_len);
-        size_t zdestLen = uncomp_len;
-        int zerr = cpu_inflate((uint8_t*)dst.data(), &zdestLen, comp_data, comp_len);
-        if (zerr != 0 || zdestLen != uncomp_len)
+        int zerr = cpu_inflate_vector(dst, comp_data, comp_len);
+        if (zerr != 0)
         {
             dst.resize(0);
             return GDF_FILE_ERROR;
