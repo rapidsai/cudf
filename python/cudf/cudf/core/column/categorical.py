@@ -346,7 +346,11 @@ class CategoricalColumn(column.TypedColumnBase):
 
     @property
     def __cuda_array_interface__(self):
-        return self.cat().codes.__cuda_array_interface__
+        raise TypeError(
+            "Categorical does not support `__cuda_array_interface__`."
+            " Please consider using `.code` or `.categories`"
+            " if you need this functionality."
+        )
 
     def to_pandas(self, index=None):
         codes = self.cat().codes.fillna(-1).to_array()
