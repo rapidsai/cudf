@@ -53,7 +53,8 @@ struct ipv4_to_integers_fn
             return 0;
         string_view d_str = d_strings.element<string_view>(idx);
         int32_t ipvals[4] = {0}; // IPV4 format: xxx.xxx.xxx.xxx
-        int32_t ipv_idx = 0, factor = 1;
+        int32_t ipv_idx = 0;
+        int32_t factor = 1;
         const char* in_ptr = d_str.data();
         const char* end = in_ptr + d_str.size_bytes();
         while( (in_ptr < end) && (ipv_idx < 4))
