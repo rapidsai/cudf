@@ -86,6 +86,8 @@ else
     logger "Check GPU usage..."
     nvidia-smi
 
+    mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || echo "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
+
     logger "GoogleTest for libnvstrings..."
     cd $WORKSPACE/cpp/build
     GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_nvstrings
