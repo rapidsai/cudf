@@ -67,9 +67,9 @@ struct copy_unique_functor
         // check if adjacent elements match
         auto lhs_index = d_ordinals[idx-1];
         auto rhs_index = d_ordinals[idx];
-        auto result = cudf::experimental::type_dispatcher( d_column.type(),
-                            experimental::element_equality_comparator<true>{d_column, d_column, true},
-                            lhs_index, rhs_index);
+        auto result = !cudf::experimental::type_dispatcher( d_column.type(),
+                             experimental::element_equality_comparator<true>{d_column, d_column, true},
+                             lhs_index, rhs_index);
         d_indices[idx] = static_cast<int32_t>(result); // convert bool to integer [0,1]
         return result;
     }
@@ -106,7 +106,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
                                                stream, mr);
     auto indices = indices_column->mutable_view();
     auto d_indices = indices.data<int32_t>();
-    // build indices map and initialize indices
+    // build map and initialize indices
     rmm::device_vector<int32_t> map_indices(count);
     auto d_map_indices = map_indices.data().get();
     // The copy-if here does 2 things in one kernel; (trying to minimize element compares)
@@ -116,28 +116,30 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
                                        thrust::make_counting_iterator<int32_t>(count), d_map_indices,
                                        detail::copy_unique_functor{d_column, d_ordinals, d_indices} );
     // output of copy_if:
-    //  map_indices: [0,2,3,6,7]       => start of unique values        0,1,2,3,4,5,6,7,8
-    //  indices: [0,0,1,1,0,0,1,1,0,0] => identifies unique positions   a,a,b,c,c,c,d,e,e
-    // in-place scan will produce the actual indices
-    thrust::inclusive_scan(execpol->on(stream), d_indices, d_indices + count, d_indices);
-    // output of scan indices [0,0,1,1,0,0,1,1,0,0] is now [0,0,1,2,2,2,3,4,4]
-    // and sort will put the indices in the correct order
-    thrust::sort_by_key(execpol->on(stream), ordinals.begin(), ordinals.end(), d_indices);
-    // output of sort; indices is now [4,0,3,1,2,2,2,4,0]
-    indices.set_null_count(input_column.null_count());
-    // done with indices_column
+    //  map_indices: [0,2,3,6,7]     => start of unique values        0,1,2,3,4,5,6,7,8
+    //  indices: [0,0,1,1,0,0,1,1,0] => identifies unique positions   a,a,b,c,c,c,d,e,e
+
     // gather the positions of the unique values
     size_type unique_count = static_cast<size_type>(std::distance(d_map_indices,d_map_nend)); // 5
     rmm::device_vector<size_type> keys_indices(unique_count);
-    thrust::gather( execpol->on(stream), d_map_indices, d_map_nend, ordinals.begin(), keys_indices.begin() );
+    auto d_keys_indices = keys_indices.data().get();
+    thrust::gather( execpol->on(stream), d_map_indices, d_map_nend, d_ordinals, d_keys_indices );
     // output of gather [0,2,3,6,7] from [1,8,3,4,5,6,2,0,7]
     //  keys_indices: [1,3,4,2,0]
+
+    // in-place scan will produce the actual indices
+    thrust::inclusive_scan(execpol->on(stream), d_indices, d_indices + count, d_indices);
+    // output of scan indices [0,0,1,1,0,0,1,1,0] is now [0,0,1,2,2,2,3,4,4]
+    // sort will put the indices in the correct order
+    thrust::sort_by_key(execpol->on(stream), ordinals.begin(), ordinals.end(), d_indices);
+    // output of sort; indices is now [4,0,3,1,2,2,2,4,0]
+
     // if there are nulls, just truncate the null entry -- it was sorted to the end;
     // the indices do not need to be updated since any value for a null entry is technically undefined
     if( input_column.has_nulls() )
         unique_count--;
+    indices_column->set_null_count(0);
     // gather the keys using keys_indices: [1,3,4,2,0] => ['a','b','c','d','e']
-    auto d_keys_indices = keys_indices.data().get();
     auto table_keys = experimental::detail::gather( table_view{std::vector<column_view>{input_column}},
                                                     d_keys_indices, d_keys_indices+unique_count,
                                                     false, false, false, mr, stream)->release();
