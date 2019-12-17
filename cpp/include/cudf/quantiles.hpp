@@ -27,14 +27,11 @@ namespace experimental {
  *        between the values on either side of a percent-based location within
  *        that column.
  *
- * @param[in] in             Table containing columns used to compute quantile
- *                           values.
- * @param[in] percent        Percent-based location of desired quantile values.
- * @param[in] interp         Strategy used to interpolate between the two values
- *                           on either side of the percent-based location.
- * @param[in] col_is_sorted  Indicates which columns in the table are sorted.
- * @param[in] col_order      Order of values in pre-sorted columns.
- * @param[in] col_null_order Precendence of nulls in pre-sorted columns.
+ * @param[in] in        Table containing columns used to compute quantile values.
+ * @param[in] percent   Percent-based location of desired quantile values.
+ * @param[in] interp    Strategy used to interpolate between the two values on
+ *                      either side of the percent-based location.
+ * @param[in] col_order Indicates the sortedness of columns.
  *
  * @returns Quantile values at the given percent-based location, or null if the
  *          table contains no rows.
@@ -44,7 +41,7 @@ std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& input,
           double percent,
           interpolation interp = interpolation::LINEAR,
-          std::vector<order_info> col_order_info = {});
+          std::vector<order_info> col_order = {});
 
 } // namespace experimental
 } // namespace cudf
