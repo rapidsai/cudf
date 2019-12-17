@@ -46,6 +46,7 @@ test:
   commands:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
+    - test -f $PREFIX/include/cudf/detail/dlpack.hpp
     - test -f $PREFIX/include/cudf/detail/gather.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
@@ -62,6 +63,7 @@ test:
     - test -f $PREFIX/include/cudf/legacy/copying.hpp
     - test -f $PREFIX/include/cudf/cudf.h
     - test -f $PREFIX/include/cudf/datetime.hpp
+    - test -f $PREFIX/include/cudf/dlpack.hpp
     - test -f $PREFIX/include/cudf/legacy/filling.hpp
     - test -f $PREFIX/include/cudf/legacy/functions.h
     - test -f $PREFIX/include/cudf/legacy/groupby.hpp

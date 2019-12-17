@@ -69,7 +69,7 @@ constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
  * @brief Function that translates ORC datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
-    const orc::SchemaType &schema, bool use_np_dtypes, gdf_time_unit ts_unit) {
+    const orc::SchemaType &schema, bool use_np_dtypes, gdf_time_unit ts_unit, bool decimals_as_float) {
   switch (schema.kind) {
     case orc::BOOLEAN:
       return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
@@ -104,9 +104,10 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
                  : std::make_pair(GDF_DATE32,
                                   gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::DECIMAL:
-      // There isn't an arbitrary-precision type in cuDF, so map as float
-      static_assert(DECIMALS_AS_FLOAT64 == 1, "Missing decimal->float");
-      return std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      // There isn't an arbitrary-precision type in cuDF, so map as float or int
+      return (decimals_as_float)
+                 ? std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{TIME_UNIT_NONE})
+                 : std::make_pair(GDF_INT64, gdf_dtype_extra_info{TIME_UNIT_NONE});
     default:
       break;
   }
@@ -648,6 +649,10 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
 
   // Enable or disable the conversion to numpy-compatible dtypes
   use_np_dtypes_ = options.use_np_dtypes;
+
+  // Control decimals conversion (float64 or int64 with optional scale)
+  decimals_as_float_ = options.decimals_as_float;
+  decimals_as_int_scale_ = options.forced_decimals_scale;
 }
 
 table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
@@ -664,7 +669,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols_) {
     auto dtype_info =
-        to_dtype(md_->ff.types[col], use_np_dtypes_, timestamp_unit_);
+        to_dtype(md_->ff.types[col], use_np_dtypes_, timestamp_unit_, decimals_as_float_);
 
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
@@ -740,7 +745,15 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
         chunk.num_rows = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[selected_cols_[j]].kind;
         chunk.type_kind = md_->ff.types[selected_cols_[j]].kind;
-        chunk.decimal_scale = md_->ff.types[selected_cols_[j]].scale;
+        if (decimals_as_float_) {
+          chunk.decimal_scale = md_->ff.types[selected_cols_[j]].scale | ORC_DECIMAL2FLOAT64_SCALE;
+        }
+        else if (decimals_as_int_scale_ < 0) {
+          chunk.decimal_scale = md_->ff.types[selected_cols_[j]].scale;
+        }
+        else {
+          chunk.decimal_scale = decimals_as_int_scale_;
+        }
         chunk.rowgroup_id = num_rowgroups;
         if (chunk.type_kind == orc::TIMESTAMP) {
           chunk.ts_clock_rate = to_clockrate(timestamp_unit_);
