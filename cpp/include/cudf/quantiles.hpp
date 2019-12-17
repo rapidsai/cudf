@@ -24,22 +24,22 @@ namespace cudf {
 namespace experimental {
 
 /* @brief For each column, computes a value for a quantile by interpolating
- *        between the values on either side of a percent-based location within
- *        that column.
+ *        between the values on either side of the desired quantile.
  *
- * @param[in] in        Table containing columns used to compute quantile values.
- * @param[in] percent   Percent-based location of desired quantile values.
- * @param[in] interp    Strategy used to interpolate between the two values on
- *                      either side of the percent-based location.
- * @param[in] col_order Indicates the sortedness of columns.
+ * @param[in] input        Table containing columns used to compute quantile
+ *                         values.
+ * @param[in] q            Desired quantile in range [0, 1].
+ * @param[in] interp       Strategy used to interpolate between the two values
+ *                         on either side of the desired quantile.
+ * @param[in] column_order Indicates the sortedness of columns.
  *
- * @returns Quantile values at the given percent-based location, or null if the
- *          table contains no rows.
+ * @returns Value of the desired quantile for each column, or null if the column
+ *          has no valid elements.
  */
 
 std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& input,
-          double percent,
+          double q,
           interpolation interp = interpolation::LINEAR,
           std::vector<order_info> column_order = {});
 

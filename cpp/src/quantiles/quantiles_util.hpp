@@ -112,35 +112,35 @@ struct quantile_index
     }
 };
 
-/* @brief computes a quantile / percentile.
+/* @brief computes a quantile value.
  *
  * Computes a value for a quantile by interpolating between two values on either
- * side of a percent-based location.
+ * side of the desired quantile.
  *
  * `get_value` must have signature: `T <T>(size_type)` where T can be
  * `static_cast` to `Result`.
  *
  * @param[in] get_value Gets the value at a given index in range [0, size].
  * @param[in] size      Number of values indexed by `get_value`.
- * @param[in] percent   Percent-based location of desired quantile value.
+ * @param[in] q         Desired quantile in range [0, 1].
  * @param[in] interp    Strategy used to interpolate between the two values
- *                      on either side of the percent-based location.
+ *                      on either side of the desired quantile.
  *
- * @returns Quantile value at the given percent-based location.
+ * @returns Value of the desired quantile.
  */
 
 template<typename Result, typename ValueAccessor>
 Result
 select_quantile(ValueAccessor get_value,
                 size_type size,
-                double percent,
+                double q,
                 interpolation interp)
 {
     if (size < 2) {
         return get_value(0);
     }
 
-    quantile_index idx(size, percent);
+    quantile_index idx(size, q);
 
     switch (interp) {
     case interpolation::LINEAR:
