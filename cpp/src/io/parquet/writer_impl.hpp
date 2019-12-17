@@ -74,9 +74,10 @@ class writer::impl {
    * @brief Write an entire dataset to parquet format.
    *
    * @param table The set of columns
+   * @param metadata The metadata associated with the table
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void write(table_view const& table, cudaStream_t stream);
+  void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
 
  private:
   /**

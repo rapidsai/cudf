@@ -159,7 +159,7 @@ class orc_column_view {
    * for building dictionaries for string columns
    **/
   explicit orc_column_view(size_t id, size_t str_id, column_view const &col,
-                           cudaStream_t stream)
+                           const table_metadata *metadata, cudaStream_t stream)
       : _id(id),
         _str_id(str_id),
         _string_type(col.type().id() == type_id::STRING),
@@ -180,7 +180,13 @@ class orc_column_view {
       _data = _indexes.data();
       cudaStreamSynchronize(stream);
     }
-    _name = "_col" + std::to_string(_id);
+    // Generating default name if name isn't present in metadata
+    if (metadata && _id < metadata->column_names.size()) {
+      _name = metadata->column_names[_id];
+    }
+    else {
+      _name = "_col" + std::to_string(_id);
+    }
   }
 
   auto is_string() const noexcept { return _string_type; }
@@ -797,7 +803,7 @@ writer::impl::impl(std::string filepath, writer_options const &options,
   CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
 }
 
-void writer::impl::write(table_view const &table, cudaStream_t stream) {
+void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
@@ -813,7 +819,7 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     const auto current_str_id = str_col_ids.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    orc_columns.emplace_back(current_id, current_str_id, col, stream);
+    orc_columns.emplace_back(current_id, current_str_id, col, metadata, stream);
     if (orc_columns.back().is_string()) {
       str_col_ids.push_back(current_id);
     }
@@ -1009,7 +1015,6 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   }
 
   // Write filefooter metadata
-  // TBD: We may want to add pandas or spark column metadata strings here
   FileFooter ff;
   ff.headerLength = std::strlen(MAGIC);
   ff.contentLength = outfile_.tellp();
@@ -1024,6 +1029,11 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     ff.types[1 + i].kind = orc_columns[i].orc_kind();
     ff.types[0].subtypes[i] = 1 + i;
     ff.types[0].fieldNames[i] = orc_columns[i].orc_name();
+  }
+  if (metadata) {
+    for (auto it = metadata->user_data.begin(); it != metadata->user_data.end(); it++) {
+      ff.metadata.push_back({it->first, it->second});
+    }
   }
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
   pbw_.write(&ff);
@@ -1059,8 +1069,8 @@ writer::writer(std::string filepath, writer_options const &options,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, cudaStream_t stream) {
-  _impl->write(table, stream);
+void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
+  _impl->write(table, metadata, stream);
 }
 
 }  // namespace orc
