@@ -329,7 +329,7 @@ class column_view : public detail::column_view_base {
   /**
    * @brief Returns the keys column.
    */
-  std::shared_ptr<column_view> keys()  { return _keys; }
+  std::shared_ptr<column_view> keys() const noexcept  { return _keys; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of child columns.

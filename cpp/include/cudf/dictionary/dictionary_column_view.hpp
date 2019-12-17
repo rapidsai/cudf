@@ -28,7 +28,7 @@ namespace cudf
  * The dictionary is a sorted set of unique values for the column.
  * The indices values are position indices into the dictionary.
  */
-class dictionary_column_view : public column_view
+class dictionary_column_view : private column_view
 {
 public:
     dictionary_column_view( column_view dictionary_column );
@@ -38,15 +38,27 @@ public:
     dictionary_column_view& operator=(dictionary_column_view const&) = default;
     dictionary_column_view& operator=(dictionary_column_view&&) = default;
 
+    using column_view::size;
+    using column_view::null_mask;
+    using column_view::null_count;
+    using column_view::has_nulls;
+    using column_view::offset;
+    using column_view::keys;
+
     /**
-     * @brief Returns the internal dictionary column.
+     * @brief Returns the parent column.
      */
-    column_view dictionary() const noexcept { return _dictionary; }
+    column_view parent() const;
 
     /**
      * @brief Returns the column of indices
      */
     column_view indices() const;
+
+    /**
+     * @brief Returns the number of rows in the keys column.
+     */
+    size_type keys_size() const noexcept;
 
 private:
     column_view _dictionary;
@@ -56,64 +68,64 @@ namespace dictionary
 {
 
 /**
- * @brief Create a new dictionary column by adding the new dictionary elements
+ * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.
  *
- * The indices are updated if any of the new dictionary elements are sorted
+ * The indices are updated if any of the new keys are sorted
  * before any of the existing dictionary elements.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = add_dictionary(d1,["b","c"])
+ * d2 = add_keys(d1,["b","c"])
  * d2 is now {["a","b","c","d"],[3,0,2,0]}
  * ```
  *
- * @throw cudf_logic_error if the dictionary type does not match the dictionary type in
+ * @throw cudf_logic_error if the keys type does not match the keys type in
  * the dictionary_column.
  *
  * @param dictionary_column Existing dictionary column.
- * @param dictionary New keys to incorporate into the dictionary_column
+ * @param keys New keys to incorporate into the dictionary_column
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> add_dictionary( dictionary_column_view const& dictionary_column,
-                                        column_view const& dictionary,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_column,
+                                  column_view const& keys,
+                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a new dictionary column by removing the specified dictionary elements
+ * @brief Create a new dictionary column by removing the specified keys
  * from the existing dictionary_column.
  *
- * The indices are updated to the new positions of the remaining dictionary elements.
- * Any indices pointing to removed elements are set to null.
+ * The indices are updated to the new positions of the remaining keys.
+ * Any indices pointing to removed keys are set to null.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = remove_dictionary(d1,["b","c"])
+ * d2 = remove_keys(d1,["b","c"])
  * d2 is now {["a","d"],[1,0,null,0]}
  * ```
  *
- * @throw cudf_logic_error if the dictionary type does not match the dictionary type in
+ * @throw cudf_logic_error if the keys type does not match the keys type in
  * the dictionary_column.
  *
  * @param dictionary_column Existing dictionary column.
- * @param dictionary New keys to remove from the dictionary_column
+ * @param keys New keys to remove from the dictionary_column
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> remove_dictionary( dictionary_column_view const& dictionary_column,
-                                           column_view const& dictionary,
-                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_column,
+                                     column_view const& keys,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a new dictionary column by removing any dictionary elements
+ * @brief Create a new dictionary column by removing any keys
  * that are not referenced by any of the indices.
  *
- * The indices are updated to the new position values of the remaining dictionary elements.
+ * The indices are updated to the new position values of the remaining keys.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,2,0]}
- * d2 = remove_unused_dictionary(d1)
+ * d2 = remove_unused_keys(d1)
  * d2 is now {["a","d"],[1,0,1,0]}
  * ```
  *
@@ -121,40 +133,40 @@ std::unique_ptr<column> remove_dictionary( dictionary_column_view const& diction
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> remove_unused_dictionary( dictionary_column_view const& dictionary_column,
-                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictionary_column,
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a new dictionary column by applying only the specified dictionary elements
+ * @brief Create a new dictionary column by applying only the specified keys
  * to the existing dictionary_column.
  *
- * Any new elements found in the dictionary parameter are added to the output dictionary.
- * Any existing dictionary elements not in the dictionary parameter are removed.
+ * Any new elements found in the keys parameter are added to the output dictionary.
+ * Any existing keys not in the keys parameter are removed.
  *
- * The indices are update to reflect the position values of the new dictionary.
- * Any indices pointing to removed elements are set to null.
+ * The indices are update to reflect the position values of the new keys.
+ * Any indices pointing to removed keys are set to null.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = set_dictionary(d1,["a","b","c"])
+ * d2 = set_keys(d1,["a","b","c"])
  * d2 is now {["a","b","c"],[null,0,2,0]}
  * ```
  *
- * @throw cudf_logic_error if the dictionary type does not match the dictionary type in
+ * @throw cudf_logic_error if the keys type does not match the keys type in
  * the dictionary_column.
  *
  * @param dictionary_column Existing dictionary column.
- * @param dictionary New keys to use for the output column.
+ * @param keys New keys to use for the output column.
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> set_dictionary( dictionary_column_view const& dictionary_column,
-                                        column_view const& dictionary,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_column,
+                                  column_view const& keys,
+                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a new dictionary column by merging the specified dictionary elements
- * from two existing dictionary_columns.
+ * @brief Create a new dictionary column by merging the keys and indices
+ * from two existing dictionary columns.
  *
  * The indices are updated to appear as though the second dictionary_column is appended to the first.
  *
@@ -167,8 +179,8 @@ std::unique_ptr<column> set_dictionary( dictionary_column_view const& dictionary
  *
  * @throw cudf_logic_error if the dictionary types do not match for both dictionary columns.
  *
- * @param dictionary_column Existing dictionary column.
- * @param dictionary New keys to remove from the dictionary_column
+ * @param dictionary_column1 Existing dictionary column.
+ * @param dictionary_column2 2nd existing dictionary column.
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
@@ -177,8 +189,8 @@ std::unique_ptr<column> merge_dictionaries( dictionary_column_view const& dictio
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a column by gathering the elements from the provided
- * dictionary_column using the specified indices.
+ * @brief Create a column by gathering the keys from the provided
+ * dictionary_column into a new column using the specified indices.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
@@ -189,15 +201,15 @@ std::unique_ptr<column> merge_dictionaries( dictionary_column_view const& dictio
  * @param dictionary_column Existing dictionary column.
  * @param indices Indices to use for the new dictionary column.
  * @param mr Resource for allocating memory for the output.
- * @return New column with type matching the dictionary_column's dictionary.
+ * @return New column with type matching the dictionary_column's keys.
  */
 std::unique_ptr<column> gather_type( dictionary_column_view const& dictionary_column,
                                      column_view const& indices,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create a column by gathering the elements from the provided
- * dictionary_column using the indices from that column.
+ * @brief Create a column by gathering the keys from the provided
+ * dictionary_column into a new column using the indices from that column.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
@@ -207,7 +219,7 @@ std::unique_ptr<column> gather_type( dictionary_column_view const& dictionary_co
  *
  * @param dictionary_column Existing dictionary column.
  * @param mr Resource for allocating memory for the output.
- * @return New column with type matching the dictionary_column's dictionary.
+ * @return New column with type matching the dictionary_column's keys.
  */
 std::unique_ptr<column> to_type( dictionary_column_view const& dictionary_column,
                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

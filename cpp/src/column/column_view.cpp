@@ -44,7 +44,8 @@ column_view_base::column_view_base(data_type type, size_type size,
     CUDF_EXPECTS(nullptr == null_mask,
                  "EMPTY column should have no null mask.");
   }
-  else if ( is_compound(type) ) {
+  else if ( type.id()==DICTIONARY32 || // TODO: add to type-dispatcher
+            is_compound(type) ) {
     CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
   } else if( size > 0){
     CUDF_EXPECTS(nullptr != data, "Null data pointer.");	   
