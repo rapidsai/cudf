@@ -326,7 +326,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
                                                      per_thread,
                                                      filter);
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::size_type output_size = 0;
 
@@ -353,7 +353,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         output_size = block_counts.back();
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
 
    if (output_size == input.num_rows()) {
