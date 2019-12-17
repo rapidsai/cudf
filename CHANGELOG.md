@@ -15,8 +15,8 @@
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
 - PR #3608 Update OPS codeowner group name
-
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
 
 ## Bug Fixes
 
