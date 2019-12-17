@@ -128,7 +128,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
@@ -154,7 +154,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
@@ -181,7 +181,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
@@ -208,7 +208,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
   in_args.timestamp_type = this->type();
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, MultiColumn) {
@@ -231,12 +231,13 @@ TEST_F(OrcWriterTest, MultiColumn) {
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
 
-  // column_set_name(col0.get(), "bools");
-  // column_set_name(col1.get(), "int8s");
-  // column_set_name(col2.get(), "int16s");
-  // column_set_name(col3.get(), "int32s");
-  // column_set_name(col4.get(), "floats");
-  // column_set_name(col5.get(), "doubles");
+  cudf_io::table_metadata expected_metadata;
+  //expected_metadata.column_names.emplace_back("bools");
+  expected_metadata.column_names.emplace_back("int8s");
+  expected_metadata.column_names.emplace_back("int16s");
+  expected_metadata.column_names.emplace_back("int32s");
+  expected_metadata.column_names.emplace_back("floats");
+  expected_metadata.column_names.emplace_back("doubles");
 
   std::vector<std::unique_ptr<column>> cols;
   // cols.push_back(col0.release());
@@ -250,14 +251,15 @@ TEST_F(OrcWriterTest, MultiColumn) {
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view()};
+                                   expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(OrcWriterTest, MultiColumnWithNulls) {
@@ -290,12 +292,13 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
 
-  // column_set_name(col0.get(), "bools");
-  // column_set_name(col1.get(), "int8s");
-  // column_set_name(col2.get(), "int16s");
-  // column_set_name(col3.get(), "int32s");
-  // column_set_name(col4.get(), "floats");
-  // column_set_name(col5.get(), "doubles");
+  cudf_io::table_metadata expected_metadata;
+  //expected_metadata.column_names.emplace_back("bools");
+  expected_metadata.column_names.emplace_back("int8s");
+  expected_metadata.column_names.emplace_back("int16s");
+  expected_metadata.column_names.emplace_back("int32s");
+  expected_metadata.column_names.emplace_back("floats");
+  expected_metadata.column_names.emplace_back("doubles");
 
   std::vector<std::unique_ptr<column>> cols;
   // cols.push_back(col0.release());
@@ -309,14 +312,15 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view()};
+                                   expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(OrcWriterTest, Strings) {
@@ -333,9 +337,10 @@ TEST_F(OrcWriterTest, Strings) {
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
   column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
 
-  // column_set_name(col0.get(), "col_other");
-  // column_set_name(col1.get(), "col_string");
-  // column_set_name(col2.get(), "col_another");
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_other");
+  expected_metadata.column_names.emplace_back("col_string");
+  expected_metadata.column_names.emplace_back("col_another");
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col0.release());
@@ -346,12 +351,13 @@ TEST_F(OrcWriterTest, Strings) {
 
   auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
   cudf_io::write_orc_args out_args{cudf_io::sink_info{filepath},
-                                   expected->view()};
+                                   expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
 
   cudf_io::read_orc_args in_args{cudf_io::source_info{filepath}};
   in_args.use_index = false;
   auto result = cudf_io::read_orc(in_args);
 
-  expect_tables_equal(expected->view(), result->view());
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
