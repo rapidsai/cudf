@@ -16,12 +16,14 @@
 
 #include <cuda_runtime.h>
 #include <cudf/strings/string_view.cuh>
-#include "./regcomp.h"
-#include "../char_types/is_flags.h"
-#include "../utilities.cuh"
+#include <strings/regex/regcomp.h>
+#include <strings/char_types/is_flags.h>
+#include <strings/utilities.cuh>
 
 #include <memory.h>
-
+#include <thrust/logical.h>
+#include <thrust/functional.h>
+#include <thrust/execution_policy.h>
 
 namespace cudf
 {
@@ -33,14 +35,15 @@ namespace detail
 /**
  * @brief This holds the state information when evaluating a string
  * against a regex pattern.
- * 
+ *
  * There are 2 instances of this per string managed in the reljunk class.
  * As each regex instruction is evaluated for a string, the result is
  * reflected here. The regexec function updates and manages this state data.
  */
 struct alignas(8) relist
 {
-    int16_t size, listsize;
+    int16_t size;
+    int16_t listsize;
     int32_t reserved;
     int2* ranges;        // pair per instruction
     int16_t* inst_ids;   // one per instruction
@@ -66,10 +69,10 @@ struct alignas(8) relist
         listsize = insts;
         u_char* ptr = (u_char*)data;
         if( ptr==nullptr )
-            ptr = ((u_char*)this) + sizeof(relist);
-        ranges = (int2*)ptr;
+            ptr = (reinterpret_cast<u_char*>(this)) + sizeof(relist);
+        ranges = reinterpret_cast<int2*>(ptr);
         ptr += listsize * sizeof(ranges[0]);
-        inst_ids = (short*)ptr;
+        inst_ids = reinterpret_cast<int16_t*>(ptr);
         ptr += listsize * sizeof(inst_ids[0]);
         mask = ptr;
         reset();
@@ -86,7 +89,7 @@ struct alignas(8) relist
         if(readMask(i))
             return false;
         writeMask(true, i);
-        inst_ids[size] = static_cast<int64_t>(i);
+        inst_ids[size] = static_cast<int16_t>(i);
         ranges[size] = int2{begin,end};
         ++size;
         return true;
@@ -104,7 +107,7 @@ struct alignas(8) relist
     __device__ inline bool readMask(int32_t pos)
     {
         u_char uc = mask[pos >> 3];
-        return (bool)((uc >> (pos & 7)) & 1);
+        return static_cast<bool>((uc >> (pos & 7)) & 1);
     }
 };
 
@@ -113,8 +116,9 @@ struct alignas(8) relist
  */
 struct reljunk
 {
-    relist *list1, *list2;
-    int32_t	starttype;
+    relist* list1;
+    relist* list2;
+    int32_t starttype;
     char32_t startchar;
 };
 
@@ -127,19 +131,16 @@ __device__ inline void swaplist(relist*& l1, relist*& l2)
 
 /**
  * @brief Utility to check a specific character against this class instance.
- * 
+ *
  * @param ch A 4-byte UTF-8 character.
  * @param codepoint_flags Used for mapping a character to type for builtin classes.
  * @return true if the character matches
  */
 __device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* codepoint_flags)
 {
-    int i=0, len = count;
-    for( ; i < len; i += 2 )
-    {
-        if( (ch >= literals[i]) && (ch <= literals[i+1]) )
-            return true;
-    }
+    if( thrust::any_of( thrust::seq, thrust::make_counting_iterator<int>(0), thrust::make_counting_iterator<int>(count),
+                        [ch, this] __device__ (int i) { return ((ch >= literals[i*2]) && (ch <= literals[(i*2)+1])); }) )
+        return true;
     if( !builtins )
         return false;
     uint32_t codept = utf8_to_codepoint(ch);
@@ -164,12 +165,12 @@ __device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* code
 
 /**
  * @brief Set the device data to be used for holding the state data of a string.
- * 
+ *
  * With one thread per string, the stack is used to maintain state when evaluating the string.
  * With large regex patterns, the normal stack is not always practical.
  * This mechanism allows an alternate buffer of device memory to be used in place of the stack
  * for the state data.
- * 
+ *
  * Two distinct buffers are required for the state data.
  */
 __device__ inline void reprog_device::set_stack_mem(u_char* s1, u_char* s2)
@@ -197,9 +198,9 @@ __device__ inline int32_t* reprog_device::startinst_ids() const
 
 /**
  * @brief Evaluate a specific string against regex pattern compiled to this instance.
- * 
+ *
  * This is the main function for executing the regex against an individual string.
- * 
+ *
  * @param dstr String used for matching.
  * @param jnk State data object for this string.
  * @param[in,out] begin Character position to start evaluation. On return, it is the position of the match.
@@ -262,7 +263,7 @@ __device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljun
         c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
 
         // expand LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
-        bool expanded;
+        bool expanded = false;
         do
         {
             jnk.list2->reset();
@@ -411,8 +412,7 @@ __device__ inline int32_t reprog_device::regexec(string_view const& dstr, reljun
 
 __device__ inline int32_t reprog_device::find( int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end )
 {
-    int32_t rtn = 0;
-    rtn = call_regexec(idx,dstr,begin,end);
+    int32_t rtn = call_regexec(idx,dstr,begin,end);
     if( rtn <=0 )
         begin = end = -1;
     return rtn;
@@ -438,7 +438,8 @@ __device__ inline int32_t reprog_device::call_regexec( int32_t idx, string_view 
 
     if( _relists_mem==0 )
     {
-        relist relist1, relist2;
+        relist relist1;
+        relist relist2;
         jnk.list1 = &relist1;
         jnk.list2 = &relist2;
         jnk.list1->set_data(static_cast<int16_t>(_insts_count),_stack_mem1);

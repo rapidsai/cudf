@@ -14,9 +14,10 @@
 * limitations under the License.
 */
 
+#include <strings/regex/regcomp.h>
+
 #include <string.h>
 
-#include "./regcomp.h"
 
 namespace cudf
 {
@@ -28,7 +29,7 @@ namespace
 {
 
 // Bitmask of all operators
-#define OPERATOR_MASK    0200  
+#define OPERATOR_MASK    0200
 enum OperatorType
 {
     START        = 0200, // Start, used for marker on stack
@@ -45,12 +46,12 @@ enum OperatorType
     NOP          = 0302, // No operation, internal use only
 };
 
-static reclass ccls_w(1); // = { 'a', 'z','A','Z','0','9','_','_' };
-static reclass ccls_W(8); // = { '\n','\n','a', 'z', 'A', 'Z', '0', '9', '_', '_' };
-static reclass ccls_s(2); // = { '\t', '\t', '\n', '\n', '\r', '\r', '\f', '\f', '\v', '\v', ' ', ' ' };
-static reclass ccls_S(16);// ccls_S is the same as ccls_s
-static reclass ccls_d(4); // = { '0', '9' };
-static reclass ccls_D(32);// = { '\n', '\n', '0', '9' };
+static reclass ccls_w(1);  // [a-z], [A-Z], [0-9], and '_'
+static reclass ccls_W(8);  // now ccls_w plus '\n'
+static reclass ccls_s(2);  // all spaces or ctrl characters
+static reclass ccls_S(16); // not ccls_s
+static reclass ccls_d(4);  // digits [0-9]
+static reclass ccls_D(32); // not ccls_d plus '\n'
 
 } // namespace
 
@@ -66,13 +67,13 @@ int32_t reprog::add_inst(int32_t t)
 int32_t reprog::add_inst(reinst inst)
 {
     _insts.push_back(inst);
-    return (int)_insts.size() - 1;
+    return static_cast<int>(_insts.size() - 1);
 }
 
 int32_t reprog::add_class(reclass cls)
 {
     _classes.push_back(cls);
-    return (int)_classes.size()-1;
+    return static_cast<int>(_classes.size()-1);
 }
 
 reinst& reprog::inst_at(int32_t id)
@@ -97,12 +98,12 @@ int32_t reprog::get_start_inst() const
 
 int32_t reprog::insts_count() const
 {
-    return (int)_insts.size();
+    return static_cast<int>(_insts.size());
 }
 
 int32_t reprog::classes_count() const
 {
-    return (int)_classes.size();
+    return static_cast<int>(_classes.size());
 }
 
 void reprog::set_groups_count(int32_t groups)
@@ -127,18 +128,22 @@ const int32_t* reprog::starts_data() const
 
 int32_t reprog::starts_count() const
 {
-    return (int)_startinst_ids.size();
+    return static_cast<int>(_startinst_ids.size());
 }
 
 // Converts pattern into regex classes
-class RegParser
+class regex_parser
 {
     reprog& m_prog;
 
     const char32_t* exprp;
     bool lexdone;
 
-    int id_ccls_w = -1, id_ccls_W = -1, id_ccls_s = -1, id_ccls_d = -1, id_ccls_D = -1;
+    int id_ccls_w = -1; // alphanumeric
+    int id_ccls_W = -1; // not alphanumeric
+    int id_ccls_s = -1; // space
+    int id_ccls_d = -1; // digit
+    int id_ccls_D = -1; // not digit
 
     char32_t yy; /* last lex'd Char */
     int yyclass_id; /* last lex'd class */
@@ -171,7 +176,7 @@ class RegParser
 
         /* look ahead for negation */
         /* SPECIAL CASE!!! negated classes don't match \n */
-        char32_t c;
+        char32_t c = 0;
         int quoted = nextc(c);
         if(!quoted && c == '^')
         {
@@ -279,12 +284,11 @@ class RegParser
                 }
 
         /* merge spans */
-        reclass yycls;
-        yycls.builtins=builtins;
-        int p = 0;
+        reclass yycls{builtins};
         if( cls.size()>=2 )
         {
             int np = 0;
+            int p = 0;
             yycls.literals += cls[p++];
             yycls.literals += cls[p++];
             for (; p < cls.size(); p += 2)
@@ -309,8 +313,7 @@ class RegParser
 
     int lex(int dot_type)
     {
-        int quoted;
-        quoted = nextc(yy);
+        int quoted = nextc(yy);
         if(quoted)
         {
             if (yy == 0)
@@ -470,8 +473,7 @@ class RegParser
         {
             if (*exprp<'0' || *exprp>'9') break;
             const char32_t* exprp_backup = exprp; // in case '}' is not found
-            char buff[8];
-            buff[0] = 0;
+            char buff[8] = {0};
             for (int i = 0; i < 7 && *exprp != '}' && *exprp != ',' && *exprp != 0; i++, exprp++)
             {
                 buff[i] = *exprp;
@@ -552,13 +554,11 @@ public:
 
     bool m_has_counted;
 
-    RegParser(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
+    regex_parser(const char32_t* pattern, int dot_type, reprog& prog)
+    : m_prog(prog), exprp(pattern), lexdone(false), m_has_counted(false)
     {
-        exprp = pattern;
-        lexdone = false;
-        m_has_counted = false;
-        int token;
-        while ((token = lex(dot_type)) != END)
+        int token = 0;
+        while((token = lex(dot_type)) != END)
         {
             Item item;
             item.t = token;
@@ -580,7 +580,7 @@ public:
 /**
  * @brief The compiler converts class list into instructions.
  */
-class RegCompiler
+class regex_compiler
 {
     reprog& m_prog;
 
@@ -603,7 +603,7 @@ class RegCompiler
     std::vector<Ator> atorstack;
 
     bool lastwasand;
-    int	nbra;
+    int nbra;
 
     inline void pushand(int f, int l)
     {
@@ -640,8 +640,10 @@ class RegCompiler
 
     void evaluntil(int pri)
     {
-        Node op1, op2;
-        int id_inst1, id_inst2;
+        Node op1;
+        Node op2;
+        int id_inst1 = -1;
+        int id_inst2 = -1;
         while( pri == RBRA || atorstack[atorstack.size() - 1].t >= pri )
         {
             Ator ator = popator();
@@ -768,7 +770,7 @@ class RegCompiler
     char32_t yy;
     int yyclass_id;
 
-    void expand_counted(const std::vector<RegParser::Item>& in, std::vector<RegParser::Item>& out)
+    void expand_counted(const std::vector<regex_parser::Item>& in, std::vector<regex_parser::Item>& out)
     {
         std::vector<int> lbra_stack;
         int rep_start = -1;
@@ -799,7 +801,7 @@ class RegCompiler
                 if (rep_start < 0) // broken regex
                     return;
 
-                RegParser::Item item = in[i];
+                regex_parser::Item item = in[i];
                 if (item.d.yycount.n <= 0)
                 {
                     // need to erase
@@ -819,7 +821,7 @@ class RegCompiler
                 {
                     for (int j = item.d.yycount.n; j < item.d.yycount.m; j++)
                     {
-                        RegParser::Item o_item;
+                        regex_parser::Item o_item;
                         o_item.t = LBRA_NC;
                         o_item.d.yy = 0;
                         out.push_back(o_item);
@@ -828,7 +830,7 @@ class RegCompiler
                     }
                     for (int j = item.d.yycount.n; j < item.d.yycount.m; j++)
                     {
-                        RegParser::Item o_item;
+                        regex_parser::Item o_item;
                         o_item.t = RBRA;
                         o_item.d.yy = 0;
                         out.push_back(o_item);
@@ -846,7 +848,7 @@ class RegCompiler
                 }
                 else // infinite repeat
                 {
-                    RegParser::Item o_item;
+                    regex_parser::Item o_item;
                     o_item.d.yy = 0;
 
                     if (item.d.yycount.n > 0) // put '+' after last repetition
@@ -885,12 +887,14 @@ class RegCompiler
 
 
 public:
-    RegCompiler(const char32_t* pattern, int dot_type, reprog& prog) : m_prog(prog)
+    regex_compiler(const char32_t* pattern, int dot_type, reprog& prog)
+    : m_prog(prog), cursubid(0), pushsubid(0), lastwasand(false), nbra(0),
+      yyclass_id(0), yy(0)
     {
         // Parse
-        std::vector<RegParser::Item> items;
+        std::vector<regex_parser::Item> items;
         {
-            RegParser parser(pattern, dot_type, m_prog);
+            regex_parser parser(pattern, dot_type, m_prog);
 
             // Expand counted repetitions
             if (parser.m_has_counted)
@@ -899,18 +903,12 @@ public:
                 items = parser.m_items;
         }
 
-        cursubid = 0;
-        pushsubid = 0;
-
         /* Start with a low priority operator to prime parser */
         pushator(START - 1);
 
-        lastwasand = false;
-        nbra = 0;
-
-        for (int i = 0; i < (int)items.size(); i++)
+        for (int i = 0; i < static_cast<int>(items.size()); i++)
         {
-            RegParser::Item item = items[i];
+            regex_parser::Item item = items[i];
             int token = item.t;
             if (token == CCLASS || token == NCCLASS)
                 yyclass_id = item.d.yyclass_id;
@@ -953,7 +951,7 @@ public:
 reprog reprog::create_from(const char32_t* pattern)
 {
     reprog rtn;
-    RegCompiler compiler(pattern, ANY, rtn); // future feature: ANYNL
+    regex_compiler compiler(pattern, ANY, rtn); // future feature: ANYNL
     //rtn->print();
     return rtn;
 }
@@ -962,7 +960,7 @@ reprog reprog::create_from(const char32_t* pattern)
 void reprog::optimize1()
 {
     // Treat non-capturing LBRAs/RBRAs as NOOP
-    for (int i = 0; i < (int)_insts.size(); i++)
+    for (int i = 0; i < static_cast<int>(_insts.size()); i++)
     {
         if (_insts[i].type == LBRA || _insts[i].type == RBRA)
         {
@@ -1036,9 +1034,9 @@ void reprog::optimize2()
     _startinst_ids.clear();
     std::vector<int> stack;
     stack.push_back(_startinst_id);
-    while(stack.size() > 0)
+    while(!stack.empty())
     {
-        int id = *(stack.end() - 1);
+        int id = stack.back();
         stack.pop_back();
         const reinst& inst = _insts[id];
         if(inst.type == OR)
@@ -1068,7 +1066,7 @@ void reprog::print()
             break;
         case CHAR:
             if( inst.u1.c <=32 || inst.u1.c >=127 )
-                printf("CHAR, c = '0x%02x', nextid= %d", (unsigned)inst.u1.c, inst.u2.next_id);
+                printf("CHAR, c = '0x%02x', nextid= %d", static_cast<unsigned>(inst.u1.c), inst.u2.next_id);
             else
                 printf("CHAR, c = '%c', nextid= %d", inst.u1.c, inst.u2.next_id);
             break;
@@ -1133,21 +1131,21 @@ void reprog::print()
         printf("\n");
     }
 
-    int count = (int)_classes.size();
+    int count = static_cast<int>(_classes.size());
     printf("\nClasses %d\n",count);
     for( int i = 0; i < count; i++ )
     {
         const reclass& cls = _classes[i];
-        int len = (int)cls.literals.size();
+        int len = static_cast<int>(cls.literals.size());
         printf("%2d: ", i);
         for( int j=0; j < len; j += 2 )
         {
             char32_t c1 = cls.literals[j];
             char32_t c2 = cls.literals[j+1];
             if( c1 <= 32 || c1 >= 127 || c2 <= 32 || c2 >= 127 )
-                printf("0x%02x-0x%02x",(unsigned)c1,(unsigned)c2);
+                printf("0x%02x-0x%02x",static_cast<unsigned>(c1),static_cast<unsigned>(c2));
             else
-                printf("%c-%c",(char)c1,(char)c2);
+                printf("%c-%c",static_cast<char>(c1),static_cast<char>(c2));
             if( (j+2) < len )
                 printf(", ");
         }
@@ -1155,7 +1153,7 @@ void reprog::print()
         if( cls.builtins )
         {
             int mask = cls.builtins;
-            printf("   builtins(x%02X):",(unsigned)mask);
+            printf("   builtins(x%02X):",static_cast<unsigned>(mask));
             if( mask & 1 )
                 printf(" \\w");
             if( mask & 2 )
