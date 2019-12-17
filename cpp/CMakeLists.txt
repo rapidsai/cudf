@@ -306,7 +306,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
-                    "${RDKAFKA_INCLUDE}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
@@ -566,6 +565,9 @@ add_library(cudf
             src/groupby/sort/groupby.cu
             src/aggregation/aggregation.cpp
 )
+
+target_include_directories(cudf PUBLIC
+                           "${RDKAFKA_INCLUDE}")
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
