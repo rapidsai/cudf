@@ -124,21 +124,6 @@ class ColumnBase(Column):
         result.gpu_data._obj = self
         return result
 
-    def _assign(self, other):
-        """
-        Assign another Column's buffers, children and properties
-        to this column.
-        """
-        self._data = other.data
-        self.mask = other.mask
-        self.children = other.children
-        self.dtype = other.dtype
-        self.offset = other.offset
-        self.size = other.size
-        if hasattr(other, "_nvstrings"):
-            self._nvstrings = other._nvstrings
-        self.__class__ = other.__class__
-
     def __len__(self):
         return self.size
 
@@ -582,8 +567,7 @@ class ColumnBase(Column):
                     )
                 raise
 
-        self._assign(out)
-        # self._mimic_inplace(out, inplace=True)
+        self._mimic_inplace(out, inplace=True)
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -783,10 +767,15 @@ class ColumnBase(Column):
         if inplace:
             self.data = result.data
             self.mask = result.mask
+            self.dtype = result.dtype
+            self.size = result.size
+            self.name = result.name
+            self.offset = result.offset
             if hasattr(result, "children"):
                 self.children = result.children
                 if is_string_dtype(self):
                     self._nvstrings = None  # force nvstrings to be recomputed
+            self.__class__ = result.__class__
         else:
             return result
 
