@@ -327,8 +327,8 @@ class row_lexicographic_comparator {
    * columns.
    *---------------------------------------------------------------------------**/
   row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               order* column_order = nullptr,
-                               null_order* null_precedence = nullptr)
+                               order const* column_order = nullptr,
+                               null_order const* null_precedence = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
         _column_order{column_order},

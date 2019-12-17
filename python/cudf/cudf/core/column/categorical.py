@@ -524,6 +524,18 @@ class CategoricalColumn(column.TypedColumnBase):
             params = self._replace_defaults()
             return type(self)(**params)
 
+    def __sizeof__(self):
+        return self._categories.__sizeof__() + self.cat().codes.__sizeof__()
+
+    def _memory_usage(self, deep=False):
+        if deep:
+            return self.__sizeof__()
+        else:
+            return (
+                self._categories._memory_usage()
+                + self.cat().codes.memory_usage()
+            )
+
 
 def pandas_categorical_as_column(categorical, codes=None):
     """Creates a CategoricalColumn from a pandas.Categorical

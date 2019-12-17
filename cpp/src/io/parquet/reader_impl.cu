@@ -558,9 +558,10 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _strings_to_categorical = options.strings_to_categorical;
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          int row_group, cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_group,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata out_metadata;
 
   // Select only row groups required
   const auto selected_row_groups =
@@ -590,7 +591,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     std::vector<int> chunk_map(num_chunks);
 
     // Tracker for eventually deallocating compressed and uncompressed data
-    std::vector<rmm::device_buffer> page_data;
+    std::vector<rmm::device_buffer> page_data(num_chunks);
 
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
@@ -632,8 +633,8 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
                                   : col_meta.data_page_offset;
           auto buffer =
               _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data.emplace_back(buffer->data(), buffer->size(), stream);
-          d_compdata = static_cast<uint8_t *>(page_data.back().data());
+          page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+          d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
         }
         chunks.insert(gpu::ColumnChunkDesc(
             col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -658,12 +659,18 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     const auto total_pages = count_page_headers(chunks, stream);
     if (total_pages > 0) {
       hostdevice_vector<gpu::PageInfo> pages(total_pages, total_pages, stream);
+      rmm::device_buffer decomp_page_data;
 
       decode_page_headers(chunks, pages, stream);
       if (total_decompressed_size > 0) {
-        auto decomp_page_data = decompress_page_data(chunks, pages, stream);
-        page_data.clear();
-        page_data.push_back(std::move(decomp_page_data));
+        decomp_page_data = decompress_page_data(chunks, pages, stream);
+        // Free compressed data
+        for (size_t c = 0; c < chunks.size(); c++) {
+          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+            page_data[c].resize(0);
+            page_data[c].shrink_to_fit();
+          }
+        }
       }
 
       std::vector<column_buffer> out_buffers;
@@ -681,7 +688,17 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
-  return std::make_unique<table>(std::move(out_columns));
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_selected_columns.size());
+  for (size_t i = 0; i < _selected_columns.size(); i++) {
+    out_metadata.column_names[i] = _selected_columns[i].second;
+  }
+  // Return user metadata
+  for (const auto& kv : _metadata->key_value_metadata) {
+    out_metadata.user_data.insert({kv.key, kv.value});
+  }
+
+  return { std::make_unique<table>(std::move(out_columns)), std::move(out_metadata) };
 }
 
 // Forward to implementation
@@ -709,20 +726,20 @@ reader::~reader() = default;
 std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_row_group(size_type row_group,
-                                              cudaStream_t stream) {
+table_with_metadata reader::read_row_group(size_type row_group,
+                                           cudaStream_t stream) {
   return _impl->read(0, -1, row_group, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type skip_rows,
-                                         size_type num_rows,
-                                         cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type skip_rows,
+                                      size_type num_rows,
+                                      cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
 }
 
