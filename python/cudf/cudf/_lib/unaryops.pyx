@@ -1,3 +1,4 @@
+
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 # cython: profile=False
@@ -148,6 +149,7 @@ def apply_dt_extract_op(Column incol, Column outcol, op):
 def nans_to_nulls(Column py_col):
     from cudf.core.column import as_column
     from cudf.core.buffer import Buffer
+    from cudf.utils.utils import mask_bitsize, calc_chunk_size
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
 
@@ -157,9 +159,13 @@ def nans_to_nulls(Column py_col):
         result = cpp_unaryops.nans_to_nulls(c_col[0])
 
     mask = None
-    if result.second:
+    if result.second > 0:
         mask_ptr = int(<uintptr_t>result.first)
-        mask = Buffer(data=mask_ptr, size=len(py_col))
+        mask_buf = rmm.DeviceBuffer(
+            ptr=mask_ptr,
+            size=calc_chunk_size(len(py_col), mask_bitsize)
+        )
+        mask = Buffer(mask_buf)
 
     free_column(c_col)
 
