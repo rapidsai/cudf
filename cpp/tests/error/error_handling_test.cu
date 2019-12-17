@@ -56,8 +56,7 @@ TEST(CudaTryTest, TryCatch) {
 }
 
 TEST(StreamCheck, success) {
-  cudaStream_t stream = 0;
-  EXPECT_NO_THROW(CHECK_CUDA(stream));
+  EXPECT_NO_THROW(CHECK_CUDA(0));
 }
 
 namespace {
@@ -65,36 +64,12 @@ namespace {
 void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
-// Test the function underlying CHECK_STREAM so that it throws an exception when
-// a kernel fails
-TEST(StreamCheck, FailedKernel) {
-  cudaStream_t stream;
-  CUDA_TRY(cudaStreamCreate(&stream));
-  int a;
-  test_kernel<<<0, 0, 0, stream>>>(&a);
-  EXPECT_THROW(cudf::detail::check_cuda<true>(__FILE__, __LINE__, stream),
-               cudf::cuda_error);
-  CUDA_TRY(cudaStreamDestroy(stream));
-}
-
-TEST(StreamCheck, CatchFailedKernel) {
-  cudaStream_t stream;
-  CUDA_TRY(cudaStreamCreate(&stream));
-  int a;
-  test_kernel<<<0, 0, 0, stream>>>(&a);
-  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_cuda<true>(
-                              __FILE__, __LINE__, stream),
-                            "cudaErrorInvalidConfiguration "
-                            "invalid configuration argument");
-  CUDA_TRY(cudaStreamDestroy(stream));
-}
-
 // In a release build and without explicit synchronization, CHECK_CUDA may
 // or may not fail on erroneous asynchronous CUDA calls. Invoke
 // cudaStreamSynchronize to guarantee failure on error. In a non-release build,
 // CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
 // calls.
-TEST(StreamCheck, ReleaseFailedKernel) {
+TEST(StreamCheck, FailedKernel) {
   cudaStream_t stream;
   CUDA_TRY(cudaStreamCreate(&stream));
   int a;
@@ -105,3 +80,18 @@ TEST(StreamCheck, ReleaseFailedKernel) {
   EXPECT_THROW(CHECK_CUDA(stream), cudf::cuda_error);
   CUDA_TRY(cudaStreamDestroy(stream));
 }
+
+TEST(StreamCheck, CatchFailedKernel) {
+  cudaStream_t stream;
+  CUDA_TRY(cudaStreamCreate(&stream));
+  int a;
+  test_kernel<<<0, 0, 0, stream>>>(&a);
+#ifndef NDEBUG
+  CUDA_TRY(cudaStreamSynchronize(stream));
+#endif
+  CUDA_EXPECT_THROW_MESSAGE(CHECK_CUDA(stream),
+                            "cudaErrorInvalidConfiguration "
+                            "invalid configuration argument");
+  CUDA_TRY(cudaStreamDestroy(stream));
+}
+
