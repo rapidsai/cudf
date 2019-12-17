@@ -34,6 +34,7 @@ export FULL_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+\.[0-9]
 # this CI job, e.g. `/tmp/cudf_0.12.0/gpu-v100-32-sm06-3-1234-jitify-cache`
 export LIBCUDF_KERNEL_CACHE_PATH="/tmp/cudf_$FULL_VERSION/\
 ${NODE_NAME:+$NODE_NAME-}${EXECUTOR_NUMBER:+$EXECUTOR_NUMBER-}${BUILD_ID:+$BUILD_ID-}jitify-cache"
+mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH"
 
 ################################################################################
 # SETUP - Check environment
