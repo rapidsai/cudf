@@ -60,7 +60,9 @@ class MultimapTest : public GdfTest {
 
   MultimapTest(const size_type hash_table_size = 100)
       : the_map(multimap_type::create(hash_table_size)),
-        size(hash_table_size) {}
+        size(hash_table_size) {
+            CUDA_TRY(cudaStreamSynchronize(0));
+        }
 
   ~MultimapTest() {}
 };
@@ -89,7 +91,6 @@ TYPED_TEST(MultimapTest, InitialState) {
 }
 
 TYPED_TEST(MultimapTest, CheckUnusedValues) {
-  CUDA_TRY(cudaStreamSynchronize(0));
   EXPECT_EQ(this->the_map->get_unused_key(), this->unused_key);
 
   auto begin = this->the_map->begin();
