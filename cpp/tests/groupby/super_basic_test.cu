@@ -37,7 +37,6 @@ TEST_F(super_basic_test, really_basic_mean) {
 
 struct GroupSTDTest : public cudf::test::BaseFixture {
 
-    // TODO (dm): covert to iterator
     auto all_valid() {
         auto all_valid = cudf::test::make_counting_transform_iterator(
             0, [](auto i) { return true; });

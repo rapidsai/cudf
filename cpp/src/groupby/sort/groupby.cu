@@ -98,11 +98,6 @@ groupby::sort_aggregate(
     std::vector<aggregation_request> const& requests,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr)
 {
-
-  // Sort keys using sort_helper
-  // TODO (dm): sort helper should be stored in groupby object
-  // TODO (dm): convert sort helper's include_nulls to ignore_nulls
-
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
@@ -118,97 +113,92 @@ groupby::sort_aggregate(
     std::tie(sorted_values, group_sizes) =
       helper().sorted_values_and_num_valids(requests[i].values);
 
-    auto store_sum = [&] (size_type col_idx,
-                          std::unique_ptr<aggregation> const& agg)
+    auto store_sum = [&] (std::unique_ptr<aggregation> const& agg)
     {
-      if (cache.has_result(col_idx, agg))
+      if (cache.has_result(i, agg))
         return;
-      cache.add_result(col_idx, agg, 
+      cache.add_result(i, agg, 
                       detail::group_sum(sorted_values->view(), 
                                 helper().group_labels(),
                                 helper().num_groups(), stream));
     };
 
-    auto store_count = [&] (size_type col_idx,
-                            std::unique_ptr<aggregation> const& agg)
+    auto store_count = [&] (std::unique_ptr<aggregation> const& agg)
     {
-      if (cache.has_result(col_idx, agg))
+      if (cache.has_result(i, agg))
         return;
       auto counts = std::make_unique<column>(
                       data_type(type_to_id<size_type>()),
                       group_sizes.size(),
                       rmm::device_buffer(group_sizes.data().get(),
                         group_sizes.size() * sizeof(size_type)));
-      cache.add_result(col_idx, agg, std::move(counts));
+      cache.add_result(i, agg, std::move(counts));
     };
 
-    auto store_mean = [&] (size_type col_idx,
-                           std::unique_ptr<aggregation> const& agg)
+    auto store_mean = [&] (std::unique_ptr<aggregation> const& agg)
     {
-      if (cache.has_result(col_idx, agg))
+      if (cache.has_result(i, agg))
         return;
       auto sum_agg = make_sum_aggregation();
       auto count_agg = make_count_aggregation();
-      store_sum(col_idx, sum_agg);
-      store_count(col_idx, count_agg);
-      column_view sum_result = cache.get_result(col_idx, sum_agg);
-      column_view count_result = cache.get_result(col_idx, count_agg);
+      store_sum(sum_agg);
+      store_count(count_agg);
+      column_view sum_result = cache.get_result(i, sum_agg);
+      column_view count_result = cache.get_result(i, count_agg);
       // TODO (dm): Special case for timestamp. Add target_type_impl for it
       auto result = cudf::experimental::detail::binary_operation(
         sum_result, count_result, binary_operator::DIV, 
         cudf::experimental::detail::target_type(
-          requests[col_idx].values.type(), aggregation::MEAN), mr, stream);
-      cache.add_result(col_idx, agg, std::move(result));
+          requests[i].values.type(), aggregation::MEAN), mr, stream);
+      cache.add_result(i, agg, std::move(result));
     };
 
-    auto store_var = [&] (size_type col_idx,
-                          std::unique_ptr<aggregation> const& agg)
+    auto store_var = [&] (std::unique_ptr<aggregation> const& agg)
     {
-      if (cache.has_result(col_idx, agg))
+      if (cache.has_result(i, agg))
         return;
       auto var_agg =
         static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
       auto mean_agg = make_mean_aggregation();
-      store_mean(col_idx, mean_agg);
-      column_view mean_result = cache.get_result(col_idx, mean_agg);
+      store_mean(mean_agg);
+      column_view mean_result = cache.get_result(i, mean_agg);
       auto result = detail::group_var(sorted_values->view(), mean_result, 
                               helper().group_labels(), group_sizes, var_agg->_ddof,
                               mr, stream);
-      cache.add_result(col_idx, agg, std::move(result));
+      cache.add_result(i, agg, std::move(result));
     };
     
-    auto store_std = [&] (size_type col_idx,
-                          std::unique_ptr<aggregation> const& agg)
+    auto store_std = [&] (std::unique_ptr<aggregation> const& agg)
     {
-      if (cache.has_result(col_idx, agg))
+      if (cache.has_result(i, agg))
         return;
       auto std_agg =
         static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
       auto var_agg = make_variance_aggregation(std_agg->_ddof);
-      store_var(col_idx, var_agg);
-      column_view var_result = cache.get_result(col_idx, var_agg);
+      store_var(var_agg);
+      column_view var_result = cache.get_result(i, var_agg);
       auto result = experimental::detail::unary_operation(
         var_result, experimental::unary_op::SQRT, mr, stream);
-      cache.add_result(col_idx, agg, std::move(result));
+      cache.add_result(i, agg, std::move(result));
     };
 
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       switch (requests[i].aggregations[j]->kind) {
         // TODO (dm): single pass compute all supported reductions
       case aggregation::SUM:
-        store_sum(i, requests[i].aggregations[j]);
+        store_sum(requests[i].aggregations[j]);
         break;
       case aggregation::COUNT:
-        store_count(i, requests[i].aggregations[j]);
+        store_count(requests[i].aggregations[j]);
         break;
       case aggregation::MEAN:
-        store_mean(i, requests[i].aggregations[j]);
+        store_mean(requests[i].aggregations[j]);
         break;
       case aggregation::STD:
-        store_std(i, requests[i].aggregations[j]);
+        store_std(requests[i].aggregations[j]);
         break;
       case aggregation::VARIANCE:
-        store_var(i, requests[i].aggregations[j]);
+        store_var(requests[i].aggregations[j]);
         break;
       case aggregation::QUANTILE:
   
