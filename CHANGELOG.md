@@ -27,6 +27,7 @@
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 - PR #3588 Remove avro reader column order reversal
+- PR #3629 Fix hash map test failure
 
 
 # cuDF 0.11.0 (11 Dec 2019)
