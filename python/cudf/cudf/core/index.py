@@ -410,6 +410,9 @@ class Index(object):
         assert axis in (None, 0)
         return as_index(self._values.repeat(repeats))
 
+    def memory_usage(self, deep=False):
+        return self._values._memory_usage(deep=deep)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -634,6 +637,9 @@ class RangeIndex(Index):
     @property
     def __cuda_array_interface__(self):
         return self._values.__cuda_array_interface__
+
+    def memory_usage(self, **kwargs):
+        return 0
 
 
 def index_from_range(start, stop=None, step=None):
