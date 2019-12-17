@@ -48,19 +48,19 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
                               cudaStream_t stream,
                               rmm::mr::device_memory_resource* mr) {
-  // TODO (dm): If sort groupby has been called once on this groupby object, then
-  //       always use sort groupby from now on. Because once keys are sorted, 
-  //       all the aggs that can be done by hash groupby are efficiently done by
-  //       sort groupby as well.
+  // If sort groupby has been called once on this groupby object, then
+  // always use sort groupby from now on. Because once keys are sorted, 
+  // all the aggs that can be done by hash groupby are efficiently done by
+  // sort groupby as well.
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (not _keys_are_sorted and
+      not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
     return detail::hash::groupby(_keys, requests, _ignore_null_keys, stream,
                                  mr);
   } else {
-    return detail::sort::groupby(_keys, requests, _ignore_null_keys,
-      _keys_are_sorted, _column_order, _null_precedence, stream, mr);
+    return sort_aggregate(requests, stream, mr);
   }
 }
 

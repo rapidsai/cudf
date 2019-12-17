@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "sort_helper.hpp"
 #include "result_cache.hpp"
 #include "group_reductions.hpp"
 
@@ -75,6 +74,9 @@ namespace sort {
 //   }
 // }
 
+}  // namespace sort
+
+// TODO (dm): Find a better home for this. Probably a result_cache member
 std::vector<aggregation_result> extract_results(
     std::vector<aggregation_request> const& requests,
     result_cache& cache)
@@ -88,25 +90,23 @@ std::vector<aggregation_result> extract_results(
   }
   return results;
 }
+}  // namespace detail
 
 // Sort-based groupby
-std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
-    table_view const& keys, std::vector<aggregation_request> const& requests,
-    bool ignore_null_keys, bool keys_are_sorted,
-    std::vector<order> const& column_order,
-    std::vector<null_order> const& null_precedence,
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> 
+groupby::sort_aggregate(
+    std::vector<aggregation_request> const& requests,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr)
 {
 
   // Sort keys using sort_helper
   // TODO (dm): sort helper should be stored in groupby object
   // TODO (dm): convert sort helper's include_nulls to ignore_nulls
-  helper sorter(keys, not ignore_null_keys, null_precedence, keys_are_sorted);
 
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
-  result_cache cache(requests.size());
+  detail::result_cache cache(requests.size());
   
   for (size_t i = 0; i < requests.size(); i++) {
     // TODO (dm): Not all aggs require sorted values. Only sort if there is an 
@@ -116,7 +116,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     std::unique_ptr<column> sorted_values;
     rmm::device_vector<size_type> group_sizes;
     std::tie(sorted_values, group_sizes) =
-      sorter.sorted_values_and_num_valids(requests[i].values);
+      helper().sorted_values_and_num_valids(requests[i].values);
 
     auto store_sum = [&] (size_type col_idx,
                           std::unique_ptr<aggregation> const& agg)
@@ -124,9 +124,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
       if (cache.has_result(col_idx, agg))
         return;
       cache.add_result(col_idx, agg, 
-                      group_sum(sorted_values->view(), 
-                                sorter.group_labels(),
-                                sorter.num_groups(), stream));
+                      detail::group_sum(sorted_values->view(), 
+                                helper().group_labels(),
+                                helper().num_groups(), stream));
     };
 
     auto store_count = [&] (size_type col_idx,
@@ -171,8 +171,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
       auto mean_agg = make_mean_aggregation();
       store_mean(col_idx, mean_agg);
       column_view mean_result = cache.get_result(col_idx, mean_agg);
-      auto result = group_var(sorted_values->view(), mean_result, 
-                              sorter.group_labels(), group_sizes, var_agg->_ddof,
+      auto result = detail::group_var(sorted_values->view(), mean_result, 
+                              helper().group_labels(), group_sizes, var_agg->_ddof,
                               mr, stream);
       cache.add_result(col_idx, agg, std::move(result));
     };
@@ -221,11 +221,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   
   auto results = extract_results(requests, cache);
   
-  return std::make_pair(sorter.unique_keys(),
+  return std::make_pair(helper().unique_keys(),
                         std::move(results));
 }
-}  // namespace sort
-}  // namespace detail
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

@@ -19,6 +19,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/detail/groupby/sort_helper.hpp>
 
 #include <utility>
 #include <vector>
@@ -162,6 +163,22 @@ class groupby {
   std::vector<null_order> _null_precedence{};  ///< If keys are sorted,
                                                ///< indicates null order
                                                ///< of each column
+  std::unique_ptr<detail::sort::helper> _helper; ///< Helper object used by sort
+                                                 ///< based implementation
+
+  /**
+   * @brief Get the sort helper object
+   * 
+   * The object is constructed on first invocation and subsequent invocations
+   * of this function return the memoized object.
+   */
+  detail::sort::helper& helper() {
+    if (_helper)
+      return *_helper;
+    _helper = std::make_unique<detail::sort::helper>(
+      _keys, _ignore_null_keys, _null_precedence, _keys_are_sorted);
+    return *_helper;
+  };
 
   /**
    * @brief Dispatches to the appropriate implementation to satisfy the
@@ -171,6 +188,12 @@ class groupby {
   dispatch_aggregation(std::vector<aggregation_request> const& requests,
                        cudaStream_t stream,
                        rmm::mr::device_memory_resource* mr);
+
+  // Sort-based groupby
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> 
+  sort_aggregate(std::vector<aggregation_request> const& requests,
+                 cudaStream_t stream, rmm::mr::device_memory_resource* mr);
+
 };
 }  // namespace groupby
 }  // namespace experimental

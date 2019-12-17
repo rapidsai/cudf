@@ -15,8 +15,6 @@
  */
 
 #pragma once
-// TODO (dm): where am i using this? remove/replace
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/column/column.hpp>

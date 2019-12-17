@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "sort_helper.hpp"
-
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
