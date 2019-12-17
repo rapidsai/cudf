@@ -537,6 +537,7 @@ add_library(cudf
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/substring.cu
+            src/strings/translate.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
