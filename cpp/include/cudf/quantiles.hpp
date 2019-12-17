@@ -41,7 +41,7 @@ std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& input,
           double percent,
           interpolation interp = interpolation::LINEAR,
-          std::vector<order_info> col_order = {});
+          std::vector<order_info> column_order = {});
 
 } // namespace experimental
 } // namespace cudf

@@ -47,23 +47,23 @@ struct quantile_functor
     operator()(column_view const& input,
                double percent,
                interpolation interp,
-               order_info col_order,
+               order_info column_order,
                rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
         if (input.size() == input.null_count()) {
-            return std::make_unique<numeric_scalar<ScalarResult>>(0, false);
+            return std::make_unique<numeric_scalar<ScalarResult>>(0, false, stream);
         }
 
         if (input.size() == 1) {
             auto result = get_array_value<ScalarResult>(input.begin<T>(), 0);
-            return std::make_unique<numeric_scalar<ScalarResult>>(result);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
         }
 
         auto valid_count = input.size() - input.null_count();
 
-        if (not col_order.is_ordered)
+        if (not column_order.is_ordered)
         {
             table_view const in_table { { input } };
             auto sortmap = sorted_order(in_table, { order::ASCENDING }, { null_order::AFTER });
@@ -79,18 +79,16 @@ struct quantile_functor
             return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
         }
 
-        using Selector = std::function<T(size_type)>;
+        auto input_begin = column_order.ordering == order::ASCENDING
+            ? input.begin<T>() + (column_order.null_ordering == null_order::BEFORE ? input.null_count() : 0)
+            : input.begin<T>() - (column_order.null_ordering == null_order::AFTER  ? input.null_count() : 0) + input.size() - 1;
 
-        auto input_begin = col_order.ordering == order::ASCENDING
-            ? input.begin<T>() + (col_order.null_ordering == null_order::BEFORE ? input.null_count() : 0)
-            : input.begin<T>() - (col_order.null_ordering == null_order::AFTER  ? input.null_count() : 0) + input.size() - 1;
-
-        Selector selector = col_order.ordering == order::ASCENDING
-            ? Selector([&](size_type location){ return get_array_value<T>(input_begin,  location); })
-            : Selector([&](size_type location){ return get_array_value<T>(input_begin, -location); });
+        auto selector = [&](size_type location) {
+            return get_array_value<T>(input_begin, column_order.ordering == order::ASCENDING ? location : -location);
+        };
 
         auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
-        return std::make_unique<numeric_scalar<ScalarResult>>(result);
+        return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
     }
 };
 
@@ -100,10 +98,10 @@ std::unique_ptr<scalar>
 quantile(column_view const& input,
          double percent,
          interpolation interp,
-         order_info col_order)
+         order_info column_order)
 {
         return type_dispatcher(input.type(), detail::quantile_functor{},
-                               input, percent, interp, col_order);
+                               input, percent, interp, column_order);
 }
 
 } // namspace detail
@@ -112,12 +110,12 @@ std::vector<std::unique_ptr<scalar>>
 quantiles(table_view const& input,
           double percent,
           interpolation interp,
-          std::vector<order_info> col_order)
+          std::vector<order_info> column_order)
 {
-    if (col_order.size() == 0) {
-        col_order = std::vector<order_info>(input.num_columns(), { false });
+    if (column_order.size() == 0) {
+        column_order = std::vector<order_info>(input.num_columns(), { false });
     } else {
-        CUDF_EXPECTS(col_order.size() == static_cast<uint32_t>(input.num_columns()),
+        CUDF_EXPECTS(column_order.size() == static_cast<uint32_t>(input.num_columns()),
                      "Must provide order_info for each column.");
     }
 
@@ -126,7 +124,7 @@ quantiles(table_view const& input,
         out[i] = detail::quantile(input.column(i),
                                   percent,
                                   interp,
-                                  col_order[i]);
+                                  column_order[i]);
     }
     return out;
 }

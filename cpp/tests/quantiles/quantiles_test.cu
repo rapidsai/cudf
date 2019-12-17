@@ -64,7 +64,7 @@ template<typename T>
 struct test_case {
     fixed_width_column_wrapper<T> column;
     vector<q_expect> expectations;
-    cudf::order_info col_order;
+    cudf::order_info column_order;
 };
 
 // empty
@@ -461,19 +461,19 @@ void test(testdata::test_case<T> test_case) {
 
     for (auto & expected : test_case.expectations) {
 
-        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, { test_case.col_order });
+        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, { test_case.column_order });
         expect_scalars_equal(expected.higher, *actual_higher[0]);
 
-        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, { test_case.col_order });
+        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, { test_case.column_order });
         expect_scalars_equal(expected.lower, *actual_lower[0]);
 
-        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, { test_case.col_order });
+        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, { test_case.column_order });
         expect_scalars_equal(expected.linear, *actual_linear[0]);
 
-        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, { test_case.col_order });
+        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, { test_case.column_order });
         expect_scalars_equal(expected.midpoint, *actual_midpoint[0]);
 
-        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, { test_case.col_order });
+        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, { test_case.column_order });
         expect_scalars_equal(expected.nearest, *actual_nearest[0]);
     }
 }
