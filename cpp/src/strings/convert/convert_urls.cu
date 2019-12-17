@@ -187,14 +187,13 @@ struct url_decoder_fn
     // utility to convert a hex char into a single byte
     __device__ u_char hex_char_to_byte( char ch )
     {
-        u_char result = 0;
         if( ch >= '0' && ch <= '9' )
-            result = (ch-48);
-        else if( ch >= 'A' && ch <= 'Z' )
-            result = (ch-55);
-        else if( ch >='a' && ch <= 'z' )
-            result = (ch-87);
-        return result;
+            return (ch-48);
+        if( ch >= 'A' && ch <= 'Z' )
+            return (ch-55);
+        if( ch >='a' && ch <= 'z' )
+            return (ch-87);
+        return 0;
     }
 
     // main functor method executed on each string
