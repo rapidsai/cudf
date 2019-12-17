@@ -1160,13 +1160,17 @@ class Series(Table):
         if isinstance(self.index, MultiIndex):
             new_index = self.index.take(new_index)
 
+        result = Series(out_cols[0], index=new_index, name=self.name)
+        return self._mimic_inplace(result, inplace=inplace)
+
+    def _mimic_inplace(self, result, inplace=False):
         if inplace:
-            self._index = new_index
-            self._size = len(new_index)
-            self._column = out_cols[0]
+            self._data = result._data
+            self._index = result._index
+            self._size = len(self._index)
+            self.name = result.name
         else:
-            out = Series(out_cols[0], index=new_index, name=self.name)
-            return out
+            return result
 
     def dropna(self):
         """

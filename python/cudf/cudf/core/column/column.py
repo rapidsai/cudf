@@ -135,6 +135,8 @@ class ColumnBase(Column):
         self.dtype = other.dtype
         self.offset = other.offset
         self.size = other.size
+        if hasattr(other, "_nvstrings"):
+            self._nvstrings = other._nvstrings
         self.__class__ = other.__class__
 
     def __len__(self):

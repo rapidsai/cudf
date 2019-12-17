@@ -1610,16 +1610,24 @@ class DataFrame(Table):
         new_index = as_index(new_index)
         if isinstance(self.index, cudf.core.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
+
+        outdf = DataFrame()
+        for k, new_col in zip(self._data, out_cols):
+            outdf[k] = new_col
+        outdf = outdf.set_index(new_index)
+
+        return self._mimic_inplace(outdf, inplace=inplace)
+
+    def _mimic_inplace(self, result, inplace=False):
         if inplace:
-            self._index = new_index
-            for k, new_col in zip(self._data, out_cols):
-                self[k] = new_col
+            self._data = result._data
+            self._index = result._index
+            if hasattr(result, "multi_cols"):
+                self.multi_cols = result.multi_cols
+            if hasattr(result, "_columns_name"):
+                self._columns_name = result._columns_name
         else:
-            outdf = DataFrame()
-            for k, new_col in zip(self._data, out_cols):
-                outdf[k] = new_col
-            outdf = outdf.set_index(new_index)
-            return outdf
+            return result
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
