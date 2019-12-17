@@ -10,7 +10,7 @@ from rmm import DeviceBuffer
 class Buffer:
     def __init__(self, data=None, size=None, owner=None):
         """
-        Create a Buffer from the given `data` and `size`.
+        A Buffer represents a device memory allocation.
 
         Parameters
         ----------
@@ -22,9 +22,8 @@ class Buffer:
             is passed for `data`.
         owner : object, optional
             Python object to which the lifetime of the memory
-            allocation is tied. May be required if a pointer
-            is passed for `data` to prevent memory being freed
-            from under us.
+            allocation is tied. If provided, a reference to this
+            object is kept in this Buffer.
         """
         if isinstance(data, Buffer):
             self.ptr = data.ptr
