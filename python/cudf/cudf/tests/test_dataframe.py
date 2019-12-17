@@ -4110,3 +4110,115 @@ def test_cov_nans():
     gdf = gd.from_pandas(pdf)
 
     assert_eq(pdf.cov(), gdf.cov())
+
+
+@pytest.mark.parametrize("set_index", [None, "A", "C", "D"])
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("deep", [True, False])
+def test_memory_usage(deep, index, set_index):
+    # Testing numerical/datetime by comparing with pandas
+    # (string and categorical columns will be different)
+    rows = int(100)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int64"),
+            "B": np.arange(rows, dtype="int32"),
+            "C": np.arange(rows, dtype="float64"),
+        }
+    )
+    df["D"] = pd.to_datetime(df.A)
+    if set_index:
+        df = df.set_index(set_index)
+
+    gdf = gd.from_pandas(df)
+
+    if index and set_index is None:
+
+        # Special Case: Assume RangeIndex size == 0
+        assert gdf.index.memory_usage(deep=deep) == 0
+
+    else:
+
+        # Check for Series only
+        assert df["B"].memory_usage(index=index, deep=deep) == gdf[
+            "B"
+        ].memory_usage(index=index, deep=deep)
+
+        # Check for entire DataFrame
+        assert_eq(
+            df.memory_usage(index=index, deep=deep).sort_index(),
+            gdf.memory_usage(index=index, deep=deep).sort_index(),
+        )
+
+
+def test_memory_usage_string():
+    rows = int(100)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int32"),
+            "B": np.random.choice(["apple", "banana", "orange"], rows),
+        }
+    )
+    gdf = gd.from_pandas(df)
+
+    # Check deep=False (should match pandas)
+    assert gdf.B.memory_usage(deep=False, index=False) == df.B.memory_usage(
+        deep=False, index=False
+    )
+
+    # Check string column
+    assert (
+        gdf.B.memory_usage(deep=True, index=False)
+        == gdf.B._column._data.device_memory()
+    )
+
+    # Check string index
+    assert (
+        gdf.set_index("B").index.memory_usage(deep=True)
+        == gdf.B._column._data.device_memory()
+    )
+
+
+def test_memory_usage_cat():
+    rows = int(100)
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int32"),
+            "B": np.random.choice(["apple", "banana", "orange"], rows),
+        }
+    )
+    df["B"] = df.B.astype("category")
+    gdf = gd.from_pandas(df)
+
+    expected = (
+        gdf.B._column._categories.__sizeof__()
+        + gdf.B._column.cat().codes.__sizeof__()
+    )
+
+    # Check cat column
+    assert gdf.B.memory_usage(deep=True, index=False) == expected
+
+    # Check cat index
+    assert gdf.set_index("B").index.memory_usage(deep=True) == expected
+
+
+def test_memory_usage_multi():
+    rows = int(100)
+    deep = True
+    df = pd.DataFrame(
+        {
+            "A": np.arange(rows, dtype="int32"),
+            "B": np.random.choice(np.arange(3, dtype="int64"), rows),
+            "C": np.random.choice(np.arange(3, dtype="float64"), rows),
+        }
+    ).set_index(["B", "C"])
+    gdf = gd.from_pandas(df)
+
+    # Assume MultiIndex memory footprint is just that
+    # of the underlying columns, levels, and codes
+    expect = rows * 16  # Source Columns
+    expect += rows * 16  # Codes
+    expect += 3 * 8  # Level 0
+    expect += 3 * 8  # Level 1
+
+    assert expect == gdf.index.memory_usage(deep=deep)
