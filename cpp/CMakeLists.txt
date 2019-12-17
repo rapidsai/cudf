@@ -180,10 +180,10 @@ message(STATUS "RDKAFKA: RDKAFKA_LIBRARY set to ${RDKAFKA_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
-add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
-if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
-    set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
-endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+# add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
+# if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+#     set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
+# endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
