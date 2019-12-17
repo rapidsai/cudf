@@ -332,23 +332,19 @@ std::unique_ptr<column> rolling_window(column_view const &input,
     auto output_view = output->mutable_view();
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
-    std::cout << "SOURCE\n" << cuda_source << "\n";
-
     // Launch the jitify kernel
     cudf::jit::launcher(hash, cuda_source,
                         { cudf_types_hpp, cudf::experimental::rolling::jit::code::operation_h },
                         { "-std=c++14" }, nullptr, stream)
-       .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
-                        { cudf::jit::get_type_name(output->type()), // list of template arguments
-                          cudf::jit::get_type_name(input.type()),
-                          cudf::rolling::jit::get_operator_name(op),
-                          static_window ? "true" : "false"})
-
-       // launch the JITed kernel
-       .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
-               cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
-               device_valid_count.data(),
-               preceding_window_begin, following_window_begin, min_periods);
+      .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
+                       { cudf::jit::get_type_name(input.type()), // list of template arguments
+                         cudf::jit::get_type_name(output->type()),
+                         cudf::rolling::jit::get_operator_name(op),
+                        static_window ? "cudf::size_type" : "cudf::size_type*"})
+      .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
+              cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
+              device_valid_count.data(), preceding_window_begin[0], following_window_begin[0],
+              min_periods);
 
     output->set_null_count(output->size() - device_valid_count.value(stream));
 

@@ -30,16 +30,28 @@ R"***(
 const char* kernel =
 R"***(
 #include "operation.h"
-template <typename OutType, typename InType, class agg_op, bool static_window>
+
+template <typename WindowType>
+cudf::size_type get_window(WindowType window, cudf::size_type index) { return 0; }
+
+template <>
+cudf::size_type get_window(cudf::size_type window, cudf::size_type index) { return window; }
+
+template <>
+cudf::size_type get_window(cudf::size_type* window, cudf::size_type index) {
+  return window[index];
+}
+
+template <typename InType, typename OutType, class agg_op, typename WindowType>
 __global__
 void gpu_rolling_new(cudf::size_type nrows,
-                 OutType* __restrict__ out_col, 
-                 cudf::valid_type* __restrict__ out_col_valid,
                  InType const* const __restrict__ in_col, 
-                 cudf::valid_type const* const __restrict__ in_col_valid,
+                 cudf::bitmask_type const* const __restrict__ in_col_valid,
+                 OutType* __restrict__ out_col, 
+                 cudf::bitmask_type* __restrict__ out_col_valid,
                  cudf::size_type * __restrict__ output_valid_count,
-                 cudf::size_type const* __restrict__ preceding_window_begin,
-                 cudf::size_type const* __restrict__ following_window_begin,
+                 WindowType preceding_window_begin,
+                 WindowType following_window_begin,
                  cudf::size_type min_periods)
 {
   constexpr int warp_size{32};
@@ -55,10 +67,10 @@ void gpu_rolling_new(cudf::size_type nrows,
     // for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
 
-    cudf::size_type preceding_window = preceding_window_begin[static_window ? 0 : i];
-    cudf::size_type following_window = following_window_begin[static_window ? 0 : i];
+    cudf::size_type preceding_window = get_window(preceding_window_begin, i);
+    cudf::size_type following_window = get_window(following_window_begin, i);
 
-        // compute bounds
+    // compute bounds
     cudf::size_type start_index = max(0, i - preceding_window);
     cudf::size_type end_index = min(nrows, i + following_window + 1);
 
@@ -72,18 +84,19 @@ void gpu_rolling_new(cudf::size_type nrows,
     // check if we have enough input samples
     bool output_is_valid = (count >= min_periods);
 
-    // set the mask
-    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
-    const cudf::size_type out_mask_location = i / warp_size;
-
-    // only one thread writes the mask
-    if (0 == threadIdx.x % warp_size) {
-      out_col_valid[out_mask_location] = result_mask;
-      warp_valid_count += __popc(result_mask);
+    // store the output value, one per thread
+    if (output_is_valid) {
+      out_col[i] = val;
     }
 
-    // store the output value, one per thread
-    out_col[i] = val;
+    // set the mask
+    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
+   
+    // only one thread writes the mask
+    if (0 == threadIdx.x % warp_size) {
+      out_col_valid[i / warp_size] = result_mask;
+      warp_valid_count += __popc(result_mask);
+    }
 
     // process next element 
     i += stride;
@@ -91,7 +104,7 @@ void gpu_rolling_new(cudf::size_type nrows,
   }
 
   // TODO: likely faster to do a single_lane_block_reduce and a single
-  // atomic per block but that requires jitifying all of that code...
+  // atomic per block but that requires jitifying single_lane_block_reduce...
   if(0 == threadIdx.x % warp_size) {
     atomicAdd(output_valid_count, warp_valid_count);
   }

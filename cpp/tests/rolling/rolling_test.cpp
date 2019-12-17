@@ -705,15 +705,19 @@ TEST_F(RollingTestNumba, NumbaGeneric)
 
   std::unique_ptr<cudf::column> output;
 
-  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, 2, 4, 2, ptx, 
+  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, 2, 2, 4, ptx, 
                                                               rolling_operator::NUMBA_UDF,
                                                               cudf::data_type{cudf::INT64}));
 
   auto start = cudf::test::make_counting_transform_iterator(0,
-    [] __device__(size_type row) { return row * 4 + 2; });
+    [size] __device__(size_type row) { 
+      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2)),
+                             thrust::make_counting_iterator(std::min(size, row + 2 + 1)),
+                             0); 
+    });
 
   auto valid = cudf::test::make_counting_transform_iterator(0, 
-    [size] __device__ (size_type row) { return (row != 0 && row != size - 2 && row != size - 1); });
+    [size] __device__ (size_type row) { return (row != 0 && row != size - 1); });
 
   fixed_width_column_wrapper<int64_t> expected{start, start+size, valid};
 
