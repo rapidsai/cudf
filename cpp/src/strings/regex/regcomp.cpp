@@ -176,7 +176,7 @@ class regex_parser
 
         /* look ahead for negation */
         /* SPECIAL CASE!!! negated classes don't match \n */
-        char32_t c;
+        char32_t c = 0;
         int quoted = nextc(c);
         if(!quoted && c == '^')
         {
@@ -642,8 +642,8 @@ class regex_compiler
     {
         Node op1;
         Node op2;
-        int id_inst1;
-        int id_inst2;
+        int id_inst1 = -1;
+        int id_inst2 = -1;
         while( pri == RBRA || atorstack[atorstack.size() - 1].t >= pri )
         {
             Ator ator = popator();
