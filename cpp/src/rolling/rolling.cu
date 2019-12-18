@@ -288,62 +288,62 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        cudaStream_t stream = 0)
 {
   if (input.has_nulls())
-      CUDF_FAIL("Currently the UDF version of rolling window does NOT support inputs with nulls.");
-    
-    cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
+    CUDF_FAIL("Currently the UDF version of rolling window does NOT support inputs with nulls.");
 
-    min_periods = std::max(min_periods, 1);
+  cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
-    std::string hash = "prog_experimental_rolling." 
-      + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
+  min_periods = std::max(min_periods, 1);
 
-    std::string cuda_source;
-    switch(op){
-      case rolling_operator::NUMBA_UDF:
-        cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
-        cuda_source += cudf::jit::parse_single_function_ptx(user_defined_aggregator, 
-                                                            cudf::rolling::jit::get_function_name(op), 
-                                                            cudf::jit::get_type_name(output_type),
-                                                            {0, 5}); // args 0 and 5 are pointers.
-        cuda_source += cudf::experimental::rolling::jit::code::kernel;
-        break; 
-      case rolling_operator::CUDA_UDF:
-        cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
-        cuda_source += cudf::jit::parse_single_function_cuda(user_defined_aggregator, 
-                                                             cudf::rolling::jit::get_function_name(op));
-        cuda_source += cudf::experimental::rolling::jit::code::kernel;
-        break;
-      default:
-        CUDF_FAIL("Unsupported UDF type.");
-    }
+  std::string hash = "prog_experimental_rolling." 
+    + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
 
-    std::unique_ptr<column> output = make_numeric_column(output_type, input.size(),
-                                                         cudf::UNINITIALIZED, stream, mr);
+  std::string cuda_source;
+  switch(op){
+    case rolling_operator::NUMBA_UDF:
+      cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
+      cuda_source += cudf::jit::parse_single_function_ptx(user_defined_aggregator, 
+                                                          cudf::rolling::jit::get_function_name(op), 
+                                                          cudf::jit::get_type_name(output_type),
+                                                          {0, 5}); // args 0 and 5 are pointers.
+      cuda_source += cudf::experimental::rolling::jit::code::kernel;
+      break; 
+    case rolling_operator::CUDA_UDF:
+      cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
+      cuda_source += cudf::jit::parse_single_function_cuda(user_defined_aggregator, 
+                                                            cudf::rolling::jit::get_function_name(op));
+      cuda_source += cudf::experimental::rolling::jit::code::kernel;
+      break;
+    default:
+      CUDF_FAIL("Unsupported UDF type.");
+  }
 
-    auto output_view = output->mutable_view();
-    rmm::device_scalar<size_type> device_valid_count{0, stream};
+  std::unique_ptr<column> output = make_numeric_column(output_type, input.size(),
+                                                       cudf::UNINITIALIZED, stream, mr);
 
-    // Launch the jitify kernel
-    cudf::jit::launcher(hash, cuda_source,
-                        { cudf_types_hpp, cudf::experimental::rolling::jit::code::operation_h },
-                        { "-std=c++14" }, nullptr, stream)
-      .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
-                       { cudf::jit::get_type_name(input.type()), // list of template arguments
-                         cudf::jit::get_type_name(output->type()),
-                         cudf::rolling::jit::get_operator_name(op),
-                        static_window ? "cudf::size_type" : "cudf::size_type*"})
-      .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
-              cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
-              device_valid_count.data(), preceding_window, following_window, min_periods);
+  auto output_view = output->mutable_view();
+  rmm::device_scalar<size_type> device_valid_count{0, stream};
 
-    output->set_null_count(output->size() - device_valid_count.value(stream));
+  // Launch the jitify kernel
+  cudf::jit::launcher(hash, cuda_source,
+                      { cudf_types_hpp, cudf::experimental::rolling::jit::code::operation_h },
+                      { "-std=c++14" }, nullptr, stream)
+    .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
+                      { cudf::jit::get_type_name(input.type()), // list of template arguments
+                        cudf::jit::get_type_name(output->type()),
+                        cudf::rolling::jit::get_operator_name(op),
+                      static_window ? "cudf::size_type" : "cudf::size_type*"})
+    .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
+            cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
+            device_valid_count.data(), preceding_window, following_window, min_periods);
 
-    // check the stream for debugging
-    CHECK_CUDA(stream);
+  output->set_null_count(output->size() - device_valid_count.value(stream));
 
-    cudf::nvtx::range_pop();
+  // check the stream for debugging
+  CHECK_CUDA(stream);
 
-    return output;
+  cudf::nvtx::range_pop();
+
+  return output;
 }
 
 } // namespace detail
