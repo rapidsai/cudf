@@ -157,7 +157,7 @@ hash_partition(table_view const& input,
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return {};
+    return std::make_pair(experimental::empty_like(input), std::vector<size_type>{});
   }
 
   if (has_nulls(table_to_hash)) {

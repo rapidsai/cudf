@@ -23,6 +23,7 @@
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using cudf::test::expect_tables_equal;
+using cudf::test::expect_table_properties_equal;
 
 // Transform vector of column wrappers to vector of column views
 template <typename T>
@@ -60,8 +61,14 @@ TEST_F(HashPartition, ZeroPartitions)
 
   cudf::size_type const num_partitions = 0;
   auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  // With structured bindings, this could be `auto [output, offsets] = hash_partition...`
+  auto& output = result.first;
+  auto& offsets = result.second;
 
-  EXPECT_EQ(0, result.size());
+  // Expect empty table with same number of columns and zero partitions
+  EXPECT_EQ(input.num_columns(), output->num_columns());
+  EXPECT_EQ(0, output->num_rows());
+  EXPECT_EQ(0, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroRows)
@@ -75,8 +82,13 @@ TEST_F(HashPartition, ZeroRows)
 
   cudf::size_type const num_partitions = 3;
   auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto& output = result.first;
+  auto& offsets = result.second;
 
-  EXPECT_EQ(0, result.size());
+  // Expect empty table with same number of columns and zero partitions
+  EXPECT_EQ(input.num_columns(), output->num_columns());
+  EXPECT_EQ(0, output->num_rows());
+  EXPECT_EQ(0, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroColumns)
@@ -87,8 +99,13 @@ TEST_F(HashPartition, ZeroColumns)
 
   cudf::size_type const num_partitions = 3;
   auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto& output = result.first;
+  auto& offsets = result.second;
 
-  EXPECT_EQ(0, result.size());
+  // Expect empty table with same number of columns and zero partitions
+  EXPECT_EQ(input.num_columns(), output->num_columns());
+  EXPECT_EQ(0, output->num_rows());
+  EXPECT_EQ(0, offsets.size());
 }
 
 TEST_F(HashPartition, MixedColumnTypes)
@@ -103,15 +120,20 @@ TEST_F(HashPartition, MixedColumnTypes)
   cudf::size_type const num_partitions = 3;
   auto result1 = cudf::hash_partition(input, columns_to_hash, num_partitions);
   auto result2 = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto& output1 = result1.first;
+  auto& offsets1 = result1.second;
+  auto& output2 = result2.first;
+  auto& offsets2 = result2.second;
 
   // Expect output to have size num_partitions
-  EXPECT_EQ(static_cast<size_t>(num_partitions), result1.size());
-  EXPECT_EQ(result1.size(), result2.size());
+  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
+  EXPECT_EQ(offsets1.size(), offsets2.size());
+
+  // Expect output to have same shape as input
+  expect_table_properties_equal(input, output1->view());
 
   // Expect deterministic result from hashing the same input
-  for (cudf::size_type i = 0; i < num_partitions; ++i) {
-    expect_tables_equal(result1[i]->view(), result2[i]->view());
-  }
+  expect_tables_equal(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -134,15 +156,20 @@ void run_fixed_width_test(size_t cols, size_t rows, cudf::size_type num_partitio
 
   auto result1 = cudf::hash_partition(input, columns_to_hash, num_partitions);
   auto result2 = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto& output1 = result1.first;
+  auto& offsets1 = result1.second;
+  auto& output2 = result2.first;
+  auto& offsets2 = result2.second;
 
   // Expect output to have size num_partitions
-  EXPECT_EQ(static_cast<size_t>(num_partitions), result1.size());
-  EXPECT_EQ(result1.size(), result2.size());
+  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
+  EXPECT_EQ(offsets1.size(), offsets2.size());
+
+  // Expect output to have same shape as input
+  expect_table_properties_equal(input, output1->view());
 
   // Expect deterministic result from hashing the same input
-  for (cudf::size_type i = 0; i < num_partitions; ++i) {
-    expect_tables_equal(result1[i]->view(), result2[i]->view());
-  }
+  expect_tables_equal(output1->view(), output2->view());
 }
 
 TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)
