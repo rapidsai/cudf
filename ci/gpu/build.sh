@@ -96,6 +96,8 @@ else
     cd $WORKSPACE/cpp/build
     GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
 
+    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || echo "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
+
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
     np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
