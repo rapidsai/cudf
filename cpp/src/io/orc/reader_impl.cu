@@ -50,7 +50,7 @@ namespace {
  * @brief Function that translates ORC data kind to cuDF type enum
  **/
 constexpr type_id to_type_id(const orc::SchemaType &schema, bool use_np_dtypes,
-                             type_id timestamp_type_id) {
+                             type_id timestamp_type_id, bool decimals_as_float) {
   switch (schema.kind) {
     case orc::BOOLEAN:
       return type_id::BOOL8;
@@ -81,9 +81,9 @@ constexpr type_id to_type_id(const orc::SchemaType &schema, bool use_np_dtypes,
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS
                              : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL:
-      // There isn't an arbitrary-precision type in cuDF, so map as float
-      static_assert(DECIMALS_AS_FLOAT64 == 1, "Missing decimal->float");
-      return type_id::FLOAT64;
+      // There isn't an arbitrary-precision type in cuDF, so map as float or int
+      return (decimals_as_float) ? type_id::FLOAT64
+                                 : type_id::INT64;
     default:
       break;
   }
@@ -596,11 +596,16 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
   // Enable or disable the conversion to numpy-compatible dtypes
   _use_np_dtypes = options.use_np_dtypes;
+
+  // Control decimals conversion (float64 or int64 with optional scale)
+  _decimals_as_float = options.decimals_as_float;
+  _decimals_as_int_scale = options.forced_decimals_scale;
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          int stripe, cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata out_metadata;
 
   // Select only stripes required (aka row groups)
   const auto selected_stripes =
@@ -613,7 +618,7 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
     auto col_type = to_type_id(_metadata->ff.types[col], _use_np_dtypes,
-                               _timestamp_type.id());
+                               _timestamp_type.id(), _decimals_as_float);
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     column_types.emplace_back(col_type);
 
@@ -687,7 +692,15 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
         chunk.num_rows = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind = _metadata->ff.types[_selected_columns[j]].kind;
-        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
+        if (_decimals_as_float) {
+          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale | ORC_DECIMAL2FLOAT64_SCALE;
+        }
+        else if (_decimals_as_int_scale < 0) {
+          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
+        }
+        else {
+          chunk.decimal_scale = _decimals_as_int_scale;
+        }
         chunk.rowgroup_id = num_rowgroups;
         chunk.dtype_len = (column_types[j].id() == type_id::STRING)
                               ? sizeof(std::pair<const char *, size_t>)
@@ -756,7 +769,17 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
-  return std::make_unique<table>(std::move(out_columns));
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_selected_columns.size());
+  for (size_t i = 0; i < _selected_columns.size(); i++) {
+    out_metadata.column_names[i] = _metadata->ff.GetColumnName(_selected_columns[i]);
+  }
+  // Return user metadata
+  for (const auto& kv : _metadata->ff.metadata) {
+    out_metadata.user_data.insert({kv.name, kv.value});
+  }
+
+  return { std::make_unique<table>(std::move(out_columns)), std::move(out_metadata) };
 }
 
 // Forward to implementation
@@ -781,20 +804,20 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_stripe(size_type stripe,
-                                           cudaStream_t stream) {
+table_with_metadata reader::read_stripe(size_type stripe,
+                                        cudaStream_t stream) {
   return _impl->read(0, -1, stripe, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type skip_rows,
-                                         size_type num_rows,
-                                         cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type skip_rows,
+                                      size_type num_rows,
+                                      cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
 }
 
