@@ -13,7 +13,9 @@ import numpy as np
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.string cimport string
+
 import rmm
+from rmm._lib.lib cimport cudaStream_t, c_free
 
 from cudf.utils import cudautils
 
@@ -21,6 +23,7 @@ from cudf._libxx.column cimport Column
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.GDFError import GDFError
+
 
 cimport cudf._lib.includes.unaryops as cpp_unaryops
 
@@ -152,8 +155,8 @@ def nans_to_nulls(Column py_col):
     from cudf.utils.utils import mask_bitsize, calc_chunk_size
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
-
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
+    cdef cudaStream_t stream = <cudaStream_t><size_t>(0)
 
     with nogil:
         result = cpp_unaryops.nans_to_nulls(c_col[0])
@@ -166,6 +169,7 @@ def nans_to_nulls(Column py_col):
             size=calc_chunk_size(len(py_col), mask_bitsize)
         )
         mask = Buffer(mask_buf)
+        c_free(result.first, stream)
 
     free_column(c_col)
 
