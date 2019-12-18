@@ -177,16 +177,18 @@ template <typename Source, aggregation::Kind k>
 using target_type_t = typename target_type_impl<Source, k>::type;
 
 /**
- * @brief Dispatches  k as a non-type template parameter to a callable,  f.
+ * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.
  *
  * @tparam F Type of callable
  * @param k The `aggregation::Kind` value to dispatch
  * aram f The callable that accepts an `aggregation::Kind` non-type template
  * argument.
+ * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
  */
 template <typename F, typename... Ts>
-decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f, Ts&&... args) {
+decltype(auto) aggregation_dispatcher(aggregation::Kind k, F&& f,
+                                      Ts&&... args) {
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
@@ -195,33 +197,40 @@ decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f, Ts&&... args) {
     case aggregation::MAX:
       return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
     case aggregation::COUNT:
-      return f.template operator()<aggregation::COUNT>(std::forward<Ts>(args)...);
+      return f.template operator()<aggregation::COUNT>(
+          std::forward<Ts>(args)...);
     case aggregation::MEAN:
-      return f.template operator()<aggregation::MEAN>(std::forward<Ts>(args)...);
+      return f.template operator()<aggregation::MEAN>(
+          std::forward<Ts>(args)...);
     case aggregation::MEDIAN:
-      return f.template operator()<aggregation::MEDIAN>(std::forward<Ts>(args)...);
+      return f.template operator()<aggregation::MEDIAN>(
+          std::forward<Ts>(args)...);
     case aggregation::QUANTILE:
-      return f.template operator()<aggregation::QUANTILE>(std::forward<Ts>(args)...);
+      return f.template operator()<aggregation::QUANTILE>(
+          std::forward<Ts>(args)...);
     case aggregation::ARGMAX:
-      return f.template operator()<aggregation::ARGMAX>(std::forward<Ts>(args)...);
+      return f.template operator()<aggregation::ARGMAX>(
+          std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
-      return f.template operator()<aggregation::ARGMIN>(std::forward<Ts>(args)...);
+      return f.template operator()<aggregation::ARGMIN>(
+          std::forward<Ts>(args)...);
   }
 }
 
-template <typename Source, template <typename, aggregation::Kind> typename F>
+template <typename Element>
 struct dispatch_aggregation {
-  template <aggregation::Kind k, typename... Ts>
-  constexpr auto operator()(Ts&&... args) const noexcept {
-    return F<Source, k>{}(std::forward<Ts>(args)...);
+  template <aggregation::Kind k, typename F, typename... Ts>
+  decltype(auto) operator()(F&& f, Ts&&... args) const noexcept {
+    return f.template operator()<Element, k>(std::forward<Ts>(args)...);
   }
 };
 
-template <template <typename, aggregation::Kind> typename F>
 struct dispatch_source {
-  template <typename Source, typename... Ts>
-  constexpr auto operator()(aggregation::Kind k, Ts&&... args) const noexcept {
-    return aggregation_dispatcher(k, dispatch_aggregation<Source, F>{},
+  template <typename Element, typename F, typename... Ts>
+  decltype(auto) operator()(aggregation::Kind k, F&& f, Ts&&... args) const
+      noexcept {
+    return aggregation_dispatcher(k, dispatch_aggregation<Element>{},
+                                  std::forward<F>(f),
                                   std::forward<Ts>(args)...);
   }
 };
@@ -230,26 +239,24 @@ struct dispatch_source {
  * @brief Dispatches both a type and `aggregation::Kind` template parameters to
  * a callable.
  *
- * This function expects a callable template-template parameter `F` with two
+ * This function expects a callable `f` with an `operator()` template accepting two
  * template parameters. The first is a type dispatched from `type`. The second
  * is an `aggregation::Kind` dispatched from `k`.
  *
- * @tparam F The template-template callable with a type and `aggregation::Kind`
- * template parameters.
  * @param type The `data_type` used to dispatch a type for the first template
  * parameter of the callable `F`
  * @param k The `aggregation::Kind` used to dispatch an `aggregation::Kind`
  * non-type template parameter for the second template parameter of the callable
+ * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
-template <template <typename, aggregation::Kind> typename F, typename... Ts>
+template <typename F, typename... Ts>
 decltype(auto) dispatch_type_and_aggregation(data_type type,
-                                             aggregation::Kind k,
+                                             aggregation::Kind k, F&& f,
                                              Ts&&... args) {
-  return type_dispatcher(type, dispatch_source<F>{}, k,
+  return type_dispatcher(type, dispatch_source{}, k, std::forward<F>(f),
                          std::forward<Ts>(args)...);
 }
-
 /**
  * @brief Returns the target `data_type` for the specified aggregation  k
  * performed on elements of type  source_type.

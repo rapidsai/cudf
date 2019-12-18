@@ -65,15 +65,15 @@ std::unique_ptr<aggregation> make_argmin_aggregation() {
 
 namespace detail {
 namespace {
-template <typename Source, aggregation::Kind k>
 struct target_type_functor {
+  template <typename Source, aggregation::Kind k>
   constexpr data_type operator()() const noexcept {
     return data_type{type_to_id<target_type_t<Source, k>>()};
   }
 };
 
-template <typename Source, aggregation::Kind k>
 struct is_valid_aggregation_impl {
+  template <typename Source, aggregation::Kind k>
   constexpr bool operator()() const noexcept {
     return is_valid_aggregation<Source, k>();
   }
@@ -82,12 +82,12 @@ struct is_valid_aggregation_impl {
 
 // Return target data_type for the given source_type and aggregation
 data_type target_type(data_type source, aggregation::Kind k) {
-  return dispatch_type_and_aggregation<target_type_functor>(source, k);
+  return dispatch_type_and_aggregation(source, k, target_type_functor{});
 }
 
 // Verifies the aggregation `k` is valid on the type `source`
 bool is_valid_aggregation(data_type source, aggregation::Kind k) {
-  return dispatch_type_and_aggregation<is_valid_aggregation_impl>(source, k);
+  return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
 }  // namespace experimental
