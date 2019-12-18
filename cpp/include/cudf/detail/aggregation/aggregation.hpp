@@ -73,9 +73,8 @@ struct quantile_aggregation : aggregation {
  * @tparam k The `aggregation::Kind` value to map to its corresponding operator
  */
 template <aggregation::Kind k>
-struct corresponding_operator {
-  using type = void;
-};
+struct corresponding_operator {};
+
 template <>
 struct corresponding_operator<aggregation::MIN> {
   using type = DeviceMin;
@@ -186,9 +185,10 @@ using target_type_t = typename target_type_impl<Source, k>::type;
  * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
  */
+#pragma nv_exec_check_disable
 template <typename F, typename... Ts>
-decltype(auto) aggregation_dispatcher(aggregation::Kind k, F&& f,
-                                      Ts&&... args) {
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
+    aggregation::Kind k, F&& f, Ts&&... args) {
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
@@ -219,15 +219,19 @@ decltype(auto) aggregation_dispatcher(aggregation::Kind k, F&& f,
 
 template <typename Element>
 struct dispatch_aggregation {
+#pragma nv_exec_check_disable
   template <aggregation::Kind k, typename F, typename... Ts>
-  decltype(auto) operator()(F&& f, Ts&&... args) const noexcept {
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
+      noexcept {
     return f.template operator()<Element, k>(std::forward<Ts>(args)...);
   }
 };
 
 struct dispatch_source {
+#pragma nv_exec_check_disable
   template <typename Element, typename F, typename... Ts>
-  decltype(auto) operator()(aggregation::Kind k, F&& f, Ts&&... args) const
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(aggregation::Kind k,
+                                                      F&& f, Ts&&... args) const
       noexcept {
     return aggregation_dispatcher(k, dispatch_aggregation<Element>{},
                                   std::forward<F>(f),
