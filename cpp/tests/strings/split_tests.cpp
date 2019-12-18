@@ -158,3 +158,12 @@ TEST_F(StringsSplitTest, AllNullsCase)
     EXPECT_TRUE( column.has_nulls() );
     EXPECT_TRUE( column.null_count()==column.size() );
 }
+
+TEST_F(StringsSplitTest, InvalidParameter)
+{
+    std::vector<const char*> h_strings{ "string left intentionally blank" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    auto strings_view = cudf::strings_column_view(strings);
+    EXPECT_THROW( cudf::strings::split(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
+    EXPECT_THROW( cudf::strings::rsplit(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
+}
