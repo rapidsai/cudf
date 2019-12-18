@@ -369,7 +369,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
                           stream>>>(
         static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit,
         number_of_mask_words);
-    CUDA_CHECK_LAST();
+    CHECK_CUDA(stream);
   }
   return dest_mask;
 }

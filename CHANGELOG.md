@@ -15,9 +15,11 @@
 - PR #3590 Specialize hash functions for floating point
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
+- PR #3567 Include `strides` in `__cuda_array_interface__`
 - PR #3608 Update OPS codeowner group name
-
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 
@@ -27,7 +29,9 @@
 - PR #3563 Use `__cuda_array_interface__` for serialization
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
+- PR #3622 Fix new warnings and errors when building with gcc-8
 - PR #3588 Remove avro reader column order reversal
+- PR #3637 Fix sorted set_index operations in dask_cudf
 
 
 # cuDF 0.11.0 (11 Dec 2019)

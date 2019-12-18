@@ -109,7 +109,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
            stream>>>(*map, d_input_keys, d_input_values,
                      *d_sparse_output_values, d_ops.data().get(), nullptr);
   }
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   return std::make_pair(std::move(map), sparse_output_values);
 }
@@ -148,7 +148,7 @@ auto extract_results(table const& input_keys, table const& input_values,
          stream>>>(map, d_input_keys, *d_output_keys, *d_sparse_output_values,
                    *d_output_values, d_result_size);
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   cudf::size_type result_size{-1};
   CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(cudf::size_type),
