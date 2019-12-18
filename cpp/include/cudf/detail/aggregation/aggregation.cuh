@@ -25,38 +25,35 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-template <typename Source, aggregation::Kind k, typename Enable = void>
-struct update_target_element {};
+template <typename Source, aggregation::Kind k>
+struct update_target_element {
+  void operator()(mutable_column_device_view target, size_type target_index,
+                  column_device_view source, size_type source_index) const
+      noexcept {}
+};
 
+template <bool target_has_nulls = true, bool source_has_nulls = true>
+struct elementwise_aggregator {
+  template <typename Source, aggregation::Kind k>
+  void operator()(mutable_column_device_view target, size_type target_index,
+                  column_device_view source, size_type source_index) const
+      noexcept {}
+};
+
+/*
 template <typename Source, aggregation::Kind k>
 struct update_target_element<
-    Source, k, std::enable_if_t<is_valid_aggregation<Source, k>()>> {};
+    Source, k, std::enable_if_t<is_valid_aggregation<Source, k>()>> {
+  void operator()() {}
+};
 
 template <typename Source>
 struct update_target_element<
     Source, aggregation::COUNT,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {};
-
-template <typename Source>
-struct element_wise_aggregator_impl {
-  template <aggregation::Kind k>
-  __device__ inline void operator()(mutable_column_device_view target,
-                                    size_type target_index,
-                                    column_device_view source,
-                                    size_type source_index) const noexcept {}
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {
+  void operator()() {}
 };
-
-struct elementwise_aggregator {
-  template <typename Source>
-  __device__ inline void operator()(mutable_column_device_view target,
-                                    size_type target_index,
-                                    column_device_view source,
-                                    size_type source_index,
-                                    aggregation::Kind k) const noexcept {
-    return aggregation_dispatcher(k, element_wise_aggregator_impl<Source>{},
-                                  target, target_index, source, source_index);
-  }
-};
+*/
 
 /**
  * @brief Updates a row in `target` by performing elementwise aggregation
@@ -84,16 +81,12 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      table_device_view source,
                                      size_type source_index,
                                      aggregation::Kind* aggs) {
-  thrust::transform(
-      thrust::seq, target.begin(), target.end(), source.begin(),
-      thrust::make_discard_iterator(),
-      [target_index, source_index, aggs](auto target_column,
-                                         auto source_column) {
-        cudf::type_dispatcher(
-            target.type(),
-            elementwise_aggregator<target_has_nulls, source_has_nulls>{},
-            target_column, target_index, source_column, source_index);
-      });
+  for (auto i = 0; i < target.num_columns(); ++i) {
+    dispatch_type_and_aggregation(
+        target.column(i).type(), aggs[i],
+        elementwise_aggregator<target_has_nulls, source_has_nulls>{},
+        target.column(i), target_index, source.column(i), source_index);
+  }
 }
 
 }  // namespace detail
