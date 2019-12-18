@@ -84,6 +84,8 @@ def read_csv(
         prefix=prefix,
         index_col=index_col,
         kafka_configs=kafka_configs,
+        start_offset=start_offset,
+        batch_size=batch_size,
     )
 
 

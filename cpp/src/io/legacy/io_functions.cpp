@@ -75,6 +75,8 @@ table read_csv(csv_read_arg const &args) {
     options.quoting = static_cast<csv::quote_style>(args.quoting);
     options.doublequote = args.doublequote;
     options.out_time_unit = args.out_time_unit;
+    options.cudf_start_offset = args.cudf_start_offset;
+    options.cudf_end_offset = args.cudf_end_offset;
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<csv::reader>(args.source.filepath, options);

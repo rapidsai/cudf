@@ -77,7 +77,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
-                    "${RMM_INCLUDE}")
+                    "${RMM_INCLUDE}"
+                    "${RDKAFKA_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -87,7 +88,9 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${CMAKE_BINARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}")
+                 "${RMM_LIBRARY}"
+                 "${RDKAFKA_LIBRARY}"
+                 "${RDKAFKA++_LIBRARY}")
 
 ###################################################################################################
 ### test sources ##################################################################################
@@ -413,11 +416,10 @@ ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 
 # Kafka integration tests are disabled by default.
 if(ENABLE_KAFKA_TESTS)
-    message("Running Kafka Tests !!!!!!!!!!!!!!!!!!!!")
-    include_directories("${RDKAFKA_INCLUDE}")
+    #include_directories("${RDKAFKA_INCLUDE}")
     
-    link_directories("${RDKAFKA_LIBRARY}"
-                     "${RDKAFKA++_LIBRARY}")
+    # link_directories("${RDKAFKA_LIBRARY}"
+    #                  "${RDKAFKA++_LIBRARY}")
 
     set(LEGACY_KAFKA_IO_TEST_SRC
         "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_kafka_test.cpp"

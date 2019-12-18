@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n --allgpuarch -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks kafka_tests -v -g -n --allgpuarch -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [kafka_tests] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
    libnvstrings - build the nvstrings C++ code only
@@ -28,7 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
    benchmarks   - build benchmarks
-   kafka_tests  - run kafka integration tests
+   kafka_tests  - enable kafka integration tests
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step

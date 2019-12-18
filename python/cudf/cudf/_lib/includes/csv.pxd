@@ -7,6 +7,7 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.includes.io cimport *
+from libc.stdint cimport int64_t
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -66,8 +67,8 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         quote_style         quoting
         bool                doublequote
 
-        int64               cudf_start_offset
-        int64               cudf_end_offset
+        int64_t             cudf_start_offset
+        int64_t             cudf_end_offset
 
         gdf_time_unit       out_time_unit
 

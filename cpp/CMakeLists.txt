@@ -570,9 +570,6 @@ add_library(cudf
             src/aggregation/aggregation.cpp
 )
 
-# target_include_directories(cudf PUBLIC
-#                            "${RDKAFKA_INCLUDE}")
-
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
 set_target_properties(libNVCategory PROPERTIES OUTPUT_NAME "NVCategory")

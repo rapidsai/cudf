@@ -93,7 +93,7 @@ class KafkaTest : public GdfTest {
     }
   }
 
-  std::string default_test_topic = "libcudf-test";
+  std::string default_test_topic = "libcudf-csv-test";
   std::string _errstr;
   RdKafka::Conf *kafka_conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
   RdKafka::Conf::ConfResult conf_result;

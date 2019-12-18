@@ -51,9 +51,23 @@ class kafka_io_source : public datasource {
     consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
     CUDF_EXPECTS(consumer_, "Failed to create Kafka consumer");
 
-    RdKafka::ErrorCode err = consumer_->subscribe(topics_);
+    err = consumer_->subscribe(topics_);
     CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
                  "Failed to subscribe to Kafka Topics");
+
+    // Retrieve the current TopicPartition assignment and update it to the desired offset range.
+    std::vector<RdKafka::TopicPartition*> tps;
+    err = consumer_->assignment(tps);
+    CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
+                "Failed to retrieve current topic partition assignments");
+
+    printf("Current Offset: %lu", tps.at(0)->offset());
+    tps.at(0)->set_offset(start_offset_);
+    printf("Offset After: %lu", tps.at(0)->offset());
+
+    err = consumer_->assign(tps);
+    CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
+                "Error occured while reassigning the topic partition offset");
 
     // The csv_reader implementation will call 'empty()' to determine how maby
     // bytes are available. With files this works, with Kafka we don't yet have
@@ -161,6 +175,7 @@ class kafka_io_source : public datasource {
   RdKafka::KafkaConsumer *consumer_;
   RdKafka::ErrorCode err_code_;
 
+  RdKafka::ErrorCode err;
   std::vector<std::string> topics_;
   std::string errstr_;
   RdKafka::Conf::ConfResult conf_res;
