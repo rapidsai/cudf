@@ -109,6 +109,15 @@ enum class null_order : bool {
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates how a collection of values has been ordered.
+ *---------------------------------------------------------------------------**/
+struct order_info {
+   bool is_ordered;
+   order ordering;
+   null_order null_ordering;
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
 enum mask_state {

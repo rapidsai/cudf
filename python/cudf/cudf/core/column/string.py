@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 
 import nvstrings
 import rmm
@@ -485,6 +486,18 @@ class StringColumn(column.TypedColumnBase):
     def str(self, index=None):
         return StringMethods(self, index=index)
 
+    def __sizeof__(self):
+        n = self._data.device_memory()
+        if self._mask:
+            n += self._mask.__sizeof__()
+        return n
+
+    def _memory_usage(self, deep=False):
+        if deep:
+            return self.__sizeof__()
+        else:
+            return self.str().size() * self.dtype.itemsize
+
     def __len__(self):
         return self._data.size()
 
@@ -651,14 +664,14 @@ class StringColumn(column.TypedColumnBase):
         # Deserialize the mask, value, and offset frames
         arrays = []
 
-        for i, frame in enumerate(frames):
-            if isinstance(frame, memoryview):
-                sheader = header["subheaders"][i]
-                dtype = sheader["dtype"]
-                frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
+        for each_frame in frames:
+            if hasattr(each_frame, "__cuda_array_interface__"):
+                each_frame = cuda.as_cuda_array(each_frame)
+            elif isinstance(each_frame, memoryview):
+                each_frame = np.asarray(each_frame)
+                each_frame = cudautils.to_device(each_frame)
 
-            arrays.append(libcudf.cudf.get_ctype_ptr(frame))
+            arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
