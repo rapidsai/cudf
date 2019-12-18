@@ -50,6 +50,9 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
+    # Suppress parentheses warning which causes gmock to fail
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
+
     option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
     if(CMAKE_CXX11_ABI)
         message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
@@ -407,6 +410,7 @@ add_library(cudf
             src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
+            src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
@@ -479,13 +483,12 @@ add_library(cudf
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
-            src/utilities/legacy/column_utils.cpp
             src/copying/gather.cu
+            src/utilities/legacy/column_utils.cpp
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
-            src/copying/gather.cu
             src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
