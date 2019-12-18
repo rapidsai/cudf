@@ -19,6 +19,7 @@
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
 - PR #3402 Define and implement new quantiles APIs
+- PR #3640 Enable memory_usage in dask_cudf
 
 ## Bug Fixes
 
