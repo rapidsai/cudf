@@ -348,7 +348,7 @@ class CategoricalColumn(column.TypedColumnBase):
     def __cuda_array_interface__(self):
         raise TypeError(
             "Categorical does not support `__cuda_array_interface__`."
-            " Please consider using `.code` or `.categories`"
+            " Please consider using `.codes` or `.categories`"
             " if you need this functionality."
         )
 
