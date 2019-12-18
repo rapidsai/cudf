@@ -87,7 +87,6 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
         return make_numeric_column( data_type{INT64}, 0 );
 
     auto strings_column = column_device_view::create(strings.parent(), stream);
-    auto d_strings = *strings_column;
     // create output column copying the strings' null-mask
     auto results = make_numeric_column( data_type{INT64}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
@@ -96,7 +95,7 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
     thrust::transform( rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        d_results, ipv4_to_integers_fn{d_strings});
+        d_results, ipv4_to_integers_fn{*strings_column});
     // done
     results->set_null_count(strings.null_count());
     return results;
@@ -202,14 +201,12 @@ std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                                     offsets_transformer_itr+strings_count,
                                                     mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets = offsets_view.data<int32_t>();
+    auto d_offsets = offsets_column->view().data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
     auto chars_column = create_chars_child_column( strings_count, integers.null_count(), bytes, mr, stream );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<char>();
+    auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         integers_to_ipv4_fn{d_column, d_offsets, d_chars});
     //
