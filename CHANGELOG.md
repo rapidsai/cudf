@@ -1,7 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
-
+- PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers

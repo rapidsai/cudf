@@ -177,12 +177,20 @@ set(LEGACY_GROUPBY_WO_AGG_TEST_SRC
 ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 
 ###################################################################################################
+# - legacy join tests ------------------------------------------------------------------------------------
+
+set(LEGACY_JOIN_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
+
+ConfigureTest(LEGACY_JOIN_TEST "${LEGACY_JOIN_TEST_SRC}")
+
+###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
 
-ConfigureTest(LEGACY_JOIN_TEST "${JOIN_TEST_SRC}")
+ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
 # - orderby tests ---------------------------------------------------------------------------------
