@@ -66,6 +66,9 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         quote_style         quoting
         bool                doublequote
 
+        int64               cudf_start_offset
+        int64               cudf_end_offset
+
         gdf_time_unit       out_time_unit
 
     cdef cppclass reader:

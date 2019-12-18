@@ -165,10 +165,10 @@ class kafka_io_source : public datasource {
   std::string errstr_;
   RdKafka::Conf::ConfResult conf_res;
   std::string conf_val;
+  int64_t start_offset_ = -1;
   int16_t batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
   int32_t default_timeout_ = 10000;  // 1 second
-  int64_t msg_count_ =
-      0;  // Running tally of the messages consumed. Useful for retry logic.
+  int64_t msg_count_ = 0;  // Running tally of the messages consumed. Useful for retry logic.
 
   std::string buffer_;
 };  // namespace io

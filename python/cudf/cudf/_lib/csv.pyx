@@ -73,6 +73,8 @@ cpdef read_csv(
     prefix=None,
     index_col=None,
     kafka_configs=None,
+    start_offset=-1,
+    batch_size=10000,
 ):
     """
     Cython function to call into libcudf API, see `read_csv`.
@@ -194,6 +196,9 @@ cpdef read_csv(
     cdef KafkaConf.ConfType gk = KafkaConf.ConfType.CONF_GLOBAL
     cdef KafkaConf *gkc
     cdef vector[string] topics
+
+    args.cudf_start_offset = start_offset
+    args.cudf_end_offset = start_offset + batch_size
 
     # Regular execution path variables
     cdef const unsigned char[::1] buffer
