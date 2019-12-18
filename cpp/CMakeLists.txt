@@ -180,10 +180,10 @@ message(STATUS "RDKAFKA: RDKAFKA_LIBRARY set to ${RDKAFKA_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
-# add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
-# if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
-#     set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
-# endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
+if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+    set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
+endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -310,7 +310,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
+                    "${DLPACK_INCLUDE}"
+                    "${RDKAFKA_INCLUDE}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -566,8 +567,8 @@ add_library(cudf
             src/aggregation/aggregation.cpp
 )
 
-target_include_directories(cudf PUBLIC
-                           "${RDKAFKA_INCLUDE}")
+# target_include_directories(cudf PUBLIC
+#                            "${RDKAFKA_INCLUDE}")
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
