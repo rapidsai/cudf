@@ -5,6 +5,7 @@
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3403 Define and implement new stack + tile APIs
 
 ## Improvements
@@ -15,8 +16,8 @@
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
 - PR #3608 Update OPS codeowner group name
-
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
 
 ## Bug Fixes
 
@@ -26,6 +27,7 @@
 - PR #3563 Use `__cuda_array_interface__` for serialization
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
+- PR #3588 Remove avro reader column order reversal
 
 
 # cuDF 0.11.0 (11 Dec 2019)
