@@ -20,7 +20,7 @@
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/detail/scatter.hpp>
+#include <cudf/detail/gather.cuh>
 
 #include <thrust/tabulate.h>
 
@@ -78,7 +78,7 @@ class bitwise_partitioner
 };
 
 template <bool has_nulls>
-std::vector<std::unique_ptr<experimental::table>>
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition_table(table_view const& input,
                      table_view const &table_to_hash,
                      const size_type num_partitions,
@@ -86,7 +86,7 @@ hash_partition_table(table_view const& input,
                      cudaStream_t stream)
 {
   auto const num_rows = table_to_hash.num_rows();
-  auto row_partition_numbers = rmm::device_vector<size_type>(num_rows);
+  auto row_partitions = rmm::device_vector<size_type>(num_rows);
 
   // Make an iterator to compute the hash over each row
   auto const device_input = table_device_view::create(input, stream);
@@ -100,61 +100,73 @@ hash_partition_table(table_view const& input,
     // Compute which partition each row belongs to using bitwise partitioner
     auto partitioner = bitwise_partitioner<hash_value_type>{num_partitions};
     thrust::transform(rmm::exec_policy(stream)->on(stream), hash_iterator,
-      hash_iterator + num_rows, row_partition_numbers.begin(), partitioner);
-
+      hash_iterator + num_rows, row_partitions.begin(), partitioner);
   } else {
     // Compute which partition each row belongs to using modulo partitioner
     auto partitioner = modulo_partitioner<hash_value_type>{num_partitions};
     thrust::transform(rmm::exec_policy(stream)->on(stream), hash_iterator,
-      hash_iterator + num_rows, row_partition_numbers.begin(), partitioner);
+      hash_iterator + num_rows, row_partitions.begin(), partitioner);
   }
 
-  // Scatter input rows to output partitions given the partition map
-  auto const partition_map = column_view(data_type(INT32), num_rows,
-    row_partition_numbers.data().get());
-  auto output = experimental::detail::scatter_to_tables(input, partition_map, mr, stream);
+  // Initialize gather maps and offsets to sequence
+  auto gather_map = rmm::device_vector<size_type>(num_rows);
+  auto d_offsets = rmm::device_vector<size_type>(num_rows);
+  thrust::sequence(rmm::exec_policy(stream)->on(stream),
+    gather_map.begin(), gather_map.end());
+  thrust::sequence(rmm::exec_policy(stream)->on(stream),
+    d_offsets.begin(), d_offsets.end());
 
-  // Pad with empty tables if we have less than num_partitions
-  if (output.size() < static_cast<size_t>(num_partitions)) {
-    std::generate_n(std::back_inserter(output), num_partitions - output.size(),
-      [&input]() { return experimental::empty_like(input); });
-  }
+  // Sort sequence using partition map as key to generate gather maps
+  thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
+    row_partitions.begin(), row_partitions.end(), gather_map.begin());
 
-  return output;
+  // Reduce unique partitions to extract gather map offsets from sequence
+  auto end = thrust::unique_by_key(rmm::exec_policy(stream)->on(stream),
+    row_partitions.begin(), row_partitions.end(), d_offsets.begin());
+
+  auto output = experimental::detail::gather(input, gather_map.begin(), gather_map.end(),
+    false, false, false, mr, stream);
+
+  // Copy offsets from device to vector, padded to num_partitions
+  std::vector<size_type> offsets(num_partitions, input.num_rows());
+  thrust::copy(d_offsets.begin(), end.second, offsets.begin());
+
+  return std::make_pair(std::move(output), std::move(offsets));
 }
+
+struct nvtx_raii {
+  nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
+  ~nvtx_raii() { nvtx::range_pop(); }
+};
 
 }  // namespace
 
 namespace detail {
 
-std::vector<std::unique_ptr<experimental::table>>
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream)
 {
-  std::vector<std::unique_ptr<experimental::table>> output;
+  // Push/pop nvtx range around the scope of this function
+  nvtx_raii("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
+
   auto table_to_hash = input.select(columns_to_hash);
 
-  // Return empty vector if there are no partitions or anything to hash
+  // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return output;
+    return {};
   }
-
-  cudf::nvtx::range_push("CUDF_HASH_PARTITION", cudf::nvtx::PARTITION_COLOR);
 
   if (has_nulls(table_to_hash)) {
-    output = hash_partition_table<true>(
+    return hash_partition_table<true>(
         input, table_to_hash, num_partitions, mr, stream);
   } else {
-    output = hash_partition_table<false>(
+    return hash_partition_table<false>(
         input, table_to_hash, num_partitions, mr, stream);
   }
-
-  cudf::nvtx::range_pop();
-
-  return output;
 }
 
 std::unique_ptr<column> hash(table_view const& input,
@@ -208,7 +220,7 @@ std::unique_ptr<column> hash(table_view const& input,
 
 }  // namespace detail
 
-std::vector<std::unique_ptr<experimental::table>>
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,

@@ -25,8 +25,8 @@ namespace detail {
  *
  * Partitions rows of `input` into `num_partitions` bins based on the hash
  * value of the columns specified by `columns_to_hash`. Rows partitioned into
- * the same bin are grouped together into a new table. Returns a vector
- * containing `num_partitions` new tables.
+ * the same bin are grouped consecutively in the output table. Returns a vector
+ * of row offsets to the start of each partition in the output table.
  *
  * @throw std::out_of_range if index is `columns_to_hash` is invalid
  *
@@ -36,9 +36,9 @@ namespace detail {
  * @param mr Optional resource to use for device memory allocation
  * @param stream Optional stream to use for allocations and copies
  *
- * @returns A vector of tables partitioned from the input
+ * @returns An output table and a vector of row offsets to each partition
  * -------------------------------------------------------------------------**/
-std::vector<std::unique_ptr<experimental::table>>
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions,
