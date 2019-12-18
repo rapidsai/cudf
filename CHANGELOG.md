@@ -30,6 +30,7 @@
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 - PR #3622 Fix new warnings and errors when building with gcc-8
 - PR #3588 Remove avro reader column order reversal
+- PR #3637 Fix sorted set_index operations in dask_cudf
 
 
 # cuDF 0.11.0 (11 Dec 2019)
