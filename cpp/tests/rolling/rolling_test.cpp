@@ -707,7 +707,7 @@ struct RollingTestUdf : public cudf::test::BaseFixture {
     )***"};
 };
 
-TEST_F(RollingTestUdf, NumbaGenericStaticWindow)
+TEST_F(RollingTestUdf, StaticWindow)
 {
   size_type size = 12;
 
@@ -716,10 +716,6 @@ TEST_F(RollingTestUdf, NumbaGenericStaticWindow)
                                             thrust::make_constant_iterator(true));
 
   std::unique_ptr<cudf::column> output;
-
-  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, 2, 2, 4, this->ptx_func,
-                                                              rolling_operator::NUMBA_UDF,
-                                                              cudf::data_type{cudf::INT64}));
 
   auto start = cudf::test::make_counting_transform_iterator(0,
     [size] __device__(size_type row) { 
@@ -733,10 +729,22 @@ TEST_F(RollingTestUdf, NumbaGenericStaticWindow)
 
   fixed_width_column_wrapper<int64_t> expected{start, start+size, valid};
 
+  // Test CUDA UDF
+  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, 2, 2, 4, this->cuda_func,
+                                                              rolling_operator::CUDA_UDF,
+                                                              cudf::data_type{cudf::INT64}));
+
+  cudf::test::expect_columns_equal(*output, expected);
+
+  // Test NUMBA UDF
+  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, 2, 2, 4, this->ptx_func,
+                                                              rolling_operator::NUMBA_UDF,
+                                                              cudf::data_type{cudf::INT64}));
+
   cudf::test::expect_columns_equal(*output, expected);
 }
 
-TEST_F(RollingTestUdf, NumbaGenericDynamicWindow)
+TEST_F(RollingTestUdf, DynamicWindow)
 {
   size_type size = 12;
 
@@ -757,11 +765,6 @@ TEST_F(RollingTestUdf, NumbaGenericDynamicWindow)
   fixed_width_column_wrapper<int32_t> preceding(prec, prec + size);
   fixed_width_column_wrapper<int32_t> following(follow, follow + size);
   std::unique_ptr<cudf::column> output;
-
-  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, preceding, following, 2,
-                                                              this->ptx_func,
-                                                              rolling_operator::NUMBA_UDF,
-                                                              cudf::data_type{cudf::INT64}));
 
   auto start = cudf::test::make_counting_transform_iterator(0,
     [size] __device__(size_type row) { 
@@ -775,76 +778,19 @@ TEST_F(RollingTestUdf, NumbaGenericDynamicWindow)
 
   fixed_width_column_wrapper<int64_t> expected{start, start+size, valid};
 
-  cudf::test::expect_columns_equal(*output, expected);
-}
-
-TEST_F(RollingTestUdf, CudaGenericStaticWindow)
-{
-  size_type size = 12;
-
-  fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
-                                            thrust::make_counting_iterator(size),
-                                            thrust::make_constant_iterator(true));
-
-  std::unique_ptr<cudf::column> output;
-
-  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, 2, 2, 4, this->cuda_func,
-                                                              rolling_operator::CUDA_UDF,
-                                                              cudf::data_type{cudf::INT64}));
-
-  auto start = cudf::test::make_counting_transform_iterator(0,
-    [size] __device__(size_type row) { 
-      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2)),
-                             thrust::make_counting_iterator(std::min(size, row + 2 + 1)),
-                             0); 
-    });
-
-  auto valid = cudf::test::make_counting_transform_iterator(0, 
-    [size] __device__ (size_type row) { return (row != 0 && row != size - 1); });
-
-  fixed_width_column_wrapper<int64_t> expected{start, start+size, valid};
-
-  cudf::test::expect_columns_equal(*output, expected);
-}
-
-TEST_F(RollingTestUdf, CudaGenericDynamicWindow)
-{
-  size_type size = 12;
-
-  fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
-                                            thrust::make_counting_iterator(size),
-                                            thrust::make_constant_iterator(true));
-
-  auto prec = cudf::test::make_counting_transform_iterator(0,
-    [size] __device__(size_type row) { 
-      return row % 2 + 1;
-    });
-
-  auto follow = cudf::test::make_counting_transform_iterator(0,
-    [size] __device__(size_type row) { 
-      return row % 2;
-    });
-
-  fixed_width_column_wrapper<int32_t> preceding(prec, prec + size);
-  fixed_width_column_wrapper<int32_t> following(follow, follow + size);
-  std::unique_ptr<cudf::column> output;
-
+  // Test CUDA UDF
   EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, preceding, following, 2,
                                                               this->cuda_func,
                                                               rolling_operator::CUDA_UDF,
                                                               cudf::data_type{cudf::INT64}));
 
-  auto start = cudf::test::make_counting_transform_iterator(0,
-    [size] __device__(size_type row) { 
-      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - (row % 2 + 1))),
-                             thrust::make_counting_iterator(std::min(size, row + (row % 2) + 1)),
-                             0); 
-    });
+  cudf::test::expect_columns_equal(*output, expected);
 
-  auto valid = cudf::test::make_counting_transform_iterator(0, 
-    [size] __device__ (size_type row) { return row != 0; });
-
-  fixed_width_column_wrapper<int64_t> expected{start, start+size, valid};
+  // Test PTX UDF
+  EXPECT_NO_THROW(output = cudf::experimental::rolling_window(input, preceding, following, 2,
+                                                              this->ptx_func,
+                                                              rolling_operator::NUMBA_UDF,
+                                                              cudf::data_type{cudf::INT64}));
 
   cudf::test::expect_columns_equal(*output, expected);
 }
