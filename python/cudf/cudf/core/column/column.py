@@ -997,6 +997,7 @@ class TypedColumnBase(Column):
     def __cuda_array_interface__(self):
         output = {
             "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
             "data": (self.data.mem.device_ctypes_pointer.value, True),
             "version": 1,
