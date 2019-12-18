@@ -39,7 +39,7 @@ struct dispatch_nan_to_null {
 
         if (input.nullable()) {
             auto pred = [input_device_view] __device__ (cudf::size_type idx) {
-                return not (std::isnan(input_device_view.element<T>(idx)) || input_device_view.is_null(idx));
+                return not (std::isnan(input_device_view.element<T>(idx)) || input_device_view.is_null_nocheck(idx));
             };
 
             auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
