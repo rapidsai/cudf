@@ -70,11 +70,18 @@ std::unique_ptr<column> group_sum(
     size_type num_groups,
     cudaStream_t stream = 0);
 
+std::unique_ptr<column> group_count(
+    column_view const& values,
+    rmm::device_vector<size_type> const& group_labels,
+    size_type num_groups,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
 std::unique_ptr<column> group_var(
     column_view const& values,
     column_view const& group_means,
+    column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
-    rmm::device_vector<size_type> const& group_sizes,
     size_type ddof,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
@@ -83,16 +90,16 @@ std::unique_ptr<column> group_var(
  * @brief Internal API to calculate groupwise quantiles
  * 
  * @param values Grouped and sorted (within group) values to get quantiles from
- * @param group_offsets Offsets of groups' starting points within @p values
  * @param group_sizes Number of valid elements per group
+ * @param group_offsets Offsets of groups' starting points within @p values
  * @param quantiles List of quantiles q where q lies in [0,1]
  * @param interp Method to use when desired value lies between data points
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_quantiles(
     column_view const& values,
+    column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_offsets,
-    rmm::device_vector<size_type> const& group_sizes,
     std::vector<double> const& quantiles,
     interpolation interp,
     rmm::mr::device_memory_resource* mr,

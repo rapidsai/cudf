@@ -37,8 +37,8 @@ struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column> >
   operator()(column_view const& values,
+             column_view const& group_sizes,
              rmm::device_vector<size_type> const& group_offsets,
-             rmm::device_vector<size_type> const& group_sizes,
              rmm::device_vector<double> const& quantile,
              interpolation interpolation, rmm::mr::device_memory_resource* mr,
              cudaStream_t stream = 0)
@@ -55,6 +55,7 @@ struct quantiles_functor {
 
     // prepare args to be used by lambda below
     auto values_view = column_device_view::create(values);
+    auto group_size_view = column_device_view::create(group_sizes);
     auto result_view = mutable_column_device_view::create(result->mutable_view());
 
     // For each group, calculate quantile
@@ -63,14 +64,14 @@ struct quantiles_functor {
       group_offsets.size(),
       [
         d_values = *values_view,
+        d_group_size = *group_size_view,
         d_result = *result_view,
         d_group_offset = group_offsets.data().get(),
-        d_group_size = group_sizes.data().get(),
         d_quantiles = quantile.data().get(),
         num_quantiles = quantile.size(),
         interpolation
       ] __device__ (size_type i) {
-        size_type segment_size = d_group_size[i];
+        size_type segment_size = d_group_size.element<size_type>(i);
 
         auto selector = [&] (size_type j) {
           return d_values.element<T>(d_group_offset[i] + j);
@@ -101,8 +102,8 @@ struct quantiles_functor {
 // TODO: add optional check for is_sorted. Use context.flag_sorted
 std::unique_ptr<column> group_quantiles(
     column_view const& values,
+    column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_offsets,
-    rmm::device_vector<size_type> const& group_sizes,
     std::vector<double> const& quantiles,
     interpolation interp,
     rmm::mr::device_memory_resource* mr,
@@ -111,7 +112,7 @@ std::unique_ptr<column> group_quantiles(
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   return type_dispatcher(values.type(), quantiles_functor{},
-                         values, group_offsets, group_sizes,
+                         values, group_sizes, group_offsets,
                          dv_quantiles, interp, mr, stream);
 }
 

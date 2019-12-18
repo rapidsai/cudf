@@ -91,26 +91,15 @@ struct helper {
    * @brief Groups a column of values according to `keys` and sorts within each group.
    * 
    * Groups the @p values where the groups are dictated by key table
-   * and each group is sorted in ascending order, with NULL elements positioned at the end of each group. Calculates and
-   * returns the number of valid values within each group. 
+   * and each group is sorted in ascending order, with NULL elements positioned 
+   * at the end of each group.
    * 
    * @throws cudf::logic_error if `values.size != keys.num_rows()`
    * 
    * @param values The value column to group and sort
-   * @return the sorted and grouped column and per-group valid count
+   * @return the sorted and grouped column
    */
-  std::pair<std::unique_ptr<column>, index_vector >
-  sorted_values_and_num_valids(column_view const& values, 
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-
   std::unique_ptr<column> sorted_values(column_view const& values, 
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-
-  // TODO (dm): implement
-  std::pair<std::unique_ptr<column>, index_vector >
-  grouped_values_and_num_valids(column_view const& values, 
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 

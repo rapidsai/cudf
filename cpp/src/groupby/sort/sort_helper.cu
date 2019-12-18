@@ -233,48 +233,6 @@ column_view helper::keys_bitmask_column(cudaStream_t stream) {
   return _keys_bitmask_column->view();
 }
 
-helper::index_vector helper::count_valids_in_groups(
-  column const& grouped_values,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  // Get number of valid values in each group
-  helper::index_vector val_group_sizes(num_groups());
-
-  if (grouped_values.nullable()) {
-    auto col_view = column_device_view::create(grouped_values.view());
-    
-    auto bitmask_iterator = experimental::detail::make_validity_iterator(
-                                                    *col_view);
-
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                          group_labels().begin(),
-                          group_labels().end(),
-                          bitmask_iterator,
-                          thrust::make_discard_iterator(),
-                          val_group_sizes.begin());
-  } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                          group_labels().begin(),
-                          group_labels().end(),
-                          thrust::make_constant_iterator(1),
-                          thrust::make_discard_iterator(),
-                          val_group_sizes.begin());
-  }
-
-  return val_group_sizes;
-}
-
-std::pair<helper::column_ptr, helper::index_vector >
-helper::sorted_values_and_num_valids(column_view const& values,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  auto sorted_values = this->sorted_values(values, mr, stream);
-  auto val_group_sizes = count_valids_in_groups(*sorted_values, mr, stream); 
-  return std::make_pair(std::move(sorted_values), val_group_sizes);
-}
-
 helper::column_ptr helper::sorted_values(column_view const& values, 
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)

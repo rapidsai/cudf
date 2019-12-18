@@ -108,10 +108,7 @@ groupby::sort_aggregate(
     //            agg that requires sorted result
     // TODO (dm): Use key_sorted_order to make permutation iterator and avoid
     //            generating value columns
-    std::unique_ptr<column> sorted_values;
-    rmm::device_vector<size_type> group_sizes;
-    std::tie(sorted_values, group_sizes) =
-      helper().sorted_values_and_num_valids(requests[i].values);
+    std::unique_ptr<column> sorted_values = helper().sorted_values(requests[i].values);
 
     auto store_sum = [&] (std::unique_ptr<aggregation> const& agg)
     {
@@ -127,12 +124,10 @@ groupby::sort_aggregate(
     {
       if (cache.has_result(i, agg))
         return;
-      auto counts = std::make_unique<column>(
-                      data_type(type_to_id<size_type>()),
-                      group_sizes.size(),
-                      rmm::device_buffer(group_sizes.data().get(),
-                        group_sizes.size() * sizeof(size_type)));
-      cache.add_result(i, agg, std::move(counts));
+      cache.add_result(i, agg, 
+                       detail::group_count(sorted_values->view(), 
+                                helper().group_labels(),
+                                helper().num_groups(), mr, stream));
     };
 
     auto store_mean = [&] (std::unique_ptr<aggregation> const& agg)
@@ -160,10 +155,13 @@ groupby::sort_aggregate(
       auto var_agg =
         static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
       auto mean_agg = make_mean_aggregation();
+      auto count_agg = make_count_aggregation();
       store_mean(mean_agg);
+      store_count(count_agg);
       column_view mean_result = cache.get_result(i, mean_agg);
+      column_view group_sizes = cache.get_result(i, count_agg);
       auto result = detail::group_var(sorted_values->view(), mean_result, 
-                              helper().group_labels(), group_sizes, var_agg->_ddof,
+                              group_sizes, helper().group_labels(), var_agg->_ddof,
                               mr, stream);
       cache.add_result(i, agg, std::move(result));
     };
@@ -186,10 +184,13 @@ groupby::sort_aggregate(
     {
       if (cache.has_result(i, agg))
         return;
+      auto count_agg = make_count_aggregation();
+      store_count(count_agg);
+      column_view group_sizes = cache.get_result(i, count_agg);
       auto quantile_agg =
         static_cast<experimental::detail::quantile_aggregation const*>(agg.get());
       auto result = detail::group_quantiles(
-        sorted_values->view(), helper().group_offsets(), group_sizes,
+        sorted_values->view(), group_sizes, helper().group_offsets(),
         quantile_agg->_quantiles, quantile_agg->_interpolation, mr, stream);
       cache.add_result(i, agg, std::move(result));
     };
@@ -198,8 +199,11 @@ groupby::sort_aggregate(
     {
       if (cache.has_result(i, agg))
         return;
+      auto count_agg = make_count_aggregation();
+      store_count(count_agg);
+      column_view group_sizes = cache.get_result(i, count_agg);
       auto result = detail::group_quantiles(
-        sorted_values->view(), helper().group_offsets(), group_sizes,
+        sorted_values->view(), group_sizes, helper().group_offsets(),
         {0.5}, interpolation::LINEAR, mr, stream);
       cache.add_result(i, agg, std::move(result));
     };
