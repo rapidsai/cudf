@@ -367,8 +367,6 @@ gdf_column rolling_window(gdf_column const& input,
       CUDF_FAIL("Unsupported UDF type.");
   }
 
-  std::cout << "SOURCE\n" << cuda_source << "\n";
-  
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
