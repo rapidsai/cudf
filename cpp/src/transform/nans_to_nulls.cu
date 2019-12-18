@@ -37,17 +37,28 @@ struct dispatch_nan_to_null {
         auto input_device_view_ptr = column_device_view::create(input, stream);
         auto input_device_view = *input_device_view_ptr;
 
-        auto pred = [input_device_view] __device__ (cudf::size_type idx) {
-            return not (std::isnan(input_device_view.element<T>(idx)) || input_device_view.is_null(idx)); 
-        };
+        if (input.nullable()) {
+            auto pred = [input_device_view] __device__ (cudf::size_type idx) {
+                return not (std::isnan(input_device_view.element<T>(idx)) || input_device_view.is_null(idx));
+            };
 
-        auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
-                                thrust::make_counting_iterator<cudf::size_type>(input.size()),
-                                pred, stream, mr);
+            auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
+                                    pred, stream, mr);
 
-        return std::make_pair(std::make_unique<rmm::device_buffer>(mask.first), mask.second);
+            return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
+        } else {
+            auto pred = [input_device_view] __device__ (cudf::size_type idx) {
+                return not (std::isnan(input_device_view.element<T>(idx)));
+            };
+
+            auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
+                                    pred, stream, mr);
+
+            return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
+        }
     }
-
 
     template <typename T>
     std::enable_if_t<!std::is_floating_point<T>::value, std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>

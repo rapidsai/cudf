@@ -50,14 +50,7 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
                     [](T val){return (std::isnan(val))? false : true;});
         }
 
-        auto expected_null_count = std::count_if(expected_mask.begin(), expected_mask.end(), [](bool val) {return val == false;});
-
-        if (mask.size() > 0 or expected_null_count > 0) {
-            return static_cast<cudf::column>(cudf::test::fixed_width_column_wrapper<T> (expected.begin(), expected.end(), expected_mask.begin()));
-        }
-        else {
-            return static_cast<cudf::column>(cudf::test::fixed_width_column_wrapper<T> (expected.begin(), expected.end()));
-        }
+        return static_cast<cudf::column>(cudf::test::fixed_width_column_wrapper<T> (expected.begin(), expected.end(), expected_mask.begin()));
 
     }
 };
@@ -95,7 +88,7 @@ TYPED_TEST(NaNsToNullTest, NoNANWithMask){
 TYPED_TEST(NaNsToNullTest, NoNANNoMask){
     using T = TypeParam;
 
-    std::vector<T> input = {1, 2, 3, 4, 5, NAN};
+    std::vector<T> input = {1, 2, 3, 4, 5, 6};
     auto input_column = cudf::test::fixed_width_column_wrapper<T> (input.begin(), input.end());
     this->run_test(static_cast<cudf::column>(input_column), this->create_expected(input));
 }
