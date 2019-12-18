@@ -426,6 +426,7 @@ add_library(cudf
             src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
+            src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
@@ -498,13 +499,12 @@ add_library(cudf
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
-            src/utilities/legacy/column_utils.cpp
             src/copying/gather.cu
+            src/utilities/legacy/column_utils.cpp
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
-            src/copying/gather.cu
             src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp

@@ -6,6 +6,7 @@
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3527 Add string functionality for merge API
+- PR #3610 Add memory_usage to DataFrame and Series APIs
 
 ## Improvements
 
@@ -18,6 +19,8 @@
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3507 Define and implement new binary operation APIs
 - PR #3601 Port UDF functionality for rolling windows
+- PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 
