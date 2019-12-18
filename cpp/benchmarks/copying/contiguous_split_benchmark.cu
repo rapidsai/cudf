@@ -24,42 +24,45 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+// to enable, run cmake with -DBUILD_BENCHMARKS=ON
+
 class ContiguousSplit: public cudf::benchmark {};
 
 void BM_contiguous_split(benchmark::State& state)
 {   
    int64_t total_desired_bytes = state.range(0);
-   int64_t num_cols = state.range(1);   
-   int64_t num_splits = state.range(2);   
+   cudf::size_type num_cols = state.range(1);   
+   cudf::size_type num_splits = state.range(2);   
    bool include_validity = state.range(3) == 0 ? false : true;   
 
-   int64_t el_size = 4;     // ints and floats
+   cudf::size_type el_size = 4;     // ints and floats
    int64_t num_rows = total_desired_bytes / (num_cols * el_size);   
 
    // generate splits
-   int split_stride = num_rows / num_splits;
+   cudf::size_type split_stride = num_rows / num_splits;
    std::vector<cudf::size_type> splits;
    for(int idx=0; idx<num_rows; idx+=split_stride){      
-      splits.push_back(min((int)(idx + split_stride), (int)num_rows));
+      splits.push_back(std::min(idx + split_stride, static_cast<cudf::size_type>(num_rows)));
    }
 
    // generate input table
    srand(31337);
    auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
-   std::vector<cudf::test::fixed_width_column_wrapper<int>> src_cols = {};
+   std::vector<cudf::test::fixed_width_column_wrapper<int>> src_cols(num_cols);
    for(int idx=0; idx<num_cols; idx++){
       auto rand_elements = cudf::test::make_counting_transform_iterator(0, [](int i){return rand();});
       if(include_validity){
-         src_cols.push_back(cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows, valids));
+         src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows, valids);
       } else {
-         src_cols.push_back(cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows));
+         src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
       }
-   }   
-   std::vector<std::unique_ptr<cudf::column>> columns((size_t)num_cols);
-   for(int idx=0; idx<num_cols; idx++){
-      columns[idx] = src_cols[idx].release();
-      columns[idx]->set_null_count(0);
-   }
+   }      
+   std::vector<std::unique_ptr<cudf::column>> columns(num_cols);
+   std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](cudf::test::fixed_width_column_wrapper<int> &in){   
+      auto ret = in.release();
+      ret->set_null_count(0);
+      return ret;
+   });
    cudf::experimental::table src_table(std::move(columns));   
       
    for(auto _ : state){

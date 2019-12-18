@@ -39,7 +39,7 @@ struct SliceTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypes);
 
-TYPED_TEST(SliceTest, NumericColumnsWithInValids) {
+TYPED_TEST(SliceTest, NumericColumnsWithNulls) {
     using T = TypeParam;
 
     cudf::size_type start = 0;
@@ -61,7 +61,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithInValids) {
 
 struct SliceStringTest : public SliceTest <std::string>{};
 
-TEST_F(SliceStringTest, StringWithInvalids) {
+TEST_F(SliceStringTest, StringWithNulls) {
     std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
     auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
     cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
@@ -144,7 +144,7 @@ struct SliceTableTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(SliceTableTest, cudf::test::NumericTypes);
 
-TYPED_TEST(SliceTableTest, NumericColumnsWithInValids) {
+TYPED_TEST(SliceTableTest, NumericColumnsWithNulls) {
     using T = TypeParam;
 
     cudf::size_type start = 0;
@@ -168,7 +168,7 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithInValids) {
 
 struct SliceStringTableTest : public SliceTableTest <std::string>{};
 
-TEST_F(SliceStringTableTest, StringWithInvalids) {    
+TEST_F(SliceStringTableTest, StringWithNulls) {    
     auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
     
     std::vector<std::string> strings[2]     = { {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"}, 

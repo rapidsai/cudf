@@ -64,40 +64,10 @@ ColumnView slice(ColumnView const& input,
 }
 
 /**
- * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s according 
- * to a set of indices derived from expected splits. The memory is allocated in a single
- * contiguous block owned by the `all_data` field in the returned contiguous_split_result. There
- * is no top level owning table.
+ * @copydoc cudf::experimental::contiguous_split
  *
- * The returned views of `input` are constructed from vector of splits, which indicates
- * where the split should occur. The `i`th returned `table_view` is sliced as
- * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
- * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
- *
- * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
- *
- * @note It is the caller's responsibility to ensure that the returned view
- * does not outlive the viewed device memory contained in the `all_data` field of the
- * returned contiguous_split_result.   
- *
- * Example:
- * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
- *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
- * splits:  {2, 5, 9}
- * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
- *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
- *           
- *
- * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
- * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
- * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
- *
- * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
- * @param[in] mr Optional, The resource to use for all allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return The set of requested views of `input` indicated by the `splits`.
- */
+ * @param stream Optional CUDA stream on which to execute kernels
+ **/
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
                                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

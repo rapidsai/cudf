@@ -56,8 +56,9 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
     // sliced_table[i][j]
     // where i is the i'th column of the j'th table_view
     std::vector<std::vector<cudf::column_view>> sliced_table;
-    std::for_each(input.begin(), input.end(), [&sliced_table, indices](cudf::column_view const& c){
-        sliced_table.emplace_back(slice(c, indices));
+    sliced_table.reserve(indices.size() + 1);
+    std::transform(input.begin(), input.end(), std::back_inserter(sliced_table), [&indices](cudf::column_view const& c){
+       return slice(c, indices);
     });
 
     // distribute columns into outgoing table_views

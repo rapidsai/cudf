@@ -198,8 +198,8 @@ TEST_F(SplitCornerCases, NegativeValue) {
 }
 
 // common functions for testing split/contiguous_split
-template<typename T, typename SplitFunc>
-void split_end_less_than_size(SplitFunc Split)
+template<typename T, typename SplitFunc, typename CompareFunc>
+void split_end_less_than_size(SplitFunc Split, CompareFunc Compare)
 {
     cudf::size_type start = 0;
     cudf::size_type col_size = 10;
@@ -215,13 +215,13 @@ void split_end_less_than_size(SplitFunc Split)
 
     EXPECT_EQ(expected.size(), result.size());
         
-    for (unsigned long index = 0; index < result.size(); index++) {        
-        cudf::test::expect_tables_equal(expected[index], result[index]);
+    for (unsigned long index = 0; index < result.size(); index++) {
+        Compare(expected[index], result[index]);
     }    
 }
 
-template<typename T, typename SplitFunc>
-void split_end_to_size(SplitFunc Split)
+template<typename T, typename SplitFunc, typename CompareFunc>
+void split_end_to_size(SplitFunc Split, CompareFunc Compare)
 {
     cudf::size_type start = 0;
     cudf::size_type col_size = 10;
@@ -238,7 +238,7 @@ void split_end_to_size(SplitFunc Split)
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_tables_equal(expected[index], result[index]);
+        Compare(expected[index], result[index]);
     }
 }
 
@@ -324,47 +324,85 @@ struct SplitTableTest : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(SplitTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTableTest, SplitEndLessThanSize) {
-    split_end_less_than_size<TypeParam>([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
-    });
+    split_end_less_than_size<TypeParam>(
+        [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+            return cudf::experimental::split(t, splits);
+        },
+        [](cudf::table_view const& expected, cudf::table_view const& result){
+            return cudf::test::expect_tables_equal(expected, result);
+        }
+    );
 }
 
 TYPED_TEST(SplitTableTest, SplitEndToSize) {
-    split_end_to_size<TypeParam>([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
-    });
+    split_end_to_size<TypeParam>(
+        [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+            return cudf::experimental::split(t, splits);
+        },
+        [](cudf::table_view const& expected, cudf::table_view const& result){
+            return cudf::test::expect_tables_equal(expected, result);
+        }
+    );
 }
 
 struct SplitTableCornerCases : public SplitTest <int8_t>{};
 
 TEST_F(SplitTableCornerCases, EmptyTable) {
-    split_empty_table([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
+    split_empty_table([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+        return cudf::experimental::split(t, splits);
     });
 }
 
-TEST_F(SplitTableCornerCases, EmptyIndices) {   
-    split_empty_indices([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
-    }); 
+TEST_F(SplitTableCornerCases, EmptyIndices) {
+    split_empty_indices([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+        return cudf::experimental::split(t, splits);
+    });
 }
 
-TEST_F(SplitTableCornerCases, InvalidSetOfIndices) {    
-    split_invalid_indices([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
-    }); 
+TEST_F(SplitTableCornerCases, InvalidSetOfIndices) {
+    split_invalid_indices([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+        return cudf::experimental::split(t, splits);
+    });
 }
 
-TEST_F(SplitTableCornerCases, ImproperRange) {    
-    split_improper_range([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
-    }); 
+TEST_F(SplitTableCornerCases, ImproperRange) {
+    split_improper_range([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+        return cudf::experimental::split(t, splits);
+    });
 }
 
-TEST_F(SplitTableCornerCases, NegativeValue) {   
-    split_negative_value([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
-       return cudf::experimental::split(t, splits); 
-    }); 
+TEST_F(SplitTableCornerCases, NegativeValue) {
+    split_negative_value([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){
+        return cudf::experimental::split(t, splits);
+    });
+}
+
+struct SplitStringTableTest : public SplitTest <std::string>{};
+
+TEST_F(SplitStringTableTest, StringWithInvalids) {
+    auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
+
+    std::vector<std::string> strings[2]     = { {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"}, 
+                                                {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"} };
+    cudf::test::strings_column_wrapper sw[2] = { {strings[0].begin(), strings[0].end(), valids},
+                                                {strings[1].begin(), strings[1].end(), valids} };
+
+    std::vector<std::unique_ptr<cudf::column>> scols;
+    scols.push_back(sw[0].release());
+    scols.push_back(sw[1].release());    
+    cudf::experimental::table src_table(std::move(scols));
+
+    std::vector<cudf::size_type> splits{2, 5, 9};
+    
+    std::vector<cudf::experimental::table> expected = create_expected_string_tables_for_splits(strings, splits, true);
+
+    std::vector<cudf::table_view> result = cudf::experimental::split(src_table, splits);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+        cudf::test::expect_table_properties_equal(expected[index], result[index]);
+    }
 }
 
 
@@ -374,15 +412,25 @@ struct ContiguousSplitTableTest : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(ContiguousSplitTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize) {
-    split_end_less_than_size<TypeParam>([](cudf::table_view const& t, std::vector<cudf::size_type> const &splits){ 
-       return cudf::experimental::contiguous_split(t, splits); 
-    });
+    split_end_less_than_size<TypeParam>(
+        [](cudf::table_view const& t, std::vector<cudf::size_type> const &splits){
+            return cudf::experimental::contiguous_split(t, splits);
+        },
+        [](cudf::table_view const& expected, cudf::experimental::contiguous_split_result const& result){
+            return cudf::test::expect_tables_equal(expected, result.table);
+        }
+    );
 }
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndToSize) {
-    split_end_to_size<TypeParam>([](cudf::table_view const& t, std::vector<cudf::size_type> const &splits){ 
-       return cudf::experimental::contiguous_split(t, splits); 
-    });
+    split_end_to_size<TypeParam>(
+        [](cudf::table_view const& t, std::vector<cudf::size_type> const &splits){
+            return cudf::experimental::contiguous_split(t, splits);
+        },
+        [](cudf::table_view const& expected, cudf::experimental::contiguous_split_result const& result){
+            return cudf::test::expect_tables_equal(expected, result.table);
+        }
+    );
 }
 
 struct ContiguousSplitTableCornerCases : public SplitTest <int8_t>{};
@@ -415,32 +463,4 @@ TEST_F(ContiguousSplitTableCornerCases, NegativeValue) {
     split_negative_value([](cudf::table_view const& t, std::vector<cudf::size_type> const& splits){ 
        return cudf::experimental::contiguous_split(t, splits); 
     }); 
-}
-
-struct SplitStringTableTest : public SplitTest <std::string>{};
-
-TEST_F(SplitStringTableTest, StringWithInvalids) {
-    auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
-
-    std::vector<std::string> strings[2]     = { {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"}, 
-                                                {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"} };
-    cudf::test::strings_column_wrapper sw[2] = { {strings[0].begin(), strings[0].end(), valids},
-                                                {strings[1].begin(), strings[1].end(), valids} };
-
-    std::vector<std::unique_ptr<cudf::column>> scols;
-    scols.push_back(sw[0].release());
-    scols.push_back(sw[1].release());    
-    cudf::experimental::table src_table(std::move(scols));
-
-    std::vector<cudf::size_type> splits{2, 5, 9};
-    
-    std::vector<cudf::experimental::table> expected = create_expected_string_tables_for_splits(strings, splits, true);
-
-    std::vector<cudf::table_view> result = cudf::experimental::split(src_table, splits);
-
-    EXPECT_EQ(expected.size(), result.size());
-
-    for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_table_properties_equal(expected[index], result[index]);
-    }
 }
