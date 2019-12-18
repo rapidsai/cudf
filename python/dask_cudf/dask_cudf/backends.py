@@ -40,7 +40,6 @@ try:
     from cudf.core.column import column, CategoricalColumn, StringColumn
     import rmm
     import cudf._lib as libcudf
-    from cudf.core.buffer import Buffer
 
     def _string_safe_hash(df):
         frame = df.copy(deep=False)
@@ -48,8 +47,8 @@ try:
             if isinstance(frame[col]._column, StringColumn):
                 out_dev_arr = rmm.device_array(len(frame), dtype="int32")
                 ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-                frame[col]._column.data.hash(devptr=ptr)
-                frame[col] = cudf.Series(Buffer(out_dev_arr))
+                frame[col]._column._data_view().hash(devptr=ptr)
+                frame[col] = cudf.Series(out_dev_arr)
         return frame.hash_columns()
 
     @hash_object_dispatch.register(cudf.DataFrame)

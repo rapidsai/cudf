@@ -4235,6 +4235,8 @@ def from_pandas(obj):
         return cudf.core.index.RangeIndex(
             obj._start, stop=obj._stop, name=obj.name
         )
+    elif isinstance(obj, pd.Index):
+        return cudf.core.index.as_index(obj, name=obj.name)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, "
