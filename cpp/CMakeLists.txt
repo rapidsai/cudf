@@ -50,6 +50,9 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
+    # Suppress parentheses warning which causes gmock to fail
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
+
     option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
     if(CMAKE_CXX11_ABI)
         message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
@@ -408,6 +411,7 @@ add_library(cudf
             src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
+            src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
@@ -438,6 +442,7 @@ add_library(cudf
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
+            src/dlpack/dlpack.cpp
             src/io/convert/dlpack/legacy/cudf_dlpack.cpp
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -479,13 +484,12 @@ add_library(cudf
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
-            src/utilities/legacy/column_utils.cpp
             src/copying/gather.cu
+            src/utilities/legacy/column_utils.cpp
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
-            src/copying/gather.cu
             src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
@@ -537,6 +541,7 @@ add_library(cudf
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
             src/strings/substring.cu
+            src/strings/translate.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
