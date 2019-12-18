@@ -14,9 +14,9 @@
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
 - PR #3608 Update OPS codeowner group name
-
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3620 Add stream parameter to unary ops' internal API
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 
@@ -24,6 +24,7 @@
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
 - PR #3563 Use `__cuda_array_interface__` for serialization
+- PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 
 
