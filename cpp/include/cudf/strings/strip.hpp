@@ -26,19 +26,21 @@ namespace strings
 
 enum class strip_type
 {
-    left,   //<< strip characters from the beginning of the string
-    right,  //<< strip characters from the end of the string
-    both    //<< strip characters from the beginning and end of the string
+    LEFT,   //<< strip characters from the beginning of the string
+    RIGHT,  //<< strip characters from the end of the string
+    BOTH    //<< strip characters from the beginning and end of the string
 };
 
 /**
- * @brief Removes the specified characters from the begnning or end
+ * @brief Removes the specified characters from the beginning or end
  * (or both) of each string.
  *
  * The to_strip parameter can contain one or more characters.
- * Each character is used when stripping.
+ * All characters in `to_strip` are removed from the input strings.
  *
- * If to_string is the empty string, whitespace characters are used in the strip.
+ * If `to_strip` is the empty string, whitespace characters are removed.
+ * Whitespace is considered the space character plus control characters
+ * like tab and line feed.
  *
  * Any null string entries return corresponding null output column entries.
  *
@@ -48,16 +50,18 @@ enum class strip_type
  * r is now ["aaa", "bbbb", "cccc", "ddd", "ee _ff gg"]
  * ```
  *
+ * @throw cudf::logic_error if `to_strip` is invalid.
+ *
  * @param strings Strings column for this operation.
  * @param stype Indicates characters are to be stripped from the beginning, end, or both of each string.
  *        Default is both.
- * @param to_string UTF-8 encoded characters to strip from each string.
+ * @param to_strip UTF-8 encoded characters to strip from each string.
  *        Default is empty string which indicates strip whitespace characters.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> strip( strings_column_view const& strings,
-                               strip_type stype = strip_type::both,
+                               strip_type stype = strip_type::BOTH,
                                string_scalar const& to_strip = string_scalar(""),
                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

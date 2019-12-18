@@ -20,8 +20,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <thrust/transform.h>
 #include <thrust/logical.h>
@@ -74,7 +74,7 @@ struct strip_fn
         size_type length = d_str.length();
         size_type left_offset = 0;
         auto itr = d_str.begin();
-        if( stype==strip_type::left || stype==strip_type::both )
+        if( stype==strip_type::LEFT || stype==strip_type::BOTH )
         {
             for( ; itr != d_str.end(); )
             {
@@ -87,7 +87,7 @@ struct strip_fn
             }
         }
         size_type right_offset = d_str.size_bytes();
-        if( stype==strip_type::right || stype==strip_type::both )
+        if( stype==strip_type::RIGHT || stype==strip_type::BOTH )
         {
             itr = d_str.end();
             for( size_type n=0; n < length; ++n )
@@ -112,7 +112,7 @@ struct strip_fn
 }
 
 std::unique_ptr<column> strip( strings_column_view const& strings,
-                               strip_type stype = strip_type::both,
+                               strip_type stype = strip_type::BOTH,
                                string_scalar const& to_strip = string_scalar(""),
                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                cudaStream_t stream = 0 )
