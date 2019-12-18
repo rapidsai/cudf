@@ -38,7 +38,7 @@ TEST_F(StringsStripTest, StripLeft)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    auto results = cudf::strings::strip(strings_view,cudf::strings::strip_type::left);
+    auto results = cudf::strings::strip(strings_view,cudf::strings::strip_type::LEFT);
 
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
@@ -54,7 +54,7 @@ TEST_F(StringsStripTest, StripRight)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    auto results = cudf::strings::strip(strings_view,cudf::strings::strip_type::right,cudf::string_scalar(" a"));
+    auto results = cudf::strings::strip(strings_view,cudf::strings::strip_type::RIGHT,cudf::string_scalar(" a"));
 
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
@@ -70,7 +70,7 @@ TEST_F(StringsStripTest, StripBoth)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     auto strings_view = cudf::strings_column_view(strings);
 
-    auto results = cudf::strings::strip(strings_view,cudf::strings::strip_type::both,cudf::string_scalar(" é"));
+    auto results = cudf::strings::strip(strings_view,cudf::strings::strip_type::BOTH,cudf::string_scalar(" é"));
 
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
@@ -84,4 +84,12 @@ TEST_F(StringsStripTest, EmptyStringsColumn)
     auto results = cudf::strings::strip(strings_view);
     auto view = results->view();
     cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsStripTest, InvalidParameter)
+{
+    std::vector<const char*> h_strings{ "string left intentionally blank" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    auto strings_view = cudf::strings_column_view(strings);
+    EXPECT_THROW( cudf::strings::strip(strings_view,cudf::strings::strip_type::BOTH,cudf::string_scalar("",false)), cudf::logic_error);
 }
