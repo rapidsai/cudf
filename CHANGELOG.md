@@ -89,6 +89,7 @@
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
+- PR #3557 Add contiguous_split() function. 
 
 ## Improvements
 
