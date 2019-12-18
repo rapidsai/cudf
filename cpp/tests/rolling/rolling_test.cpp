@@ -567,31 +567,6 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 
 // ------------- non-fixed-width types --------------------
 
-/*using RollingTestSeconds = RollingTest<cudf::timestamp_s>;
-
-TEST_F(RollingTestSeconds, Foo)
-{
-  std::vector<cudf::timestamp_s> h_timestamps{ 131246625 , 1563399277, 1553085296, 1582934400 };
-  //  std::vector<const char*> h_expected{ "1974-02-28T01:23:45Z", "2019-07-17T21:34:37Z", nullptr, "2019-03-20T12:34:56Z", "2020-02-29T00:00:00Z" };
-
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_s> input( h_timestamps.begin(), h_timestamps.end());
-        //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-
-  auto results = cudf::strings::from_timestamps(input);
-  cudf::test::print(*results);
-   
-  std::vector<size_type> window{1};
-
-  std::cout << "MIN\n";
-  //EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
-  std::cout << "MAX\n";
-  //EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
-  std::cout << "COUNT\n";
-  //EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
-  std::cout << "MEAN\n";
-  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MEAN));
-}*/
-
 using RollingTestStrings = RollingTest<cudf::string_view>;
 
 TEST_F(RollingTestStrings, StringsUnsupportedOperators)
