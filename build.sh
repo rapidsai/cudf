@@ -181,5 +181,9 @@ fi
 if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    python setup.py install --single-version-externally-managed --record=record.txt
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        python setup.py build_ext --inplace
+    fi
 fi
