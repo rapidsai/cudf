@@ -46,7 +46,7 @@ def optimize(dsk, keys, **kwargs):
 
 def finalize(results):
     if results and isinstance(
-        results[0], (cudf.DataFrame, cudf.Series, cudf.Index)
+        results[0], (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
     ):
         return cudf.concat(results)
     return results
