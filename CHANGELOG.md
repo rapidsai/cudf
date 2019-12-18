@@ -9,7 +9,6 @@
 
 ## Improvements
 
-- PR #3431 Port NVStrings translate to cudf strings column
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
@@ -17,6 +16,9 @@
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
 - PR #3608 Update OPS codeowner group name
+- PR #3431 Port NVStrings translate to cudf strings column
+- PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3402 Define and implement new quantiles APIs
 
 ## Bug Fixes
 

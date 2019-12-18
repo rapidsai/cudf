@@ -182,7 +182,7 @@ struct rolling_window_launcher
     null_count = nrows - device_valid_count.value();
 
     // check the stream for debugging
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::nvtx::range_pop();
   }
