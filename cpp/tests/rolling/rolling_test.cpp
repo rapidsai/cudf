@@ -709,7 +709,7 @@ struct RollingTestUdf : public cudf::test::BaseFixture {
 
 TEST_F(RollingTestUdf, StaticWindow)
 {
-  size_type size = 12;
+  size_type size = 1000;
 
   fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
                                             thrust::make_counting_iterator(size),
@@ -746,7 +746,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
 TEST_F(RollingTestUdf, DynamicWindow)
 {
-  size_type size = 12;
+  size_type size = 1000;
 
   fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
                                             thrust::make_counting_iterator(size),
