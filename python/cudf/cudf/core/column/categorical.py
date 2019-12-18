@@ -46,16 +46,13 @@ class CategoricalAccessor(object):
             from cudf import Series
 
             parent = self._parent
-            dtype = CategoricalDtype(
-                categories=parent.dtype.categories, ordered=True,
-            )
             return Series(
-                column.build_column(
-                    data=None,
-                    dtype=dtype,
+                column.build_categorical_column(
+                    categories=parent.dtype.categories,
+                    codes=parent.cat().codes,
                     mask=parent.mask,
                     name=parent.name,
-                    children=parent.children,
+                    ordered=True,
                 )
             )
 
@@ -66,16 +63,13 @@ class CategoricalAccessor(object):
             from cudf import Series
 
             parent = self._parent
-            dtype = CategoricalDtype(
-                categories=parent.dtype.categories, ordered=False,
-            )
             return Series(
-                column.build_column(
-                    data=None,
-                    dtype=dtype,
+                column.build_categorical_column(
+                    categories=parent.dtype.categories,
+                    codes=parent.codes,
                     mask=parent.mask,
                     name=parent.name,
-                    children=parent.children,
+                    ordered=False,
                 )
             )
 
@@ -370,25 +364,23 @@ class CategoricalColumn(column.ColumnBase):
         ary = utils.scalar_broadcast_to(
             self._encode(other), shape=len(self), dtype=self.codes.dtype
         )
-        col = column.build_column(
-            data=None,
-            dtype=CategoricalDtype(
-                categories=self.dtype.categories, ordered=self.dtype.ordered,
-            ),
+        col = column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=column.as_column(ary),
             mask=self.mask,
             name=self.name,
-            children=(column.as_column(ary),),
+            ordered=self.dtype.ordered,
         )
         return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
-        col = column.build_column(
-            data=None,
-            dtype=self.dtype,
+        col = column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=codes,
             mask=self.mask,
-            name=self.mask,
-            children=(codes,),
+            name=self.name,
+            ordered=self.dtype.ordered,
         )
         return col, inds
 
@@ -414,10 +406,12 @@ class CategoricalColumn(column.ColumnBase):
 
     def unique(self, method=None):
         codes = self.as_numerical.unique(method)
-        dtype = CategoricalDtype(
-            categories=self.categories, ordered=self.ordered,
+        return column.build_categorical_column(
+            categories=self.categories,
+            codes=codes,
+            mask=codes.mask,
+            ordered=self.ordered,
         )
-        return column.build_column(data=None, dtype=dtype, children=(codes,))
 
     def _encode(self, value):
         return self.categories.find_first_value(value)
@@ -452,12 +446,12 @@ class CategoricalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-        return column.build_column(
-            data=None,
-            dtype=self.dtype,
+        return column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=output,
             mask=self.mask,
             name=self.name,
-            children=(output,),
+            ordered=self.dtype.ordered,
         )
 
     def fillna(self, fill_value, inplace=False):
@@ -491,12 +485,12 @@ class CategoricalColumn(column.ColumnBase):
 
         result = libcudf.replace.replace_nulls(self, fill_value)
 
-        result = column.build_column(
-            data=None,
-            dtype=self.dtype,
+        result = column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=result,
             mask=result.mask,
             name=self.name,
-            children=(result,),
+            ordered=self.dtype.ordered,
         )
 
         result.mask = None
@@ -504,12 +498,12 @@ class CategoricalColumn(column.ColumnBase):
 
     def apply_boolean_mask(self, mask):
         codes = super().apply_boolean_mask(mask)
-        return column.build_column(
-            data=None,
-            dtype=self.dtype,
+        return column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=codes,
             mask=codes.mask,
             name=self.name,
-            children=(codes,),
+            ordered=self.dtype.ordered,
         )
 
     def find_first_value(self, value, closest=False):
@@ -580,20 +574,20 @@ class CategoricalColumn(column.ColumnBase):
     def copy(self, deep=True):
         if deep:
             copied_col = libcudf.copying.copy_column(self)
-            return column.build_column(
-                data=None,
-                dtype=self.dtype,
+            return column.build_categorical_column(
+                categories=self.dtype.categories,
+                codes=copied_col,
                 mask=copied_col.mask,
                 name=self.name,
-                children=(copied_col,),
+                ordered=self.dtype.ordered,
             )
         else:
-            return column.build_column(
-                data=None,
-                dtype=self.dtype,
+            return column.build_categorical_column(
+                categories=self.dtype.categories,
+                codes=self.codes,
                 mask=self.mask,
                 name=self.name,
-                children=self.children,
+                ordered=self.dtype.ordered,
             )
 
 
@@ -610,15 +604,15 @@ def pandas_categorical_as_column(categorical, codes=None):
     #       https://github.com/pandas-dev/pandas/issues/14711
     #       https://github.com/pandas-dev/pandas/pull/16015
     valid_codes = codes != -1
-    dtype = CategoricalDtype(
-        categories=categorical.categories, ordered=categorical.ordered,
-    )
 
     mask = None
     if not np.all(valid_codes):
         mask = cudautils.compact_mask_bytes(valid_codes)
         mask = Buffer(mask)
 
-    return column.build_column(
-        data=None, dtype=dtype, mask=mask, children=(codes,)
+    return column.build_categorical_column(
+        categories=categorical.categories,
+        codes=codes,
+        mask=mask,
+        ordered=categorical.ordered,
     )

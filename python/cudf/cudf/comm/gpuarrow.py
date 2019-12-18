@@ -190,18 +190,15 @@ def array_to_series(array):
     dtype = arrow_to_pandas_dtype(array.type)
 
     if pa.types.is_dictionary(array.type):
-        from cudf.core.column import build_column
+        from cudf.core.column import build_categorical_column
         from cudf.core.buffer import Buffer
 
         codes = array_to_series(array.indices)
         categories = array_to_series(array.dictionary)
-        dtype = cudf.CategoricalDtype(
-            categories=categories, ordered=array.type.ordered,
-        )
         if mask is not None:
             mask = Buffer(mask)
-        data = build_column(
-            data=None, dtype=dtype, mask=mask, children=(codes._column,)
+        data = build_categorical_column(
+            categories=categories, codes=codes, mask=mask
         )
 
     elif pa.types.is_string(array.type):

@@ -15,10 +15,11 @@ def indices_from_labels(obj, labels):
     if is_categorical_dtype(obj.index):
         labels = labels.astype("category")
         codes = labels.codes.astype(obj.index._values.codes.dtype)
-        dtype = cudf.CategoricalDtype(
-            categories=labels.dtype.categories, ordered=labels.dtype.ordered,
+        labels = column.build_categorical_column(
+            categories=labels.dtype.categories,
+            codes=codes,
+            ordered=labels.dtype.ordered,
         )
-        labels = column.build_column(data=None, dtype=dtype, children=(codes,))
     else:
         labels = labels.astype(obj.index.dtype)
 
@@ -333,7 +334,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             for col_num in range(len(columns_df.columns)):
                 # need Series() in case a scalar is returned
                 df[col_num] = Series(columns_df._columns[col_num][arg[0]])
-            df.index = as_index(columns_df.index.as_column()[arg[0]])
+            df.index = as_index(
+                columns_df.index.as_column()[arg[0]],
+                name=columns_df.index.name,
+            )
             df.columns = columns_df.columns
 
         # Iloc Step 3:

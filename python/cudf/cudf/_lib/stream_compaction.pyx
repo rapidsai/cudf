@@ -150,7 +150,7 @@ def drop_nulls(cols, how="any", subset=None, thresh=None):
     -------
     List of Columns
     """
-    from cudf.core.column import build_column
+    from cudf.core.column import build_column, build_categorical_column
 
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
@@ -185,15 +185,11 @@ def drop_nulls(cols, how="any", subset=None, thresh=None):
 
     for i, inp_col in enumerate(cols):
         if is_categorical_dtype(inp_col.dtype):
-            codes = result_cols[i]
-            dtype = cudf.CategoricalDtype(
+            result_cols[i] = build_categorical_column(
                 categories=inp_col.cat().categories,
-                ordered=inp_col.cat().ordered)
-            result_cols[i] = build_column(
-                data=None,
-                dtype=dtype,
-                mask=codes.mask,
-                children=(codes,)
+                codes=result_cols[i],
+                mask=result_cols[i].mask,
+                ordered=inp_col.cat().ordered
             )
 
     return result_cols

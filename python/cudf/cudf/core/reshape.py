@@ -4,7 +4,11 @@ import numpy as np
 
 import cudf
 from cudf.core import Buffer, DataFrame, Index, MultiIndex, Series
-from cudf.core.column import CategoricalColumn, build_column
+from cudf.core.column import (
+    CategoricalColumn,
+    build_categorical_column,
+    build_column,
+)
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
@@ -226,10 +230,8 @@ def melt(
         var_name = "variable"
 
     mdata[var_name] = Series(
-        build_column(
-            data=None,
-            dtype=cudf.CategoricalDtype(categories=value_vars, ordered=False,),
-            children=(temp._column,),
+        build_categorical_column(
+            categories=value_vars, codes=temp._column, ordered=False
         )
     )
 

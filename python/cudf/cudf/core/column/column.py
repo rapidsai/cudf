@@ -807,13 +807,12 @@ class ColumnBase(Column):
             cats = cats.dropna()
             labels = labels - 1
 
-        dtype = CategoricalDtype(categories=cats, ordered=ordered)
-        return build_column(
-            data=None,
-            dtype=dtype,
+        return build_categorical_column(
+            categories=cats,
+            codes=labels._column,
             mask=self.mask,
             name=self.name,
-            children=(labels._column,),
+            ordered=ordered,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -971,6 +970,26 @@ def column_empty(row_count, dtype, masked, name=None):
     return build_column(data, dtype, mask=mask, children=children, name=name)
 
 
+def build_categorical_column(
+    categories,
+    codes,
+    mask=None,
+    offset=0,
+    children=(),
+    name=None,
+    ordered=None,
+):
+    dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
+    return build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        offset=offset,
+        children=(as_column(codes),),
+        name=name,
+    )
+
+
 def build_column(
     data, dtype, mask=None, offset=0, children=(), name=None, categories=None,
 ):
@@ -1059,7 +1078,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     if isinstance(arbitrary, ColumnBase):
         arbitrary.name = name
-        return arbitrary
+        if dtype is not None:
+            return arbitrary.astype(dtype)
+        else:
+            return arbitrary
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column

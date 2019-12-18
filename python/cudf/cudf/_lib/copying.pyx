@@ -108,15 +108,12 @@ def gather(source, maps, bounds_check=True):
 
     for i, in_col in enumerate(in_cols):
         if isinstance(in_col, CategoricalColumn):
-            dtype = cudf.CategoricalDtype(
+            out_cols[i] = column.build_categorical_column(
                 categories=in_col.cat().categories,
+                codes=out_cols[i],
+                mask=out_cols[i].mask,
                 ordered=in_col.cat().ordered
             )
-            out_cols[i] = column.build_column(
-                data=None,
-                mask=out_cols[i].mask,
-                dtype=dtype,
-                children=(out_cols[i],))
 
     free_column(c_maps)
     free_table(c_in_table)
@@ -167,16 +164,12 @@ def scatter(source, maps, target, bounds_check=True):
 
     for i, in_col in enumerate(target_cols):
         if is_categorical_dtype(in_col.dtype):
-            dtype = cudf.CategoricalDtype(
+            result_cols[i] = column.build_categorical_column(
                 categories=in_col.cat().categories,
+                codes=result_cols[i],
+                mask=result_cols[i].mask,
                 ordered=in_col.cat().ordered
             )
-            result_cols[i] = column.build_column(
-                data=None,
-                mask=result_cols[i].mask,
-                dtype=dtype,
-                children=(result_cols[i],))
-    
 
     del c_source_table
     del c_target_table
@@ -268,7 +261,7 @@ def scatter_to_frames(source, maps, index=None, names=None):
     -------
     list of scattered dataframes
     """
-    from cudf.core.column import column, build_column
+    from cudf.core.column import column, build_column, build_categorical_column
     from cudf.core.series import Series
     in_cols = source
 
@@ -314,14 +307,11 @@ def scatter_to_frames(source, maps, index=None, names=None):
                 data_dtype = df[name].codes.dtype
             else:
                 data_dtype = df[name].dtype
-            dtype = cudf.CategoricalDtype(
-                categories=cat_info[0],
-                ordered=cat_info[1])
             df[name] = Series(
-                build_column(
-                    data=None,
-                    dtype=dtype,
-                    children=(df[name]._column,)
+                build_categorical_column(
+                    categories=cat_info[0],
+                    codes=df[name]._column,
+                    ordered=cat_info[1]
                 )
             )
         if index:

@@ -64,7 +64,7 @@ def groupby(
     result : tuple of list of Columns
         keys and values of the result
     """
-    from cudf.core.column import build_column
+    from cudf.core.column import build_column, build_categorical_column
 
     if len(values) == 0:
         return (keys, [])
@@ -101,15 +101,12 @@ def groupby(
     
     for i, inp_key_col in enumerate(keys):
         if is_categorical_dtype(inp_key_col.dtype):
-            codes = result_key_cols[i]
-            dtype = cudf.CategoricalDtype(
+            result_key_cols[i] = build_categorical_column(
                 categories=inp_key_col.cat().categories,
-                ordered=inp_key_col.cat().ordered)
-            result_key_cols[i] = build_column(
-                data=None,
-                dtype=dtype,
+                codes=result_key_cols[i],
                 mask=result_key_cols[i].mask,
-                children=(codes,))
+                ordered=inp_key_col.cat().ordered
+            )
 
     return (result_key_cols, result_value_cols)
 
@@ -129,7 +126,7 @@ def groupby_without_aggregations(cols, key_cols):
     offsets : Column
         Integer offsets to the start of each set of unique keys
     """
-    from cudf.core.column import build_column
+    from cudf.core.column import build_column, build_categorical_column
 
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef vector[size_type] c_key_col_indices
@@ -164,15 +161,12 @@ def groupby_without_aggregations(cols, key_cols):
 
     for i, inp_col in enumerate(cols):
         if is_categorical_dtype(inp_col.dtype):
-            codes = sorted_cols[i]
-            dtype = cudf.CategoricalDtype(
+            sorted_cols[i] = build_categorical_column(
                 categories=inp_col.cat().categories,
-                ordered=inp_col.cat().ordered)
-            sorted_cols[i] = build_column(
-                data=None,
-                dtype=dtype,
+                codes=sorted_cols[i],
                 mask=sorted_cols[i].mask,
-                children=(codes,))
+                ordered=inp_col.cat().ordered
+            )
 
     del c_in_table
 

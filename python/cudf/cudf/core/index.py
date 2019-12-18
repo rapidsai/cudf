@@ -729,6 +729,7 @@ class GenericIndex(Index):
         res = self.as_column()[index]
         if not isinstance(index, int):
             res = as_index(res)
+            res.name = self.name
             return res
         else:
             return res
@@ -904,22 +905,17 @@ class CategoricalIndex(GenericIndex):
             is_categorical_dtype(values.dtype)
         ):
             codes_data = column.as_column(values.cat.codes.values)
-            values = column.build_column(
-                data=None,
-                dtype=cudf.CategoricalDtype(
-                    categories=values.cat.categories,
-                    ordered=values.cat.ordered,
-                ),
-                children=(codes_data,),
+            values = column.build_categorical_column(
+                categories=values.cat.categories,
+                codes=codes_data,
+                ordered=values.cat.ordered,
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             codes_data = column.as_column(values.codes)
-            values = column.build_column(
-                data=None,
-                dtype=cudf.CategoricalDtype(
-                    categories=values.categories, ordered=values.ordered,
-                ),
-                children=(codes_data,),
+            values = column.build_categorical_column(
+                categories=values.categories,
+                codes=codes_data,
+                ordered=values.ordered,
             )
         elif isinstance(values, (list, tuple)):
             values = column.as_column(

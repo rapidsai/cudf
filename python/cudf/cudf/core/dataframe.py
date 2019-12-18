@@ -2620,13 +2620,13 @@ class DataFrame(Table):
         )
 
         for name, cats in cat_join:
-            dtype = cudf.CategoricalDtype(categories=cats, ordered=False,)
+
             if is_categorical_dtype(df[name]):
-                children = (df[name]._column.codes,)
+                codes = df[name]._column.codes
             else:
-                children = (df[name]._column,)
-            df[name] = column.build_column(
-                data=None, dtype=dtype, children=children
+                codes = df[name]._column
+            df[name] = column.build_categorical_column(
+                categories=cats, codes=codes, ordered=False
             )
 
         if sort and len(df):
