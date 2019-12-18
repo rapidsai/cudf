@@ -193,6 +193,7 @@ class DataFrame(Table):
         if dtype:
             self._data = self.astype(dtype)._data
 
+        self._columns_name = None
         # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
         self._allow_setattr_to_setitem = True
 
