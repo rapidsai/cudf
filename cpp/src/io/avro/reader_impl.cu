@@ -120,8 +120,7 @@ class metadata : public file_metadata {
         }
       }
     } else {
-      // Iterate backwards as fastavro returns from last-to-first?!
-      for (int i = num_avro_columns - 1; i >= 0; --i) {
+      for (int i = 0; i < num_avro_columns; ++i) {
         auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
         CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
         selection.emplace_back(i, columns[i].name);
