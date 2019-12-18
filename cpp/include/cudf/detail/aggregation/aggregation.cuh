@@ -19,41 +19,66 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
 namespace experimental {
 namespace detail {
 
-template <typename Source, aggregation::Kind k>
+template <typename Source, aggregation::Kind k, typename Enable = void>
 struct update_target_element {
-  void operator()(mutable_column_device_view target, size_type target_index,
-                  column_device_view source, size_type source_index) const
-      noexcept {}
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {}
 };
 
-template <bool target_has_nulls = true, bool source_has_nulls = true>
-struct elementwise_aggregator {
-  template <typename Source, aggregation::Kind k>
-  void operator()(mutable_column_device_view target, size_type target_index,
-                  column_device_view source, size_type source_index) const
-      noexcept {}
-};
-
-/*
 template <typename Source, aggregation::Kind k>
 struct update_target_element<
     Source, k, std::enable_if_t<is_valid_aggregation<Source, k>()>> {
-  void operator()() {}
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    // TODO Handle nulls
+    using Target = target_type_t<Source, k>;
+    using Op = corresponding_operator_t<k>;
+
+    // Need to specialize this path for values of k that have corresponding
+    // operators...
+    // genericAtomicOperation(
+    //    &target.element<Target>(target_index),
+    //    static_cast<Target>(source.element<Source>(source_index)), Op{});
+  }
 };
 
 template <typename Source>
 struct update_target_element<
     Source, aggregation::COUNT,
     std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {
-  void operator()() {}
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {}
 };
-*/
+
+/**
+ * @brief Function object to update a single element in a target column by
+ * performing an aggregation operation with a single element from a source
+ * column.
+ *
+ * @tparam target_has_nulls Indicates presence of null elements in `target`
+ * @tparam source_has_nulls Indicates presence of null elements in `source`.
+ */
+template <bool target_has_nulls = true, bool source_has_nulls = true>
+struct elementwise_aggregator {
+  template <typename Source, aggregation::Kind k>
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    update_target_element<Source, k>{}(target, target_index, source,
+                                       source_index);
+  }
+};
 
 /**
  * @brief Updates a row in `target` by performing elementwise aggregation
@@ -75,7 +100,7 @@ struct update_target_element<
  * and `source` rows. Must contain at least `target.num_columns()` valid
  * `aggregation::Kind` values.
  */
-template <bool target_has_nulls = true, bool source_has_nulls = true>
+// template <bool target_has_nulls = true, bool source_has_nulls = true>
 __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
@@ -83,8 +108,8 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      aggregation::Kind* aggs) {
   for (auto i = 0; i < target.num_columns(); ++i) {
     dispatch_type_and_aggregation(
-        target.column(i).type(), aggs[i],
-        elementwise_aggregator<target_has_nulls, source_has_nulls>{},
+        target.column(i).type(), aggs[i], elementwise_aggregator<true, true>{},
+        // elementwise_aggregator<target_has_nulls, source_has_nulls>{},
         target.column(i), target_index, source.column(i), source_index);
   }
 }
