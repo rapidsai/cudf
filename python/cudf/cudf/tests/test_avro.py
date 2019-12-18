@@ -9,6 +9,7 @@ import pytest
 import cudf
 from cudf.tests.utils import assert_eq
 
+
 @pytest.fixture(scope="module")
 def datadir(datadir):
     return datadir / "avro"
@@ -70,7 +71,6 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     # at runtime ensures data is loaded correctly.
     got = cudf.read_avro(path, engine=engine, columns=columns)
     got = cudf.read_avro(path, engine=engine, columns=columns)
-    
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
     # FASTAVRO produces int64 columns from avro int32 dtype, so convert
