@@ -35,6 +35,17 @@ export FULL_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+\.[0-9]
 export LIBCUDF_KERNEL_CACHE_PATH="/tmp/cudf_$FULL_VERSION/\
 ${NODE_NAME:+$NODE_NAME-}${EXECUTOR_NUMBER:+$EXECUTOR_NUMBER-}${BUILD_ID:+$BUILD_ID-}jitify-cache"
 
+function remove_libcudf_kernel_cache_dir {
+    EXITCODE=$?
+    echo "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
+    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || echo "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
+    exit $EXITCODE
+}
+
+trap remove_libcudf_kernel_cache_dir EXIT
+
+mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || echo "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -86,8 +97,6 @@ else
     logger "Check GPU usage..."
     nvidia-smi
 
-    mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || echo "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
-
     logger "GoogleTest for libnvstrings..."
     cd $WORKSPACE/cpp/build
     GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_nvstrings
@@ -95,8 +104,6 @@ else
     logger "GoogleTest for libcudf..."
     cd $WORKSPACE/cpp/build
     GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
-
-    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || echo "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
