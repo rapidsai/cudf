@@ -82,49 +82,6 @@ struct null_replaced_value_accessor
 };
 
 /** -------------------------------------------------------------------------*
- * @brief pair accessor of column with/without null bitmask
- * A unary functor returns pair with scalar value at `id` and boolean validity
- * `operator() (cudf::size_type id)` computes `element`  and
- * returns a `pair(element, validity)`
- *
- * the return value for element `i` will return `pair(column[i], validity)`
- * `validity` is `true` if `has_nulls=false`.
- * `validity` is validity of the element at `i` if `has_nulls=true` and the
- * column is nullable.
- *
- * @throws `cudf::logic_error` if `has_nulls==true` and the column is not
- * nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
- *
- * @tparam Element The type of elements in the column
- * @tparam has_nulls boolean indicating to treat the column is nullable
- * -------------------------------------------------------------------------**/
-template <typename Element, bool has_nulls=false> 
-struct pair_accessor
-{
-  column_device_view const col;      ///< column view of column in device
-
-  /** -------------------------------------------------------------------------*
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
-   * -------------------------------------------------------------------------**/
-  pair_accessor(column_device_view const& _col)
-      : col{_col}
-  {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
-                 "the data type mismatch");
-    if(has_nulls) {
-      CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
-    }
-  }
-
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<Element, bool> operator()(cudf::size_type i) const {
-    return {col.element<Element>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
-  }
-};
-
-/** -------------------------------------------------------------------------*
  * @brief validity accessor of column with null bitmask
  * A unary functor returns validity at `id`.
  * `operator() (cudf::size_type id)` computes validity flag at `id`
@@ -204,9 +161,7 @@ auto make_null_replacement_iterator(column_device_view const& column,
 template <typename Element, bool has_nulls=false> 
 auto make_pair_iterator(column_device_view const& column)
 {
-  return thrust::make_transform_iterator(
-      thrust::counting_iterator<cudf::size_type>{0},
-      pair_accessor<Element, has_nulls>{column});
+  return column.pair_begin<Element, has_nulls>();
 }
 
 /**
@@ -268,7 +223,7 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar, and validity of the scalar in a pair
  */
-template <typename Element, bool is_null>
+template <typename Element, bool is_null=false>
 auto inline make_pair_iterator(scalar const& scalar_value) {
   CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   using ScalarType = experimental::scalar_type_t<Element>;
