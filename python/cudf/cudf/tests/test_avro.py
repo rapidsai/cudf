@@ -8,8 +8,6 @@ import pytest
 
 import cudf
 from cudf.tests.utils import assert_eq
-from cudf.utils.pandasutils import reorder_dataframe_columns_to_match_pandas
-
 
 @pytest.fixture(scope="module")
 def datadir(datadir):
@@ -70,11 +68,9 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     # file access behavior dropping the first or second item in the first
     # row on the first column read. Consistently producing. Accessint twice
     # at runtime ensures data is loaded correctly.
-    cudf.read_avro(path, engine=engine, columns=columns)
-    got = reorder_dataframe_columns_to_match_pandas(
-        gdf=cudf.read_avro(path, engine=engine, columns=columns), pdf=expect
-    )
-
+    got = cudf.read_avro(path, engine=engine, columns=columns)
+    got = cudf.read_avro(path, engine=engine, columns=columns)
+    
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
     # FASTAVRO produces int64 columns from avro int32 dtype, so convert
@@ -82,4 +78,6 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     for col in expect.columns:
         expect[col] = expect[col].astype(got[col].dtype)
 
-    assert_eq(expect, got, check_categorical=False)
+    # fastavro appears to return columns in reverse order
+    # (actual order may depend on pandas/python version)
+    assert_eq(expect, got[expect.columns], check_categorical=False)

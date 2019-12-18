@@ -85,7 +85,7 @@ __global__ void gather_bitmask_kernel(table_device_view source_table,
         const size_type valid_index = word_index(destination_row);
 
         // Only one thread writes output
-        if (0 == threadIdx.x % warp_size) {
+        if (0 == threadIdx.x % warp_size and thread_active) {
           masks[i][valid_index] = valid_warp;
         }
         valid_count_accumulate += single_lane_block_popc_reduce(valid_warp);

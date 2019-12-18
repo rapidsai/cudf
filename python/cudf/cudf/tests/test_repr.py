@@ -79,7 +79,7 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     size = 20
     pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
     gdf = cudf.from_pandas(pdf)
-    nrows, ncols = gdf._repr_pandas025_formatting(nrows, ncols, dtype)
+    ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
 
@@ -192,6 +192,7 @@ def test_MI():
         }
     )
     pd.options.display.max_rows = 999
+    pd.options.display.max_columns = 0
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
     pdf = gdf.to_pandas()
     gdfT = gdf.T

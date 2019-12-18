@@ -510,6 +510,16 @@ class DataFrame(object):
         index = self._index.__sizeof__()
         return columns + index
 
+    def memory_usage(self, index=True, deep=False):
+        ind = list(self.columns)
+        sizes = [
+            col._column._memory_usage(deep=deep) for col in self._cols.values()
+        ]
+        if index:
+            ind.append("Index")
+            sizes.append(self._index.memory_usage(deep=deep))
+        return Series(sizes, index=ind)
+
     def __len__(self):
         """
         Returns the number of rows
@@ -661,7 +671,7 @@ class DataFrame(object):
             "astype", dtype=dtype, errors=errors, **kwargs
         )
 
-    def _repr_pandas025_formatting(self, nrows, ncols, dtype=None):
+    def _repr_pandas025_formatting(self, ncols, nrows, dtype=None):
         """
         With Pandas > 0.25 there are some new conditional formatting for some
         datatypes and column/row configurations. This fixes most of them in
@@ -703,7 +713,7 @@ class DataFrame(object):
         )
         ncols = 0 if ncols == 2 else ncols
         ncols = 19 if ncols in [20, 21] else ncols
-        return nrows, ncols
+        return ncols, nrows
 
     def clean_renderable_dataframe(self, output):
         """
