@@ -275,14 +275,6 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                              min_periods, op, mr, stream);
 }
 
-std::istream* headers_code(std::string filename, std::iostream& stream) {
-  if (filename == "operation.h") {
-    stream << cudf::experimental::rolling::jit::code::operation_h;
-    return &stream;
-  }
-  return nullptr;
-}
-
 // Applies a user-defined rolling window function to the values in a column.
 template <bool static_window, typename WindowIterator>
 std::unique_ptr<column> rolling_window(column_view const &input,
