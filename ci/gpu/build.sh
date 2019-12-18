@@ -29,12 +29,10 @@ export HOME=$WORKSPACE
 cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
-export FULL_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+\.[0-9]+)'`
-# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to a unique path for this
-# CI job, e.g. `/tmp/cudf_0.12.0-gpu-v100-32-sm06-3-1234-jitify-cache-XXXXXXXXXX`
-export LIBCUDF_KERNEL_CACHE_PATH="$(mktemp -d -t cudf_$FULL_VERSION\
-${NODE_NAME:+-$NODE_NAME}${EXECUTOR_NUMBER:+-$EXECUTOR_NUMBER}${BUILD_ID:+-$BUILD_ID}\
--jitify-cache-XXXXXXXXXX)"
+# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
+# it's local to the container's virtual file system, and not shared with other CI jobs
+# like `/tmp` is.
+export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
