@@ -60,10 +60,9 @@ TEST_F(HashPartition, ZeroPartitions)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 0;
-  auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  // With structured bindings, this could be `auto [output, offsets] = hash_partition...`
-  auto& output = result.first;
-  auto& offsets = result.second;
+  std::unique_ptr<cudf::experimental::table> output;
+  std::vector<cudf::size_type> offsets;
+  std::tie(output, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
@@ -81,9 +80,9 @@ TEST_F(HashPartition, ZeroRows)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto& output = result.first;
-  auto& offsets = result.second;
+  std::unique_ptr<cudf::experimental::table> output;
+  std::vector<cudf::size_type> offsets;
+  std::tie(output, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
@@ -98,9 +97,9 @@ TEST_F(HashPartition, ZeroColumns)
   auto columns_to_hash = std::vector<cudf::size_type>({});
 
   cudf::size_type const num_partitions = 3;
-  auto result = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto& output = result.first;
-  auto& offsets = result.second;
+  std::unique_ptr<cudf::experimental::table> output;
+  std::vector<cudf::size_type> offsets;
+  std::tie(output, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
@@ -118,12 +117,10 @@ TEST_F(HashPartition, MixedColumnTypes)
   auto columns_to_hash = std::vector<cudf::size_type>({0, 2});
 
   cudf::size_type const num_partitions = 3;
-  auto result1 = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto result2 = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto& output1 = result1.first;
-  auto& offsets1 = result1.second;
-  auto& output2 = result2.first;
-  auto& offsets2 = result2.second;
+  std::unique_ptr<cudf::experimental::table> output1, output2;
+  std::vector<cudf::size_type> offsets1, offsets2;
+  std::tie(output1, offsets1) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  std::tie(output2, offsets2) = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect output to have size num_partitions
   EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
@@ -154,12 +151,10 @@ void run_fixed_width_test(size_t cols, size_t rows, cudf::size_type num_partitio
   auto columns_to_hash = std::vector<cudf::size_type>(cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  auto result1 = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto result2 = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto& output1 = result1.first;
-  auto& offsets1 = result1.second;
-  auto& output2 = result2.first;
-  auto& offsets2 = result2.second;
+  std::unique_ptr<cudf::experimental::table> output1, output2;
+  std::vector<cudf::size_type> offsets1, offsets2;
+  std::tie(output1, offsets1) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  std::tie(output2, offsets2) = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect output to have size num_partitions
   EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
