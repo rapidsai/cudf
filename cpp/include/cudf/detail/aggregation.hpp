@@ -204,6 +204,7 @@ decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f){
         case aggregation::STD:      return f.template operator()<aggregation::STD>();
         case aggregation::MEDIAN:   return f.template operator()<aggregation::MEDIAN>();
         case aggregation::QUANTILE: return f.template operator()<aggregation::QUANTILE>();
+        default:                    CUDF_FAIL("Unsupported aggregation kind");
     }
 }
 
