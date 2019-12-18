@@ -31,7 +31,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h] [
    -v               - verbose build mode
    -g               - build for debug
    -n               - no install step
-   --disable_nvtx   - do not build nvtx
+   --disable_nvtx   - disable inserting NVTX profiling ranges
    --allgpuarch     - build for all supported GPU architectures
    -h               - print this text
 
