@@ -14,6 +14,7 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/nvcategory_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
@@ -272,11 +273,16 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 
-set(LEGACY_QUANTILES_TEST_SRC 
+set(LEGACY_QUANTILES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
 
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
+
+set(QUANTILES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
+
+ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
 ###################################################################################################
 # - reduction tests -------------------------------------------------------------------------------
