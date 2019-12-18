@@ -182,6 +182,28 @@ groupby::sort_aggregate(
       cache.add_result(i, agg, std::move(result));
     };
 
+    auto store_quantile = [&] (std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(i, agg))
+        return;
+      auto quantile_agg =
+        static_cast<experimental::detail::quantile_aggregation const*>(agg.get());
+      auto result = detail::group_quantiles(
+        sorted_values->view(), helper().group_offsets(), group_sizes,
+        quantile_agg->_quantiles, quantile_agg->_interpolation, mr, stream);
+      cache.add_result(i, agg, std::move(result));
+    };
+
+    auto store_median = [&] (std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(i, agg))
+        return;
+      auto result = detail::group_quantiles(
+        sorted_values->view(), helper().group_offsets(), group_sizes,
+        {0.5}, interpolation::LINEAR, mr, stream);
+      cache.add_result(i, agg, std::move(result));
+    };
+
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       switch (requests[i].aggregations[j]->kind) {
         // TODO (dm): single pass compute all supported reductions
@@ -201,7 +223,10 @@ groupby::sort_aggregate(
         store_var(requests[i].aggregations[j]);
         break;
       case aggregation::QUANTILE:
-  
+        store_quantile(requests[i].aggregations[j]);
+        break;
+      case aggregation::MEDIAN:
+        store_median(requests[i].aggregations[j]);
         break;
       default:
         break;

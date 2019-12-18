@@ -35,14 +35,13 @@ TEST_F(super_basic_test, really_basic_mean) {
     expect_columns_equal(expect_vals, result.second[0].results[0]->view());
 }
 
-struct GroupSTDTest : public cudf::test::BaseFixture {
+auto all_valid() {
+    auto all_valid = cudf::test::make_counting_transform_iterator(
+        0, [](auto i) { return true; });
+    return all_valid;
+}
 
-    auto all_valid() {
-        auto all_valid = cudf::test::make_counting_transform_iterator(
-            0, [](auto i) { return true; });
-        return all_valid;
-    }
-};
+struct GroupSTDTest : public cudf::test::BaseFixture {};
 
 TEST_F(GroupSTDTest, SingleColumn)
 {
@@ -100,6 +99,35 @@ TEST_F(GroupSTDTest, SingleColumnNullable)
     // auto result = gb_obj.aggregate(requests);
     
     // expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
+}
+
+struct group_quantile : public cudf::test::BaseFixture {};
+
+TEST_F(group_quantile, SingleColumn)
+{
+    auto keys = fixed_width_column_wrapper<int32_t>        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto vals = fixed_width_column_wrapper<float>          { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+                                                       //  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
+    auto expect_keys = fixed_width_column_wrapper<int32_t> { 1,       2,          3      };
+                                                       //  { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
+    auto expect_vals = fixed_width_column_wrapper<double> ({    3,        4.5,       7   },
+        all_valid());
+    
+    // auto quantile_agg = cudf::experimental::make_median_aggregation();
+    auto quantile_agg = cudf::experimental::make_quantile_aggregation({0.5});
+
+    std::vector<cudf::experimental::groupby::aggregation_request> requests;
+    requests.emplace_back(
+        cudf::experimental::groupby::aggregation_request());
+    requests[0].values = vals;
+    
+    requests[0].aggregations.push_back(std::move(quantile_agg));
+    
+    cudf::experimental::groupby::groupby gb_obj(table_view({keys}));
+    auto result = gb_obj.aggregate(requests);
+
+    expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
 }
 
 } // namespace test

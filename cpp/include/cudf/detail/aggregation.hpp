@@ -179,7 +179,8 @@ using kind_to_type = typename kind_to_type_impl<k>::type;
 #endif
 
 AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
-AGG_KIND_MAPPING(aggregation::MEDIAN, quantile_aggregation);
+// TODO (dm): if make_median_agg just returns a quantile agg then enable this
+// AGG_KIND_MAPPING(aggregation::MEDIAN, quantile_aggregation);
 AGG_KIND_MAPPING(aggregation::STD, std_var_aggregation);
 AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
 

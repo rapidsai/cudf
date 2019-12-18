@@ -84,6 +84,7 @@ bool constexpr is_hash_aggregation(aggregation::Kind t) {
 bool can_use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests) {
   return false;
+  // TODO (dm): enable this before merging
   // return std::all_of(
   //     requests.begin(), requests.end(), [](aggregation_request const& r) {
   //       return std::all_of(

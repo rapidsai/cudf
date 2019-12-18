@@ -3,6 +3,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/aggregation.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -75,6 +76,25 @@ std::unique_ptr<column> group_var(
     rmm::device_vector<size_type> const& group_labels,
     rmm::device_vector<size_type> const& group_sizes,
     size_type ddof,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
+/**
+ * @brief Internal API to calculate groupwise quantiles
+ * 
+ * @param values Grouped and sorted (within group) values to get quantiles from
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param group_sizes Number of valid elements per group
+ * @param quantiles List of quantiles q where q lies in [0,1]
+ * @param interp Method to use when desired value lies between data points
+ * @param stream Stream to perform computation in
+ */
+std::unique_ptr<column> group_quantiles(
+    column_view const& values,
+    rmm::device_vector<size_type> const& group_offsets,
+    rmm::device_vector<size_type> const& group_sizes,
+    std::vector<double> const& quantiles,
+    interpolation interp,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 

@@ -77,6 +77,6 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param interpolation The desired interpolation
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i);
+    std::vector<double> const& q, interpolation i = interpolation::LINEAR);
 }  // namespace experimental
 }  // namespace cudf
