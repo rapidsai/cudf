@@ -218,12 +218,12 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     if out_begin > out_end:
         return out_col
 
-    if out_col.null_count == 0 and in_col.mask:
+    if out_col.null_count == 0 and in_col.mask is not None:
         mask = utils.make_mask(len(out_col))
         cudautils.fill_value(mask, 0xff)
         out_col.mask = Buffer(mask)
 
-    if in_col.null_count == 0 and out_col.mask:
+    if in_col.null_count == 0 and out_col.mask is not None:
         mask = utils.make_mask(len(in_col))
         cudautils.fill_value(mask, 0xff)
         in_col.mask = Buffer(mask)
