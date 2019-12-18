@@ -185,43 +185,44 @@ using target_type_t = typename target_type_impl<Source, k>::type;
  * argument.
  * @return Forwards the return value of the callable.
  */
-template <typename F>
-decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f) {
+template <typename F, typename... Ts>
+decltype(auto) aggregation_dispatcher(aggregation::Kind k, F f, Ts&&... args) {
   switch (k) {
     case aggregation::SUM:
-      return f.template operator()<aggregation::SUM>();
+      return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
     case aggregation::MIN:
-      return f.template operator()<aggregation::MIN>();
+      return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
     case aggregation::MAX:
-      return f.template operator()<aggregation::MAX>();
+      return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
     case aggregation::COUNT:
-      return f.template operator()<aggregation::COUNT>();
+      return f.template operator()<aggregation::COUNT>(std::forward<Ts>(args)...);
     case aggregation::MEAN:
-      return f.template operator()<aggregation::MEAN>();
+      return f.template operator()<aggregation::MEAN>(std::forward<Ts>(args)...);
     case aggregation::MEDIAN:
-      return f.template operator()<aggregation::MEDIAN>();
+      return f.template operator()<aggregation::MEDIAN>(std::forward<Ts>(args)...);
     case aggregation::QUANTILE:
-      return f.template operator()<aggregation::QUANTILE>();
+      return f.template operator()<aggregation::QUANTILE>(std::forward<Ts>(args)...);
     case aggregation::ARGMAX:
-      return f.template operator()<aggregation::ARGMAX>();
+      return f.template operator()<aggregation::ARGMAX>(std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
-      return f.template operator()<aggregation::ARGMIN>();
+      return f.template operator()<aggregation::ARGMIN>(std::forward<Ts>(args)...);
   }
 }
 
 template <typename Source, template <typename, aggregation::Kind> typename F>
 struct dispatch_aggregation {
-  template <aggregation::Kind k>
-  constexpr auto operator()() const noexcept {
-    return F<Source, k>{}();
+  template <aggregation::Kind k, typename... Ts>
+  constexpr auto operator()(Ts&&... args) const noexcept {
+    return F<Source, k>{}(std::forward<Ts>(args)...);
   }
 };
 
 template <template <typename, aggregation::Kind> typename F>
 struct dispatch_source {
-  template <typename Source>
-  constexpr auto operator()(aggregation::Kind k) const noexcept {
-    return aggregation_dispatcher(k, dispatch_aggregation<Source, F>{});
+  template <typename Source, typename... Ts>
+  constexpr auto operator()(aggregation::Kind k, Ts&&... args) const noexcept {
+    return aggregation_dispatcher(k, dispatch_aggregation<Source, F>{},
+                                  std::forward<Ts>(args)...);
   }
 };
 
@@ -241,10 +242,12 @@ struct dispatch_source {
  * non-type template parameter for the second template parameter of the callable
  * `F`.
  */
-template <template <typename, aggregation::Kind> typename F>
+template <template <typename, aggregation::Kind> typename F, typename... Ts>
 decltype(auto) dispatch_type_and_aggregation(data_type type,
-                                             aggregation::Kind k) {
-  return type_dispatcher(type, dispatch_source<F>{}, k);
+                                             aggregation::Kind k,
+                                             Ts&&... args) {
+  return type_dispatcher(type, dispatch_source<F>{}, k,
+                         std::forward<Ts>(args)...);
 }
 
 /**
