@@ -358,7 +358,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
                                                  per_thread,
                                                  filter);
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
@@ -381,7 +381,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
                     stream);
   }
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
   
   // 3. compute the output size from the last block's offset + count
   cudf::size_type output_size = 
@@ -416,7 +416,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
     output = empty_like(input);
   }
   
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   return output;
 }
