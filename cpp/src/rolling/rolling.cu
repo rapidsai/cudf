@@ -339,7 +339,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
     output->set_null_count(output->size() - device_valid_count.value(stream));
 
     // check the stream for debugging
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::nvtx::range_pop();
 
