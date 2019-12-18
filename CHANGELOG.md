@@ -19,7 +19,7 @@
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
 - PR #3402 Define and implement new quantiles APIs
-- PR #3639 Define and implement nans_to_null
+- PR #3639 Define and implement `nans_to_null`
 
 ## Bug Fixes
 
