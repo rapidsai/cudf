@@ -286,8 +286,8 @@ std::istream* headers_code(std::string filename, std::iostream& stream) {
 // Applies a user-defined rolling window function to the values in a column.
 template <bool static_window, typename WindowIterator>
 std::unique_ptr<column> rolling_window(column_view const &input,
-                                       WindowIterator preceding_window_begin,
-                                       WindowIterator following_window_begin,
+                                       WindowIterator preceding_window,
+                                       WindowIterator following_window,
                                        size_type min_periods,
                                        std::string const& user_defined_aggregator,
                                        rolling_operator op,
@@ -305,7 +305,6 @@ std::unique_ptr<column> rolling_window(column_view const &input,
     std::string hash = "prog_experimental_rolling." 
       + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
 
-    
     std::string cuda_source;
     switch(op){
       case rolling_operator::NUMBA_UDF:
@@ -343,8 +342,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                         static_window ? "cudf::size_type" : "cudf::size_type*"})
       .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
               cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
-              device_valid_count.data(), preceding_window_begin[0], following_window_begin[0],
-              min_periods);
+              device_valid_count.data(), preceding_window, following_window, min_periods);
 
     output->set_null_count(output->size() - device_valid_count.value(stream));
 
@@ -410,13 +408,9 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   CUDF_EXPECTS((preceding_window >= 0) && (following_window >= 0) && (min_periods >= 0),
                "Window sizes and min periods must be non-negative");
 
-  auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
-  auto following_window_begin = thrust::make_constant_iterator(following_window);
-
-  return cudf::experimental::detail::rolling_window<true>(input, preceding_window_begin,
-                                                          following_window_begin, min_periods,
-                                                          user_defined_aggregator, op, output_type,
-                                                          mr, 0);
+  return cudf::experimental::detail::rolling_window<true>(input, preceding_window, following_window,
+                                                          min_periods, user_defined_aggregator, op,
+                                                          output_type, mr, 0);
 }
 
 // Applies a variable-size user-defined rolling window function to the values in a column.
@@ -434,7 +428,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
                "preceding_window/following_window must have INT32 type");
 
-  CUDF_EXPECTS(preceding_window.size() != input.size() && following_window.size() != input.size(),
+  CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
                "preceding_window/following_window size must match input size");
 
   return cudf::experimental::detail::rolling_window<false>(input,
