@@ -690,7 +690,7 @@ class GenericIndex(Index):
             assert isinstance(values, (NumericalColumn, StringColumn))
 
         self._values = values
-        self.name = kwargs.get("name")
+        self._name = kwargs.get("name")
 
         assert isinstance(values, column.ColumnBase), type(values)
 
@@ -746,13 +746,11 @@ class GenericIndex(Index):
 
     @property
     def name(self):
-        return self._values.name
+        return self._name
 
     @name.setter
     def name(self, name):
-        if name != self._values.name:
-            # ensure we don't modify somebody else's Column name
-            self._values.name = name
+        self._name = name
 
     @property
     def dtype(self):
