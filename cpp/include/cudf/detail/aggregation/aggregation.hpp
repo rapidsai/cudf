@@ -239,9 +239,9 @@ struct dispatch_source {
  * @brief Dispatches both a type and `aggregation::Kind` template parameters to
  * a callable.
  *
- * This function expects a callable `f` with an `operator()` template accepting two
- * template parameters. The first is a type dispatched from `type`. The second
- * is an `aggregation::Kind` dispatched from `k`.
+ * This function expects a callable `f` with an `operator()` template accepting
+ * two template parameters. The first is a type dispatched from `type`. The
+ * second is an `aggregation::Kind` dispatched from `k`.
  *
  * @param type The `data_type` used to dispatch a type for the first template
  * parameter of the callable `F`
@@ -250,10 +250,11 @@ struct dispatch_source {
  * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
+#pragma nv_exec_check_disable
 template <typename F, typename... Ts>
-decltype(auto) dispatch_type_and_aggregation(data_type type,
-                                             aggregation::Kind k, F&& f,
-                                             Ts&&... args) {
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto)
+dispatch_type_and_aggregation(data_type type, aggregation::Kind k, F&& f,
+                              Ts&&... args) {
   return type_dispatcher(type, dispatch_source{}, k, std::forward<F>(f),
                          std::forward<Ts>(args)...);
 }
