@@ -14,6 +14,8 @@
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
   /** 
@@ -44,20 +46,20 @@ namespace detail {
    *                             indicated by `left_on[i]`.
    * @param[in] return_columns   A vector of column indices from `left` to
    *                             include in the returned table.
-   * @param[in] join_type        Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
    * @param[in] mr               Device memory resource to use for device memory allocation
    * @param[in] stream           Cuda stream
+   * @tparam    join_kind        Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
    *
    * @returns                    Result of joining `left` and `right` tables on the columns
    *                             specified by `left_on` and `right_on`. The resulting table
    *                             will contain `return_columns` from `left` that match in right.
    */
+template <join_kind JoinKind>
 std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view const& left,
                                                                cudf::table_view const& right,
                                                                std::vector<cudf::size_type> const& left_on,
                                                                std::vector<cudf::size_type> const& right_on,
                                                                std::vector<cudf::size_type> const& return_columns,
-                                                               JoinType join_type,
                                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                                                cudaStream_t stream = 0) {
 
@@ -69,27 +71,27 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
     return experimental::empty_like(left.select(return_columns));
   }
 
-  if (is_trivial_join(left, right, left_on, right_on, join_type)) {
+  if (is_trivial_join(left, right, left_on, right_on, JoinKind)) {
     return experimental::empty_like(left.select(return_columns));
   }
 
-  if ((JoinType::LEFT_ANTI_JOIN == join_type) && (0 == right.num_rows())) {
+  if ((join_kind::LEFT_ANTI_JOIN == JoinKind) && (0 == right.num_rows())) {
     // Everything matches, just copy the proper columns from the left table
     return std::make_unique<experimental::table>(left.select(return_columns), stream, mr);
   }
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
-  using hash_table_type = concurrent_unordered_map<cudf::size_type, bool8, RowHash, row_equality>;
+  using hash_table_type = concurrent_unordered_map<cudf::size_type, bool8, row_hash, row_equality>;
 
   // Create hash table containing all keys found in right table
   auto right_rows_d = table_device_view::create(right.select(right_on), stream);
   size_t const hash_table_size = compute_hash_table_size(right.num_rows());
-  RowHash hash_build{*right_rows_d};
+  row_hash hash_build{*right_rows_d};
   row_equality equality_build{*right_rows_d, *right_rows_d};
 
   // Going to join it with left table
   auto left_rows_d = table_device_view::create(left.select(left_on), stream);
-  RowHash hash_probe{*left_rows_d};
+  row_hash hash_probe{*left_rows_d};
   row_equality equality_probe{*left_rows_d, *right_rows_d};
 
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
@@ -101,7 +103,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
                                                 equality_probe);
   auto hash_table = *hash_table_ptr;
 
-  constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
+  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   experimental::detail::grid_1d config(right.num_rows(), block_size);
 
   build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(hash_table, right.num_rows());
@@ -112,7 +114,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
   //
 
   // For semi join we want contains to be true, for anti join we want contains to be false
-  bool join_type_boolean = (join_type == JoinType::LEFT_SEMI_JOIN);
+  bool join_type_boolean = (JoinKind == join_kind::LEFT_SEMI_JOIN);
 
   rmm::device_vector<size_type> gather_map(left.num_rows());
 
@@ -139,7 +141,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const
                                                           std::vector<cudf::size_type> const& return_columns,
                                                           rmm::mr::device_memory_resource* mr) {
 
-  return detail::left_semi_anti_join(left, right, left_on, right_on, return_columns, detail::JoinType::LEFT_SEMI_JOIN, mr, 0);
+  return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(left, right, left_on, right_on, return_columns, mr, 0);
   
 
 }
@@ -151,7 +153,9 @@ std::unique_ptr<cudf::experimental::table> left_anti_join(cudf::table_view const
                                                           std::vector<cudf::size_type> const& return_columns,
                                                           rmm::mr::device_memory_resource* mr) {
 
-  return detail::left_semi_anti_join(left, right, left_on, right_on, return_columns, detail::JoinType::LEFT_ANTI_JOIN, mr, 0);
+  return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(left, right, left_on, right_on, return_columns, mr, 0);
 }
 
-}
+} // experimental
+
+} // cudf

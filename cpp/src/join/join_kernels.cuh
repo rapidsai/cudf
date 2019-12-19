@@ -18,20 +18,20 @@
 
 #include <cudf/table/table_device_view.cuh>
 #include <cub/cub.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include "join_common_utils.hpp"
 
 namespace cudf {
 
+namespace experimental {
+
 namespace detail {
 
-//TODO : Use the same hasher type as concurrent_unordered_multimap
-using row_equality = cudf::experimental::row_equality_comparator<true>;
-
 /* --------------------------------------------------------------------------*/
-/** 
+/**
 * @brief  Adds a pair of indices to the shared memory cache
-* 
+*
 * @param[in] first The first index in the pair
 * @param[in] second The second index in the pair
 * @param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
@@ -39,16 +39,15 @@ memory cache the pair will be written
 * @param[in] warp_id The ID of the warp of the calling the thread
 * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
 * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
-* 
+*
 */
 /* ----------------------------------------------------------------------------*/
-template<typename size_type, typename output_index_type>
-__inline__ __device__ void add_pair_to_cache(const output_index_type first, 
-                                             const output_index_type second, 
-                                             size_type *current_idx_shared, 
-                                             const int warp_id, 
-                                             output_index_type *joined_shared_l,
-                                             output_index_type *joined_shared_r)
+__inline__ __device__ void add_pair_to_cache(const size_type first,
+                                             const size_type second,
+                                             size_type *current_idx_shared,
+                                             const int warp_id,
+                                             size_type *joined_shared_l,
+                                             size_type *joined_shared_r)
 {
   size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
 
@@ -59,22 +58,21 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Builds a hash table from a table_device_view that maps the hash
+* @brief  Builds a hash table from a row hasher that maps the hash
 * values of each row to its respective row index.
 *
 * @param[in,out] multi_map The hash table to be built to insert rows into
-* @param[in] build_table The table to build the hash table on
+* @param[in] hash_build Row hasher for the build table
 * @param[in] build_table_num_rows The number of rows in the build table
 * @tparam multimap_type The type of the hash table
 *
 */
 /* ----------------------------------------------------------------------------*/
-template<typename multimap_type, typename ScalarDeviceViewType>
+template<typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
-                                 table_device_view build_table,
-                                 RowHash hash_build,
+                                 row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
-                                 ScalarDeviceViewType error)
+                                 int* error)
 {
     cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -90,7 +88,7 @@ __global__ void build_hash_table(multimap_type multi_map,
 
       // If the insert failed, set the error code accordingly
       if (multi_map.end() == insert_location) {
-        error.set_value(1);
+        *error = 1;
       }
       i += blockDim.x * gridDim.x;
     }
@@ -123,23 +121,21 @@ __global__ void build_hash_table(Map map, size_type num_rows) {
 * @param[in] probe_table The probe table
 * @param[in] probe_table_num_rows The number of rows in the probe table
 * @param[out] output_size The resulting output size
-  @tparam join_type The type of join to be performed
+  @tparam JoinKind The type of join to be performed
   @tparam multimap_type The datatype of the hash table
-  @tparam output_cache_size The size of the shared memory cache for caching the join output results
 *
 */
 /* ----------------------------------------------------------------------------*/
-template< JoinType join_type,
+template< join_kind JoinKind,
           typename multimap_type,
-          int block_size,
-          int output_cache_size>
+          int block_size>
 __global__ void compute_join_output_size( multimap_type multi_map,
                                           table_device_view build_table,
                                           table_device_view probe_table,
-                                          RowHash hash_probe,
+                                          row_hash hash_probe,
                                           row_equality check_row_equality,
                                           const cudf::size_type probe_table_num_rows,
-                                          numeric_scalar_device_view<cudf::size_type> output_size)
+                                          size_type* output_size)
 {
   // This kernel probes multiple elements in the probe_table and store the number of matches found inside a register.
   // A block reduction is used at the end to calculate the matches per thread block, and atomically add to the global
@@ -165,7 +161,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
     found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
-    bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);
+    bool running = (JoinKind == join_kind::LEFT_JOIN) || (end != found);
     bool found_match = false;
 
     while ( running )
@@ -173,7 +169,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
       // TODO Simplify this logic...
 
       // Left joins always have an entry in the output
-      if (join_type == JoinType::LEFT_JOIN && (end == found)) {
+      if (JoinKind == join_kind::LEFT_JOIN && (end == found)) {
         running = false;
       }
       // Stop searching after encountering an empty hash table entry
@@ -211,7 +207,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
           running = false;
       }
 
-      if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+      if ((JoinKind == join_kind::LEFT_JOIN) && (!running) && (!found_match)) {
         ++thread_counter;
       }
     }
@@ -221,11 +217,46 @@ __global__ void compute_join_output_size( multimap_type multi_map,
   __shared__ typename BlockReduce::TempStorage temp_storage;
   cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
-  __syncthreads();
-
   // Add block counter to global counter
   if (threadIdx.x==0)
-    atomicAdd(output_size.data(), block_counter);
+    atomicAdd(output_size, block_counter);
+}
+
+template <int num_warps,
+         cudf::size_type output_cache_size>
+__device__
+void flush_output_cache(
+    const unsigned int activemask,
+    const cudf::size_type max_size,
+    const int warp_id,
+    const int lane_id,
+    cudf::size_type* current_idx,
+    cudf::size_type current_idx_shared[num_warps],
+    size_type join_shared_l[num_warps][output_cache_size],
+    size_type join_shared_r[num_warps][output_cache_size],
+    size_type* output_l,
+    size_type* output_r) {
+
+  // count how many active threads participating here which could be less than warp_size
+  int num_threads = __popc(activemask);
+  cudf::size_type output_offset = 0;
+
+  if ( 0 == lane_id )
+  {
+    output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
+  }
+
+  output_offset = cub::ShuffleIndex(output_offset, 0, experimental::detail::warp_size, activemask);
+
+  for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads )
+  {
+    cudf::size_type thread_offset = output_offset + shared_out_idx;
+    if (thread_offset < max_size)
+    {
+      output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
+      output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
+    }
+  }
 }
 
 /* --------------------------------------------------------------------------*/
@@ -242,61 +273,55 @@ __global__ void compute_join_output_size( multimap_type multi_map,
  * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
  * @param[in] max_size The maximum size of the output
  * @param[in] offset An optional offset
- * @tparam join_type The type of join to be performed
+ * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
- * @tparam output_index_type The datatype used for the indices in the output arrays
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join output results
  *
  */
 /* ----------------------------------------------------------------------------*/
-template< JoinType join_type,
+template< join_kind JoinKind,
           typename multimap_type,
           typename key_type,
-          typename output_index_type,
           cudf::size_type block_size,
           cudf::size_type output_cache_size>
 __global__ void probe_hash_table( multimap_type multi_map,
                                   table_device_view build_table,
                                   table_device_view probe_table,
-                                  RowHash hash_probe,
+                                  row_hash hash_probe,
                                   row_equality check_row_equality,
                                   const cudf::size_type probe_table_num_rows,
-                                  output_index_type * join_output_l,
-                                  output_index_type * join_output_r,
-                                  numeric_scalar_device_view<cudf::size_type> current_idx,
+                                  size_type* join_output_l,
+                                  size_type* join_output_r,
+                                  cudf::size_type* current_idx,
                                   const cudf::size_type max_size,
                                   bool flip_results,
-                                  const output_index_type offset = 0)
+                                  const size_type offset = 0)
 {
-  constexpr int num_warps = block_size/warp_size;
-  __shared__ cudf::size_type current_idx_shared[num_warps];
-  __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
-  __shared__ output_index_type join_shared_r[num_warps][output_cache_size];
-  output_index_type *output_l = join_output_l, *output_r = join_output_r;
+  constexpr int num_warps = block_size/experimental::detail::warp_size;
+  __shared__ size_type current_idx_shared[num_warps];
+  __shared__ size_type join_shared_l[num_warps][output_cache_size];
+  __shared__ size_type join_shared_r[num_warps][output_cache_size];
+  size_type *output_l = join_output_l, *output_r = join_output_r;
 
   if (flip_results) {
       output_l = join_output_r;
       output_r = join_output_l;
   }
 
-  const int warp_id = threadIdx.x/warp_size;
-  const int lane_id = threadIdx.x%warp_size;
+  const int warp_id = threadIdx.x/experimental::detail::warp_size;
+  const int lane_id = threadIdx.x%experimental::detail::warp_size;
 
   if ( 0 == lane_id )
   {
     current_idx_shared[warp_id] = 0;
   }
 
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   __syncwarp();
-#endif
 
-  output_index_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
-#endif
   if ( probe_row_index < probe_table_num_rows ) {
 
     const auto unused_key = multi_map.get_unused_key();
@@ -312,20 +337,16 @@ __global__ void probe_hash_table( multimap_type multi_map,
     probe_row_hash_value = hash_probe(probe_row_index);
     found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
-    bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
+    bool running = (JoinKind == join_kind::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
     while ( __any_sync( activemask, running ) )
-#else
-    while ( __any( running ) )
-#endif
     {
       if ( running )
       {
         // TODO Simplify this logic...
 
         // Left joins always have an entry in the output
-        if (join_type == JoinType::LEFT_JOIN && (end == found)) {
+        if (JoinKind == join_kind::LEFT_JOIN && (end == found)) {
           running = false;
         }
         // Stop searching after encountering an empty hash table entry
@@ -342,7 +363,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
 
             // If the rows are equal, then we have found a true match
             found_match = true;
-            const output_index_type probe_index{offset + probe_row_index};
+            const size_type probe_index{offset + probe_row_index};
             add_pair_to_cache(probe_index, found->second, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
           }
           // Continue searching for matching rows until you hit an empty hash map entry
@@ -367,83 +388,47 @@ __global__ void probe_hash_table( multimap_type multi_map,
         }
 
         // If performing a LEFT join and no match was found, insert a Null into the output
-        if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-          const output_index_type probe_index{offset + probe_row_index};
-          add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+        if ((JoinKind == join_kind::LEFT_JOIN) && (!running) && (!found_match)) {
+          const size_type probe_index{offset + probe_row_index};
+          add_pair_to_cache(probe_index, static_cast<size_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
         }
       }
 
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
       __syncwarp(activemask);
-#endif
       //flush output cache if next iteration does not fit
-      if ( current_idx_shared[warp_id] + warp_size >= output_cache_size )
+      if ( current_idx_shared[warp_id] + experimental::detail::warp_size >= output_cache_size )
       {
 
-        // count how many active threads participating here which could be less than warp_size
-#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
-        const unsigned int activemask = __ballot(1);
-#endif
-        int num_threads = __popc(activemask);
-        cudf::size_type output_offset = 0;
-
-        if ( 0 == lane_id )
-        {
-          output_offset = atomicAdd( current_idx.data(), current_idx_shared[warp_id] );
-        }
-
-        output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
-
-        for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads )
-        {
-          cudf::size_type thread_offset = output_offset + shared_out_idx;
-          if (thread_offset < max_size) {
-            output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-            output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
-          }
-        }
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
+        flush_output_cache<num_warps, output_cache_size>(
+            activemask, max_size,
+            warp_id, lane_id,
+            current_idx, current_idx_shared,
+            join_shared_l, join_shared_r,
+            output_l, output_r);
         __syncwarp(activemask);
-#endif
         if ( 0 == lane_id )
         {
           current_idx_shared[warp_id] = 0;
         }
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         __syncwarp(activemask);
-#endif
       }
     }
 
     //final flush of output cache
     if ( current_idx_shared[warp_id] > 0 )
     {
-      // count how many active threads participating here which could be less than warp_size
-#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
-      const unsigned int activemask = __ballot(1);
-#endif
-      int num_threads = __popc(activemask);
-      cudf::size_type output_offset = 0;
-      if ( 0 == lane_id )
-      {
-        output_offset = atomicAdd( current_idx.data(), current_idx_shared[warp_id] );
-      }
-
-      output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
-
-      for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads )
-      {
-        cudf::size_type thread_offset = output_offset + shared_out_idx;
-        if (thread_offset < max_size)
-        {
-          output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-          output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
-        }
-      }
+      flush_output_cache<num_warps, output_cache_size>(
+          activemask, max_size,
+          warp_id, lane_id,
+          current_idx, current_idx_shared,
+          join_shared_l, join_shared_r,
+          output_l, output_r);
     }
   }
 }
 
 }//namespace detail
+
+} //namespace experimental
 
 }//namespace cudf

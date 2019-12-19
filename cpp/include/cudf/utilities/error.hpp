@@ -64,7 +64,7 @@ struct cuda_error : public std::runtime_error {
 #define CUDF_EXPECTS(cond, reason)                           \
   (!!(cond))                                                 \
       ? static_cast<void>(0)                                 \
-      : throw ::cudf::logic_error("cuDF failure at: " __FILE__ \
+      : throw cudf::logic_error("cuDF failure at: " __FILE__ \
                                 ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
 /**---------------------------------------------------------------------------*
