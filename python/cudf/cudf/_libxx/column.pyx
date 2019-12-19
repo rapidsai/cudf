@@ -11,6 +11,7 @@ from cudf.core.buffer import Buffer
 from libc.stdlib cimport malloc, free
 
 from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.utils import cached_property
 
 
 np_to_cudf_types = {np.dtype('int8'): INT8,
@@ -51,19 +52,38 @@ cdef class Column:
             raise TypeError("Expected a Buffer for data, got " + type(data).__name__)
         if mask is not None and not isinstance(mask, Buffer):
             raise TypeError("Expected a Buffer for mask, got " + type(mask).__name__)
-        self.data = data
+        self._data = data
         self.size = size
         self.dtype = dtype
-        self.mask = mask
+        self._mask = mask
         self.offset = offset
         self.children = children
 
     @property
-    def null_count(self):
-        return self.null_count()
+    def data(self):
+        return self._data
 
-    cdef size_type null_count(self) except? 0:
-        return self.view().null_count()
+    @data.setter
+    def data(self, value):
+        self._data = value
+
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, value):
+        self._nvstrings = None
+        self._mask = value
+        if hasattr(self, "null_count"):
+            del self.null_count
+        
+    @cached_property
+    def null_count(self):
+        return self.compute_null_count()
+
+    cdef size_type compute_null_count(self) except? 0:
+        return self._view(UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
@@ -92,16 +112,21 @@ cdef class Column:
         else:
             mask = NULL
 
+        cdef size_type c_null_count = self.null_count
+        
         return mutable_column_view(
             dtype,
             self.size,
             data,
             mask,
-            UNKNOWN_NULL_COUNT,
+            c_null_count,
             offset,
             children)
 
     cdef column_view view(self) except *:
+        return self._view(self.null_count)
+    
+    cdef column_view _view(self, size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
             data_dtype = self.codes.dtype
         else:
@@ -128,12 +153,14 @@ cdef class Column:
         else:
             mask = NULL
 
+        cdef size_type c_null_count = null_count
+        
         return column_view(
             dtype,
             self.size,
             data,
             mask,
-            UNKNOWN_NULL_COUNT,
+            c_null_count,
             offset,
             children)
 

@@ -261,7 +261,7 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
         c_dtype = gdf_dtype_from_dtype(col.codes.dtype)
     else:
         c_dtype = gdf_dtype_from_dtype(col.dtype)
-    
+
     if c_dtype == GDF_STRING_CATEGORY:
         category = col.nvcategory.get_cpointer()
         if len(col) > 0:
@@ -286,13 +286,13 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
 
     cdef char* c_col_name = py_to_c_str(col_name)
     cdef size_type len_col = len(col)
-    cdef size_type c_null_count = col.null_count()
+    cdef size_type c_null_count = col.null_count
     cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(col.dtype)
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit=c_time_unit,
         category=<void*>category
     )
-    
+
     with nogil:
         gdf_column_view_augmented(
             <gdf_column*>c_col,
@@ -304,6 +304,9 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
             c_extra_dtype_info,
             c_col_name
         )
+
+    if hasattr(col, "null_count"):
+        del col.null_count
 
     return c_col
 
@@ -326,7 +329,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
     from cudf.core.buffer import Buffer
     from cudf.core.column import build_column, as_column
     from cudf.utils.utils import mask_bitsize, calc_chunk_size
-    
+
     gdf_dtype = c_col.dtype
     data_ptr = int(<uintptr_t>c_col.data)
 
@@ -348,7 +351,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
             nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
             data = nvcat_obj.to_strings()
         result = as_column(data)
-        
+
     else:
         dtype = np_dtype_from_gdf_column(c_col)
         dbuf = rmm.DeviceBuffer(
@@ -368,6 +371,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         result = build_column(data=data,
                               dtype=dtype,
                               mask=mask)
+
     return result
 
 
@@ -381,7 +385,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
 
-    if col.mask is not None and col.null_count() > 0:
+    if col.mask is not None and col.null_count > 0:
         mask_ptr = col.mask.ptr
     else:
         mask_ptr = 0
@@ -391,7 +395,7 @@ cdef gdf_column* column_view_from_string_column(
 
     cdef char* c_col_name = py_to_c_str(col_name)
     cdef size_type len_col = len(col)
-    cdef size_type c_null_count = col.null_count()
+    cdef size_type c_null_count = col.null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit=TIME_UNIT_NONE,
         category=<void*>category
@@ -408,6 +412,9 @@ cdef gdf_column* column_view_from_string_column(
             c_extra_dtype_info,
             c_col_name
         )
+
+    if hasattr(col, "null_count"):
+        del col.null_count
 
     return c_col
 

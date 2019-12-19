@@ -43,7 +43,6 @@ class ColumnBase(Column):
         mask : Buffer, optional
         children : tuple, optional
         """
-
         super().__init__(
             data,
             size=size,
@@ -52,35 +51,12 @@ class ColumnBase(Column):
             offset=offset,
             children=children,
         )
-        self._data = data
-        self.size = size
-        self.dtype = dtype
-        self._mask = mask
-        self.offset = offset
-        self.children = children
 
     def __reduce__(self):
         return (
             build_column,
             (self.data, self.dtype, self.mask, self.offset, self.children,),
         )
-
-    @property
-    def data(self):
-        return self._data
-
-    @data.setter
-    def data(self, value):
-        self._data = value
-
-    @property
-    def mask(self):
-        return self._mask
-
-    @mask.setter
-    def mask(self, value):
-        self._nvstrings = None
-        self._mask = value
 
     def _data_view(self):
         """

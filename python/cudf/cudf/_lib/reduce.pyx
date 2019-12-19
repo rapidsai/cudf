@@ -65,7 +65,7 @@ def reduce(reduction_op, Column col, dtype=None, ddof=1):
         dtype scalar value of reduction operation on column
     """
     # check empty case
-    if len(col) <= col.null_count():
+    if len(col) <= col.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
             return col.dtype.type(0)
         if reduction_op == 'product' and pandas_version >= (0, 22):
