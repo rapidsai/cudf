@@ -1,7 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
-
+- PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
@@ -9,6 +9,8 @@
 
 ## Improvements
 
+- PR #3431 Port NVStrings translate to cudf strings column
+- PR #3364 Port NVStrings split functions
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 - PR #3590 Specialize hash functions for floating point
@@ -19,6 +21,7 @@
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
 - PR #3402 Define and implement new quantiles APIs
+- PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 
 ## Bug Fixes
@@ -26,11 +29,13 @@
 - PR #3550 Update Java package to 0.12
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
+- PR #2981 enable build.sh to build all targets without installation
 - PR #3563 Use `__cuda_array_interface__` for serialization
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
 - PR #3622 Fix new warnings and errors when building with gcc-8
 - PR #3588 Remove avro reader column order reversal
+- PR #3629 Fix hash map test failure
 - PR #3637 Fix sorted set_index operations in dask_cudf
 
 
@@ -88,6 +93,7 @@
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
+- PR #3557 Add contiguous_split() function. 
 
 ## Improvements
 
