@@ -17,7 +17,7 @@ from cudf.core.column import Column, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, numbautils, utils
+from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -156,9 +156,7 @@ class Series(object):
         if self.null_count != 0:
             raise ValueError("Column must have no nulls.")
 
-        # numbautils.PatchedNumbaDeviceArray() is a
-        # temporary fix for CuPy < 7.0, numba = 0.46
-        return cupy.asarray(numbautils.PatchedNumbaDeviceArray(self.data.mem))
+        return cupy.asarray(self.data.mem)
 
     @property
     def values_host(self):
