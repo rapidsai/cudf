@@ -447,3 +447,13 @@ def test_drop(gdf, gddf):
     gddf2 = gddf.drop(columns="x").compute()
 
     dd.assert_eq(gdf2, gddf2)
+
+
+@pytest.mark.parametrize("deep", [True, False])
+@pytest.mark.parametrize("index", [True, False])
+def test_memory_usage(gdf, gddf, index, deep):
+
+    dd.assert_eq(
+        gdf.memory_usage(deep=deep, index=index),
+        gddf.memory_usage(deep=deep, index=index),
+    )
