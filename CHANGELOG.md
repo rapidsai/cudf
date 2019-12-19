@@ -23,6 +23,7 @@
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
+- PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 
 ## Bug Fixes
 
