@@ -45,7 +45,7 @@ std::unique_ptr<column> url_encode( strings_column_view const& strings,
  * @brief Encodes each string using URL encoding.
  *
  * Converts all character sequences starting with '%' into character code-points
- * interpretting the 2 following characters as hex values to create the code-point.
+ * interpreting the 2 following characters as hex values to create the code-point.
  * For example, the sequence '%20' is converted into byte (0x20) which is a single
  * space character. Another example converts '%C3%A9' into 2 sequential bytes
  * (0xc3 and 0xa9 respectively). Overall, 3 characters are converted into one char byte
