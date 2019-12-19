@@ -184,7 +184,7 @@ struct url_decoder_fn
     char* d_chars{};
 
     // utility to convert a hex char into a single byte
-    __device__ char hex_char_to_byte( char ch )
+    __device__ uint8_t hex_char_to_byte( char ch )
     {
         if( ch >= '0' && ch <= '9' )
             return (ch-'0');
