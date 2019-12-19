@@ -117,7 +117,7 @@ hash_partition_table(table_view const& input,
     d_offsets.begin(), d_offsets.end());
 
   // Sort sequence using partition map as key to generate gather maps
-  thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
+  thrust::sort_by_key(rmm::exec_policy(stream)->on(stream),
     row_partitions.begin(), row_partitions.end(), gather_map.begin());
 
   // Reduce unique partitions to extract gather map offsets from sequence
@@ -127,11 +127,22 @@ hash_partition_table(table_view const& input,
   auto output = experimental::detail::gather(input, gather_map.begin(), gather_map.end(),
     false, false, false, mr, stream);
 
-  // Copy offsets from device to vector, padded to num_partitions
-  std::vector<size_type> offsets(num_partitions, input.num_rows());
-  thrust::copy(d_offsets.begin(), end.second, offsets.begin());
+  thrust::host_vector<size_type> unique_partitions(row_partitions.begin(), end.first);
+  thrust::host_vector<size_type> unique_offsets(d_offsets.begin(), end.second);
 
-  return std::make_pair(std::move(output), std::move(offsets));
+  std::vector<size_type> offsets(num_partitions, input.num_rows());
+
+  // Pad offsets to insert empty partitions absent from unique_partitions
+  size_type next_partition = 0;
+  for (size_t i = 0; i < unique_partitions.size(); ++i) {
+    auto const partition = next_partition;
+    next_partition = unique_partitions[i] + 1;
+    auto const count = next_partition - partition;
+    auto const offset = unique_offsets[i];
+    std::fill_n(&offsets[partition], count, offset);
+  }
+
+  return std::make_pair(std::move(output), offsets);
 }
 
 struct nvtx_raii {
