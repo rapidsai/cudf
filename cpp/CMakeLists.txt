@@ -184,8 +184,10 @@ message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
 add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
+add_library(rdkafka++ SHARED IMPORTED ${RDKAFKA++_LIBRARY})
 if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
     set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
+    set_target_properties(rdkafka++ PROPERTIES IMPORTED_LOCATION ${RDKAFKA++_LIBRARY})
 endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
 
 ###################################################################################################
@@ -313,8 +315,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}"
-                    "${RDKAFKA_INCLUDE}")
+                    "${DLPACK_INCLUDE}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -328,8 +329,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${CMAKE_BINARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}"
-                 "${RDKAFKA_LIBRARY}")
+                 "${RMM_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -571,6 +571,10 @@ add_library(cudf
             src/aggregation/aggregation.cpp
 )
 
+# Include librdkafka exclusively for libcudf
+target_include_directories(cudf PUBLIC "${RDKAFKA_INCLUDE}")
+target_link_directories(cudf PUBLIC "${RDKAFKA_LIBRARY}")
+
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
 set_target_properties(libNVCategory PROPERTIES OUTPUT_NAME "NVCategory")
@@ -641,7 +645,7 @@ target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
 target_link_libraries(libNVText libNVStrings rmm cudart cuda)
 
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} ${RDKAFKA_LIBRARY} ${RDKAFKA++_LIBRARY} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} rdkafka rdkafka++ nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
