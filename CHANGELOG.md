@@ -24,7 +24,7 @@
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
-- PR #3639 Define and implement `nans_to_null`
+- PR #3639 Define and implement `nans_to_nulls`
 
 ## Bug Fixes
 
