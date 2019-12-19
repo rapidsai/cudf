@@ -239,11 +239,11 @@ cpdef read_csv(
     with nogil:
         if kafka_configs is not None:
             reader = unique_ptr[csv_reader](
-                new csv_reader(gkc, 
-                    topics, 
-                    kafka_start_offset, 
-                    kafka_batch_size, 
-                    args)
+                new csv_reader(gkc,
+                                topics, 
+                                kafka_start_offset, 
+                                kafka_batch_size, 
+                                args)
             )
         else:
             if buffer is None:
