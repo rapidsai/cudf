@@ -543,7 +543,7 @@ cpdef count_nonzero_mask(mask, size):
     return nnz
 
 
-cdef char* py_to_c_str(object py_str):
+cdef char* py_to_c_str(object py_str) except? NULL:
     """
     Util to convert a Python bytes, bytearray, or unicode string to a char*,
     in a way that breaks free from the Cython garbage collector.

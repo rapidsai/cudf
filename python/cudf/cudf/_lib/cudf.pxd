@@ -377,4 +377,4 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
 cdef gdf_dtype gdf_dtype_from_dtype(dtype) except? GDF_invalid
 
-cdef char* py_to_c_str(object py_str)
+cdef char* py_to_c_str(object py_str) except? NULL
