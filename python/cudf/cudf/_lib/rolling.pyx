@@ -36,7 +36,7 @@ def rolling(inp, window, min_periods, center, op):
     if op == "mean":
         inp = inp.astype("float64")
 
-    cdef gdf_column* c_in_col = column_view_from_column(inp, inp.name)
+    cdef gdf_column* c_in_col = column_view_from_column(inp)
 
     if op == "count":
         min_periods = 0
@@ -78,8 +78,7 @@ def rolling(inp, window, min_periods, center, op):
         
         out_col = build_column(Buffer(data),
                                dtype=data.dtype,
-                               mask=Buffer(mask),
-                               name=inp.name)
+                               mask=Buffer(mask))
     else:
         if callable(op):
             nb_type = numba.numpy_support.from_dtype(inp.dtype)

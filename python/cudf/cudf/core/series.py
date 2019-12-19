@@ -121,9 +121,7 @@ class Series(Table):
             data = {}
 
         if not isinstance(data, column.ColumnBase):
-            data = column.as_column(
-                data, nan_as_null=nan_as_null, dtype=dtype, name=name
-            )
+            data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
@@ -639,10 +637,7 @@ class Series(Table):
                     rhs = rhs.fillna(fill_value)
                     result = func(lhs, rhs)
                     data = column.build_column(
-                        data=result.data,
-                        dtype=result.dtype,
-                        mask=mask,
-                        name=lhs.name,
+                        data=result.data, dtype=result.dtype, mask=mask,
                     )
                     return lhs._copy_construct(data=data)
                 elif lhs.has_null_mask:

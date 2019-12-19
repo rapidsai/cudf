@@ -273,7 +273,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     df["a"] = np.random.choice(strlist[:map_size], nelem)
     df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
     df["c"] = np.random.randint(map_size, size=nelem)
-    df["d"] = df["a"]._column.as_categorical_column(np.int32).rename("d")
+    df["d"] = df["a"]._column.as_categorical_column(np.int32)
 
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size

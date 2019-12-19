@@ -33,9 +33,7 @@ from cudf.utils.utils import (
 
 
 class ColumnBase(Column):
-    def __init__(
-        self, data, size, dtype, mask=None, offset=0, name=None, children=()
-    ):
+    def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
         """
         Parameters
         ----------
@@ -43,7 +41,6 @@ class ColumnBase(Column):
         dtype
             The type associated with the data Buffer
         mask : Buffer, optional
-        name : optional
         children : tuple, optional
         """
 
@@ -54,7 +51,6 @@ class ColumnBase(Column):
             mask=mask,
             offset=offset,
             children=children,
-            name=name,
         )
         self._data = data
         self.size = size
@@ -62,19 +58,11 @@ class ColumnBase(Column):
         self._mask = mask
         self.offset = offset
         self.children = children
-        self.name = name
 
     def __reduce__(self):
         return (
             build_column,
-            (
-                self.data,
-                self.dtype,
-                self.mask,
-                self.offset,
-                self.children,
-                self.name,
-            ),
+            (self.data, self.dtype, self.mask, self.offset, self.children,),
         )
 
     @property
@@ -179,18 +167,12 @@ class ColumnBase(Column):
             self.data,
             self.dtype,
             mask=mask,
-            name=self.name,
             offset=self.offset,
             children=self.children,
         )
 
-    def rename(self, name, copy=True):
-        result = self.copy(deep=copy)
-        result.name = name
-        return result
-
     @staticmethod
-    def from_mem_views(data_mem, mask_mem=None, null_count=None, name=None):
+    def from_mem_views(data_mem, mask_mem=None, null_count=None):
         """Create a Column object from a data device array (or nvstrings
            object), and an optional mask device array
         """
@@ -270,7 +252,7 @@ class ColumnBase(Column):
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             objs = [o.nvstrings for o in objs]
-            return as_column(nvstrings.from_strings(*objs), name=head.name)
+            return as_column(nvstrings.from_strings(*objs))
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
@@ -313,7 +295,6 @@ class ColumnBase(Column):
         else:
             dropped_col = dropped_col[0]
             dropped_col.mask = None
-            dropped_col.name = self.name
             return dropped_col
 
     def to_gpu_array(self, fillna=None):
@@ -444,7 +425,6 @@ class ColumnBase(Column):
                     data=None,
                     dtype=self.dtype,
                     mask=codes.mask,
-                    name=self.name,
                     children=(codes,),
                 )
 
@@ -485,9 +465,7 @@ class ColumnBase(Column):
                 if slice_mask is not None:
                     slice_mask = Buffer(slice_mask)
 
-                return build_column(
-                    slice_data, self.dtype, mask=slice_mask, name=self.name
-                )
+                return build_column(slice_data, self.dtype, mask=slice_mask)
         else:
             arg = column.as_column(arg)
             if len(arg) == 0:
@@ -669,7 +647,6 @@ class ColumnBase(Column):
                 )
             raise
 
-        result.name = self.name
         return result
 
     def as_mask(self):
@@ -769,7 +746,6 @@ class ColumnBase(Column):
             self.mask = result.mask
             self.dtype = result.dtype
             self.size = result.size
-            self.name = result.name
             self.offset = result.offset
             if hasattr(result, "children"):
                 self.children = result.children
@@ -811,7 +787,6 @@ class ColumnBase(Column):
             categories=cats,
             codes=labels._column,
             mask=self.mask,
-            name=self.name,
             ordered=ordered,
         )
 
@@ -831,7 +806,6 @@ class ColumnBase(Column):
             return column_empty_like(self, newsize=0)
         else:
             result = data[0]
-            result.name = self.name
             return result
 
     def argsort(self, ascending):
@@ -931,7 +905,7 @@ def column_empty_like_same_mask(column, dtype):
     return result
 
 
-def column_empty(row_count, dtype, masked, name=None):
+def column_empty(row_count, dtype, masked):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
@@ -967,17 +941,11 @@ def column_empty(row_count, dtype, masked, name=None):
     else:
         mask = None
 
-    return build_column(data, dtype, mask=mask, children=children, name=name)
+    return build_column(data, dtype, mask=mask, children=children)
 
 
 def build_categorical_column(
-    categories,
-    codes,
-    mask=None,
-    offset=0,
-    children=(),
-    name=None,
-    ordered=None,
+    categories, codes, mask=None, offset=0, children=(), ordered=None,
 ):
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
     return build_column(
@@ -986,12 +954,11 @@ def build_categorical_column(
         mask=mask,
         offset=offset,
         children=(as_column(codes),),
-        name=name,
     )
 
 
 def build_column(
-    data, dtype, mask=None, offset=0, children=(), name=None, categories=None,
+    data, dtype, mask=None, offset=0, children=(), categories=None,
 ):
     """
     Build a Column of the appropriate type from the given parameters
@@ -1007,7 +974,6 @@ def build_column(
         The mask buffer
     offset : int, optional
     children : tuple, optional
-    name : optional
     categories : Column, optional
         If constructing a CategoricalColumn, a Column containing
         the categories
@@ -1027,27 +993,21 @@ def build_column(
         if not isinstance(children[0], ColumnBase):
             raise TypeError("children must be a tuple of Columns")
         return CategoricalColumn(
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            children=children,
-            name=name,
+            dtype=dtype, mask=mask, offset=offset, children=children,
         )
     elif dtype.type is np.datetime64:
         return DatetimeColumn(
-            data=data, dtype=dtype, mask=mask, offset=offset, name=name,
+            data=data, dtype=dtype, mask=mask, offset=offset,
         )
     elif dtype.type in (np.object_, np.str_):
-        return StringColumn(
-            mask=mask, offset=offset, children=children, name=name
-        )
+        return StringColumn(mask=mask, offset=offset, children=children)
     else:
         return NumericalColumn(
-            data=data, dtype=dtype, mask=mask, offset=offset, name=name
+            data=data, dtype=dtype, mask=mask, offset=offset
         )
 
 
-def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
+def as_column(arbitrary, nan_as_null=True, dtype=None):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
@@ -1071,13 +1031,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     from cudf.core.series import Series
     from cudf.core.index import Index
 
-    if name is None and hasattr(arbitrary, "name"):
-        name = arbitrary.name
-    else:
-        name = name
-
     if isinstance(arbitrary, ColumnBase):
-        arbitrary.name = name
         if dtype is not None:
             return arbitrary.astype(dtype)
         else:
@@ -1138,10 +1092,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 null,
             )
             data = datetime.DatetimeColumn(
-                data=Buffer(arbitrary),
-                dtype=data.dtype,
-                mask=col.mask,
-                name=name,
+                data=Buffer(arbitrary), dtype=data.dtype, mask=col.mask,
             )
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1150,7 +1101,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         mask = _mask_from_cuda_array_interface_desc(desc)
         dtype = np.dtype(desc["typestr"])
         nelem = desc["shape"][0]
-        col = build_column(data, dtype=dtype, mask=mask, name=name)
+        col = build_column(data, dtype=dtype, mask=mask)
 
         # Keep a reference to `arbitrary` with the underlying
         # Buffer, so that the memory isn't freed out
@@ -1344,7 +1295,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         np.array(arbitrary, dtype=np.dtype(dtype)),
                         nan_as_null=nan_as_null,
                     )
-    data.name = name
     return data
 
 

@@ -107,7 +107,7 @@ class StringMethods(object):
         col = column.build_column(
             Buffer(out_dev_arr), np.dtype("int32"), mask=mask
         )
-        return Series(col, index=self._index, name=self._parent.name)
+        return Series(col, index=self._index, name=self._name)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -226,7 +226,7 @@ class StringMethods(object):
         data = self._parent.nvstrings.cat(
             others=others, sep=sep, na_rep=na_rep
         )
-        out = Series(data, index=self._index, name=self._parent.name,)
+        out = Series(data, index=self._index, name=self._name)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -275,7 +275,7 @@ class StringMethods(object):
 
         out = self._parent.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(out[0], index=self._index, name=self._parent.name)
+            return Series(out[0], index=self._index, name=self._name)
         else:
             out_df = DataFrame(index=self._index)
             for idx, val in enumerate(out):
@@ -332,7 +332,7 @@ class StringMethods(object):
             Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask,
         )
 
-        return Series(col, index=self._index, name=self._parent.name)
+        return Series(col, index=self._index, name=self._name)
 
     def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
         """
@@ -377,7 +377,7 @@ class StringMethods(object):
         return Series(
             self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
             index=self._index,
-            name=self._parent.name,
+            name=self._name,
         )
 
     def lower(self):
@@ -392,9 +392,7 @@ class StringMethods(object):
         from cudf.core import Series
 
         return Series(
-            self._parent.nvstrings.lower(),
-            index=self._index,
-            name=self._parent.name,
+            self._parent.nvstrings.lower(), index=self._index, name=self._name
         )
 
     def split(self, pat=None, n=-1, expand=True):
@@ -443,7 +441,7 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, offset=0, children=(), name=None):
+    def __init__(self, mask=None, offset=0, children=()):
         """
         Parameters
         ----------
@@ -454,8 +452,6 @@ class StringColumn(column.ColumnBase):
         children : Tuple[Column]
             Two non-null columns containing the string data and offsets
             respectively
-        name
-            Name of the Column
         """
 
         data = Buffer.empty(0)
@@ -469,7 +465,7 @@ class StringColumn(column.ColumnBase):
             size = children[0].size - 1
 
         super().__init__(
-            data, size, dtype, mask=mask, name=name, children=children,
+            data, size, dtype, mask=mask, children=children,
         )
 
         self._nvstrings = None
@@ -613,7 +609,6 @@ class StringColumn(column.ColumnBase):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
-        pd_series.name = self.name
         return pd_series
 
     def to_array(self, fillna=None):
@@ -726,7 +721,7 @@ class StringColumn(column.ColumnBase):
             to_replace = to_replace.nvstrings.to_host()[0]
             replacement = replacement.nvstrings.to_host()[0]
             result = self.nvstrings.replace(to_replace, replacement)
-            return column.as_column(result, name=self.name)
+            return column.as_column(result)
         else:
             raise NotImplementedError(
                 "StringColumn currently only supports replacing"
@@ -790,7 +785,6 @@ class StringColumn(column.ColumnBase):
             col = utils.scalar_broadcast_to(
                 other, shape=len(self), dtype="object"
             )
-            col.name = self.name
             return col
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))

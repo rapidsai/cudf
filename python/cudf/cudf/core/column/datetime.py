@@ -24,7 +24,7 @@ _numpy_to_pandas_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, offset=0, name=None):
+    def __init__(self, data, dtype, mask=None, offset=0):
         """
         Parameters
         ----------
@@ -34,14 +34,12 @@ class DatetimeColumn(column.ColumnBase):
             The data type
         mask : Buffer; optional
             The validity mask
-        name : str
-            The Column name
         """
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         size = data.size // dtype.itemsize
-        super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
+        super().__init__(data, size=size, dtype=dtype, mask=mask)
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
@@ -122,7 +120,6 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field):
         out = column.column_empty_like_same_mask(self, dtype=np.int16)
         libcudf.unaryops.apply_dt_extract_op(self, out, field)
-        out.name = self.name
         return out
 
     def normalize_binop_value(self, other):
@@ -148,9 +145,7 @@ class DatetimeColumn(column.ColumnBase):
     def as_numerical(self):
         from cudf.core.column import build_column
 
-        return build_column(
-            data=self.data, dtype=np.int64, mask=self.mask, name=self.name
-        )
+        return build_column(data=self.data, dtype=np.int64, mask=self.mask)
 
     def as_datetime_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
@@ -181,9 +176,9 @@ class DatetimeColumn(column.ColumnBase):
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
             ](dev_ptr, **kwargs)
-            return as_column(data, name=self.name)
+            return as_column(data)
         else:
-            return as_column([], dtype="object", name=self.name)
+            return as_column([], dtype="object")
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
@@ -236,7 +231,6 @@ class DatetimeColumn(column.ColumnBase):
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = self[col_inds]
-        col_inds.name = self.name
         return col_keys, col_inds
 
     def min(self, dtype=None):

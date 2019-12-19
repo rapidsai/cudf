@@ -51,7 +51,6 @@ class CategoricalAccessor(object):
                     categories=parent.dtype.categories,
                     codes=parent.cat().codes,
                     mask=parent.mask,
-                    name=parent.name,
                     ordered=True,
                 )
             )
@@ -68,7 +67,6 @@ class CategoricalAccessor(object):
                     categories=parent.dtype.categories,
                     codes=parent.codes,
                     mask=parent.mask,
-                    name=parent.name,
                     ordered=False,
                 )
             )
@@ -222,7 +220,7 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, dtype, mask=None, offset=0, children=(), name=None):
+    def __init__(self, dtype, mask=None, offset=0, children=()):
         """
         Parameters
         ----------
@@ -234,8 +232,6 @@ class CategoricalColumn(column.ColumnBase):
         children : Tuple[Column]
             Two non-null columns containing the categories and codes
             respectively
-        name
-            Name of the Column
         """
         data = Buffer.empty(0)
         size = children[0].size
@@ -250,7 +246,6 @@ class CategoricalColumn(column.ColumnBase):
             mask=mask,
             offset=offset,
             children=children,
-            name=name,
         )
         self._codes = None
 
@@ -302,10 +297,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def as_numerical(self):
         return column.build_column(
-            data=self.codes.data,
-            dtype=self.codes.dtype,
-            mask=self.mask,
-            name=self.name,
+            data=self.codes.data, dtype=self.codes.dtype, mask=self.mask,
         )
 
     @property
@@ -368,7 +360,6 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.dtype.categories,
             codes=column.as_column(ary),
             mask=self.mask,
-            name=self.name,
             ordered=self.dtype.ordered,
         )
         return col
@@ -379,7 +370,6 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.dtype.categories,
             codes=codes,
             mask=self.mask,
-            name=self.name,
             ordered=self.dtype.ordered,
         )
         return col, inds
@@ -450,7 +440,6 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.dtype.categories,
             codes=output,
             mask=self.mask,
-            name=self.name,
             ordered=self.dtype.ordered,
         )
 
@@ -489,7 +478,6 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.dtype.categories,
             codes=result,
             mask=result.mask,
-            name=self.name,
             ordered=self.dtype.ordered,
         )
 
@@ -502,7 +490,6 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.dtype.categories,
             codes=codes,
             mask=codes.mask,
-            name=self.name,
             ordered=self.dtype.ordered,
         )
 
@@ -578,7 +565,6 @@ class CategoricalColumn(column.ColumnBase):
                 categories=self.dtype.categories,
                 codes=copied_col,
                 mask=copied_col.mask,
-                name=self.name,
                 ordered=self.dtype.ordered,
             )
         else:
@@ -586,7 +572,6 @@ class CategoricalColumn(column.ColumnBase):
                 categories=self.dtype.categories,
                 codes=self.codes,
                 mask=self.mask,
-                name=self.name,
                 ordered=self.dtype.ordered,
             )
 

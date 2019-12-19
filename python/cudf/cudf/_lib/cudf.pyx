@@ -261,9 +261,6 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
         c_dtype = gdf_dtype_from_dtype(col.codes.dtype)
     else:
         c_dtype = gdf_dtype_from_dtype(col.dtype)
-
-    if col_name is None:
-        col_name = col.name
     
     if c_dtype == GDF_STRING_CATEGORY:
         category = col.nvcategory.get_cpointer()
@@ -317,7 +314,7 @@ cpdef uintptr_t column_view_pointer(col):
     return <uintptr_t> column_view_from_column(col)
 
 
-cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
+cdef Column gdf_column_to_column(gdf_column* c_col):
     """
     Util to create a Python cudf.Column from a libcudf gdf_column.
 
@@ -325,26 +322,17 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
     ----------
     c_col : gdf_column*
         A pointer to the source gdf_column.
-    int_col_name : bool; optional
-        A flag indicating the string column name should be cast
-        to an integer after decoding (default: False).
     """
     from cudf.core.buffer import Buffer
     from cudf.core.column import build_column, as_column
     from cudf.utils.utils import mask_bitsize, calc_chunk_size
-
-    name = None
-    if c_col.col_name is not NULL:
-        name = c_col.col_name.decode()
-        if int_col_name:
-            name = int(name)
     
     gdf_dtype = c_col.dtype
     data_ptr = int(<uintptr_t>c_col.data)
 
     if gdf_dtype == GDF_STRING:
         data = nvstrings.bind_cpointer(data_ptr)
-        result = as_column(data, name=name)
+        result = as_column(data)
     elif gdf_dtype == GDF_STRING_CATEGORY:
         # Need to do this just to make sure it's freed properly
         garbage = rmm.device_array_from_ptr(
@@ -359,7 +347,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
             nvcat_ptr = int(<uintptr_t>c_col.dtype_info.category)
             nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
             data = nvcat_obj.to_strings()
-        result = as_column(data, name=name)
+        result = as_column(data)
         
     else:
         dtype = np_dtype_from_gdf_column(c_col)
@@ -379,8 +367,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col, int_col_name=False):
 
         result = build_column(data=data,
                               dtype=dtype,
-                              mask=mask,
-                              name=name)
+                              mask=mask)
     return result
 
 
@@ -425,7 +412,7 @@ cdef gdf_column* column_view_from_string_column(
     return c_col
 
 
-cdef gdf_column** cols_view_from_cols(cols) except ? NULL:
+cdef gdf_column** cols_view_from_cols(cols, names=None) except ? NULL:
     col_count=len(cols)
     cdef gdf_column **c_cols = <gdf_column**>malloc(
         sizeof(gdf_column*) * col_count
@@ -433,8 +420,12 @@ cdef gdf_column** cols_view_from_cols(cols) except ? NULL:
 
     cdef i
     for i in range(col_count):
+        if names is None:
+            name = None
+        else:
+            name = names[i]
         check_gdf_compatibility(cols[i])
-        c_cols[i] = column_view_from_column(cols[i])
+        c_cols[i] = column_view_from_column(cols[i], name)
 
     return c_cols
 

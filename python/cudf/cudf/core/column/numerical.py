@@ -25,7 +25,7 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, offset=0, name=None):
+    def __init__(self, data, dtype, mask=None, offset=0):
         """
         Parameters
         ----------
@@ -33,13 +33,12 @@ class NumericalColumn(column.ColumnBase):
         dtype : np.dtype
             The dtype associated with the data Buffer
         mask : Buffer, optional
-        name : optional
         """
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         size = data.size // dtype.itemsize
-        super().__init__(data, size=size, dtype=dtype, mask=mask, name=name)
+        super().__init__(data, size=size, dtype=dtype, mask=mask)
 
     def __contains__(self, item):
         """
@@ -139,18 +138,15 @@ class NumericalColumn(column.ColumnBase):
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
             ](dev_ptr, **kwargs)
-            return as_column(data, name=self.name)
+            return as_column(data)
         else:
-            return as_column([], dtype="object", name=self.name)
+            return as_column([], dtype="object")
 
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").data,
-            dtype=dtype,
-            mask=self.mask,
-            name=self.name,
+            data=self.astype("int64").data, dtype=dtype, mask=self.mask,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -251,7 +247,7 @@ class NumericalColumn(column.ColumnBase):
 
         data = Buffer(cudautils.apply_round(self._data_view(), decimals))
         return column.build_column(
-            data=data, dtype=self.dtype, mask=self.mask, name=self.name
+            data=data, dtype=self.dtype, mask=self.mask,
         )
 
     def applymap(self, udf, out_dtype=None):
@@ -423,15 +419,12 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = False
-    name = None
     if np.isscalar(lhs):
         masked = rhs.mask
         row_count = len(rhs)
-        name = rhs.name
     elif np.isscalar(rhs):
         masked = lhs.mask
         row_count = len(lhs)
-        name = lhs.name
     else:
         masked = lhs.mask or rhs.mask
         row_count = len(lhs)

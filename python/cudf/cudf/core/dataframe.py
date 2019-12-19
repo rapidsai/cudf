@@ -1608,7 +1608,7 @@ class DataFrame(Table):
         out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
             [in_index.as_column()], in_cols, subset_cols, keep
         )
-        new_index = as_index(new_index)
+        new_index = as_index(new_index, name=self.index.name)
         if isinstance(self.index, cudf.core.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
 
@@ -3456,7 +3456,7 @@ class DataFrame(Table):
             else:
                 dtype = None
 
-            df[name] = column.as_column(col, dtype=dtype, name=name)
+            df[name] = column.as_column(col, dtype=dtype)
         if index_col:
             if isinstance(index_col[0], dict):
                 assert index_col[0]["kind"] == "range"
@@ -4076,21 +4076,20 @@ class DataFrame(Table):
         if keep_index:
             if isinstance(self.index, cudf.MultiIndex):
                 index = self.index.to_frame()._columns
+                index_names = self.index.to_frame().columns.to_list()
             else:
                 index = [self.index.as_column()]
+                index_names = [self.index.name]
         else:
             index = None
+            index_names = []
 
-        # Make sure every column has the correct name
-        for col, name in zip(self._columns, self.columns):
-            col.name = name
-
-        # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
             self._columns,
             map_index._column,
             index,
             names=self.columns.to_list(),
+            index_names=index_names,
         )
 
         if map_size:

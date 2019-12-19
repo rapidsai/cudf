@@ -239,7 +239,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
             nvstr_obj = nvcat_obj.to_strings()
         else:
             nvstr_obj = nvstrings.to_device([])
-        out_col = as_column(nvstr_obj, name=out_col.name)
+        out_col = as_column(nvstr_obj)
     
     free_column(c_in_col)
     free_column(c_out_col)
@@ -247,7 +247,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def scatter_to_frames(source, maps, index=None, names=None):
+def scatter_to_frames(source, maps, index=None, names=None, index_names=None):
     """
     Scatters rows to 'n' dataframes according to maps
 
@@ -266,21 +266,20 @@ def scatter_to_frames(source, maps, index=None, names=None):
     in_cols = source
 
     if index:
-        ind_names = [ind.name for ind in index]
-        ind_names_tmp = [(ind_name or "_tmp_index") for ind_name in ind_names]
+        ind_names_tmp = [(ind_name or "_tmp_index") for ind_name in index_names]
         for i in range(len(index)):
-            index[i].name = ind_names_tmp[i]
             in_cols.append(index[i])
-            names.append(index[i].name)
+            names.append(ind_names_tmp[i])
+            
     col_count=len(in_cols)
     if col_count == 0:
         return []
 
     cats = {}
     for i, in_col in enumerate(in_cols):
-        in_cols[i] = column.as_column(in_cols[i], name=names[i])
+        in_cols[i] = column.as_column(in_cols[i])
         if is_categorical_dtype(in_cols[i]):
-            cats[in_cols[i].name] = (
+            cats[names[i]] = (
                 Series(in_cols[i].categories),
                 in_cols[i].ordered
             )
@@ -291,7 +290,7 @@ def scatter_to_frames(source, maps, index=None, names=None):
     gather_count = len(maps)
     assert(gather_count == in_size)
 
-    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
+    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols, names)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
     cdef gdf_column* c_maps = column_view_from_column(maps)
     cdef vector[cudf_table] c_out_tables
@@ -315,9 +314,12 @@ def scatter_to_frames(source, maps, index=None, names=None):
                 )
             )
         if index:
+            print(index)
+            print(index_names)
+            print(df)
             df = df.set_index(ind_names_tmp)
             if len(index) == 1:
-                df.index.name = ind_names[0]
+                df.index.name = index_names[0]
         out_tables.append(df)
 
     free_table(c_in_table, c_in_cols)
