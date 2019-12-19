@@ -25,6 +25,7 @@ namespace code {
 const char* kernel_headers = 
 R"***(
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 )***";
 
 const char* kernel =
@@ -54,7 +55,6 @@ void gpu_rolling_new(cudf::size_type nrows,
                  WindowType following_window_begin,
                  cudf::size_type min_periods)
 {
-  constexpr int warp_size{32};
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::size_type stride = blockDim.x * gridDim.x;
 
@@ -91,10 +91,11 @@ void gpu_rolling_new(cudf::size_type nrows,
 
     // set the mask
     const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
-   
+
     // only one thread writes the mask
-    if (0 == threadIdx.x % warp_size) {
-      out_col_valid[i / warp_size] = result_mask;
+    // only one thread writes the mask
+    if (0 == cudf::intra_word_index(i)) {
+      out_col_valid[cudf::word_index(i)] = result_mask;
       warp_valid_count += __popc(result_mask);
     }
 
@@ -105,7 +106,7 @@ void gpu_rolling_new(cudf::size_type nrows,
 
   // TODO: likely faster to do a single_lane_block_reduce and a single
   // atomic per block but that requires jitifying single_lane_block_reduce...
-  if(0 == threadIdx.x % warp_size) {
+  if(0 == cudf::intra_word_index(threadIdx.x)) {
     atomicAdd(output_valid_count, warp_valid_count);
   }
 }

@@ -33,6 +33,7 @@
 #include <rolling/jit/util/type.h>
 
 #include <types.hpp.jit>
+#include <bit.hpp.jit>
 
 #include <rmm/device_scalar.hpp>
 
@@ -269,6 +270,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::mr::device_memory_resource* mr,
                                        cudaStream_t stream = 0)
 {
+  static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
+                "bitmask_type size does not match CUDA warp size");
+
   return cudf::experimental::type_dispatcher(input.type(),
                                              rolling_window_launcher{},
                                              input, preceding_window_begin, following_window_begin,
@@ -287,6 +291,9 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        rmm::mr::device_memory_resource* mr,
                                        cudaStream_t stream = 0)
 {
+  static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
+                "bitmask_type size does not match CUDA warp size");
+
   if (input.has_nulls())
     CUDF_FAIL("Currently the UDF version of rolling window does NOT support inputs with nulls.");
 
@@ -325,7 +332,8 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 
   // Launch the jitify kernel
   cudf::jit::launcher(hash, cuda_source,
-                      { cudf_types_hpp, cudf::experimental::rolling::jit::code::operation_h },
+                      { cudf_types_hpp, cudf_utilities_bit_hpp,
+                        cudf::experimental::rolling::jit::code::operation_h },
                       { "-std=c++14" }, nullptr, stream)
     .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
                       { cudf::jit::get_type_name(input.type()), // list of template arguments

@@ -18,7 +18,9 @@
 
 #include <cudf/types.hpp>
 
+#ifndef NDEBUG // THis is just to avoid JITIFY warnings
 #include <cassert>
+#endif
 
 /**
  * @file bit.hpp
@@ -60,7 +62,9 @@ constexpr CUDA_HOST_DEVICE_CALLABLE size_type intra_word_index(size_type bit_ind
  *---------------------------------------------------------------------------**/
 CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
                                               size_type bit_index) {
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(nullptr != bitmask);
+#endif
   bitmask[word_index(bit_index)] |=
       (bitmask_type{1} << intra_word_index(bit_index));
 }
@@ -76,7 +80,9 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
  *---------------------------------------------------------------------------**/
 CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
                                                 size_type bit_index) {
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(nullptr != bitmask);
+#endif
   bitmask[word_index(bit_index)] |=
       ~(bitmask_type{1} << intra_word_index(bit_index));
 }
@@ -90,7 +96,9 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
  *---------------------------------------------------------------------------**/
 CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
                                                  size_type bit_index) {
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(nullptr != bitmask);
+#endif
   return bitmask[word_index(bit_index)] &
          (bitmask_type{1} << intra_word_index(bit_index));
 }
@@ -104,7 +112,9 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
  * @return A bitmask word with `n` least significant bits set
  *---------------------------------------------------------------------------**/
 constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size_type n) {
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(0 < n < detail::size_in_bits<bitmask_type>());
+#endif
   return ((bitmask_type{1} << n) - 1);
 }
 
@@ -118,7 +128,9 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size
  *---------------------------------------------------------------------------**/
 constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_most_significant_bits(size_type n) {
   constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(0 < n < word_size);
+#endif
   return ~((bitmask_type{1} << (word_size - n)) - 1);
 }
 
@@ -138,7 +150,9 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_most_significant_bits(size_
  * @param bit_index  Index of the bit to set
  *---------------------------------------------------------------------------**/
 __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(nullptr != bitmask);
+#endif
   atomicOr(&bitmask[word_index(bit_index)],
            (bitmask_type{1} << intra_word_index(bit_index)));
 }
@@ -156,7 +170,9 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
  * @param bit_index  Index of the bit to clear
  *---------------------------------------------------------------------------**/
 __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index) {
+#ifndef NDEBUG // this may seem unnecessary, but this is to avoid JIT failures
   assert(nullptr != bitmask);
+#endif
   atomicAnd(&bitmask[word_index(bit_index)],
             ~(bitmask_type{1} << intra_word_index(bit_index)));
 }

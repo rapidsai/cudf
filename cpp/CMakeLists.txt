@@ -595,19 +595,23 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    DEPENDS stringify
                    OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                           ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/utilities/bit.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
 
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
                    )
 
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/types.h.jit
                   ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit)
 
 add_dependencies(cudf stringify_run)
