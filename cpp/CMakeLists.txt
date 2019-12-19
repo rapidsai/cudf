@@ -386,6 +386,7 @@ add_library(cudf
             src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
+            src/join/join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -515,6 +516,7 @@ add_library(cudf
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
+            src/copying/contiguous_split.cu
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -558,6 +560,7 @@ add_library(cudf
             src/strings/padding.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
