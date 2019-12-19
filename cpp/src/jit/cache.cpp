@@ -14,41 +14,50 @@
  * limitations under the License.
  */
 
+#include <boost/filesystem.hpp>
 #include <cudf/utilities/error.hpp>
 #include <jit/cache.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 
 namespace cudf {
 namespace jit {
 
-std::string getCacheDir()
-{
-    char const *tmpdir_path;
-    std::string cache_dir{"cudf"};
-    cache_dir = cache_dir + '_' + CUDF_STRINGIFY(CUDF_VERSION) + '/';
-    
-    #if defined(__unix__)
+// Default `LIBCUDF_KERNEL_CACHE_PATH` to `$TEMPDIR/cudf_$CUDF_VERSION`.
+// This definition can be overridden at compile time by specifying a
+// `-DLIBCUDF_KERNEL_CACHE_PATH=/kernel/cache/path` CMake argument.
+// Use `boost::filesystem` for cross-platform path resolution and dir
+// creation. This path is used in the `getCacheDir()` function below.
+#if !defined(LIBCUDF_KERNEL_CACHE_PATH)
+#define LIBCUDF_KERNEL_CACHE_PATH            \
+  boost::filesystem::temp_directory_path() / \
+    ("cudf_" + std::string{CUDF_STRINGIFY(CUDF_VERSION)})
+#endif
 
-        (tmpdir_path = std::getenv("TMPDIR" )) ||
-        (tmpdir_path = std::getenv("TMP"    )) ||
-        (tmpdir_path = std::getenv("TEMP"   )) ||
-        (tmpdir_path = std::getenv("TEMPDIR"));
-
-        tmpdir_path = ( tmpdir_path != 0 ) ? tmpdir_path : "/tmp";
-        
-        cache_dir = std::string(tmpdir_path) + '/' + cache_dir;
-
-        // if it doesn't exist, make it
-        mkdir(cache_dir.c_str(), S_IRWXU);
-
-        return cache_dir;
-    #elif
-        #error Only unix is supported
-    #endif // __unix__
+/**
+ * @brief Get the string path to the JITIFY kernel cache directory.
+ *
+ * This path can be overridden at runtime by defining an environment variable
+ * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
+ * under which the process' user has read/write priveleges.
+ *
+ * This function returns a path to the cache directory, creating it if it
+ * doesn't exist.
+ *
+ * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ **/
+boost::filesystem::path getCacheDir() {
+  // The environment variable always overrides the
+  // default/compile-time value of `LIBCUDF_KERNEL_CACHE_PATH`
+  auto kernel_cache_path_env = std::getenv("LIBCUDF_KERNEL_CACHE_PATH");
+  auto kernel_cache_path = boost::filesystem::path(
+      kernel_cache_path_env != nullptr ? kernel_cache_path_env
+                                       : LIBCUDF_KERNEL_CACHE_PATH);
+  // `mkdir -p` the kernel cache path if it doesn't exist
+  boost::filesystem::create_directories(kernel_cache_path);
+  return kernel_cache_path;
 }
 
 cudfJitCache::cudfJitCache() { }
