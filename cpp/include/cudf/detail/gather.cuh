@@ -45,54 +45,48 @@ struct bounds_checker {
   }
 };
 
-
-
-
 template <bool ignore_out_of_bounds, typename MapIterator>
-__global__ void gather_bitmask_kernel(table_device_view source_table,
+__global__ void gather_bitmask_kernel(table_device_view input,
                                       MapIterator gather_map,
                                       bitmask_type * masks[],
-                                      size_type destination_table_num_rows,
+                                      size_type destination_row_count,
                                       size_type* valid_counts) {
 
-  for (size_type i = 0; i < source_table.num_columns(); i++) {
+  for (size_type col = 0; col < input.num_columns(); col++) {
 
-    column_device_view source_col = source_table.column(i);
+    auto input_col = input.column(col);
+    auto mask = masks[col];
 
-    if (masks[i] != nullptr) {
-      size_type destination_row_base = blockIdx.x * blockDim.x;
-      cudf::size_type valid_count_accumulate = 0;
+    if (mask != nullptr) {
+      auto row_base = blockIdx.x * blockDim.x;
+      auto valid_count_accumulate = static_cast<size_type>(0);
 
-      while (destination_row_base < destination_table_num_rows) {
-        size_type destination_row = destination_row_base + threadIdx.x;
-
-        const bool thread_active = destination_row < destination_table_num_rows;
-        size_type source_row =
-          thread_active ? gather_map[destination_row] : 0;
+      while (row_base < destination_row_count) {
+        auto row = row_base + threadIdx.x;
+        auto thread_active = row < destination_row_count;
+        auto source_row = thread_active ? gather_map[row] : 0;
 
         bool bit_is_valid;
-        if (ignore_out_of_bounds && (source_row < 0 || source_row >= source_col.size())) {
-          bit_is_valid = thread_active && bit_is_set(masks[i], destination_row);
+        if (ignore_out_of_bounds && (source_row < 0 || source_row >= input_col.size())) {
+          bit_is_valid = thread_active && bit_is_set(mask, row);
         } else {
-          bit_is_valid = source_col.is_valid(source_row);
+          bit_is_valid = input_col.is_valid(source_row);
         }
 
         // Use ballot to find all valid bits in this warp and create the output
         // bitmask element
-        const uint32_t valid_warp =
-          __ballot_sync(0xffffffff, thread_active && bit_is_valid);
-
-        const size_type valid_index = word_index(destination_row);
+        auto warp_validity = __ballot_sync(0xffffffff, thread_active && bit_is_valid);
+        auto validity_index = word_index(row);
 
         // Only one thread writes output
         if (0 == threadIdx.x % warp_size and thread_active) {
-          masks[i][valid_index] = valid_warp;
+          mask[validity_index] = warp_validity;
         }
-        valid_count_accumulate += single_lane_block_popc_reduce(valid_warp);
-        destination_row_base += blockDim.x * gridDim.x;
+        valid_count_accumulate += single_lane_block_popc_reduce(warp_validity);
+        row_base += blockDim.x * gridDim.x;
       }
       if (threadIdx.x == 0) {
-        atomicAdd(valid_counts + i, valid_count_accumulate);
+        atomicAdd(valid_counts + col, valid_count_accumulate);
       }
     }
   }
