@@ -21,6 +21,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/null_mask.hpp>
 
 
 #include <thrust/copy.h>
@@ -175,6 +176,71 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
 }
 
 /**---------------------------------------------------------------------------*
+ * For each range `[first_bit_indices[i], last_bit_indices[i])`
+ * (where 0 <= i < `num_ranges`), count the number of bits set outside the range
+ * in the boundary words (i.e. words that include either
+ * `first_bit_indices[i]'th` bit or `(last_bit_indices[i] - 1)'th` bit) and
+ * subtract the count from the range's null count.
+ *
+ * Expects `0 <= first_bit_indices[i] <= last_bit_indices[i]`.
+ *
+ * @param[in] bitmask The bitmask whose non-zero bits outside the range in the
+ * boundary words will be counted.
+ * @param[in] num_ranges The number of ranges
+ * @param[in] first_bit_indices The indices (inclusive) of the first bit in each
+ * range
+ * @param[in] last_bit_indices The indices (exclusive) of the last bit in each
+ * range
+ * @param[in,out] null_counts The number of non-zero bits in each range to be
+ * updated
+ *---------------------------------------------------------------------------**/
+template <typename OffsetIterator, typename OutputIterator>
+__global__ void subtract_set_bits_range_boundaries_kerenel(
+    bitmask_type const* bitmask,
+    size_type num_ranges,
+    OffsetIterator first_bit_indices,
+    OffsetIterator last_bit_indices,
+    OutputIterator null_counts) {
+  constexpr size_type const
+    word_size_in_bits{detail::size_in_bits<bitmask_type>()};
+
+  cudf::size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type range_id = tid;
+
+  while (range_id < num_ranges) {
+    size_type const first_bit_index = *(first_bit_indices + range_id);
+    size_type const last_bit_index = *(last_bit_indices + range_id);
+    size_type delta = 0;
+    size_type num_slack_bits = 0;
+
+    // compute delta due to the preceding bits in the first word in the range
+
+    num_slack_bits = intra_word_index(first_bit_index);
+    if (num_slack_bits > 0) {
+      bitmask_type word = bitmask[word_index(first_bit_index)];
+      bitmask_type slack_mask = set_least_significant_bits(num_slack_bits);
+      delta -= __popc(word & slack_mask);
+    }
+
+    // compute delta due to the following bits in the last word in the range
+
+    num_slack_bits =
+      (last_bit_index % word_size_in_bits) == 0 ?
+        0 : word_size_in_bits - intra_word_index(last_bit_index);
+    if (num_slack_bits > 0) {
+      bitmask_type word = bitmask[word_index(last_bit_index)];
+      bitmask_type slack_mask = set_most_significant_bits(num_slack_bits);
+      delta -= __popc(word & slack_mask);
+    }
+
+    size_type updated_null_count = *(null_counts + range_id) + delta;
+    *(null_counts + range_id) = updated_null_count;
+
+    range_id += blockDim.x * gridDim.x;
+  }
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Copies the bits starting at the specified offset from a source
  * bitmask into the destination bitmask.
  *
@@ -255,6 +321,25 @@ concatenate_masks_kernel(
   }
 }
 
+// convert [first_bit_index,last_bit_index) to
+// [first_word_index,last_word_index)
+struct to_word_index : public thrust::unary_function<size_type, size_type> {
+  bool _first = false;
+  size_type const* _d_bit_indices = nullptr;
+
+  __host__ to_word_index(bool first, size_type const* d_bit_indices) : _first(first), _d_bit_indices(d_bit_indices) {}
+
+  __device__ size_type operator()(const size_type& i) const {
+    auto bit_index = _d_bit_indices[i];
+    if (_first) {  // inclusive
+      return word_index(bit_index);
+    }
+    else {  // exclusive
+      return intra_word_index(bit_index) == 0 ?
+        word_index(bit_index) : word_index(bit_index) + 1;
+    }
+  }
+};
 
 }  // namespace
 
@@ -296,6 +381,113 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
   }
   auto num_bits = (stop - start);
   return (num_bits - detail::count_set_bits(bitmask, start, stop, stream));
+}
+
+std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
+                                      std::vector<size_type> const& indices,
+                                      cudaStream_t stream) {
+  CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
+
+  if (bitmask == nullptr) {
+    return std::vector<size_type>();
+  }
+
+  size_type num_ranges = indices.size() / 2;
+  thrust::host_vector<size_type> h_first_indices(num_ranges);
+  thrust::host_vector<size_type> h_last_indices(num_ranges);
+  for (size_type i = 0; i < num_ranges; i++) {
+    auto begin = indices[i * 2];
+    auto end = indices[i * 2 + 1];
+    CUDF_EXPECTS(begin >= 0, "Invalid range.");
+    CUDF_EXPECTS(end >= begin, "Invalid range.");
+    h_first_indices[i] = begin;
+    h_last_indices[i] = end;
+  }
+
+  rmm::device_vector<size_type> d_first_indices = h_first_indices;
+  rmm::device_vector<size_type> d_last_indices = h_last_indices;
+  rmm::device_vector<size_type> d_null_counts(num_ranges, 0);
+
+  auto word_elements =
+    thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [bitmask] __device__ (auto i) {
+        return static_cast<size_type>(__popc(bitmask[i]));
+      });
+  auto first_word_indices =
+    thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
+      // first_word_indices and last_word_indices to have the same type.
+      to_word_index(true, d_first_indices.data().get()));
+  auto last_word_indices =
+    thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
+      // first_word_indices and last_word_indices to have the same type.
+      to_word_index(false, d_last_indices.data().get()));
+
+  // first allocate temporary memroy
+
+  size_t temp_storage_bytes{0};
+  cub::DeviceSegmentedReduce::Sum(nullptr, temp_storage_bytes,
+                                  word_elements,
+                                  d_null_counts.begin(),
+                                  num_ranges,
+                                  first_word_indices, last_word_indices,
+                                  stream);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+
+  // second perform segmented reduction
+
+  cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(), temp_storage_bytes,
+                                  word_elements,
+                                  d_null_counts.begin(),
+                                  num_ranges,
+                                  first_word_indices, last_word_indices,
+                                  stream);
+
+  CHECK_STREAM(stream);
+
+  // third adjust counts in segement boundaries (if segments are not
+  // word-aligned)
+
+  constexpr size_type block_size{256};
+
+  cudf::experimental::detail::grid_1d grid(num_ranges, block_size);
+
+  subtract_set_bits_range_boundaries_kerenel
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+      bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(),
+      d_null_counts.begin());
+
+  CHECK_STREAM(stream);
+
+  std::vector<size_type> ret(num_ranges);
+  CUDA_TRY(cudaMemcpyAsync(ret.data(), d_null_counts.data().get(),
+                           num_ranges * sizeof(size_type),
+                           cudaMemcpyDeviceToHost, stream));
+
+  CHECK_STREAM(stream);
+
+  return ret;
+}
+
+std::vector<size_type> count_unset_bits(bitmask_type const* bitmask,
+                                        std::vector<size_type> const& indices,
+                                        cudaStream_t stream) {
+  if (bitmask == nullptr) {
+    return std::vector<size_type>();
+  }
+
+  auto ret = count_set_bits(bitmask, indices, stream);
+  for (size_type i = 0; i < static_cast<size_type>(ret.size()); i++) {
+    auto begin = indices[i * 2];
+    auto end = indices[i * 2 + 1];
+    ret[i] = (end - begin) - ret[i];
+  }
+
+  return ret;
 }
 
 // Create a bitmask from a vector of column views
@@ -343,6 +535,18 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
                                  size_type stop) {
   return detail::count_unset_bits(bitmask, start, stop);
+}
+
+// Count non-zero bits in the specified ranges
+std::vector<size_type> count_set_bits(bitmask_type const *bitmask,
+                                      std::vector<size_type> const& indices) {
+  return detail::count_set_bits(bitmask, indices, 0);
+}
+
+// Count zero bits in the specified ranges
+std::vector<size_type> count_unset_bits(bitmask_type const *bitmask,
+                                        std::vector<size_type> const& indices) {
+  return detail::count_unset_bits(bitmask, indices, 0);
 }
 
 // Create a bitmask from a specific range
