@@ -48,12 +48,12 @@ struct url_encoder_fn
     char* d_chars{};
 
     // utility to create 2-byte hex characters from single binary byte
-    __device__ void byte_to_hex( u_char byte, char* hex )
+    __device__ void byte_to_hex( uint8_t byte, char* hex )
     {
         hex[0] = '0';
         if( byte >= 16 )
         {
-            u_char hibyte = byte/16;
+            uint8_t hibyte = byte/16;
             hex[0] = hibyte < 10 ? '0'+hibyte : 'A'+(hibyte-10);
             byte = byte - (hibyte * 16);
         }
@@ -95,14 +95,14 @@ struct url_encoder_fn
                     if( out_ptr )
                     {
                         out_ptr = copy_and_increment(out_ptr,"%",1);  // add the '%' prefix
-                        byte_to_hex( static_cast<u_char>(ch), hex);   // convert to 2 hex chars
+                        byte_to_hex( static_cast<uint8_t>(ch), hex);   // convert to 2 hex chars
                         out_ptr = copy_and_increment(out_ptr,hex,2);  // add them to the output
                     }
                 }
             }
             else // these are to be utf-8 url-encoded
             {
-                u_char char_bytes[4]; // holds utf-8 bytes for one character
+                uint8_t char_bytes[4]; // holds utf-8 bytes for one character
                 size_type char_width = from_char_utf8(ch, reinterpret_cast<char*>(char_bytes));
                 nbytes += char_width * 3; // '%' plus 2 hex chars per byte (example: é is %C3%A9)
                 // process each byte in this current character
@@ -184,14 +184,14 @@ struct url_decoder_fn
     char* d_chars{};
 
     // utility to convert a hex char into a single byte
-    __device__ u_char hex_char_to_byte( char ch )
+    __device__ char hex_char_to_byte( char ch )
     {
         if( ch >= '0' && ch <= '9' )
-            return (ch-48);
-        if( ch >= 'A' && ch <= 'Z' )
-            return (ch-55);
-        if( ch >='a' && ch <= 'z' )
-            return (ch-87);
+            return (ch-'0');
+        if( ch >= 'A' && ch <= 'F' )
+            return (ch-'A'+10); // in hex A=10,B=11,...,F=15
+        if( ch >='a' && ch <= 'f' )
+            return (ch-'a'+10); // same for lower case
         return 0;
     }
 
