@@ -21,8 +21,11 @@ std::unique_ptr<column> group_count(
   if (values.nullable()) {
     auto values_view = column_device_view::create(values);
     
-    auto bitmask_iterator = experimental::detail::make_validity_iterator(
-                                                    *values_view);
+    // make_validity_iterator returns a boolean iterator that sums to 1
+    // so we need to transform it to cast it to an integer type
+    auto bitmask_iterator = thrust::make_transform_iterator(
+      experimental::detail::make_validity_iterator(*values_view),
+      [] __device__ (auto i) -> size_type { return i; });
 
     thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
                           group_labels.begin(),

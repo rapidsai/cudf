@@ -37,10 +37,14 @@ struct reduce_functor {
       auto device_values = column_device_view::create(values);
       auto val_it = cudf::experimental::detail::make_null_replacement_iterator(
                         *device_values, default_value);
+
+      // Without this transform, thrust throws a runtime error
+      auto it = thrust::make_transform_iterator(val_it,
+                            [] __device__ (auto i) { return i; });
       
       thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
                             group_labels.begin(), group_labels.end(),
-                            val_it, thrust::make_discard_iterator(),
+                            it, thrust::make_discard_iterator(),
                             result->mutable_view().begin<ResultType>(),
                             thrust::equal_to<size_type>(), op);
     } else {

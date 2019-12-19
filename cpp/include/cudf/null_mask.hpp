@@ -207,4 +207,22 @@ rmm::device_buffer bitmask_and(column_view const& view1,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Returns a bitwise AND of the bitmasks of a vector of columns
+ * 
+ * If any of the columns isn't nullable, it is considered all valid. 
+ * If no input column is nullable, an empty bitmask is returned.
+ * 
+ * @note The sizes of all the columns should be the same
+ * 
+ * @param views The vector of columns
+ * @param stream CUDA stream on which to execute kernels 
+ * @param mr Memory resource for allocating output bitmask
+ * @return rmm::device_buffer Output bitmask
+ */
+rmm::device_buffer bitmask_and(
+    std::vector<column_view> const& views,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace cudf

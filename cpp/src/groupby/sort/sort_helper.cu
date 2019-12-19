@@ -134,7 +134,7 @@ column_view helper::key_sort_order(cudaStream_t stream) {
 
     _key_sorted_order = cudf::experimental::detail::sorted_order(
       augmented_keys, {},
-      std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
+      std::vector<null_order>(_keys.num_columns() + 1, null_order::AFTER),
       rmm::mr::get_default_resource(), stream);
 
     // All rows with one or more null values are at the end of the resulting sorted order.
@@ -203,17 +203,20 @@ column_view helper::unsorted_keys_labels(cudaStream_t stream) {
 
   column_ptr temp_labels = make_numeric_column(
                               data_type(type_to_id<size_type>()),
-                              key_sort_order().size(),
+                              _keys.num_rows(), 
                               mask_state::ALL_NULL, stream);
   
   auto group_labels_view = cudf::column_view(
                               data_type(type_to_id<size_type>()),
                               group_labels().size(),
                               group_labels().data().get());
+  
+  auto scatter_map = cudf::experimental::detail::slice(
+    key_sort_order(), 0, num_keys());
 
   std::unique_ptr<table> t_unsorted_keys_labels = 
     cudf::experimental::detail::scatter(
-      table_view({group_labels_view}), key_sort_order(), 
+      table_view({group_labels_view}), scatter_map, 
       table_view({temp_labels->view()}),
       false, rmm::mr::get_default_resource(), stream);
 
@@ -226,9 +229,18 @@ column_view helper::keys_bitmask_column(cudaStream_t stream) {
   if (_keys_bitmask_column)
     return _keys_bitmask_column->view();
 
-  // TODO (dm): port row_bitmask
-  // _keys_bitmask_column = 
-  //   ( new bitmask_vector(row_bitmask(_keys, stream)));
+  auto key_cols = std::vector<column_view>(_keys.begin(), _keys.end());
+  auto row_bitmask = bitmask_and(key_cols, stream);
+
+  _keys_bitmask_column = make_numeric_column(
+    data_type(type_id::INT8), _keys.num_rows(), std::move(row_bitmask),
+    cudf::UNKNOWN_NULL_COUNT, stream);
+
+  using T = id_to_type<type_id::INT8>;
+  thrust::fill(rmm::exec_policy(stream)->on(stream),
+    _keys_bitmask_column->mutable_view().begin<T>(),
+    _keys_bitmask_column->mutable_view().end<T>(),
+    0);
 
   return _keys_bitmask_column->view();
 }

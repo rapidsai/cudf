@@ -95,10 +95,9 @@ TEST_F(GroupSTDTest, SingleColumnNullable)
     
     cudf::experimental::groupby::groupby gb_obj(table_view({keys}));
 
-    // TODO (dm): enable after we have row_bitmask and therefore null keys support
-    // auto result = gb_obj.aggregate(requests);
+    auto result = gb_obj.aggregate(requests);
     
-    // expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
+    expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
 }
 
 struct group_quantile : public cudf::test::BaseFixture {};
