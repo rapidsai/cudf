@@ -142,7 +142,7 @@ hash_partition_table(table_view const& input,
     std::fill_n(&offsets[partition], count, offset);
   }
 
-  return std::make_pair(std::move(output), offsets);
+  return std::make_pair(std::move(output), std::move(offsets));
 }
 
 struct nvtx_raii {
