@@ -149,7 +149,6 @@ std::unique_ptr<column> url_encode( strings_column_view const& strings,
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator<size_type>(0), strings_count,
                        url_encoder_fn{d_strings,d_offsets,d_chars});
-    //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
 }
