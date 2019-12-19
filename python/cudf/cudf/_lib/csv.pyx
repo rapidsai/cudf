@@ -240,9 +240,9 @@ cpdef read_csv(
         if kafka_configs is not None:
             reader = unique_ptr[csv_reader](
                 new csv_reader(gkc,
-                               topics, 
-                               kafka_start_offset, 
-                               kafka_batch_size, 
+                               topics,
+                               kafka_start_offset,
+                               kafka_batch_size,
                                args)
             )
         else:
