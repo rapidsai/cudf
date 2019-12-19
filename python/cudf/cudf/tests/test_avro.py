@@ -67,4 +67,6 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     for col in expect.columns:
         expect[col] = expect[col].astype(got[col].dtype)
 
-    assert_eq(expect, got, check_categorical=False)
+    # fastavro appears to return columns in reverse order
+    # (actual order may depend on pandas/python version)
+    assert_eq(expect, got[expect.columns], check_categorical=False)
