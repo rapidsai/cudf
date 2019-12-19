@@ -75,8 +75,8 @@ table read_csv(csv_read_arg const &args) {
     options.quoting = static_cast<csv::quote_style>(args.quoting);
     options.doublequote = args.doublequote;
     options.out_time_unit = args.out_time_unit;
-    options.cudf_start_offset = args.cudf_start_offset;
-    options.cudf_end_offset = args.cudf_end_offset;
+    options.start_offset = args.start_offset;
+    options.batch_size = args.batch_size;
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<csv::reader>(args.source.filepath, options);
@@ -87,10 +87,13 @@ table read_csv(csv_read_arg const &args) {
       return std::make_unique<csv::reader>(args.source.file, options);
     } else if (args.source.type == KAFKA_TOPIC) {
       options.kafka_topics = args.kafka_topics;
-      options.cudf_start_offset = args.cudf_start_offset;
-      options.cudf_end_offset = args.cudf_end_offset;
+      options.start_offset = args.start_offset;
+      options.batch_size = args.batch_size;
       return std::make_unique<csv::reader>(args.kafka_configs,
-                                           args.kafka_topics, options);
+                                           args.kafka_topics,
+                                           args.start_offset,
+                                           args.batch_size,
+                                           options);
     } else {
       CUDF_FAIL("Unsupported source type");
     }

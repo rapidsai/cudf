@@ -46,10 +46,10 @@ TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
 class KafkaTest : public GdfTest {
  protected:
   void SetUp() override {
-    // Create a baseline default configuration so each test will not need to do
-    // so
-    conf_result =
-        kafka_conf->set("metadata.broker.list", "localhost:9092", _errstr);
+    // Create a baseline default configuration so each test will not need to do so
+    kafka_conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+
+    conf_result = kafka_conf->set("metadata.broker.list", "localhost:9092", _errstr);
     ASSERT_EQ(conf_result, RdKafka::Conf::ConfResult::CONF_OK);
     conf_result = kafka_conf->set("client.id", "libcudf_unit_test", _errstr);
     ASSERT_EQ(conf_result, RdKafka::Conf::ConfResult::CONF_OK);
@@ -72,7 +72,6 @@ class KafkaTest : public GdfTest {
   void TearDown() override {
     topics.clear();
     populate_kafka = false;
-    delete kafka_conf;
   }
 
   void publish_kafka_messages() {
@@ -95,7 +94,7 @@ class KafkaTest : public GdfTest {
 
   std::string default_test_topic = "libcudf-csv-test";
   std::string _errstr;
-  RdKafka::Conf *kafka_conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+  RdKafka::Conf *kafka_conf;
   RdKafka::Conf::ConfResult conf_result;
   std::vector<std::string> topics;
 
@@ -140,8 +139,10 @@ TEST_F(KafkaTest, TopicConnection) {
   args.names = {"fname", "lname", "age"};
   args.kafka_configs = kafka_conf;
   args.kafka_topics = topics;
+  args.start_offset = 0;
+  args.batch_size = 5;
 
   const auto df = cudf::read_csv(args);
   EXPECT_EQ(df.num_columns(), 3);
-  EXPECT_EQ(df.num_rows(), messages_to_produce);
+  EXPECT_EQ(df.num_rows(), args.batch_size);
 }

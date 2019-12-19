@@ -41,7 +41,7 @@ def read_csv(
     prefix=None,
     index_col=None,
     kafka_configs=None,
-    start_offset=-1,
+    start_offset=0,
     batch_size=10000,
     **kwargs,
 ):

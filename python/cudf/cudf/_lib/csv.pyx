@@ -20,6 +20,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
+from libc.stdint cimport *
 from cudf._lib.includes.io cimport *
 
 import numpy as np
@@ -73,7 +74,7 @@ cpdef read_csv(
     prefix=None,
     index_col=None,
     kafka_configs=None,
-    start_offset=-1,
+    start_offset=0,
     batch_size=10000,
 ):
     """
@@ -196,9 +197,11 @@ cpdef read_csv(
     cdef KafkaConf.ConfType gk = KafkaConf.ConfType.CONF_GLOBAL
     cdef KafkaConf *gkc
     cdef vector[string] topics
+    cdef int64_t kafka_start_offset = start_offset
+    cdef int16_t kafka_batch_size = batch_size
 
-    args.cudf_start_offset = start_offset
-    args.cudf_end_offset = start_offset + batch_size
+    args.start_offset = start_offset
+    args.batch_size = batch_size
 
     # Regular execution path variables
     cdef const unsigned char[::1] buffer
@@ -236,7 +239,7 @@ cpdef read_csv(
     with nogil:
         if kafka_configs is not None:
             reader = unique_ptr[csv_reader](
-                new csv_reader(gkc, topics, args)
+                new csv_reader(gkc, topics, kafka_start_offset, kafka_batch_size, args)
             )
         else:
             if buffer is None:

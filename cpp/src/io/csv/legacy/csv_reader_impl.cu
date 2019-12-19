@@ -754,8 +754,9 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
   }
 }
 
-reader::reader(RdKafka::Conf *global_configs, std::vector<std::string> kafka_topics, reader_options const &options)
-    : impl_(std::make_unique<Impl>(datasource::create(global_configs, kafka_topics), "",
+reader::reader(RdKafka::Conf *global_configs, std::vector<std::string> kafka_topics, 
+                int64_t start_offset, int16_t batch_size, reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(global_configs, kafka_topics, start_offset, batch_size), "",
                                    options)) {}
 
 reader::reader(std::string filepath, reader_options const &options)

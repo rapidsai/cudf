@@ -212,8 +212,8 @@ struct csv_read_arg {
   std::vector<std::string>
       kafka_topics;  ///< Topics that should be consumed from
 
-  int cudf_start_offset;
-  int cudf_end_offset;
+  int64_t start_offset;
+  int16_t batch_size;
 
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };

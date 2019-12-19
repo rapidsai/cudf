@@ -7,7 +7,7 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.includes.io cimport *
-from libc.stdint cimport int64_t
+from libc.stdint cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -67,8 +67,8 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         quote_style         quoting
         bool                doublequote
 
-        int64_t             cudf_start_offset
-        int64_t             cudf_end_offset
+        int64_t             start_offset
+        int16_t             batch_size
 
         gdf_time_unit       out_time_unit
 
@@ -77,6 +77,8 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         reader(
             Conf *global_configs,
             vector[string] topics,
+            int64_t start_offset,
+            int16_t batch_size,
             const reader_options &options
         ) except +
 
