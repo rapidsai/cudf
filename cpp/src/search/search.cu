@@ -134,14 +134,12 @@ struct contains_scalar_dispatch {
     auto s = static_cast<const ScalarType *>(&value);
 
     if (col.has_nulls()) {
-      auto element_valid_iter = make_pair_iterator<Element, true>(*d_col);
-      auto val = thrust::make_pair(s->value(), true);
       auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
-                                     element_valid_iter,
-                                     element_valid_iter + d_col->size(),
-                                     val);
+                                     d_col->pair_begin<Element, true>(),
+                                     d_col->pair_end<Element, true>(),
+                                     thrust::make_pair(s->value(), true));
 
-      return found_iter != element_valid_iter + d_col->size();
+      return found_iter != d_col->pair_end<Element, true>();
     } else {
       auto found_iter =  thrust::find(rmm::exec_policy(stream)->on(stream),
                                       d_col->begin<Element>(),

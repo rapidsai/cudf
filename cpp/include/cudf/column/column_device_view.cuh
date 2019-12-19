@@ -352,7 +352,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @throws `cudf::logic_error` if column datatype and Element type mismatch.
    *---------------------------------------------------------------------------**/
   template<typename T, bool has_nulls>
-  const_iterator<T> pair_end() const {
+  const_pair_iterator<T, has_nulls> pair_end() const {
     return const_pair_iterator<T, has_nulls>{
         count_it{size()}, detail::pair_accessor<T, has_nulls>{*this}};
   }
