@@ -783,7 +783,7 @@ class DataFrame(object):
                 else:
                     result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
-            other_cols = dict(other.to_pandas())
+            other_cols = other.to_pandas().to_dict()
             result_cols = list(self.columns)
             for new_col in other_cols.keys():
                 if new_col not in result_cols:
@@ -795,7 +795,13 @@ class DataFrame(object):
                 else:
                     if col not in self.columns:
                         r_opr = other_cols[col]
-                        l_opr = Series(column_empty(len(self), masked=True, dtype=r_opr.dtype))
+                        l_opr = Series(
+                            column_empty(
+                                len(self),
+                                masked=True,
+                                dtype=np.array(r_opr).dtype,
+                            )
+                        )
                     if col not in other.index:
                         r_opr = None
                         l_opr = self._cols[col]
