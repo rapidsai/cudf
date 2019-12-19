@@ -23,6 +23,7 @@
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3647 Remove PatchedNumbaDeviceArray with CuPy 6.6.0
+- PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 
 ## Bug Fixes
 
