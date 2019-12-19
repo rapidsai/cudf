@@ -313,7 +313,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
+                    "${DLPACK_INCLUDE}"
+                    "${RDKAFKA_INCLUDE}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -327,7 +328,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${CMAKE_BINARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}")
+                 "${RMM_LIBRARY}"
+                 "${RDKAFKA_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -568,10 +570,6 @@ add_library(cudf
             src/groupby/sort/groupby.cu
             src/aggregation/aggregation.cpp
 )
-
-# Target the librdkafka specifically for cudf only
-target_include_directories(cudf PUBLIC "${RDKAFKA_INCLUDE}")
-target_link_directories(cudf PUBLIC "${RDKAFKA_LIBRARY}")
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
