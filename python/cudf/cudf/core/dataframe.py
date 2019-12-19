@@ -510,6 +510,16 @@ class DataFrame(object):
         index = self._index.__sizeof__()
         return columns + index
 
+    def memory_usage(self, index=True, deep=False):
+        ind = list(self.columns)
+        sizes = [
+            col._column._memory_usage(deep=deep) for col in self._cols.values()
+        ]
+        if index:
+            ind.append("Index")
+            sizes.append(self._index.memory_usage(deep=deep))
+        return Series(sizes, index=ind)
+
     def __len__(self):
         """
         Returns the number of rows

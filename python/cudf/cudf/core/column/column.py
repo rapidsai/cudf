@@ -303,6 +303,9 @@ class Column(object):
             n += self._mask.__sizeof__()
         return n
 
+    def _memory_usage(self, **kwargs):
+        return self.__sizeof__()
+
     def __len__(self):
         return self._data.size
 
@@ -994,6 +997,7 @@ class TypedColumnBase(Column):
     def __cuda_array_interface__(self):
         output = {
             "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
             "data": (self.data.mem.device_ctypes_pointer.value, True),
             "version": 1,
