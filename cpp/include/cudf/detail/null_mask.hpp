@@ -15,9 +15,35 @@
  */
 #pragma once
 
+#include <cudf/types.hpp>
+
+#include <vector>
+
 namespace cudf {
 
 namespace detail {
+
+/**
+ * TODO: will this compile?
+ * @copydoc cudf::couunt_set_bits(bitmask_type const*,
+ *                                std::vector<size_type> const&)
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
+                                      std::vector<size_type> const& indices,
+                                      cudaStream_t stream = 0);
+
+/**
+ * TODO: will this compile?
+ * @copydoc cudf::couunt_unset_bits(bitmask_type const*,
+ *                                  std::vector<size_type> const&)
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type> count_unset_bits(bitmask_type const* bitmask,
+                                        std::vector<size_type> const& indices,
+                                        cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates `views[i]`'s bitmask from the bits
