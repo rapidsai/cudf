@@ -175,7 +175,7 @@ std::pair<bit_container*, size_type> valid_if(
   cudaStreamSynchronize(stream);
   size_type null_count = num_bits - valid_count_host;
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
   return std::pair<bit_container*, size_type>(destination_mask, null_count);
 
 }
