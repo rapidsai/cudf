@@ -286,3 +286,21 @@ def test_rangeindex_slice_attr_name():
     rg = RangeIndex(start, stop, "myindex")
     sliced_rg = rg[0:9]
     assert_eq(rg.name, sliced_rg.name)
+
+
+def test_from_pandas_str():
+    idx = ["a", "b", "c"]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.StringIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+def test_from_pandas_gen():
+    idx = [2, 4, 6]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)

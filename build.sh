@@ -61,6 +61,10 @@ function hasArg {
     (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
 
+function buildAll {
+    ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
+}
+
 if hasArg -h; then
     echo "${HELP}"
     exit 0
@@ -117,7 +121,7 @@ fi
 
 ################################################################################
 # Configure, build, and install libnvstrings
-if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
+if buildAll || hasArg libnvstrings; then
 
     mkdir -p ${LIBNVSTRINGS_BUILD_DIR}
     cd ${LIBNVSTRINGS_BUILD_DIR}
@@ -133,18 +137,19 @@ if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
 fi
 
 # Build and install the nvstrings Python package
-if (( ${NUMARGS} == 0 )) || hasArg nvstrings; then
+if buildAll || hasArg nvstrings; then
+
     cd ${REPODIR}/python/nvstrings
     if [[ ${INSTALL_TARGET} != "" ]]; then
-    python setup.py build_ext
-    python setup.py install --single-version-externally-managed --record=record.txt
+        python setup.py build_ext
+        python setup.py install --single-version-externally-managed --record=record.txt
     else
-    python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+        python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
     fi
 fi
 
 # Configure, build, and install libcudf
-if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
+if buildAll || hasArg libcudf; then
 
     mkdir -p ${LIBCUDF_BUILD_DIR}
     cd ${LIBCUDF_BUILD_DIR}
@@ -161,20 +166,24 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
 fi
 
 # Build and install the cudf Python package
-if (( ${NUMARGS} == 0 )) || hasArg cudf; then
+if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-    python setup.py build_ext --inplace
-    python setup.py install --single-version-externally-managed --record=record.txt
+        python setup.py build_ext --inplace
+        python setup.py install --single-version-externally-managed --record=record.txt
     else
-    python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
 # Build and install the dask_cudf Python package
-if (( ${NUMARGS} == 0 )) || hasArg dask_cudf; then
+if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    python setup.py install --single-version-externally-managed --record=record.txt
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        python setup.py build_ext --inplace
+    fi
 fi
