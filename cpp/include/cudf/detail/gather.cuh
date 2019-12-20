@@ -45,51 +45,77 @@ struct bounds_checker {
   }
 };
 
+template<typename ValiditySelector>
+__device__ void select_bitmask(ValiditySelector get_validity,
+                               bitmask_type* masks[],
+                               size_type mask_count,
+                               size_type mask_num_bits,
+                               size_type* validity_counts)
+{
+  for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
+    auto const mask = masks[mask_idx];
+    if (mask == nullptr) {
+      continue;
+    }
+
+    auto bit_idx_offset = blockIdx.x * blockDim.x;
+    auto validity_count_aggregate = static_cast<size_type>(0);
+
+    while (bit_idx_offset < mask_num_bits) {
+      auto const bit_idx = bit_idx_offset + threadIdx.x;
+      auto const bit_active = bit_idx < mask_num_bits;
+      auto const bit_is_valid = bit_active && get_validity(mask_idx, bit_idx);
+      auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
+      auto const validity_idx = word_index(bit_idx);
+
+      if (threadIdx.x % warp_size == 0) {
+        mask[validity_idx] = warp_validity;
+      }
+
+      validity_count_aggregate += single_lane_block_popc_reduce(warp_validity);
+      bit_idx_offset += blockDim.x * gridDim.x;
+    }
+
+
+    if (threadIdx.x == 0) {
+      atomicAdd(validity_counts + mask_idx, validity_count_aggregate);
+    }
+  }
+}
+
+template <bool ignore_out_of_bounds, typename MapIterator>
+struct gather_bitmask_functor {
+  table_device_view input;
+  bitmask_type** masks;
+  MapIterator gather_map;
+
+  __device__ bool operator()(size_type mask_idx, size_type bit_idx) {
+    auto row_idx = gather_map[bit_idx];
+    auto col = input.column(mask_idx);
+
+    if (ignore_out_of_bounds) {
+      if (row_idx < 0 || row_idx >= col.size()) {
+        return bit_is_set(masks[mask_idx], bit_idx);
+      }
+    }
+
+    return col.is_valid(row_idx);
+  }
+};
+
 template <bool ignore_out_of_bounds, typename MapIterator>
 __global__ void gather_bitmask_kernel(table_device_view input,
                                       MapIterator gather_map,
                                       bitmask_type * masks[],
                                       size_type destination_row_count,
-                                      size_type* valid_counts) {
+                                      size_type* validity_counts) {
 
-  for (size_type col = 0; col < input.num_columns(); col++) {
-
-    auto input_col = input.column(col);
-    auto mask = masks[col];
-
-    if (mask != nullptr) {
-      auto row_base = blockIdx.x * blockDim.x;
-      auto valid_count_accumulate = static_cast<size_type>(0);
-
-      while (row_base < destination_row_count) {
-        auto row = row_base + threadIdx.x;
-        auto thread_active = row < destination_row_count;
-        auto source_row = thread_active ? gather_map[row] : 0;
-
-        bool bit_is_valid;
-        if (ignore_out_of_bounds && (source_row < 0 || source_row >= input_col.size())) {
-          bit_is_valid = thread_active && bit_is_set(mask, row);
-        } else {
-          bit_is_valid = input_col.is_valid(source_row);
-        }
-
-        // Use ballot to find all valid bits in this warp and create the output
-        // bitmask element
-        auto warp_validity = __ballot_sync(0xffffffff, thread_active && bit_is_valid);
-        auto validity_index = word_index(row);
-
-        // Only one thread writes output
-        if (0 == threadIdx.x % warp_size and thread_active) {
-          mask[validity_index] = warp_validity;
-        }
-        valid_count_accumulate += single_lane_block_popc_reduce(warp_validity);
-        row_base += blockDim.x * gridDim.x;
-      }
-      if (threadIdx.x == 0) {
-        atomicAdd(valid_counts + col, valid_count_accumulate);
-      }
-    }
-  }
+  using Selector = gather_bitmask_functor<ignore_out_of_bounds, MapIterator>;
+  select_bitmask(Selector{ input, masks, gather_map },
+                 masks,
+                 input.num_columns(),
+                 destination_row_count,
+                 validity_counts);
 }
 
 /**---------------------------------------------------------------------------*
