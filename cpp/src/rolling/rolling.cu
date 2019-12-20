@@ -336,7 +336,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   cudf::jit::launcher(hash, cuda_source,
                       { cudf_types_hpp, cudf_utilities_bit_hpp,
                         cudf::experimental::rolling::jit::code::operation_h },
-                      { "-std=c++14" }, nullptr, stream)
+                      { "-std=c++14", "-w" }, nullptr, stream)
     .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
                       { cudf::jit::get_type_name(input.type()), // list of template arguments
                         cudf::jit::get_type_name(output->type()),
