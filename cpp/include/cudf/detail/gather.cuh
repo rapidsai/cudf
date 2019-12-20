@@ -48,10 +48,12 @@ struct bounds_checker {
 
 /**----------------------------------------------------------------------------*
  * @brief For each mask, assigns each bit to a value obtained by calling the
-          validity selector.
-
+ *        validity selector.
+ *
+ * @note If any mask is `nullptr`, that mask will be ignored.
+ *
  * @param get_validity    Function used to obtain validity for each bit.
-                          Signature: `bool(size_type mask_idx, size_type bit_idx)`
+ *                        Signature: `bool(size_type mask_idx, size_type bit_idx)`
  * @param masks           Masks for which bits will be obtained and assigned.
  * @param mask_count      The number of `masks`.
  * @param mask_num_bits   The number of bits to assign for each mask. If this
