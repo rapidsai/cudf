@@ -103,7 +103,7 @@ __global__ void select_bitmask_kernel(ValiditySelector get_validity,
       auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
       auto const mask_idx = word_index(lane_idx);
 
-      if (lane_active & threadIdx.x % warp_size == 0) {
+      if (lane_active && threadIdx.x % warp_size == 0) {
         mask[mask_idx] = warp_validity;
       }
 
