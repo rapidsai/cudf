@@ -379,15 +379,6 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
 
-  auto bitmask_kernel =
-    nullify_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> :
-                            gather_bitmask_kernel<false, decltype(gather_map_begin)>;
-
-  int gather_grid_size;
-  int gather_block_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
-               &gather_grid_size, &gather_block_size, bitmask_kernel));
-
   auto source_table_view = table_device_view::create(source_table);
   std::vector<bitmask_type*> host_masks(destination_table->num_columns());
   auto mutable_destination_table = destination_table->mutable_view();
@@ -397,12 +388,35 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
                     });
 
   rmm::device_vector<bitmask_type*> masks(host_masks);
+  auto masks_data = masks.data().get();
 
-  bitmask_kernel<<<gather_grid_size, gather_block_size, 0, stream>>>(*source_table_view,
-                                                          gather_map_begin,
-                                                          masks.data().get(),
-                                                          destination_table->num_rows(),
-                                                          valid_counts.data().get());
+  if (nullify_out_of_bounds) {
+    using Selector = gather_bitmask_functor<true, decltype(gather_map_begin)>;
+    auto selector = Selector{ *source_table_view, masks_data, gather_map_begin };
+    auto kernel = select_bitmask_kernel<Selector>;
+    int grid_size;
+    int block_size;
+    CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, kernel));
+    kernel<<<grid_size, block_size, 0, stream>>>(selector,
+                                                 masks_data,
+                                                 masks.size(),
+                                                 destination_table->num_rows(),
+                                                 valid_counts.data().get());
+
+
+  } else {
+    using Selector = gather_bitmask_functor<false, decltype(gather_map_begin)>;
+    auto selector = Selector{ *source_table_view, masks_data, gather_map_begin };
+    auto kernel = select_bitmask_kernel<Selector>;
+    int grid_size;
+    int block_size;
+    CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, kernel));
+    kernel<<<grid_size, block_size, 0, stream>>>(selector,
+                                                 masks_data,
+                                                 masks.size(),
+                                                 destination_table->num_rows(),
+                                                 valid_counts.data().get());
+  }
 
   thrust::host_vector<cudf::size_type> h_valid_counts(valid_counts);
 
