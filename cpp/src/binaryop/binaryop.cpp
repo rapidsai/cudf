@@ -97,7 +97,7 @@ void binary_operation(mutable_column_view& out,
   cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
                       headers_code, stream)
       .set_kernel_inst(
-          "cudf::experimental::kernel_v_s",       // name of the kernel we are
+          "kernel_v_s",                           // name of the kernel we are
                                                   // launching
           {cudf::jit::get_type_name(out.type()),  // list of template arguments
            cudf::jit::get_type_name(rhs.type()),
@@ -115,7 +115,7 @@ void binary_operation(mutable_column_view& out,
   cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
                       headers_code, stream)
       .set_kernel_inst(
-          "cudf::experimental::kernel_v_s",       // name of the kernel we are
+          "kernel_v_s",                           // name of the kernel we are
                                                   // launching
           {cudf::jit::get_type_name(out.type()),  // list of template arguments
            cudf::jit::get_type_name(lhs.type()),
@@ -133,7 +133,7 @@ void binary_operation(mutable_column_view& out,
   cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
                       headers_code, stream)
       .set_kernel_inst(
-          "cudf::experimental::kernel_v_v",       // name of the kernel we are
+          "kernel_v_v",                           // name of the kernel we are
                                                   // launching
           {cudf::jit::get_type_name(out.type()),  // list of template arguments
            cudf::jit::get_type_name(lhs.type()),
@@ -160,8 +160,8 @@ void binary_operation(mutable_column_view& out,
 
   cudf::jit::launcher(ptx_hash, cuda_source, header_names, compiler_flags,
                       headers_code, stream)
-      .set_kernel_inst("cudf::experimental::kernel_v_v",  // name of the kernel
-                                                          // we are launching
+      .set_kernel_inst("kernel_v_v",       // name of the kernel
+                                           // we are launching
                        {output_type_name,  // list of template arguments
                         cudf::jit::get_type_name(lhs.type()),
                         cudf::jit::get_type_name(rhs.type()),
