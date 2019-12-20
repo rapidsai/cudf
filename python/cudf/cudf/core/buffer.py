@@ -39,7 +39,7 @@ class Buffer:
 
             self._init_from_array_like(data)
         elif isinstance(data, memoryview):
-            self._init_from_array_like(np.array(data))
+            self._init_from_array_like(np.asarray(data))
         else:
             if data is None:
                 self.ptr = 0

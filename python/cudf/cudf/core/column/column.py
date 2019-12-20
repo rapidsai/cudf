@@ -1232,7 +1232,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
-            np.array(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+            np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
 
     else:
@@ -1268,7 +1268,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
-                        np.array(arbitrary, dtype=np.dtype(dtype)),
+                        np.asarray(arbitrary, dtype=np.dtype(dtype)),
                         nan_as_null=nan_as_null,
                     )
     return data
