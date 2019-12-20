@@ -157,7 +157,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
-          -ENABLE_KAFKA_TESTS=${ENABLE_KAFKA_TESTS} \
+          -DENABLE_KAFKA_TESTS=${ENABLE_KAFKA_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}

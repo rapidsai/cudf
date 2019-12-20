@@ -416,10 +416,10 @@ ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
 
 # Kafka integration tests are disabled by default.
 if(ENABLE_KAFKA_TESTS)
-    #include_directories("${RDKAFKA_INCLUDE}")
+    include_directories("${RDKAFKA_INCLUDE}")
     
-    # link_directories("${RDKAFKA_LIBRARY}"
-    #                  "${RDKAFKA++_LIBRARY}")
+    link_directories("${RDKAFKA_LIBRARY}"
+                     "${RDKAFKA++_LIBRARY}")
 
     set(LEGACY_KAFKA_IO_TEST_SRC
         "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_kafka_test.cpp"
