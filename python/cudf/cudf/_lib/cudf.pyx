@@ -13,6 +13,8 @@ from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport malloc, free
 from libc.string cimport strcpy
+from rmm._lib.lib cimport c_free, cudaStream_t
+
 
 import numpy as np
 import pandas as pd
@@ -112,11 +114,11 @@ cpdef get_ctype_ptr(obj):
 
 
 cpdef get_column_data_ptr(obj):
-    return get_ctype_ptr(obj._data_view())
+    return obj.data.ptr
 
 
 cpdef get_column_valid_ptr(obj):
-    return get_ctype_ptr(obj._mask_view())
+    return obj.mask.ptr
 
 
 cdef np_dtype_from_gdf_column(gdf_column* col):
@@ -160,6 +162,9 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     """
     Returns a gdf_scalar* constructed from the numpy scalar ``val``.
     """
+    if not np.isscalar(val):
+        raise TypeError("val must be a NumPy scalar")
+
     cdef bool is_valid = True
 
     if dtype is None:
@@ -337,13 +342,8 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         data = nvstrings.bind_cpointer(data_ptr)
         result = as_column(data)
     elif gdf_dtype == GDF_STRING_CATEGORY:
-        # Need to do this just to make sure it's freed properly
-        garbage = rmm.device_array_from_ptr(
-            data_ptr,
-            nelem=c_col.size,
-            dtype='int32',
-            finalizer=rmm._make_finalizer(data_ptr, 0)
-        )
+        c_free(<void*><uintptr_t>data_ptr, <cudaStream_t><size_type>0)
+
         if c_col.size == 0:
             data = nvstrings.to_device([])
         else:
@@ -354,19 +354,13 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
 
     else:
         dtype = np_dtype_from_gdf_column(c_col)
-        dbuf = rmm.DeviceBuffer(
-            ptr=data_ptr,
-            size=dtype.itemsize * c_col.size,
-        )
-        data = Buffer(dbuf)
+        dptr = rmm._DevicePointer(data_ptr)
+        data = Buffer(dptr, dtype.itemsize*c_col.size)
+
         mask = None
         if c_col.valid:
-            mask_ptr = int(<uintptr_t>c_col.valid)
-            mbuf = rmm.DeviceBuffer(
-                ptr=mask_ptr,
-                size=calc_chunk_size(c_col.size,mask_bitsize)
-            )
-            mask = Buffer(mbuf)
+            mptr = rmm._DevicePointer(int(<uintptr_t>c_col.valid))
+            mask = Buffer(mptr, size=calc_chunk_size(c_col.size, mask_bitsize))
 
         result = build_column(data=data,
                               dtype=dtype,
