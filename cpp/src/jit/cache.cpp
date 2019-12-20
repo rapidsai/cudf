@@ -67,12 +67,12 @@ cudfJitCache::~cudfJitCache() { }
 std::mutex cudfJitCache::_kernel_cache_mutex;
 std::mutex cudfJitCache::_program_cache_mutex;
 
-named_prog<jitify_v2::Program> cudfJitCache::getProgram(
+named_prog<jitify::experimental::Program> cudfJitCache::getProgram(
     std::string const& prog_name, 
     std::string const& cuda_source,
     std::vector<std::string> const& given_headers,
     std::vector<std::string> const& given_options,
-    jitify_v2::file_callback_type file_callback)
+    jitify::experimental::file_callback_type file_callback)
 {
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_program_cache_mutex);
@@ -81,7 +81,7 @@ named_prog<jitify_v2::Program> cudfJitCache::getProgram(
         [&](){
             CUDF_EXPECTS( not cuda_source.empty(),
                 "Program not found in cache, Needs source string.");
-            return jitify_v2::Program(cuda_source,
+            return jitify::experimental::Program(cuda_source,
                                         given_headers,
                                         given_options,
                                         file_callback);
@@ -89,16 +89,16 @@ named_prog<jitify_v2::Program> cudfJitCache::getProgram(
     );
 }
 
-named_prog<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
+named_prog<jitify::experimental::KernelInstantiation> cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
-    named_prog<jitify_v2::Program> const& named_program,
+    named_prog<jitify::experimental::Program> const& named_program,
     std::vector<std::string> const& arguments)
 {
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_kernel_cache_mutex);
 
     std::string prog_name = std::get<0>(named_program);
-    jitify_v2::Program& program = *std::get<1>(named_program);
+    jitify::experimental::Program& program = *std::get<1>(named_program);
 
     // Make instance name e.g. "prog_binop.kernel_v_v_int_int_long int_Add"
     std::string kern_inst_name = prog_name + '.' + kern_name;
@@ -115,7 +115,7 @@ named_prog<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
 // kernel instantiations in one step
 // ------------------------------------------------------------------------
 /*
-jitify_v2::KernelInstantiation cudfJitCache::getKernelInstantiation(
+jitify::experimental::KernelInstantiation cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
     std::string const& prog_name,
     std::string const& cuda_source = "",
