@@ -45,6 +45,23 @@ struct bounds_checker {
   }
 };
 
+
+/**----------------------------------------------------------------------------*
+ * @brief For each mask, assigns each bit to a value obtained by calling the
+          validity selector.
+
+ * @param get_validity    Function used to obtain validity for each bit.
+                          Signature: `bool(size_type mask_idx, size_type bit_idx)`
+ * @param masks           Masks for which bits will be obtained and assigned.
+ * @param mask_count      The number of `masks`.
+ * @param mask_num_bits   The number of bits to assign for each mask. If this
+ *                        number is smaller than the total number of bits, the
+ *                        remaining bits will be set to `0` / `false`.
+ * @param validity_counts Used to obtain the total number of valid bits for each
+ *                        mask.
+ *
+ * @tparam ValiditySelector bool(size_type mask_idx, size_type bit_idx);
+ *---------------------------------------------------------------------------**/
 template<typename ValiditySelector>
 __device__ void select_bitmask(ValiditySelector get_validity,
                                bitmask_type* masks[],
