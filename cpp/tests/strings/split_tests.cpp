@@ -300,4 +300,6 @@ TEST_F(StringsSplitTest, InvalidParameter)
     auto strings_view = cudf::strings_column_view(strings);
     EXPECT_THROW( cudf::strings::split(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
     EXPECT_THROW( cudf::strings::rsplit(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
+    EXPECT_THROW( cudf::strings::partition(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
+    EXPECT_THROW( cudf::strings::rpartition(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
 }
