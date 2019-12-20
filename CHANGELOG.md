@@ -1,6 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
+
 - PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
@@ -9,7 +10,7 @@
 
 ## Improvements
 
-- PR #3431 Port NVStrings translate to cudf strings column
+- PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
@@ -24,6 +25,7 @@
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
+- PR #3654 Update Jitify submodule ref to include gcc-8 fix
 
 ## Bug Fixes
 
