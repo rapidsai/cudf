@@ -32,6 +32,37 @@ namespace experimental {
 namespace detail {
 namespace {
 
+template <typename Transformer>
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>>
+form_offsets_and_char_column (cudf::column_device_view input,
+                              Transformer offsets_transformer,
+                              rmm::mr::device_memory_resource* mr,
+                              cudaStream_t stream) {
+
+    std::unique_ptr<column> offsets_column{};
+    auto strings_count = input.size();
+
+    if (input.nullable()) {
+        auto input_begin = cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
+        auto offsets_transformer_itr = thrust::make_transform_iterator(input_begin, offsets_transformer);
+        offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
+                    offsets_transformer_itr + strings_count,
+                    mr, stream));
+    } else {
+        auto offsets_transformer_itr = thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
+        offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
+                    offsets_transformer_itr + strings_count,
+                    mr, stream));
+    }
+
+    auto d_offsets = offsets_column->view().template data<int32_t>();
+    // build chars column
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+    auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
+
+    return std::make_pair(std::move(offsets_column), std::move(chars_column));
+}
+
 std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& input,
                                                    string_scalar const& lo,
                                                    string_scalar const& hi,
@@ -47,32 +78,26 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
 
     if (lo.is_valid(stream) and (hi.is_valid(stream))) {
         // build offset column
-        auto offsets_transformer = [d_input, d_lo, d_hi] __device__ (size_type idx) {
+        auto offsets_transformer = [d_lo, d_hi] __device__ (string_view element, bool is_valid=true) {
             size_type bytes = 0;
 
-            if (d_input.is_valid(idx)) {
-                auto input_element = d_input.element<string_view>(idx);
-
-                if (input_element < d_lo){
+            if (is_valid) {
+                if (element < d_lo){
                     bytes = d_lo.size_bytes();
-                } else if (d_hi < input_element) {
+                } else if (d_hi < element) {
                     bytes = d_hi.size_bytes();
                 } else {
-                    bytes = input_element.size_bytes();
+                    bytes = element.size_bytes();
                 }
             }
             return bytes;
         };
 
-        auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
-                offsets_transformer_itr + strings_count,
-                mr, stream);
+        auto offset_and_char = form_offsets_and_char_column(d_input, offsets_transformer, mr, stream);
+        auto offsets_column(std::move(offset_and_char.first));
+        auto chars_column(std::move(offset_and_char.second));
 
         auto d_offsets = offsets_column->view().template data<int32_t>();
-        // build chars column
-        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
         auto d_chars = chars_column->mutable_view().template data<char>();
         // fill in chars
         auto copy_transformer = [d_input, d_lo, d_hi, d_offsets, d_chars] __device__(size_type idx){
@@ -95,30 +120,25 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
                 input.null_count(), std::move(copy_bitmask(input.parent())), stream, mr);
     } else if (hi.is_valid(stream)) {
         // build offset column
-        auto offsets_transformer = [d_input, d_hi] __device__ (size_type idx) {
+        auto offsets_transformer = [d_hi] __device__ (string_view element, bool is_valid=true) {
             size_type bytes = 0;
 
-            if (d_input.is_valid(idx)) {
-                auto input_element = d_input.element<string_view>(idx);
+            if (is_valid) {
 
-                if (d_hi < input_element) {
+                if (d_hi < element) {
                     bytes = d_hi.size_bytes();
                 } else {
-                    bytes = input_element.size_bytes();
+                    bytes = element.size_bytes();
                 }
             }
             return bytes;
         };
 
-        auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
-                offsets_transformer_itr + strings_count,
-                mr, stream);
+        auto offset_and_char = form_offsets_and_char_column(d_input, offsets_transformer, mr, stream);
+        auto offsets_column(std::move(offset_and_char.first));
+        auto chars_column(std::move(offset_and_char.second));
 
         auto d_offsets = offsets_column->view().template data<int32_t>();
-        // build chars column
-        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
         auto d_chars = chars_column->mutable_view().template data<char>();
         // fill in chars
         auto copy_transformer = [d_input, d_hi, d_offsets, d_chars] __device__(size_type idx){
@@ -139,30 +159,25 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
                 input.null_count(), std::move(copy_bitmask(input.parent())), stream, mr);
     } else {
         // build offset column
-        auto offsets_transformer = [d_input, d_lo] __device__ (size_type idx) {
+        auto offsets_transformer = [d_lo] __device__ (string_view element, bool is_valid=true) {
             size_type bytes = 0;
 
-            if (d_input.is_valid(idx)) {
-                auto input_element = d_input.element<string_view>(idx);
+            if (is_valid) {
 
-                if (input_element < d_lo){
+                if (element < d_lo){
                     bytes = d_lo.size_bytes();
                 } else {
-                    bytes = input_element.size_bytes();
+                    bytes = element.size_bytes();
                 }
             }
             return bytes;
         };
 
-        auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
-                offsets_transformer_itr + strings_count,
-                mr, stream);
+        auto offset_and_char = form_offsets_and_char_column(d_input, offsets_transformer, mr, stream);
+        auto offsets_column(std::move(offset_and_char.first));
+        auto chars_column(std::move(offset_and_char.second));
 
         auto d_offsets = offsets_column->view().template data<int32_t>();
-        // build chars column
-        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
         auto d_chars = chars_column->mutable_view().template data<char>();
         // fill in chars
         auto copy_transformer = [d_input, d_lo, d_offsets, d_chars] __device__(size_type idx){
