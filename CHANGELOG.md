@@ -11,7 +11,7 @@
 
 ## Improvements
 
-- PR #3431 Port NVStrings translate to cudf strings column
+- PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
@@ -22,10 +22,12 @@
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
+- PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 
 ## Bug Fixes
@@ -98,6 +100,7 @@
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
 - PR #3557 Add contiguous_split() function. 
+- PR #3507 Define and implement new binary operation APIs
 
 ## Improvements
 

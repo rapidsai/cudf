@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/detail/copy.hpp>
@@ -45,12 +61,31 @@ struct bounds_checker {
   }
 };
 
-template<typename ValiditySelector>
-__device__ void select_bitmask(ValiditySelector get_validity,
-                               bitmask_type* masks[],
-                               size_type mask_count,
-                               size_type mask_num_bits,
-                               size_type* validity_counts)
+
+/**----------------------------------------------------------------------------*
+ * @brief For each mask, assigns each bit to a value obtained by calling the
+ *        validity selector.
+ *
+ * @note If any mask is `nullptr`, that mask will be ignored.
+ *
+ * @param get_validity    Function used to obtain validity for each bit.
+ *                        Signature: `bool(size_type mask_idx, size_type bit_idx)`
+ * @param masks           Masks for which bits will be obtained and assigned.
+ * @param mask_count      The number of `masks`.
+ * @param mask_num_bits   The number of bits to assign for each mask. If this
+ *                        number is smaller than the total number of bits, the
+ *                        remaining bits will be set to `0` / `false`.
+ * @param validity_counts Used to obtain the total number of valid bits for each
+ *                        mask.
+ *
+ * @tparam ValiditySelector bool(size_type mask_idx, size_type bit_idx);
+ *---------------------------------------------------------------------------**/
+template <typename ValiditySelector, int32_t block_size>
+__global__ void select_bitmask_kernel(ValiditySelector get_validity,
+                                      bitmask_type* masks[],
+                                      size_type mask_count,
+                                      size_type mask_num_bits,
+                                      size_type* valid_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
@@ -58,27 +93,28 @@ __device__ void select_bitmask(ValiditySelector get_validity,
       continue;
     }
 
-    auto bit_idx_offset = blockIdx.x * blockDim.x;
-    auto validity_count_aggregate = static_cast<size_type>(0);
+    auto lane_offset = blockIdx.x * blockDim.x;
+    auto warp_valid_count = static_cast<size_type>(0);
 
-    while (bit_idx_offset < mask_num_bits) {
-      auto const bit_idx = bit_idx_offset + threadIdx.x;
-      auto const bit_active = bit_idx < mask_num_bits;
-      auto const bit_is_valid = bit_active && get_validity(mask_idx, bit_idx);
+    while (lane_offset < mask_num_bits) {
+      auto const lane_idx = lane_offset + threadIdx.x;
+      auto const lane_active = lane_idx < mask_num_bits;
+      auto const bit_is_valid = lane_active && get_validity(mask_idx, lane_idx);
       auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
-      auto const validity_idx = word_index(bit_idx);
+      auto const mask_idx = word_index(lane_idx);
 
-      if (threadIdx.x % warp_size == 0) {
-        mask[validity_idx] = warp_validity;
+      if (lane_active && threadIdx.x % warp_size == 0) {
+        mask[mask_idx] = warp_validity;
       }
 
-      validity_count_aggregate += single_lane_block_popc_reduce(warp_validity);
-      bit_idx_offset += blockDim.x * gridDim.x;
+      warp_valid_count += __popc(warp_validity);
+      lane_offset += blockDim.x * gridDim.x;
     }
 
+    auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
     if (threadIdx.x == 0) {
-      atomicAdd(validity_counts + mask_idx, validity_count_aggregate);
+      atomicAdd(valid_counts + mask_idx, block_valid_count);
     }
   }
 }
@@ -102,30 +138,6 @@ struct gather_bitmask_functor {
     return col.is_valid(row_idx);
   }
 };
-
-template <typename ValiditySelector>
-__global__ void select_bitmask_kernel(ValiditySelector get_validity,
-                                      bitmask_type* masks[],
-                                      size_type mask_count,
-                                      size_type mask_num_bits,
-                                      size_type* validity_counts) {
-  select_bitmask(get_validity, masks, mask_count, mask_num_bits, validity_counts);
-}
-
-template <bool ignore_out_of_bounds, typename MapIterator>
-__global__ void gather_bitmask_kernel(table_device_view input,
-                                      MapIterator gather_map,
-                                      bitmask_type * masks[],
-                                      size_type destination_row_count,
-                                      size_type* validity_counts) {
-
-  using Selector = gather_bitmask_functor<ignore_out_of_bounds, MapIterator>;
-  select_bitmask(Selector{ input, masks, gather_map },
-                 masks,
-                 input.num_columns(),
-                 destination_row_count,
-                 validity_counts);
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased
@@ -294,6 +306,27 @@ struct index_converter : public thrust::unary_function<map_type,map_type>
   size_type n_rows;
 };
 
+template<bool ignore_out_of_bounds, typename GatherMap>
+void gather_bitmask(table_device_view input,
+                    GatherMap gather_map_begin,
+                    bitmask_type** masks,
+                    size_type mask_count,
+                    size_type mask_size,
+                    size_type* valid_counts,
+                    cudaStream_t stream)
+{
+  constexpr size_type block_size = 256;
+  using Selector = gather_bitmask_functor<ignore_out_of_bounds, decltype(gather_map_begin)>;
+  auto selector = Selector{ input, masks, gather_map_begin };
+  auto kernel = select_bitmask_kernel<Selector, block_size>;
+  cudf::experimental::detail::grid_1d grid { mask_size, block_size, 1 };
+  kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
+                                                     masks,
+                                                     mask_count,
+                                                     mask_size,
+                                                     valid_counts);
+}
+
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
@@ -334,8 +367,6 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
        bool allow_negative_indices = false,
        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
        cudaStream_t stream = 0) {
-  auto source_n_cols = source_table.num_columns();
-  auto source_n_rows = source_table.num_rows();
   auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
 
   std::vector<std::unique_ptr<column>> destination_columns;
@@ -360,15 +391,6 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
 
-  auto bitmask_kernel =
-    nullify_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_begin)> :
-                            gather_bitmask_kernel<false, decltype(gather_map_begin)>;
-
-  int gather_grid_size;
-  int gather_block_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
-               &gather_grid_size, &gather_block_size, bitmask_kernel));
-
   auto source_table_view = table_device_view::create(source_table);
   std::vector<bitmask_type*> host_masks(destination_table->num_columns());
   auto mutable_destination_table = destination_table->mutable_view();
@@ -379,11 +401,23 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   rmm::device_vector<bitmask_type*> masks(host_masks);
 
-  bitmask_kernel<<<gather_grid_size, gather_block_size, 0, stream>>>(*source_table_view,
-                                                          gather_map_begin,
-                                                          masks.data().get(),
-                                                          destination_table->num_rows(),
-                                                          valid_counts.data().get());
+  if (nullify_out_of_bounds) {
+    gather_bitmask<true>(*source_table_view,
+                         gather_map_begin,
+                         masks.data().get(),
+                         masks.size(),
+                         num_destination_rows,
+                         valid_counts.data().get(),
+                         stream);
+  } else {
+    gather_bitmask<false>(*source_table_view,
+                          gather_map_begin,
+                          masks.data().get(),
+                          masks.size(),
+                          num_destination_rows,
+                          valid_counts.data().get(),
+                          stream);
+  }
 
   thrust::host_vector<cudf::size_type> h_valid_counts(valid_counts);
 
