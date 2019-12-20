@@ -5,6 +5,7 @@
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3619 Support CuPy 7
 
 ## Improvements
 
