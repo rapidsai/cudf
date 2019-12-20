@@ -16,7 +16,7 @@ class Buffer:
         ----------
         data : array_like, int
             An array-like object or integer representing a
-            device pointer to pre-allocated memory.
+            device or host pointer to pre-allocated memory.
         size : int, optional
             Size of memory allocation. Required if a pointer
             is passed for `data`.
