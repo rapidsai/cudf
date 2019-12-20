@@ -18,8 +18,12 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/replace.hpp>
 #include <cudf/detail/iterator.cuh>
 
@@ -27,6 +31,159 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 namespace {
+
+std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& input,
+                                                   string_scalar const& lo,
+                                                   string_scalar const& hi,
+                                                   rmm::mr::device_memory_resource* mr,
+                                                   cudaStream_t stream) {
+
+    auto input_device_column = column_device_view::create(input.parent(),stream);
+    auto d_input = *input_device_column;
+    auto d_lo = lo.value();
+    auto d_hi = hi.value();
+    auto strings_count = input.size();
+    auto exec = rmm::exec_policy(stream);
+
+    if (lo.is_valid(stream) and (hi.is_valid(stream))) {
+        // build offset column
+        auto offsets_transformer = [d_input, d_lo, d_hi] __device__ (size_type idx) {
+            size_type bytes = 0;
+
+            if (d_input.is_valid(idx)) {
+                auto input_element = d_input.element<string_view>(idx);
+
+                if (input_element < d_lo){
+                    bytes = d_lo.size_bytes();
+                } else if (d_hi < input_element) {
+                    bytes = d_hi.size_bytes();
+                } else {
+                    bytes = input_element.size_bytes();
+                }
+            }
+            return bytes;
+        };
+
+        auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer);
+        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
+                offsets_transformer_itr + strings_count,
+                mr, stream);
+
+        auto d_offsets = offsets_column->view().template data<int32_t>();
+        // build chars column
+        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
+        auto d_chars = chars_column->mutable_view().template data<char>();
+        // fill in chars
+        auto copy_transformer = [d_input, d_lo, d_hi, d_offsets, d_chars] __device__(size_type idx){
+            if (d_input.is_null(idx)){
+                return;
+            }
+            auto input_element = d_input.element<string_view>(idx);
+
+            if (input_element < d_lo){
+                memcpy(d_chars + d_offsets[idx], d_lo.data(), d_lo.size_bytes() );
+            } else if (d_hi < input_element) {
+                memcpy(d_chars + d_offsets[idx], d_hi.data(), d_hi.size_bytes() );
+            } else {
+                memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes() );
+            }
+        };
+        thrust::for_each_n(exec->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, copy_transformer);
+
+        return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                input.null_count(), std::move(copy_bitmask(input.parent())), stream, mr);
+    } else if (hi.is_valid(stream)) {
+        // build offset column
+        auto offsets_transformer = [d_input, d_hi] __device__ (size_type idx) {
+            size_type bytes = 0;
+
+            if (d_input.is_valid(idx)) {
+                auto input_element = d_input.element<string_view>(idx);
+
+                if (d_hi < input_element) {
+                    bytes = d_hi.size_bytes();
+                } else {
+                    bytes = input_element.size_bytes();
+                }
+            }
+            return bytes;
+        };
+
+        auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer);
+        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
+                offsets_transformer_itr + strings_count,
+                mr, stream);
+
+        auto d_offsets = offsets_column->view().template data<int32_t>();
+        // build chars column
+        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
+        auto d_chars = chars_column->mutable_view().template data<char>();
+        // fill in chars
+        auto copy_transformer = [d_input, d_hi, d_offsets, d_chars] __device__(size_type idx){
+            if (d_input.is_null(idx)){
+                return;
+            }
+            auto input_element = d_input.element<string_view>(idx);
+
+            if (d_hi < input_element) {
+                memcpy(d_chars + d_offsets[idx], d_hi.data(), d_hi.size_bytes() );
+            } else {
+                memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes() );
+            }
+        };
+        thrust::for_each_n(exec->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, copy_transformer);
+
+        return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                input.null_count(), std::move(copy_bitmask(input.parent())), stream, mr);
+    } else {
+        // build offset column
+        auto offsets_transformer = [d_input, d_lo] __device__ (size_type idx) {
+            size_type bytes = 0;
+
+            if (d_input.is_valid(idx)) {
+                auto input_element = d_input.element<string_view>(idx);
+
+                if (input_element < d_lo){
+                    bytes = d_lo.size_bytes();
+                } else {
+                    bytes = input_element.size_bytes();
+                }
+            }
+            return bytes;
+        };
+
+        auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer);
+        auto offsets_column = cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr,
+                offsets_transformer_itr + strings_count,
+                mr, stream);
+
+        auto d_offsets = offsets_column->view().template data<int32_t>();
+        // build chars column
+        size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+        auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
+        auto d_chars = chars_column->mutable_view().template data<char>();
+        // fill in chars
+        auto copy_transformer = [d_input, d_lo, d_offsets, d_chars] __device__(size_type idx){
+            if ( d_input.is_null(idx)){
+                return;
+            }
+            auto input_element = d_input.element<string_view>(idx);
+
+            if (input_element < d_lo){
+                memcpy(d_chars + d_offsets[idx], d_lo.data(), d_lo.size_bytes() );
+            } else {
+                memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes() );
+            }
+        };
+        thrust::for_each_n(exec->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, copy_transformer);
+
+        return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                input.null_count(), std::move(copy_bitmask(input.parent())), stream, mr);
+    }
+}
+
 struct dispatch_clamp {
     template <typename T, typename Transformer>
     void apply_transform (column_device_view  input,
@@ -113,15 +270,18 @@ struct dispatch_clamp {
     }
     
     template <typename T>
-    std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
+    std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::column>>
     operator()(column_view const& input,
               scalar const& lo,
               scalar const& hi,
               rmm::mr::device_memory_resource* mr,
               cudaStream_t stream) {
-        CUDF_FAIL("Clamp is not yet supporting non-fixed types");
-    }
 
+        using ScalarType = cudf::experimental::scalar_type_t<string_view>;
+        auto lo_scalar = static_cast<ScalarType const*>(&lo);
+        auto hi_scalar = static_cast<ScalarType const*>(&hi);
+        return clamp_string_column (input, *lo_scalar, *hi_scalar, mr, stream);
+    }
 };
 } //namespace
 
