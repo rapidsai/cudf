@@ -1914,41 +1914,6 @@ def test_reset_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
-@pytest.mark.xfail(
-    reason="Individual Columns in a DataFrame are "
-    "stored as Columns, not Series"
-)
-def test_series_reset_index_inplace(pdf, gdf):
-    pdf.x.reset_index(drop=True, inplace=True)
-    gdf.x.reset_index(drop=True, inplace=True)
-    assert_eq(pdf.x, gdf.x)
-
-
-@pytest.mark.xfail(
-    reason="Individual Columns in a DataFrame are "
-    "stored as Columns, not Series"
-)
-@pytest.mark.parametrize("drop", [True, False])
-def test_reset_named_index_inplace(pdf, gdf, drop):
-    pdf.index.name = "cudf"
-    gdf.index.name = "cudf"
-    pdf.reset_index(drop=drop, inplace=True)
-    gdf.reset_index(drop=drop, inplace=True)
-    assert_eq(pdf, gdf)
-
-
-@pytest.mark.xfail(
-    reason="Individual Columns in a DataFrame are "
-    "stored as Columns, not Series"
-)
-def test_series_reset_named_index_inplace(pdf, gdf):
-    pdf.x.index.name = "cudf"
-    gdf.x.index.name = "cudf"
-    pdf.x.reset_index(drop=True, inplace=True)
-    gdf.x.reset_index(drop=True, inplace=True)
-    assert_eq(pdf.x, gdf.x)
-
-
 @pytest.mark.parametrize("drop", [True, False])
 def test_set_index(pdf, gdf, drop):
     for col in pdf.columns:
