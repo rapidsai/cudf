@@ -232,7 +232,7 @@ class ColumnBase(Column):
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(col.mask for col in objs)
+        nulls = any(col.mask is not None for col in objs)
         newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
