@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/detail/copy.hpp>
@@ -64,12 +80,12 @@ struct bounds_checker {
  *
  * @tparam ValiditySelector bool(size_type mask_idx, size_type bit_idx);
  *---------------------------------------------------------------------------**/
-template <typename ValiditySelector>
+template <typename ValiditySelector, int32_t block_size>
 __global__ void select_bitmask_kernel(ValiditySelector get_validity,
                                       bitmask_type* masks[],
                                       size_type mask_count,
                                       size_type mask_num_bits,
-                                      size_type* validity_counts)
+                                      size_type* valid_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
@@ -77,27 +93,28 @@ __global__ void select_bitmask_kernel(ValiditySelector get_validity,
       continue;
     }
 
-    auto bit_idx_offset = blockIdx.x * blockDim.x;
-    auto validity_count_aggregate = static_cast<size_type>(0);
+    auto lane_offset = blockIdx.x * blockDim.x;
+    auto warp_valid_count = static_cast<size_type>(0);
 
-    while (bit_idx_offset < mask_num_bits) {
-      auto const bit_idx = bit_idx_offset + threadIdx.x;
-      auto const bit_active = bit_idx < mask_num_bits;
-      auto const bit_is_valid = bit_active && get_validity(mask_idx, bit_idx);
+    while (lane_offset < mask_num_bits) {
+      auto const lane_idx = lane_offset + threadIdx.x;
+      auto const lane_active = lane_idx < mask_num_bits;
+      auto const bit_is_valid = lane_active && get_validity(mask_idx, lane_idx);
       auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
-      auto const validity_idx = word_index(bit_idx);
+      auto const mask_idx = word_index(lane_idx);
 
-      if (bit_active && threadIdx.x % warp_size == 0) {
-        mask[validity_idx] = warp_validity;
+      if (lane_active & threadIdx.x % warp_size == 0) {
+        mask[mask_idx] = warp_validity;
       }
 
-      validity_count_aggregate += single_lane_block_popc_reduce(warp_validity);
-      bit_idx_offset += blockDim.x * gridDim.x;
+      warp_valid_count += __popc(warp_validity);
+      lane_offset += blockDim.x * gridDim.x;
     }
 
+    auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
     if (threadIdx.x == 0) {
-      atomicAdd(validity_counts + mask_idx, validity_count_aggregate);
+      atomicAdd(valid_counts + mask_idx, block_valid_count);
     }
   }
 }
@@ -298,17 +315,16 @@ void gather_bitmask(table_device_view input,
                     size_type* valid_counts,
                     cudaStream_t stream)
 {
+  constexpr size_type block_size = 256;
   using Selector = gather_bitmask_functor<ignore_out_of_bounds, decltype(gather_map_begin)>;
   auto selector = Selector{ input, masks, gather_map_begin };
-  auto kernel = select_bitmask_kernel<Selector>;
-  int grid_size;
-  int block_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, kernel));
-  kernel<<<grid_size, block_size, 0, stream>>>(selector,
-                                               masks,
-                                               mask_count,
-                                               mask_size,
-                                               valid_counts);
+  auto kernel = select_bitmask_kernel<Selector, block_size>;
+  cudf::experimental::detail::grid_1d grid { mask_size, block_size, 1 };
+  kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
+                                                     masks,
+                                                     mask_count,
+                                                     mask_size,
+                                                     valid_counts);
 }
 
 

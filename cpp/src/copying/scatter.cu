@@ -77,10 +77,10 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto masks = d_target_masks.data().get();
 
   // Compute block size
+  constexpr size_type block_size = 256;
   using Selector = gather_bitmask_functor<true, decltype(gather_map)>;
   auto bitmask_selector = Selector{ *device_source, masks, gather_map };
-  auto bitmask_kernel = select_bitmask_kernel<decltype(bitmask_selector)>;
-  constexpr size_type block_size = 256;
+  auto bitmask_kernel = select_bitmask_kernel<Selector, block_size>;
   size_type const grid_size = grid_1d(target_rows, block_size).num_blocks;
 
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
