@@ -174,6 +174,30 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
   }
 }
 
+/**
+ * @brief Convenience function to get offset word from a bitmask
+ * 
+ * @see copy_offset_bitmask
+ * @see offset_bitmask_and
+ */
+__device__ bitmask_type get_mask_offset_word(
+  bitmask_type const *__restrict__ source,
+  size_type destination_word_index,
+  size_type source_begin_bit,
+  size_type source_end_bit)
+{
+  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
+  bitmask_type curr_word = source[source_word_index];
+  bitmask_type next_word = 0;
+  if ((word_index(source_begin_bit) != 0) &&
+      (word_index(source_end_bit) >
+        word_index(source_begin_bit +
+          destination_word_index * detail::size_in_bits<bitmask_type>()))) {
+    next_word = source[source_word_index + 1];
+  }
+  return __funnelshift_r(curr_word, next_word, source_begin_bit);
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Copies the bits starting at the specified offset from a source
  * bitmask into the destination bitmask.
@@ -184,7 +208,9 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
  * @param source The mask to copy from
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
+ * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
  *---------------------------------------------------------------------------**/
+// TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
                                     size_type source_begin_bit,
@@ -193,19 +219,8 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
-    size_type source_word_index =
-        destination_word_index + word_index(source_begin_bit);
-    bitmask_type curr_word = source[source_word_index];
-    bitmask_type next_word = 0;
-    if ((word_index(source_begin_bit) != 0) &&
-        (word_index(source_end_bit) >
-          word_index(source_begin_bit +
-            destination_word_index * detail::size_in_bits<bitmask_type>()))) {
-      next_word = source[source_word_index + 1];
-    }
-    bitmask_type write_word =
-      __funnelshift_r(curr_word, next_word, source_begin_bit);
-    destination[destination_word_index] = write_word;
+    destination[destination_word_index] =
+      get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
   }
 }
 
@@ -255,6 +270,65 @@ concatenate_masks_kernel(
   }
 }
 
+/**
+ * @brief Computes the bitwise AND of two bitmasks
+ * 
+ * @param destination The bitmask to write result into
+ * @param source1 The first source mask
+ * @param source2 The second source mask
+ * @param begin_bit1 The @p source1 begin offset
+ * @param end_bit1 The @p source1 end offset
+ * @param begin_bit2 The @p source1 begin offset
+ * @param end_bit2 The @p source1 end offset
+ * @param number_of_mask_words The number of words of type bitmask_type to copy
+ */
+__global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
+                                    bitmask_type const *__restrict__ source1,
+                                    bitmask_type const *__restrict__ source2,
+                                    size_type begin_bit1, size_type end_bit1,
+                                    size_type begin_bit2, size_type end_bit2,
+                                    size_type number_of_mask_words) {
+  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+       destination_word_index < number_of_mask_words;
+       destination_word_index += blockDim.x * gridDim.x) {
+    bitmask_type source1_word = get_mask_offset_word(
+        source1, destination_word_index, begin_bit1, end_bit1);
+    bitmask_type source2_word = get_mask_offset_word(
+        source2, destination_word_index, begin_bit2, end_bit2);
+
+    destination[destination_word_index] = source1_word & source2_word;
+  }
+}
+
+// Create a bitmask from a specific range
+rmm::device_buffer bitmask_and(bitmask_type const *mask1, size_type begin_bit1,
+                               bitmask_type const *mask2, size_type begin_bit2,
+                               size_type size, cudaStream_t stream,
+                               rmm::mr::device_memory_resource *mr) {
+  CUDF_EXPECTS(begin_bit1 >= 0 && begin_bit2 >= 0, "Invalid range.");
+  CUDF_EXPECTS(size > 0, "Invalid bit range.");
+  CUDF_EXPECTS(mask1 != nullptr && mask2 != nullptr,
+               "Mask pointer cannot be null");
+
+  rmm::device_buffer dest_mask{};
+  auto num_bytes = bitmask_allocation_size_bytes(size);
+
+  auto number_of_mask_words = cudf::util::div_rounding_up_safe(
+      static_cast<size_t>(size),
+      detail::size_in_bits<bitmask_type>());
+  dest_mask = rmm::device_buffer{num_bytes, stream, mr};
+  cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+  offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0,
+                        stream>>>(
+      static_cast<bitmask_type *>(dest_mask.data()), mask1, mask2,
+      begin_bit1, begin_bit1 + size,
+      begin_bit2, begin_bit2 + size,
+      number_of_mask_words);
+  
+  CHECK_CUDA(stream);
+
+  return dest_mask;
+}
 
 }  // namespace
 
@@ -401,6 +475,32 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
     detail::concatenate_masks(
         views, static_cast<bitmask_type *>(null_mask.data()), stream);
   }
+
+  return null_mask;
+}
+
+// Create a bitmask from a specific range
+rmm::device_buffer bitmask_and(column_view const& view1,
+                               column_view const& view2,
+                               cudaStream_t stream,
+                               rmm::mr::device_memory_resource *mr) {
+  CUDF_EXPECTS(view1.size() == view2.size(), "Sizes cannot be different");
+
+  rmm::device_buffer null_mask{};
+  if (view1.size() == 0) {
+    return null_mask;
+  }
+
+  if (view1.nullable() and not view2.nullable()) {
+    null_mask = copy_bitmask(view1, stream, mr);
+  } else if (not view1.nullable() and view2.nullable()) {
+    null_mask = copy_bitmask(view2, stream, mr);
+  } else if (view1.nullable() and view2.nullable()) {
+    null_mask = bitmask_and(view1.null_mask(), view1.offset(),
+                            view2.null_mask(), view2.offset(),
+                            view1.size(), stream, mr);
+  }
+  
   return null_mask;
 }
 
