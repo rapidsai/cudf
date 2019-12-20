@@ -408,6 +408,7 @@ add_library(cudf
             src/binaryop/legacy/jit/util/operator.cpp
             src/binaryop/legacy/jit/util/type.cpp
             src/binaryop/binaryop.cpp
+            src/binaryop/compiled/binary_ops.cu
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp

@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -29,6 +30,8 @@
 #include <jit/type.h>
 #include <binaryop/jit/util.hpp>
 #include <cudf/datetime.hpp>  // replace eventually
+
+#include "compiled/binary_ops.hpp"
 
 #include <string>
 #include <timestamps.hpp.jit>
@@ -190,6 +193,7 @@ auto scalar_col_valid_mask_and(column_view const& col,
   } else if (s.is_valid() && not col.nullable()) {
     return rmm::device_buffer{};
   }
+  return rmm::device_buffer{};
 }
 }  // namespace
 
@@ -202,9 +206,19 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type),
+               "Invalid/Unsupported output datatype");
+
+  if ((lhs.type().id() == type_id::STRING) &&
+      (rhs.type().id() == type_id::STRING)) {
+    std::cout << "string binary_operation(lhs=scalar, rhs=column_view)"
+              << std::endl;
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
+                                              stream);
+  }
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
 
   auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
   auto out = make_numeric_column(output_type, rhs.size(), new_mask,
@@ -226,9 +240,19 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type),
+               "Invalid/Unsupported output datatype");
+
+  if ((lhs.type().id() == type_id::STRING) &&
+      (rhs.type().id() == type_id::STRING)) {
+    std::cout << "string binary_operation(lhs=column_view, rhs=scalar)"
+              << std::endl;
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
+                                              stream);
+  }
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
 
   auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
@@ -249,13 +273,22 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
+  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+
   // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+  if ((lhs.type().id() == type_id::STRING) &&
+      (rhs.type().id() == type_id::STRING)) {
+    std::cout << "string binary_operation(lhs=column_view, rhs=column_view)"
+              << std::endl;
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
+                                              stream);
+  }
+
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   auto new_mask = bitmask_and(lhs, rhs, stream, mr);
   auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
@@ -282,6 +315,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     return is_fixed_width(type) and
            type.id() != type_id::INT8;  // Numba PTX doesn't support int8
   };
+
   CUDF_EXPECTS(is_type_supported_ptx(lhs.type()),
                "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_type_supported_ptx(rhs.type()),
