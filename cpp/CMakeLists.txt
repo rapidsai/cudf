@@ -50,6 +50,9 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
+    # Suppress parentheses warning which causes gmock to fail
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
+
     option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
     if(CMAKE_CXX11_ABI)
         message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
@@ -210,6 +213,9 @@ message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
 
 if(Boost_FOUND)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
 endif(Boost_FOUND)
@@ -380,6 +386,7 @@ add_library(cudf
             src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
+            src/join/join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -509,6 +516,7 @@ add_library(cudf
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
+            src/copying/contiguous_split.cu
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -555,6 +563,7 @@ add_library(cudf
             src/strings/padding.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp

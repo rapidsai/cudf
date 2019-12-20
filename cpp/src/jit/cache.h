@@ -22,6 +22,7 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <boost/filesystem.hpp>
 
 namespace cudf {
 namespace jit {
@@ -29,18 +30,19 @@ namespace jit {
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
-/**---------------------------------------------------------------------------*
- * @brief Get the string path to Cache Directory
- * 
- * This will return a path to the cache directory and will create the directory
- * if it doesn't exist
- * 
- * The cache directory is kept in the same place as the output of C++17's 
- * std::filesystem::temp_directory_path()
- * @todo: replace the logic to find the cache dir with the above method after 
- *  transitioning to C++17
- *---------------------------------------------------------------------------**/
-std::string getCacheDir();
+/**
+ * @brief Get the string path to the JITIFY kernel cache directory.
+ *
+ * This path can be overridden at runtime by defining an environment variable
+ * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
+ * under which the process' user has read/write priveleges.
+ *
+ * This function returns a path to the cache directory, creating it if it
+ * doesn't exist.
+ *
+ * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ **/
+boost::filesystem::path getCacheDir();
 
 class cudfJitCache
 {
@@ -176,8 +178,8 @@ private:
             bool successful_read = false;
             std::string serialized;
             #if defined(JITIFY_USE_CACHE)
-                std::string file_name = getCacheDir() + name;
-                cacheFile file{file_name};
+                boost::filesystem::path file_name = getCacheDir() / name;
+                cacheFile file{file_name.string()};
                 serialized = file.read();
                 successful_read = file.is_read_successful();
             #endif
