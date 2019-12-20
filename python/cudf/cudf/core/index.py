@@ -7,6 +7,7 @@ from copy import copy, deepcopy
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import nvstrings
 import rmm
@@ -410,6 +411,18 @@ class Index(object):
         assert axis in (None, 0)
         return as_index(self._values.repeat(repeats))
 
+    def memory_usage(self, deep=False):
+        return self._values._memory_usage(deep=deep)
+
+    @classmethod
+    def from_pandas(cls, index):
+        if not isinstance(index, pd.Index):
+            raise TypeError("not a pandas.Index")
+
+        ind = as_index(pa.Array.from_pandas(index))
+        ind.name = index.name
+        return ind
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -634,6 +647,9 @@ class RangeIndex(Index):
     @property
     def __cuda_array_interface__(self):
         return self._values.__cuda_array_interface__
+
+    def memory_usage(self, **kwargs):
+        return 0
 
 
 def index_from_range(start, stop=None, step=None):

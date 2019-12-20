@@ -23,33 +23,48 @@ namespace cudf {
 
 namespace experimental {
 
+namespace  {
+    template<typename T>
+    std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits) {
+        std::vector<T> result{};
+
+        if(splits.size() == 0 or column_size == 0) {
+            return result;
+        }
+        CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
+
+        // If the size is not zero, the split will always start at `0`
+        std::vector<size_type> indices{0};
+        std::for_each(splits.begin(), splits.end(), 
+                [&indices](auto split) {
+                    indices.push_back(split); // This for end
+                    indices.push_back(split); // This for the start
+                });
+        
+        if (splits.back() != column_size) {
+            indices.push_back(column_size); // This to include rest of the elements
+        } else {
+            indices.pop_back(); // Not required as it is extra 
+        }
+
+        return cudf::experimental::slice(input, indices);
+    }   
+};  // anonymous namespace
+
 std::vector<cudf::column_view> split(cudf::column_view const& input,
-                                                std::vector<size_type> const& splits) {
+                                                std::vector<size_type> const& splits) {       
+    return split(input, input.size(), splits);
+}
 
-    std::vector<cudf::column_view> result{};
-
-    if(splits.size() == 0 or input.size() == 0) {
+std::vector<cudf::table_view> split(cudf::table_view const& input,
+                                                std::vector<size_type> const& splits) {            
+    std::vector<table_view> result{};
+    if(input.num_columns() == 0) {
         return result;
-    }
-
-    CUDF_EXPECTS(splits.back() <= input.size(), "splits can't exceed size of the column");
-
-    //If the size is not zero, the split will always start at `0`
-    std::vector<size_type> indices{0};
-    std::for_each(splits.begin(), splits.end(), 
-            [&indices](auto split) {
-                indices.push_back(split); // This for end
-                indices.push_back(split); // This for the start
-            });
-    
-    if (splits.back() != input.size()) {
-        indices.push_back(input.size()); // This to include rest of the elements
-    } else {
-        indices.pop_back(); // Not required as it is extra 
-    }
-
-    return cudf::experimental::slice(input, indices);
+    }    
+    return split(input, input.column(0).size(), splits);
 }
 
 } // experimental
+
 } // cudf
