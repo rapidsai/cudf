@@ -103,6 +103,15 @@ struct gather_bitmask_functor {
   }
 };
 
+template <typename ValiditySelector>
+__global__ void select_bitmask_kernel(ValiditySelector get_validity,
+                                      bitmask_type* masks[],
+                                      size_type mask_count,
+                                      size_type mask_num_bits,
+                                      size_type* validity_counts) {
+  select_bitmask(get_validity, masks, mask_count, mask_num_bits, validity_counts);
+}
+
 template <bool ignore_out_of_bounds, typename MapIterator>
 __global__ void gather_bitmask_kernel(table_device_view input,
                                       MapIterator gather_map,
