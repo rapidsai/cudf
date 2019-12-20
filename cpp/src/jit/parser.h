@@ -22,8 +22,11 @@
 #include <map>
 #include <vector>
 
+namespace cudf {
+namespace jit {
+
 /**
- * @brief Parse and Transform a piece of PTX code that contains the implementation 
+ * @brief Parse and transform a piece of PTX code that contains the implementation 
  * of a `__device__` function into a CUDA `__device__` `__inline__` function.
  * 
  * @param `src` The input PTX code.
@@ -32,10 +35,6 @@
  * @param `output_arg_type` The output type of the PTX function, e.g. "int", "int64_t"
  * @return The output CUDA `__device__` `__inline__` function
 */
-
-namespace cudf {
-namespace jit {
-
 class ptx_parser {
 
 private:

@@ -17,6 +17,7 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
+#include <cudf/utilities/error.hpp>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>

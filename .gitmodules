@@ -5,8 +5,8 @@
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
-	branch = hotfix/builtin-header-lookups
+	branch = cudf
 [submodule "thirdparty/libcudacxx"]
 	path = thirdparty/libcudacxx
 	url = https://github.com/rapidsai/thirdparty-freestanding.git
-	branch = jitify-compat
+	branch = cudf

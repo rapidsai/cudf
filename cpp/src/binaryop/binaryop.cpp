@@ -202,9 +202,9 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
-  CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
 
   auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
   auto out = make_numeric_column(output_type, rhs.size(), new_mask,
@@ -226,9 +226,9 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
-  CUDF_EXPECTS(is_numeric(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_numeric(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_numeric(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
 
   auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
