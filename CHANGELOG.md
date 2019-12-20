@@ -21,6 +21,7 @@
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE

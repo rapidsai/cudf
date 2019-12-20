@@ -84,7 +84,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   unique_indices.dtype = cudf::gdf_dtype_of<cudf::size_type>();
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::empty_like(input_table), unique_indices);
+    return std::make_pair(cudf::empty_like(input_table), std::move(unique_indices));
   }
 
   cudf::size_type nrows = input_table.num_rows();
@@ -182,6 +182,6 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   cudf::table key_col_sorted_table(key_cols_vect_out.data(),
                                    key_cols_vect_out.size());
 
-  return std::make_pair(destination_table,
+  return std::make_pair(std::move(destination_table),
                         gdf_unique_indices(key_col_sorted_table, *context));
 }
