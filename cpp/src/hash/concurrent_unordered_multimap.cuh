@@ -35,9 +35,12 @@
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
  *
+ * @note The user is responsible for the following stream semantics:
+ * - Either the same stream should be used to create the map as is used by the kernels that access it, or
+ * - the stream used to create the map should be synchronized before it is accessed from a different stream or from host code.
+ *
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
- *  - extend interface to accept streams
  */
 template <typename Key, typename Element, typename size_type, Key unused_key,
           Element unused_element, typename Hasher = default_hash<Key>,
@@ -75,6 +78,10 @@ class concurrent_unordered_multimap {
    *is empty, the pair residing there will be equal to (unused_key,
    *unused_element). As a result, attempting to insert a key equal to
    *`unused_key` results in undefined behavior.
+   *
+   * @note All allocations, kernels and copies in the constructor take place
+   * on stream but the constructor does not synchronize the stream. It is the user's
+   * responsibility to synchronize or use the same stream to access the map.
    *
    * @param capacity The maximum number of pairs the map may hold.
    * @param init Indicates if the map should be initialized with the unused
@@ -114,18 +121,69 @@ class concurrent_unordered_multimap {
     delete this;
   }
 
+  /**
+   * @brief Returns an iterator to the first element in the map
+   *
+   * @note When using the managed allocator, host code that calls this function
+   * should ensure the stream used for `create()` is appropriately synchronized.
+   *
+   * @note When called in a device code, user should make sure that it should
+   * either be running on the same stream as create(), or the accessing stream
+   * should be appropriately synchronized with the creating stream.
+   *
+   * @returns iterator to the first element in the map.
+   **/
   __host__ __device__ iterator begin() {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size,
                     m_hashtbl_values);
   }
+
+  /**
+   * @brief Returns a constant iterator to the first element in the map
+   *
+   * @note When using the managed allocator, host code that calls this function
+   * should ensure the stream used for `create()` is appropriately synchronized.
+   *
+   * @note When called in a device code, user should make sure that it should
+   * either be running on the same stream as create(), or the accessing stream
+   * should be appropriately synchronized with the creating stream.
+   *
+   * @returns constant iterator to the first element in the map.
+   **/
   __host__ __device__ const_iterator begin() const {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size,
                           m_hashtbl_values);
   }
+
+  /**
+   * @brief Returns an iterator to the one past the last element in the map
+   *
+   * @note When using the managed allocator, host code that calls this function
+   * should ensure the stream used for `create()` is appropriately synchronized.
+   *
+   * @note When called in a device code, user should make sure that it should
+   * either be running on the same stream as create(), or the accessing stream
+   * should be appropriately synchronized with the creating stream.
+   *
+   * @returns iterator to the one past the last element in the map.
+   **/
   __host__ __device__ iterator end() {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size,
                     m_hashtbl_values + m_hashtbl_size);
   }
+
+  /**
+   * @brief Returns a constant iterator to the one past the last element in the map
+   *
+   * @note When using the managed allocator, host code that calls this function
+   * should ensure the stream used for `create()` is appropriately synchronized.
+   *
+   * @note When called in a device code, user should make sure that it should
+   * either be running on the same stream as create(), or the accessing stream
+   * should be appropriately synchronized with the creating stream.
+   *
+   * @returns constant iterator to the one past the last element in the map.
+   **/
   __host__ __device__ const_iterator end() const {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size,
                           m_hashtbl_values + m_hashtbl_size);
