@@ -15,12 +15,20 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::orc" nogil:
     cdef cppclass reader_options:
         vector[string] columns
         bool use_index
+        bool use_np_dtypes
+        gdf_time_unit timestamp_unit
+        bool decimals_as_float
+        int forced_decimals_scale
 
         reader_options() except +
 
         reader_options(
             vector[string] columns,
-            bool use_index
+            bool use_index,
+            bool use_np_dtypes,
+            gdf_time_unit timestamp_unit,
+            bool decimals_as_float,
+            int forced_decimals_scale
         ) except +
 
     cdef cppclass reader:
