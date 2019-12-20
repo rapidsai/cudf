@@ -1,6 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
+
 - PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3336 Add `from_dlpack` and `to_dlpack`
@@ -24,6 +25,7 @@
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
+- PR #3653 Make `gather_bitmask_kernel` more reusable.
 
 ## Bug Fixes
 
