@@ -25,6 +25,7 @@
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
+- PR #3654 Update Jitify submodule ref to include gcc-8 fix
 
 ## Bug Fixes
 
