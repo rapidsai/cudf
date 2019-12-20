@@ -85,20 +85,19 @@ cdef class Column:
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
-            data_dtype = self.codes.dtype
+            col = self.codes
         else:
-            data_dtype = self.dtype
+            col = self
+        data_dtype = col.dtype
+
         cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef data_type dtype = data_type(tid)
         cdef size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
 
-        if is_categorical_dtype(self.dtype):
-            data = <void*><uintptr_t>(self.codes.data.ptr)
-        else:
-            data = <void*><uintptr_t>(self.data.ptr)
-            
+        data = <void*><uintptr_t>(col.data.ptr)
+
         cdef Column child_column
         if self.children:
             for child_column in self.children:
@@ -123,23 +122,21 @@ cdef class Column:
 
     cdef column_view view(self) except *:
         return self._view(self.null_count)
-    
+
     cdef column_view _view(self, size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
-            data_dtype = self.codes.dtype
+            col = self.codes
         else:
-            data_dtype = self.dtype
+            col = self
+        data_dtype = col.dtype
         cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef data_type dtype = data_type(tid)
         cdef size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
 
-        if is_categorical_dtype(self.dtype):
-            data = <void*><uintptr_t>(self.codes.data.ptr)
-        else:
-            data = <void*><uintptr_t>(self.data.ptr)
-        
+        data = <void*><uintptr_t>(col.data.ptr)
+
         cdef Column child_column
         if self.children:
             for child_column in self.children:
@@ -152,7 +149,7 @@ cdef class Column:
             mask = NULL
 
         cdef size_type c_null_count = null_count
-        
+
         return column_view(
             dtype,
             self.size,
@@ -172,10 +169,10 @@ cdef class Column:
 
         # After call to release(), c_col is unusable
         cdef column_contents contents = c_col.get()[0].release()
-        
+
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
         data = Buffer(data)
-        
+
         if has_nulls:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
             mask = Buffer(mask)
