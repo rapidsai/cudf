@@ -170,6 +170,20 @@ else()
 endif(ARROW_FOUND)
 
 ###################################################################################################
+# - clone libcu++ ------------------------------------------------------------------------------------
+
+message(STATUS "Installing libcu++")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                COMMAND git clone --branch cudf --recurse-submodules
+                        https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/include/        DESTINATION include/libcudacxx)
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/libcxx/include/ DESTINATION include/libcxx/include)
+
+###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
@@ -393,7 +407,12 @@ add_library(cudf
             src/binaryop/legacy/jit/code/traits.cpp
             src/binaryop/legacy/jit/util/operator.cpp
             src/binaryop/legacy/jit/util/type.cpp
+            src/binaryop/binaryop.cpp
+            src/binaryop/jit/code/kernel.cpp
+            src/binaryop/jit/code/operation.cpp
+            src/binaryop/jit/code/traits.cpp
             src/jit/legacy/type.cpp
+            src/jit/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
@@ -533,6 +552,7 @@ add_library(cudf
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
@@ -577,23 +597,25 @@ add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
+add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMENT "Stringify types.h, types.hpp, and timestamps.hpp for use in JIT compiled code"
                    DEPENDS stringify
-                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
+                   OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
+                          ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                   COMMENT "Run stringify on header types.hpp to convert it to c-str for use in JIT compiled code"
-                   DEPENDS stringify
-                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   )
 
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/types.h.jit
-                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
+                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit)
 
 add_dependencies(cudf stringify_run)
 
@@ -657,6 +679,14 @@ install(TARGETS cudf
         COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
+        DESTINATION include/libcudf
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcudacxx
+        DESTINATION include/libcudf
         COMPONENT cudf)
 
 add_custom_target(install_cudf

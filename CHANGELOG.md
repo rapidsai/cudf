@@ -10,7 +10,7 @@
 
 ## Improvements
 
-- PR #3431 Port NVStrings translate to cudf strings column
+- PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
@@ -97,6 +97,7 @@
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
 - PR #3557 Add contiguous_split() function. 
+- PR #3507 Define and implement new binary operation APIs
 
 ## Improvements
 

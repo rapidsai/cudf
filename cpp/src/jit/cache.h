@@ -17,6 +17,7 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
+#include <cudf/utilities/error.hpp>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
@@ -73,9 +74,9 @@ public:
      * @param arguments [in] template arguments for kernel in vector of strings
      * @return  Pair of string kernel identifier and compiled kernel object
      *---------------------------------------------------------------------------**/
-    named_prog<jitify_v2::KernelInstantiation> getKernelInstantiation(
+    named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
         std::string const& kern_name,
-        named_prog<jitify_v2::Program> const& program,
+        named_prog<jitify::experimental::Program> const& program,
         std::vector<std::string> const& arguments);
 
     /**---------------------------------------------------------------------------*
@@ -91,21 +92,21 @@ public:
      * @param given_options  [in] vector of strings options to pass to NVRTC
      * @param file_callback  [in] pointer to callback function to call whenever a
      *  header needs to be loaded
-     * @return named_prog<jitify_v2::Program> 
+     * @return named_prog<jitify::experimental::Program> 
      *---------------------------------------------------------------------------**/
-    named_prog<jitify_v2::Program> getProgram(
+    named_prog<jitify::experimental::Program> getProgram(
         std::string const& prog_file_name, 
         std::string const& cuda_source = "",
         std::vector<std::string> const& given_headers = {},
         std::vector<std::string> const& given_options = {},
-        jitify_v2::file_callback_type file_callback = nullptr);
+        jitify::experimental::file_callback_type file_callback = nullptr);
 
 private:
     template <typename Tv>
     using umap_str_shptr = std::unordered_map<std::string, std::shared_ptr<Tv>>;
 
-    umap_str_shptr<jitify_v2::KernelInstantiation>  kernel_inst_map;
-    umap_str_shptr<jitify_v2::Program>              program_map;
+    umap_str_shptr<jitify::experimental::KernelInstantiation>  kernel_inst_map;
+    umap_str_shptr<jitify::experimental::Program>              program_map;
 
     /*
     Even though this class can be used as a non-singleton, the file cache
