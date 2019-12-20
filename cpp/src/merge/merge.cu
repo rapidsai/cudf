@@ -149,7 +149,7 @@ void materialize_bitmask(column_view const& left_col,
     }
   }
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 }
   
 /**
@@ -228,7 +228,7 @@ generate_merged_indices(table_view const& left_table,
                       ineq_op);
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     return merged_indices;
 }
