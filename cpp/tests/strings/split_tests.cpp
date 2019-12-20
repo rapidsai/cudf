@@ -292,3 +292,12 @@ TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns)
     results = cudf::strings::rpartition(zero_size_strings_column);
     EXPECT_TRUE( results->num_columns()==0 );
 }
+
+TEST_F(StringsSplitTest, InvalidParameter)
+{
+    std::vector<const char*> h_strings{ "string left intentionally blank" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    auto strings_view = cudf::strings_column_view(strings);
+    EXPECT_THROW( cudf::strings::split(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
+    EXPECT_THROW( cudf::strings::rsplit(strings_view,cudf::string_scalar("",false)), cudf::logic_error);
+}

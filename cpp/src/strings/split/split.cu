@@ -393,8 +393,6 @@ std::unique_ptr<experimental::table> split_fn( size_type strings_count,
                                                rmm::mr::device_memory_resource* mr,
                                                cudaStream_t stream )
 {
-    std::vector<std::unique_ptr<column>> results;
-
     auto execpol = rmm::exec_policy(stream);
     // compute the number of tokens per string
     size_type columns_count = 0;
@@ -410,6 +408,7 @@ std::unique_ptr<experimental::table> split_fn( size_type strings_count,
         columns_count = *thrust::max_element(execpol->on(stream),
                                              token_counts.begin(), token_counts.end() );
     }
+    std::vector<std::unique_ptr<column>> results;
     // boundary case: if no columns, return one null column (issue #119)
     if( columns_count==0 )
     {
@@ -450,24 +449,23 @@ std::unique_ptr<experimental::table> split( strings_column_view const& strings,
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
 
-    auto strings_column = column_device_view::create(strings.parent(),stream);
-    column_device_view d_strings = *strings_column;
     size_type max_tokens = 0;
     if( maxsplit > 0 )
         max_tokens = maxsplit + 1; // makes consistent with Pandas
 
+    auto strings_column = column_device_view::create(strings.parent(),stream);
     if( delimiter.size()==0 )
     {
         return split_fn( strings.size(),
-                         whitespace_token_counter_fn{d_strings,max_tokens},
-                         whitespace_split_tokenizer_fn{d_strings,max_tokens},
+                         whitespace_token_counter_fn{*strings_column,max_tokens},
+                         whitespace_split_tokenizer_fn{*strings_column,max_tokens},
                          mr, stream);
     }
 
     string_view d_delimiter( delimiter.data(), delimiter.size() );
     return split_fn( strings.size(),
-                     token_counter_fn{d_strings,d_delimiter,max_tokens},
-                     split_tokenizer_fn{d_strings,d_delimiter},
+                     token_counter_fn{*strings_column,d_delimiter,max_tokens},
+                     split_tokenizer_fn{*strings_column,d_delimiter},
                      mr, stream);
 }
 
@@ -479,24 +477,23 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
 
-    auto strings_column = column_device_view::create(strings.parent(),stream);
-    column_device_view d_strings = *strings_column;
     size_type max_tokens = 0;
     if( maxsplit > 0 )
         max_tokens = maxsplit + 1; // makes consistent with Pandas
 
+    auto strings_column = column_device_view::create(strings.parent(),stream);
     if( delimiter.size()==0 )
     {
         return split_fn( strings.size(),
-                         whitespace_token_counter_fn{d_strings,max_tokens},
-                         whitespace_rsplit_tokenizer_fn{d_strings,max_tokens},
+                         whitespace_token_counter_fn{*strings_column,max_tokens},
+                         whitespace_rsplit_tokenizer_fn{*strings_column,max_tokens},
                          mr, stream);
     }
 
     string_view d_delimiter( delimiter.data(), delimiter.size() );
     return split_fn( strings.size(),
-                     token_counter_fn{d_strings,d_delimiter,max_tokens},
-                     rsplit_tokenizer_fn{d_strings,d_delimiter},
+                     token_counter_fn{*strings_column,d_delimiter,max_tokens},
+                     rsplit_tokenizer_fn{*strings_column,d_delimiter},
                      mr, stream);
 }
 
