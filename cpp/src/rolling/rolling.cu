@@ -93,8 +93,10 @@ void gpu_rolling(column_device_view input,
     size_type following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start_index = max(0, i - preceding_window);
-    size_type end_index = min(input.size(), i + following_window + 1);
+    size_type start = max(0, i - preceding_window);
+    size_type end = min(input.size(), i + following_window + 1);
+    size_type start_index = min(start, end);
+    size_type end_index = max(start, end);
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -364,8 +366,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_operator op,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS((preceding_window >= 0) && (following_window >= 0) && (min_periods >= 0),
-               "Window sizes and min periods must be non-negative");
+  CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
   auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
   auto following_window_begin = thrust::make_constant_iterator(following_window);
@@ -405,8 +406,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                                        data_type output_type,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS((preceding_window >= 0) && (following_window >= 0) && (min_periods >= 0),
-               "Window sizes and min periods must be non-negative");
+  CUDF_EXPECTS((min_periods >= 0),"min_periods must be non-negative");
 
   return cudf::experimental::detail::rolling_window<true>(input, preceding_window, following_window,
                                                           min_periods, user_defined_aggregator, op,

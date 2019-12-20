@@ -18,7 +18,7 @@
 
 #include <cudf/types.hpp>
 
-#ifndef NDEBUG // THis is just to avoid JITIFY warnings
+#ifndef NDEBUG // This is just to avoid JITIFY warnings
 #include <cassert>
 #endif
 

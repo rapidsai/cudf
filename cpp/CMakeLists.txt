@@ -174,7 +174,7 @@ endif(ARROW_FOUND)
 
 message(STATUS "Installing libcu++")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                COMMAND git clone --branch jitify-compat --recurse-submodules
+                COMMAND git clone --branch cudf --recurse-submodules
                         https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")

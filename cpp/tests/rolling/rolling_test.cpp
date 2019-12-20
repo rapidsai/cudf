@@ -128,8 +128,10 @@ protected:
       // compute bounds
       auto preceding_window = preceding_window_col[i%preceding_window_col.size()];
       auto following_window = following_window_col[i%following_window_col.size()];
-      size_type start_index = std::max((size_type)0, i - preceding_window);
-      size_type end_index   = std::min(num_rows, i + following_window + 1);
+      size_type start = std::max((size_type)0, i - preceding_window);
+      size_type end   = std::min(num_rows, i + following_window + 1);
+      size_type start_index = std::min(start, end);
+      size_type end_index = std::max(start, end);
 
       // aggregate
       size_type count = 0;
@@ -176,8 +178,11 @@ protected:
       // compute bounds
       auto preceding_window = preceding_window_col[i%preceding_window_col.size()];
       auto following_window = following_window_col[i%following_window_col.size()];
-      size_type start_index = std::max((size_type)0, i - preceding_window);
-      size_type end_index   = std::min(num_rows, i + following_window + 1);
+      size_type start = std::max((size_type)0, i - preceding_window);
+      size_type end   = std::min(num_rows, i + following_window + 1);
+      size_type start_index = std::min(start, end);
+      size_type end_index = std::max(start, end);
+
       
       // aggregate
       size_type count = 0;
@@ -242,16 +247,12 @@ protected:
 class RollingErrorTest : public cudf::test::BaseFixture {};
 
 // negative sizes
-TEST_F(RollingErrorTest, NegativeSizes)
+TEST_F(RollingErrorTest, NegativeMinPeriods)
 {
   const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
   fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
 
-  EXPECT_THROW(cudf::experimental::rolling_window(input, -2,  2,  2, rolling_operator::SUM),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input,  2, -2,  2, rolling_operator::SUM),
-               cudf::logic_error);
   EXPECT_THROW(cudf::experimental::rolling_window(input,  2,  2, -2, rolling_operator::SUM),
                cudf::logic_error);
 }
@@ -380,6 +381,20 @@ TYPED_TEST(RollingTest, SimpleStatic)
 
   // static sizes
   this->run_test_col_agg(input, window, window, 1);
+}
+
+// negative sizes
+TYPED_TEST(RollingTest, NegativeWindowSizes)
+{
+  const std::vector<TypeParam> col_data  = {0, 1, 2, 0, 4};
+  const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
+  std::vector<size_type> window{3};
+  std::vector<size_type> negative_window{-2};
+
+  this->run_test_col_agg(input, negative_window, window, 1);
+  this->run_test_col_agg(input, window, negative_window, 1);
+  this->run_test_col_agg(input, negative_window, negative_window, 1);
 }
 
 // simple example from Pandas docs:
