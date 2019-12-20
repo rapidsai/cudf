@@ -95,6 +95,7 @@
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
 - PR #3557 Add contiguous_split() function. 
+- PR #3507 Define and implement new binary operation APIs
 
 ## Improvements
 
