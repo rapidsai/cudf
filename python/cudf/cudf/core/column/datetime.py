@@ -56,7 +56,7 @@ class DatetimeColumn(column.ColumnBase):
         cast_dtype = array.dtype.type == np.int64
         if array.dtype.kind == "M":
             time_unit, _ = np.datetime_data(array.dtype)
-            cast_dtype = time_unit == "D" or (
+            cast_dtype = time_unit in ("D", "W", "M", "Y") or (
                 len(array) > 0
                 and (
                     isinstance(array[0], str)
@@ -68,6 +68,11 @@ class DatetimeColumn(column.ColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
+
+        if cast_dtype:
+            array = array.astype(np.dtype("datetime64[s]"))
+        assert array.dtype.itemsize == 8
+
         null = cudf.core.column.column_empty_like(
             array, masked=True, newsize=1
         )
@@ -79,9 +84,6 @@ class DatetimeColumn(column.ColumnBase):
             ),
             null,
         )
-        if cast_dtype:
-            array = array.astype(np.dtype("datetime64[ms]"))
-        assert array.dtype.itemsize == 8
 
         return cls(data=Buffer(array), mask=col.mask, dtype=array.dtype,)
 
