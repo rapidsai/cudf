@@ -136,7 +136,8 @@ struct binary_op {
         auto lhs_itr = detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), out_itr, apply_func);
       } else {
-        auto lhs_itr = lhs_device_view->begin<Lhs>();
+        auto lhs_itr = thrust::make_transform_iterator(thrust::make_counting_iterator(size_type{0}),
+                                                      [col=*lhs_device_view] __device__ (size_type i) { return col.element<Lhs>(i); });
         thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), out_itr, apply_func);
       }
     }
@@ -163,18 +164,20 @@ struct binary_op {
         thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, func);
       } else if (lhs.has_nulls()) {
         auto lhs_itr = detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
-        auto rhs_itr = rhs_device_view->begin<Rhs>();
+        auto rhs_itr = thrust::make_transform_iterator(thrust::make_counting_iterator(size_type{0}),
+                                                      [col=*rhs_device_view] __device__ (size_type i) { return col.element<Rhs>(i); });
         thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, func);
       } else if (rhs.has_nulls()) {
-        auto lhs_begin = lhs_device_view->begin<Lhs>();
-        auto lhs_end = lhs_device_view->end<Lhs>();
+        auto lhs_itr = thrust::make_transform_iterator(thrust::make_counting_iterator(size_type{0}),
+                                                      [col=*lhs_device_view] __device__ (size_type i) { return col.element<Lhs>(i); });
         auto rhs_itr = detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
-        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_begin, lhs_end, rhs_itr, out_itr, func);
+        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, func);
       } else {
-        auto lhs_begin = lhs_device_view->begin<Lhs>();
-        auto lhs_end = lhs_device_view->end<Lhs>();
-        auto rhs_itr = rhs_device_view->begin<Rhs>();
-        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_begin, lhs_end, rhs_itr, out_itr, func);
+        auto lhs_itr = thrust::make_transform_iterator(thrust::make_counting_iterator(size_type{0}),
+                                                      [col=*lhs_device_view] __device__ (size_type i) { return col.element<Lhs>(i); });
+        auto rhs_itr = thrust::make_transform_iterator(thrust::make_counting_iterator(size_type{0}),
+                                                      [col=*rhs_device_view] __device__ (size_type i) { return col.element<Rhs>(i); });
+        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, func);
       }
     }
 
