@@ -23,8 +23,6 @@
 
 #include <join/join_common_utils.hpp>
 #include <join/hash_join.cuh>
-//#include <algorithm>
-//#include <iterator>
 
 namespace cudf {
 
