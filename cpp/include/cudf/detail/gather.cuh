@@ -64,12 +64,12 @@ struct bounds_checker {
  *
  * @tparam ValiditySelector bool(size_type mask_idx, size_type bit_idx);
  *---------------------------------------------------------------------------**/
-template<typename ValiditySelector>
-__device__ void select_bitmask(ValiditySelector get_validity,
-                               bitmask_type* masks[],
-                               size_type mask_count,
-                               size_type mask_num_bits,
-                               size_type* validity_counts)
+template <typename ValiditySelector>
+__global__ void select_bitmask_kernel(ValiditySelector get_validity,
+                                      bitmask_type* masks[],
+                                      size_type mask_count,
+                                      size_type mask_num_bits,
+                                      size_type* validity_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
@@ -121,30 +121,6 @@ struct gather_bitmask_functor {
     return col.is_valid(row_idx);
   }
 };
-
-template <typename ValiditySelector>
-__global__ void select_bitmask_kernel(ValiditySelector get_validity,
-                                      bitmask_type* masks[],
-                                      size_type mask_count,
-                                      size_type mask_num_bits,
-                                      size_type* validity_counts) {
-  select_bitmask(get_validity, masks, mask_count, mask_num_bits, validity_counts);
-}
-
-template <bool ignore_out_of_bounds, typename MapIterator>
-__global__ void gather_bitmask_kernel(table_device_view input,
-                                      MapIterator gather_map,
-                                      bitmask_type * masks[],
-                                      size_type destination_row_count,
-                                      size_type* validity_counts) {
-
-  using Selector = gather_bitmask_functor<ignore_out_of_bounds, MapIterator>;
-  select_bitmask(Selector{ input, masks, gather_map },
-                 masks,
-                 input.num_columns(),
-                 destination_row_count,
-                 validity_counts);
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased
