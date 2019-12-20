@@ -87,7 +87,7 @@ __device__ void select_bitmask(ValiditySelector get_validity,
       auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
       auto const validity_idx = word_index(bit_idx);
 
-      if (threadIdx.x % warp_size == 0) {
+      if (bit_active && threadIdx.x % warp_size == 0) {
         mask[validity_idx] = warp_validity;
       }
 
