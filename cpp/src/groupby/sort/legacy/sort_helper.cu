@@ -309,7 +309,7 @@ helper::sort_values(gdf_column const& values) {
                         thrust::make_discard_iterator(),
                         val_group_sizes.begin());
 
-  return std::make_pair(sorted_values, val_group_sizes);
+  return std::make_pair(std::move(sorted_values), std::move(val_group_sizes));
 }
 
 cudf::table helper::unique_keys() {

@@ -111,7 +111,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   }
   CHECK_CUDA(stream);
 
-  return std::make_pair(std::move(map), sparse_output_values);
+  return std::make_pair(std::move(map), std::move(sparse_output_values));
 }
 
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
@@ -167,7 +167,7 @@ auto extract_results(table const& input_keys, table const& input_values,
   std::transform(output_values.begin(), output_values.end(),
                  output_values.begin(), update_column);
 
-  return std::make_pair(output_keys, output_values);
+  return std::make_pair(std::move(output_keys), std::move(output_values));
 }
 
 /**---------------------------------------------------------------------------*
@@ -272,7 +272,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   cudf::table final_output_values = compute_original_requests(
       original_requests, simple_agg_columns, simple_output_values, stream);
 
-  return std::make_pair(output_keys, final_output_values);
+  return std::make_pair(std::move(output_keys), std::move(final_output_values));
 }
 
 /**---------------------------------------------------------------------------*
@@ -328,7 +328,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
   update_nvcategories(keys, output_keys, values, output_values);
 
-  return std::make_pair(output_keys, output_values);
+  return std::make_pair(std::move(output_keys), std::move(output_values));
 }
 }  // namespace detail
 
