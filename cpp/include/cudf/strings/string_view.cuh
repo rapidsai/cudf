@@ -106,6 +106,8 @@ class string_view
       __device__ const_iterator operator+(difference_type);
       __device__ const_iterator& operator--();
       __device__ const_iterator operator--(int);
+      __device__ const_iterator& operator-=(difference_type);
+      __device__ const_iterator operator-(difference_type);
       __device__ bool operator==(const const_iterator& rhs) const;
       __device__ bool operator!=(const const_iterator& rhs) const;
       __device__ bool operator<(const const_iterator& rhs) const;
@@ -272,31 +274,6 @@ class string_view
    * @return New instance pointing to a subset of the characters within this instance.
    */
   __device__ string_view substr( size_type start, size_type length ) const;
-
-  /**
-   * @brief Tokenizes this string around the given delimiter up to count times.
-   *
-   * @param delimiter Character to use for separating tokens.
-   * @param count Maximum number of tokens to return.
-   *              Specify -1 to indicate all tokens.
-   * @param[out] Array to hold output tokens.
-   *             Specify nullptr here to return just the token count.
-   * @return Number of tokens.
-   */
-  __device__ size_type split( const char* delimiter, size_type count, string_view* strs ) const;
-
-  /**
-   * @brief Tokenizes this string around the given delimiter up to count times
-   * starting at the end of the string.
-   *
-   * @param delimiter Character to use for separating tokens.
-   * @param count Maximum number of tokens to return.
-   *              Specify -1 to indicate all tokens.
-   * @param[out] Array to hold output tokens.
-   *             Specify nullptr here to return just the token count.
-   * @return Number of tokens.
-   */
-  __device__ size_type rsplit( const char* delimiter, size_type count, string_view* strs ) const;
 
 private:
     const char* _data{};           ///< Pointer to device memory contain char array for this string
