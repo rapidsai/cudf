@@ -100,7 +100,7 @@ estimate_join_output_size(
   size_type h_size_estimate{0};
   rmm::device_scalar<size_type> size_estimate(0, stream);
 
-  CHECK_CUDA();
+  CHECK_CUDA(stream);
 
   constexpr int block_size {DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks {-1};
@@ -140,7 +140,7 @@ estimate_join_output_size(
         equality,
         sample_probe_num_rows,
         size_estimate.data());
-    CHECK_CUDA();
+    CHECK_CUDA(stream);
 
     // Only in case subset of probe table is chosen,
     // increase the estimated output size by a factor of the ratio between the
@@ -319,7 +319,7 @@ get_base_hash_join_indices(
         estimated_size,
         flip_join_indices);
 
-    CHECK_CUDA();
+    CHECK_CUDA(stream);
 
     join_size = write_index.value();
     estimated_size *= 2;
