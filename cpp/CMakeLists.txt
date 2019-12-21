@@ -420,6 +420,7 @@ add_library(cudf
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
