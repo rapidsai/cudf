@@ -27,6 +27,7 @@
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
+- PR #3639 Define and implement `nans_to_nulls`
 
 ## Bug Fixes
 
