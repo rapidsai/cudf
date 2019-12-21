@@ -401,8 +401,6 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR) {
       lhs, rhs, cudf::experimental::binary_operator::LESS,
       data_type(experimental::type_to_id<TypeOut>()));
 
-  print(*out);
-
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
 

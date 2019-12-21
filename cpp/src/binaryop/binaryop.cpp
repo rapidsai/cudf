@@ -211,8 +211,6 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
 
   if ((lhs.type().id() == type_id::STRING) &&
       (rhs.type().id() == type_id::STRING)) {
-    std::cout << "string binary_operation(lhs=scalar, rhs=column_view)"
-              << std::endl;
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
                                               stream);
   }
@@ -245,8 +243,6 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   if ((lhs.type().id() == type_id::STRING) &&
       (rhs.type().id() == type_id::STRING)) {
-    std::cout << "string binary_operation(lhs=column_view, rhs=scalar)"
-              << std::endl;
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
                                               stream);
   }
@@ -281,8 +277,6 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   if ((lhs.type().id() == type_id::STRING) &&
       (rhs.type().id() == type_id::STRING)) {
-    std::cout << "string binary_operation(lhs=column_view, rhs=column_view)"
-              << std::endl;
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
                                               stream);
   }
