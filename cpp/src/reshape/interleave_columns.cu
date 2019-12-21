@@ -14,55 +14,37 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include "cudf/utilities/bit.hpp"
+#include <cudf/types.hpp>
 
 namespace cudf {
-
 namespace experimental {
-
 namespace detail {
+namespace {
 
 template<typename T>
-struct interleave_columns_selector
+struct interleave_columns_element_selector
 {
     table_device_view input;
-
     T __device__ operator()(size_type idx)
     {
         auto col_num = idx % input.num_columns();
         auto row_num = idx / input.num_columns();
-        column_device_view in_col = input.column(col_num);
+        auto in_col = input.column(col_num);
         return in_col.element<T>(row_num);
     }
 };
 
-struct interleave_columns_validity_selector
+struct interleave_columns_bitmask_selector
 {
     table_device_view input;
-    size_type out_row_count;
-
-    bitmask_type __device__ operator()(size_type i)
-    {
-        bitmask_type out = 0b00000000000000000000000000000000;
-
-        const auto num_bits = cudf::detail::size_in_bits<bitmask_type>();
-
-        for (size_type bit = 0; bit < num_bits; bit++) {
-            size_type out_row = i * num_bits + bit;
-            if (out_row >= out_row_count) {
-                break;
-            }
-
-            size_type col = out_row % input.num_columns();
-            size_type row = out_row / input.num_columns();
-
-            out |= bit_is_set(input.column(col).null_mask(), row) << bit;
-        }
-
-        return out;
+    bool __device__ operator()(size_type mask_idx, size_type bit_idx) {
+        auto col_idx = bit_idx % input.num_columns();
+        auto row_idx = bit_idx / input.num_columns();
+        auto in_col = input.column(col_idx);
+        return bit_is_set(in_col.null_mask(), row_idx);
     }
 };
 
@@ -85,7 +67,7 @@ struct interleave_columns_functor
     {
         auto arch_column = input.column(0);
         auto size = input.num_columns() * input.num_rows();
-        auto out = allocate_like(arch_column, size, mask_policy, mr);
+        auto out = allocate_like(arch_column, size, mask_policy, mr, stream);
         auto device_in = table_device_view::create(input);
         auto device_out = mutable_column_device_view::create(*out);
         auto counting_it = thrust::make_counting_iterator<size_type>(0);
@@ -94,21 +76,36 @@ struct interleave_columns_functor
                           counting_it,
                           counting_it + size,
                           device_out->data<T>(),
-                          interleave_columns_selector<T>{*device_in});
+                          interleave_columns_element_selector<T>{*device_in});
 
         if (out->nullable())
         {
-            thrust::transform(rmm::exec_policy(stream)->on(stream),
-                              counting_it,
-                              counting_it + bitmask_allocation_size_bytes(size),
-                              device_out->null_mask(),
-                              interleave_columns_validity_selector{*device_in, device_out->size()});
+            auto constexpr block_size = 256;
+            auto const grid = grid_1d(size, block_size);
+
+            std::vector<bitmask_type*> masks = { device_out->null_mask() };
+            rmm::device_vector<bitmask_type*> device_masks{ masks };
+            rmm::device_vector<cudf::size_type> device_valid_counts(1, 0);
+
+            using Selector = interleave_columns_bitmask_selector;
+            auto selector = Selector{ *device_in };
+            auto kernel = select_bitmask_kernel<Selector, block_size>;
+            kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
+                                                               device_masks.data().get(),
+                                                               1,
+                                                               size,
+                                                               device_valid_counts.data().get());
+
+            thrust::host_vector<cudf::size_type> valid_counts(device_valid_counts);
+
+            out->set_null_count(out->size() - valid_counts[0]);
         }
 
         return out;
     }
 };
 
+} // anonymous namespace
 } // namespace detail
 
 std::unique_ptr<column>
