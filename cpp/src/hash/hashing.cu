@@ -28,54 +28,10 @@ namespace cudf {
 
 namespace {
 
-/** 
- * @brief  Functor to map a hash value to a particular 'bin' or partition number
- * that uses the modulo operation.
- */
-template <typename hash_value_t>
-class modulo_partitioner
-{
- public:
-  modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
-
-  __device__
-  size_type operator()(hash_value_t hash_value) const {
-    return hash_value % divisor;
-  }
-
- private:
-  const size_type divisor;
-};
-
 template <typename T>
 bool is_power_two(T number) {
   return (0 == (number & (number - 1)));
 }
-
-/** 
- * @brief  Functor to map a hash value to a particular 'bin' or partition number
- * that uses a bitwise mask. Only works when num_partitions is a power of 2.
- *
- * For n % d, if d is a power of two, then it can be computed more efficiently via 
- * a single bitwise AND as:
- * n & (d - 1)
- */
-template <typename hash_value_t>
-class bitwise_partitioner
-{
- public:
-  bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)} {
-    assert(is_power_two(num_partitions));
-  }
-
-  __device__
-  size_type operator()(hash_value_t hash_value) const {
-    return hash_value & mask; // hash_value & (num_partitions - 1)
-  }
-
- private:
-  const size_type mask;
-};
 
 template <bool has_nulls>
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
@@ -94,18 +50,21 @@ hash_partition_table(table_view const& input,
   auto const hash_iterator = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), hasher);
 
-  // If the number of partitions is a power of two, we can compute the partition 
-  // number of each row more efficiently with bitwise operations
+  // Compute the partition number by taking the modulo of the hash and the
+  // number of partitions. When the number of partitions is a power of two,
+  // the modulo can be implemented more efficiently as a bitwise and.
   if (is_power_two(num_partitions)) {
-    // Compute which partition each row belongs to using bitwise partitioner
-    auto partitioner = bitwise_partitioner<hash_value_type>{num_partitions};
-    thrust::transform(rmm::exec_policy(stream)->on(stream), hash_iterator,
-      hash_iterator + num_rows, row_partitions.begin(), partitioner);
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+      hash_iterator, hash_iterator + num_rows, row_partitions.begin(),
+      [mask = num_partitions - 1] __device__ (hash_value_type hash_value) {
+        return hash_value & mask; // hash_value & (num_partitions - 1)
+      });
   } else {
-    // Compute which partition each row belongs to using modulo partitioner
-    auto partitioner = modulo_partitioner<hash_value_type>{num_partitions};
-    thrust::transform(rmm::exec_policy(stream)->on(stream), hash_iterator,
-      hash_iterator + num_rows, row_partitions.begin(), partitioner);
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+      hash_iterator, hash_iterator + num_rows, row_partitions.begin(),
+      [num_partitions] __device__ (hash_value_type hash_value) {
+        return hash_value % num_partitions;
+      });
   }
 
   // Initialize gather maps and offsets to sequence
