@@ -315,10 +315,15 @@ void gather_bitmask(table_device_view input,
                     size_type* valid_counts,
                     cudaStream_t stream)
 {
+  if (mask_size == 0) {
+    return;
+  }
+
   constexpr size_type block_size = 256;
   using Selector = gather_bitmask_functor<ignore_out_of_bounds, decltype(gather_map_begin)>;
   auto selector = Selector{ input, masks, gather_map_begin };
   auto kernel = select_bitmask_kernel<Selector, block_size>;
+
   cudf::experimental::detail::grid_1d grid { mask_size, block_size, 1 };
   kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
                                                      masks,
