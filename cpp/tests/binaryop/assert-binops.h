@@ -37,7 +37,7 @@ void ASSERT_BINOP(column_view const& out,
                   scalar const& lhs,
                   column_view const& rhs,
                   TypeOp&& op) {
-    auto lhs_h = static_cast<const ScalarType*>(&lhs)->value();
+    auto lhs_h = static_cast<ScalarType const&>(lhs).operator TypeLhs();
     auto rhs_h = cudf::test::to_host<TypeRhs>(rhs);
     auto rhs_data = rhs_h.first;
     auto out_h = cudf::test::to_host<TypeOut>(out);
@@ -79,7 +79,7 @@ void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   scalar const& rhs,
                   TypeOp&& op) {
-    auto rhs_h = static_cast<const ScalarType*>(&rhs)->value();
+    auto rhs_h = static_cast<ScalarType const&>(rhs).operator TypeRhs();
     auto lhs_h = cudf::test::to_host<TypeLhs>(lhs);
     auto lhs_data = lhs_h.first;
     auto out_h = cudf::test::to_host<TypeOut>(out);
