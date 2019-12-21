@@ -93,22 +93,22 @@ __global__ void select_bitmask_kernel(ValiditySelector get_validity,
       continue;
     }
 
-    auto lane_offset = blockIdx.x * blockDim.x;
+    auto block_offset = blockIdx.x * blockDim.x;
     auto warp_valid_count = static_cast<size_type>(0);
 
-    while (lane_offset < mask_num_bits) {
-      auto const lane_idx = lane_offset + threadIdx.x;
-      auto const lane_active = lane_idx < mask_num_bits;
-      auto const bit_is_valid = lane_active && get_validity(mask_idx, lane_idx);
+    while (block_offset < mask_num_bits) {
+      auto const thread_idx = block_offset + threadIdx.x;
+      auto const thread_active = thread_idx < mask_num_bits;
+      auto const bit_is_valid = thread_active && get_validity(mask_idx, thread_idx);
       auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
-      auto const mask_idx = word_index(lane_idx);
+      auto const mask_idx = word_index(thread_idx);
 
-      if (lane_active && threadIdx.x % warp_size == 0) {
+      if (thread_active && threadIdx.x % warp_size == 0) {
         mask[mask_idx] = warp_validity;
       }
 
       warp_valid_count += __popc(warp_validity);
-      lane_offset += blockDim.x * gridDim.x;
+      block_offset += blockDim.x * gridDim.x;
     }
 
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
@@ -315,10 +315,15 @@ void gather_bitmask(table_device_view input,
                     size_type* valid_counts,
                     cudaStream_t stream)
 {
+  if (mask_size == 0) {
+    return;
+  }
+
   constexpr size_type block_size = 256;
   using Selector = gather_bitmask_functor<ignore_out_of_bounds, decltype(gather_map_begin)>;
   auto selector = Selector{ input, masks, gather_map_begin };
   auto kernel = select_bitmask_kernel<Selector, block_size>;
+
   cudf::experimental::detail::grid_1d grid { mask_size, block_size, 1 };
   kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
                                                      masks,
