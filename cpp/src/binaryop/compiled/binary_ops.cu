@@ -76,6 +76,36 @@ auto scalar_col_valid_mask_and(column_view const& col,
 template <typename Lhs, typename Rhs, typename Out>
 struct binary_op {
 
+  std::unique_ptr<column> operator()(scalar const& lhs, column_view const& rhs, binary_operator op, data_type out_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+    auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+    auto out = make_fixed_width_column(out_type, rhs.size(), new_mask,
+                                       cudf::UNKNOWN_NULL_COUNT, stream, mr);
+
+    if (rhs.size() > 0) {
+      auto out_view = out->mutable_view();
+      auto out_itr = out_view.begin<Out>();
+      auto rhs_device_view = column_device_view::create(rhs, stream);
+      auto lhs_scalar = static_cast<cudf::experimental::scalar_type_t<Lhs> const&>(lhs);
+      auto binop = apply_binop<Lhs, Rhs, Out>{op};
+      auto lhs_scalar_view = get_scalar_device_view(lhs_scalar);
+      auto apply_binop_scalar = [binop, lhs_scalar_view] __device__ (Rhs const& rhs) {
+        return binop(lhs_scalar_view.is_valid() ? lhs_scalar_view.value() : Lhs{}, rhs);
+      };
+      if (rhs.has_nulls()) {
+        auto rhs_itr = detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
+        thrust::transform(rmm::exec_policy(stream)->on(stream), rhs_itr, rhs_itr + rhs.size(), out_itr, apply_binop_scalar);
+      } else {
+        auto rhs_itr = thrust::make_transform_iterator(thrust::make_counting_iterator(size_type{0}),
+                                                      [col=*rhs_device_view] __device__ (size_type i) { return col.element<Rhs>(i); });
+        thrust::transform(rmm::exec_policy(stream)->on(stream), rhs_itr, rhs_itr + rhs.size(), out_itr, apply_binop_scalar);
+      }
+    }
+
+    CHECK_CUDA(stream);
+
+    return out;
+  }
+
   std::unique_ptr<column> operator()(column_view const& lhs, scalar const& rhs, binary_operator op, data_type out_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
     auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     auto out = make_fixed_width_column(out_type, lhs.size(), new_mask,
@@ -199,7 +229,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs, column_view const& r
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, cudf::experimental::bool8>{}(rhs, lhs, op, output_type, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, cudf::experimental::bool8>{}(lhs, rhs, op, output_type, mr, stream);
   // CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
   // return experimental::type_dispatcher(output_type, dispatch_binop{}, lhs, rhs, op, output_type, mr, stream);
 }
