@@ -498,6 +498,36 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
  */
 std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& rhs, column_view const& boolean_mask,
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-                                 
+
+/**
+* @brief Creates a new table by shifting all values in all columns by an offset.
+*
+* Elements will be deteremined by `output[col][idx] = input[col][idx - offset]`.
+* Some elements in the output may be indeterminable from the input. For those
+* elements, the value will be determined by `fill_value`.
+*
+* Examples
+* -------------------------------------------------
+* input      = { [0, 1, 2, 3, 4], [5, 4, 3, 2, 1] }
+* offset     = 3
+* fill_value = { @, 7 }
+* return     = { [@, @, @, 0, 1], [7, 7, 7, 5, 4] }
+* -------------------------------------------------
+* input      = { [0, 1, 2, 3, 4], [5, 4, 3, 2, 1] }
+* offset     = -2
+* fill_value = { 2, @ }
+* return     = { [2, 3, 4, 2, 2], [3, 2, 1, @, @] }
+*
+* @note if a column is nullable, it's output column will be nullable.
+* @note if a fill value is null, it's output column will be nullable.
+*
+* @param input      Table containing columns to be shifted.
+* @param offset     The offset by which to shift the input.
+* @param fill_value Fill value for indeterminable outputs.
+*/
+std::unique_ptr<table> shift(table_view const& in,
+                             size_type periods,
+                             std::vector<scalar> const& fill_value);
+
 }  // namespace experimental
 }  // namespace cudf

@@ -7,6 +7,7 @@
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #2930 Define and implement `shift`.
 
 ## Improvements
 
