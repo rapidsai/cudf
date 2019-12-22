@@ -674,7 +674,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
       auto result1 = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      //std::cout<<"e="<<expected_value<<",r="<<result1->to_string()<<std::endl;
+      std::cout<<"expected="<<expected_value<<",got="<<result1->to_string()<<std::endl;
       EXPECT_EQ(expected_value, result1->to_string()) << (op == reduction_op::MIN ? "MIN" : "MAX" );
     };
 
@@ -693,6 +693,10 @@ std::vector<std::string> string_list[] = {
 {"one", "", "three", "four", "five", "six", "seven", "eight", "nine"},
 {"", "", "", "four", "five", "six", "seven", "eight", "nine"},
 {"", "", "", "", "", "", "", "", ""},
+//DeviceMin identity sentinel test cases
+{"\xF7\xBF\xBF\xBF", "", "", "", "", "", "", "", ""},
+{"one", "two", "three", "four", "\xF7\xBF\xBF\xBF", "six", "seven", "eight", "nine"},
+{"one", "two", "\xF7\xBF\xBF\xBF", "four", "five", "six", "seven", "eight", "nine"},
 };
 INSTANTIATE_TEST_CASE_P(string_cases, StringReductionTest,
                          testing::ValuesIn(string_list));
