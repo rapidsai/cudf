@@ -16,8 +16,21 @@
 
 #pragma once
 
-#define _LIBCUDACXX_USE_CXX20_CHRONO
-#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
+#include <cudf/scalar/scalar.hpp>
 
-#include <simt/chrono>
-#include <details/iterator>
+namespace cudf {
+namespace test {
+
+/**
+ * @brief Verifies the equality of two scalars.
+ *
+ * Treats invalid scalars as equivalent.
+ *
+ * @param lhs                   The first scalar
+ * @param rhs                   The second scalar
+ *---------------------------------------------------------------------------**/
+void expect_scalars_equal(cudf::scalar const& lhs,
+                          cudf::scalar const& rhs);
+
+} // namespace test
+} // namespace cudf
