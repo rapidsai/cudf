@@ -42,6 +42,7 @@
 - PR #3588 Remove avro reader column order reversal
 - PR #3629 Fix hash map test failure
 - PR #3637 Fix sorted set_index operations in dask_cudf
+- PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
 
 
 # cuDF 0.11.0 (11 Dec 2019)
