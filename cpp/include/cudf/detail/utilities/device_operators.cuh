@@ -73,6 +73,8 @@ struct DeviceCount {
   }
 };
 
+// sentinel value which is the highest possible valid UTF-8 encoded character
+__constant__ char sentinel[5]{"\xF7\xBF\xBF\xBF"};
 /* @brief binary `min` operator */
 struct DeviceMin {
   template <typename T>
@@ -87,11 +89,12 @@ struct DeviceMin {
   }
 
   // @brief identity specialized for string_view 
-  // (sentinel value which is the highest possible valid UTF-8 encoded character)
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
-    return string_scalar("\xF7\xBF\xBF\xBF").value();
+    const char* psentinel{nullptr};
+    cudaGetSymbolAddress((void**)&psentinel, sentinel);
+    return string_view(psentinel, 4);
   }
 };
 

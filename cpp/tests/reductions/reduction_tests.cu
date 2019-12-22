@@ -675,7 +675,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       auto result1 = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
       //std::cout<<"e="<<expected_value<<",r="<<result1->to_string()<<std::endl;
-      EXPECT_EQ(expected_value, result1->to_string());
+      EXPECT_EQ(expected_value, result1->to_string()) << (op == reduction_op::MIN ? "MIN" : "MAX" );
     };
 
     if (succeeded_condition) {
