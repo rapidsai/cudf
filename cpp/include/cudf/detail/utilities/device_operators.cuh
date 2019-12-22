@@ -94,7 +94,7 @@ struct DeviceMin {
   static constexpr T identity() {
     const char* psentinel{nullptr};
     cudaGetSymbolAddress((void**)&psentinel, sentinel);
-    return string_view(psentinel, 4);
+    return T(psentinel, 4);
   }
 };
 
@@ -113,7 +113,9 @@ struct DeviceMax {
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
-    return T{nullptr, 0};
+    const char* psentinel{nullptr};
+    cudaGetSymbolAddress((void**)&psentinel, sentinel);
+    return T(psentinel, 0);
   }
 
 };
