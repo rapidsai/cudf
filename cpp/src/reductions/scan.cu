@@ -73,7 +73,7 @@ struct ScanDispatcher {
                                      Op::template identity<T>(), size, stream);
     }
 
-    CHECK_CUDA();
+    CHECK_CUDA(stream);
     return output_column;
   }
 
@@ -112,7 +112,7 @@ struct ScanDispatcher {
                                      input, output.data<T>(), Op{}, size, stream);
     }
 
-    CHECK_CUDA();
+    CHECK_CUDA(stream);
     return output_column;
   }
 
