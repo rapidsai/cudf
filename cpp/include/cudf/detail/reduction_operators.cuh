@@ -18,7 +18,7 @@
 
 #include <cudf/types.hpp>  //for CUDA_HOST_DEVICE_CALLABLE
 #include <cudf/detail/iterator.cuh>
-#include <iterator/transform_unary_functions.cuh>
+#include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 
 #include <thrust/functional.h>

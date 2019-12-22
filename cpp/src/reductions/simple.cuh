@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include "reduction.cuh"
-#include "reduction_operators.cuh"
+#include <cudf/detail/reduction.cuh>
 
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
