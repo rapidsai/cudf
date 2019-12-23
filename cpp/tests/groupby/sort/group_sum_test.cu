@@ -62,6 +62,19 @@ TEST_F(groupby_sum_test, basic)
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TEST_F(groupby_sum_test, zero_sized_input)
+{
+    fixed_width_column_wrapper<int32_t> keys      ( { 1, 2, 3},
+                                                    { 0, 0, 0} );
+    fixed_width_column_wrapper<float>   vals        { 3, 4, 5};
+
+    fixed_width_column_wrapper<int32_t> expect_keys { };
+    fixed_width_column_wrapper<float>   expect_vals { };
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 
 } // namespace test
 } // namespace cudf

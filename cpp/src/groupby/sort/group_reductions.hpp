@@ -32,6 +32,10 @@ struct reduce_functor {
                                       num_groups);
     auto op = OpType{};
 
+    if (values.size() == 0) {
+      return result;
+    }
+
     if (values.nullable()) {
       T default_value = OpType::template identity<T>();
       auto device_values = column_device_view::create(values);

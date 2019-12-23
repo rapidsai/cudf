@@ -182,6 +182,10 @@ helper::index_vector const& helper::group_labels(cudaStream_t stream) {
   _group_labels = std::make_unique<index_vector>(num_keys());
 
   auto& group_labels = *_group_labels;
+
+  if (num_keys() == 0)
+    return group_labels;
+
   auto exec = rmm::exec_policy(stream);
   thrust::scatter(exec->on(stream),
     thrust::make_constant_iterator(1, decltype(num_groups())(1)), 
