@@ -983,26 +983,40 @@ def build_column(
         )
 
 
-def as_column(arbitrary, nan_as_null=True, dtype=None):
+def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
     """Create a Column from an arbitrary object
 
+    Parameters
+    ----------
+    arbitrary : object
+        Object to construct the Column from. See *Notes*.
+    nan_as_null : bool,optional
+        If True (default), treat NaN values in arbitrary as null.
+    dtype : optional
+        Optionally typecast the construted Column to the given
+        dtype.
+    length : int, optional
+        If `arbitrary` is a scalar, broadcast into a Column of
+        the given length.
+
+    Returns
+    -------
+    A Column of the appropriate type and size.
+
+    Notes
+    -----
     Currently support inputs are:
+
     * ``Column``
     * ``Series``
     * ``Index``
+    * Scalars (can be broadcasted to a specified size via the `length` parameter)
     * Objects exposing ``__cuda_array_interface__`` (e.g., numba device arrays)
     * Objects exposing ``__array_interface__``(e.g., numpy arrays)
     * pyarrow array
     * pandas.Categorical objects
-
-    Returns
-    -------
-    result :
-        - CategoricalColumn for pandas.Categorical input.
-        - DatetimeColumn for datetime input.
-        - StringColumn for string input.
-        - NumericalColumn for all other inputs.
     """
+
     from cudf.core.column import numerical, categorical, datetime, string
     from cudf.core.series import Series
     from cudf.core.index import Index
@@ -1220,15 +1234,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
-        if hasattr(arbitrary, "dtype"):
-            data_type = np_to_pa_dtype(arbitrary.dtype)
-            # PyArrow can't construct date64 or date32 arrays from np
-            # datetime types
-            if pa.types.is_date64(data_type) or pa.types.is_date32(data_type):
-                arbitrary = arbitrary.astype("int64")
-            data = as_column(pa.array([arbitrary], type=data_type))
-        else:
-            data = as_column(pa.array([arbitrary]), nan_as_null=nan_as_null)
+        length = length or 1
+        data = as_column(
+            utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
+        )
+        if not nan_as_null:
+            data = data.fillna(np.nan)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
