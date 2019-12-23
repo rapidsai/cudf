@@ -64,10 +64,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
   }
   // set scalar is valid
-  if (col.null_count() < col.size())
-    result->set_valid(true, stream);
-  else
-    result->set_valid(false, stream);
+  result->set_valid((col.null_count() < col.size()), stream);
   return result;
 };
 
