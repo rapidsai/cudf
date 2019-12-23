@@ -180,7 +180,8 @@ ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/super_basic_test.cu")
+    # "${CMAKE_CURRENT_SOURCE_DIR}/groupby/super_basic_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_sum_test.cu")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 

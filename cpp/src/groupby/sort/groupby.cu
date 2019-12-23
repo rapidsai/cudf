@@ -108,6 +108,8 @@ groupby::sort_aggregate(
     //            agg that requires sorted result
     // TODO (dm): Use key_sorted_order to make permutation iterator and avoid
     //            generating value columns
+    // TODO (dm): once we have multi-agg, if no other requests remain, ensure
+    //            sort_values is not called
     std::unique_ptr<column> sorted_values = helper().sorted_values(requests[i].values);
 
     auto store_sum = [&] (std::unique_ptr<aggregation> const& agg)
