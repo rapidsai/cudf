@@ -31,24 +31,22 @@ TEST_F(ColumnDeviceViewTest, Sample) {
     using T = int32_t;
     cudaStream_t stream = 0;
     cudf::test::fixed_width_column_wrapper<T> input ({1, 2, 3, 4, 5, 6});
-    auto input_column(std::move(input.release()));
-    auto output = cudf::experimental::allocate_like(input_column->view());
-    auto input_device_view  = cudf::column_device_view::create(input_column->view(), stream);
+    auto output = cudf::experimental::allocate_like(input);
+    auto input_device_view  = cudf::column_device_view::create(input, stream);
     auto output_device_view  = cudf::mutable_column_device_view::create(output->mutable_view(), stream);
     auto exec = rmm::exec_policy(stream);
-    thrust::copy(exec->on(stream), input_device_view->begin<T>(), input_device_view->end<T>(),
-            output_device_view->begin<T>());
+    EXPECT_NO_THROW(thrust::copy(exec->on(stream), input_device_view->begin<T>(), input_device_view->end<T>(),
+            output_device_view->begin<T>()));
 
-    cudf::test::expect_columns_equal(input_column->view(), output->view());
+    cudf::test::expect_columns_equal(input, output->view());
 }
 
 TEST_F(ColumnDeviceViewTest, MismatchingType) {
     using T = int32_t;
     cudaStream_t stream = 0;
     cudf::test::fixed_width_column_wrapper<T> input ({1, 2, 3, 4, 5, 6});
-    auto input_column(std::move(input.release()));
-    auto output = cudf::experimental::allocate_like(input_column->view());
-    auto input_device_view  = cudf::column_device_view::create(input_column->view(), stream);
+    auto output = cudf::experimental::allocate_like(input);
+    auto input_device_view  = cudf::column_device_view::create(input, stream);
     auto output_device_view  = cudf::mutable_column_device_view::create(output->mutable_view(), stream);
     auto exec = rmm::exec_policy(stream);
     EXPECT_THROW(thrust::copy(exec->on(stream), input_device_view->begin<T>(),
