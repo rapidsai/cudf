@@ -16,10 +16,8 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "types.hpp"
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 
@@ -48,14 +46,126 @@ namespace experimental {
  * rows in the source columns to rows in the destination columns.
  * @param[in] check_bounds Optionally perform bounds checking on the values
  * of `gather_map` and throw an error if any of its values are out of bounds.
- * @params[in] mr The resource to use for all allocations
- * @return cudf::table Result of the gather
+ * @param[in] mr The resource to use for all allocations
+ * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
-			      bool check_bounds = false,
-			      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                              bool check_bounds = false,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-			       
+/**
+ * @brief Scatters the rows of the source table into a copy of the target table
+ * according to a scatter map.
+ *
+ * Scatters values from the source table into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a
+ * scatter map such that row `scatter_map[i]` of the destination table gets row
+ * `i` of the source table. All other rows of the destination table equal
+ * corresponding rows of the target table.
+ *
+ * The number of columns in source must match the number of columns in target
+ * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
+ * is the number of rows in the `target` table.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param source The input columns containing values to be scattered into the
+ * target columns
+ * @param scatter_map A non-nullable column of integral indices that maps the
+ * rows in the source table to rows in the target table. The size must be equal
+ * to or less than the number of elements in the source columns.
+ * @param target The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param mr The resource to use for all allocations
+ * @return Result of scattering values from source to target
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(
+    table_view const& source, column_view const& scatter_map,
+    table_view const& target, bool check_bounds = false,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters a row of scalar values into a copy of the target table
+ * according to a scatter map.
+ *
+ * Scatters values from the source row into the target table out-of-place,
+ * returning a "destination table". The scatter is performed according to a
+ * scatter map such that row `scatter_map[i]` of the destination table is
+ * replaced by the source row. All other rows of the destination table equal
+ * corresponding rows of the target table.
+ *
+ * The number of elements in source must match the number of columns in target
+ * and their corresponding datatypes must be the same.
+ * 
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the target table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param source The input scalars containing values to be scattered into the
+ * target columns
+ * @param indices A non-nullable column of integral indices that indicate
+ * the rows in the target table to be replaced by source.
+ * @param target The set of columns into which values from the source_table
+ * are to be scattered
+ * @param check_bounds Optionally perform bounds checking on the values of
+ * `scatter_map` and throw an error if any of its values are out of bounds.
+ * @param mr The resource to use for all allocations
+ * @return Result of scattering values from source to target
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> scatter(
+    std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
+    table_view const& target, bool check_bounds = false,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters the rows of a table to `n` tables according to a partition map
+ *
+ * Copies the rows from the input table to new tables according to the table
+ * indices given by partition_map. The number of output tables is one more than
+ * the maximum value in `partition_map`.
+ * 
+ * Output table `i` in [0, n] is empty if `i` does not appear in partition_map.
+ * output table will be empty.
+ *
+ * @throw cudf::logic_error when partition_map is a non-integer type
+ * @throw cudf::logic_error when partition_map is larger than input
+ * @throw cudf::logic_error when partition_map has nulls
+ *
+ * Example:
+ * input:         [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *                 { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * partition_map: {3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
+ * output:     {[{22}, {2}], 
+ *              [{16, 24, 26, 28}, {4, 4, 6, 2}],
+ *              [{}, {}],
+ *              [{10, 14}, {1, 3}],
+ *              [{12, 18, 20}, {2, null, 0}]}
+ *
+ * @param input Table of rows to be partitioned into a set of tables
+ * tables according to `partition_map`
+ * @param partition_map  Non-null column of integer values that map
+ * each row in `input` table into one of the output tables
+ * @param mr The resource to use for all allocations
+ *
+ * @return A vector of tables containing the scattered rows of `input`.
+ * `table` `i` contains all rows `j` from `input` where `partition_map[j] == i`.
+ */
+std::vector<std::unique_ptr<table>> scatter_to_tables(
+    table_view const& input, column_view const& partition_map,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
@@ -64,7 +174,6 @@ enum class  mask_allocation_policy {
     RETAIN, ///< Allocate a null mask if the input contains one
     ALWAYS ///< Allocate a null mask, regardless of input
 };
-
 
 /*
  * Initializes and returns an empty column of the same type as the `input`.
@@ -196,8 +305,8 @@ std::unique_ptr<column> copy_range(column_view const& source,
  * For all `i` it is expected `indices[i] <= input.size()`
  * For all `i%2==0`, it is expected that `indices[i] <= indices[i+1]`
  *
- * @note It is the caller's responsibility to ensure that the returned view
- * does not outlive the viewed device memory.
+ * @note It is the caller's responsibility to ensure that the returned views
+ * do not outlive the viewed device memory.
  *
  * @example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
@@ -217,6 +326,38 @@ std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices);
 
 /**
+ * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
+ * 
+ * The returned views of `input` are constructed from an even number indices where
+ * the `i`th returned `table_view` views the elements in `input` indicated by the range
+ * `[indices[2*i], indices[(2*i)+1])`.
+ *
+ * For all `i` it is expected `indices[i] <= input.size()`
+ * For all `i%2==0`, it is expected that `indices[i] <= indices[i+1]`
+ *
+ * @note It is the caller's responsibility to ensure that the returned views
+ * do not outlive the viewed device memory.
+ *
+ * @example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
+ * indices: {1, 3, 5, 9, 2, 4, 8, 8}
+ * output:  [{{12, 14}, {20, 22, 24, 26}, {14, 16}, {}},
+ *           {{52, 54}, {60, 22, 24, 26}, {14, 16}, {}}]
+ *
+ * @throws `cudf::logic_error` if `indices` size is not even.
+ * @throws `cudf::logic_error` When the values in the pair are strictly decreasing.
+ * @throws `cudf::logic_error` When any of the values in the pair don't belong to
+ * the range [0, input.size()).
+ *
+ * @param input View of table to slice
+ * @param indices A vector of indices used to take slices of `input`.
+ * @return Vector of views of `input` indicated by the ranges in `indices`.
+ */
+std::vector<table_view> slice(table_view const& input,
+                               std::vector<size_type> const& indices);
+
+/**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
  * derived from expected splits.
  *
@@ -227,8 +368,8 @@ std::vector<column_view> slice(column_view const& input,
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  *
- * @note It is the caller's responsibility to ensure that the returned view
- * does not outlive the viewed device memory.
+ * @note It is the caller's responsibility to ensure that the returned views
+ * do not outlive the viewed device memory.
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
@@ -245,6 +386,96 @@ std::vector<column_view> slice(column_view const& input,
  */
 std::vector<column_view> split(column_view const& input,
                                std::vector<size_type> const& splits);
+
+/**
+ * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
+ * derived from expected splits.
+ *
+ * The returned views of `input` are constructed from vector of splits, which indicates
+ * where the split should occur. The `i`th returned `table_view` is sliced as
+ * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
+ * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ *
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ *
+ * @note It is the caller's responsibility to ensure that the returned views
+ * do not outlive the viewed device memory.
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
+ * splits:  {2, 5, 9}
+ * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
+ *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
+ *           
+ *
+ * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
+ * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ *
+ * @param input View of a table to split
+ * @param splits A vector of indices where the view will be split
+ * @return The set of requested views of `input` indicated by the `splits`.
+ */
+std::vector<table_view> split(table_view const& input,
+                               std::vector<size_type> const& splits);
+
+/**
+ * @brief The result(s) of a `contiguous_split`
+ *
+ * Each table_view resulting from a split operation performed by contiguous_split,
+ * will be returned wrapped in a `contiguous_split_result`.  The table_view and internal
+ * column_views in this struct are not owned by a top level cudf::table or cudf::column. 
+ * The backing memory is instead owned by the `all_data` field and in one
+ * contiguous block. 
+ * 
+ * The user is responsible for assuring that the `table` or any derived table_views do
+ * not outlive the memory owned by `all_data`
+ */
+struct contiguous_split_result {
+   cudf::table_view                    table;
+   std::unique_ptr<rmm::device_buffer> all_data;   
+};
+
+/**
+ * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s into a single 
+ * contiguous block of memory.
+ *
+ * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
+ * in the `contiguous_split_result`. There is no top-level owning table.
+ *
+ * The returned views of `input` are constructed from a vector of indices, that indicate
+ * where each split should occur. The `i`th returned `table_view` is sliced as
+ * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
+ * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ *
+ * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ *
+ * @note It is the caller's responsibility to ensure that the returned views
+ * do not outlive the viewed device memory contained in the `all_data` field of the
+ * returned contiguous_split_result.   
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
+ *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
+ * splits:  {2, 5, 9}
+ * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
+ *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
+ *           
+ *
+ * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
+ * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
+ * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ *
+ * @param input View of a table to split
+ * @param splits A vector of indices where the view will be split
+ * @param[in] mr Optional, The resource to use for all returned allocations
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @return The set of requested views of `input` indicated by the `splits` and the viewed memory buffer.
+ */
+std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
+                                                      std::vector<size_type> const& splits,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 

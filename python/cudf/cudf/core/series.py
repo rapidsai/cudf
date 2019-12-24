@@ -379,6 +379,12 @@ class Series(object):
     def __sizeof__(self):
         return self._column.__sizeof__() + self._index.__sizeof__()
 
+    def memory_usage(self, index=True, deep=False):
+        n = self._column._memory_usage(deep=deep)
+        if index:
+            n += self._index.memory_usage(deep=deep)
+        return n
+
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
         """
@@ -1110,13 +1116,10 @@ class Series(object):
             else:
                 index = Index._concat([o.index for o in objs])
 
-        names = {obj.name for obj in objs}
-        if len(names) == 1:
-            [name] = names
-        else:
-            name = None
         col = Column._concat([o._column for o in objs])
-        return cls(data=col, index=index, name=name)
+        if len(set([o.name for o in objs])) != 1:
+            col.name = None
+        return cls(data=col, index=index)
 
     @property
     def valid_count(self):

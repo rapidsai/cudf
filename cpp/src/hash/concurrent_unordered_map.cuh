@@ -18,11 +18,14 @@
 #define CONCURRENT_UNORDERED_MAP_CUH
 
 #include <utilities/legacy/device_atomics.cuh>
+#include <hash/helper_functions.cuh>
+#include <hash/hash_allocator.cuh>
+
+#include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include "helper_functions.cuh"
-#include "managed_allocator.cuh"
 
 #include <thrust/pair.h>
+
 #include <cassert>
 #include <iostream>
 #include <iterator>
@@ -83,13 +86,16 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
 /**
  * Supports concurrent insert, but not concurrent insert and find.
  *
+ * @note The user is responsible for the following stream semantics:
+ * - Either the same stream should be used to create the map as is used by the kernels that access it, or
+ * - the stream used to create the map should be synchronized before it is accessed from a different stream or from host code.
+ *
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
- *  - extend interface to accept streams
  */
 template <typename Key, typename Element, typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
-          typename Allocator = legacy_allocator<thrust::pair<Key, Element>>>
+          typename Allocator = default_allocator<thrust::pair<Key, Element>>>
 class concurrent_unordered_map {
  public:
   using size_type = size_t;
@@ -113,9 +119,13 @@ class concurrent_unordered_map {
    *
    * @note The implementation of this unordered_map uses sentinel values to
    * indicate an entry in the hash table that is empty, i.e., if a hash bucket
-   *is empty, the pair residing there will be equal to (unused_key,
-   *unused_element). As a result, attempting to insert a key equal to
+   * is empty, the pair residing there will be equal to (unused_key,
+   * unused_element). As a result, attempting to insert a key equal to
    *`unused_key` results in undefined behavior.
+   *
+   * @note All allocations, kernels and copies in the constructor take place
+   * on stream but the constructor does not synchronize the stream. It is the user's
+   * responsibility to synchronize or use the same stream to access the map.
    *
    * @param capacity The maximum number of pairs the map may hold
    * @param unused_element The sentinel value to use for an empty value
@@ -125,37 +135,81 @@ class concurrent_unordered_map {
    * equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
+   * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
   static auto create(
-      size_type capacity,
+      size_type capacity, 
       const mapped_type unused_element = std::numeric_limits<key_type>::max(),
       const key_type unused_key = std::numeric_limits<key_type>::max(),
       const Hasher& hash_function = hasher(),
       const Equality& equal = key_equal(),
-      const allocator_type& allocator = allocator_type()) {
+      const allocator_type& allocator = allocator_type(), 
+      cudaStream_t stream = 0) {
     using Self =
         concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
-    auto deleter = [](Self* p) { p->destroy(); };
+    auto deleter = [stream](Self* p) { p->destroy(stream); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
         new Self(capacity, unused_element, unused_key, hash_function, equal,
-                 allocator),
+                 allocator, stream),
         deleter};
   }
 
+  /**
+   * @brief Returns an iterator to the first element in the map
+   *
+   * @note `__device__` code that calls this function should either run in the
+   * same stream as `create()`, or the accessing stream either be running on the
+   * same stream as create(), or the accessing stream should be appropriately
+   * synchronized with the creating stream.
+   *
+   * @returns iterator to the first element in the map.
+   **/
   __device__ iterator begin() {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                     m_hashtbl_values);
   }
+
+  /**
+   * @brief Returns a constant iterator to the first element in the map
+   *
+   * @note `__device__` code that calls this function should either run in the
+   * same stream as `create()`, or the accessing stream either be running on the
+   * same stream as create(), or the accessing stream should be appropriately
+   * synchronized with the creating stream.
+   *
+   * @returns constant iterator to the first element in the map.
+   **/
   __device__ const_iterator begin() const {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                           m_hashtbl_values);
   }
+
+  /**
+   * @brief Returns an iterator to the one past the last element in the map
+   *
+   * @note `__device__` code that calls this function should either run in the
+   * same stream as `create()`, or the accessing stream either be running on the
+   * same stream as create(), or the accessing stream should be appropriately
+   * synchronized with the creating stream.
+   *
+   * @returns iterator to the one past the last element in the map.
+   **/
   __device__ iterator end() {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                     m_hashtbl_values + m_capacity);
   }
+
+  /**
+   * @brief Returns a constant iterator to the one past the last element in the map
+   *
+   * @note When called in a device code, user should make sure that it should
+   * either be running on the same stream as create(), or the accessing stream
+   * should be appropriately synchronized with the creating stream.
+   *
+   * @returns constant iterator to the one past the last element in the map.
+   **/
   __device__ const_iterator end() const {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                           m_hashtbl_values + m_capacity);
@@ -316,11 +370,11 @@ class concurrent_unordered_map {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
     } else {
-      m_allocator.deallocate(m_hashtbl_values, m_capacity);
+      m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
       m_capacity = other.m_capacity;
       m_capacity = other.m_capacity;
 
-      m_hashtbl_values = m_allocator.allocate(m_capacity);
+      m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     }
     CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values, other.m_hashtbl_values,
                              m_capacity * sizeof(value_type), cudaMemcpyDefault,
@@ -361,9 +415,11 @@ class concurrent_unordered_map {
    *
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
+   *
+   * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
-  void destroy() {
-    m_allocator.deallocate(m_hashtbl_values, m_capacity);
+  void destroy(cudaStream_t stream = 0) {
+    m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
     delete this;
   }
 
@@ -395,18 +451,20 @@ class concurrent_unordered_map {
    *are equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
+   * @param stream CUDA stream to use for device operations. 
    *---------------------------------------------------------------------------**/
   concurrent_unordered_map(size_type capacity, const mapped_type unused_element,
                            const key_type unused_key,
                            const Hasher& hash_function, const Equality& equal,
-                           const allocator_type& allocator)
+                           const allocator_type& allocator, 
+                           cudaStream_t stream = 0)
       : m_hf(hash_function),
         m_equal(equal),
         m_allocator(allocator),
         m_capacity(capacity),
         m_unused_element(unused_element),
         m_unused_key(unused_key) {
-    m_hashtbl_values = m_allocator.allocate(m_capacity);
+    m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     constexpr int block_size = 128;
     {
       cudaPointerAttributes hashtbl_values_ptr_attributes;
@@ -416,16 +474,15 @@ class concurrent_unordered_map {
       if (cudaSuccess == status &&
           isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_RT_CALL(cudaGetDevice(&dev_id));
-        CUDA_RT_CALL(cudaMemPrefetchAsync(
-            m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, 0));
+        CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDA_TRY(cudaMemPrefetchAsync(
+            m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
       }
     }
 
-    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size>>>(
+    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream>>>(
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
-    CUDA_RT_CALL(cudaGetLastError());
-    CUDA_RT_CALL(cudaStreamSynchronize(0));
+    CUDA_TRY(cudaGetLastError());
   }
 };
 

@@ -17,7 +17,11 @@
 #pragma once
 
 #include <limits>
-#include <cudf/utilities/chrono.hpp>
+
+#define _LIBCUDACXX_USE_CXX20_CHRONO
+#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
+
+#include <simt/chrono>
 
 /**---------------------------------------------------------------------------*
  * @file timestamps.hpp
@@ -39,7 +43,6 @@ struct timestamp : time_point<Duration> {
   constexpr timestamp(Duration d) : time_point<Duration>(d){};
   constexpr timestamp(typename Duration::rep r)
       : time_point<Duration>(Duration(r)){};
-
   /**
    * @brief Constructs a new timestamp by copying the contents of another
    * `time_point` and converting its duration value if necessary.

@@ -7,6 +7,7 @@ from copy import copy, deepcopy
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import nvstrings
 import rmm
@@ -264,7 +265,7 @@ class Index(object):
         else:
             return column_join_res
 
-    def rename(self, name):
+    def rename(self, name, inplace=False):
         """
         Alter Index name.
 
@@ -279,13 +280,14 @@ class Index(object):
         -------
         Index
 
-        Difference from pandas:
-          * Not supporting: inplace
         """
-        out = self.copy(deep=False)
-        out.name = name
-
-        return out.copy(deep=True)
+        if inplace is True:
+            self.name = name
+            return None
+        else:
+            out = self.copy(deep=False)
+            out.name = name
+            return out.copy(deep=True)
 
     def astype(self, dtype):
         """Convert to the given ``dtype``.
@@ -409,6 +411,18 @@ class Index(object):
         assert axis in (None, 0)
         return as_index(self._values.repeat(repeats))
 
+    def memory_usage(self, deep=False):
+        return self._values._memory_usage(deep=deep)
+
+    @classmethod
+    def from_pandas(cls, index):
+        if not isinstance(index, pd.Index):
+            raise TypeError("not a pandas.Index")
+
+        ind = as_index(pa.Array.from_pandas(index))
+        ind.name = index.name
+        return ind
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -481,9 +495,9 @@ class RangeIndex(Index):
             start += self._start
             stop += self._start
             if sln == 0:
-                return RangeIndex(0)
+                return RangeIndex(0, None, self.name)
             elif step == 1:
-                return RangeIndex(start, stop)
+                return RangeIndex(start, stop, self.name)
             else:
                 return index_from_range(start, stop, step)
 
@@ -633,6 +647,9 @@ class RangeIndex(Index):
     @property
     def __cuda_array_interface__(self):
         return self._values.__cuda_array_interface__
+
+    def memory_usage(self, **kwargs):
+        return 0
 
 
 def index_from_range(start, stop=None, step=None):
@@ -992,7 +1009,9 @@ def as_index(arbitrary, **kwargs):
     kwargs = _setdefault_name(arbitrary, kwargs)
 
     if isinstance(arbitrary, Index):
-        return arbitrary.rename(**kwargs)
+        idx = arbitrary.copy(deep=False)
+        idx.rename(**kwargs, inplace=True)
+        return idx
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):

@@ -79,7 +79,7 @@ class device_table {
     std::unique_ptr<device_table, decltype(deleter)> p{
         new device_table(num_columns, cols, stream), deleter};
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     return p;
   }
@@ -172,7 +172,7 @@ class device_table {
     CUDA_TRY(cudaMemcpyAsync(device_columns, temp_columns.data(),
                              num_cols * sizeof(gdf_column),
                              cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
   }
 };
 

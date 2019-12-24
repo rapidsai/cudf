@@ -305,7 +305,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
                           cudaStream_t stream = 0) {
 
     if (0 == input.num_rows() || 0 == input.num_columns()) {
-        return experimental::detail::empty_like(input, stream);
+        return experimental::empty_like(input);
     }
 
     constexpr int block_size = 256;
@@ -326,7 +326,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
                                                      per_thread,
                                                      filter);
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::size_type output_size = 0;
 
@@ -353,7 +353,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         output_size = block_counts.back();
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
 
    if (output_size == input.num_rows()) {
@@ -371,7 +371,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         return std::make_unique<experimental::table>(std::move(out_columns));
 
    } else {
-        return experimental::detail::empty_like(input, stream);
+        return experimental::empty_like(input);
    }
 }
 
