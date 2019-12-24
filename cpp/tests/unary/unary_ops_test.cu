@@ -383,33 +383,33 @@ TYPED_TEST(IsNotNull, EmptyColumns) {
 }
 
 static const auto test_timestamps_D = std::vector<int32_t>{
-    -1528,  // 1965-10-26
-    17716,  // 2018-07-04
-    19382,  // 2023-01-25
+    -1528,  // 1965-10-26 GMT
+    17716,  // 2018-07-04 GMT
+    19382,  // 2023-01-25 GMT
 };
 
 static const auto test_timestamps_s = std::vector<int64_t>{
-    -131968728,  // 1965-10-26 14:01:12
-    1530705600,  // 2018-07-04 12:00:00
-    1674631932,  // 2023-01-25 07:32:12
+    -131968728,  // 1965-10-26 14:01:12 GMT
+    1530705600,  // 2018-07-04 12:00:00 GMT
+    1674631932,  // 2023-01-25 07:32:12 GMT
 };
 
 static const auto test_timestamps_ms = std::vector<int64_t>{
-    -131968727238,  // 1965-10-26 14:01:12.762
-    1530705600000,  // 2018-07-04 12:00:00.000
-    1674631932929,  // 2023-01-25 07:32:12.929
+    -131968727238,  // 1965-10-26 14:01:12.762 GMT
+    1530705600000,  // 2018-07-04 12:00:00.000 GMT
+    1674631932929,  // 2023-01-25 07:32:12.929 GMT
 };
 
 static const auto test_timestamps_us = std::vector<int64_t>{
-    -131968727238000,  // 1965-10-26 14:01:12.762000000
-    1530705600000000,  // 2018-07-04 12:00:00.000000000
-    1674631932929000,  // 2023-01-25 07:32:12.929000000
+    -131968727238000,  // 1965-10-26 14:01:12.762000000 GMT
+    1530705600000000,  // 2018-07-04 12:00:00.000000000 GMT
+    1674631932929000,  // 2023-01-25 07:32:12.929000000 GMT
 };
 
 static const auto test_timestamps_ns = std::vector<int64_t>{
-    -131968727238000000,  // 1965-10-26 14:01:12.762000000
-    1530705600000000000,  // 2018-07-04 12:00:00.000000000
-    1674631932929000000,  // 2023-01-25 07:32:12.929000000
+    -131968727238000000,  // 1965-10-26 14:01:12.762000000 GMT
+    1530705600000000000,  // 2018-07-04 12:00:00.000000000 GMT
+    1674631932929000000,  // 2023-01-25 07:32:12.929000000 GMT
 };
 
 template <typename T>
@@ -554,13 +554,20 @@ std::vector<cudf::type_id> get_higher_precision_timestamp_type_ids(
 
 // Test that all timestamps whose precision is >= to the TypeParam
 // down-casts appropriately to the lower-precision TypeParam
-TYPED_TEST(CastTimestampsTyped, DownCastingTruncatesValues) {
+TYPED_TEST(CastTimestampsTyped, DownCastingFloorsValues) {
   using T = TypeParam;
   using namespace cudf::test;
   auto dtype_exp = make_data_type<T>();
   auto timestamps_exp = make_exp_timestamp_column(dtype_exp.id());
+  // Construct a list of the timestamp type_ids whose precision is
+  // greater than or equal to the precision of TypeParam's, e.g:
+  // timestamp_ms -> {timestamp_ms, timestamp_us, timestamp_ns};
+  // timestamp_us -> {timestamp_us, timestamp_ns};
+  // etc.
   auto higher_precision_type_ids = get_higher_precision_timestamp_type_ids(
       cudf::experimental::type_to_id<T>());
+  // For each higher-precision type, down-cast to TypeParam and validate
+  // that the values were floored.
   for (cudf::type_id higher_precision_type_id : higher_precision_type_ids) {
     auto timestamps_src = make_exp_timestamp_column(higher_precision_type_id);
     auto timestamps_got = cudf::experimental::cast(timestamps_src, dtype_exp);
@@ -569,7 +576,7 @@ TYPED_TEST(CastTimestampsTyped, DownCastingTruncatesValues) {
 }
 
 // Specific test to ensure down-casting to days happens correctly
-TYPED_TEST(CastTimestampsTyped, DownCastingToDaysTruncatesValues) {
+TYPED_TEST(CastTimestampsTyped, DownCastingToDaysFloorsValues) {
   using T = TypeParam;
   using namespace cudf::test;
 
