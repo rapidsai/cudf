@@ -15,6 +15,7 @@
  */
 
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/copying.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -56,6 +57,25 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   auto host_data = cudf::test::to_host<TypeParam>(col);
 
   EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
+}
+
+TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  auto size = this->size();
+
+  std::vector<TypeParam> data(sequence, sequence + size);
+  std::vector<TypeParam> expected_data(sequence+2, sequence + size);
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(
+    data.begin(), data.end());
+
+  std::vector<cudf::size_type> splits{2};
+  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+
+  auto host_data = cudf::test::to_host<TypeParam>(result.back());
+
+  EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
 }
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
