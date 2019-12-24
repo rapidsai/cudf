@@ -41,6 +41,28 @@ namespace cudf {
 namespace experimental {
 
 namespace binops {
+namespace detail {
+/**
+ * @brief Computes output valid mask for op between a column and a scalar
+ */
+rmm::device_buffer scalar_col_valid_mask_and(
+    column_view const& col,
+    scalar const& s,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
+  if (col.size() == 0) {
+    return rmm::device_buffer{};
+  }
+
+  if (not s.is_valid()) {
+    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
+  } else if (s.is_valid() && col.nullable()) {
+    return copy_bitmask(col, stream, mr);
+  } else {
+    return rmm::device_buffer{};
+  }
+}
+}  // namespace detail
 
 namespace jit {
 
@@ -174,29 +196,6 @@ void binary_operation(mutable_column_view& out,
 }  // namespace jit
 }  // namespace binops
 
-namespace {
-/**
- * @brief Computes output valid mask for op between a column and a scalar
- */
-auto scalar_col_valid_mask_and(column_view const& col,
-                               scalar const& s,
-                               cudaStream_t stream,
-                               rmm::mr::device_memory_resource* mr) {
-  if (col.size() == 0) {
-    return rmm::device_buffer{};
-  }
-
-  if (not s.is_valid()) {
-    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
-  } else if (s.is_valid() && col.nullable()) {
-    return copy_bitmask(col, stream, mr);
-  } else if (s.is_valid() && not col.nullable()) {
-    return rmm::device_buffer{};
-  }
-  return rmm::device_buffer{};
-}
-}  // namespace
-
 namespace detail {
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
@@ -218,7 +217,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+  auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
   auto out = make_numeric_column(output_type, rhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -250,7 +249,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+  auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
