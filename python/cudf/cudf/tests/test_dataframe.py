@@ -4157,7 +4157,7 @@ def test_df_sr_binop(gsr, colnames, op):
     got = op(psr, pdf)
     assert_eq(expect.astype(float), got.astype(float))
 
-    
+
 @pytest.mark.parametrize("set_index", [None, "A", "C", "D"])
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
