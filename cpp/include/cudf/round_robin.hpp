@@ -79,7 +79,6 @@ namespace experimental {
  * @Param[in] num_partitions Number of partitions for the table
  * @Param[in] start_partition Index of the 1st partition
  * @Param[in] mr Device memory allocator
- * @Param[in] stream The cudaStream_t object to be used
  *
  * @Returns A std::pair consisting of an unique_ptr to the partitioned table and the partition offsets for each partition within the table
  */
@@ -87,8 +86,7 @@ std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_typ
 round_robin_partition(table_view const& input,
                       cudf::size_type num_partitions,
                       cudf::size_type start_partition = 0,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                      cudaStream_t stream = 0);
+                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
   
 }  // namespace experimental
 }  // namespace cudf
