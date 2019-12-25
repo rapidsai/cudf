@@ -60,7 +60,7 @@ struct page_state_s {
     int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
     int32_t dict_pos;               // write position of dictionary indices
     int32_t out_pos;                // read position of final output
-    int32_t int64_nanoscale;        // if non-zero, convert timestamp to nano
+    int32_t ts_scale;               // if non-zero, convert timestamp to nano
     uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
     uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
     uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
@@ -850,6 +850,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
     {
         uint2 v;
         int64_t val;
+        int32_t ts_scale;
         v.x = *(const uint32_t *)(src8 + dict_pos + 0);
         v.y = *(const uint32_t *)(src8 + dict_pos + 4);
         if (ofs)
@@ -861,7 +862,17 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
         val = v.y;
         val <<= 32;
         val |= v.x;
-        ts = ((val * s->int64_nanoscale) + (499999999 / s->col.ts_clock_rate)) / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
+        // Output to desired clock rate
+        ts_scale = s->ts_scale;
+        if (ts_scale < 0)
+        {
+            // round towards negative infinity
+            ts = (val + ((val < 0) ? 1 - ts_scale : 0)) / -ts_scale;
+        }
+        else
+        {
+            ts = val * ts_scale;
+        }
     }
     else
     {
@@ -1119,7 +1130,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             uint8_t *end = cur + s->page.uncompressed_page_size;
             size_t page_start_row = s->col.start_row + s->page.chunk_row;
             uint32_t dtype_len_out = s->col.data_type >> 3;
-            s->int64_nanoscale = 0;
+            s->ts_scale = 0;
             // Validate data type
             switch(s->col.data_type & 7)
             {
@@ -1133,12 +1144,13 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             case INT64:
                 if (s->col.ts_clock_rate)
                 {
+                    int32_t units = 0;
                     if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
-                        if (s->col.ts_clock_rate != 1000000)
-                            s->int64_nanoscale = 1000;
+                        units = 1000000;
                     else if (s->col.converted_type == TIME_MILLIS || s->col.converted_type == TIMESTAMP_MILLIS)
-                        if (s->col.ts_clock_rate != 1000)
-                            s->int64_nanoscale = 1000000;
+                        units = 1000;
+                    if (units && units != s->col.ts_clock_rate)
+                        s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate) : (s->ts_clock_rate / units);
                 }
                 // Fall through to DOUBLE
             case DOUBLE:
@@ -1340,7 +1352,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                 else if (dtype_len == 8)
                 {
-                    if (s->int64_nanoscale)
+                    if (s->ts_scale)
                         gpuOutputInt64Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                     else
                         gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
