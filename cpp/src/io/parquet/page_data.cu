@@ -1150,7 +1150,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     else if (s->col.converted_type == TIME_MILLIS || s->col.converted_type == TIMESTAMP_MILLIS)
                         units = 1000;
                     if (units && units != s->col.ts_clock_rate)
-                        s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate) : (s->ts_clock_rate / units);
+                        s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate) : (s->col.ts_clock_rate / units);
                 }
                 // Fall through to DOUBLE
             case DOUBLE:
