@@ -21,15 +21,19 @@ struct reduce_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column> >
   operator()(column_view const& values,
+             column_view const& group_sizes,
              rmm::device_vector<cudf::size_type> const& group_labels,
-             size_type num_groups,
              cudaStream_t stream)
   {
     using OpType = cudf::experimental::detail::corresponding_operator_t<k>;
     using ResultType = cudf::experimental::detail::target_type_t<T, k>;
+    size_type num_groups = group_sizes.size();
 
     auto result = make_numeric_column(data_type(type_to_id<ResultType>()), 
-                                      num_groups);
+                                      num_groups,
+                                      values.nullable() 
+                                        ? mask_state::UNINITIALIZED
+                                        : mask_state::UNALLOCATED);
     auto op = OpType{};
 
     if (values.size() == 0) {
@@ -47,10 +51,30 @@ struct reduce_functor {
                             [] __device__ (auto i) { return i; });
       
       thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                            group_labels.begin(), group_labels.end(),
-                            it, thrust::make_discard_iterator(),
-                            result->mutable_view().begin<ResultType>(),
-                            thrust::equal_to<size_type>(), op);
+        // Input keys
+          group_labels.begin(), group_labels.end(),
+        // Input values
+          it,
+        // Output keys
+          thrust::make_discard_iterator(),
+        // Output values
+          result->mutable_view().begin<ResultType>(),
+        // comparator and operation
+          thrust::equal_to<size_type>(), op);
+
+      auto result_view = mutable_column_device_view::create(*result);
+      auto group_size_view = column_device_view::create(group_sizes);
+
+      thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+        thrust::make_counting_iterator(0), group_sizes.size(),
+        [d_result=*result_view, d_group_sizes=*group_size_view]
+        __device__ (size_type i){
+          size_type group_size = d_group_sizes.element<size_type>(i);
+          if (group_size == 0)
+            d_result.set_null(i);
+          else
+            d_result.set_valid(i);
+        });
     } else {
       auto it = thrust::make_transform_iterator(values.data<T>(),
                             [] __device__ (auto i) { return i; });
@@ -74,8 +98,8 @@ struct reduce_functor {
 // TODO (dm): take memory resource
 std::unique_ptr<column> group_sum(
     column_view const& values,
+    column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
-    size_type num_groups,
     cudaStream_t stream = 0);
 
 std::unique_ptr<column> group_count(

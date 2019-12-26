@@ -112,16 +112,6 @@ groupby::sort_aggregate(
     //            sort_values is not called
     std::unique_ptr<column> sorted_values = helper().sorted_values(requests[i].values);
 
-    auto store_sum = [&] (std::unique_ptr<aggregation> const& agg)
-    {
-      if (cache.has_result(i, agg))
-        return;
-      cache.add_result(i, agg, 
-                      detail::group_sum(sorted_values->view(), 
-                                helper().group_labels(),
-                                helper().num_groups(), stream));
-    };
-
     auto store_count = [&] (std::unique_ptr<aggregation> const& agg)
     {
       if (cache.has_result(i, agg))
@@ -130,6 +120,18 @@ groupby::sort_aggregate(
                        detail::group_count(sorted_values->view(), 
                                 helper().group_labels(),
                                 helper().num_groups(), mr, stream));
+    };
+
+    auto store_sum = [&] (std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(i, agg))
+        return;
+      auto count_agg = make_count_aggregation();
+      store_count(count_agg);
+      column_view count_result = cache.get_result(i, count_agg);
+      cache.add_result(i, agg, 
+                      detail::group_sum(sorted_values->view(), count_result, 
+                                        helper().group_labels(), stream));
     };
 
     auto store_mean = [&] (std::unique_ptr<aggregation> const& agg)

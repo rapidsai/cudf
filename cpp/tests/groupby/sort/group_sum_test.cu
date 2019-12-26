@@ -47,6 +47,18 @@ struct groupby_sum_test : public cudf::test::BaseFixture {
         expect_tables_equal(table_view({expect_keys}), result.first->view());
         expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
     }
+
+    auto all_valid() {
+        auto all_valid = cudf::test::make_counting_transform_iterator(
+            0, [](auto i) { return true; });
+        return all_valid;
+    }
+
+    auto all_null() {
+        auto all_null = cudf::test::make_counting_transform_iterator(
+            0, [](auto i) { return false; });
+        return all_null;
+    }
 };
 
 
@@ -62,14 +74,42 @@ TEST_F(groupby_sum_test, basic)
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TEST_F(groupby_sum_test, zero_sized_input)
+TEST_F(groupby_sum_test, zero_valid_keys)
 {
-    fixed_width_column_wrapper<int32_t> keys      ( { 1, 2, 3},
-                                                    { 0, 0, 0} );
+    fixed_width_column_wrapper<int32_t> keys      ( { 1, 2, 3}, all_null() );
     fixed_width_column_wrapper<float>   vals        { 3, 4, 5};
 
     fixed_width_column_wrapper<int32_t> expect_keys { };
     fixed_width_column_wrapper<float>   expect_vals { };
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
+TEST_F(groupby_sum_test, zero_valid_values)
+{
+    fixed_width_column_wrapper<int32_t> keys        { 1, 1, 1};
+    fixed_width_column_wrapper<float>   vals      ( { 3, 4, 5}, all_null() );
+
+    fixed_width_column_wrapper<int32_t> expect_keys { 1 };
+    fixed_width_column_wrapper<float>   expect_vals({ 0 }, all_null());
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
+TEST_F(groupby_sum_test, null_keys_and_values)
+{
+    fixed_width_column_wrapper<int32_t> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                                    { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<double>  vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                                    { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+
+                                                //  { 1, 1,     2, 2, 2,   3, 3,    4}
+    fixed_width_column_wrapper<int32_t> expect_keys({ 1,        2,         3,       4}, all_valid());
+                                                //  { 3, 6,     1, 4, 9,   2, 8,    -}
+    fixed_width_column_wrapper<double>  expect_vals({ 9,        14,        10,      0},
+                                                    { 1,         1,         1,      0});
 
     auto agg = cudf::experimental::make_sum_aggregation();
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
