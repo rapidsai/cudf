@@ -18,6 +18,8 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
+
 #include <cudf/groupby.hpp>
 #include <cudf/detail/aggregation.hpp>
 #include <cudf/table/table.hpp>
@@ -25,91 +27,107 @@
 namespace cudf {
 namespace test {
 
-
-struct groupby_sum_test : public cudf::test::BaseFixture {
-    void run_test(column_view const& keys,
-                  column_view const& values,
-                  column_view const& expect_keys,
-                  column_view const& expect_vals,
-                  std::unique_ptr<experimental::aggregation>&& agg)
-    {
-        std::vector<cudf::experimental::groupby::aggregation_request> requests;
-        requests.emplace_back(
-            cudf::experimental::groupby::aggregation_request());
-        requests[0].values = values;
-        
-        requests[0].aggregations.push_back(std::move(agg));
-        
-
-        cudf::experimental::groupby::groupby gb_obj(table_view({keys}));
-
-        auto result = gb_obj.aggregate(requests);
-        expect_tables_equal(table_view({expect_keys}), result.first->view());
-        expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
-    }
-
-    auto all_valid() {
-        auto all_valid = cudf::test::make_counting_transform_iterator(
-            0, [](auto i) { return true; });
-        return all_valid;
-    }
-
-    auto all_null() {
-        auto all_null = cudf::test::make_counting_transform_iterator(
-            0, [](auto i) { return false; });
-        return all_null;
-    }
-};
-
-
-TEST_F(groupby_sum_test, basic)
+void run_test(column_view const& keys,
+              column_view const& values,
+              column_view const& expect_keys,
+              column_view const& expect_vals,
+              std::unique_ptr<experimental::aggregation>&& agg)
 {
-    fixed_width_column_wrapper<int32_t> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<float>   vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::vector<cudf::experimental::groupby::aggregation_request> requests;
+    requests.emplace_back(
+        cudf::experimental::groupby::aggregation_request());
+    requests[0].values = values;
+    
+    requests[0].aggregations.push_back(std::move(agg));
 
-    fixed_width_column_wrapper<int32_t> expect_keys { 1, 2,  3 };
-    fixed_width_column_wrapper<float>   expect_vals { 9, 19, 17};
+    cudf::experimental::groupby::groupby gb_obj(table_view({keys}));
+
+    auto result = gb_obj.aggregate(requests);
+    expect_tables_equal(table_view({expect_keys}), result.first->view());
+    expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
+}
+
+auto all_valid() {
+    auto all_valid = cudf::test::make_counting_transform_iterator(
+        0, [](auto i) { return true; });
+    return all_valid;
+}
+
+auto all_null() {
+    auto all_null = cudf::test::make_counting_transform_iterator(
+        0, [](auto i) { return false; });
+    return all_null;
+}
+
+template <typename V>
+struct groupby_sum_test : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(groupby_sum_test, cudf::test::NumericTypes);
+
+TYPED_TEST(groupby_sum_test, basic)
+{
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
+
+    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    fixed_width_column_wrapper<K> expect_keys { 1, 2,  3 };
+    fixed_width_column_wrapper<R> expect_vals { 9, 19, 17};
 
     auto agg = cudf::experimental::make_sum_aggregation();
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TEST_F(groupby_sum_test, zero_valid_keys)
+TYPED_TEST(groupby_sum_test, zero_valid_keys)
 {
-    fixed_width_column_wrapper<int32_t> keys      ( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<float>   vals        { 3, 4, 5};
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
 
-    fixed_width_column_wrapper<int32_t> expect_keys { };
-    fixed_width_column_wrapper<float>   expect_vals { };
+    fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
+    fixed_width_column_wrapper<V> vals        { 3, 4, 5};
+
+    fixed_width_column_wrapper<K> expect_keys { };
+    fixed_width_column_wrapper<R> expect_vals { };
 
     auto agg = cudf::experimental::make_sum_aggregation();
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TEST_F(groupby_sum_test, zero_valid_values)
+TYPED_TEST(groupby_sum_test, zero_valid_values)
 {
-    fixed_width_column_wrapper<int32_t> keys        { 1, 1, 1};
-    fixed_width_column_wrapper<float>   vals      ( { 3, 4, 5}, all_null() );
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
 
-    fixed_width_column_wrapper<int32_t> expect_keys { 1 };
-    fixed_width_column_wrapper<float>   expect_vals({ 0 }, all_null());
+    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
+    fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
+
+    fixed_width_column_wrapper<K> expect_keys { 1 };
+    fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
 
     auto agg = cudf::experimental::make_sum_aggregation();
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TEST_F(groupby_sum_test, null_keys_and_values)
+TYPED_TEST(groupby_sum_test, null_keys_and_values)
 {
-    fixed_width_column_wrapper<int32_t> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                                    { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<double>  vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                                    { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
 
-                                                //  { 1, 1,     2, 2, 2,   3, 3,    4}
-    fixed_width_column_wrapper<int32_t> expect_keys({ 1,        2,         3,       4}, all_valid());
-                                                //  { 3, 6,     1, 4, 9,   2, 8,    -}
-    fixed_width_column_wrapper<double>  expect_vals({ 9,        14,        10,      0},
-                                                    { 1,         1,         1,      0});
+    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+
+                                          //  { 1, 1,     2, 2, 2,   3, 3,    4}
+    fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
+                                          //  { 3, 6,     1, 4, 9,   2, 8,    -}
+    fixed_width_column_wrapper<R> expect_vals({ 9,        14,        10,      0},
+                                              { 1,         1,         1,      0});
 
     auto agg = cudf::experimental::make_sum_aggregation();
     run_test(keys, vals, expect_keys, expect_vals, std::move(agg));
