@@ -146,7 +146,7 @@ class fixed_width_scalar : public scalar {
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing the value
 
-  fixed_width_scalar() = default;
+  fixed_width_scalar() : scalar(data_type(experimental::type_to_id<T>())) {}
 
   /**
    * @brief Construct a new fixed width scalar object
@@ -225,7 +225,7 @@ class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
-  string_scalar() = default;
+  string_scalar() : scalar(data_type(STRING)) {}
   ~string_scalar() = default;
   string_scalar(string_scalar&& other) = default;
   string_scalar(string_scalar const& other) = default;
