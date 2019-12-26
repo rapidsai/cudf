@@ -553,6 +553,7 @@ add_library(cudf
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_ipv4.cu
             src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu

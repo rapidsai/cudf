@@ -11,6 +11,7 @@
 
 ## Improvements
 
+- PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
