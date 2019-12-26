@@ -47,8 +47,7 @@ struct quantiles_functor {
 
     auto result = make_numeric_column(data_type(type_to_id<ResultType>()), 
                                       group_sizes.size() * quantile.size(),
-                                      mask_state::ALL_VALID, stream, mr);
-    // TODO (dm): Add null support. Elements where group_size == 0 are null
+                                      mask_state::UNINITIALIZED, stream, mr);
     // TODO (dm): Support for no-materialize index indirection values
     // TODO (dm): Future optimization: add column order to aggregation request
     //            so that sorting isn't required. Then add support for pre-sorted
@@ -83,6 +82,25 @@ struct quantiles_functor {
                             return experimental::detail::select_quantile<double>(
                               selector, segment_size, q, interpolation); 
                           });
+
+        for (size_t j = 0; j < num_quantiles; j++) {
+          size_type group_size = d_group_size.element<size_type>(i);
+          if (group_size == 0)
+            d_result.set_null(i * num_quantiles + j);
+          else
+            d_result.set_valid(i * num_quantiles + j);
+        }
+
+        // DEAR REVIEWER, would you prefer I do this instead of the loop above?
+        // thrust::for_each_n(thrust::seq,
+        //   thrust::make_counting_iterator(0), num_quantiles,
+        //   [&d_result, &d_group_size, num_quantiles, i] (size_type j) {
+        //     size_type group_size = d_group_size.element<size_type>(i);
+        //     if (group_size == 0)
+        //       d_result.set_null(i * num_quantiles + j);
+        //     else
+        //       d_result.set_valid(i * num_quantiles + j);
+        //   });
       }
     );
 
