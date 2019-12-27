@@ -867,7 +867,8 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
         if (ts_scale < 0)
         {
             // round towards negative infinity
-            ts = (val - ((val < 0) ? ts_scale + 1 : 0)) / -ts_scale;
+            int sign = (val < 0);
+            ts = ((val + sign) / -ts_scale) + sign;
         }
         else
         {
