@@ -65,11 +65,6 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     if not avro_file.closed:
         avro_file.close()
 
-    # `read_avro()` is deliberately called twice. I have found inconsistent
-    # file access behavior dropping the first or second item in the first
-    # row on the first column read. Consistently producing. Accessint twice
-    # at runtime ensures data is loaded correctly.
-    got = cudf.read_avro(path, engine=engine, columns=columns)
     got = cudf.read_avro(path, engine=engine, columns=columns)
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
