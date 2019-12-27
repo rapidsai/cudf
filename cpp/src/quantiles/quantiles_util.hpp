@@ -113,6 +113,7 @@ struct quantile_index
     }
 };
 
+#pragma nv_exec_check_disable
 /* @brief computes a quantile value.
  *
  * Computes a value for a quantile by interpolating between two values on either
@@ -129,7 +130,6 @@ struct quantile_index
  *
  * @returns Value of the desired quantile.
  */
-
 template<typename Result, typename ValueAccessor>
 CUDA_HOST_DEVICE_CALLABLE
 Result
