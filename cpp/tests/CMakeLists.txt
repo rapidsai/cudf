@@ -184,6 +184,7 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_count_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_sum_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_mean_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_var_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu")
 

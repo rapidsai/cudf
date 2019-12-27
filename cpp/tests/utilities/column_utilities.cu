@@ -64,6 +64,7 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
 
+  // TODO (dm): handle floating point equality
   thrust::device_vector<int> differences(lhs.size());
 
   auto diff_iter = thrust::copy_if(thrust::device,
