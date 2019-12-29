@@ -18,6 +18,8 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <memory>
 
 namespace cudf {
@@ -199,6 +201,43 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        std::string const& udf,
                                        rolling_operator op,
                                        data_type output_type,
+                                       rmm::mr::device_memory_resource* mr =
+                                        rmm::mr::get_default_resource());
+
+/**
+ * @brief  Applies a fixed-size rolling window function to the values in a column.
+ *
+ * This function aggregates values in a window around each element i of the input column, and
+ * invalidates the bit mask for element i if there are not enough observations. The window size is
+ * static (the same for each element). This matches Pandas' API for DataFrame.rolling with a few
+ * notable differences:
+ * - instead of the center flag it uses a two-part window to allow for more flexible windows.
+ *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
+ *   `[i-preceding_window, i+following_window]` to do the window computation, provided that they
+ *   fall within the confines of their corresponding groups, as indicated by `group_offsets`.
+ * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
+ *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ * 
+ * The returned column for `op == COUNT` always has `INT32` type. All other operators return a 
+ * column of the same type as the input. Therefore it is suggested to convert integer column types
+ * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
+ *
+ * @param[in] input_col The input column
+ * @param[in] group_offsets A column of indexes, indicating partition/grouping boundaries.
+ * @param[in] preceding_window The static rolling window size in the backward direction.
+ * @param[in] following_window The static rolling window size in the forward direction.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise element `i` is null.
+ * @param[in] op The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ *
+ * @returns   A nullable output column containing the rolling window results
+ **/
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       rmm::device_vector<cudf::size_type> const& group_offsets,
+                                       size_type preceding_window,
+                                       size_type following_window,
+                                       size_type min_periods,
+                                       rolling_operator op,
                                        rmm::mr::device_memory_resource* mr =
                                         rmm::mr::get_default_resource());
 
