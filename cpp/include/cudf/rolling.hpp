@@ -18,6 +18,8 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <memory>
 
 namespace cudf {

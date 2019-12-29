@@ -53,6 +53,58 @@ struct aggregation_request {
 };
 
 /**
+ * @brief Struct defining the bounds of a window-based analytical query.
+ */
+struct window_bounds {
+
+  // Number of rows preceding the current row, to consider in the window
+  cudf::size_type preceding;    
+
+  // Number of rows following the current row, to consider in the window
+  cudf::size_type following; 
+
+  // The minimum number of observations to consider, for a window to be
+  // valid, including: 
+  // 1. The current row
+  // 2. Upto `preceding` rows appearing prior to the current row
+  //    (subject to belonging within a group)
+  // 3. Upto `following` rows appearing after the current row
+  //    (subject to belonging within a group)
+  // 
+  // E.g. Consider the following int column-vector:
+  //   [0,1,2,3,4,5]
+  // If an aggregation operation (E.g. SUM) is specified with
+  // the following window parameters:
+  //   preceding   = 1
+  //   following   = 1
+  //   min_periods = 3
+  //
+  // Then, the resulting column-vector would be as follows:
+  //   [INVALID, 3, 6, 9, 12, INVALID]
+  // 
+  // Specifically, the results at indices `0` and `5` are INVALID, 
+  // since there are only two observations (each) at either end,
+  // and *three* are needed at minimum, for the result to be valid.
+  cudf::size_type min_periods;
+};
+
+/**
+ * @brief Request for groupby window-based aggregation(s) to perform on a column.
+ * 
+ * Similarly to `aggregation_request`, a `window_aggregation_request` is applied
+ * to all values in the column vector, but only across the elements within the 
+ * confines of the associated `window_bounds`.
+ * 
+ * `values.size()` must equal `keys.num_rows()`.
+ */
+struct window_aggregation_request {
+  column_view values; ///< the elements to aggregate
+  std::vector<
+    std::pair<window_bounds, std::unique_ptr<aggregation>>> 
+    aggregations;  ///< Desired aggregations
+};
+
+/**
  * @brief The result(s) of an `aggregation_request`
  *
  * For every `aggregation_request` given to `groupby::aggregate` an
@@ -160,6 +212,70 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
       std::vector<aggregation_request> const& requests,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Performs grouped window-based aggregations on the specified values.
+   * 
+   * A `window_aggregation_request` specifies a column-vector of values to
+   * aggregate, a list of aggregation operations, and the `window_bounds`
+   * that governs each aggregation.
+   * 
+   * Consider a user-sales dataset, where the rows look as follows:
+   *  { "user_id", sales_amt, day }
+   *
+   * The `windowed_aggregate` method enables windowing queries such as 
+   * grouping a dataset by `user_id`, sorting by increasing `day`, and summing up
+   * the `sales_amt` column over a window of 3 days (1 day preceding, 
+   * 1 day following).
+   * 
+   * Note: The groupby object must already be grouped and sorted appropriately,
+   * before window-based `aggregate()` is invoked.
+   * In the example above, the data would be grouped by `user_id`, and ordered
+   * by `date`. The aggregation (SUM) would then be calculated for a window of
+   * 3 values around (and including) each row.
+   * 
+   * If the input rows were as follows:
+   * 
+   *  [ 
+   *    { "user1", 10, "Monday" },
+   *    { "user2", 20, "Monday" },
+   *    { "user1", 20, "Monday" },
+   *    { "user1", 10, "Tuesday" },
+   *    { "user2", 30, "Tuesday" },
+   *    { "user2", 80, "Tuesday" },
+   *    { "user1", 50, "Wednesday" },
+   *    { "user1", 60, "Wednesday" },
+   *    { "user2", 40, "Wednesday" }
+   *  ]
+   * 
+   * Partitioning (grouping) by `user_id`, and ordering by `day` would yield
+   * the following `sales_amt` vector (with 2 groups, * one for each distinct 
+   * `user_id`):
+   * 
+   *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
+   *      <-------user1-------->|<------user2------->
+   * 
+   * The SUM aggregation would then be applied, with 1 preceding, and 1 following
+   * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
+   * thereby yielding the following column:
+   * 
+   *    [ 30, 40,  80, 120, 100,  50, 130, 150, 120 ]
+   * 
+   * Note: The SUMs calculated at the group boundaries (i.e. indices 0,4,5, and 8)
+   * consider only 2 values each, in spite of the window-size being 3.
+   * Each aggregation operation cannot cross group boundaries.
+   *
+   * @param requests The list of window_aggregation_requests, specifying the columns
+   * to aggregate, the aggregation operations per column, and the window-specification
+   * per aggregation
+   * @param mr Memory resource used to allocate the returned table and columns
+   * @return Pair containing the table with each group's unique key and
+   * a vector of aggregation_results for each request in the same order as
+   * specified in `requests`.
+   */
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> windowed_aggregate(
+      std::vector<window_aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  private:

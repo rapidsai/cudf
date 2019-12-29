@@ -52,6 +52,47 @@ inline void test_single_agg(column_view const& keys,
     expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
 }
 
+inline void test_single_rolling_window_agg(
+                            column_view const& keys,
+                            column_view const& values,
+                            column_view const& expect_keys,
+                            column_view const& expect_vals,
+                            std::unique_ptr<experimental::aggregation>&& agg,
+                            experimental::groupby::window_bounds const& window,
+                            bool ignore_null_keys = true,
+                            bool keys_are_sorted = true,
+                            std::vector<order> const& column_order = {},
+                            std::vector<null_order> const& null_precedence = {})
+{
+    using experimental::aggregation;
+    using experimental::groupby::window_bounds;
+    using experimental::groupby::window_aggregation_request;
+
+    std::vector<experimental::groupby::window_aggregation_request> requests;
+    requests.emplace_back(
+        experimental::groupby::window_aggregation_request());
+    requests[0].values = values;
+    requests[0].aggregations.emplace_back(std::make_pair(window, std::move(agg)));
+
+    experimental::groupby::groupby gb_obj(table_view({keys}),
+        ignore_null_keys, keys_are_sorted, column_order, null_precedence);
+
+    auto result = gb_obj.windowed_aggregate(requests);
+
+#if 0
+    std::cout << "Results: \n";
+    cudf::test::print(*result.second[0].results[0], std::cout, "\t");
+    std::cout << "\n";
+
+    std::cout << "Checking the keys: \n";
+#endif
+    expect_tables_equal(table_view({expect_keys}), result.first->view());
+#if 0
+    std::cout << "Checking the values: \n";
+#endif
+    expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
+}
+
 inline auto all_valid() {
     auto all_valid = make_counting_transform_iterator(
         0, [](auto i) { return true; });

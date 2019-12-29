@@ -47,6 +47,24 @@ TYPED_TEST(groupby_min_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TYPED_TEST(groupby_min_test, basic_rolling_window)
+{
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::MIN>;
+
+    fixed_width_column_wrapper<K> keys        {  1, 1, 1, 1, 2, 2, 2, 2, 3, 3};
+    fixed_width_column_wrapper<V> vals        {  0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    size_type preceding = 1, following = 1, min_periods = 1;
+    fixed_width_column_wrapper<K> expect_keys {  1, 1, 1, 1, 2, 2, 2, 2, 3, 3};
+    fixed_width_column_wrapper<R> expect_vals ({ 0, 0, 1, 2, 4, 4, 5, 6, 8, 8}, all_valid());
+
+    auto agg = cudf::experimental::make_min_aggregation();
+    test_single_rolling_window_agg(keys, vals, expect_keys, expect_vals, std::move(agg), 
+        experimental::groupby::window_bounds{preceding, following, min_periods});
+}
+
 TYPED_TEST(groupby_min_test, zero_valid_keys)
 {
     using K = int32_t;

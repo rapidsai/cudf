@@ -720,3 +720,4 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
 //   cudf::test::expect_columns_equal(*output, expected);
 // }
 
+
