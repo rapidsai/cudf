@@ -267,6 +267,15 @@ helper::column_ptr helper::sorted_values(column_view const& values,
   return std::move(sorted_values_table->release()[0]);
 }
 
+helper::column_ptr helper::grouped_values(column_view const& values, 
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  auto grouped_values_table = cudf::experimental::detail::gather(
+    table_view({values}), key_sort_order(), false, false, false, mr, stream);
+
+  return std::move(grouped_values_table->release()[0]);
+}
 
 std::unique_ptr<table> helper::unique_keys(
   rmm::mr::device_memory_resource* mr,

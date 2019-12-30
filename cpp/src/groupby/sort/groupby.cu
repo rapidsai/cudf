@@ -104,20 +104,41 @@ groupby::sort_aggregate(
   detail::result_cache cache(requests.size());
   
   for (size_t i = 0; i < requests.size(); i++) {
-    // TODO (dm): Not all aggs require sorted values. Only sort if there is an 
-    //            agg that requires sorted result
     // TODO (dm): Use key_sorted_order to make permutation iterator and avoid
     //            generating value columns
     // TODO (dm): once we have multi-agg, if no other requests remain, ensure
     //            sort_values is not called
-    std::unique_ptr<column> sorted_values = helper().sorted_values(requests[i].values);
+    std::unique_ptr<column> sorted_values;
+    std::unique_ptr<column> grouped_values;
+
+    auto get_grouped_values = [&] () 
+    {
+      // TODO (dm): After implementing single pass mutli-agg, explore making a
+      //            cache of all grouped value columns rather than one at a time
+      if (grouped_values)
+        return grouped_values->view();
+      else if (sorted_values)
+        // TODO (dm): When we implement scan, it wouldn't be ok to return sorted
+        //            values when asked for grouped values. Change this then.
+        return sorted_values->view();
+      else
+        grouped_values = helper().grouped_values(requests[i].values);
+      return grouped_values->view();
+    };
+
+    auto get_sorted_values = [&] () 
+    {
+      if (not sorted_values)
+        sorted_values = helper().sorted_values(requests[i].values);
+      return sorted_values->view();
+    };
 
     auto store_count = [&] (std::unique_ptr<aggregation> const& agg)
     {
       if (cache.has_result(i, agg))
         return;
       cache.add_result(i, agg, 
-                       detail::group_count(sorted_values->view(), 
+                       detail::group_count(get_grouped_values(), 
                                 helper().group_labels(),
                                 helper().num_groups(), mr, stream));
     };
@@ -130,7 +151,7 @@ groupby::sort_aggregate(
       store_count(count_agg);
       column_view count_result = cache.get_result(i, count_agg);
       cache.add_result(i, agg, 
-                      detail::group_sum(sorted_values->view(), count_result, 
+                      detail::group_sum(get_grouped_values(), count_result, 
                                         helper().group_labels(), stream));
     };
 
@@ -164,7 +185,7 @@ groupby::sort_aggregate(
       store_count(count_agg);
       column_view mean_result = cache.get_result(i, mean_agg);
       column_view group_sizes = cache.get_result(i, count_agg);
-      auto result = detail::group_var(sorted_values->view(), mean_result, 
+      auto result = detail::group_var(get_grouped_values(), mean_result, 
                               group_sizes, helper().group_labels(), var_agg->_ddof,
                               mr, stream);
       cache.add_result(i, agg, std::move(result));
@@ -194,7 +215,7 @@ groupby::sort_aggregate(
       auto quantile_agg =
         static_cast<experimental::detail::quantile_aggregation const*>(agg.get());
       auto result = detail::group_quantiles(
-        sorted_values->view(), group_sizes, helper().group_offsets(),
+        get_sorted_values(), group_sizes, helper().group_offsets(),
         quantile_agg->_quantiles, quantile_agg->_interpolation, mr, stream);
       cache.add_result(i, agg, std::move(result));
     };
@@ -207,7 +228,7 @@ groupby::sort_aggregate(
       store_count(count_agg);
       column_view group_sizes = cache.get_result(i, count_agg);
       auto result = detail::group_quantiles(
-        sorted_values->view(), group_sizes, helper().group_offsets(),
+        get_sorted_values(), group_sizes, helper().group_offsets(),
         {0.5}, interpolation::LINEAR, mr, stream);
       cache.add_result(i, agg, std::move(result));
     };

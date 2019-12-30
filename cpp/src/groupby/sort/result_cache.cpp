@@ -71,6 +71,8 @@ void result_cache::add_result(size_t col_idx,
 column_view result_cache::get_result(size_t col_idx,
                                      std::unique_ptr<aggregation> const& agg)
 {
+  CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
+
   auto key = copy_to_shared_ptr(agg);
   auto result_it = _cache[col_idx].find(key);
   return result_it->second->view();
@@ -80,6 +82,8 @@ std::unique_ptr<column>
 result_cache::release_result(size_t col_idx,
                              std::unique_ptr<aggregation> const& agg)
 {
+  CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
+
   auto key = copy_to_shared_ptr(agg);
 
   // unordered_map.extract() is a c++17 feature so we do this:
