@@ -25,7 +25,7 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.column import CategoricalColumn, StringColumn
+from cudf.core.column import CategoricalColumn, StringColumn, as_column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -162,6 +162,8 @@ class DataFrame(Table):
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
+        self._columns_name = None
+
         if isinstance(columns, cudf.MultiIndex):
             self.multi_cols = columns
             columns = RangeIndex(len(columns))
@@ -193,7 +195,6 @@ class DataFrame(Table):
         if dtype:
             self._data = self.astype(dtype)._data
 
-        self._columns_name = None
         # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
         self._allow_setattr_to_setitem = True
 
@@ -1111,10 +1112,7 @@ class DataFrame(Table):
         if hasattr(self, "multi_cols"):
             return self.multi_cols
         else:
-            if hasattr(self, "_columns_name"):
-                name = self._columns_name
-            else:
-                name = None
+            name = self._columns_name
             return pd.Index(self._data, name=name)
 
     @columns.setter
@@ -1151,8 +1149,8 @@ class DataFrame(Table):
         return list(self._data.values())
 
     def _rename_columns(self, new_names):
-        old_cols = list(self._data.keys())
-        l_old_cols = len(old_cols)
+        old_cols = iter(self._data.keys())
+        l_old_cols = len(self._data)
         l_new_cols = len(new_names)
         if l_new_cols != l_old_cols:
             msg = (
@@ -1363,7 +1361,7 @@ class DataFrame(Table):
         result = DataFrame()
         for idx in range(len(positions)):
             if len(self) == 0:
-                result[idx] = cudf.Series([])
+                result[idx] = as_column([])
             else:
                 result[column_names[positions[idx]]] = column_values[
                     positions[idx]
@@ -1625,8 +1623,7 @@ class DataFrame(Table):
             self._index = result._index
             if hasattr(result, "multi_cols"):
                 self.multi_cols = result.multi_cols
-            if hasattr(result, "_columns_name"):
-                self._columns_name = result._columns_name
+            self._columns_name = result._columns_name
         else:
             return result
 
@@ -2134,7 +2131,7 @@ class DataFrame(Table):
         inp.index = RangeIndex(start=0, stop=len(self))
         result = libcudf.transpose.transpose(inp)
         result._index = as_index(temp_columns)
-        result.columns = temp_index
+        result.columns = temp_index.to_pandas()
         return result
 
     @property
@@ -2428,11 +2425,12 @@ class DataFrame(Table):
             if is_string_dtype(col):
                 df[name] = col
             elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
-                df[name] = column.build_column(
-                    data=None,
-                    dtype=categorical_dtypes.get(name, col.dtype),
+                dtype = categorical_dtypes.get(name, col.dtype)
+                df[name] = column.build_categorical_column(
+                    categories=dtype.categories,
+                    codes=col,
                     mask=col.mask,
-                    children=(col,),
+                    ordered=dtype.ordered,
                 )
             else:
                 df[name] = column.build_column(
@@ -3268,8 +3266,6 @@ class DataFrame(Table):
         else:
             out_columns = self.columns
 
-        # for col_name, (c, x) in zip(out_columns, self._data.items()):
-        #     out_data[col_name] = x.to_pandas(index=out_index)
         for i, col_key in enumerate(self._data):
             out_data[i] = self._data[col_key].to_pandas(index=out_index)
 
@@ -3319,8 +3315,6 @@ class DataFrame(Table):
                 if vals.shape[0] == 1:
                     df[i] = Series(vals.flatten(), nan_as_null=nan_as_null)
                 else:
-                    # TODO fix multiple column with same name with different
-                    # method.
                     if isinstance(colk, tuple):
                         colk = str(colk)
                     for idx in range(len(vals.shape)):
@@ -3702,7 +3696,7 @@ class DataFrame(Table):
             "and bool dtypes."
         )
 
-        if any([col.mask for col in self._columns]):
+        if any([col.mask is not None for col in self._columns]):
             msg = (
                 "Row-wise operations do not currently support columns with "
                 "null values. Consider removing them with .dropna() "
