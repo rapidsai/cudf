@@ -45,10 +45,12 @@ try:
         frame = df.copy(deep=False)
         for col in frame.columns:
             if isinstance(frame[col]._column, StringColumn):
-                out_dev_arr = rmm.device_array(len(frame), dtype="int32")
-                ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+                out_col = column.column_empty(
+                    len(frame), dtype="int32", masked=False
+                )
+                ptr = out_col.data.ptr
                 frame[col]._column._data_view().hash(devptr=ptr)
-                frame[col] = cudf.Series(out_dev_arr)
+                frame[col] = out_col
         return frame.hash_columns()
 
     @hash_object_dispatch.register(cudf.DataFrame)
