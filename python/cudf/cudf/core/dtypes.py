@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import pandas as pd
 from pandas.api.extensions import ExtensionDtype
@@ -79,12 +81,18 @@ class CategoricalDtype(ExtensionDtype):
         frames = []
         header["ordered"] = self.ordered
         if self.categories is not None:
-            _, categories_frames = self.categories.serialize()
+            categories_header, categories_frames = self.categories.serialize()
+        header["categories"] = categories_header
         frames.extend(categories_frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
         ordered = header["ordered"]
-        categories = frames[0]
+        categories_header = header["categories"]
+        categories_frames = frames
+        categories_type = pickle.loads(categories_header["type"])
+        categories = categories_type.deserialize(
+            categories_header, categories_frames
+        )
         return cls(categories=categories, ordered=ordered)
