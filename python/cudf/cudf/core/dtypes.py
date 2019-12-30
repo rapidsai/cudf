@@ -78,10 +78,9 @@ class CategoricalDtype(ExtensionDtype):
         header = {}
         frames = []
         header["ordered"] = self.ordered
-        categories_buffer = []
         if self.categories is not None:
-            categories_buffer = [self.categories.as_column()._data_view()]
-        frames.extend(categories_buffer)
+            _, categories_frames = self.categories.serialize()
+        frames.extend(categories_frames)
         return header, frames
 
     @classmethod
