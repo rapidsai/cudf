@@ -71,7 +71,9 @@ cdef class Column:
 
     @mask.setter
     def mask(self, value):
-        self._nvstrings = None
+        self._set_mask(value)
+
+    def _set_mask(self, value):
         self._mask = value
         if hasattr(self, "null_count"):
             del self.null_count

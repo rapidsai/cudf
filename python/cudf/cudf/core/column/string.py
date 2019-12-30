@@ -520,6 +520,10 @@ class StringColumn(column.ColumnBase):
     def nvcategory(self, nvc):
         self._nvcategory = nvc
 
+    def _set_mask(self, value):
+        self._nvstrings = None
+        super().set_mask(value)
+
     @property
     def indices(self):
         if self._indices is None:
