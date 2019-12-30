@@ -18,8 +18,12 @@
 #include <synchronization/synchronization.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <cudf/detail/aggregation.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/groupby.hpp>
+
+#include <gperftools/profiler.h>
 
 #include <random>
 #include <memory>
@@ -63,11 +67,50 @@ void BM_basic_sum(benchmark::State& state){
   }
 }
 
-BENCHMARK_DEFINE_F(Groupby, Table)(::benchmark::State& state) {
+BENCHMARK_DEFINE_F(Groupby, Basic)(::benchmark::State& state) {
   BM_basic_sum(state);
 }
 
-BENCHMARK_REGISTER_F(Groupby, Table)
+BENCHMARK_REGISTER_F(Groupby, Basic)
+  ->UseManualTime()
+  ->Unit(benchmark::kMillisecond)
+  ->Arg(10000)->Arg(10000000);
+
+void BM_pre_sorted_sum(benchmark::State& state){
+  using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+
+  auto data_it = cudf::test::make_counting_transform_iterator(0,
+    [=](cudf::size_type row) { return random_int(0, 100); });
+
+  wrapper keys(data_it, data_it + column_size);
+  wrapper vals(data_it, data_it + column_size);
+
+  auto keys_table = cudf::table_view({keys});
+  auto sort_order = cudf::experimental::sorted_order(keys_table);
+  auto sorted_keys = cudf::experimental::gather(keys_table, *sort_order);
+  // No need to sort values using sort_order because they were generated randomly
+
+  cudf::experimental::groupby::groupby gb_obj(*sorted_keys, true, true);
+
+  std::vector<cudf::experimental::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::experimental::groupby::aggregation_request());
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(cudf::experimental::make_sum_aggregation());
+
+  for(auto _ : state){
+    cuda_event_timer timer(state, true);
+
+    auto result = gb_obj.aggregate(requests);
+  }
+}
+
+BENCHMARK_DEFINE_F(Groupby, PreSorted)(::benchmark::State& state) {
+  BM_pre_sorted_sum(state);
+}
+
+BENCHMARK_REGISTER_F(Groupby, PreSorted)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Arg(10000000);
