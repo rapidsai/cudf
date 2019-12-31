@@ -86,9 +86,12 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
 /**
  * Supports concurrent insert, but not concurrent insert and find.
  *
+ * @note The user is responsible for the following stream semantics:
+ * - Either the same stream should be used to create the map as is used by the kernels that access it, or
+ * - the stream used to create the map should be synchronized before it is accessed from a different stream or from host code.
+ *
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
- *  - extend interface to accept streams
  */
 template <typename Key, typename Element, typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
@@ -116,9 +119,13 @@ class concurrent_unordered_map {
    *
    * @note The implementation of this unordered_map uses sentinel values to
    * indicate an entry in the hash table that is empty, i.e., if a hash bucket
-   *is empty, the pair residing there will be equal to (unused_key,
-   *unused_element). As a result, attempting to insert a key equal to
+   * is empty, the pair residing there will be equal to (unused_key,
+   * unused_element). As a result, attempting to insert a key equal to
    *`unused_key` results in undefined behavior.
+   *
+   * @note All allocations, kernels and copies in the constructor take place
+   * on stream but the constructor does not synchronize the stream. It is the user's
+   * responsibility to synchronize or use the same stream to access the map.
    *
    * @param capacity The maximum number of pairs the map may hold
    * @param unused_element The sentinel value to use for an empty value
@@ -149,18 +156,60 @@ class concurrent_unordered_map {
         deleter};
   }
 
+  /**
+   * @brief Returns an iterator to the first element in the map
+   *
+   * @note `__device__` code that calls this function should either run in the
+   * same stream as `create()`, or the accessing stream either be running on the
+   * same stream as create(), or the accessing stream should be appropriately
+   * synchronized with the creating stream.
+   *
+   * @returns iterator to the first element in the map.
+   **/
   __device__ iterator begin() {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                     m_hashtbl_values);
   }
+
+  /**
+   * @brief Returns a constant iterator to the first element in the map
+   *
+   * @note `__device__` code that calls this function should either run in the
+   * same stream as `create()`, or the accessing stream either be running on the
+   * same stream as create(), or the accessing stream should be appropriately
+   * synchronized with the creating stream.
+   *
+   * @returns constant iterator to the first element in the map.
+   **/
   __device__ const_iterator begin() const {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                           m_hashtbl_values);
   }
+
+  /**
+   * @brief Returns an iterator to the one past the last element in the map
+   *
+   * @note `__device__` code that calls this function should either run in the
+   * same stream as `create()`, or the accessing stream either be running on the
+   * same stream as create(), or the accessing stream should be appropriately
+   * synchronized with the creating stream.
+   *
+   * @returns iterator to the one past the last element in the map.
+   **/
   __device__ iterator end() {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                     m_hashtbl_values + m_capacity);
   }
+
+  /**
+   * @brief Returns a constant iterator to the one past the last element in the map
+   *
+   * @note When called in a device code, user should make sure that it should
+   * either be running on the same stream as create(), or the accessing stream
+   * should be appropriately synchronized with the creating stream.
+   *
+   * @returns constant iterator to the one past the last element in the map.
+   **/
   __device__ const_iterator end() const {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                           m_hashtbl_values + m_capacity);
