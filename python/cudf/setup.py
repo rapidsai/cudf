@@ -16,7 +16,9 @@ cython_files = ["cudf/**/*.pyx"]
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
     CUDA_HOME = (
-        os.popen('echo "$(dirname $(dirname $(which nvcc)))"').read().strip()
+        os.popen('echo "$(dirname $(dirname $(which cuda-gdb)))"')
+        .read()
+        .strip()
     )
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
