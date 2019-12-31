@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/copying.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/table_utilities.hpp>
@@ -608,4 +609,96 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
     target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
+}
+
+
+template <typename T>
+class BooleanMaskScatter : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
+{
+    using T = TypeParam;
+    cudf::test::fixed_width_column_wrapper<T> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<T>  target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
+
+    cudf::test::fixed_width_column_wrapper<T> expected ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+
+    auto got = cudf::experimental::boolean_mask_scatter(source, target, mask);
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(BooleanMaskScatter, WithNull)
+{
+    using T = TypeParam;
+    cudf::test::fixed_width_column_wrapper<T> source({1, 5, 6, 8, 9}, {1, 0, 1, 0, 1});
+    cudf::test::fixed_width_column_wrapper<T>  target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
+
+    cudf::test::fixed_width_column_wrapper<T> expected ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 0, 1, 0, 1, 1, 0, 1, 0});
+
+    auto got = cudf::experimental::boolean_mask_scatter(source, target, mask);
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+class BooleanMaskScatterString : public cudf::test::BaseFixture {};
+
+TEST_F(BooleanMaskScatterString, NoNUll)
+{
+    cudf::test::strings_column_wrapper source ({"This", "cudf"});
+    cudf::test::strings_column_wrapper target ({"is", "is", "a", "udf", "api"});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, true, false});
+
+    cudf::test::strings_column_wrapper expected ({"This", "is", "a", "cudf", "api"});
+
+    auto got = cudf::experimental::boolean_mask_scatter(source, target, mask);
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+
+TEST_F(BooleanMaskScatterString, WithNUll)
+{
+    cudf::test::strings_column_wrapper source ({"This", "cudf"}, {0, 1});
+    cudf::test::strings_column_wrapper target ({"is", "is", "a", "udf", "api"}, {1, 0, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, true, false});
+
+    cudf::test::strings_column_wrapper expected ({"This", "is", "a", "cudf", "api"}, {0, 0, 0, 1, 1});
+
+    auto got = cudf::experimental::boolean_mask_scatter(source, target, mask);
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+class BooleanMaskScatterFails : public cudf::test::BaseFixture {};
+
+TEST_F(BooleanMaskScatterFails, SourceAndTargetTypeMismatch)
+{
+    cudf::test::fixed_width_column_wrapper<int32_t> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<int64_t> target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
+
+    EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source, target, mask), cudf::logic_error);
+}
+
+TEST_F(BooleanMaskScatterFails, BooleanMaskTypeMismatch)
+{
+    cudf::test::fixed_width_column_wrapper<int32_t> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<int32_t> target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<int8_t> mask({true,  false, false, false, true, true, false, true, true, false});
+
+    EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source, target, mask), cudf::logic_error);
+}
+
+TEST_F(BooleanMaskScatterFails, BooleanMaskTargetSizeMismatch)
+{
+    cudf::test::fixed_width_column_wrapper<int32_t> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<int32_t> target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true});
+
+    EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source, target, mask), cudf::logic_error);
 }

@@ -18,6 +18,8 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -442,6 +444,35 @@ std::vector<std::unique_ptr<table>> scatter_to_tables(
     input, partition_map, mr, stream);
 }
 
+std::unique_ptr<column> boolean_mask_scatter(
+    column_view const& source, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream) {
+
+    CUDF_EXPECTS(boolean_mask.size() == target.size(), "Boolean mask size mismatch with traget size");
+    CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
+    CUDF_EXPECTS(source.type().id() == target.type().id(), "Type mismatch for source and target");
+
+    auto indices = cudf::make_numeric_column(data_type{INT32},
+                                  target.size(), UNALLOCATED, stream, mr);
+    auto mutable_indices = indices->mutable_view();
+
+    thrust::sequence(rmm::exec_policy(stream)->on(stream),
+                     mutable_indices.begin<size_type>(),
+                     mutable_indices.end<size_type>(),
+                     0);
+
+    // The scatter map is actually a table with only one column, which is scatter map.
+    auto scatter_map = detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask,
+                                                  mr, stream);
+    auto output_table =  detail::scatter(table_view{{source}}, scatter_map->get_column(0).view(),
+                                             table_view{{target}}, false, mr, stream);
+
+    // There is only one column in output_table
+    return std::make_unique<column>(std::move(output_table->get_column(0)));
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> scatter(
@@ -465,6 +496,14 @@ std::vector<std::unique_ptr<table>> scatter_to_tables(
     rmm::mr::device_memory_resource* mr)
 {
   return detail::scatter_to_tables(input, partition_map, mr);
+}
+
+std::unique_ptr<column> boolean_mask_scatter(
+    column_view const& source, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr)
+{
+    return detail::boolean_mask_scatter(source, target, boolean_mask, mr);
 }
 
 }  // namespace experimental

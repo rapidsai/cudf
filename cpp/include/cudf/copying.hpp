@@ -498,6 +498,37 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
  */
 std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& rhs, column_view const& boolean_mask,
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-                                 
+
+
+/**
+ * @brief Scatters dense buffer `source` of size N to `target` of size K (K >= N)
+ * as per `boolean_mask` of size K.
+ *
+ * `boolean_mask` should have N number of `true`s. If boolean mask is `true`,
+ * corresponding value in target is updated with value from `source`, else it
+ * is left untouched.
+ *
+ * Example:
+ * source: {1, 5, 6, 8, 9}
+ * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
+ * target:       {   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}
+ *
+ * output:       {   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}
+ *
+ * @throws cudf::logic_error if source.type() != target.type()
+ * @throws cudf::logic_error if boolean_mask.type() != bool
+ * @throws cudf::logic_error if boolean_mask.size() != target.size()
+ *
+ * @param[in] source column_view (dense buffer) which gets scattered
+ * @param[in] target column_view which gets updated with scattered values from `source`
+ * @param[in] boolean_mask column_view which is a scatter_map.
+ * @param[in] mr Optional, The resource to use for all returned allocations
+ *
+ * @returns Returns a column_view by scattering `source` into `target` as per `boolean_mask`.
+ */
+std::unique_ptr<column> boolean_mask_scatter(
+    column_view const& source, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf
