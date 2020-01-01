@@ -257,7 +257,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+  auto new_mask = bitmask_and({lhs, rhs}, stream, mr);
   auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
                                      cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -291,7 +291,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+  auto new_mask = bitmask_and({lhs, rhs}, stream, mr);
   auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
                                      cudf::UNKNOWN_NULL_COUNT, stream, mr);
 

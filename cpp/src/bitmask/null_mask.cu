@@ -301,7 +301,7 @@ __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
   }
 }
 
-// Create a bitmask from a specific range
+// Bitwise AND of the masks
 rmm::device_buffer bitmask_and(bitmask_type const * const * masks, 
                                size_type const * begin_bits,
                                size_type num_masks, size_type mask_size,
@@ -487,32 +487,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
   return null_mask;
 }
 
-// Create a bitmask from a specific range
-// TODO (dm): remove from binaryops in favour of below version
-rmm::device_buffer bitmask_and(column_view const& view1,
-                               column_view const& view2,
-                               cudaStream_t stream,
-                               rmm::mr::device_memory_resource *mr) {
-  CUDF_EXPECTS(view1.size() == view2.size(), "Sizes cannot be different");
-
-  rmm::device_buffer null_mask{};
-  if (view1.size() == 0) {
-    return null_mask;
-  }
-
-  if (view1.nullable() and not view2.nullable()) {
-    null_mask = copy_bitmask(view1, stream, mr);
-  } else if (not view1.nullable() and view2.nullable()) {
-    null_mask = copy_bitmask(view2, stream, mr);
-  } else if (view1.nullable() and view2.nullable()) {
-    // null_mask = bitmask_and(view1.null_mask(), view1.offset(),
-    //                         view2.null_mask(), view2.offset(),
-    //                         view1.size(), stream, mr);
-  }
-  
-  return null_mask;
-}
-
+// Returns the bitwise AND of the null masks of column views
 rmm::device_buffer bitmask_and(std::vector<column_view> const& views,
                                cudaStream_t stream,
                                rmm::mr::device_memory_resource *mr) {
