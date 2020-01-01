@@ -242,7 +242,7 @@ struct reader_options {
 
   RdKafka::Conf *kafka_configs;               ///< Defines Kafka configurations that apply across an entire connected session.
   std::vector<std::string> kafka_topics;      ///< The name of the topic that the reader should consume the data from.
-  int64_t start_offset;                      ///< Kafka offset where the consumption should begin, exclusive. Set to 0 for "from beginning"
+  int64_t start_offset;                      ///< Kafka offset where the consumption should begin, inclusive. Set to 0 for "from beginning"
   int16_t batch_size;                        ///< Number of messages that should be read from the start_offset forward.
 
   reader_options() = default;

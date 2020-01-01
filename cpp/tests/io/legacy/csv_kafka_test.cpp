@@ -139,10 +139,10 @@ TEST_F(KafkaTest, TopicConnection) {
   args.names = {"fname", "lname", "age"};
   args.kafka_configs = kafka_conf;
   args.kafka_topics = topics;
-  args.start_offset = 0;
-  args.batch_size = 5;
+  args.kafka_start_offset = 0;
+  args.kafka_batch_size = 5;
 
   const auto df = cudf::read_csv(args);
   EXPECT_EQ(df.num_columns(), 3);
-  EXPECT_EQ(df.num_rows(), args.batch_size);
+  EXPECT_EQ(df.num_rows(), args.kafka_batch_size);
 }

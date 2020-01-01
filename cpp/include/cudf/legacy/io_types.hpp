@@ -44,14 +44,12 @@ struct source_info {
   std::string filepath;
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
-  std::string topicname;
   int64_t start_offset;
   int64_t end_offset;
 
   explicit source_info(const std::string& topic_name, int64_t start_offset,
                        int64_t end_offset)
       : type(KAFKA_TOPIC),
-        topicname(topic_name),
         start_offset(start_offset),
         end_offset(end_offset) {}
   explicit source_info(const std::string& file_path)
@@ -212,8 +210,8 @@ struct csv_read_arg {
   std::vector<std::string>
       kafka_topics;  ///< Topics that should be consumed from
 
-  int64_t start_offset;
-  int16_t batch_size;
+  int64_t kafka_start_offset;
+  int16_t kafka_batch_size;
 
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };

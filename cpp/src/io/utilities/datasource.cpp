@@ -78,9 +78,6 @@ class kafka_io_source : public datasource {
  private:
   class KafkaRebalanceCB : public RdKafka::RebalanceCb {
    public:
-
-    int64_t start_offset_;
-
     KafkaRebalanceCB(int64_t start_offset) : start_offset_(start_offset) {}
 
     void rebalance_cb(RdKafka::KafkaConsumer *consumer, RdKafka::ErrorCode err,
@@ -95,6 +92,9 @@ class kafka_io_source : public datasource {
         consumer->unassign();
       }
     }
+
+   private:
+    int64_t start_offset_;
   };
 
   void consume_messages() {
@@ -114,8 +114,7 @@ class kafka_io_source : public datasource {
 
         // handle_error handles specific errors. Any coded logic error case will
         // generate an exception and cease execution. Kafka has hundreds of
-        // possible exceptions however. To be safe its best to print the generic
-        // error message here and break the consumer loop.
+        // possible exceptions however. To be safe its best break the consumer loop.
         break;
       }
     }
@@ -176,8 +175,8 @@ class kafka_io_source : public datasource {
   RdKafka::Conf::ConfResult conf_res;
   std::string conf_val;
   int64_t start_offset_ = -1;
-  int16_t batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
-  int32_t default_timeout_ = 10000;  // 1 second
+  int32_t batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
+  int32_t default_timeout_ = 10000;  // 10 seconds
   int64_t msg_count_ = 0;  // Running tally of the messages consumed. Useful for retry logic.
 
   std::string buffer_;
