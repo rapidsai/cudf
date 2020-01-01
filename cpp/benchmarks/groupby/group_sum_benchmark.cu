@@ -23,8 +23,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/groupby.hpp>
 
-#include <gperftools/profiler.h>
-
 #include <random>
 #include <memory>
 

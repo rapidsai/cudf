@@ -106,8 +106,6 @@ groupby::sort_aggregate(
   for (size_t i = 0; i < requests.size(); i++) {
     // TODO (dm): Use key_sorted_order to make permutation iterator and avoid
     //            generating value columns
-    // TODO (dm): once we have multi-agg, if no other requests remain, ensure
-    //            sort_values is not called
     std::unique_ptr<column> sorted_values;
     std::unique_ptr<column> grouped_values;
 

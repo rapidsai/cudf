@@ -106,6 +106,9 @@ column_view helper::key_sort_order(cudaStream_t stream) {
   if (_key_sorted_order)
     return _key_sorted_order->view();
 
+  // TODO (dm): optimization. When keys are pre sorted but ignore nulls is true,
+  //            we still want all rows with nulls in the end. Sort is costly, so
+  //            do a copy_if(counting, sorted_order, {bitmask.isvalid(i)})
   if (_keys_pre_sorted) {
     _key_sorted_order = make_numeric_column(data_type(type_to_id<size_type>()),
                           _keys.num_rows(), mask_state::UNALLOCATED, stream);
