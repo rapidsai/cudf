@@ -76,8 +76,10 @@ cdef class Column:
 
     @data.setter
     def data(self, value):
+        if value is not None:
+            if not isinstance(value, Buffer):
+                raise TypeError("data must be a Buffer or None")
         self._data = value
-
 
     @property
     def nullable(self):
@@ -93,6 +95,9 @@ cdef class Column:
 
     @mask.setter
     def mask(self, value):
+        if value is not None:
+            if not isinstance(value, Buffer):
+                raise TypeError("mask must be a Buffer or None")
         self._set_mask(value)
 
     def _set_mask(self, value):
