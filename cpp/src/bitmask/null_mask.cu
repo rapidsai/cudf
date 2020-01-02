@@ -291,7 +291,7 @@ __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
 
-    bitmask_type destination_word = -1; // All bits 1
+    bitmask_type destination_word = 0xFFFF'FFFF; // All bits 1
     for (size_type i = 0; i < num_sources; i++) {
       destination_word &= get_mask_offset_word(
         source[i], destination_word_index, begin_bit[i], begin_bit[i] + source_size);
