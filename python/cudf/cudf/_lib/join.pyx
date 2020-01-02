@@ -72,10 +72,20 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     cdef cudf_table result
 
+    with nogil:
+        if how == 'left':
+                result = left_join(
+                        list_lhs[0],
+                        list_rhs[0],
+                        left_on_ind,
+                        right_on_ind,
+                        columns_in_common,
+                        <cudf_table*> NULL,
+                        context
+                    )
 
-    if how == 'left':
-        with nogil:
-            result = left_join(
+        elif how == 'inner':
+                result = inner_join(
                     list_lhs[0],
                     list_rhs[0],
                     left_on_ind,
@@ -85,29 +95,16 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                     context
                 )
 
-    elif how == 'inner':
-        with nogil:
-            result = inner_join(
-                list_lhs[0],
-                list_rhs[0],
-                left_on_ind,
-                right_on_ind,
-                columns_in_common,
-                <cudf_table*> NULL,
-                context
-            )
-
-    elif how == 'outer':
-        with nogil:
-            result = full_join(
-                list_lhs[0],
-                list_rhs[0],
-                left_on_ind,
-                right_on_ind,
-                columns_in_common,
-                <cudf_table*> NULL,
-                context
-            )
+        elif how == 'outer':
+                result = full_join(
+                    list_lhs[0],
+                    list_rhs[0],
+                    left_on_ind,
+                    right_on_ind,
+                    columns_in_common,
+                    <cudf_table*> NULL,
+                    context
+                )
 
     res = columns_from_table(&result)
 
