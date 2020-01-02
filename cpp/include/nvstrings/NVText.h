@@ -82,6 +82,16 @@ public:
      */
     static unsigned int token_count( NVStrings& strs, const char* delimiter, unsigned int* results, bool devmem=true );
 
+     /**
+     * @brief Computes the number of tokens in each string.
+     * @param strs Strings to tokenize.
+     * @param delimiter NVStrings object containing String or character used to identify tokens.
+     * @param[in,out] results Array of counts, one per string.
+     * @param devmem True if results in device memory.
+     * @return 0 if successful.
+     */
+    static unsigned int token_count( NVStrings& strs, NVStrings& delimiter, unsigned int* results, bool devmem=true );
+
     /**
      * @brief Fills a matrix of boolean values indicating the corresponding token appears in that string.
      * @param strs Strings to process.
