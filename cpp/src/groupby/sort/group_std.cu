@@ -41,15 +41,16 @@ struct var_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    // TODO (dm): Use target_type and replace all reference to `double`
+    using ResultType = experimental::detail::target_type_t<
+                        T, experimental::aggregation::Kind::VARIANCE>;
     const size_type* d_group_labels = group_labels.data().get();
     auto values_view = column_device_view::create(values);
     auto means_view = column_device_view::create(group_means);
     auto group_size_view = column_device_view::create(group_sizes);
 
     std::unique_ptr<column> result =
-      make_numeric_column(data_type(type_id::FLOAT64), group_sizes.size(),
-        mask_state::UNINITIALIZED, stream, mr);
+      make_numeric_column(data_type(type_to_id<ResultType>()),
+        group_sizes.size(), mask_state::UNINITIALIZED, stream, mr);
 
     auto values_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
@@ -63,7 +64,7 @@ struct var_functor {
         if (d_values.is_null(i))
           return 0.0;
         
-        double x = d_values.element<T>(i);
+        ResultType x = d_values.element<T>(i);
         size_type group_idx = d_group_labels[i];
         size_type group_size = d_group_sizes.element<size_type>(group_idx);
         
@@ -71,7 +72,7 @@ struct var_functor {
         if (group_size == 0 or group_size - ddof <= 0)
           return 0.0;
 
-        double mean = d_means.element<double>(group_idx);
+        ResultType mean = d_means.element<ResultType>(group_idx);
         return (x - mean) * (x - mean) / (group_size - ddof);
       }
     );
@@ -79,7 +80,7 @@ struct var_functor {
     thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
                           group_labels.begin(), group_labels.end(), values_it, 
                           thrust::make_discard_iterator(),
-                          result->mutable_view().data<double>());
+                          result->mutable_view().data<ResultType>());
 
     // set nulls
     auto result_view = mutable_column_device_view::create(*result);

@@ -77,9 +77,9 @@ struct quantiles_functor {
         };
         
         thrust::transform(thrust::seq, d_quantiles, d_quantiles + num_quantiles,
-                          d_result.data<double>() + i * num_quantiles,
+                          d_result.data<ResultType>() + i * num_quantiles,
                           [selector, segment_size, interpolation] (auto q) { 
-                            return experimental::detail::select_quantile<double>(
+                            return experimental::detail::select_quantile<ResultType>(
                               selector, segment_size, q, interpolation); 
                           });
 
