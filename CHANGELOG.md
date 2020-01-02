@@ -7,9 +7,11 @@
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #3627 Adding cudf::sort and cudf::sort_by_key
 
 ## Improvements
 
+- PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
@@ -21,10 +23,13 @@
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
+- PR #3654 Update Jitify submodule ref to include gcc-8 fix
+- PR #3639 Define and implement `nans_to_nulls`
 
 ## Bug Fixes
 
@@ -39,6 +44,8 @@
 - PR #3588 Remove avro reader column order reversal
 - PR #3629 Fix hash map test failure
 - PR #3637 Fix sorted set_index operations in dask_cudf
+- PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
+- PR #3668 Fixing CHECK_CUDA debug build issue
 
 
 # cuDF 0.11.0 (11 Dec 2019)
