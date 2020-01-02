@@ -444,6 +444,7 @@ def test_datetime_has_null_test(data, expected):
     if False in count.keys():
         expected_count = count[False]
 
+    assert_eq(expected, data.has_nulls)
     assert_eq(expected_count, data.null_count)
 
 
@@ -457,4 +458,5 @@ def test_datetime_has_null_test_pyarrow():
     expected = True
     expected_count = 1
 
+    assert_eq(expected, data.has_nulls)
     assert_eq(expected_count, data.null_count)
