@@ -61,11 +61,13 @@ struct partition_fn
     string_index_pair* d_indices_right{}; // amigos
 
     partition_fn( column_device_view const& d_strings, string_view const& d_delimiter,
-                  string_index_pair* d_indices_left = nullptr,
-                  string_index_pair* d_indices_delim = nullptr,
-                  string_index_pair* d_indices_right = nullptr)
+                  rmm::device_vector<string_index_pair>& indices_left,
+                  rmm::device_vector<string_index_pair>& indices_delim,
+                  rmm::device_vector<string_index_pair>& indices_right)
                 : d_strings(d_strings), d_delimiter(d_delimiter),
-                  d_indices_left(d_indices_left), d_indices_delim(d_indices_delim), d_indices_right(d_indices_right) {}
+                  d_indices_left(indices_left.data().get()),
+                  d_indices_delim(indices_delim.data().get()),
+                  d_indices_right(indices_right.data().get()) {}
 
     __device__ void set_null_entries( size_type idx )
     {
@@ -148,10 +150,10 @@ struct partition_fn
 struct rpartition_fn : public partition_fn
 {
     rpartition_fn( column_device_view const& d_strings, string_view const& d_delimiter,
-                  string_index_pair* d_indices_left = nullptr,
-                  string_index_pair* d_indices_delim = nullptr,
-                  string_index_pair* d_indices_right = nullptr)
-                : partition_fn(d_strings, d_delimiter, d_indices_left, d_indices_delim, d_indices_right) {}
+                   rmm::device_vector<string_index_pair>& indices_left,
+                   rmm::device_vector<string_index_pair>& indices_delim,
+                   rmm::device_vector<string_index_pair>& indices_right)
+                : partition_fn(d_strings, d_delimiter, indices_left, indices_delim, indices_right) {}
 
     __device__ void operator()(size_type idx)
     {
@@ -186,17 +188,16 @@ std::unique_ptr<experimental::table> partition( strings_column_view const& strin
                                                 cudaStream_t stream = 0 )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
-    std::vector<std::unique_ptr<column>> results;
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return std::make_unique<experimental::table>(std::move(results));
+        return std::make_unique<experimental::table>(std::vector<std::unique_ptr<column>>());
     auto strings_column = column_device_view::create(strings.parent(),stream);
-    column_device_view d_strings = *strings_column;
     string_view d_delimiter(delimiter.data(),delimiter.size());
     rmm::device_vector<string_index_pair> left_indices(strings_count), delim_indices(strings_count), right_indices(strings_count);
-    partition_fn partitioner(d_strings,d_delimiter,left_indices.data().get(),delim_indices.data().get(),right_indices.data().get());
+    partition_fn partitioner(*strings_column,d_delimiter,left_indices,delim_indices,right_indices);
 
     thrust::for_each_n( rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, partitioner);
+    std::vector<std::unique_ptr<column>> results;
     results.emplace_back(make_strings_column(left_indices,stream,mr));
     results.emplace_back(make_strings_column(delim_indices,stream,mr));
     results.emplace_back(make_strings_column(right_indices,stream,mr));
@@ -209,17 +210,16 @@ std::unique_ptr<experimental::table> rpartition( strings_column_view const& stri
                                                  cudaStream_t stream = 0 )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
-    std::vector<std::unique_ptr<column>> results;
     auto strings_count = strings.size();
     if( strings_count == 0 )
-        return std::make_unique<experimental::table>(std::move(results));
+        return std::make_unique<experimental::table>(std::vector<std::unique_ptr<column>>());
     auto strings_column = column_device_view::create(strings.parent(),stream);
-    column_device_view d_strings = *strings_column;
     string_view d_delimiter(delimiter.data(),delimiter.size());
     rmm::device_vector<string_index_pair> left_indices(strings_count), delim_indices(strings_count), right_indices(strings_count);
-    rpartition_fn partitioner(d_strings,d_delimiter,left_indices.data().get(),delim_indices.data().get(),right_indices.data().get());
+    rpartition_fn partitioner(*strings_column,d_delimiter,left_indices,delim_indices,right_indices);
     thrust::for_each_n( rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, partitioner);
 
+    std::vector<std::unique_ptr<column>> results;
     results.emplace_back(make_strings_column(left_indices,stream,mr));
     results.emplace_back(make_strings_column(delim_indices,stream,mr));
     results.emplace_back(make_strings_column(right_indices,stream,mr));
