@@ -203,7 +203,7 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
       right_indices.begin(),
       right_indices.end(),
       JoinNoneValue);
-  return std::make_pair(left_indices, right_indices);
+  return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
 /* --------------------------------------------------------------------------*/
@@ -327,7 +327,7 @@ get_base_hash_join_indices(
 
   left_indices.resize(join_size);
   right_indices.resize(join_size);
-  return std::make_pair(left_indices, right_indices);
+  return std::make_pair(std::move(left_indices), std::move(right_indices));
 
 }
 
