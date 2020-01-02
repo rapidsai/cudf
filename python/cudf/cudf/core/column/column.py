@@ -408,7 +408,7 @@ class ColumnBase(Column):
             if start == stop:
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice
-            if self.null_count > 0:
+            if self.has_nulls:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
 
@@ -757,7 +757,7 @@ class ColumnBase(Column):
         # string columns include null index in factorization; remove:
         if (
             pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
-        ) and self.null_count > 0:
+        ) and self.has_nulls:
             cats = cats.dropna()
             labels = labels - 1
 
@@ -802,7 +802,7 @@ class ColumnBase(Column):
             "version": 1,
         }
 
-        if self.nullable and self.null_count > 0:
+        if self.nullable and self.has_nulls:
             from types import SimpleNamespace
 
             # Create a simple Python object that exposes the

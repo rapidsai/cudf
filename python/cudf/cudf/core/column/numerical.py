@@ -165,7 +165,7 @@ class NumericalColumn(column.ColumnBase):
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        if self.null_count > 0 and self.dtype == np.bool:
+        if self.has_nulls and self.dtype == np.bool:
             # Boolean series in Pandas that contains None/NaN is of dtype
             # `np.object`, which is not natively supported in GDF.
             ret = self.astype(np.int8).to_array(fillna=-1)
@@ -393,7 +393,7 @@ class NumericalColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.null_count > 0:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -404,7 +404,7 @@ class NumericalColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.null_count > 0:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(

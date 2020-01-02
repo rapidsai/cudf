@@ -724,7 +724,7 @@ class DataFrame(Table):
         temp_mi_columns = output.columns
         for col in output._data:
             if (
-                self._data[col].null_count > 0
+                self._data[col].has_nulls
                 and not self._data[col].dtype == "O"
                 and not is_datetime_dtype(self._data[col].dtype)
             ):
@@ -1883,7 +1883,7 @@ class DataFrame(Table):
             raise TypeError("non-numeric data not yet supported")
         dtype = np.find_common_type(cols, [])
         for k, c in self._data.items():
-            if c.null_count > 0:
+            if c.has_nulls:
                 errmsg = (
                     "column {!r} has null values. "
                     "hint: use .fillna() to replace null values"

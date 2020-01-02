@@ -101,7 +101,7 @@ class StringMethods(object):
         self._parent.nvstrings.len(ptr)
 
         mask = None
-        if self._parent.null_count > 0:
+        if self._parent.has_nulls:
             mask = self._parent.mask
 
         col = column.build_column(
@@ -325,7 +325,7 @@ class StringMethods(object):
         self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
-        if self._parent.null_count > 0:
+        if self._parent.has_nulls:
             mask = self._parent.mask
 
         col = column.build_column(
@@ -566,7 +566,7 @@ class StringColumn(column.ColumnBase):
 
         out_col = column.as_column(out_arr)
 
-        if self.null_count > 0:
+        if self.has_nulls:
             mask_size = utils.calc_chunk_size(
                 len(self.nvstrings), utils.mask_bitsize
             )
@@ -814,7 +814,7 @@ class StringColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.null_count > 0:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -825,7 +825,7 @@ class StringColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.null_count > 0:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(

@@ -379,7 +379,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
 
-    if col.nullable and col.null_count > 0:
+    if col.nullable and col.has_nulls:
         mask_ptr = col.mask.ptr
     else:
         mask_ptr = 0

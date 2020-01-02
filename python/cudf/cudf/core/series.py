@@ -1899,7 +1899,7 @@ class Series(Table):
     def median(self, skipna=True):
         """Compute the median of the series
         """
-        if not skipna and self.null_count > 0:
+        if not skipna and self.has_nulls:
             return np.nan
         # enforce linear in case the default ever changes
         return self.quantile(0.5, interpolation="linear", exact=True)
@@ -2053,7 +2053,7 @@ class Series(Table):
                 rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
 
         # fillna so we can find nulls
-        if rhs.null_count > 0:
+        if rhs.has_nulls:
             lhs = lhs.fillna(lhs._column.default_na_value())
             rhs = rhs.fillna(lhs._column.default_na_value())
 

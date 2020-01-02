@@ -239,11 +239,11 @@ class Rolling:
         """
         has_nulls = False
         if isinstance(self.obj, cudf.Series):
-            if self.obj._column.null_count > 0:
+            if self.obj._column.has_nulls:
                 has_nulls = True
         else:
             for col in self.obj._data:
-                if self.obj[col].null_count > 0:
+                if self.obj[col].has_nulls:
                     has_nulls = True
         if has_nulls:
             raise NotImplementedError(
