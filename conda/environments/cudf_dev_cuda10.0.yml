@@ -14,7 +14,7 @@ dependencies:
   - numba>=0.45.1
   - pandas>=0.25
   - pyarrow=0.15.0
-  - fastavro>=0.22.0
+  - fastavro>=0.22.9
   - notebook>=0.5.0
   - cython>=0.29,<0.30
   - fsspec>=0.3.3

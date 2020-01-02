@@ -62,9 +62,6 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
 
     expect = pd.DataFrame.from_records(reader)
 
-    if not avro_file.closed:
-        avro_file.close()
-
     # `read_avro()` is deliberately called twice. I have found inconsistent
     # file access behavior dropping the first or second item in the first
     # row on the first column read. Consistently producing. Accessint twice
