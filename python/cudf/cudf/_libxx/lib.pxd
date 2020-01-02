@@ -6,9 +6,6 @@ from libcpp.memory cimport unique_ptr
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
-cdef extern from "<utility>" namespace "std" nogil:
-    cdef device_buffer move(device_buffer)
-
 cdef extern from "types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
