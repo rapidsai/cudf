@@ -53,16 +53,7 @@ def apply_unary_op(Column incol, op):
     from cudf.core.column import build_column
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
-
-    if op in ("sin", "cos", "tam", "asin", "acos",
-              "atan", "exp", "log"):
-        if not np.issubdtype(incol.dtype.type, np.floating):
-            raise TypeError(
-                f"Operation '{op}' not supported on {incol.dtype.type.__name__}"
-            )
-
     cdef gdf_column c_out_col
-
     cdef string cpp_str
     cdef gdf_dtype g_type
     cdef cpp_unaryops.unary_op c_op
