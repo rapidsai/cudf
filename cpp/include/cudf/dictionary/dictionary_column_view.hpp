@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,11 @@
 namespace cudf
 {
 /**
- * @brief Given a column-view of DICTIONARY type, an instance of this class
- * provides a wrapper on this compound column for dictionary operations.
+ * @brief A wrapper class for operations on a dictionary column.
  *
- * A dictionary column contains a dictionary and a set of indices.
- * The dictionary is a sorted set of unique values for the column.
- * The indices values are position indices into the dictionary.
+ * A dictionary column contains a set of keys and a column of indices.
+ * The keys are a sorted set of unique values for the column.
+ * The indices values are position indices into the keys.
  */
 class dictionary_column_view : private column_view
 {
@@ -109,12 +108,12 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
  * the dictionary_column.
  *
  * @param dictionary_column Existing dictionary column.
- * @param keys New keys to remove from the dictionary_column
+ * @param keys_to_remove The keys to remove from the dictionary_column
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
 std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_column,
-                                     column_view const& keys,
+                                     column_view const& keys_to_remove,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -143,7 +142,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * Any new elements found in the keys parameter are added to the output dictionary.
  * Any existing keys not in the keys parameter are removed.
  *
- * The indices are update to reflect the position values of the new keys.
+ * The indices are updated to reflect the position values of the new keys.
  * Any indices pointing to removed keys are set to null.
  *
  * ```
@@ -168,7 +167,8 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
  * @brief Create a new dictionary column by merging the keys and indices
  * from two existing dictionary columns.
  *
- * The indices are updated to appear as though the second dictionary_column is appended to the first.
+ * The indices of the resulting column are created to appear as though the
+ * second dictionary_column indices is appended to the first.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
@@ -177,7 +177,7 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
  * d3 is now {["a","b","c","d","e"],[3,0,2,0,4,1,4,4,1]}
  * ```
  *
- * @throw cudf_logic_error if the dictionary types do not match for both dictionary columns.
+ * @throw cudf_logic_error if the keys types do not match for both dictionary columns.
  *
  * @param dictionary_column1 Existing dictionary column.
  * @param dictionary_column2 2nd existing dictionary column.
