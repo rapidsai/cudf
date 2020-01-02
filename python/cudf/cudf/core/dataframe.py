@@ -439,7 +439,7 @@ class DataFrame(Table):
         df = self.copy()
         for col in self.columns:
             if col in other.columns:
-                if other[col].null_count != 0:
+                if other[col].has_nulls:
                     raise ValueError("Column must have no nulls.")
 
                 boolbits = cudautils.compact_mask_bytes(
@@ -3696,7 +3696,7 @@ class DataFrame(Table):
             "and bool dtypes."
         )
 
-        if any([col.mask is not None for col in self._columns]):
+        if any([col.nullable for col in self._columns]):
             msg = (
                 "Row-wise operations do not currently support columns with "
                 "null values. Consider removing them with .dropna() "

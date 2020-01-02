@@ -165,7 +165,7 @@ class DatetimeColumn(column.ColumnBase):
             dev_array = self._data_view()
             dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
             null_ptr = None
-            if self.mask is not None:
+            if self.nullable:
                 null_ptr = libcudf.cudf.get_ctype_ptr(self._mask_view())
             kwargs.update(
                 {
@@ -197,7 +197,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def to_arrow(self):
         mask = None
-        if self.mask:
+        if self.nullable:
             mask = pa.py_buffer(self._mask_view().copy_to_host())
         data = pa.py_buffer(self.as_numerical._data_view().copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
@@ -279,7 +279,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.mask is not None and self.null_count > 0:
+            if self.nullable and self.null_count > 0:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -290,7 +290,7 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.mask is not None and self.null_count > 0:
+            if self.nullable and self.null_count > 0:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(
@@ -301,7 +301,7 @@ class DatetimeColumn(column.ColumnBase):
 
 def binop(lhs, rhs, op, out_dtype):
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
-    masked = lhs.mask is not None or rhs.mask is not None
+    masked = lhs.nullable or rhs.nullable
     out = column.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = libcudf.binops.apply_op(lhs, rhs, out, op)
     libcudf.nvtx.nvtx_range_pop()

@@ -266,7 +266,7 @@ class CategoricalColumn(column.ColumnBase):
         header["data"], data_frames = self.codes.serialize()
         header["data_frames_count"] = len(data_frames)
         frames.extend(data_frames)
-        if self.mask is not None:
+        if self.nullable:
             mask_frames = [self._mask_view()]
         else:
             mask_frames = []
@@ -447,7 +447,7 @@ class CategoricalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if not self.mask:
+        if not self.nullable:
             return self
 
         fill_is_scalar = np.isscalar(fill_value)

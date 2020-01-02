@@ -105,7 +105,7 @@ def apply_chunks(
 def make_aggregate_nullmask(df, columns=None, op="and"):
     out_mask = None
     for k in columns or df.columns:
-        if not df[k].has_null_mask:
+        if not df[k].nullable:
             continue
 
         nullmask = df[k].nullmask

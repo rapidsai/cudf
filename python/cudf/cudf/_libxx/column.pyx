@@ -65,6 +65,15 @@ cdef class Column:
     def data(self, value):
         self._data = value
 
+
+    @property
+    def nullable(self):
+        return self.mask is not None
+
+    @property
+    def has_nulls(self):
+        return self.null_count != 0
+        
     @property
     def mask(self):
         return self._mask
@@ -106,7 +115,7 @@ cdef class Column:
                 children.push_back(child_column.mutable_view())
 
         cdef bitmask_type* mask
-        if self.mask is not None:
+        if self.nullable:
             mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL
@@ -145,7 +154,7 @@ cdef class Column:
                 children.push_back(child_column.view())
 
         cdef bitmask_type* mask
-        if self.mask is not None:
+        if self.nullable:
             mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL

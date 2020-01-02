@@ -95,7 +95,7 @@ class ColumnBase(Column):
         arr = self._data_view()
         sr = pd.Series(arr.copy_to_host())
 
-        if self.mask is not None:
+        if self.nullable:
             mask_bits = self._mask_view().copy_to_host()
             mask_bytes = (
                 cudautils.expand_mask_bits(len(self), mask_bits)
@@ -120,7 +120,7 @@ class ColumnBase(Column):
 
     def __sizeof__(self):
         n = self.data.size
-        if self.mask is not None:
+        if self.nullable:
             n += self.mask.size
         return n
 
@@ -232,7 +232,7 @@ class ColumnBase(Column):
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(col.mask is not None for col in objs)
+        nulls = any(col.nullable for col in objs)
         newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
@@ -319,7 +319,7 @@ class ColumnBase(Column):
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
-        if self.mask:
+        if self.nullable:
             return cudf.Series(self._mask_view())
         else:
             raise ValueError("Column has no null mask")
@@ -528,7 +528,7 @@ class ColumnBase(Column):
 
         Returns a copy with null filled.
         """
-        if not self.has_null_mask:
+        if not self.nullable:
             return self
         out = cudautils.fillna(
             data=self._data_view(), mask=self._mask_view(), value=value
@@ -563,7 +563,7 @@ class ColumnBase(Column):
         DeviceNDArray
            logical inverted mask
         """
-        if self.null_count != 0:
+        if self.has_nulls:
             raise ValueError("Column must have no nulls.")
         gpu_mask = self._data_view()
         cudautils.invert_mask(gpu_mask, gpu_mask)
@@ -633,7 +633,7 @@ class ColumnBase(Column):
         device array
         """
 
-        if self.null_count != 0:
+        if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
         return cudautils.compact_mask_bytes(self._data_view())
@@ -726,7 +726,9 @@ class ColumnBase(Column):
             if hasattr(result, "children"):
                 self.children = result.children
                 if is_string_dtype(self):
-                    self._nvstrings = None  # force nvstrings to be recomputed
+                    # force recomputation of nvstrings/nvcategory
+                    self._nvstrings = None
+                    self._nvcategory = None
             self.__class__ = result.__class__
         else:
             return result
@@ -800,7 +802,7 @@ class ColumnBase(Column):
             "version": 1,
         }
 
-        if self.mask is not None and self.null_count > 0:
+        if self.nullable and self.null_count > 0:
             from types import SimpleNamespace
 
             # Create a simple Python object that exposes the
@@ -829,7 +831,7 @@ class ColumnBase(Column):
         data_frames = [self._data_view()]
         frames.extend(data_frames)
 
-        if self.mask is not None:
+        if self.nullable:
             mask_frames = [self._mask_view()]
         else:
             mask_frames = []
@@ -876,7 +878,7 @@ def column_empty_like_same_mask(column, dtype):
         The dtype of the data buffer.
     """
     result = column_empty_like(column, dtype)
-    if column.mask:
+    if column.nullable:
         result.mask = column.mask
     return result
 
@@ -1304,7 +1306,7 @@ def column_applymap(udf, column, out_dtype):
     core = njit(udf)
     results = rmm.device_array(shape=len(column), dtype=out_dtype)
     values = column.to_gpu_array()
-    if column.mask:
+    if column.nullable:
         # For masked columns
         @cuda.jit
         def kernel_masked(values, masks, results):

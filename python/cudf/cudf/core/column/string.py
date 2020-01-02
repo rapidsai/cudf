@@ -491,7 +491,7 @@ class StringColumn(column.ColumnBase):
     @property
     def nvstrings(self):
         if self._nvstrings is None:
-            if self.mask:
+            if self.nullable:
                 mask = self.mask.ptr
             else:
                 mask = None
@@ -522,7 +522,8 @@ class StringColumn(column.ColumnBase):
 
     def _set_mask(self, value):
         self._nvstrings = None
-        super().set_mask(value)
+        self._nvcategory = None
+        super()._set_mask(value)
 
     @property
     def indices(self):
@@ -813,7 +814,7 @@ class StringColumn(column.ColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.mask is not None and self.null_count > 0:
+            if self.nullable and self.null_count > 0:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -824,7 +825,7 @@ class StringColumn(column.ColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.mask is not None and self.null_count > 0:
+            if self.nullable and self.null_count > 0:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(
@@ -842,7 +843,7 @@ class StringColumn(column.ColumnBase):
 def _string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
-    masked = lhs.mask or rhs.mask
+    masked = lhs.nullable or rhs.nullable
     out = column.column_empty_like(lhs, dtype="bool", masked=masked)
     # Call and fix null_count
     _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)

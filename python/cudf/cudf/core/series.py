@@ -157,7 +157,7 @@ class Series(Table):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
-        if self.null_count != 0:
+        if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
         # numbautils.PatchedNumbaDeviceArray() is a
@@ -472,7 +472,7 @@ class Series(Table):
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._column.mask is not None:
+        if self._column.nullable:
             mask = mask.set_mask(self._column.mask).fillna(False)
         return mask
 
@@ -545,7 +545,7 @@ class Series(Table):
         else:
             preprocess = self
         if (
-            preprocess.has_null_mask
+            preprocess.nullable
             and not preprocess.dtype == "O"
             and not is_categorical_dtype(preprocess.dtype)
             and not is_datetime_dtype(preprocess.dtype)
@@ -629,7 +629,7 @@ class Series(Table):
 
         if fill_value is not None:
             if isinstance(rhs, Series):
-                if lhs.has_null_mask and rhs.has_null_mask:
+                if lhs.nullable and rhs.nullable:
                     lmask = Series(data=lhs.nullmask)
                     rmask = Series(data=rhs.nullmask)
                     mask = (lmask | rmask).data
@@ -640,9 +640,9 @@ class Series(Table):
                         data=result.data, dtype=result.dtype, mask=mask,
                     )
                     return lhs._copy_construct(data=data)
-                elif lhs.has_null_mask:
+                elif lhs.nullable:
                     return func(lhs.fillna(fill_value), rhs)
-                elif rhs.has_null_mask:
+                elif rhs.nullable:
                     return func(lhs, rhs.fillna(fill_value))
             elif is_scalar(rhs):
                 return func(lhs.fillna(fill_value), rhs)
@@ -1134,9 +1134,13 @@ class Series(Table):
         return self._column.null_count
 
     @property
-    def has_null_mask(self):
+    def nullable(self):
         """A boolean indicating whether a null-mask is needed"""
-        return self._column.mask is not None
+        return self._column.nullable
+
+    @property
+    def has_nulls(self):
+        return self._column.has_nulls
 
     def drop_duplicates(self, keep="first", inplace=False):
         """
@@ -1173,7 +1177,7 @@ class Series(Table):
         """
         Return a Series with null values removed.
         """
-        if self.null_count == 0:
+        if not self.has_nulls:
             return self
         name = self.name
         result = self.to_frame(name="_").dropna()
@@ -1422,7 +1426,7 @@ class Series(Table):
         -------
         device array
         """
-        if self.null_count != 0:
+        if self.has_nulls:
             raise ValueError("Column must have no nulls.")
         return cudautils.compact_mask_bytes(self._column._data_view())
 
@@ -2043,7 +2047,7 @@ class Series(Table):
                 # If they're not the same dtype, short-circuit if the test
                 # list doesn't have any nulls. If it does have nulls, make
                 # the test list a Categorical with a single null
-                if rhs.null_count == 0:
+                if not rhs.has_nulls:
                     return Series(cudautils.zeros(len(self), dtype="bool"))
                 rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
@@ -2111,7 +2115,7 @@ class Series(Table):
     def scale(self):
         """Scale values to [0, 1] in float64
         """
-        if self.null_count != 0:
+        if self.has_nulls:
             msg = "masked series not supported by this operation"
             raise NotImplementedError(msg)
 
@@ -2182,7 +2186,7 @@ class Series(Table):
             self._column, initial_hash_values=initial_hash
         )
 
-        if hashed_values.null_count != 0:
+        if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
 
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
@@ -2382,7 +2386,7 @@ class Series(Table):
         """
         assert axis in (None, 0) and freq is None and fill_value is None
 
-        if self.null_count != 0:
+        if self.has_nulls:
             raise AssertionError(
                 "Shift currently requires columns with no " "null values"
             )
@@ -2411,7 +2415,7 @@ class Series(Table):
         Diff currently only supports float and integer dtype columns with
         no null values.
         """
-        if self.null_count != 0:
+        if self.has_nulls:
             raise AssertionError(
                 "Diff currently requires columns with no " "null values"
             )

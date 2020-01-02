@@ -596,7 +596,7 @@ def test_dataframe_setitem_from_masked_object():
     ary[mask] = np.nan
 
     test1_null = Series(ary, nan_as_null=True)
-    assert test1_null.has_null_mask
+    assert test1_null.nullable
     assert test1_null.null_count == 20
     test1_nan = Series(ary, nan_as_null=False)
     assert test1_nan.null_count == 0
@@ -604,7 +604,7 @@ def test_dataframe_setitem_from_masked_object():
     test2_null = DataFrame.from_pandas(
         pd.DataFrame({"a": ary}), nan_as_null=True
     )
-    assert test2_null["a"].has_null_mask
+    assert test2_null["a"].nullable
     assert test2_null["a"].null_count == 20
     test2_nan = DataFrame.from_pandas(
         pd.DataFrame({"a": ary}), nan_as_null=False
@@ -613,7 +613,7 @@ def test_dataframe_setitem_from_masked_object():
 
     gpu_ary = rmm.to_device(ary)
     test3_null = Series(gpu_ary, nan_as_null=True)
-    assert test3_null.has_null_mask
+    assert test3_null.nullable
     assert test3_null.null_count == 20
     test3_nan = Series(gpu_ary, nan_as_null=False)
     assert test3_nan.null_count == 0
@@ -621,7 +621,7 @@ def test_dataframe_setitem_from_masked_object():
     test4 = DataFrame()
     lst = [1, 2, None, 4, 5, 6, None, 8, 9]
     test4["lst"] = lst
-    assert test4["lst"].has_null_mask
+    assert test4["lst"].nullable
     assert test4["lst"].null_count == 2
 
 

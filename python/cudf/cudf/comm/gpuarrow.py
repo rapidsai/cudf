@@ -221,7 +221,7 @@ def array_to_series(array):
 
     series = Series(data, dtype=dtype)
 
-    if null_count > 0 and mask is not None and not series.has_null_mask:
+    if null_count > 0 and mask is not None and not series.nullable:
         return series.set_mask(mask, null_count)
 
     return series

@@ -284,7 +284,7 @@ cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL
         else:
             data_ptr = 0
 
-    if col.mask:
+    if col.nullable:
         valid_ptr = col.mask.ptr
     else:
         valid_ptr = 0
@@ -379,7 +379,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
 
-    if col.mask is not None and col.null_count > 0:
+    if col.nullable and col.null_count > 0:
         mask_ptr = col.mask.ptr
     else:
         mask_ptr = 0
