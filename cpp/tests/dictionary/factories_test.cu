@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,4 +44,21 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumn)
     std::vector<int32_t> h_expected{4,0,3,1,2,2,2,4,0};
     cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
     cudf::test::expect_columns_equal(view.indices(), expected);
+}
+
+TEST_F(DictionaryFactoriesTest, CreateFromColumns)
+{
+    std::vector<const char*> h_keys{ "aaa", "ccc", "ddd", "www" };
+    cudf::test::strings_column_wrapper keys_strings( h_keys.begin(), h_keys.end() );
+    std::vector<int32_t> h_values{2,0,3,1,2,2,2,3,0};
+    cudf::test::fixed_width_column_wrapper<int32_t> values( h_values.begin(), h_values.end() );
+    rmm::device_buffer null_mask{};
+     
+    auto dictionary = cudf::make_dictionary_column( keys_strings, values,
+                                                    null_mask, 0 );
+    cudf::dictionary_column_view view(dictionary->view());
+    auto keys = *(view.keys());
+
+    cudf::test::expect_columns_equal(keys, keys_strings);
+    cudf::test::expect_columns_equal(view.indices(), values);
 }
