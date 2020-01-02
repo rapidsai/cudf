@@ -24,7 +24,7 @@ namespace strings
 {
 
 /**
- * @brief Returns a vector of strings columns for each matching occurence of the
+ * @brief Returns a table of strings columns for each matching occurence of the
  * regex pattern within each string.
  *
  * The number of output columns is determined by the string with the most
@@ -35,7 +35,7 @@ namespace strings
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
  * @param mr Resource for allocating device memory.
- * @return New column of strings.
+ * @return New table of strings columns.
  */
 std::unique_ptr<experimental::table> findall_re( strings_column_view const& strings,
                                                  std::string const& pattern,
