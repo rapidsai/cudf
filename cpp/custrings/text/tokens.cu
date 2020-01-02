@@ -366,7 +366,7 @@ unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsign
 unsigned int NVText::token_count( NVStrings& strs, NVStrings& delims, unsigned int* results, bool bdevmem )
 {
     unsigned int delims_count = delims.size();
-//    if( delims_count==0 )
+//    if( delims_count==0 ) TODO
 //        return NVText::token_count
 
     auto execpol = rmm::exec_policy(0);

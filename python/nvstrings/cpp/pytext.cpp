@@ -185,7 +185,7 @@ static PyObject* n_token_count( PyObject* self, PyObject* args )
 }
 
 //
-static PyObject* n_tokenize_multi(PyObject* self, PyObject* args )
+static PyObject* n_token_count_multi(PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
     NVStrings* strs = strings_from_object(pystrs);
@@ -202,7 +202,7 @@ static PyObject* n_tokenize_multi(PyObject* self, PyObject* args )
     {
         unsigned int rtn = 0;
         Py_BEGIN_ALLOW_THREADS
-        rtn = NVText::token_count(*strs, *delimiter, devptr);
+        rtn = NVText::token_count(*strs, *delims, devptr);
         Py_END_ALLOW_THREADS
         return PyLong_FromLong((long)rtn);
     }
@@ -213,7 +213,7 @@ static PyObject* n_tokenize_multi(PyObject* self, PyObject* args )
         return ret;
     unsigned int* rtn = new unsigned int[count];
     Py_BEGIN_ALLOW_THREADS
-    NVText::token_count(*strs, *delimiter, rtn, false);
+    NVText::token_count(*strs, *delims, rtn, false);
     Py_END_ALLOW_THREADS
     for(unsigned int idx=0; idx < count; idx++)
         PyList_SetItem(ret, idx, PyLong_FromLong((long)rtn[idx]));
