@@ -653,7 +653,7 @@ reader::Impl::gather_column_dtypes() {
     }
   }
 
-  return std::make_pair(dtypes, dtypes_extra_info);
+  return std::make_pair(std::move(dtypes), std::move(dtypes_extra_info));
 }
 
 void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
