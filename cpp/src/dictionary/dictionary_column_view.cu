@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ column_view dictionary_column_view::parent() const
 column_view dictionary_column_view::indices() const
 {
     CUDF_EXPECTS( num_children()>0, "dictionary column has no children" );
-    return experimental::detail::slice( child(0), offset(), offset() + size() );
+    return child(0);
 }
 
 size_type dictionary_column_view::keys_size() const noexcept
