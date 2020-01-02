@@ -411,6 +411,8 @@ gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
 
   binops::jit::binary_operation(&output, &lhs, &rhs, ptx,
                                 cudf::jit::getTypeName(output_type));
+
+  return output;
 }
 
 }  // namespace cudf
