@@ -43,6 +43,7 @@ def path_or_buf(datadir):
 
     yield _make_path_or_buf
 
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf"])
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
@@ -64,7 +65,7 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     expect = pd.DataFrame.from_records(reader)
     if not avro_file.closed:
         avro_file.close()
-    
+
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
     # FASTAVRO produces int64 columns from avro int32 dtype, so convert
