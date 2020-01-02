@@ -24,7 +24,7 @@ namespace strings
 {
 
 /**
- * @brief Returns a table of strings columns for each matching occurence of the
+ * @brief Returns a table of strings columns for each matching occurrence of the
  * regex pattern within each string.
  *
  * The number of output columns is determined by the string with the most
