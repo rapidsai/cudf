@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import cython
 import rmm
 
@@ -50,6 +51,18 @@ cdef class Column:
             raise TypeError("Expected a Buffer for data, got " + type(data).__name__)
         if mask is not None and not isinstance(mask, Buffer):
             raise TypeError("Expected a Buffer for mask, got " + type(mask).__name__)
+        if not pd.api.types.is_integer(size):
+            raise TypeError("Expected an integer for size, got " + type(size).__name__)
+        if not pd.api.types.is_integer(offset):
+            raise TypeError("Expected an integer for offset, got " + type(offset).__name__)
+        if not isinstance(children, tuple):
+            raise TypeError("Expected a tuple of Columns for children, got " + type(children).__name__)
+
+        for child in children:
+            if not isinstance(child, Column):
+                raise TypeError("Expected each of children to be a  Column, got " +
+                                type(child).__name__)
+
         self._data = data
         self.size = size
         self.dtype = dtype
