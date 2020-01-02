@@ -43,12 +43,13 @@ def path_or_buf(datadir):
 
     yield _make_path_or_buf
 
-
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf"])
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
 def test_avro_reader_basic(datadir, inputfile, columns, engine):
     path = datadir / inputfile
+
+    got = cudf.read_avro(path, engine=engine, columns=columns)
 
     try:
         avro_file = open(path, "rb")
@@ -61,13 +62,9 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
             print(type(excpr).__name__)
 
     expect = pd.DataFrame.from_records(reader)
-
-    # `read_avro()` is deliberately called twice. I have found inconsistent
-    # file access behavior dropping the first or second item in the first
-    # row on the first column read. Consistently producing. Accessint twice
-    # at runtime ensures data is loaded correctly.
-    got = cudf.read_avro(path, engine=engine, columns=columns)
-    got = cudf.read_avro(path, engine=engine, columns=columns)
+    if not avro_file.closed:
+        avro_file.close()
+    
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
     # FASTAVRO produces int64 columns from avro int32 dtype, so convert
