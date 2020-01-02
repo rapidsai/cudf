@@ -307,6 +307,12 @@ IS_NEP18_ACTIVE = _is_nep18_active()
 
 
 class cached_property:
+    """
+    Like @property, but only evaluated upon first invocation.
+    To force re-evaluation of a cached_property, simply delete
+    it with `del`.
+    """
+
     def __init__(self, func):
         self.func = func
 
