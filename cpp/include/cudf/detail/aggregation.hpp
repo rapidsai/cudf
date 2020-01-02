@@ -149,7 +149,7 @@ struct target_type_impl<SourceType, aggregation::QUANTILE> { using type = double
 // MEDIAN is a special case of a QUANTILE  
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::MEDIAN> {
-   using type = target_type_impl<SourceType, aggregation::QUANTILE>; 
+  using type = typename target_type_impl<SourceType, aggregation::QUANTILE>::type; 
 };
 
 /**
