@@ -489,9 +489,9 @@ class StringColumn(column.ColumnBase):
     def nvstrings(self):
         if self._nvstrings is None:
             if self.nullable:
-                mask = self.mask.ptr
+                mask_ptr = self.mask.ptr
             else:
-                mask = None
+                mask_ptr = None
             if self.size == 0:
                 self._nvstrings = nvstrings.to_device([])
             else:
@@ -499,7 +499,7 @@ class StringColumn(column.ColumnBase):
                     self.children[1].data.ptr,
                     self.children[0].data.ptr,
                     self.size,
-                    mask,
+                    mask_ptr,
                     ncount=self.null_count,
                     bdevmem=True,
                 )
