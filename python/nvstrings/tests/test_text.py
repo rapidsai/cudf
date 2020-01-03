@@ -75,11 +75,11 @@ def test_token_count():
     assert got == expected
 
     # test device pointer
-    got = nvtext.token_count(strs, delimiter=["a", "e", "i", "o"])
+    nvtext.token_count(strs, delimiter=["a", "e", "i", "o"])
     got_darray = rmm.device_array(strs.size(), dtype=np.int32)
     nvtext.token_count(strs, devptr=got_darray.device_ctypes_pointer.value)
     expected = [12, 13, 0, 0]
-    assert np.array_equal(got.copy_to_host(), expected)
+    assert np.array_equal(got_darray.copy_to_host(), expected)
 
 
 def test_unique_tokens():
