@@ -98,10 +98,11 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,           3,     4,  3},
                                               { 1,        1,           1,     1,  0});
                                           //  { 0, 3, 6,  1, 4, 5, 9,  2, 8,  -,  -}
-    fixed_width_column_wrapper<R> expect_vals { 3,       18,         24,      4,  7};
+    fixed_width_column_wrapper<R> expect_vals { 3,        18,          24,    4,  7};
 
     auto agg = cudf::experimental::make_sum_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), false);
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
+        false); //< Don't ignore nulls in keys
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys)
@@ -121,6 +122,62 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys)
         true); //< keys_are_sorted
 }
 
+TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
+{
+    using K = TypeParam;
+    using V = int32_t;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
+
+    fixed_width_column_wrapper<K> keys        { 4, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1};
+    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
+
+    fixed_width_column_wrapper<K> expect_keys { 4, 3,       2,          1      };
+    fixed_width_column_wrapper<R> expect_vals { 0, 6,       22,        22      };
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
+        true,
+        {order::DESCENDING}); //< keys_are_sorted
+}
+
+TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
+{
+    using K = TypeParam;
+    using V = int32_t;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
+
+    fixed_width_column_wrapper<K> keys(       { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4},
+                                              { 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
+
+    fixed_width_column_wrapper<K> expect_keys({ 1,       2,          3,       4}, all_valid());
+    fixed_width_column_wrapper<R> expect_vals { 3,       15,         17,      4};
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
+        true /* keys_are_sorted */); 
+}
+
+TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
+{
+    using K = TypeParam;
+    using V = int32_t;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
+
+    fixed_width_column_wrapper<K> keys(       { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4},
+                                              { 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
+
+                                          //  { 1, 1, 1,  -, -,  2, 2,  -,  3, 3,  4}
+    fixed_width_column_wrapper<K> expect_keys({ 1,        2,     2,     3,  3,     4},
+                                              { 1,        0,     1,     0,  1,     1});
+    fixed_width_column_wrapper<R> expect_vals { 3,        7,     15,    7,  17,    4};
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
+        false /* don't ignore null keys */, 
+        true /* keys_are_sorted */); 
+}
 
 } // namespace test
 } // namespace cudf
