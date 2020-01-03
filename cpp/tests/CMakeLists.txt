@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
@@ -183,6 +183,7 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/groupby_keys_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_count_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_sum_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_min_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_mean_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_var_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"

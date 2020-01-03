@@ -21,13 +21,13 @@ namespace experimental {
 namespace groupby {
 namespace detail {
 
-std::unique_ptr<column> group_sum(
+std::unique_ptr<column> group_min(
     column_view const& values,
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
     cudaStream_t stream)
 {
-  return type_dispatcher(values.type(), reduce_functor<aggregation::SUM>{},
+  return type_dispatcher(values.type(), reduce_functor<aggregation::MIN>{},
                          values, group_sizes, group_labels, stream);
 }
 

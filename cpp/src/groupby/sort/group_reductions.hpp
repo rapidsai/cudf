@@ -102,6 +102,12 @@ std::unique_ptr<column> group_sum(
     rmm::device_vector<size_type> const& group_labels,
     cudaStream_t stream = 0);
 
+std::unique_ptr<column> group_min(
+    column_view const& values,
+    column_view const& group_sizes,
+    rmm::device_vector<size_type> const& group_labels,
+    cudaStream_t stream = 0);
+
 std::unique_ptr<column> group_count(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
