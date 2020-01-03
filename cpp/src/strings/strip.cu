@@ -66,6 +66,13 @@ struct strip_fn
     int32_t const* d_offsets{};
     char* d_chars{};
 
+    __device__ bool is_strip_character( char_utf8 chr )
+    {
+        return d_to_strip.empty() ? (chr <= ' ') : // whitespace check
+                    thrust::any_of( thrust::seq, d_to_strip.begin(), d_to_strip.end(),
+                                    [chr] __device__ (char_utf8 c) {return c==chr;});
+    }
+
     __device__ size_type operator()( size_type idx )
     {
         if( d_strings.is_null(idx) )
@@ -78,10 +85,7 @@ struct strip_fn
         {
             for( ; itr != d_str.end(); )
             {
-                char_utf8 chr = *itr++;
-                if( d_to_strip.empty() ? (chr > ' ') : // whitespace
-                    thrust::none_of( thrust::seq, d_to_strip.begin(), d_to_strip.end(),
-                                        [chr] __device__ (char_utf8 c) {return c==chr;}) )
+                if( !is_strip_character(*itr++) )
                     break;
                 left_offset = itr.byte_offset();
             }
@@ -92,10 +96,7 @@ struct strip_fn
             itr = d_str.end();
             for( size_type n=0; n < length; ++n )
             {
-                char_utf8 chr = *(--itr);
-                if( d_to_strip.empty() ? (chr > ' ') : // whitespace
-                    thrust::none_of( thrust::seq, d_to_strip.begin(), d_to_strip.end(),
-                        [chr] __device__ (char_utf8 c) {return c==chr;} ) )
+                if( !is_strip_character(*(--itr)) )
                     break;
                 right_offset = itr.byte_offset();
             }
