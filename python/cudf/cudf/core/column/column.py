@@ -922,19 +922,6 @@ def column_empty(row_count, dtype, masked):
     return build_column(data, dtype, mask=mask, children=children)
 
 
-def build_categorical_column(
-    categories, codes, mask=None, offset=0, ordered=None,
-):
-    dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
-    return build_column(
-        data=None,
-        dtype=dtype,
-        mask=mask,
-        offset=offset,
-        children=(as_column(codes),),
-    )
-
-
 def build_column(
     data, dtype, mask=None, offset=0, children=(), categories=None,
 ):
@@ -983,6 +970,35 @@ def build_column(
         return NumericalColumn(
             data=data, dtype=dtype, mask=mask, offset=offset
         )
+
+
+def build_categorical_column(
+    categories, codes, mask=None, offset=0, ordered=None,
+):
+    """
+    Build a CategoricalColumn
+
+    Parameters
+    ----------
+    categories : Column
+        Column of categories
+    codes : Column
+        Column of codes, the size of the resulting Column will be
+        the size of `codes`
+    mask : Buffer
+        Null mask
+    offset : int
+    ordered : bool
+        Indicates whether the categories are ordered
+    """
+    dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
+    return build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        offset=offset,
+        children=(as_column(codes),),
+    )
 
 
 def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
