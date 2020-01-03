@@ -73,8 +73,7 @@ struct helper {
   {
     if (keys_pre_sorted and
         ignore_null_keys and
-        std::any_of(null_sort_order.begin(), null_sort_order.end(), 
-          [] (null_order order) { return order == null_order::BEFORE;})
+        has_nulls(keys)
        )
     {
       _keys_pre_sorted = false;
