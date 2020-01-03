@@ -1363,7 +1363,7 @@ def _mask_from_cuda_array_interface_desc(obj):
     from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
     from cudf.utils.cudautils import compact_mask_bytes
 
-    desc = mask.__cuda_array_interface__
+    desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
     if mask is not None:
