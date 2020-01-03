@@ -165,6 +165,18 @@ groupby::sort_aggregate(
                                         helper().group_labels(), stream));
     };
 
+    auto store_max = [&] (std::unique_ptr<aggregation> const& agg)
+    {
+      if (cache.has_result(i, agg))
+        return;
+      auto count_agg = make_count_aggregation();
+      store_count(count_agg);
+      column_view count_result = cache.get_result(i, count_agg);
+      cache.add_result(i, agg, 
+                      detail::group_max(get_grouped_values(), count_result, 
+                                        helper().group_labels(), stream));
+    };
+
     auto store_mean = [&] (std::unique_ptr<aggregation> const& agg)
     {
       if (cache.has_result(i, agg))
@@ -251,6 +263,9 @@ groupby::sort_aggregate(
         break;
       case aggregation::MIN:
         store_min(requests[i].aggregations[j]);
+        break;
+      case aggregation::MAX:
+        store_max(requests[i].aggregations[j]);
         break;
       case aggregation::COUNT:
         store_count(requests[i].aggregations[j]);

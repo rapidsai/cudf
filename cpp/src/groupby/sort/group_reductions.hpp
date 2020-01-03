@@ -23,7 +23,8 @@ struct reduce_functor {
   static constexpr bool is_supported(){
     if (cudf::is_numeric<T>())
       return true;
-    else if (cudf::is_timestamp<T>() and k == aggregation::MIN)
+    else if (cudf::is_timestamp<T>() and 
+              (k == aggregation::MIN or k == aggregation::MAX))
       return true;
     else
       return false;
@@ -114,6 +115,12 @@ std::unique_ptr<column> group_sum(
     cudaStream_t stream = 0);
 
 std::unique_ptr<column> group_min(
+    column_view const& values,
+    column_view const& group_sizes,
+    rmm::device_vector<size_type> const& group_labels,
+    cudaStream_t stream = 0);
+
+std::unique_ptr<column> group_max(
     column_view const& values,
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
