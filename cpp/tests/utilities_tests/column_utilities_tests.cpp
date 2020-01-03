@@ -64,18 +64,43 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset) {
       0, [](auto i) { return TypeParam(i); });
 
   auto size = this->size();
+  auto split = 2;
 
   std::vector<TypeParam> data(sequence, sequence + size);
-  std::vector<TypeParam> expected_data(sequence+2, sequence + size);
+  std::vector<TypeParam> expected_data(sequence+split, sequence + size);
   cudf::test::fixed_width_column_wrapper<TypeParam> col(
     data.begin(), data.end());
 
-  std::vector<cudf::size_type> splits{2};
+  std::vector<cudf::size_type> splits{split};
   std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 
   EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
+}
+
+TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  auto split = 2;
+  auto size = this->size();
+  auto valid = cudf::test::make_counting_transform_iterator(0, [&split](auto i) { return (i < (split+1) or i > 10)? false: true;});
+  std::vector<TypeParam> data(sequence, sequence + size);
+  std::vector<TypeParam> expected_data(sequence + split, sequence + size);
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(
+    data.begin(), data.end(), valid);
+
+  std::vector<cudf::size_type> splits{split};
+  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+
+  auto host_data = cudf::test::to_host<TypeParam>(result.back());
+
+  EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
+
+  auto masks = cudf::test::detail::make_null_mask_vector(valid + split, valid + size);
+
+  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
 }
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
