@@ -130,10 +130,10 @@ class NumericalColumn(column.ColumnBase):
                 dev_array = self.astype("int32", **kwargs).data_array_view
             else:
                 dev_array = self.data_array_view
-            dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
+            dev_ptr = self.data.ptr
             null_ptr = None
             if self.nullable:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask_array_view)
+                null_ptr = self.mask.ptr
             kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
@@ -420,10 +420,10 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     # Allocate output
     masked = False
     if np.isscalar(lhs):
-        masked = rhs.mask
+        masked = rhs.nullable
         row_count = len(rhs)
     elif np.isscalar(rhs):
-        masked = lhs.mask
+        masked = lhs.nullable
         row_count = len(lhs)
     else:
         masked = lhs.nullable or rhs.nullable
@@ -511,10 +511,10 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
-    from cudf.core.column import as_column
+    from cudf.core.column import column_empty
 
     columns = [column0] + list(other_columns)
-    result = as_column(rmm.device_array(len(column0), dtype=np.int32))
+    result = column_empty(len(column0), dtype=np.int32, masked=True)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
     libcudf.hash.hash_columns(columns, result, initial_hash_values)
