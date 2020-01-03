@@ -514,7 +514,7 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     from cudf.core.column import column_empty
 
     columns = [column0] + list(other_columns)
-    result = column_empty(len(column0), dtype=np.int32, masked=True)
+    result = column_empty(len(column0), dtype=np.int32, masked=False)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
     libcudf.hash.hash_columns(columns, result, initial_hash_values)
