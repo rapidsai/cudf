@@ -162,11 +162,10 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_array = self.data_array_view
-            dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
+            dev_ptr = self.data.ptr
             null_ptr = None
             if self.nullable:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask_array_view)
+                null_ptr = self.mask.ptr
             kwargs.update(
                 {
                     "count": len(self),
