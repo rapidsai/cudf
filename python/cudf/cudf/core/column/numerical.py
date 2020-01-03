@@ -127,10 +127,12 @@ class NumericalColumn(column.ColumnBase):
 
         if len(self) > 0:
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                dev_array = self.astype("int32", **kwargs).data_array_view
+                self_as_int32 = self.astype("int32", **kwargs)
+                dev_array = self_as_int32.data_array_view
+                dev_ptr = self_as_int32.data.ptr
             else:
                 dev_array = self.data_array_view
-            dev_ptr = self.data.ptr
+                dev_ptr = self.data.ptr
             null_ptr = None
             if self.nullable:
                 null_ptr = self.mask.ptr

@@ -472,9 +472,6 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = None
         self._indices = None
 
-    def __reduce__(self):
-        return (column.as_column, (self.nvstrings))
-
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
 
