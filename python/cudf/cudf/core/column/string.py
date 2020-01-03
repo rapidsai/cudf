@@ -567,11 +567,12 @@ class StringColumn(column.ColumnBase):
             mask_size = utils.calc_chunk_size(
                 len(self.nvstrings), utils.mask_bitsize
             )
-            out_mask_arr = rmm.device_array(mask_size, dtype="int8")
-            out_mask_ptr = libcudf.cudf.get_ctype_ptr(out_mask_arr)
+            out_mask = column.column_empty(
+                mask_size, dtype="int8", masked=False
+            ).data
+            out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            mask = Buffer(out_mask_arr)
-            out_col.mask = mask
+            out_col.mask = out_mask
 
         return out_col.astype(out_dtype)
 
