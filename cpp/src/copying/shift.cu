@@ -19,21 +19,41 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include "cudf/detail/gather.hpp"
-#include "thrust/gather.h"
-#include "thrust/iterator/counting_iterator.h"
-#include "thrust/iterator/transform_iterator.h"
-#include "thrust/transform.h"
+#include <cudf/detail/fill.hpp>
+#include <cudf/detail/gather.hpp>
+#include <__clang_cuda_math_forward_declares.h>
+#include <thrust/gather.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace experimental {
 
-std::unique_ptr<table> shift(table_view const& in,
-    size_type periods,
-    std::vector<scalar> const& fill_value)
+std::unique_ptr<table> shift(table_view const& input,
+                             size_type periods,
+                             std::vector<scalar> const& fill_value,
+                             rmm::mr::device_memory_resource *mr =
+                               rmm::mr::get_default_resource())
 {
-    if (in.num_rows() == 0) {
-        return empty_like(in);
+    if (input.num_rows() == 0) {
+        return empty_like(input);
+    }
+
+    if (input.num_columns() != fill_value.size()) {
+        // cudf::logic_error
+    }
+
+    // verify input columns and fill_values have compatible dtypes.
+    // throw cudf::logic_error if any dtype is mismatched.
+    // possibly aggregate and report all mismatched-dtypes in a single throw.
+
+    if (abs(periods) >= input.num_rows()) {
+        // It may not be useful to process this case specially, since the normal
+        // dispatch implementation could handle this.
+        // allocate_like for each column
+        // fill each collumn
+        // return table of those columns.
     }
 
     throw new cudf::logic_error("not implemented");

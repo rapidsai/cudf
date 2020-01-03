@@ -502,7 +502,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& 
 /**
 * @brief Creates a new table by shifting all values in all columns by an offset.
 *
-* Elements will be deteremined by `output[col][idx] = input[col][idx - offset]`.
+* Elements will be determined by `output[col][idx] = input[col][idx - offset]`.
 * Some elements in the output may be indeterminable from the input. For those
 * elements, the value will be determined by `fill_value`.
 *
@@ -524,9 +524,13 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& 
 * @param input      Table containing columns to be shifted.
 * @param offset     The offset by which to shift the input.
 * @param fill_value Fill value for indeterminable outputs.
+*
+* @throw cudf::logic_error if @p input dtype is not fixed-with.
+* @throw cudf::logic_error if @p fill_value size differs from input num columns.
+* @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
 */
-std::unique_ptr<table> shift(table_view const& in,
-                             size_type periods,
+std::unique_ptr<table> shift(table_view const& input,
+                             size_type offset,
                              std::vector<scalar> const& fill_value);
 
 }  // namespace experimental
