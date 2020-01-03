@@ -42,7 +42,6 @@ def test_series_not(dtype):
     np.testing.assert_equal((~sr).to_array(), ~arr)
 
 
-@pytest.mark.skip
 def test_series_neg():
     arr = np.random.random(100) * 100
     sr = Series(arr)
