@@ -12,6 +12,7 @@ from pandas.api.types import is_dict_like
 
 import rmm
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
