@@ -241,13 +241,11 @@ class ColumnBase(Column):
             data = None
             data_dtype = head.codes.dtype
             children = (
-                as_column(
-                    rmm.device_array(shape=newsize, dtype=head.codes.dtype)
-                ),
+                column_empty(newsize, dtype=head.codes.dtype, masked=True),
             )
         else:
             data_dtype = head.dtype
-            mem = rmm.device_array(shape=newsize, dtype=data_dtype)
+            mem = rmm.DeviceBuffer(size=newsize * data_dtype.itemsize)
             data = Buffer(mem)
             children = None
 
