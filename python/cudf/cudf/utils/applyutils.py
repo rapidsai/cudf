@@ -140,14 +140,17 @@ class ApplyKernelCompilerBase(object):
         # Get input columns
         if isinstance(self.incols, dict):
             inputs = {
-                v: df[k]._column._data_view() for (k, v) in self.incols.items()
+                v: df[k]._column.data_array_view
+                for (k, v) in self.incols.items()
             }
         else:
-            inputs = {k: df[k]._column._data_view() for k in self.incols}
+            inputs = {k: df[k]._column.data_array_view for k in self.incols}
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
-            outputs[k] = column.column_empty(len(df), dt, False)._data_view()
+            outputs[k] = column.column_empty(
+                len(df), dt, False
+            ).data_array_view
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
@@ -165,7 +168,7 @@ class ApplyKernelCompilerBase(object):
         for k in sorted(self.outcols):
             outdf[k] = Series(outputs[k], nan_as_null=False)
             if out_mask is not None:
-                outdf[k] = outdf[k].set_mask(out_mask._data_view())
+                outdf[k] = outdf[k].set_mask(out_mask.data_array_view)
 
         return outdf
 
@@ -207,7 +210,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
         else:
             # *chunks* is an array of chunk leading offset
             chunks = column.as_column(chunks)
-            return chunks._data_view()
+            return chunks.data_array_view
 
 
 def _make_row_wise_kernel(func, argnames, extras):

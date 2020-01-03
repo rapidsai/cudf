@@ -240,7 +240,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=np.float64)
                     if size > 0:
                         group_mean.forall(size)(
-                            sr._column._data_view(), dev_begins, dev_out
+                            sr._column.data_array_view, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -249,7 +249,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(
-                            sr._column._data_view(), dev_begins, dev_out
+                            sr._column.data_array_view, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -258,7 +258,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(
-                            sr._column._data_view(), dev_begins, dev_out
+                            sr._column.data_array_view, dev_begins, dev_out
                         )
                     values[newk] = dev_out
                 else:

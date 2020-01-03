@@ -267,7 +267,7 @@ class CategoricalColumn(column.ColumnBase):
         header["data_frames_count"] = len(data_frames)
         frames.extend(data_frames)
         if self.nullable:
-            mask_frames = [self._mask_view()]
+            mask_frames = [self.mask_array_view]
         else:
             mask_frames = []
         frames.extend(mask_frames)

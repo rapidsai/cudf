@@ -188,7 +188,7 @@ def test_kernel_deep_copy():
 
     # column.to_gpu_array calls to_dense_buffer which returns a copy
     # need to access buffer directly and then call gpu_array
-    add_one[1, len(sr)](sr._column._data_view())
+    add_one[1, len(sr)](sr._column.data_array_view)
     assert not gdf.to_string().split() == cdf.to_string().split()
 
 

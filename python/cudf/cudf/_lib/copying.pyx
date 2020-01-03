@@ -61,7 +61,7 @@ def _normalize_maps(maps, size):
 
     maps = column.as_column(maps).astype("int32")
     maps = maps.binary_operator("mod", np.int32(size))
-    maps = maps._data_view()
+    maps = maps.data_array_view
     return maps
 
 

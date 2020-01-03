@@ -49,7 +49,7 @@ try:
                     len(frame), dtype="int32", masked=False
                 )
                 ptr = out_col.data.ptr
-                frame[col]._column._data_view().hash(devptr=ptr)
+                frame[col]._column.data_array_view.hash(devptr=ptr)
                 frame[col] = out_col
         return frame.hash_columns()
 

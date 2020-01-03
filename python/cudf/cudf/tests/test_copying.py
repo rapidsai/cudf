@@ -43,14 +43,14 @@ def test_gather_cols():
 
 def test_gather_string_col():
     col = column.as_column(["a", "b", "c", "d"])
-    gather_map = column.as_column([0, 2, 3], dtype="int32")._data_view()
+    gather_map = column.as_column([0, 2, 3], dtype="int32").data_array_view
     result = libcudf.copying.gather(col, gather_map)
-    assert result._data_view().to_host() == ["a", "c", "d"]
+    assert result.data_array_view.to_host() == ["a", "c", "d"]
 
     col = column.as_column(["a", "b", None, "d"])
-    gather_map = column.as_column([0, 2, 3], dtype="int32")._data_view()
+    gather_map = column.as_column([0, 2, 3], dtype="int32").data_array_view
     result = libcudf.copying.gather(col, gather_map)
-    assert result._data_view().to_host() == ["a", None, "d"]
+    assert result.data_array_view.to_host() == ["a", None, "d"]
 
 
 @pytest.mark.parametrize(

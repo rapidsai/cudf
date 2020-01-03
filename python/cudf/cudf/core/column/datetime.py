@@ -162,11 +162,11 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_array = self._data_view()
+            dev_array = self.data_array_view
             dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
             null_ptr = None
             if self.nullable:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self._mask_view())
+                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask_array_view)
             kwargs.update(
                 {
                     "count": len(self),
@@ -198,8 +198,8 @@ class DatetimeColumn(column.ColumnBase):
     def to_arrow(self):
         mask = None
         if self.nullable:
-            mask = pa.py_buffer(self._mask_view().copy_to_host())
-        data = pa.py_buffer(self.as_numerical._data_view().copy_to_host())
+            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
+        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,

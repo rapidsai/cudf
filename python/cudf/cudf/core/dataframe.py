@@ -443,7 +443,7 @@ class DataFrame(Table):
                     raise ValueError("Column must have no nulls.")
 
                 boolbits = cudautils.compact_mask_bytes(
-                    other[col]._column._data_view()
+                    other[col]._column.data_array_view
                 )
             else:
                 boolbits = cudautils.make_empty_mask(len(self[col]))

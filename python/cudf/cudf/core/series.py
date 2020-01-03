@@ -163,19 +163,19 @@ class Series(Table):
         # numbautils.PatchedNumbaDeviceArray() is a
         # temporary fix for CuPy < 7.0, numba = 0.46
         return cupy.asarray(
-            numbautils.PatchedNumbaDeviceArray(self._column._data_view())
+            numbautils.PatchedNumbaDeviceArray(self._column.data_array_view)
         )
 
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
             return np.array(
-                self._column._data_view().to_host(), dtype="object"
+                self._column.data_array_view.to_host(), dtype="object"
             )
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
-            return self._column._data_view().copy_to_host()
+            return self._column.data_array_view.copy_to_host()
 
     @classmethod
     def from_arrow(cls, s):
@@ -1428,7 +1428,7 @@ class Series(Table):
         """
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
-        return cudautils.compact_mask_bytes(self._column._data_view())
+        return cudautils.compact_mask_bytes(self._column.data_array_view)
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -2121,7 +2121,7 @@ class Series(Table):
 
         vmin = self.min()
         vmax = self.max()
-        gpuarr = self._column._data_view()
+        gpuarr = self._column.data_array_view
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 

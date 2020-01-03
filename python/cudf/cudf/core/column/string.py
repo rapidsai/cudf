@@ -706,7 +706,7 @@ class StringColumn(column.ColumnBase):
             Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
         )
 
-        col_keys = self[col_inds._data_view()]
+        col_keys = self[col_inds.data_array_view]
 
         return col_keys, col_inds
 

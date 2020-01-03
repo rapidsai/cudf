@@ -124,7 +124,7 @@ class Index(object):
 
     @property
     def gpu_values(self):
-        return self.as_column()._data_view()
+        return self.as_column().data_array_view
 
     def min(self):
         return self.as_column().min()

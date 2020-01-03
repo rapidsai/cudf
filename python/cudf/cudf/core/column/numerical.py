@@ -47,8 +47,8 @@ class NumericalColumn(column.ColumnBase):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self._data_view().dtype):
-                item = self._data_view().dtype.type(item)
+            if np.can_cast(item, self.data_array_view.dtype):
+                item = self.data_array_view.dtype.type(item)
             else:
                 return False
         except Exception:
@@ -127,13 +127,13 @@ class NumericalColumn(column.ColumnBase):
 
         if len(self) > 0:
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                dev_array = self.astype("int32", **kwargs)._data_view()
+                dev_array = self.astype("int32", **kwargs).data_array_view
             else:
-                dev_array = self._data_view()
+                dev_array = self.data_array_view
             dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
             null_ptr = None
             if self.nullable:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self._mask_view())
+                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask_array_view)
             kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
@@ -180,8 +180,8 @@ class NumericalColumn(column.ColumnBase):
     def to_arrow(self):
         mask = None
         if self.nullable:
-            mask = pa.py_buffer(self._mask_view().copy_to_host())
-        data = pa.py_buffer(self._data_view().copy_to_host())
+            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
+        data = pa.py_buffer(self.data_array_view.copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
@@ -245,7 +245,7 @@ class NumericalColumn(column.ColumnBase):
         if np.issubdtype(self.dtype, np.integer):
             return self
 
-        data = Buffer(cudautils.apply_round(self._data_view(), decimals))
+        data = Buffer(cudautils.apply_round(self.data_array_view, decimals))
         return column.build_column(
             data=data, dtype=self.dtype, mask=self.mask,
         )
@@ -346,7 +346,7 @@ class NumericalColumn(column.ColumnBase):
         """
         found = 0
         if len(self):
-            found = cudautils.find_first(self._data_view(), value)
+            found = cudautils.find_first(self.data_array_view, value)
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = 0
@@ -354,7 +354,7 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self)
             else:
                 found = cudautils.find_first(
-                    self._data_view(), value, compare="gt"
+                    self.data_array_view, value, compare="gt"
                 )
                 if found == -1:
                     raise ValueError("value not found")
@@ -370,7 +370,7 @@ class NumericalColumn(column.ColumnBase):
         """
         found = 0
         if len(self):
-            found = cudautils.find_last(self._data_view(), value)
+            found = cudautils.find_last(self.data_array_view, value)
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = -1
@@ -378,7 +378,7 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self) - 1
             else:
                 found = cudautils.find_last(
-                    self._data_view(), value, compare="lt"
+                    self.data_array_view, value, compare="lt"
                 )
                 if found == -1:
                     raise ValueError("value not found")

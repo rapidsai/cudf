@@ -58,7 +58,8 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children,),
         )
 
-    def _data_view(self):
+    @property
+    def data_array_view(self):
         """
         View the data as a device array or nvstrings object
         """
@@ -66,7 +67,7 @@ class ColumnBase(Column):
             return self.nvstrings
 
         if is_categorical_dtype(self.dtype):
-            return self.codes._data_view()
+            return self.codes.data_array_view
         else:
             dtype = self.dtype
 
@@ -76,7 +77,8 @@ class ColumnBase(Column):
         result.gpu_data._obj = self
         return result
 
-    def _mask_view(self):
+    @property
+    def mask_array_view(self):
         """
         View the mask as a device array
         """
@@ -92,11 +94,11 @@ class ColumnBase(Column):
         return self.size
 
     def to_pandas(self):
-        arr = self._data_view()
+        arr = self.data_array_view
         sr = pd.Series(arr.copy_to_host())
 
         if self.nullable:
-            mask_bits = self._mask_view().copy_to_host()
+            mask_bits = self.mask_array_view.copy_to_host()
             mask_bytes = (
                 cudautils.expand_mask_bits(len(self), mask_bits)
                 .copy_to_host()
@@ -288,9 +290,9 @@ class ColumnBase(Column):
         output size could be smaller.
         """
         if fillna:
-            return self.fillna(self.default_na_value())._data_view()
+            return self.fillna(self.default_na_value()).data_array_view
         else:
-            return self.dropna()._data_view()
+            return self.dropna().data_array_view
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -320,7 +322,7 @@ class ColumnBase(Column):
         """The gpu buffer for the null-mask
         """
         if self.nullable:
-            return cudf.Series(self._mask_view())
+            return cudf.Series(self.mask_array_view)
         else:
             raise ValueError("Column has no null mask")
 
@@ -377,11 +379,11 @@ class ColumnBase(Column):
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
-        val = self._data_view()[index]  # this can raise IndexError
+        val = self.data_array_view[index]  # this can raise IndexError
         if isinstance(val, nvstrings.nvstrings):
             val = val.to_host()[0]
         valid = (
-            cudautils.mask_get.py_func(self._mask_view(), index)
+            cudautils.mask_get.py_func(self.mask_array_view, index)
             if self.mask
             else True
         )
@@ -413,15 +415,15 @@ class ColumnBase(Column):
                     raise NotImplementedError(arg)
 
                 # slicing data
-                slice_data = self._data_view()[arg]
+                slice_data = self.data_array_view[arg]
                 # slicing mask
                 data_size = self.size
                 bytemask = cudautils.expand_mask_bits(
-                    data_size, self._mask_view()
+                    data_size, self.mask_array_view
                 )
                 slice_mask = cudautils.compact_mask_bytes(bytemask[arg])
             else:
-                slice_data = self._data_view()[arg]
+                slice_data = self.data_array_view[arg]
                 slice_mask = None
             if self.dtype == "object":
                 return as_column(slice_data)
@@ -531,7 +533,7 @@ class ColumnBase(Column):
         if not self.nullable:
             return self
         out = cudautils.fillna(
-            data=self._data_view(), mask=self._mask_view(), value=value
+            data=self.data_array_view, mask=self.mask_array_view, value=value
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
@@ -565,7 +567,7 @@ class ColumnBase(Column):
         """
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
-        gpu_mask = self._data_view()
+        gpu_mask = self.data_array_view
         cudautils.invert_mask(gpu_mask, gpu_mask)
         return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
@@ -636,7 +638,7 @@ class ColumnBase(Column):
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        return cudautils.compact_mask_bytes(self._data_view())
+        return cudautils.compact_mask_bytes(self.data_array_view)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -696,7 +698,7 @@ class ColumnBase(Column):
         # sort the column
         sortcol, _ = densecol.sort_by_values()
         # find segments
-        sortedvals = sortcol._data_view()
+        sortedvals = sortcol.data_array_view
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
@@ -798,7 +800,7 @@ class ColumnBase(Column):
         output = {
             "shape": (len(self),),
             "typestr": self.dtype.str,
-            "data": (self._data_view().device_ctypes_pointer.value, True),
+            "data": (self.data_array_view.device_ctypes_pointer.value, True),
             "version": 1,
         }
 
@@ -813,7 +815,7 @@ class ColumnBase(Column):
                     "shape": (len(self),),
                     "typestr": "<t1",
                     "data": (
-                        self._mask_view().device_ctypes_pointer.value,
+                        self.mask_array_view.device_ctypes_pointer.value,
                         True,
                     ),
                     "version": 1,
@@ -828,11 +830,11 @@ class ColumnBase(Column):
         frames = []
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        data_frames = [self._data_view()]
+        data_frames = [self.data_array_view]
         frames.extend(data_frames)
 
         if self.nullable:
-            mask_frames = [self._mask_view()]
+            mask_frames = [self.mask_array_view]
         else:
             mask_frames = []
         frames.extend(mask_frames)
@@ -1318,7 +1320,7 @@ def column_applymap(udf, column, out_dtype):
                     # call udf
                     results[i] = core(values[i])
 
-        masks = column._mask_view()
+        masks = column.mask_array_view
         kernel_masked.forall(len(column))(values, masks, results)
     else:
         # For non-masked columns

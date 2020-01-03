@@ -1115,7 +1115,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.array(s1.buffers()[0])[0],
-        gs1._column._mask_view().copy_to_host()[0],
+        gs1._column.mask_array_view.copy_to_host()[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1126,7 +1126,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.array(s2.buffers()[0])[0],
-        gs2._column._mask_view().copy_to_host()[0],
+        gs2._column.mask_array_view.copy_to_host()[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1626,12 +1626,12 @@ def test_gpu_memory_usage_with_boolmask():
     cudaDF = cudaDF[boolmask]
 
     assert (
-        cudaDF.index._values._data_view().device_ctypes_pointer
-        == cudaDF["col0"].index._values._data_view().device_ctypes_pointer
+        cudaDF.index._values.data_array_view.device_ctypes_pointer
+        == cudaDF["col0"].index._values.data_array_view.device_ctypes_pointer
     )
     assert (
-        cudaDF.index._values._data_view().device_ctypes_pointer
-        == cudaDF["col1"].index._values._data_view().device_ctypes_pointer
+        cudaDF.index._values.data_array_view.device_ctypes_pointer
+        == cudaDF["col1"].index._values.data_array_view.device_ctypes_pointer
     )
 
     assert memory_used == query_GPU_memory()
@@ -3634,7 +3634,7 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got._column._data_view().copy_to_host(), expected)
+    assert_eq(got._column.data_array_view.copy_to_host(), expected)
 
 
 def test_constructor_properties():
