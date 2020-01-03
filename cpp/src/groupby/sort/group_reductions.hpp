@@ -18,8 +18,19 @@ namespace detail {
 
 template <aggregation::Kind k>
 struct reduce_functor {
+
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column> >
+  static constexpr bool is_supported(){
+    if (cudf::is_numeric<T>())
+      return true;
+    else if (cudf::is_timestamp<T>() and k == aggregation::MIN)
+      return true;
+    else
+      return false;
+  }
+
+  template <typename T>
+  std::enable_if_t<is_supported<T>(), std::unique_ptr<column> >
   operator()(column_view const& values,
              column_view const& group_sizes,
              rmm::device_vector<cudf::size_type> const& group_labels,
@@ -29,11 +40,11 @@ struct reduce_functor {
     using ResultType = cudf::experimental::detail::target_type_t<T, k>;
     size_type num_groups = group_sizes.size();
 
-    auto result = make_numeric_column(data_type(type_to_id<ResultType>()), 
-                                      num_groups,
-                                      values.nullable() 
-                                        ? mask_state::UNINITIALIZED
-                                        : mask_state::UNALLOCATED);
+    auto result = make_fixed_width_column(data_type(type_to_id<ResultType>()), 
+                                          num_groups,
+                                          values.nullable() 
+                                            ? mask_state::UNINITIALIZED
+                                            : mask_state::UNALLOCATED);
     auto op = OpType{};
 
     if (values.size() == 0) {
@@ -89,7 +100,7 @@ struct reduce_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column> >
+  std::enable_if_t<not is_supported<T>(), std::unique_ptr<column> >
   operator()(Args&&... args) {
     CUDF_FAIL("Only numeric types are supported in variance");
   }
