@@ -2,8 +2,6 @@
 
 from __future__ import division, print_function
 
-import pickle
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa

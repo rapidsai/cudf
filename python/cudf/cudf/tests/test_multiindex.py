@@ -95,7 +95,7 @@ def test_multiindex_series_assignment():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex, StringColumn
+    from cudf.core.index import StringIndex
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)

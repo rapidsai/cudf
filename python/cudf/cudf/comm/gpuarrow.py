@@ -10,7 +10,6 @@ import pyarrow as pa
 
 import rmm
 
-import cudf
 from cudf._lib.arrow._cuda import CudaBuffer
 from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,

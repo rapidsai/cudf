@@ -12,7 +12,6 @@ import pytest
 import rmm
 
 import cudf as gd
-from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand

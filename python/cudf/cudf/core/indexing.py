@@ -192,7 +192,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import Series, DataFrame
-        from cudf.core.column import column, as_column
+        from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf.utils.cudautils import arange
         from cudf import MultiIndex
@@ -291,8 +291,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame, Series
-        from cudf.core.dataframe import Series
-        from cudf.core.column import as_column, column_empty
+        from cudf.core.column import column_empty
         from cudf.core.index import as_index
 
         # Iloc Step 1:

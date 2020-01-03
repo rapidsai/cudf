@@ -148,7 +148,6 @@ class StringMethods(object):
             (same type as caller) of str dtype is returned.
         """
         from cudf.core import Series, Index
-        from cudf.core.column import as_column
 
         if isinstance(others, Series):
             assert others.dtype == np.dtype("object")

@@ -38,8 +38,6 @@ try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
     from cudf.core.column import column, CategoricalColumn, StringColumn
-    import rmm
-    import cudf._lib as libcudf
 
     def _string_safe_hash(df):
         frame = df.copy(deep=False)

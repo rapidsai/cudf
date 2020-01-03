@@ -502,8 +502,6 @@ class ColumnBase(Column):
 
         if is_scalar(value):
             if is_categorical_dtype(self.dtype):
-                from cudf.core.column import CategoricalColumn
-                from cudf.core.buffer import Buffer
                 from cudf.utils.cudautils import fill_value
 
                 data = rmm.device_array(nelem, dtype=self.codes.dtype)
@@ -816,9 +814,6 @@ class ColumnBase(Column):
         _, inds = self.sort_by_values(ascending=ascending)
         return inds
 
-    def sort_by_values(self, ascending):
-        raise NotImplementedError
-
     @property
     def __cuda_array_interface__(self):
         output = {
@@ -1052,7 +1047,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
     * ``Column``
     * ``Series``
     * ``Index``
-    * Scalars (can be broadcasted to a specified size via the `length` parameter)
+    * Scalars (can be broadcasted to a specified `length`)
     * Objects exposing ``__cuda_array_interface__`` (e.g., numba device arrays)
     * Objects exposing ``__array_interface__``(e.g., numpy arrays)
     * pyarrow array

@@ -12,7 +12,7 @@ import rmm
 
 from cudf import concat
 from cudf.core import DataFrame, Series
-from cudf.core.index import StringColumn, StringIndex
+from cudf.core.index import StringIndex
 from cudf.tests.utils import assert_eq
 
 data_list = [

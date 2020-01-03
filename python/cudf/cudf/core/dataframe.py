@@ -40,7 +40,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
-    to_cudf_compatible_scalar,
 )
 
 
@@ -1387,8 +1386,6 @@ class DataFrame(Table):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
-        from cudf import MultiIndex
-
         data = OrderedDict()
 
         if deep:
@@ -2259,8 +2256,6 @@ class DataFrame(Table):
         4    3    13.0
         2    4    14.0    12.0
         """
-        import nvstrings
-
         libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
@@ -2374,7 +2369,6 @@ class DataFrame(Table):
         # We save the original categories for the reconstruction of the
         # final data frame
         categorical_dtypes = {}
-        col_with_categories = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
             if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype

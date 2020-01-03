@@ -2,13 +2,8 @@
 
 import numpy as np
 
-import cudf
-from cudf.core import Buffer, DataFrame, Index, MultiIndex, Series
-from cudf.core.column import (
-    CategoricalColumn,
-    build_categorical_column,
-    build_column,
-)
+from cudf.core import DataFrame, Index, MultiIndex, Series
+from cudf.core.column import build_categorical_column
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
