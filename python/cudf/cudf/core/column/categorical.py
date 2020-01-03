@@ -583,11 +583,9 @@ def pandas_categorical_as_column(categorical, codes=None):
     If ``codes`` is defined, use it instead of ``categorical.codes``
     """
     # TODO fix mutability issue in numba to avoid the .copy()
-    codes = categorical.codes.copy() if codes is None else codes
+    codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
-    # TODO pending pandas to be improved
-    #       https://github.com/pandas-dev/pandas/issues/14711
-    #       https://github.com/pandas-dev/pandas/pull/16015
+
     valid_codes = codes != -1
 
     mask = None
