@@ -1321,7 +1321,7 @@ def column_applymap(udf, column, out_dtype):
     """
     core = njit(udf)
     results = rmm.device_array(shape=len(column), dtype=out_dtype)
-    values = column.to_gpu_array()
+    values = column.data_array_view
     if column.nullable:
         # For masked columns
         @cuda.jit
