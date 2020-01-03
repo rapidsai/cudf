@@ -1113,7 +1113,7 @@ class DataFrame(Table):
             return self.multi_cols
         else:
             name = self._columns_name
-            return pd.Index(self._data, name=name)
+            return pd.Index(self._data.keys(), name=name)
 
     @columns.setter
     def columns(self, columns):
