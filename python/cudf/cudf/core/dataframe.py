@@ -3194,7 +3194,9 @@ class DataFrame(Table):
                     col: data[col].describe(percentiles=percentiles)
                     for col in data.columns
                 },
-                index=Series([]).describe(percentiles=percentiles).index,
+                index=Series(column.column_empty(0, dtype="int32"))
+                .describe(percentiles=percentiles)
+                .index,
             )
 
         if not include and not exclude:
