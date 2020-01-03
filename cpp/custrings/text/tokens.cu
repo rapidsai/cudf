@@ -388,8 +388,10 @@ unsigned int NVText::token_count( NVStrings& strs, NVStrings& delims, unsigned i
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
         [d_strings, d_delimiters, delims_count, d_counts] __device__(unsigned int idx){
             custring_view* d_string = d_strings[idx];
-            if( !d_string || d_string->empty())
+            if( !d_string || d_string->empty()){
+                d_counts[idx] = 0;
                 return;
+            }
             int tokens = 1;
             const char* sptr = d_string->data();
             const char* eptr = sptr + d_string->size();
