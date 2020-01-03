@@ -1442,3 +1442,12 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     expect = pd.read_csv(pdf_df_fname)
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
+
+
+def test_csv_reader_empty_compressed_file(tmpdir):
+    file_name = tmpdir + '/empty.csv.gz'
+
+    with gzip.open(file_name, 'w') as f:
+        f.write(''.encode('utf-8'))
+    
+    assert_eq(len(cudf.read_csv(file_name).columns), 0)
