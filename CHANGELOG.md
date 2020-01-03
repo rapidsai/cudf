@@ -45,6 +45,8 @@
 - PR #3629 Fix hash map test failure
 - PR #3637 Fix sorted set_index operations in dask_cudf
 - PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
+- PR #3668 Fixing CHECK_CUDA debug build issue
+- PR #3684 Fix ends_with logic for matching string case
 
 
 # cuDF 0.11.0 (11 Dec 2019)
