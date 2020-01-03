@@ -43,7 +43,7 @@ struct var_functor {
   {
     using ResultType = experimental::detail::target_type_t<
                         T, experimental::aggregation::Kind::VARIANCE>;
-    const size_type* d_group_labels = group_labels.data().get();
+    size_type const* d_group_labels = group_labels.data().get();
     auto values_view = column_device_view::create(values);
     auto means_view = column_device_view::create(group_means);
     auto group_size_view = column_device_view::create(group_sizes);
