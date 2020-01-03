@@ -45,8 +45,8 @@ class datasource {
    * from
    */
   static std::unique_ptr<datasource> create(
-      RdKafka::Conf *kafka_configs, std::vector<std::string> kafka_topics,
-      int64_t start_offset, int16_t batch_size);
+      RdKafka::Conf* kafka_configs, std::vector<std::string> kafka_topics,
+      int64_t start_offset, int32_t batch_size);
 
   /**
    * @brief Create a source from a file path

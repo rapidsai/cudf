@@ -67,8 +67,8 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         quote_style         quoting
         bool                doublequote
 
-        int64_t             start_offset
-        int16_t             batch_size
+        int64_t             kafka_start_offset
+        int32_t             kafka_batch_size
 
         gdf_time_unit       out_time_unit
 

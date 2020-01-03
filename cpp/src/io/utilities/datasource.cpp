@@ -33,11 +33,11 @@ namespace io {
 
 class kafka_io_source : public datasource {
  public:
-  explicit kafka_io_source(RdKafka::Conf *kafka_configs,
+  explicit kafka_io_source(RdKafka::Conf* kafka_configs,
                            std::vector<std::string> kafka_topics,
-                           int64_t start_offset,
-                           int16_t batch_size)
-      : kafka_conf_(kafka_configs), topics_(kafka_topics), start_offset_(start_offset), batch_size_(batch_size) {
+                           int64_t kafka_start_offset,
+                           int32_t kafka_batch_size)
+      : kafka_conf_(kafka_configs), topics_(kafka_topics), start_offset_(kafka_start_offset), batch_size_(kafka_batch_size) {
     // Kafka 0.9 > requires at least a group.id in the configuration so lets
     // make sure that is present.
     conf_res = kafka_conf_->get("group.id", conf_val);
@@ -290,9 +290,9 @@ class memory_mapped_source : public datasource {
 };
 
 std::unique_ptr<datasource> datasource::create(
-    RdKafka::Conf *global_configs, std::vector<std::string> kafka_topics, 
-    int64_t start_offset, int16_t batch_size) {
-  return std::make_unique<kafka_io_source>(global_configs, kafka_topics, start_offset, batch_size);
+    RdKafka::Conf* kafka_configs, std::vector<std::string> kafka_topics, 
+    int64_t kafka_start_offset, int32_t kafka_batch_size) {
+  return std::make_unique<kafka_io_source>(kafka_configs, kafka_topics, kafka_start_offset, kafka_batch_size);
 }
 
 std::unique_ptr<datasource> datasource::create(const std::string filepath,

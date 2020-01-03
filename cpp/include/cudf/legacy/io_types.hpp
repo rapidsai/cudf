@@ -16,23 +16,19 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
-#include <utility>
 #include <vector>
+#include <memory>
+#include <utility>
 
-#include <cudf/legacy/io_types.h>
-#include <cudf/legacy/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/legacy/table.hpp>
+#include <cudf/legacy/io_types.h>
 
 #include <librdkafka/rdkafkacpp.h>
 
 // Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
+namespace arrow { namespace io {  class RandomAccessFile; } }
 
 namespace cudf {
 
@@ -44,14 +40,22 @@ struct source_info {
   std::string filepath;
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
-  int64_t start_offset;
-  int64_t end_offset;
 
-  explicit source_info(const std::string& topic_name, int64_t start_offset,
-                       int64_t end_offset)
+  // Kafka specific arguments
+  RdKafka::Conf *kafka_conf;
+  std::vector<std::string> kafka_topics;
+  int64_t kafka_start_offset;
+  int32_t kafka_batch_size;
+
+  explicit source_info(RdKafka::Conf *kafka_conf,
+                       std::vector<std::string> kafka_topics,
+                       int64_t kafka_start_offset,
+                       int32_t kafka_batch_size)
       : type(KAFKA_TOPIC),
-        start_offset(start_offset),
-        end_offset(end_offset) {}
+        kafka_conf(kafka_conf),
+        kafka_topics(kafka_topics),
+        kafka_start_offset(kafka_start_offset),
+        kafka_batch_size(kafka_batch_size) {}
   explicit source_info(const std::string& file_path)
       : type(FILE_PATH), filepath(file_path) {}
   explicit source_info(const char* host_buffer, size_t size)
@@ -83,12 +87,12 @@ struct sink_info {
  * @brief Input arguments to the `read_avro` interface
  *---------------------------------------------------------------------------**/
 struct avro_read_arg {
-  source_info source;  ///< Info on source of data
+  source_info source;                       ///< Info on source of data
 
-  std::vector<std::string> columns;  ///< Names of column to read; empty is all
+  std::vector<std::string> columns;         ///< Names of column to read; empty is all
 
-  int skip_rows = -1;  ///< Rows to skip from the start; -1 is none
-  int num_rows = -1;   ///< Rows to read; -1 is all
+  int skip_rows = -1;                       ///< Rows to skip from the start; -1 is none
+  int num_rows = -1;                        ///< Rows to read; -1 is all
 
   explicit avro_read_arg(const source_info& src) : source(src) {}
 };
@@ -125,93 +129,58 @@ struct avro_read_arg {
  *---------------------------------------------------------------------------**/
 struct csv_read_arg {
   enum quote_style {
-    QUOTE_MINIMAL =
-        0,      ///< Only quote those fields which contain special characters
-    QUOTE_ALL,  ///< Quote all fields
-    QUOTE_NONNUMERIC,  ///< Quote all non-numeric fields
-    QUOTE_NONE         ///< Never quote fields; disable quotation when parsing
+    QUOTE_MINIMAL = 0,  ///< Only quote those fields which contain special characters
+    QUOTE_ALL,          ///< Quote all fields
+    QUOTE_NONNUMERIC,   ///< Quote all non-numeric fields
+    QUOTE_NONE          ///< Never quote fields; disable quotation when parsing
   };
 
-  source_info source;  ///< Info on source of data
+  source_info source;                       ///< Info on source of data
 
-  std::string compression =
-      "infer";  ///< One of: `none`, `infer`, `bz2`, `gz`, `xz`, `zip`; default
-                ///< detects from file extension
+  std::string compression = "infer";        ///< One of: `none`, `infer`, `bz2`, `gz`, `xz`, `zip`; default detects from file extension
 
-  char lineterminator = '\n';  ///< Line terminator character
-  char delimiter = ',';        ///< Field separator; also known as `sep`
-  bool windowslinetermination = false;  ///< Treat `\r\n` as line terminator
-  bool delim_whitespace = false;        ///< Use white space as the delimiter;
-                                        ///< overrides the delimiter argument
-  bool skipinitialspace = false;  ///< Skip white space after the delimiter
-  bool skip_blank_lines =
-      true;  ///< Ignore empty lines or parse line values as invalid
+  char lineterminator = '\n';               ///< Line terminator character
+  char delimiter = ',';                     ///< Field separator; also known as `sep`
+  bool windowslinetermination = false;      ///< Treat `\r\n` as line terminator
+  bool delim_whitespace = false;            ///< Use white space as the delimiter; overrides the delimiter argument
+  bool skipinitialspace = false;            ///< Skip white space after the delimiter
+  bool skip_blank_lines = true;             ///< Ignore empty lines or parse line values as invalid
 
-  cudf::size_type nrows = -1;       ///< Rows to read
-  cudf::size_type skiprows = -1;    ///< Rows to skip from the start
-  cudf::size_type skipfooter = -1;  ///< Rows to skip from the end
-  cudf::size_type header = 0;       ///< Header row index, zero-based counting;
-                                    ///< default is no header reading
+  cudf::size_type nrows = -1;                 ///< Rows to read
+  cudf::size_type skiprows = -1;              ///< Rows to skip from the start
+  cudf::size_type skipfooter = -1;            ///< Rows to skip from the end
+  cudf::size_type header = 0;                 ///< Header row index, zero-based counting; default is no header reading
 
-  std::vector<std::string> names;  ///< Names of the columns
-  std::vector<std::string>
-      dtype;  ///< Data types of the column; empty to infer dtypes
+  std::vector<std::string> names;           ///< Names of the columns
+  std::vector<std::string> dtype;           ///< Data types of the column; empty to infer dtypes
 
-  std::vector<int>
-      use_cols_indexes;  ///< Indexes of columns to read; empty is all columns
-  std::vector<std::string>
-      use_cols_names;  ///< Names of column to read; empty is all columns
+  std::vector<int> use_cols_indexes;        ///< Indexes of columns to read; empty is all columns
+  std::vector<std::string> use_cols_names;  ///< Names of column to read; empty is all columns
 
-  std::vector<std::string>
-      true_values;  ///< Values to recognize as boolean True; default empty
-  std::vector<std::string>
-      false_values;  ///< Values to recognize as boolean False; default empty
-  std::vector<std::string>
-      na_values; /**< Values to recognize as invalid; default values:
-                 '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN',
-                 '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
-                 'NaN', 'n/a', 'nan', 'null'. */
-  bool keep_default_na = true;  ///< Keep the default NA values
-  bool na_filter =
-      true;  ///< Detect missing values (empty strings and the values in
-             ///< na_values); disabling can improve performance
+  std::vector<std::string> true_values;     ///< Values to recognize as boolean True; default empty
+  std::vector<std::string> false_values;    ///< Values to recognize as boolean False; default empty
+  std::vector<std::string> na_values;       /**< Values to recognize as invalid; default values: 
+                                            '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
+                                            'NaN', 'n/a', 'nan', 'null'. */
+  bool keep_default_na = true;              ///< Keep the default NA values
+  bool na_filter = true;                    ///< Detect missing values (empty strings and the values in na_values); disabling can improve performance
 
-  std::string prefix;  ///< If there is no header or names, prepend this to the
-                       ///< column ID as the name
-  bool mangle_dupe_cols =
-      true;  ///< If true, duplicate columns get a suffix; if false, data will
-             ///< be overwritten if there are columns with duplicate names
+  std::string prefix;                       ///< If there is no header or names, prepend this to the column ID as the name
+  bool mangle_dupe_cols = true;             ///< If true, duplicate columns get a suffix; if false, data will be overwritten if there are columns with duplicate names
 
-  bool dayfirst = false;  ///< Is the first value in the date formatthe day?
-                          ///< DD/MM  versus MM/DD
+  bool dayfirst = false;                    ///< Is the first value in the date formatthe day?  DD/MM  versus MM/DD
 
-  char thousands =
-      '\0';  ///< Numeric data thousands seperator; cannot match delimiter
-  char decimal = '.';   ///< Decimal point character; cannot match delimiter
-  char comment = '\0';  ///< Comment line start character; rest of the line will
-                        ///< not be parsed
+  char thousands = '\0';                    ///< Numeric data thousands seperator; cannot match delimiter
+  char decimal = '.';                       ///< Decimal point character; cannot match delimiter
+  char comment = '\0';                      ///< Comment line start character; rest of the line will not be parsed
 
-  char quotechar =
-      '\"';  ///< Character used to denote start and end of a quoted item
-  quote_style quoting =
-      QUOTE_MINIMAL;  ///< Treat string fields as quoted item and remove the
-                      ///< first and last quotechar
-  bool doublequote = true;  ///< Whether to interpret two consecutive quotechar
-                            ///< inside a field as a single quotechar
+  char quotechar = '\"';                    ///< Character used to denote start and end of a quoted item
+  quote_style quoting = QUOTE_MINIMAL;      ///< Treat string fields as quoted item and remove the first and last quotechar
+  bool doublequote = true;                  ///< Whether to interpret two consecutive quotechar inside a field as a single quotechar
 
-  size_t byte_range_offset = 0;  ///< Bytes to skip from the start
-  size_t byte_range_size = 0;    ///< Bytes to read; always reads complete rows
-  gdf_time_unit out_time_unit =
-      TIME_UNIT_NONE;  ///< The output resolution for date32, date64, and
-                       ///< timestamp columns
-
-  RdKafka::Conf* kafka_configs;  ///< Defines global Kafka configurations that
-                                 ///< apply across an entire connected session.
-  std::vector<std::string>
-      kafka_topics;  ///< Topics that should be consumed from
-
-  int64_t kafka_start_offset;
-  int16_t kafka_batch_size;
+  size_t byte_range_offset = 0;             ///< Bytes to skip from the start
+  size_t byte_range_size = 0;               ///< Bytes to read; always reads complete rows
+  gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< The output resolution for date32, date64, and timestamp columns
 
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };
@@ -237,17 +206,15 @@ struct csv_read_arg {
  *  `chunksize`             - use `byte_range_xxx` for chunking instead
  *---------------------------------------------------------------------------**/
 struct json_read_arg {
-  source_info source;  ///< Info on source of data
+  source_info source;                       ///< Info on source of data
 
-  std::vector<std::string>
-      dtype;  ///< Data types of the column; empty to infer dtypes
-  std::string compression = "infer";  ///< For on-the-fly decompression, one of
-                                      ///< `none`, `infer`, `gzip`, `zip`
+  std::vector<std::string> dtype;           ///< Data types of the column; empty to infer dtypes
+  std::string compression = "infer";        ///< For on-the-fly decompression, one of `none`, `infer`, `gzip`, `zip`
 
-  bool lines = false;  ///< Read the file as a json object per line
+  bool lines = false;                       ///< Read the file as a json object per line
 
-  size_t byte_range_offset = 0;  ///< Bytes to skip from the start
-  size_t byte_range_size = 0;    ///< Bytes to read; always reads complete rows
+  size_t byte_range_offset = 0;             ///< Bytes to skip from the start
+  size_t byte_range_size = 0;               ///< Bytes to read; always reads complete rows
 
   explicit json_read_arg(const source_info& src) : source(src) {}
 };
@@ -256,16 +223,16 @@ struct json_read_arg {
  * @brief Input arguments to the `read_orc` interface
  *---------------------------------------------------------------------------**/
 struct orc_read_arg {
-  source_info source;  ///< Info on source of data
+  source_info source;                       ///< Info on source of data
 
-  std::vector<std::string> columns;  ///< Names of column to read; empty is all
+  std::vector<std::string> columns;         ///< Names of column to read; empty is all
 
-  int stripe = -1;     ///< Stripe to read; -1 is all
-  int skip_rows = -1;  ///< Rows to skip from the start; -1 is none
-  int num_rows = -1;   ///< Rows to read; -1 is all
+  int stripe = -1;                          ///< Stripe to read; -1 is all
+  int skip_rows = -1;                       ///< Rows to skip from the start; -1 is none
+  int num_rows = -1;                        ///< Rows to read; -1 is all
 
-  bool use_index = false;     ///< Whether to use row index to speed-up reading
-  bool use_np_dtypes = true;  ///< Whether to use numpy-compatible dtypes
+  bool use_index = false;                   ///< Whether to use row index to speed-up reading
+  bool use_np_dtypes = true;                ///< Whether to use numpy-compatible dtypes
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
   bool decimals_as_float = true;            ///< Whether to convert decimals to float64
   int forced_decimals_scale = -1;           /// Optional forced decimal scale; -1 is none
@@ -277,9 +244,9 @@ struct orc_read_arg {
  * @brief Input arguments to the `write_orc` interface
  *---------------------------------------------------------------------------**/
 struct orc_write_arg {
-  sink_info sink;  ///< Info on sink of data
+  sink_info sink;                           ///< Info on sink of data
 
-  cudf::table table;  ///< Table of columns to write
+  cudf::table table;                        ///< Table of columns to write
 
   explicit orc_write_arg(const sink_info& snk) : sink(snk) {}
 };
@@ -288,18 +255,16 @@ struct orc_write_arg {
  * @brief Input arguments to the `read_parquet` interface
  *---------------------------------------------------------------------------**/
 struct parquet_read_arg {
-  source_info source;  ///< Info on source of data
+  source_info source;                       ///< Info on source of data
 
-  std::vector<std::string> columns;  ///< Names of column to read; empty is all
+  std::vector<std::string> columns;         ///< Names of column to read; empty is all
 
-  int row_group = -1;  ///< Row group to read; -1 is all
-  int skip_rows = -1;  ///< Rows to skip from the start; -1 is none
-  int num_rows = -1;   ///< Rows to read; -1 is all
+  int row_group = -1;                       ///< Row group to read; -1 is all
+  int skip_rows = -1;                       ///< Rows to skip from the start; -1 is none
+  int num_rows = -1;                        ///< Rows to read; -1 is all
 
-  bool strings_to_categorical =
-      false;  ///< Whether to store string data as GDF_CATEGORY
-  bool use_pandas_metadata =
-      true;  ///< Whether to always load PANDAS index columns
+  bool strings_to_categorical = false;      ///< Whether to store string data as GDF_CATEGORY
+  bool use_pandas_metadata = true;          ///< Whether to always load PANDAS index columns
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit parquet_read_arg(const source_info& src) : source(src) {}

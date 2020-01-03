@@ -22,16 +22,13 @@
 #include <vector>
 
 #include <cudf/cudf.h>
-#include <librdkafka/rdkafkacpp.h>
-#include <cudf/legacy/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/legacy/table.hpp>
+
+#include <librdkafka/rdkafkacpp.h>
 
 // Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
+namespace arrow { namespace io {  class RandomAccessFile; } }
 
 namespace cudf {
 namespace io {
@@ -182,12 +179,10 @@ namespace csv {
  * @brief Quoting behavior for CSV readers/writers
  *---------------------------------------------------------------------------**/
 enum quote_style {
-  QUOTE_MINIMAL = 0,  ///< Only quote those fields which contain special
-                      ///< characters; enable quotation when parsing.
-  QUOTE_ALL,          ///< Quote all fields; enable quotation when parsing.
-  QUOTE_NONNUMERIC,   ///< Quote all non-numeric fields; enable quotation when
-                      ///< parsing.
-  QUOTE_NONE          ///< Never quote fields; disable quotation when parsing.
+  QUOTE_MINIMAL = 0,                        ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
+  QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
+  QUOTE_NONE                                ///< Never quote fields; disable quotation when parsing.
 };
 
 /**---------------------------------------------------------------------------*
@@ -198,52 +193,50 @@ enum quote_style {
  * for user-friendliness.
  *---------------------------------------------------------------------------**/
 struct reader_options {
-  std::string compression = "none";           ///< Compression type ("none", "infer", "bz2", "gz", "xz","zip"); with the default value, "infer", infers the compression from the file extension.
+  std::string compression = "none";         ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
 
-  char lineterminator = '\n';                 ///< Define the line terminator character; Default is '\n'.
-  char delimiter = ',';                       ///< Define the field separator; Default is ','.
-  char decimal = '.';                         ///< The decimal point character; default is '.'. Should not match the delimiter.
-  char thousands = '\0';                      ///< Single character that separates thousands in numeric data; default is '\0'. Should not match the delimiter.
-  char comment = '\0';                        ///< The character used to denote start of a comment line. The rest of the line will not be parsed. The default is '\0'.
-  bool dayfirst = false;                      ///< Is day the first value in the date format (DD/MM versus MM/DD)? false by default.
-  bool delim_whitespace = false;              ///< Use white space as the delimiter; default is false. This overrides the delimiter argument.
-  bool skipinitialspace = false;              ///< Skip white spaces after the delimiter; default is false.
-  bool skip_blank_lines = true;               ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
+  char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
+  char          delimiter = ',';            ///< Define the field separator; Default is ','.
+  char          decimal = '.';              ///< The decimal point character; default is '.'. Should not match the delimiter.
+  char          thousands = '\0';           ///< Single character that separates thousands in numeric data; default is '\0'. Should not match the delimiter.
+  char          comment = '\0';             ///< The character used to denote start of a comment line. The rest of the line will not be parsed. The default is '\0'.
+  bool          dayfirst = false;           ///< Is day the first value in the date format (DD/MM versus MM/DD)? false by default.
+  bool          delim_whitespace = false;   ///< Use white space as the delimiter; default is false. This overrides the delimiter argument.
+  bool          skipinitialspace = false;   ///< Skip white spaces after the delimiter; default is false.
+  bool          skip_blank_lines = true;    ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
   cudf::size_type header = 0;                 ///< Row of the header data, zero based counting; Default is zero.
 
-  std::vector<std::string> names;             ///< Ordered List of column names; Empty by default.
-  std::vector<std::string> dtype;             ///< Ordered List of data types; Empty by default.
+  std::vector<std::string> names;           ///< Ordered List of column names; Empty by default.
+  std::vector<std::string> dtype;           ///< Ordered List of data types; Empty by default.
 
-  std::vector<int> use_cols_indexes;          ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
-  std::vector<std::string> use_cols_names;    ///< Names of columns to be processed and returned; Empty by default - process all columns.
+  std::vector<int> use_cols_indexes;        ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
+  std::vector<std::string> use_cols_names;  ///< Names of columns to be processed and returned; Empty by default - process all columns.
 
-  std::vector<int> infer_date_indexes;        ///< Column indexes to attempt to infer as date
-  std::vector<std::string> infer_date_names;  ///< Column names to attempt to infer as date
+  std::vector<int> infer_date_indexes;      ///< Column indexes to attempt to infer as date
+  std::vector<std::string> infer_date_names;///< Column names to attempt to infer as date
 
-  std::vector<std::string> true_values;       ///< List of values to recognize as boolean True; Empty by default.
-  std::vector<std::string> false_values;      ///< List of values to recognize as boolean False; Empty by default.
-  std::vector<std::string> na_values;         /**< Array of strings that should be considered as NA. By
-                                              default the following values are interpreted as NA:
-                                              '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN',
-                                              '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
-                                              'NaN', 'n/a', 'nan', 'null'. */
+  std::vector<std::string> true_values;     ///< List of values to recognize as boolean True; Empty by default.
+  std::vector<std::string> false_values;    ///< List of values to recognize as boolean False; Empty by default.
+  std::vector<std::string> na_values;       /**< Array of strings that should be considered as NA. By default the following values are interpreted as NA: 
+                                            '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
+                                            'NaN', 'n/a', 'nan', 'null'. */
 
-  bool keep_default_na = true;                ///< Keep the default NA values; true by default.
-  bool na_filter = true;                      ///< Detect missing values (empty strings and the values in na_values); true by default. Passing false can improve performance.
+  bool          keep_default_na = true;     ///< Keep the default NA values; true by default.
+  bool          na_filter = true;           ///< Detect missing values (empty strings and the values in na_values); true by default. Passing false can improve performance.
 
-  std::string prefix;                         ///< If there is no header or names, prepend this to the column ID as the name; Default value is an empty string.
-  bool mangle_dupe_cols = true;               ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names; true by default.
+  std::string   prefix;                     ///< If there is no header or names, prepend this to the column ID as the name; Default value is an empty string.
+  bool          mangle_dupe_cols = true;    ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names; true by default.
 
-  char quotechar = '\"';                      ///< Define the character used to denote start and end of a quoted item; default is '\"'.
-  quote_style quoting = QUOTE_MINIMAL;        ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
-  bool doublequote = true;                    ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
+  char          quotechar = '\"';           ///< Define the character used to denote start and end of a quoted item; default is '\"'.
+  quote_style   quoting = QUOTE_MINIMAL;    ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
+  bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
 
-  gdf_time_unit out_time_unit = TIME_UNIT_NONE;  ///< Defines the output resolution for date32, date64, and timestamp columns
+  gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< Defines the output resolution for date32, date64, and timestamp columns
 
-  RdKafka::Conf *kafka_configs;               ///< Defines Kafka configurations that apply across an entire connected session.
-  std::vector<std::string> kafka_topics;      ///< The name of the topic that the reader should consume the data from.
-  int64_t start_offset;                      ///< Kafka offset where the consumption should begin, inclusive. Set to 0 for "from beginning"
-  int16_t batch_size;                        ///< Number of messages that should be read from the start_offset forward.
+  RdKafka::Conf *kafka_configs;             ///< Defines Kafka configurations that apply across an entire connected session.
+  std::vector<std::string> kafka_topics;    ///< Vector of topics that should be read from. Note currently only a single topic is supported.
+  int64_t kafka_start_offset;               ///< Kafka offset where the consumption should begin, inclusive. Set to 0 for "from beginning"
+  int32_t kafka_batch_size;                 ///< Number of messages that should be read from the start_offset forward.
 
   reader_options() = default;
 };
@@ -257,15 +250,15 @@ class reader {
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+ /**---------------------------------------------------------------------------*
    * @brief Constructor for a Kafka source.
    *---------------------------------------------------------------------------**/
-  explicit reader(RdKafka::Conf *kafka_configs,
+  explicit reader(RdKafka::Conf* kafka_configs,
                   std::vector<std::string> kafka_topics,
-                  int64_t start_offset,
-                  int16_t batch_size,
+                  int64_t kafka_start_offset,
+                  int32_t kafka_batch_size,
                   reader_options const &options);
-
+                  
   /**---------------------------------------------------------------------------*
    * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
@@ -315,8 +308,7 @@ class reader {
    *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  table read_rows(cudf::size_type num_skip_header,
-                  cudf::size_type num_skip_footer,
+  table read_rows(cudf::size_type num_skip_header, cudf::size_type num_skip_footer,
                   cudf::size_type num_rows = -1);
 
   ~reader();

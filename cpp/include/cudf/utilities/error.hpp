@@ -2,17 +2,17 @@
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#include <stdexcept>
 #include <string>
+#include <stdexcept>
 
 #include <rmm/rmm.h>
 
-#define RMM_TRY(call)                                            \
-  do {                                                           \
-    rmmError_t const status = (call);                            \
-    if (RMM_SUCCESS != status) {                                 \
-      cudf::detail::throw_rmm_error(status, __FILE__, __LINE__); \
-    }                                                            \
+#define RMM_TRY(call)                                             \
+  do {                                                            \
+    rmmError_t const status = (call);                             \
+    if (RMM_SUCCESS != status) {                                  \
+      cudf::detail::throw_rmm_error(status, __FILE__, __LINE__);  \
+    }                                                             \
   } while (0);
 
 #define RMM_TRY_CUDAERROR(x) \
@@ -47,11 +47,11 @@ struct cuda_error : public std::runtime_error {
 #define CUDF_STRINGIFY(x) STRINGIFY_DETAIL(x)
 
 /**---------------------------------------------------------------------------*
- * @brief Macro for checking (pre-)conditions that throws an exception when
+ * @brief Macro for checking (pre-)conditions that throws an exception when  
  * a condition is violated.
- *
+ * 
  * Example usage:
- *
+ * 
  * @code
  * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
  * @endcode
@@ -67,7 +67,6 @@ struct cuda_error : public std::runtime_error {
                    std::string("cuDF failure at: " __FILE__         \
                                ":" CUDF_STRINGIFY(__LINE__) ": ") + \
                    reason)
-
 /**---------------------------------------------------------------------------*
  * @brief Indicates that an erroneous code path has been taken.
  *
@@ -78,7 +77,7 @@ struct cuda_error : public std::runtime_error {
  * ```
  * CUDF_FAIL("Non-arithmetic operation is not supported");
  * ```
- *
+ * 
  * @param[in] reason String literal description of the reason
  *---------------------------------------------------------------------------**/
 #define CUDF_FAIL(reason)                                                  \
@@ -90,7 +89,7 @@ namespace cudf {
 namespace detail {
 
 inline void throw_rmm_error(rmmError_t error, const char* file,
-                            unsigned int line) {
+                             unsigned int line) {
   // todo: throw cuda_error if the error is from cuda
   throw cudf::logic_error(
       std::string{"RMM error encountered at: " + std::string{file} + ":" +

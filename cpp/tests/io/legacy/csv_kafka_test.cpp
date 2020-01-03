@@ -106,43 +106,43 @@ class KafkaTest : public GdfTest {
 // Test behavior when read_csv is invoked with Kafka configurations that include
 // a Kafka broker that either does not exist or offline.
 TEST_F(KafkaTest, NonExistantBroker) {
-  cudf::csv_read_arg args(cudf::source_info{default_test_topic, 0, 10});
+  cudf::csv_read_arg args(cudf::source_info{kafka_conf, topics, 0, 10});
 
   // Manipulate the default configurations to use a non existent hostname
   conf_result = kafka_conf->set("metadata.broker.list",
                                 "deadend-doesnotexist:9092", _errstr);
 
   // Create the cudf arguments that would be passed to libcudf from cython
-  args.kafka_configs = kafka_conf;
-  args.kafka_topics = topics;
+  args.source.kafka_conf = kafka_conf;
+  args.source.kafka_topics = topics;
 
   EXPECT_THROW(cudf::read_csv(args), cudf::logic_error);
 }
 
 // Test reading from an empty Kafka Broker
 TEST_F(KafkaTest, EmptyTopic) {
-  cudf::csv_read_arg args(cudf::source_info{default_test_topic, 0, 10});
+  cudf::csv_read_arg args(cudf::source_info{kafka_conf, topics, 0, 10});
 
   topics.clear();
   topics.push_back("nonexistent-kafka-topic");
 
   // Create the cudf arguments that would be passed to libcudf from cython
-  args.kafka_configs = kafka_conf;
-  args.kafka_topics = topics;
+  args.source.kafka_conf = kafka_conf;
+  args.source.kafka_topics = topics;
 
   EXPECT_THROW(cudf::read_csv(args), cudf::logic_error);
 }
 
 TEST_F(KafkaTest, TopicConnection) {
-  cudf::csv_read_arg args(cudf::source_info{default_test_topic, 0, 10});
+  cudf::csv_read_arg args(cudf::source_info{kafka_conf, topics, 0, 10});
 
   args.names = {"fname", "lname", "age"};
-  args.kafka_configs = kafka_conf;
-  args.kafka_topics = topics;
-  args.kafka_start_offset = 0;
-  args.kafka_batch_size = 5;
+  args.source.kafka_conf = kafka_conf;
+  args.source.kafka_topics = topics;
+  args.source.kafka_start_offset = 0;
+  args.source.kafka_batch_size = 5;
 
   const auto df = cudf::read_csv(args);
   EXPECT_EQ(df.num_columns(), 3);
-  EXPECT_EQ(df.num_rows(), args.kafka_batch_size);
+  EXPECT_EQ(df.num_rows(), args.source.kafka_batch_size);
 }
