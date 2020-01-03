@@ -45,6 +45,16 @@ cudf_to_np_types = {INT8: np.dtype('int8'),
 
 @cython.auto_pickle(True)
 cdef class Column:
+    """
+    A Column stores columnar data in device memory.
+    A Column may be composed of:
+
+    * A *data* Buffer
+    * One or more (optional) *children* Columns
+    * An (optional) *mask* Buffer representing the nullmask
+
+    The *dtype* indicates the Column's element type.
+    """
 
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
         if not isinstance(data, Buffer):
