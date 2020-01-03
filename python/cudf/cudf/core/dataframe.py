@@ -795,15 +795,16 @@ class DataFrame(object):
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
             result_cols = list(self.columns)
+            df_cols = list(result_cols)
             for new_col in other_cols.keys():
                 if new_col not in result_cols:
                     result_cols.append(new_col)
             for col in result_cols:
-                if col in self.columns and col in other.index:
+                if col in df_cols and col in other.index:
                     l_opr = self._cols[col]
                     r_opr = other_cols[col]
                 else:
-                    if col not in self.columns:
+                    if col not in df_cols:
                         r_opr = other_cols[col]
                         l_opr = Series(
                             column_empty(
