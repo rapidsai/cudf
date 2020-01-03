@@ -348,6 +348,7 @@ class ColumnBase(Column):
 
     def view(self, newcls, **kwargs):
         """View the underlying column data differently using a subclass of
+        ColumnBase
 
         Parameters
         ----------
