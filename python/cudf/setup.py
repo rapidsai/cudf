@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import os
+import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
@@ -15,11 +16,8 @@ cython_files = ["cudf/**/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
-    CUDA_HOME = (
-        os.popen('echo "$(dirname $(dirname $(which cuda-gdb)))"')
-        .read()
-        .strip()
-    )
+    CUDA_HOME = os.path.dirname(os.path.dirname(shutil.which("cuda-gdb")))
+
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 
