@@ -195,6 +195,24 @@ def test_set_index_w_series():
         dd.assert_eq(expect, got)
 
 
+def test_set_index_sorted():
+    with dask.config.set(scheduler="single-threaded"):
+        df1 = pd.DataFrame({"val": [4, 3, 2, 1, 0], "id": [0, 1, 3, 5, 7]})
+        ddf1 = dd.from_pandas(df1, npartitions=2)
+
+        gdf1 = cudf.from_pandas(df1)
+        gddf1 = dgd.from_cudf(gdf1, npartitions=2)
+
+        expect = ddf1.set_index("id", sorted=True)
+        got = gddf1.set_index("id", sorted=True)
+
+        dd.assert_eq(expect, got)
+
+        with pytest.raises(ValueError):
+            # Cannot set `sorted=True` for non-sorted column
+            gddf1.set_index("val", sorted=True)
+
+
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
 @pytest.mark.parametrize("index", [None, "myindex"])
 def test_rearrange_by_divisions(nelem, index):
@@ -429,3 +447,13 @@ def test_drop(gdf, gddf):
     gddf2 = gddf.drop(columns="x").compute()
 
     dd.assert_eq(gdf2, gddf2)
+
+
+@pytest.mark.parametrize("deep", [True, False])
+@pytest.mark.parametrize("index", [True, False])
+def test_memory_usage(gdf, gddf, index, deep):
+
+    dd.assert_eq(
+        gdf.memory_usage(deep=deep, index=index),
+        gddf.memory_usage(deep=deep, index=index),
+    )

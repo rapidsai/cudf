@@ -49,6 +49,16 @@ std::unique_ptr<column> transform(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
   cudaStream_t stream = 0);
 
+/**
+ * @copydoc cudf::experimental::nans_to_nulls
+ *
+ * @param stream        CUDA stream on which to execute kernels
+ **/
+std::pair<std::unique_ptr<rmm::device_buffer>, size_type>
+nans_to_nulls(column_view const& input,
+              rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource(),
+              cudaStream_t stream = 0);
+
 } // namespace detail
 } // namespace experimental
 } // namespace cudf

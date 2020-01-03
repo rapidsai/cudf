@@ -73,19 +73,24 @@ class DatetimeColumn(column.ColumnBase):
             array = array.astype(np.dtype("datetime64[s]"))
         assert array.dtype.itemsize == 8
 
-        null = cudf.core.column.column_empty_like(
-            array, masked=True, newsize=1
-        )
-        col = libcudf.replace.replace(
-            as_column(Buffer(array), dtype=array.dtype),
-            as_column(
-                Buffer(np.array([np.datetime64("NaT")], dtype=array.dtype)),
-                dtype=array.dtype,
-            ),
-            null,
-        )
+        mask = None
+        if np.any(np.isnat(array)):
+            null = cudf.core.column.column_empty_like(
+                array, masked=True, newsize=1
+            )
+            col = libcudf.replace.replace(
+                as_column(Buffer(array), dtype=array.dtype),
+                as_column(
+                    Buffer(
+                        np.array([np.datetime64("NaT")], dtype=array.dtype)
+                    ),
+                    dtype=array.dtype,
+                ),
+                null,
+            )
+            mask = col.mask
 
-        return cls(data=Buffer(array), mask=col.mask, dtype=array.dtype,)
+        return cls(data=Buffer(array), mask=mask, dtype=array.dtype,)
 
     @property
     def time_unit(self):

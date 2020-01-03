@@ -388,6 +388,12 @@ class Series(Table):
     def __sizeof__(self):
         return self._column.__sizeof__() + self._index.__sizeof__()
 
+    def memory_usage(self, index=True, deep=False):
+        n = self._column._memory_usage(deep=deep)
+        if index:
+            n += self._index.memory_usage(deep=deep)
+        return n
+
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
         """

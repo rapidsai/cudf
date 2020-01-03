@@ -162,8 +162,10 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     """
     Returns a gdf_scalar* constructed from the numpy scalar ``val``.
     """
-    if not np.isscalar(val):
-        raise TypeError("val must be a NumPy scalar")
+    if (val is not None
+        and not np.isscalar(val)
+    ):
+        raise TypeError("val must be a NumPy scalar or None")
 
     cdef bool is_valid = True
 
@@ -173,11 +175,15 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     if s is NULL:
         raise MemoryError
-
-    set_scalar_value(s, val)
+    if val is None:
+        is_valid = False
+        val = dtype.type(0)
 
     s[0].is_valid = is_valid
     s[0].dtype = gdf_dtype_from_dtype(dtype)
+
+    set_scalar_value(s, val)
+
     return s
 
 

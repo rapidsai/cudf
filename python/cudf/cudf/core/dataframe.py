@@ -541,6 +541,14 @@ class DataFrame(Table):
         index = self._index.__sizeof__()
         return columns + index
 
+    def memory_usage(self, index=True, deep=False):
+        ind = list(self.columns)
+        sizes = [col._memory_usage(deep=deep) for col in self._data.values()]
+        if index:
+            ind.append("Index")
+            sizes.append(self.index.memory_usage(deep=deep))
+        return Series(sizes, index=ind)
+
     def __len__(self):
         """
         Returns the number of rows
@@ -4203,7 +4211,7 @@ def from_pandas(obj):
     """
     Convert certain Pandas objects into the cudf equivalent.
 
-    Supports DataFrame, Series, or MultiIndex.
+    Supports DataFrame, Series, Index, or MultiIndex.
 
     Raises
     ------
@@ -4231,11 +4239,11 @@ def from_pandas(obj):
             obj._start, stop=obj._stop, name=obj.name
         )
     elif isinstance(obj, pd.Index):
-        return cudf.core.index.as_index(obj, name=obj.name)
+        return cudf.Index.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, "
-            "RangeIndex and MultiIndex objects. "
+            "Index, RangeIndex and MultiIndex objects. "
             "Got %s" % type(obj)
         )
 

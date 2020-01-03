@@ -378,6 +378,14 @@ class CategoricalColumn(column.ColumnBase):
         val = self.as_numerical.element_indexing(index)
         return self._decode(val) if val is not None else val
 
+    @property
+    def __cuda_array_interface__(self):
+        raise TypeError(
+            "Categorical does not support `__cuda_array_interface__`."
+            " Please consider using `.codes` or `.categories`"
+            " if you need this functionality."
+        )
+
     def to_pandas(self, index=None):
         codes = self.cat().codes.fillna(-1).to_array()
         categories = self.categories.to_pandas()
@@ -573,6 +581,20 @@ class CategoricalColumn(column.ColumnBase):
                 codes=self.codes,
                 mask=self.mask,
                 ordered=self.dtype.ordered,
+            )
+
+    def __sizeof__(self):
+        return (
+            self.cat().categories.__sizeof__() + self.cat().codes.__sizeof__()
+        )
+
+    def _memory_usage(self, deep=False):
+        if deep:
+            return self.__sizeof__()
+        else:
+            return (
+                self._categories._memory_usage()
+                + self.cat().codes.memory_usage()
             )
 
 

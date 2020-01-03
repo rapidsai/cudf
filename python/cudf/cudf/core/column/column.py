@@ -273,6 +273,29 @@ class ColumnBase(Column):
             dropped_col.mask = None
             return dropped_col
 
+    def _get_mask_as_column(self):
+        data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
+        mask = as_column(data=data)
+        if self.nullable:
+            mask = mask.set_mask(self._mask).fillna(False)
+        return mask
+
+    def _memory_usage(self, **kwargs):
+        return self.__sizeof__()
+
+    def allocate_mask(self, all_valid=True):
+        """Return a new Column with a newly allocated mask buffer.
+        If ``all_valid`` is True, the new mask is set to all valid.
+        If ``all_valid`` is False, the new mask is set to all null.
+        """
+        nelem = len(self)
+        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
+        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
+        if nelem > 0:
+            cudautils.fill_value(mask, 0xFF if all_valid else 0)
+        mask = Buffer(mask)
+        return self.set_mask(mask=mask)
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 
@@ -800,6 +823,7 @@ class ColumnBase(Column):
     def __cuda_array_interface__(self):
         output = {
             "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
             "data": (self.data.ptr, True),
             "version": 1,

@@ -73,16 +73,14 @@ class NumericalColumn(column.ColumnBase):
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
                     out_dtype = np.dtype("float_")
-            return _numeric_column_binop(
-                lhs=self,
-                rhs=rhs,
-                op=binop,
-                out_dtype=out_dtype,
-                reflect=reflect,
-            )
+        elif rhs is None:
+            out_dtype = self.dtype
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
+        return _numeric_column_binop(
+            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect,
+        )
 
     def unary_operator(self, unaryop):
         return _numeric_column_unaryop(self, op=unaryop)
@@ -99,6 +97,8 @@ class NumericalColumn(column.ColumnBase):
         return out_col
 
     def normalize_binop_value(self, other):
+        if other is None:
+            return other
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
@@ -427,6 +427,12 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     elif np.isscalar(rhs):
         masked = lhs.nullable
         row_count = len(lhs)
+    elif rhs is None:
+        masked = True
+        row_count = len(lhs)
+    elif lhs is None:
+        masked = True
+        row_count = len(rhs)
     else:
         masked = lhs.nullable or rhs.nullable
         row_count = len(lhs)
@@ -434,8 +440,8 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
     out = column.column_empty(row_count, dtype=out_dtype, masked=masked)
-    # Call and fix null_count
-    null_count = libcudf.binops.apply_op(lhs, rhs, out, op)
+
+    _ = libcudf.binops.apply_op(lhs, rhs, out, op)
 
     if is_op_comparison:
         out.fillna(op == "ne", inplace=True)
