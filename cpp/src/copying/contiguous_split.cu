@@ -16,6 +16,8 @@ namespace detail {
 
 namespace {
 
+// TODO : this is copy of round_up_safe() that removes the exception throwing so that it can be used in a kernel.
+//        where should this ultimately live?
 template <typename S>
 __device__ inline S round_up_safe_nothrow(S number_to_round, S modulus) {
     auto remainder = number_to_round % modulus;
@@ -24,7 +26,8 @@ __device__ inline S round_up_safe_nothrow(S number_to_round, S modulus) {
     return rounded_up;
 }
 
-// Computes required allocation size of a bitmask
+// TODO : this is copy of bitmask_allocation_size_bytes() that removes the exception throwing so that it can be used in a kernel.
+//        where should this ultimately live?
 __device__ std::size_t bitmask_allocation_size_bytes_nothrow(size_type number_of_bits,
                                           std::size_t padding_boundary) {  
   auto necessary_bytes =
@@ -48,23 +51,20 @@ template <size_type block_size, typename T, bool has_validity>
 __launch_bounds__(block_size)
 __global__
 void copy_in_place_kernel( column_device_view const in,
-                           size_type validity_size,
-                           mutable_column_device_view out,
-                           T val_subtract)
+                           mutable_column_device_view out)
 {
    const size_type tid = threadIdx.x + blockIdx.x * block_size;
    const int warp_id = tid / cudf::experimental::detail::warp_size;
    const size_type warps_per_grid = gridDim.x * block_size / cudf::experimental::detail::warp_size;      
 
    // begin/end indices for the column data
-   size_type begin = 0;      
-   size_type end = in.size();   
-   size_type validity_end = validity_size;   
+   size_type begin = 0;
+   size_type end = in.size();
    // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
    // each warp will process one (32 bit) of the validity mask via
    // __ballot_sync()
-   size_type warp_begin = cudf::word_index(begin);   
-   size_type warp_end = cudf::word_index(end-1);         
+   size_type warp_begin = cudf::word_index(begin);
+   size_type warp_end = cudf::word_index(end-1);      
 
    // lane id within the current warp   
    const int lane_id = threadIdx.x % cudf::experimental::detail::warp_size;
@@ -73,21 +73,20 @@ void copy_in_place_kernel( column_device_view const in,
    size_type warp_cur = warp_begin + warp_id;   
    size_type index = tid;
    while(warp_cur <= warp_end){
-      bool validity_in_range = (index >= begin && index < validity_end);
-      bool valid = true;      
-      if(has_validity){         
-         valid = validity_in_range && in.is_valid(index);
-      }
-
       bool in_range = (index >= begin && index < end);
-      if(in_range){         
-         out.element<T>(index) = in.element<T>(index) - val_subtract;
+
+      bool valid = true;
+      if(has_validity){
+         valid = in_range && in.is_valid(index);
+      }
+      if(in_range){
+         out.element<T>(index) = in.element<T>(index);
       }
       
       // update validity      
-      if(has_validity && validity_in_range){
+      if(has_validity){
          // the final validity mask for this warp 
-         int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && validity_in_range);
+         int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
          // only one guy in the warp needs to update the mask and count
          if(lane_id == 0){            
             out.set_mask_word(warp_cur, warp_mask);            
@@ -100,17 +99,137 @@ void copy_in_place_kernel( column_device_view const in,
    }
 }
 
+/**
+ * @brief Copies contents of one string column to another.  Copies validity if present
+ * but does not compute null count.  
+ * 
+ * This purpose of this kernel as a standlone is to reduce the # of
+ * kernel calls for copying a string column from 2 to 1, since # of kernel calls is the
+ * dominant factor in large scale contiguous_split() calls.  To do this, the kernel is
+ * invoked with using max(num_chars, num_offsets) threads and then doing seperate 
+ * bounds checking on offset, chars and validity indices.
+ * 
+ * Also handles the case unique to contiguous_split() where
+ * the offsets in the output column need to be shifted by the position of the split. This
+ * happens because the output columns from contiguous_split() are full copies of the 
+ * source columns.  So if we had a 4 element string column of the form  
+ * 
+ * chars   { "a", "b", "c", "d" }
+ * offsets {  0,   1,   2,   3,   4}
+ * 
+ * and we did a traditional split() on it in the middle, we would get two output columns 
+ * pointing to the same in-memory chars and offsets data.
+ * 
+ * chars   { "a", "b" }
+ * offsets {  0,   1,   2}
+ * chars   { "c", "d" }
+ * offsets {  2,   3,   4}
+ * 
+ * However in the case of a contiguous_split, the two new columns would both start from a 
+ * unique base address, so the offsets have to be shifted down based on the split index
+ * 
+ * (shifted by 0) 
+ * chars   { "a", "b" }
+ * offsets {  0,   1,   2}
+ * (shifted by 2)
+ * chars   { "c", "d" }
+ * offsets {  0,   1,   2}
+ *
+ *  
+ * @param in num_strings number of strings (rows) in the column
+ * @param in offsets_in pointer to incoming offsets to be copied
+ * @param out offsets_out pointer to output offsets
+ * @param in validity_in_offset offset into validity buffer to add to element indices
+ * @param in validity_in pointer to incoming validity vector to be copied
+ * @param out validity_out pointer to output validity vector
+ * @param in offset_shift value to shift copied offsets down by
+ * @param in num_chars # of chars to copy
+ * @param in chars_in input chars to be copied
+ * @param out chars_out output chars to be copied.
+ */
+template <size_type block_size, bool has_validity>
+__launch_bounds__(block_size)
+__global__
+void copy_in_place_strings_kernel(size_type                        num_strings,
+                                  size_type const* __restrict__    offsets_in,
+                                  size_type* __restrict__          offsets_out,
+                                  size_type                        validity_in_offset,
+                                  bitmask_type const* __restrict__ validity_in,
+                                  bitmask_type* __restrict__       validity_out,
+
+                                  size_type                        offset_shift,
+
+                                  size_type                        num_chars,
+                                  char const* __restrict__         chars_in,
+                                  char* __restrict__               chars_out)
+{   
+   const size_type tid = threadIdx.x + blockIdx.x * block_size;
+   const int warp_id = tid / cudf::experimental::detail::warp_size;
+   const size_type warps_per_grid = gridDim.x * block_size / cudf::experimental::detail::warp_size;   
+   
+   // how many warps we'll be processing. with strings, the chars and offsets
+   // lengths may be different.  so we'll just march the worst case.
+   size_type warp_begin = cudf::word_index(0);
+   size_type warp_end = cudf::word_index(std::max(num_chars, num_strings+1)-1);
+
+   // end indices for chars   
+   size_type chars_end = num_chars;
+   // end indices for offsets   
+   size_type offsets_end = num_strings+1;
+   // end indices for validity and the last warp that actually should
+   // be updated
+   size_type validity_end = num_strings;
+   size_type validity_warp_end = cudf::word_index(num_strings-1);  
+
+   // lane id within the current warp   
+   const int lane_id = threadIdx.x % cudf::experimental::detail::warp_size;
+
+   size_type warp_cur = warp_begin + warp_id;
+   size_type index = tid;
+   while(warp_cur <= warp_end){      
+      if(index < chars_end){
+         chars_out[index] = chars_in[index];
+      }
+      
+      if(index < offsets_end){
+         // each output column starts at a new base pointer. so we have to
+         // shift every offset down by the point (in chars) at which it was split.
+         offsets_out[index] = offsets_in[index] - offset_shift;
+      }
+
+      // if we're still in range of validity at all
+      if(has_validity && warp_cur <= validity_warp_end){
+         bool valid = (index < validity_end) && bit_is_set(validity_in, validity_in_offset + index);
+      
+         // the final validity mask for this warp 
+         int warp_mask = __ballot_sync(0xFFFF'FFFF, valid);
+         // only one guy in the warp needs to update the mask and count
+         if(lane_id == 0){            
+            validity_out[warp_cur] = warp_mask;
+         }
+      }            
+
+      // next grid
+      warp_cur += warps_per_grid;
+      index += block_size * gridDim.x;
+   }    
+}
+
 // align all column size allocations to this boundary so that all output column buffers
 // start at that alignment.
 static constexpr size_t split_align = 64;
 
+/**
+ * @brief Information about the split for a given column. Bundled together
+ *        into a struct because tuples were getting pretty unreadable. 
+ */
 struct column_split_info {
-   size_t   data_size;     // size of the data
-   size_t   validity_size; // validity vector size
+   size_type   data_buf_size;    // size of the data (including padding)
+   size_type   validity_buf_size;// validity vector size (including padding)
    
-   size_t   offsets_size;  // (strings only) size of offset column
-   size_t   chars_size;    // (strings only) # of chars in the column
-   size_t   chars_offset;  // (strings only) offset from head of chars data
+   size_type   offsets_buf_size; // (strings only) size of offset column (including padding)
+   size_type   num_chars;        // (strings only) # of chars in the column
+   size_type   chars_offset;     // (strings only) offset from head of chars data
 };
 
 /**
@@ -122,16 +241,16 @@ struct column_buffer_size_functor {
    template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
    size_t operator()(column_view const& c, column_split_info &split_info)
    {
-      // this has already been precomputed in an earlier step      
-      return split_info.data_size + split_info.validity_size + split_info.offsets_size;
+      // this has already been precomputed in an earlier step. return the sum.
+      return split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size;
    }
 
    template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
    size_t operator()(column_view const& c, column_split_info &split_info)
    {      
-      split_info.data_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);  
-      split_info.validity_size = (c.nullable() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
-      return split_info.data_size + split_info.validity_size;
+      split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);  
+      split_info.validity_buf_size = (c.nullable() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
+      return split_info.data_buf_size + split_info.validity_buf_size;
    }
 };
 
@@ -144,78 +263,74 @@ struct column_buffer_size_functor {
 struct column_copy_functor {
    template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
    void operator()(column_view const& in, column_split_info const& split_info, char*& dst, std::vector<column_view>& out_cols)
-   {            
-      strings_column_view strings_c(in);      
-
+   {       
       // outgoing pointers
       char* chars_buf = dst;
-      bitmask_type* validity_buf = split_info.validity_size == 0 ? nullptr : reinterpret_cast<bitmask_type*>(dst + split_info.data_size);
-      char* offsets_buf = dst + split_info.data_size + split_info.validity_size;
+      bitmask_type* validity_buf = split_info.validity_buf_size == 0 ? nullptr : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
+      size_type* offsets_buf = reinterpret_cast<size_type*>(dst + split_info.data_buf_size + split_info.validity_buf_size);
 
       // increment working buffer
-      dst += (split_info.data_size + split_info.validity_size + split_info.offsets_size);
+      dst += (split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size);
 
-      // 2 kernel calls. 1 to copy offsets and validity, and another to copy chars            
-      
-      // copy offsets and validity
-      column_view offsets_col = strings_c.offsets();
-      mutable_column_view temp_offsets_and_validity{
-                              offsets_col.type(), offsets_col.size(), offsets_buf,
-                              validity_buf, validity_buf == nullptr ? UNKNOWN_NULL_COUNT : 0,
-                              0 };
-      {         
-         // contruct a column which wraps the validity vector and the offsets from the child column. 
-         // this is weird but it removes an extra kernel call. however, since the length of the offsets column
-         // is always 1 greater than the # of strings, the validity vector will be short by 1. the kernel will have to
-         // compensate for that. 
-         CUDF_EXPECTS(in.size() == offsets_col.size()-1, "Expected offsets column to be the same size as parent");
-         CUDF_EXPECTS(in.offset() == offsets_col.offset(), "Expected offsets column offset to be the same as parent");
-         CUDF_EXPECTS(offsets_col.type() == cudf::data_type(INT32), "Expected offsets column type to be int32");
-         column_view in_offsets_and_validity{
-                                 offsets_col.type(), offsets_col.size(), offsets_col.head<int32_t>(),
-                                 in.null_mask(), in.null_mask() == nullptr ? UNKNOWN_NULL_COUNT : 0,
-                                 in.offset()};
-         
-         cudf::size_type num_els = cudf::util::round_up_safe(strings_c.offsets().size(), cudf::experimental::detail::warp_size);
-         constexpr int block_size = 256;
-         cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};         
-         if(in.nullable()){
-            copy_in_place_kernel<block_size, size_type, true><<<grid.num_blocks, block_size, 0, 0>>>(
-                              *column_device_view::create(in_offsets_and_validity), 
-                              in.size(),  // validity vector length
-                              *mutable_column_device_view::create(temp_offsets_and_validity), split_info.chars_offset);
-         } else {
-            copy_in_place_kernel<block_size, size_type, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                              *column_device_view::create(in_offsets_and_validity),
-                              in.size(),  // validity vector length
-                              *mutable_column_device_view::create(temp_offsets_and_validity), split_info.chars_offset);
-         }
-      }
+      // offsets column.
+      strings_column_view strings_c(in);
+      column_view in_offsets = strings_c.offsets();
+      cudf::size_type num_els = cudf::util::round_up_safe(std::max(split_info.num_chars, in_offsets.size()), cudf::experimental::detail::warp_size);
 
       // get the chars column directly instead of calling .chars(), since .chars() will end up
       // doing gpu work we specifically want to avoid.
-      column_view chars_col = in.child(strings_column_view::chars_column_index);
+      column_view in_chars = in.child(strings_column_view::chars_column_index);
 
-      // copy chars
-      mutable_column_view out_chars{chars_col.type(), static_cast<size_type>(split_info.chars_size), chars_buf};      
-      {         
-         CUDF_EXPECTS(!chars_col.nullable(), "Expected input chars column to not be nullable");
-         CUDF_EXPECTS(chars_col.offset() == 0, "Expected input chars column to have an offset of 0");
-         column_view in_chars{ chars_col.type(), static_cast<size_type>(split_info.chars_size), chars_col.data<char>() + split_info.chars_offset };
-                                 
-         cudf::size_type num_els = cudf::util::round_up_safe(static_cast<size_type>(split_info.chars_size), cudf::experimental::detail::warp_size);
-         constexpr int block_size = 256;
-         cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};         
-         copy_in_place_kernel<block_size, char, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_chars),
-                           split_info.chars_size,
-                           *mutable_column_device_view::create(out_chars), 0);
+      // no work to do. I -think- this cannot happen as a string column with 0 strings in it will still have
+      // a single terminating offset. leaving this in just in case
+      if(num_els == 0){    
+         column_view out_offsets{in_offsets.type(), 0, nullptr};
+         column_view out_chars{in_chars.type(), 0, nullptr};         
+         out_cols.push_back(column_view(  in.type(), 0, nullptr,
+                                          nullptr, 0, 0,
+                                          { out_offsets, out_chars }));
+         return;
       }
-
-      // construct output string column_view.  offsets and validity have been glued together so
-      // we have to rearrange things a bit.      
-      column_view out_offsets{strings_c.offsets().type(), strings_c.offsets().size(), offsets_buf};
       
+      // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
+      // this exists in the kernel brief.    
+      constexpr int block_size = 256;
+      cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};            
+      if(in.nullable()){
+         copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
+                           in.size(),                                            // num_rows
+                           in_offsets.data<size_type>(),                         // offsets_in
+                           offsets_buf,                                          // offsets_out
+                           in.offset(),                                          // validity_in_offset
+                           in.null_mask(),                                       // validity_in
+                           validity_buf,                                         // validity_out
+
+                           split_info.chars_offset,                              // offset_shift
+
+                           split_info.num_chars,                                 // num_chars
+                           in_chars.head<char>() + split_info.chars_offset,      // chars_in
+                           chars_buf);                                                      
+      } else {                                       
+         copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
+                           in.size(),                                            // num_rows
+                           in_offsets.data<size_type>(),                         // offsets_in
+                           offsets_buf,                                          // offsets_out
+                           0,                                                    // validity_in_offset
+                           nullptr,                                              // validity_in
+                           nullptr,                                              // validity_out
+
+                           split_info.chars_offset,                              // offset_shift
+
+                           split_info.num_chars,                                 // num_chars
+                           in_chars.head<char>() + split_info.chars_offset,      // chars_in
+                           chars_buf);                                                      
+      }       
+
+      // output child columns      
+      column_view out_offsets{in_offsets.type(), in_offsets.size(), offsets_buf};
+      column_view out_chars{in_chars.type(), static_cast<size_type>(split_info.num_chars), chars_buf};
+
+      // result
       out_cols.push_back(column_view(in.type(), in.size(), nullptr,
                                      validity_buf, UNKNOWN_NULL_COUNT, 0,
                                      { out_offsets, out_chars }));
@@ -226,10 +341,16 @@ struct column_copy_functor {
    {     
       // outgoing pointers
       char* data = dst;
-      bitmask_type* validity = split_info.validity_size == 0 ? nullptr : reinterpret_cast<bitmask_type*>(dst + split_info.data_size);
+      bitmask_type* validity = split_info.validity_buf_size == 0 ? nullptr : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
 
       // increment working buffer
-      dst += (split_info.data_size + split_info.validity_size);
+      dst += (split_info.data_buf_size + split_info.validity_buf_size);
+
+      // no work to do
+      if(in.size() == 0){
+         out_cols.push_back(column_view{in.type(), 0, nullptr});
+         return;
+      }
 
       // custom copy kernel (which should probably just be an in-place copy() function in cudf.
       cudf::size_type num_els = cudf::util::round_up_safe(in.size(), cudf::experimental::detail::warp_size);
@@ -253,14 +374,12 @@ struct column_copy_functor {
                                validity, validity == nullptr ? UNKNOWN_NULL_COUNT : 0 };      
       if(in.nullable()){               
          copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped), 
-                           in.size(),
-                           *mutable_column_device_view::create(mcv), 0);         
+                           *column_device_view::create(in_wrapped),                            
+                           *mutable_column_device_view::create(mcv));         
       } else {
          copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped), 
-                           in.size(),
-                           *mutable_column_device_view::create(mcv), 0);
+                           *column_device_view::create(in_wrapped),                            
+                           *mutable_column_device_view::create(mcv));
       }
       mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);                 
 
@@ -277,7 +396,7 @@ struct column_copy_functor {
  * is entirely contained in single block of memory.
  */
 contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)      
-{            
+{   
    // preprocess column sizes for string columns.  the idea here is this:
    // - determining string lengths involves reaching into device memory to look at offsets, which is slow.
    // - contiguous_split() is typically used in situations with very large numbers of output columns, exaggerating
@@ -306,7 +425,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device
    });   
    thrust::device_vector<thrust::pair<thrust::pair<size_type, bool>, cudf::column_device_view>> device_offset_columns = offset_columns;   
      
-   // compute column sizes for all string columns   
+   // compute column split info for all string columns   
    auto *sizes_p = device_split_info.data().get();   
    thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
       [sizes_p] __device__ (auto column_info){
@@ -315,18 +434,18 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device
          cudf::column_device_view   col = column_info.second;
          size_type                  num_elements = col.size()-1;
 
-         size_t align = split_align;
-
          auto num_chars = col.data<int32_t>()[num_elements] - col.data<int32_t>()[0];         
-         sizes_p[col_index].data_size = round_up_safe_nothrow(static_cast<size_t>(num_chars), align);         
+         sizes_p[col_index].data_buf_size = round_up_safe_nothrow(static_cast<size_t>(num_chars), split_align);         
          // can't use cudf::bitmask_allocation_size_bytes() because it throws
-         sizes_p[col_index].validity_size = include_validity ? bitmask_allocation_size_bytes_nothrow(num_elements, align) : 0;                  
+         sizes_p[col_index].validity_buf_size = include_validity ? bitmask_allocation_size_bytes_nothrow(num_elements, split_align) : 0;                  
          // can't use cudf::util::round_up_safe() because it throws
-         sizes_p[col_index].offsets_size = round_up_safe_nothrow(col.size() * sizeof(size_type), align);
-         sizes_p[col_index].chars_size = num_chars;
+         sizes_p[col_index].offsets_buf_size = round_up_safe_nothrow(col.size() * sizeof(size_type), split_align);
+         sizes_p[col_index].num_chars = num_chars;
          sizes_p[col_index].chars_offset = col.data<int32_t>()[0];
       }
    );
+
+   // TODO : refactor everything above this into a function like 'preprocess_string_split_info'
    
    // copy sizes back from gpu. entries from non-string columns are uninitialized at this point.
    thrust::host_vector<column_split_info> split_info = device_split_info;  
