@@ -42,14 +42,13 @@ column_view strings_column_view::parent() const
 column_view strings_column_view::offsets() const
 {
     CUDF_EXPECTS( num_children()>0, "strings column has no children" );
-    return experimental::detail::slice( child(offsets_column_index), offset(), offset() + size()+1 );
+    return child(offsets_column_index);
 }
 
 column_view strings_column_view::chars() const
 {
-    auto offsets_column = column_device_view::create(offsets());
-    auto d_offsets = thrust::device_pointer_cast(offsets_column->data<int32_t>());
-    return experimental::detail::slice( child(chars_column_index), d_offsets[0], d_offsets[size()] );
+    CUDF_EXPECTS( num_children()>0, "strings column has no children" );
+    return child(chars_column_index);
 }
 
 size_type strings_column_view::chars_size() const noexcept
@@ -79,8 +78,6 @@ void print( strings_column_view strings,
     auto execpol = rmm::exec_policy(0);
     auto strings_column = column_device_view::create(strings.parent());
     auto d_column = *strings_column;
-    auto d_offsets = strings.offsets().data<int32_t>();
-    auto d_strings = strings.chars().data<char>();
 
     // create output strings offsets
     rmm::device_vector<size_t> output_offsets(count+1,0);
@@ -113,15 +110,14 @@ void print( strings_column_view strings,
     // copy strings into output buffer
     thrust::for_each_n(execpol->on(0),
         thrust::make_counting_iterator<size_type>(0), count,
-        [d_strings, start, d_offsets, d_output_offsets, d_buffer] __device__(size_type idx) {
-            size_t output_offset = d_output_offsets[idx];
-            size_t length = d_output_offsets[idx+1] - output_offset; // bytes
-            if( length ) // this is only 0 for nulls
-            {
-                idx += start;
-                size_type offset = d_offsets[idx];
-                memcpy(d_buffer + output_offset, d_strings + offset, length-1 );
-            }
+        [d_column, max_width, start, d_output_offsets, d_buffer] __device__(size_type idx) {
+            if( d_column.is_null(start+idx) )
+                return;
+            string_view d_str = d_column.element<string_view>(start+idx);
+            size_type bytes = d_str.size_bytes();
+            if( (max_width > 0) && (d_str.length() > max_width) )
+                bytes = d_str.byte_offset(max_width);
+            memcpy( d_buffer + d_output_offsets[idx], d_str.data(), bytes );
         });
 
     // copy output buffer to host
@@ -152,13 +148,17 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
     std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> results;
 
     size_type count = strings.size();
-    auto d_offsets = strings.offsets().data<size_type>();
+    auto d_offsets = strings.offsets().data<size_type>() + strings.offset();
+    auto first_offset = thrust::device_pointer_cast(d_offsets)[0];
     results.second = rmm::device_vector<size_type>(count+1);
-    CUDA_TRY(cudaMemcpyAsync( results.second.data().get(), d_offsets, (count+1)*sizeof(size_type),
-                              cudaMemcpyDeviceToHost, stream));
-
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
-    auto d_chars = strings.chars().data<char>();
+    // normalize the offset values for the column offset
+    thrust::transform( rmm::exec_policy(stream)->on(stream), 
+                       d_offsets, d_offsets+count+1,
+                       results.second.data().get(),
+                       [first_offset] __device__ (int32_t offset) { return offset - first_offset; } );
+    // copy the chars column data
+    auto bytes = thrust::device_pointer_cast(d_offsets)[count] - first_offset;
+    auto d_chars = strings.chars().data<char>() + first_offset;
     results.first = rmm::device_vector<char>(bytes);
     CUDA_TRY(cudaMemcpyAsync( results.first.data().get(), d_chars, bytes,
                               cudaMemcpyDeviceToHost, stream));
