@@ -179,7 +179,7 @@ class DatetimeColumn(column.ColumnBase):
             ](dev_ptr, **kwargs)
             return as_column(data)
         else:
-            return as_column([], dtype="object")
+            return column.column_empty(0, dtype="object", masked=False)
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
