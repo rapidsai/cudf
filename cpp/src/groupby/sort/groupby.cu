@@ -122,7 +122,8 @@ groupby::sort_aggregate(
 
       cache.add_result(i, agg, 
                       detail::group_sum(get_grouped_values(), count_result, 
-                                        this->helper().group_labels(), stream));
+                                        this->helper().group_labels(),
+                                        mr, stream));
     };
 
     auto store_min =
@@ -138,7 +139,8 @@ groupby::sort_aggregate(
 
       cache.add_result(i, agg, 
                       detail::group_min(get_grouped_values(), count_result, 
-                                        this->helper().group_labels(), stream));
+                                        this->helper().group_labels(),
+                                        mr, stream));
     };
 
     auto store_max =
@@ -154,7 +156,8 @@ groupby::sort_aggregate(
 
       cache.add_result(i, agg, 
                       detail::group_max(get_grouped_values(), count_result, 
-                                        this->helper().group_labels(), stream));
+                                        this->helper().group_labels(),
+                                        mr, stream));
     };
 
     auto store_mean =

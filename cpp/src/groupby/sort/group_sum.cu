@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "group_reductions.hpp"
+#include "group_single_pass_reduction_util.cuh"
 
 namespace cudf {
 namespace experimental {
@@ -25,10 +25,11 @@ std::unique_ptr<column> group_sum(
     column_view const& values,
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
+    rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
   return type_dispatcher(values.type(), reduce_functor<aggregation::SUM>{},
-                         values, group_sizes, group_labels, stream);
+                         values, group_sizes, group_labels, mr, stream);
 }
 
 }  // namespace detail

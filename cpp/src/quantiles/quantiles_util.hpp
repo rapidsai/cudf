@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/release_assert.cuh>
 
 namespace cudf {
 namespace experimental {
