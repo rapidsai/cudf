@@ -1105,16 +1105,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
-        data = _data_from_cuda_array_interface_desc(desc)
-        mask = _mask_from_cuda_array_interface_desc(desc)
+        data = _data_from_cuda_array_interface_desc(arbitrary)
+        mask = _mask_from_cuda_array_interface_desc(arbitrary)
         dtype = np.dtype(desc["typestr"])
-        nelem = desc["shape"][0]
         col = build_column(data, dtype=dtype, mask=mask)
-
-        # Keep a reference to `arbitrary` with the underlying
-        # Buffer, so that the memory isn't freed out
-        # from under us
-        col.data._obj = arbitrary
         return col
 
     elif isinstance(arbitrary, np.ndarray):
@@ -1351,7 +1345,8 @@ def column_applymap(udf, column, out_dtype):
     return as_column(results)
 
 
-def _data_from_cuda_array_interface_desc(desc):
+def _data_from_cuda_array_interface_desc(obj):
+    desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
     nelem = desc["shape"][0]
     dtype = np.dtype(desc["typestr"])
@@ -1360,14 +1355,15 @@ def _data_from_cuda_array_interface_desc(desc):
     data = rmm.device_array_from_ptr(
         ptr, nelem=nelem, dtype=dtype, finalizer=None
     )
-    data = Buffer(data)
+    data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
     return data
 
 
-def _mask_from_cuda_array_interface_desc(desc):
+def _mask_from_cuda_array_interface_desc(obj):
     from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
     from cudf.utils.cudautils import compact_mask_bytes
 
+    desc = mask.__cuda_array_interface__
     mask = desc.get("mask", None)
 
     if mask is not None:
@@ -1377,14 +1373,10 @@ def _mask_from_cuda_array_interface_desc(desc):
         typestr = desc["typestr"]
         typecode = typestr[1]
         if typecode == "t":
-            mask = rmm.device_array_from_ptr(
-                ptr,
-                nelem=calc_chunk_size(nelem, mask_bitsize),
-                dtype=mask_dtype,
-                finalizer=None,
+            nelem = calc_chunk_size(nelem, mask_bitsize)
+            mask = Buffer(
+                data=ptr, size=nelem * mask_dtype.itemsize, owner=obj
             )
-            # TODO: this can be done more efficiently
-            mask = Buffer(mask)
         elif typecode == "b":
             dtype = np.dtype(typestr)
             mask = compact_mask_bytes(
@@ -1392,7 +1384,6 @@ def _mask_from_cuda_array_interface_desc(desc):
                     ptr, nelem=nelem, dtype=dtype, finalizer=None
                 )
             )
-            # TODO: this can be done more efficiently
             mask = Buffer(mask)
         else:
             raise NotImplementedError(
