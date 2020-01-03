@@ -320,7 +320,7 @@ class ColumnBase(Column):
         """The gpu buffer for the null-mask
         """
         if self.nullable:
-            return cudf.Series(self.mask_array_view)
+            return self.mask_array_view
         else:
             raise ValueError("Column has no null mask")
 

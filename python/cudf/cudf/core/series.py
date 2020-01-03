@@ -1417,7 +1417,7 @@ class Series(Table):
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
-        return self._column.nullmask
+        return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
         """Convert booleans to bitmask
