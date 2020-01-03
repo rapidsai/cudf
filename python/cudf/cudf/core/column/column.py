@@ -883,7 +883,7 @@ def column_empty_like_same_mask(column, dtype):
     return result
 
 
-def column_empty(row_count, dtype, masked=False):
+def column_empty(row_count, dtype="object", masked=False):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
