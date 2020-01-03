@@ -19,9 +19,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/copying.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <gmock/gmock.h>
 
@@ -175,4 +177,27 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
     rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings;
     results = cudf::make_strings_column( d_strings );
     cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsFactoriesTest, CreateOffsets)
+{
+  std::vector<std::string> strings = {"this", "is", "a", "column", "of", "strings"};
+  cudf::test::strings_column_wrapper sw = { strings.begin(), strings.end() };                                                
+  cudf::column_view col(sw);
+  std::vector<cudf::size_type> indices{ 2,6 };
+  auto result = cudf::experimental::slice(col, indices);
+  auto expected_index = indices[0];
+  for(size_t idx=0; idx<result.size(); idx++)
+  {     
+    auto strings_data = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
+    thrust::host_vector<char> h_chars(strings_data.first);
+    thrust::host_vector<cudf::size_type> h_offsets(strings_data.second);
+    for( size_t jdx=0; jdx < h_offsets.size()-1; ++jdx )
+    {
+        auto offset = h_offsets[jdx];
+        auto length = h_offsets[jdx+1] - offset;
+        std::string str(h_chars.data()+offset, length);
+        EXPECT_EQ(str,strings[expected_index++]);
+    }
+  }
 }
