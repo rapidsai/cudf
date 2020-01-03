@@ -292,7 +292,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame, Series
         from cudf.core.dataframe import Series
-        from cudf.core.column import as_column
+        from cudf.core.column import as_column, column_empty
         from cudf.core.index import as_index
 
         # Iloc Step 1:
@@ -305,7 +305,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 and len(columns_df.columns) == 0
                 and not isinstance(arg[0], slice)
             ):
-                result = Series([], name=arg[0])
+                result = Series(column_empty(0, dtype="float64"), name=arg[0])
                 result._index = columns_df.columns.copy(deep=False)
                 return result
         else:
@@ -365,7 +365,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     return result
                 elif not isinstance(arg[0], slice):
                     if len(df._data) == 0:
-                        return Series([], index=df.columns, name=arg[0])
+                        return Series(
+                            column_empty(0, dtype="float64"),
+                            index=df.columns,
+                            name=arg[0],
+                        )
                     else:
                         result_series = df[df.columns[0]]
                         result_series.index = df.columns
