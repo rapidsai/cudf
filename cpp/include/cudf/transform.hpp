@@ -63,5 +63,24 @@ std::unique_ptr<column> transform(
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type>
 nans_to_nulls(column_view const& input,
               rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
+
+
+/**
+ * @brief Creates a null_mask from `input`, for `true` bit is set valid (`1`) for
+ * that row and for `false` bit is set in-valid (`0`) for that corresponding row.
+ *
+ * If the input column is nullable, the null element will represent `false`.
+ *
+ * @throws `cudf::logic_error` if `input.type()` is a non-boolean type
+ *
+ * @param input         An immutable view of the input column of BOOL8 type
+ * @param mr            The memory resource to use for for all device allocations
+ * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * null count obtained from input considering `true` represent `valid`/`1` and
+ * `false` represent `invalid`/`0`.
+ **/
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>
+bools_to_mask(column_view const& input,
+                  rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf

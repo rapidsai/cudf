@@ -385,7 +385,8 @@ ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 set(TRANSFORM_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
