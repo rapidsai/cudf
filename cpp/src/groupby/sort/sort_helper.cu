@@ -290,7 +290,7 @@ std::unique_ptr<table> helper::unique_keys(
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     group_offsets().begin(), group_offsets().end(),
                     transformed_group_ids.begin(),
-    [=] __device__ (size_type i) { return idx_data[i]; } );
+    [idx_data] __device__ (size_type i) { return idx_data[i]; } );
 
   auto gather_map = cudf::column_view(data_type(type_to_id<size_type>()),
     num_groups(), transformed_group_ids.data().get());

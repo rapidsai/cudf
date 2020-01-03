@@ -72,7 +72,7 @@ struct quantiles_functor {
       ] __device__ (size_type i) {
         size_type segment_size = d_group_size.element<size_type>(i);
 
-        auto selector = [&] (size_type j) {
+        auto selector = [i, &d_values, d_group_offset] (size_type j) {
           return d_values.element<T>(d_group_offset[i] + j);
         };
         
