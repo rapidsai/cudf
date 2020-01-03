@@ -801,7 +801,7 @@ class ColumnBase(Column):
         output = {
             "shape": (len(self),),
             "typestr": self.dtype.str,
-            "data": (self.data_array_view.device_ctypes_pointer.value, True),
+            "data": (self.data.ptr, True),
             "version": 1,
         }
 
@@ -815,10 +815,7 @@ class ColumnBase(Column):
                 __cuda_array_interface__={
                     "shape": (len(self),),
                     "typestr": "<t1",
-                    "data": (
-                        self.mask_array_view.device_ctypes_pointer.value,
-                        True,
-                    ),
+                    "data": (self.mask.ptr, True,),
                     "version": 1,
                 }
             )
