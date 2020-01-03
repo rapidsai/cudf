@@ -61,7 +61,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
               "feather-format" "cupy>=6.0.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
-              "fastavro>=0.22.0" "pandas=0.25" "hypothesis" "s3fs" "gcsfs" \
+              "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \
               "boto3" "moto" "httpretty" "streamz"
 
 # Install the master version of dask, distributed, and streamz
