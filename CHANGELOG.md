@@ -47,6 +47,7 @@
 - PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
 - PR #3668 Fixing CHECK_CUDA debug build issue
 - PR #3684 Fix ends_with logic for matching string case
+- PR #3691 Fix create_offsets to handle offset correctly
 
 
 # cuDF 0.11.0 (11 Dec 2019)
