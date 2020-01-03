@@ -319,6 +319,38 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = cudf::timestamp_s;
+  using TypeRhs = cudf::timestamp_s;
+
+  using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  auto rhs = make_random_wrapped_column<TypeRhs>(10);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LESS,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = cudf::timestamp_ms;
+  using TypeRhs = cudf::timestamp_s;
+
+  using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::GREATER,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
+}
+
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
   using TypeOut = cudf::experimental::bool8;
   using TypeLhs = cudf::timestamp_s;

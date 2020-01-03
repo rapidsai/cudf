@@ -174,7 +174,7 @@ endif(ARROW_FOUND)
 
 message(STATUS "Installing libcu++")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                COMMAND git clone --branch jitify-compat --recurse-submodules
+                COMMAND git clone --branch cudf --recurse-submodules
                         https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
@@ -213,6 +213,9 @@ message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
 
 if(Boost_FOUND)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
 endif(Boost_FOUND)
@@ -383,6 +386,7 @@ add_library(cudf
             src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
+            src/join/join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -416,6 +420,7 @@ add_library(cudf
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -512,6 +517,7 @@ add_library(cudf
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
+            src/copying/contiguous_split.cu
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -547,6 +553,8 @@ add_library(cudf
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_ipv4.cu
+            src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/find.cu
@@ -555,6 +563,7 @@ add_library(cudf
             src/strings/padding.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp

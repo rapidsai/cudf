@@ -7,6 +7,7 @@ from copy import copy, deepcopy
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import nvstrings
 import rmm
@@ -412,6 +413,15 @@ class Index(object):
 
     def memory_usage(self, deep=False):
         return self._values._memory_usage(deep=deep)
+
+    @classmethod
+    def from_pandas(cls, index):
+        if not isinstance(index, pd.Index):
+            raise TypeError("not a pandas.Index")
+
+        ind = as_index(pa.Array.from_pandas(index))
+        ind.name = index.name
+        return ind
 
 
 class RangeIndex(Index):

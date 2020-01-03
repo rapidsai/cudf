@@ -194,12 +194,20 @@ set(GROUPBY_TEST_SRC
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
 ###################################################################################################
+# - legacy join tests ------------------------------------------------------------------------------------
+
+set(LEGACY_JOIN_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
+
+ConfigureTest(LEGACY_JOIN_TEST "${LEGACY_JOIN_TEST_SRC}")
+
+###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
 
-ConfigureTest(LEGACY_JOIN_TEST "${JOIN_TEST_SRC}")
+ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
 # - orderby tests ---------------------------------------------------------------------------------
@@ -393,7 +401,8 @@ ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 # - unary transform tests -------------------------------------------------------------------------
 
 set(TRANSFORM_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
@@ -765,10 +774,13 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/ipv4_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
@@ -799,6 +811,6 @@ enable_testing()
 # - iterator benchmarks----------------------------------------------------------------------------
 
 set(LEGACY_ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/legacy/iterator_bench.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
 
   ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")
