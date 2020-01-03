@@ -1,4 +1,3 @@
-
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 # cython: profile=False
@@ -48,7 +47,7 @@ _UNARY_OP = {
 
 def apply_unary_op(Column incol, op):
     """
-    Call Unary op on input column 
+    Call Unary op on input column
     """
     from cudf.core.column import build_column
 

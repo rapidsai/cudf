@@ -13,12 +13,17 @@ class OrderedColumnDict(OrderedDict):
         from cudf.core.column import ColumnBase
 
         if not isinstance(value, ColumnBase):
-            raise TypeError(f"Cannot insert object of type "
-                            "{value.__class__.__name__} into OrderedColumnDict")
+            raise TypeError(
+                f"Cannot insert object of type "
+                "{value.__class__.__name__} into OrderedColumnDict"
+            )
 
         if self.first is not None and len(self.first) > 0:
             if len(value) != len(self.first):
-                raise ValueError(f"Cannot insert Column of different length into OrderedColumnDict")
+                raise ValueError(
+                    f"Cannot insert Column of different length "
+                    "into OrderedColumnDict"
+                )
 
         super().__setitem__(key, value)
 
@@ -32,6 +37,7 @@ class OrderedColumnDict(OrderedDict):
             return None
         else:
             return next(iter(self.values()))
+
 
 cdef class _Table:
 

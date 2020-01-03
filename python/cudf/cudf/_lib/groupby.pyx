@@ -98,7 +98,7 @@ def groupby(
 
     result_key_cols = columns_from_table(&result.first)
     result_value_cols = columns_from_table(&result.second)
-    
+
     for i, inp_key_col in enumerate(keys):
         if is_categorical_dtype(inp_key_col.dtype):
             result_key_cols[i] = build_categorical_column(

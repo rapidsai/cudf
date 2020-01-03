@@ -17,13 +17,18 @@ from cudf.utils.dtypes import is_scalar
 cimport cudf._lib.includes.replace as cpp_replace
 
 
-cpdef replace(Column input_col, Column values_to_replace, Column replacement_values):
+cpdef replace(Column input_col, Column values_to_replace,
+              Column replacement_values):
     """
         Call cudf::find_and_replace_all
     """
     cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    cdef gdf_column* c_values_to_replace = column_view_from_column(values_to_replace)
-    cdef gdf_column* c_replacement_values = column_view_from_column(replacement_values)
+    cdef gdf_column* c_values_to_replace = column_view_from_column(
+        values_to_replace
+    )
+    cdef gdf_column* c_replacement_values = column_view_from_column(
+        replacement_values
+    )
 
     cdef gdf_column c_out_col
 

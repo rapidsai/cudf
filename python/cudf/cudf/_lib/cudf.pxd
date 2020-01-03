@@ -36,7 +36,8 @@ cdef get_scalar_value(gdf_scalar scalar, dtype)
 cdef gdf_column* column_view_from_column(Column col, col_name=*) except? NULL
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*) except? NULL
 cdef Column gdf_column_to_column(gdf_column* c_col)
-cdef gdf_column* column_view_from_string_column(Column col, col_name=*) except? NULL
+cdef gdf_column* column_view_from_string_column(Column col,
+                                                col_name=*) except? NULL
 cdef gdf_column** cols_view_from_cols(cols, names=*) except ? NULL
 cdef free_table(cudf_table* table0, gdf_column** cols=*)
 cdef free_column(gdf_column* c_col)

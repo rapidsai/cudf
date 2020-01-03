@@ -75,7 +75,7 @@ def rolling(inp, window, min_periods, center, op):
         data = cudautils.full(
             inp.data_array_view.size, fill_value, inp.data_array_view.dtype
         )
-        
+
         out_col = build_column(Buffer(data),
                                dtype=data.dtype,
                                mask=Buffer(mask))

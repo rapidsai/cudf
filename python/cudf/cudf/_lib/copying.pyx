@@ -159,7 +159,7 @@ def scatter(source, maps, target, bounds_check=True):
             c_bounds_check)
 
     free_column(c_maps)
-    
+
     result_cols = columns_from_table(&c_result_table)
 
     for i, in_col in enumerate(target_cols):
@@ -199,7 +199,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
                int in_begin):
 
     from cudf.core.column import as_column
-    
+
     if abs(out_end - out_begin) <= 1:
         return out_col
 
@@ -240,7 +240,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
         else:
             nvstr_obj = nvstrings.to_device([])
         out_col = as_column(nvstr_obj)
-    
+
     free_column(c_in_col)
     free_column(c_out_col)
 
@@ -266,11 +266,12 @@ def scatter_to_frames(source, maps, index=None, names=None, index_names=None):
     in_cols = source
 
     if index:
-        ind_names_tmp = [(ind_name or "_tmp_index") for ind_name in index_names]
+        ind_names_tmp = [(ind_name or "_tmp_index")
+                         for ind_name in index_names]
         for i in range(len(index)):
             in_cols.append(index[i])
             names.append(ind_names_tmp[i])
-            
+
     col_count=len(in_cols)
     if col_count == 0:
         return []

@@ -162,7 +162,8 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     """
     Returns a gdf_scalar* constructed from the numpy scalar ``val``.
     """
-    if (val is not None
+    if (
+        val is not None
         and not np.isscalar(val)
     ):
         raise TypeError("val must be a NumPy scalar or None")
@@ -247,7 +248,8 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
 
 # gdf_column functions
 
-cdef gdf_column* column_view_from_column(Column col, col_name=None) except? NULL:
+cdef gdf_column* column_view_from_column(Column col,
+                                         col_name=None) except? NULL:
     """
     Make a column view from a column
 

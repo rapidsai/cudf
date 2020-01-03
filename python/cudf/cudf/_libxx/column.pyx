@@ -15,33 +15,36 @@ from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import cached_property
 
 
-np_to_cudf_types = {np.dtype('int8'): INT8,
-                    np.dtype('int16'): INT16,
-                    np.dtype('int32'): INT32,
-                    np.dtype('int64'): INT64,
-                    np.dtype('float32'): FLOAT32,
-                    np.dtype('float64'): FLOAT64,
-                    np.dtype("datetime64[s]"): TIMESTAMP_SECONDS,
-                    np.dtype("datetime64[ms]"): TIMESTAMP_MILLISECONDS,
-                    np.dtype("datetime64[us]"): TIMESTAMP_MICROSECONDS,
-                    np.dtype("datetime64[ns]"): TIMESTAMP_NANOSECONDS,
-                    np.dtype("object"): STRING,
-                    np.dtype("bool"): BOOL8
+np_to_cudf_types = {
+    np.dtype('int8'): INT8,
+    np.dtype('int16'): INT16,
+    np.dtype('int32'): INT32,
+    np.dtype('int64'): INT64,
+    np.dtype('float32'): FLOAT32,
+    np.dtype('float64'): FLOAT64,
+    np.dtype("datetime64[s]"): TIMESTAMP_SECONDS,
+    np.dtype("datetime64[ms]"): TIMESTAMP_MILLISECONDS,
+    np.dtype("datetime64[us]"): TIMESTAMP_MICROSECONDS,
+    np.dtype("datetime64[ns]"): TIMESTAMP_NANOSECONDS,
+    np.dtype("object"): STRING,
+    np.dtype("bool"): BOOL8
 }
 
-cudf_to_np_types = {INT8: np.dtype('int8'),
-                    INT16: np.dtype('int16'),
-                    INT32: np.dtype('int32'),
-                    INT64: np.dtype('int64'),
-                    FLOAT32: np.dtype('float32'),
-                    FLOAT64: np.dtype('float64'),
-                    TIMESTAMP_SECONDS: np.dtype("datetime64[s]"),
-                    TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
-                    TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
-                    TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
-                    STRING: np.dtype("object"),
-                    BOOL8: np.dtype("bool")
+cudf_to_np_types = {
+    INT8: np.dtype('int8'),
+    INT16: np.dtype('int16'),
+    INT32: np.dtype('int32'),
+    INT64: np.dtype('int64'),
+    FLOAT32: np.dtype('float32'),
+    FLOAT64: np.dtype('float64'),
+    TIMESTAMP_SECONDS: np.dtype("datetime64[s]"),
+    TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
+    TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
+    TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
+    STRING: np.dtype("object"),
+    BOOL8: np.dtype("bool")
 }
+
 
 @cython.auto_pickle(True)
 cdef class Column:
@@ -58,20 +61,27 @@ cdef class Column:
 
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
         if not isinstance(data, Buffer):
-            raise TypeError("Expected a Buffer for data, got " + type(data).__name__)
+            raise TypeError("Expected a Buffer for data, got " +
+                            type(data).__name__)
         if mask is not None and not isinstance(mask, Buffer):
-            raise TypeError("Expected a Buffer for mask, got " + type(mask).__name__)
+            raise TypeError("Expected a Buffer for mask, got " +
+                            type(mask).__name__)
         if not pd.api.types.is_integer(size):
-            raise TypeError("Expected an integer for size, got " + type(size).__name__)
+            raise TypeError("Expected an integer for size, got " +
+                            type(size).__name__)
         if not pd.api.types.is_integer(offset):
-            raise TypeError("Expected an integer for offset, got " + type(offset).__name__)
+            raise TypeError("Expected an integer for offset, got " +
+                            type(offset).__name__)
         if not isinstance(children, tuple):
-            raise TypeError("Expected a tuple of Columns for children, got " + type(children).__name__)
+            raise TypeError("Expected a tuple of Columns for children, got " +
+                            type(children).__name__)
 
         for child in children:
             if not isinstance(child, Column):
-                raise TypeError("Expected each of children to be a  Column, got " +
-                                type(child).__name__)
+                raise TypeError(
+                    "Expected each of children to be a  Column, got " +
+                    type(child).__name__
+                )
 
         self._data = data
         self.size = size
@@ -98,7 +108,7 @@ cdef class Column:
     @property
     def has_nulls(self):
         return self.null_count != 0
-        
+
     @property
     def mask(self):
         return self._mask
@@ -114,7 +124,7 @@ cdef class Column:
         self._mask = value
         if hasattr(self, "null_count"):
             del self.null_count
-        
+
     @cached_property
     def null_count(self):
         return self.compute_null_count()
@@ -149,7 +159,7 @@ cdef class Column:
             mask = NULL
 
         cdef size_type c_null_count = self.null_count
-        
+
         return mutable_column_view(
             dtype,
             self.size,
