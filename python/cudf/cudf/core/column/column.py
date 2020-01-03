@@ -485,8 +485,10 @@ class ColumnBase(Column):
 
                 data = rmm.device_array(nelem, dtype=self.codes.dtype)
                 fill_value(data, self._encode(value))
-                value = build_column(
-                    data=None, dtype=self.dtype, children=(as_column(data),)
+                value = build_categorical_column(
+                    categories=self.dtype.categories,
+                    codes=as_column(data),
+                    ordered=self.dtype.ordered,
                 )
             elif value is None:
                 value = column.column_empty(nelem, self.dtype, masked=True)
@@ -924,7 +926,7 @@ def column_empty(row_count, dtype, masked):
 
 
 def build_categorical_column(
-    categories, codes, mask=None, offset=0, children=(), ordered=None,
+    categories, codes, mask=None, offset=0, ordered=None,
 ):
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
     return build_column(
