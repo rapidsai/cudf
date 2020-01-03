@@ -1348,7 +1348,7 @@ def column_applymap(udf, column, out_dtype):
 
         kernel_non_masked.forall(len(column))(values, results)
 
-    return results
+    return as_column(results)
 
 
 def _data_from_cuda_array_interface_desc(desc):

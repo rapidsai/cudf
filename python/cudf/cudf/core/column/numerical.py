@@ -269,7 +269,7 @@ class NumericalColumn(column.ColumnBase):
         if out_dtype is None:
             out_dtype = self.dtype
         out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
-        return column.as_column(out)
+        return out
 
     def default_na_value(self):
         """Returns the default NA value for this column
