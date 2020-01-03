@@ -179,5 +179,22 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
         true /* keys_are_sorted */); 
 }
 
+struct groupby_string_keys_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_string_keys_test, basic)
+{
+    using V = int32_t;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
+
+    strings_column_wrapper        keys        { "aaa", "año", "₹1", "aaa", "año", "año", "aaa", "₹1", "₹1", "año"};
+    fixed_width_column_wrapper<V> vals        {     0,     1,    2,     3,     4,     5,     6,    7,    8,     9};
+
+    strings_column_wrapper        expect_keys({ "aaa", "año", "₹1" }, all_valid());
+    fixed_width_column_wrapper<R> expect_vals {     9,    18,   17 };
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 } // namespace test
 } // namespace cudf
