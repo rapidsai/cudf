@@ -184,16 +184,19 @@ class data_type {
    * @param id The type's identifier
    *---------------------------------------------------------------------------**/
   explicit constexpr data_type(type_id id) : _id{id} {}
+  //explicit constexpr data_type(type_id id, type_id keys_id) : _id{id}, _keys_id{keys_id} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the type identifier
    *---------------------------------------------------------------------------**/
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
+  //CUDA_HOST_DEVICE_CALLABLE type_id keys_id() const noexcept { return _keys_id; }
 
  private:
   type_id _id{EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
+  type_id _keys_id{EMPTY};
 };
 
 /**---------------------------------------------------------------------------*
@@ -209,7 +212,7 @@ class data_type {
  * @return false `lhs` is not equal to `rhs`
  *---------------------------------------------------------------------------**/
 inline bool operator==(data_type const& lhs, data_type const& rhs) {
-  return lhs.id() == rhs.id();
+  return lhs.id() == rhs.id();// and rhs.keys_id() == lhs.keys_id();
 }
 
 /**
