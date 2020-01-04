@@ -65,7 +65,7 @@ struct var_functor {
         d_group_sizes = *group_size_view,
         d_group_labels,
         ddof
-      ] __device__ (size_type i) {
+      ] __device__ (size_type i) -> ResultType {
         if (d_values.is_null(i))
           return 0.0;
         

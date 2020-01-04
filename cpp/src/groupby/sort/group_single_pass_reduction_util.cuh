@@ -77,7 +77,7 @@ struct reduce_functor {
 
       // Without this transform, thrust throws a runtime error
       auto it = thrust::make_transform_iterator(val_it,
-                            [] __device__ (auto i) { return i; });
+                          [] __device__ (auto i) -> ResultType { return i; });
       
       thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
         // Input keys
@@ -106,7 +106,7 @@ struct reduce_functor {
         });
     } else {
       auto it = thrust::make_transform_iterator(values.data<T>(),
-                            [] __device__ (auto i) { return i; });
+                          [] __device__ (auto i) -> ResultType { return i; });
       thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
                             group_labels.begin(), group_labels.end(),
                             it, thrust::make_discard_iterator(),

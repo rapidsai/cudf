@@ -42,9 +42,8 @@ struct DeviceSum {
   }
 
   template <typename T,
-            typename T2 = T,
             typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T2& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
     return lhs + rhs;
   }
 
