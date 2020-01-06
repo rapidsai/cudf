@@ -798,7 +798,7 @@ class StringColumn(column.ColumnBase):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
             col = utils.scalar_broadcast_to(
-                other, shape=len(self), dtype="object"
+                other, size=len(self), dtype="object"
             )
             return col
         else:

@@ -354,7 +354,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def normalize_binop_value(self, other):
         ary = utils.scalar_broadcast_to(
-            self._encode(other), shape=len(self), dtype=self.codes.dtype
+            self._encode(other), size=len(self), dtype=self.codes.dtype
         )
         col = column.build_categorical_column(
             categories=self.dtype.categories,

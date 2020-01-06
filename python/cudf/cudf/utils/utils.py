@@ -76,18 +76,21 @@ def require_writeable_array(arr):
     return np.require(arr, requirements="W")
 
 
-def scalar_broadcast_to(scalar, shape, dtype=None):
+def scalar_broadcast_to(scalar, size, dtype=None):
     from cudf.utils.cudautils import fill_value
     from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
     from cudf.core.column import column_empty
 
+    if isinstance(size, (tuple, list)):
+        size = size[0]
+
     if scalar is None:
         if dtype is None:
             dtype = "object"
-        return column_empty(np.prod(shape), dtype=dtype, masked=True)
+        return column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
-        return scalar_broadcast_to(scalar.categories[0], shape).astype(dtype)
+        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
     if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
         dtype = "object"
@@ -95,19 +98,16 @@ def scalar_broadcast_to(scalar, shape, dtype=None):
         scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
         dtype = scalar.dtype
 
-    if not isinstance(shape, tuple):
-        shape = (shape,)
-
     if np.dtype(dtype) == np.dtype("object"):
         import nvstrings
         from cudf.core.column import as_column
         from cudf.utils.cudautils import zeros
 
-        gather_map = zeros(shape[0], dtype="int32")
+        gather_map = zeros(size, dtype="int32")
         scalar_str_col = as_column(nvstrings.to_device([scalar]))
         return scalar_str_col[gather_map]
     else:
-        da = rmm.device_array(shape, dtype=dtype)
+        da = rmm.device_array((size,), dtype=dtype)
         if da.size != 0:
             fill_value(da, scalar)
         return da

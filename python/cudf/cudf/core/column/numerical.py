@@ -110,7 +110,7 @@ class NumericalColumn(column.ColumnBase):
                 return other
             else:
                 ary = utils.scalar_broadcast_to(
-                    other, shape=len(self), dtype=other_dtype
+                    other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
                     data=Buffer.from_array_lik(ary),

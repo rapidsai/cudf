@@ -140,7 +140,7 @@ class DatetimeColumn(column.ColumnBase):
         elif isinstance(other, np.datetime64):
             other = other.astype(self.dtype)
             ary = utils.scalar_broadcast_to(
-                other, shape=len(self), dtype=self.dtype
+                other, size=len(self), dtype=self.dtype
             )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
