@@ -275,8 +275,11 @@ helper::column_ptr helper::grouped_values(column_view const& values,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
+  auto gather_map = cudf::experimental::detail::slice(
+    key_sort_order(), 0, num_keys(stream));
+
   auto grouped_values_table = cudf::experimental::detail::gather(
-    table_view({values}), key_sort_order(), false, false, false, mr, stream);
+    table_view({values}), gather_map, false, false, false, mr, stream);
 
   return std::move(grouped_values_table->release()[0]);
 }
