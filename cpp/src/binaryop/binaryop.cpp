@@ -33,6 +33,22 @@
 #include <string>
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
+#include <libcudacxx/details/__config.jit>
+#include <libcudacxx/simt/cfloat.jit>
+#include <libcudacxx/simt/chrono.jit>
+#include <libcudacxx/simt/ctime.jit>
+#include <libcudacxx/simt/limits.jit>
+#include <libcudacxx/simt/ratio.jit>
+#include <libcudacxx/simt/type_traits.jit>
+#include <libcudacxx/simt/version.jit>
+#include <libcudacxx/libcxx/include/__config.jit>
+#include <libcudacxx/libcxx/include/__undef_macros.jit>
+#include <libcudacxx/libcxx/include/cfloat.jit>
+#include <libcudacxx/libcxx/include/chrono.jit>
+#include <libcudacxx/libcxx/include/ctime.jit>
+#include <libcudacxx/libcxx/include/limits.jit>
+#include <libcudacxx/libcxx/include/ratio.jit>
+#include <libcudacxx/libcxx/include/type_traits.jit>
 
 namespace cudf {
 namespace experimental {
@@ -45,11 +61,6 @@ namespace jit {
 #define LIBCUDF_INCLUDE_DIR \
   std::string{std::getenv("CONDA_PREFIX")} + "/include/libcudf"
 #endif
-
-// env var always overrides the default value of LIBCUDF_INCLUDE_DIR
-const char* env_dir = std::getenv("LIBCUDF_INCLUDE_DIR");
-const std::string libcudf_include_dir =
-    env_dir != NULL ? env_dir : LIBCUDF_INCLUDE_DIR;
 
 const std::string hash = "prog_binop.experimental";
 
@@ -69,10 +80,35 @@ const std::vector<std::string> compiler_flags{
     "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
     "-D_LIBCUDACXX_HAS_NO_CLIMITS",
     "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
-    "-I" + libcudf_include_dir + "/libcudacxx",
 };
 const std::vector<std::string> header_names{
     "operation.h", "traits.h", cudf_types_hpp, cudf_wrappers_timestamps_hpp};
+
+const std::unordered_map<std::string, char const *> stringified_headers{
+  {"details/../../libcxx/include/__config", libcxx_config},
+  {"../libcxx/include/__undef_macros", libcxx_undef_macros},
+  {"simt/../../libcxx/include/cfloat", libcxx_cfloat},
+  {"simt/../../libcxx/include/chrono", libcxx_chrono},
+  {"simt/../../libcxx/include/ctime", libcxx_ctime},
+  {"simt/../../libcxx/include/limits", libcxx_limits},
+  {"simt/../../libcxx/include/ratio", libcxx_ratio},
+  {"simt/../../libcxx/include/type_traits", libcxx_type_traits},
+  {"simt/../details/__config", libcudacxx_details_config},
+  {"simt/cfloat", libcudacxx_simt_cfloat},
+  {"simt/chrono", libcudacxx_simt_chrono},
+  {"simt/ctime", libcudacxx_simt_ctime},
+  {"simt/limits", libcudacxx_simt_limits},
+  {"simt/ratio", libcudacxx_simt_ratio},
+  {"simt/type_traits", libcudacxx_simt_type_traits},
+  {"simt/version", libcudacxx_simt_version},
+};
+
+std::istream* send_stringified_header(std::iostream& stream,
+                                      char const* header) {
+  // skip the filename line added by stringify
+  stream << (std::strchr(header, '\n') + 1);
+  return &stream;
+}
 
 std::istream* headers_code(std::string filename, std::iostream& stream) {
   if (filename == "operation.h") {
@@ -82,6 +118,10 @@ std::istream* headers_code(std::string filename, std::iostream& stream) {
   if (filename == "traits.h") {
     stream << code::traits;
     return &stream;
+  }
+  auto it = stringified_headers.find(filename);
+  if (it != stringified_headers.end()) {
+    return send_stringified_header(stream, it->second);
   }
   return nullptr;
 }

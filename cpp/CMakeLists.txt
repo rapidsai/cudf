@@ -607,19 +607,83 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                           ${CMAKE_BINARY_DIR}/include/types.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/details/__config.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/limits.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/cfloat.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/chrono.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/ctime.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/ratio.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/type_traits.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/version.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/__config.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/__undef_macros.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/cfloat.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/chrono.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/ctime.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/limits.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/ratio.jit
+                          ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/type_traits.jit
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/details/__config
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/limits
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/cfloat
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/chrono
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/ctime
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/ratio
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/type_traits
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/version
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/__config
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/__undef_macros
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/cfloat
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/chrono
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ctime
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/limits
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ratio
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/type_traits
 
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/libcudacxx/details/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/cfloat libcudacxx_simt_cfloat > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/chrono libcudacxx_simt_chrono > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/ctime libcudacxx_simt_ctime > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/ratio libcudacxx_simt_ratio > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/type_traits libcudacxx_simt_type_traits > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/version libcudacxx_simt_version > ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/version.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/__config libcxx_config > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/__undef_macros libcxx_undef_macros > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/__undef_macros.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/cfloat libcxx_cfloat > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/chrono libcxx_chrono > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/ctime libcxx_ctime > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/limits libcxx_limits > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/ratio libcxx_ratio > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/type_traits libcxx_type_traits > ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/type_traits.jit
                    )
 
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/types.h.jit
                   ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                  ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit)
+                  ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/details/__config.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/limits.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/cfloat.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/chrono.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/ctime.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/ratio.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/type_traits.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/simt/version.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/__config.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/__undef_macros.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/cfloat.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/chrono.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/ctime.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/limits.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/ratio.jit
+                  ${CMAKE_BINARY_DIR}/include/libcudacxx/libcxx/include/type_traits.jit)
 
 add_dependencies(cudf stringify_run)
 
