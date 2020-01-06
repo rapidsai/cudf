@@ -29,10 +29,16 @@ namespace detail {
 template <typename Op>
 struct ScanDispatcher {
   private:
+  template <typename T>
+  static constexpr bool is_string_supported() {
+    return std::is_same<T, string_view>::value &&
+     (std::is_same<Op, cudf::DeviceMin>::value ||
+      std::is_same<Op, cudf::DeviceMax>::value);
+  }
   // return true if T is arithmetic type (including cudf::experimental::bool8)
   template <typename T>
   static constexpr bool is_supported() {
-    return std::is_arithmetic<T>::value;
+    return std::is_arithmetic<T>::value || is_string_supported<T>();
   }
 
   template <typename T>
@@ -77,7 +83,9 @@ struct ScanDispatcher {
     return output_column;
   }
 
-  template <typename T>
+  //for arithmetic types
+  template <typename T,
+    std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
   auto inclusive_scan(const column_view& input_view,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
@@ -116,6 +124,53 @@ struct ScanDispatcher {
     return output_column;
   }
 
+//for string type
+template <typename T,
+    std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
+  std::unique_ptr<column> inclusive_scan(const column_view& input_view,
+                      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    const size_t size = input_view.size();
+    rmm::device_vector<T> result(size);
+
+    auto d_input = column_device_view::create(input_view, stream);
+
+    rmm::device_buffer temp_storage;
+    size_t temp_storage_bytes = 0;
+
+    if (input_view.has_nulls()) {
+      auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
+      // Prepare temp storage
+      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                     input, result.begin(), Op{}, size, stream);
+      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                     input, result.begin(), Op{}, size, stream);
+    } else {
+      auto input = d_input->begin<T>();
+      // Prepare temp storage
+      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                     input, result.begin(), Op{},
+                                     size, stream);
+      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                     input, result.begin(), Op{}, size, stream);
+    }
+    CHECK_CUDA(stream);
+
+    auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
+    //default skipna=True
+    //skipna=False? then find_first_na, true until that point, then false.
+    //opt: actual scan until find_first_na only.
+    output_column->set_null_mask(copy_bitmask(input_view, stream, mr),
+                                 input_view.null_count());
+    if(!skipna && input_view.has_nulls()) {
+      pos=find_first_na(input_view.null_mask);
+      set_false(output_column->null_mask, pos, end);
+    }
+    return output_column;
+  }
+
   public:
   /**
    * @brief creates new column from input column by applying scan operation
@@ -139,6 +194,7 @@ struct ScanDispatcher {
         output = inclusive_scan<T>(input, mr, stream);
       else
         output = exclusive_scan<T>(input, mr, stream);
+    std::cout<<input.null_count()<<"i o"<<output->null_count()<<"\n";
     CUDF_EXPECTS(input.null_count() == output->null_count(),
         "Input / output column null count mismatch");
     return output;
@@ -159,7 +215,7 @@ std::unique_ptr<column> scan(const column_view& input,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream=0)
 {
-  CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
+  CUDF_EXPECTS(is_numeric(input.type()) || is_compound(input.type()), "Unexpected non-numeric or non-string type.");
 
   switch (op) {
     case scan_op::SUM:
