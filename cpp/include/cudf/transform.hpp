@@ -73,7 +73,7 @@ nans_to_nulls(column_view const& input,
  *
  * @throws `cudf::logic_error` if `input.type()` is a non-boolean type
  *
- * @param input         An immutable view of the input column of BOOL8 type
+ * @param input        Boolean elements to convert to a bitmask. 
  * @param mr            The memory resource used to allocate the returned bitmask. 
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained from input considering `true` represent `valid`/`1` and
