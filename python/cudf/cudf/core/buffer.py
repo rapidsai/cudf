@@ -1,5 +1,7 @@
 import pickle
 import types
+import operator
+import functools
 
 import numpy as np
 
@@ -91,6 +93,7 @@ class Buffer(object):
             Returns an instance of Buffer.
         """
         assert len(frames) == 1, "Use Buffer.serialize() for serialization"
+        frame = frames[0]
         iface = header["cuda_array_interface"]
         if (
             len(iface["shape"]) == 0 or 0 in iface["shape"]
@@ -99,18 +102,32 @@ class Buffer(object):
                 iface["shape"], dtype=np.dtype(iface["typestr"])
             )
         else:
-            # Updating the data pointer to the frame data.
-            iface["data"] = frames[0].__cuda_array_interface__["data"]
+            # If the frame is already a RMM buffer we convert it to the
+            # correct dtype and return it without any copying.
+            if isinstance(frame, rmm.DeviceBuffer):
+                nelem = functools.reduce(operator.mul, iface["shape"], 1)
+                ret = Buffer(None)
+                ret.mem = rmm.device_array_from_ptr(
+                    frame.ptr, nelem, dtype=iface["typestr"]
+                )
+                _BufferSentry(ret.mem).ndim(1)
+                ret.size = ret.mem.size
+                ret.capacity = ret.size
+                ret.dtype = ret.mem.dtype
+                ret.owner = frame
+                return ret
+            else:
+                # Updating the data pointer to the frame data.
+                iface["data"] = frames[0].__cuda_array_interface__["data"]
 
-            # We need an object that exposes __cuda_array_interface__
-            _dummy_iface = types.SimpleNamespace()
-            _dummy_iface.__cuda_array_interface__ = iface
+                # We need an object that exposes __cuda_array_interface__
+                _dummy_iface = types.SimpleNamespace()
+                _dummy_iface.__cuda_array_interface__ = iface
 
-            # Allocating a new RMM CUDA array with shape and dtype as specified
-            # in `iface` and copy the frame data to it, which makes the memory
-            # survive until the new Buffer goes out of scope.
-            # TODO: when DASK supports RMM, we can simply return it as is.
-            arr, _ = rmm.auto_device(_dummy_iface)
+                # Allocating a new RMM CUDA array with shape and dtype as specified
+                # in `iface` and copy the frame data to it, which makes the memory
+                # survive until the new Buffer goes out of scope.
+                arr, _ = rmm.auto_device(_dummy_iface)
         return Buffer(arr)
 
     def __reduce__(self):
