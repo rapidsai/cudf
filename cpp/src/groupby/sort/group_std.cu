@@ -64,19 +64,20 @@ struct var_functor {
     auto values_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [=] __device__ (size_type i) -> ResultType {
-        if (d_values.is_null(i))
-          return 0.0;
+        // if (d_values.is_null(i))
+        //   return 0.0;
         
-        ResultType x = d_values.element<T>(i);
-        size_type group_idx = d_group_labels[i];
-        size_type group_size = d_group_sizes.element<size_type>(group_idx);
+        // ResultType x = d_values.element<T>(i);
+        // size_type group_idx = d_group_labels[i];
+        // size_type group_size = d_group_sizes.element<size_type>(group_idx);
         
-        // prevent divide by zero error
-        if (group_size == 0 or group_size - ddof <= 0)
-          return 0.0;
+        // // prevent divide by zero error
+        // if (group_size == 0 or group_size - ddof <= 0)
+        //   return 0.0;
 
-        ResultType mean = d_means.element<ResultType>(group_idx);
-        return (x - mean) * (x - mean) / (group_size - ddof);
+        // ResultType mean = d_means.element<ResultType>(group_idx);
+        // return (x - mean) * (x - mean) / (group_size - ddof);
+        return 1.0;
       }
     );
 
