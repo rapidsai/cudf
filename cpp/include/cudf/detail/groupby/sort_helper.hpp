@@ -36,7 +36,7 @@ namespace sort {
  * 
  * This class serves the purpose of sorting the keys and values and provides
  * building blocks for aggregations. It can provide:
- * 1. On-demand grouping and sorting of a value column based on `keys`
+ * 1. On-demand grouping or sorting of a value column based on `keys`
  *   which is provided at construction
  * 2. Group offsets: starting offsets of all groups in sorted key table
  * 3. Group valid sizes: The number of valid values in each group in a sorted
@@ -53,28 +53,25 @@ struct helper {
   /**
    * @brief Construct a new helper object
    * 
-   * If `ignore_null_keys == true`, then any row in `keys` containing a null value
-   * will effectively be discarded. I.e., any values corresponding to discarded
-   * rows in `keys` will not contribute to any aggregation. 
+   * If `ignore_null_keys == true`, then any row in `keys` containing a null
+   * value will effectively be discarded. I.e., any values corresponding to
+   * discarded rows in `keys` will not contribute to any aggregation. 
    *
    * @param keys table to group by
-   * @param ignore_null_keys ignore rows in keys with nulls
-   * @param null_sort_behavior whether to put nulls before valid values or after
-   * @param keys_pre_sorted if the keys are already sorted
-   * @param stream used for all the computation in this helper object
+   * @param ignore_null_keys Ignore rows in keys with nulls
+   * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
+   *                        optimizations to help skip re-sorting keys.
    */
   helper(table_view const& keys, bool ignore_null_keys = true,
-          std::vector<null_order> null_sort_order = {},
           bool keys_pre_sorted = false)
-  : _keys(keys)
-  , _num_keys(-1)
-  , _ignore_null_keys(ignore_null_keys)
-  , _keys_pre_sorted(keys_pre_sorted)
+  : _keys(keys),
+    _num_keys(-1),
+    _ignore_null_keys(ignore_null_keys),
+    _keys_pre_sorted(keys_pre_sorted)
   {
     if (keys_pre_sorted and
         ignore_null_keys and
-        has_nulls(keys)
-       )
+        has_nulls(keys))
     {
       _keys_pre_sorted = false;
     }
@@ -87,13 +84,14 @@ struct helper {
   helper& operator=(helper&&) = default;
 
   /**
-   * @brief Groups a column of values according to `keys` and sorts within each group.
+   * @brief Groups a column of values according to `keys` and sorts within each
+   *  group.
    * 
-   * Groups the @p values where the groups are dictated by key table
-   * and each group is sorted in ascending order, with NULL elements positioned 
-   * at the end of each group.
+   * Groups the @p values where the groups are dictated by key table and each 
+   * group is sorted in ascending order, with NULL elements positioned at the 
+   * end of each group.
    * 
-   * @throws cudf::logic_error if `values.size != keys.num_rows()`
+   * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    * 
    * @param values The value column to group and sort
    * @return the sorted and grouped column
@@ -102,7 +100,14 @@ struct helper {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
-  // TODO (dm): implement
+  /**
+   * @brief Groups a column of values according to `keys`
+   * 
+   * @throw cudf::logic_error if `values.size() != keys.num_rows()`
+   * 
+   * @param values The value column to group
+   * @return the grouped column
+   */
   std::unique_ptr<column> grouped_values(column_view const& values, 
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
@@ -118,7 +123,6 @@ struct helper {
 
   /**
    * @brief Get the number of groups in `keys`
-   * 
    */
   size_type num_groups() { return group_offsets().size(); }
 
@@ -136,8 +140,8 @@ struct helper {
    *
    * Gathering `keys` by sort order indices will produce the sorted key table.
    * 
-   * Computes and stores the key sorted order on first invocation, and returns the
-   * stored order on subsequent calls.
+   * Computes and stores the key sorted order on first invocation, and returns
+   * the stored order on subsequent calls.
    * 
    * @return the sort order indices for `keys`.
    */
@@ -156,8 +160,10 @@ struct helper {
   /**
    * @brief Get the group labels corresponding to the sorted order of `keys`. 
    * 
-   * Each group is assigned a unique numerical "label" in `[0, 1, 2, ... , num_groups() - 1, num_groups())`.
-   * For a row in sorted `keys`, its corresponding group label indicates which group it belongs to. 
+   * Each group is assigned a unique numerical "label" in 
+   * `[0, 1, 2, ... , num_groups() - 1, num_groups())`.
+   * For a row in sorted `keys`, its corresponding group label indicates which
+   * group it belongs to. 
    * 
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
@@ -170,34 +176,32 @@ struct helper {
   /**
    * @brief Get the group labels for unsorted keys
    * 
-   * Returns the group label for every row in the original `keys` table. For a given unique key row,
-   * its group label is equivalent to what is returned by `group_labels()`. However, 
-   * if a row contains a null value, and `ignore_null_keys == true`, then its label is NULL. 
+   * Returns the group label for every row in the original `keys` table. For a
+   * given unique key row, its group label is equivalent to what is returned by
+   * `group_labels()`. However, if a row contains a null value, and
+   * `ignore_null_keys == true`, then its label is NULL. 
    * 
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
    * 
-   * @return A nullable column of `GDF_INT32` containing group labels in the order of the unsorted key table
+   * @return A nullable column of `INT32` containing group labels in the order 
+   *         of the unsorted key table
    */
   column_view unsorted_keys_labels(cudaStream_t stream = 0);
 
   /**
-   * @brief Get the row bitmask for the `keys`
+   * @brief Get the column representing the row bitmask for the `keys`
    *
-   * Computes a bitmask corresponding to the rows of `keys` where if bit `i` is zero,
-   * then row `i` contains one or more null values. If bit `i` is one, then row `i` does not 
-   * contain null values. 
-   *
+   * Computes a bitmask corresponding to the rows of `keys` where if bit `i` is
+   * zero, then row `i` contains one or more null values. If bit `i` is one, 
+   * then row `i` does not contain null values. This bitmask is added as null
+   * mask of a column of type `INT8` where all the data values are the same and
+   * the elements differ only in validity.
    * 
-   * Computes and stores bitmask on first invocation and returns stored bitmask on
-   * subsequent calls.
+   * Computes and stores bitmask on first invocation and returns stored column
+   * on subsequent calls.
    */
   column_view keys_bitmask_column(cudaStream_t stream = 0);
-
-  index_vector count_valids_in_groups(
-    column const& grouped_values,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
 
  private:
 

@@ -176,7 +176,7 @@ class groupby {
     if (_helper)
       return *_helper;
     _helper = std::make_unique<detail::sort::helper>(
-      _keys, _ignore_null_keys, _null_precedence, _keys_are_sorted);
+      _keys, _ignore_null_keys, _keys_are_sorted);
     return *_helper;
   };
 

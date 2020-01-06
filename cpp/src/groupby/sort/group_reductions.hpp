@@ -27,7 +27,15 @@ namespace experimental {
 namespace groupby {
 namespace detail {
 
-
+/**
+ * @brief Internal API to calculate groupwise sum
+ * 
+ * @param values Grouped values to get sum of
+ * @param group_sizes Number of valid elements per group
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
 std::unique_ptr<column> group_sum(
     column_view const& values,
     column_view const& group_sizes,
@@ -35,6 +43,15 @@ std::unique_ptr<column> group_sum(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
+/**
+ * @brief Internal API to calculate groupwise minimum value
+ * 
+ * @param values Grouped values to get minimum from
+ * @param group_sizes Number of valid elements per group
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
 std::unique_ptr<column> group_min(
     column_view const& values,
     column_view const& group_sizes,
@@ -42,6 +59,15 @@ std::unique_ptr<column> group_min(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
+/**
+ * @brief Internal API to calculate groupwise maximum value
+ * 
+ * @param values Grouped values to get maximum from
+ * @param group_sizes Number of valid elements per group
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
 std::unique_ptr<column> group_max(
     column_view const& values,
     column_view const& group_sizes,
@@ -49,6 +75,16 @@ std::unique_ptr<column> group_max(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
+/**
+ * @brief Internal API to calculate number of non-null values in each group of
+ *  @p values
+ * 
+ * @param values Grouped values to get count of
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
 std::unique_ptr<column> group_count(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
@@ -56,6 +92,18 @@ std::unique_ptr<column> group_count(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
+/**
+ * @brief Internal API to calculate groupwise variance
+ * 
+ * @param values Grouped values to get variance of
+ * @param group_means Pre-calculated groupwise MEAN
+ * @param group_sizes Number of valid elements per group
+ * @param group_labels ID of group corresponding value in @p values belongs to
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `var` is `N - ddof`, where `N` is the group size.
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
 std::unique_ptr<column> group_var(
     column_view const& values,
     column_view const& group_means,
@@ -73,6 +121,7 @@ std::unique_ptr<column> group_var(
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param quantiles List of quantiles q where q lies in [0,1]
  * @param interp Method to use when desired value lies between data points
+ * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_quantiles(
