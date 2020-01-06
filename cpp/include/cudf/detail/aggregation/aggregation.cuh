@@ -36,7 +36,9 @@ struct update_target_element {
 
 template <typename Source, aggregation::Kind k>
 struct update_target_element<
-    Source, k, std::enable_if_t<is_valid_aggregation<Source, k>()>> {
+    Source, k,
+    std::enable_if_t<is_valid_aggregation<Source, k>() and
+                     not std::is_void<corresponding_operator_t<k>>::value>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {

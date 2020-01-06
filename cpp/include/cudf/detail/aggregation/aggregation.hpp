@@ -73,7 +73,9 @@ struct quantile_aggregation : aggregation {
  * @tparam k The `aggregation::Kind` value to map to its corresponding operator
  */
 template <aggregation::Kind k>
-struct corresponding_operator {};
+struct corresponding_operator {
+    using type = void;
+};
 
 template <>
 struct corresponding_operator<aggregation::MIN> {
