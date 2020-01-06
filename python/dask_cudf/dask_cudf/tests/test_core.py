@@ -369,7 +369,7 @@ def test_repartition_simple_divisions(start, stop):
 @pytest.fixture
 def pdf():
     return pd.DataFrame(
-        {"x": [1, 2, 3, 4, 5, 6], "y": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0]}
+        {"x": [1, 2, 3, 4, 5, 6], "y": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0],}
     )
 
 
@@ -450,7 +450,16 @@ def test_drop(gdf, gddf):
 
 
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(reason="RangeIndex has size 0 in cudf"),
+        ),
+        False,
+    ],
+)
 def test_memory_usage(gdf, gddf, index, deep):
 
     dd.assert_eq(
