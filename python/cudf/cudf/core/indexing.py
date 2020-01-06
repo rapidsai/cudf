@@ -292,7 +292,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame, Series
         from cudf.core.column import column_empty
-        from cudf.core.index import as_index, RangeIndex
+        from cudf.core.index import as_index
 
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
