@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -369,7 +370,7 @@ def test_repartition_simple_divisions(start, stop):
 @pytest.fixture
 def pdf():
     return pd.DataFrame(
-        {"x": [1, 2, 3, 4, 5, 6], "y": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0],}
+        {"x": [1, 2, 3, 4, 5, 6], "y": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0]}
     )
 
 
