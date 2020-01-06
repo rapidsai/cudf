@@ -557,9 +557,9 @@ add_library(cudf
             src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
+            src/strings/filling/fill.cu
             src/strings/find.cu
             src/strings/find_multiple.cu
-            src/strings/filling/fill.cu
             src/strings/padding.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
@@ -567,6 +567,7 @@ add_library(cudf
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
+            src/strings/strip.cu
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu

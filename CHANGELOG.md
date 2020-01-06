@@ -11,6 +11,7 @@
 
 ## Improvements
 
+- PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
@@ -48,6 +49,7 @@
 - PR #3668 Fixing CHECK_CUDA debug build issue
 - PR #3684 Fix ends_with logic for matching string case
 - PR #3691 Fix create_offsets to handle offset correctly
+- PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 
 
 # cuDF 0.11.0 (11 Dec 2019)
