@@ -40,7 +40,7 @@ TYPED_TEST(RoundRobinTest, RoundRobin3Partitions) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 1);
+        cudf::experimental::bool8 ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -77,6 +77,10 @@ TYPED_TEST(RoundRobinTest, RoundRobin3Partitions) {
     if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
       fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,0,1,0,1,0,1,0,1,1,0,1,0});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+
+      EXPECT_EQ(inputRows, expected_column_view2.size());
+      EXPECT_EQ(inputRows, output_column_view2.size());
+      
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
       fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,3,6,9,12,1,4,7,10,2,5,8,11});
