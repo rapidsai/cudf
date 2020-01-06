@@ -34,6 +34,33 @@ namespace detail {
 
 namespace {
 
+template <typename ResultType, typename T>
+struct var_transform
+{
+  column_device_view d_values;
+  column_device_view d_means;
+  column_device_view d_group_sizes;
+  size_type const* d_group_labels;
+  size_type ddof;
+
+  __device__ ResultType operator() (size_type i) {
+    if (d_values.is_null(i))
+      return 0.0;
+    
+    ResultType x = d_values.element<T>(i);
+    size_type group_idx = d_group_labels[i];
+    size_type group_size = d_group_sizes.element<size_type>(group_idx);
+    
+    // prevent divide by zero error
+    if (group_size == 0 or group_size - ddof <= 0)
+      return 0.0;
+
+    ResultType mean = d_means.element<ResultType>(group_idx);
+    return (x - mean) * (x - mean) / (group_size - ddof);
+  }
+};
+
+
 struct var_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column> >
@@ -62,23 +89,9 @@ struct var_functor {
     auto d_group_sizes = *group_size_view;
 
     auto values_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [=] __device__ (size_type i) -> ResultType {
-        // if (d_values.is_null(i))
-        //   return 0.0;
-        
-        // ResultType x = d_values.element<T>(i);
-        // size_type group_idx = d_group_labels[i];
-        // size_type group_size = d_group_sizes.element<size_type>(group_idx);
-        
-        // // prevent divide by zero error
-        // if (group_size == 0 or group_size - ddof <= 0)
-        //   return 0.0;
-
-        // ResultType mean = d_means.element<ResultType>(group_idx);
-        // return (x - mean) * (x - mean) / (group_size - ddof);
-        return 1.0;
-      }
+      thrust::make_counting_iterator(0), 
+      var_transform<ResultType, T>{d_values, d_means, d_group_sizes, 
+                                   d_group_labels, ddof}
     );
 
     thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
