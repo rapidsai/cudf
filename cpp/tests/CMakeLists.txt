@@ -103,7 +103,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -385,7 +386,8 @@ ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 set(TRANSFORM_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
@@ -761,6 +763,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
