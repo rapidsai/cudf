@@ -57,30 +57,30 @@ struct var_functor {
       make_numeric_column(data_type(type_to_id<ResultType>()),
         group_sizes.size(), mask_state::UNINITIALIZED, stream, mr);
 
-    auto values_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [
-        d_values = *values_view,
-        d_means = *means_view,
-        d_group_sizes = *group_size_view,
-        d_group_labels,
-        ddof
-      ] __device__ (size_type i) -> ResultType {
-        if (d_values.is_null(i))
-          return 0.0;
+    // auto values_it = thrust::make_transform_iterator(
+    //   thrust::make_counting_iterator(0),
+    //   [
+    //     d_values = *values_view,
+    //     d_means = *means_view,
+    //     d_group_sizes = *group_size_view,
+    //     d_group_labels,
+    //     ddof
+    //   ] __device__ (size_type i) -> ResultType {
+    //     if (d_values.is_null(i))
+    //       return 0.0;
         
-        ResultType x = d_values.element<T>(i);
-        size_type group_idx = d_group_labels[i];
-        size_type group_size = d_group_sizes.element<size_type>(group_idx);
+    //     ResultType x = d_values.element<T>(i);
+    //     size_type group_idx = d_group_labels[i];
+    //     size_type group_size = d_group_sizes.element<size_type>(group_idx);
         
-        // prevent divide by zero error
-        if (group_size == 0 or group_size - ddof <= 0)
-          return 0.0;
+    //     // prevent divide by zero error
+    //     if (group_size == 0 or group_size - ddof <= 0)
+    //       return 0.0;
 
-        ResultType mean = d_means.element<ResultType>(group_idx);
-        return (x - mean) * (x - mean) / (group_size - ddof);
-      }
-    );
+    //     ResultType mean = d_means.element<ResultType>(group_idx);
+    //     return (x - mean) * (x - mean) / (group_size - ddof);
+    //   }
+    // );
 
     // thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
     //                       group_labels.begin(), group_labels.end(), values_it, 
