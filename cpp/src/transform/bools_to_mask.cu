@@ -45,7 +45,7 @@ bools_to_mask(column_view const& input,
     };
     if(input.nullable()) {
         // Nulls are considered false
-        auto input_begin = make_null_replacement_iterator<experimental::bool8>(input_device_view, 0);
+        auto input_begin = make_null_replacement_iterator<experimental::bool8>(input_device_view, false_v);
 
         auto mask = detail::valid_if(input_begin,
                                      input_begin + input.size(),
