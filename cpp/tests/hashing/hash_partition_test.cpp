@@ -145,18 +145,19 @@ TEST_F(HashPartition, ColumnsToHash)
   auto columns_to_hash = std::vector<cudf::size_type>({0});
 
   cudf::size_type const num_partitions = 3;
-  auto first_result = cudf::hash_partition(first_input, columns_to_hash, num_partitions);
-  auto second_result = cudf::hash_partition(second_input, columns_to_hash, num_partitions);
+  std::unique_ptr<cudf::experimental::table> first_result, second_result;
+  std::vector<cudf::size_type> first_offsets, second_offsets;
+  std::tie(first_result, first_offsets) = cudf::hash_partition(first_input, columns_to_hash, num_partitions);
+  std::tie(second_result, second_offsets) = cudf::hash_partition(second_input, columns_to_hash, num_partitions);
 
-  // Expect output to have size num_partitions
-  EXPECT_EQ(static_cast<size_t>(num_partitions), first_result.size());
-  EXPECT_EQ(first_result.size(), second_result.size());
+  // Expect offsets to be equal and num_partitions in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  EXPECT_TRUE(std::equal(first_offsets.begin(), first_offsets.end(),
+    second_offsets.begin(), second_offsets.end()));
 
   // Expect same result for the hashed columns
-  for (cudf::size_type i = 0; i < num_partitions; ++i) {
-    expect_columns_equal(first_result[i]->get_column(0).view(),
-      second_result[i]->get_column(0).view());
-  }
+  expect_columns_equal(first_result->get_column(0).view(),
+    second_result->get_column(0).view());
 }
 
 template <typename T>
