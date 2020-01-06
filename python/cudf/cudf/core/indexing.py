@@ -334,10 +334,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 # need Series() in case a scalar is returned
                 df[col_num] = Series(columns_df._columns[col_num][arg[0]])
 
-            if isinstance(columns_df, RangeIndex):
-                df.index = RangeIndex(columns_df.index[arg[0]])
-            else:
-                df.index = as_index(columns_df.index[arg[0]])
+            df.index = as_index(columns_df.index[arg[0]])
             df.columns = columns_df.columns
 
         # Iloc Step 3:
