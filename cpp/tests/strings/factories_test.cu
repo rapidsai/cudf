@@ -181,23 +181,27 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 
 TEST_F(StringsFactoriesTest, CreateOffsets)
 {
-  std::vector<std::string> strings = {"this", "is", "a", "column", "of", "strings"};
-  cudf::test::strings_column_wrapper sw = { strings.begin(), strings.end() };                                                
-  cudf::column_view col(sw);
-  std::vector<cudf::size_type> indices{ 2,6 };
-  auto result = cudf::experimental::slice(col, indices);
-  auto expected_index = indices[0];
-  for(size_t idx=0; idx<result.size(); idx++)
-  {     
-    auto strings_data = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
-    thrust::host_vector<char> h_chars(strings_data.first);
-    thrust::host_vector<cudf::size_type> h_offsets(strings_data.second);
-    for( size_t jdx=0; jdx < h_offsets.size()-1; ++jdx )
+    std::vector<std::string> strings = {"this", "is", "a", "column", "of", "strings"};
+    cudf::test::strings_column_wrapper sw = { strings.begin(), strings.end() };
+    cudf::column_view col(sw);
+    std::vector<cudf::size_type> indices{ 0,2,3,6 };
+    auto result = cudf::experimental::slice(col, indices);
+
+    std::vector<std::vector<std::string>> expecteds{ std::vector<std::string>{"this", "is"},  // [0,2)
+                                                     std::vector<std::string>{"column", "of", "strings"} // [3,6)
+                                                   };
+    for(size_t idx=0; idx < result.size(); idx++)
     {
-        auto offset = h_offsets[jdx];
-        auto length = h_offsets[jdx+1] - offset;
-        std::string str(h_chars.data()+offset, length);
-        EXPECT_EQ(str,strings[expected_index++]);
-    }
+       auto strings_data = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
+       thrust::host_vector<char> h_chars(strings_data.first);
+       thrust::host_vector<cudf::size_type> h_offsets(strings_data.second);
+       auto expected_strings = expecteds[idx];
+       for( size_t jdx=0; jdx < h_offsets.size()-1; ++jdx )
+       {
+           auto offset = h_offsets[jdx];
+           auto length = h_offsets[jdx+1] - offset;
+           std::string str(h_chars.data()+offset, length);
+           EXPECT_EQ(str,expected_strings[jdx]);
+       }
   }
 }
