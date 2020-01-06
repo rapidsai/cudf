@@ -62,6 +62,22 @@ struct quantile_aggregation : aggregation {
   experimental::interpolation _interpolation;  ///< Desired interpolation
 };
 
+/**
+ * @brief Sentinel value used for `ARGMAX` aggregation.
+ *
+ * The output column for an `ARGMAX` aggregation is initialized with the
+ * sentinel value to indicate an unused element.
+ */
+constexpr size_type ARGMAX_SENTINEL{-1};
+
+/**
+ * @brief Sentinel value used for `ARGMIN` aggregation.
+ *
+ * The output column for an `ARGMIN` aggregation is initialized with the
+ * sentinel value to indicate an unused element.
+ */
+constexpr size_type ARGMIN_SENTINEL{-1};
+
 /**	
  * @brief Maps an `aggregation::Kind` value to it's corresponding binary	
  * operator.	
