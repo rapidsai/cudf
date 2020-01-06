@@ -225,6 +225,7 @@
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3685 Add string support to contiguous_split.
 
 ## Bug Fixes
 
