@@ -1422,7 +1422,7 @@ class Series(object):
             raise ValueError("Column must have no nulls.")
         return cudautils.compact_mask_bytes(self.data.mem)
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
@@ -1430,11 +1430,13 @@ class Series(object):
         ----------
 
         dtype : data type
+        copy : bool, default `False`
+               params to decide whether to return a view
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
-        out : Series
+        out : Series TODO
             Copy of ``self`` cast to the given dtype. Returns
             ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
@@ -1442,11 +1444,18 @@ class Series(object):
             raise ValueError("invalid error value specified")
 
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            if copy:
+                return self._copy_construct()
+            else:
+                return self
         try:
-            return self._copy_construct(
-                data=self._column.astype(dtype, **kwargs)
-            )
+            if copy:
+                return self._copy_construct(
+                    data=self._column.astype(dtype, **kwargs)
+                )
+            else:
+                self._column = self._column.astype(dtype, **kwargs)
+                return self
         except Exception as e:
             if errors == "raise":
                 raise e
