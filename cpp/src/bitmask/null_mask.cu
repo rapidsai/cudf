@@ -388,7 +388,7 @@ std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
                                       cudaStream_t stream) {
   CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
 
-  if (bitmask == nullptr) {
+  if ((bitmask == nullptr) || (indices.size() == 0)) {
     return std::vector<size_type>();
   }
 
@@ -447,7 +447,7 @@ std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
                                   first_word_indices, last_word_indices,
                                   stream);
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   // third adjust counts in segement boundaries (if segments are not
   // word-aligned)
@@ -461,14 +461,14 @@ std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
       bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(),
       d_null_counts.begin());
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(), d_null_counts.data().get(),
                            num_ranges * sizeof(size_type),
                            cudaMemcpyDeviceToHost, stream));
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   return ret;
 }
