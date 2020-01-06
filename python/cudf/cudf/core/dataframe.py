@@ -2136,6 +2136,8 @@ class DataFrame(Table):
         inp.index = RangeIndex(start=0, stop=len(self))
         result = libcudf.transpose.transpose(inp)
         result._index = as_index(temp_columns)
+        if not isinstance(temp_index, cudf.MultiIndex):
+            temp_index = temp_index.to_pandas()
         result.columns = temp_index
         return result
 
