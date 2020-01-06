@@ -73,6 +73,9 @@ struct var_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
+    // Running this in debug build causes a runtime error:
+    // `reduce_by_key failed on 2nd step: invalid device function`
+    #if !defined(__CUDACC_DEBUG__)
     using ResultType = experimental::detail::target_type_t<
                         T, experimental::aggregation::Kind::VARIANCE>;
     size_type const* d_group_labels = group_labels.data().get();
@@ -114,6 +117,9 @@ struct var_functor {
       });
 
     return result;
+    #else
+    CUDF_FAIL("Groupby std/var supported in debug build");
+    #endif
   }
 
   template <typename T, typename... Args>
