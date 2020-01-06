@@ -23,6 +23,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 
@@ -239,6 +240,8 @@ template <typename T>
 struct value_accessor; 
 template <typename T, bool has_nulls>
 struct pair_accessor; 
+template <typename T>
+struct mutable_value_accessor;
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
@@ -534,6 +537,40 @@ class alignas(16) mutable_column_device_view
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Iterator for navigating this column
+   *---------------------------------------------------------------------------**/
+  using count_it = thrust::counting_iterator<size_type>;
+  template <typename T>
+  using iterator =
+      thrust::transform_iterator<detail::mutable_value_accessor<T>, count_it>;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return first element (accounting for offset) after underlying data
+   * is casted to the specified type.
+   *
+   * @tparam T The desired type
+   * @return T* Pointer to the first element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), iterator<T>>
+  begin() {
+    return iterator<T>{count_it{0}, detail::mutable_value_accessor<T>{*this}};
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return one past the last element after underlying data is casted to
+   * the specified type.
+   *
+   * @tparam T The desired type
+   * @return T const* Pointer to one past the last element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), iterator<T>>
+  end() {
+    return iterator<T>{count_it{size()}, detail::mutable_value_accessor<T>{*this}};
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
@@ -724,5 +761,22 @@ struct pair_accessor {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
 };
+
+template <typename T>
+struct mutable_value_accessor {
+  mutable_column_device_view col;  ///< mutable column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col mutable column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  mutable_value_accessor(mutable_column_device_view& _col) : col{_col} {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
+                 "the data type mismatch");
+  }
+
+  __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }
+};
+
 }  // namespace detail
 }  // namespace cudf

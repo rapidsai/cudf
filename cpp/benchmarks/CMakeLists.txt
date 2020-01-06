@@ -55,12 +55,21 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
 set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
+###################################################################################################
+# - contiguous_split benchmark  -------------------------------------------------------------------
+
+set(CONTIGUOUS_SPLIT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/contiguous_split_benchmark.cu")
+
+ConfigureBench(CONTIGUOUS_SPLIT_BENCH "${CONTIGUOUS_SPLIT_BENCH_SRC}")
 
 ###################################################################################################
 # - apply_boolean_mask benchmark ------------------------------------------------------------------------------

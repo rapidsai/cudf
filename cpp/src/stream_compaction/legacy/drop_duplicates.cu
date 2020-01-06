@@ -135,7 +135,7 @@ get_unique_ordered_indices(const cudf::table& keys,
   }
   //not resizing vector to avoid copy
 
-  return std::make_pair(unique_indices, 
+  return std::make_pair(std::move(unique_indices), 
                         thrust::distance(unique_indices.begin(), result_end));
 }
 
