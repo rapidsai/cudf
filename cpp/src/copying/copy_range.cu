@@ -14,98 +14,209 @@
  * limitations under the License.
  */
 
-#include "copy_range.cuh"
 #include <cudf/copying.hpp>
+#include <cudf/types.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy_range.cuh>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/detail/copy_range.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
-namespace cudf {
+#include <thrust/iterator/constant_iterator.h>
 
-namespace detail {
+#include <cuda_runtime.h>
 
-struct column_range_factory {
-  gdf_column column;
-  gdf_index_type begin;
+#include <memory>
 
-  template <typename T>
-  struct column_range {
-    T const * column_data;
-    bit_mask_t const * bitmask;
-    gdf_index_type begin;
+namespace {
 
-    __device__
-    T data(gdf_index_type index) { 
-      return column_data[begin + index]; }
-
-    __device__
-    bool valid(gdf_index_type index) {
-      return bit_mask::is_valid(bitmask, begin + index);
-    }
-  };
-
-  template <typename T>
-  column_range<T> make() {
-    return column_range<T>{
-      static_cast<T*>(column.data),
-      reinterpret_cast<bit_mask_t*>(column.valid),
-      begin
-    };
+template <typename T>
+void in_place_copy_range(
+    cudf::column_view const& source, cudf::mutable_column_view& target,
+    cudf::size_type source_begin, cudf::size_type source_end,
+    cudf::size_type target_begin,
+    cudaStream_t stream = 0) {
+  auto p_source_device_view =
+    cudf::column_device_view::create(source, stream);
+  if (p_source_device_view->has_nulls()) {
+    cudf::experimental::detail::copy_range(
+      cudf::experimental::detail::make_null_replacement_iterator<T>(
+        *p_source_device_view, T()) + source_begin,
+      cudf::experimental::detail::make_validity_iterator(
+        *p_source_device_view) + source_begin,
+      target, target_begin, target_begin + (source_end - source_begin),
+      stream);
   }
-};
-
-}; // namespace detail
-
-void copy_range(gdf_column *out_column, gdf_column const &in_column,
-                gdf_index_type out_begin, gdf_index_type out_end, 
-                gdf_index_type in_begin)
-{
-  gdf_size_type num_elements = out_end - out_begin;
-  if (num_elements != 0) { // otherwise no-op
-    validate(in_column);
-    validate(out_column);
-    
-    CUDF_EXPECTS(out_column->dtype == in_column.dtype, "Data type mismatch");
-    
-    if (cudf::has_nulls(in_column)) {
-      CUDF_EXPECTS(cudf::is_nullable(*out_column),
-                   "Expected nullable output column");
-    }
-    
-    // out range validated by detail::copy_range
-    CUDF_EXPECTS((in_begin >= 0) && (in_begin + num_elements <= in_column.size),
-                 "Range is out of bounds");
-
-    if (out_column->dtype == GDF_STRING_CATEGORY) {
-      // if the columns are string types then we need to combine categories
-      // before copying to ensure the strings referred to by the new indices
-      // are included in the destination column
-
-      // make temporary columns which will have synced categories
-      // TODO: these copies seem excessively expensive, but 
-      // sync_column_categories doesn't copy the valid mask
-      gdf_column temp_out = cudf::copy(*out_column);
-      gdf_column temp_in  = cudf::copy(in_column);
-
-      gdf_column * input_cols[2] = {&temp_out,
-                                    const_cast<gdf_column*>(&in_column)};
-      gdf_column * temp_cols[2] = {out_column, &temp_in};
-
-      // sync categories
-      CUDF_EXPECTS(GDF_SUCCESS ==
-        sync_column_categories(input_cols, temp_cols, 2),
-        "Failed to synchronize NVCategory");
-
-      detail::copy_range(out_column,
-                         detail::column_range_factory{temp_in, in_begin},
-                         out_begin, out_end);
-      
-      gdf_column_free(&temp_out);
-      gdf_column_free(&temp_in);
-    }
-    else {
-      detail::copy_range(out_column,
-                         detail::column_range_factory{in_column, in_begin},
-                         out_begin, out_end);
-    }
+  else {
+    cudf::experimental::detail::copy_range(
+      p_source_device_view->begin<T>() + source_begin,
+      thrust::make_constant_iterator(true),  // dummy
+      target, target_begin, target_begin + (source_end - source_begin),
+      stream);
   }
 }
 
-}; // namespace cudf
+struct in_place_copy_range_dispatch {
+  cudf::column_view const& source;
+  cudf::mutable_column_view& target;
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_width<T>(), void>
+  operator()(cudf::size_type source_begin, cudf::size_type source_end,
+             cudf::size_type target_begin, cudaStream_t stream = 0) {
+    in_place_copy_range<T>(
+      source, target, source_begin, source_end, target_begin, stream);
+  }
+
+  template <typename T>
+  std::enable_if_t<not cudf::is_fixed_width<T>(), void>
+  operator()(cudf::size_type source_begin, cudf::size_type source_end,
+             cudf::size_type target_begin, cudaStream_t stream = 0) {
+    CUDF_FAIL("in-place copy does not work for variable width types.");
+  }
+};
+
+struct out_of_place_copy_range_dispatch {
+  cudf::column_view const& source;
+  cudf::column_view const& target;
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type source_begin, cudf::size_type source_end,
+      cudf::size_type target_begin,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+      cudaStream_t stream = 0) {
+    auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
+    if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
+      p_ret->set_null_mask(
+        cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
+    }
+
+    if (source_end != source_begin) {  // otherwise no-op
+      auto ret_view = p_ret->mutable_view();
+      in_place_copy_range<T>(
+        source, ret_view, source_begin, source_end, target_begin, stream);
+    }
+
+    return p_ret;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::string_view, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type source_begin, cudf::size_type source_end,
+      cudf::size_type target_begin,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+      cudaStream_t stream = 0) {
+    auto target_end = target_begin + (source_end - source_begin);
+    auto p_source_device_view =
+      cudf::column_device_view::create(source, stream);
+    if (source.has_nulls()) {
+      return cudf::strings::detail::copy_range(
+        cudf::experimental::detail::
+          make_null_replacement_iterator<cudf::string_view>(
+            *p_source_device_view, cudf::string_view()) + source_begin,
+        cudf::experimental::detail::make_validity_iterator(
+          *p_source_device_view) + source_begin,
+        cudf::strings_column_view(target), target_begin, target_end,
+        mr, stream);
+    }
+    else {
+      return cudf::strings::detail::copy_range(
+        p_source_device_view->begin<cudf::string_view>() + source_begin,
+        thrust::make_constant_iterator(true),
+        cudf::strings_column_view(target), target_begin, target_end,
+        mr, stream);
+    }
+  }
+};
+
+}
+
+namespace cudf {
+namespace experimental {
+
+namespace detail {
+
+void copy_range(column_view const& source, mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin,
+                cudaStream_t stream) {
+  CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
+               "In-place copy_range does not support variable-sized types.");
+  CUDF_EXPECTS((source_begin <= source_end) &&
+                 (source_begin >= 0) &&
+                 (source_begin < source.size()) &&
+                 (source_end <= source.size()) &&
+                 (target_begin >= 0) &&
+                 (target_begin < target.size()) &&
+                 (target_begin + (source_end - source_begin) <=
+                   target.size()) &&
+                 // overflow
+                 (target_begin + (source_end - source_begin) >= target_begin),
+               "Range is out of bounds.");
+  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
+  CUDF_EXPECTS((target.nullable() == true) || (source.has_nulls() == false),
+               "target should be nullable if source has null values.");
+
+  if (source_end != source_begin) {  // otherwise no-op
+    cudf::experimental::type_dispatcher(
+      target.type(),
+      in_place_copy_range_dispatch{source, target},
+      source_begin, source_end, target_begin, stream);
+  }
+}
+
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
+                                   rmm::mr::device_memory_resource* mr,
+                                   cudaStream_t stream) {
+  CUDF_EXPECTS((source_begin >= 0) &&
+                 (source_begin <= source_end) &&
+                 (source_begin < source.size()) &&
+                 (source_end <= source.size()) &&
+                 (target_begin >= 0) &&
+                 (target_begin < target.size()) &&
+                 (target_begin + (source_end - source_begin) <=
+                   target.size()) &&
+                 // overflow
+                 (target_begin + (source_end - source_begin) >= target_begin),
+               "Range is out of bounds.");
+  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
+
+  return cudf::experimental::type_dispatcher(
+    target.type(),
+    out_of_place_copy_range_dispatch{source, target},
+    source_begin, source_end, target_begin, mr, stream);
+}
+
+}  // namespace detail
+
+void copy_range(column_view const& source, mutable_column_view& target,
+                size_type source_begin, size_type source_end,
+                size_type target_begin) {
+  return detail::copy_range(source, target, source_begin, source_end,
+                            target_begin, 0);
+}
+
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin, size_type source_end,
+                                   size_type target_begin,
+                                   rmm::mr::device_memory_resource* mr) {
+  return detail::copy_range(source, target, source_begin, source_end,
+                            target_begin, mr, 0);
+}
+
+}  // namespace experimental
+} // namespace cudf

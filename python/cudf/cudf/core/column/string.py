@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 
 import nvstrings
 import rmm
@@ -485,6 +486,18 @@ class StringColumn(column.TypedColumnBase):
     def str(self, index=None):
         return StringMethods(self, index=index)
 
+    def __sizeof__(self):
+        n = self._data.device_memory()
+        if self._mask:
+            n += self._mask.__sizeof__()
+        return n
+
+    def _memory_usage(self, deep=False):
+        if deep:
+            return self.__sizeof__()
+        else:
+            return self.str().size() * self.dtype.itemsize
+
     def __len__(self):
         return self._data.size()
 
@@ -538,6 +551,15 @@ class StringColumn(column.TypedColumnBase):
         elif mem_dtype.type is np.datetime64:
             kwargs.update(units=np.datetime_data(mem_dtype)[0])
             mem_dtype = np.dtype(np.int64)
+            if "format" not in kwargs:
+                if len(self.data) > 0:
+                    # infer on host from the first not na element
+                    fmt = pd.core.tools.datetimes._guess_datetime_format(
+                        self[self.notna()][0]
+                    )
+                    kwargs.update(format=fmt)
+            else:
+                fmt = None
 
         out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
         out_ptr = libcudf.cudf.get_ctype_ptr(out_arr)
@@ -587,7 +609,10 @@ class StringColumn(column.TypedColumnBase):
 
     def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
-        return pd.Series(pd_series, index=index, name=self.name)
+        if index is not None:
+            pd_series.index = index
+        pd_series.name = self.name
+        return pd_series
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -605,7 +630,7 @@ class StringColumn(column.TypedColumnBase):
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
 
-        return self.to_arrow().to_pandas()
+        return self.to_arrow().to_pandas().array
 
     def serialize(self):
         header = {"null_count": self._null_count}
@@ -639,14 +664,14 @@ class StringColumn(column.TypedColumnBase):
         # Deserialize the mask, value, and offset frames
         arrays = []
 
-        for i, frame in enumerate(frames):
-            if isinstance(frame, memoryview):
-                sheader = header["subheaders"][i]
-                dtype = sheader["dtype"]
-                frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
+        for each_frame in frames:
+            if hasattr(each_frame, "__cuda_array_interface__"):
+                each_frame = cuda.as_cuda_array(each_frame)
+            elif isinstance(each_frame, memoryview):
+                each_frame = np.asarray(each_frame)
+                each_frame = cudautils.to_device(each_frame)
 
-            arrays.append(libcudf.cudf.get_ctype_ptr(frame))
+            arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
@@ -659,7 +684,8 @@ class StringColumn(column.TypedColumnBase):
             ncount=header["null_count"],
             bdevmem=True,
         )
-        return data
+        typ = pickle.loads(header["type"])
+        return typ(data)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":

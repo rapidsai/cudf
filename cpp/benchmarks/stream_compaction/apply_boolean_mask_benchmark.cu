@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/stream_compaction.hpp>
+#include <cudf/legacy/stream_compaction.hpp>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
@@ -27,10 +27,10 @@
 
 namespace {
 
-constexpr gdf_size_type hundredM = 1e8;
-constexpr gdf_size_type tenM = 1e7;
-constexpr gdf_size_type tenK = 1e4;
-constexpr gdf_size_type fifty_percent = 50;
+constexpr cudf::size_type hundredM = 1e8;
+constexpr cudf::size_type tenM = 1e7;
+constexpr cudf::size_type tenK = 1e4;
+constexpr cudf::size_type fifty_percent = 50;
 
 static void percent_range(benchmark::internal::Benchmark* b) {
   b->Unit(benchmark::kMillisecond);
@@ -61,12 +61,12 @@ public:
 };
 
 template <typename T>
-void calculate_bandwidth(benchmark::State& state, gdf_size_type num_columns) {
-  const gdf_size_type column_size{static_cast<gdf_size_type>(state.range(0))}; 
-  const gdf_size_type percent_true{static_cast<gdf_size_type>(state.range(1))}; 
+void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns) {
+  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))}; 
+  const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))}; 
 
   float fraction = percent_true / 100.f;
-  gdf_size_type column_size_out = fraction * column_size;
+  cudf::size_type column_size_out = fraction * column_size;
   int64_t mask_size = sizeof(cudf::bool8) * column_size + gdf_valid_allocation_size(column_size);
   int64_t validity_bytes_in  = (fraction >= 1.0f/32) ? 
     gdf_valid_allocation_size(column_size) :
@@ -87,26 +87,26 @@ void calculate_bandwidth(benchmark::State& state, gdf_size_type num_columns) {
 } // namespace anonymous
 
 template <class T>
-void BM_apply_boolean_mask(benchmark::State& state, gdf_size_type num_columns) {
+void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns) {
   using wrapper = cudf::test::column_wrapper<T>;
   using mask_wrapper = cudf::test::column_wrapper<cudf::bool8>;
 
-  const gdf_size_type column_size{static_cast<gdf_size_type>(state.range(0))}; 
-  const gdf_size_type percent_true{static_cast<gdf_size_type>(state.range(1))}; 
+  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))}; 
+  const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))}; 
 
   std::vector<cudf::test::column_wrapper<T> > columns;
 
   for (int i = 0; i < num_columns; i++) {
     columns.emplace_back(column_size,
-      [](gdf_index_type row) { return static_cast<T>(row); },
-      [](gdf_index_type row) { return true; });
+      [](cudf::size_type row) { return static_cast<T>(row); },
+      [](cudf::size_type row) { return true; });
   }
 
   mask_wrapper mask { column_size,
-    [&](gdf_index_type row) { 
+    [&](cudf::size_type row) { 
       return cudf::bool8{random_int(0, 100) < percent_true}; 
     },
-    [](gdf_index_type row)  { return true; }
+    [](cudf::size_type row)  { return true; }
   };
 
   std::vector<gdf_column*> raw_columns(num_columns, nullptr);

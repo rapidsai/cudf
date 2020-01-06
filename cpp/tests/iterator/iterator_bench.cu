@@ -40,11 +40,11 @@
 #include <tuple>
 
 #include <cuda_profiler_api.h>
-#include <utilities/error_utils.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <cudf/utilities/error.hpp>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
-#include <iterator/iterator.cuh>         // include iterator header
-#include <utilities/device_atomics.cuh>  // need for atomics and device operator
+#include <iterator/legacy/iterator.cuh>  // include iterator header
+#include <utilities/legacy/device_atomics.cuh>  // need for atomics and device operator
 
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
@@ -286,8 +286,8 @@ Generic reduction implementation with support for validity mask
 */
 template<typename T_in, typename T_out, typename F>
 __global__
-void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
-                      gdf_size_type size, T_out *result,
+void gpu_reduction_op(const T_in *data, const cudf::valid_type *mask,
+                      cudf::size_type size, T_out *result,
                       F functor, T_out identity)
 {
     typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
@@ -364,16 +364,16 @@ void raw_stream_bench_cub_block(cudf::test::column_wrapper<T>& col, rmm::device_
 struct benchmark
 {
   template <typename T>
-  void operator()(gdf_size_type column_size, int iters, bool do_full_test)
+  void operator()(cudf::size_type column_size, int iters, bool do_full_test)
   {
     cudf::test::column_wrapper<T> hasnull_F(
       column_size,
-      [](gdf_index_type row) { return T(row); });
+      [](cudf::size_type row) { return T(row); });
 
     cudf::test::column_wrapper<T> hasnull_T(
       column_size,
-      [](gdf_index_type row) { return T(row); },
-      [](gdf_index_type row) { return row % 2 == 0; });
+      [](cudf::size_type row) { return T(row); },
+      [](cudf::size_type row) { return row % 2 == 0; });
 
     rmm::device_vector<T> dev_result(1, T{0});
 
@@ -407,7 +407,7 @@ struct benchmark
   };
 };
 
-void benchmark_types(gdf_size_type column_size, int iters, gdf_dtype type=N_GDF_TYPES, bool do_full_test=false)
+void benchmark_types(cudf::size_type column_size, int iters, gdf_dtype type=N_GDF_TYPES, bool do_full_test=false)
 {
   std::vector<gdf_dtype> types{};
   if (type == N_GDF_TYPES)
@@ -428,7 +428,7 @@ void benchmark_types(gdf_size_type column_size, int iters, gdf_dtype type=N_GDF_
 
 int main(int argc, char **argv)
 {
-  gdf_size_type column_size{10000000};
+  cudf::size_type column_size{10000000};
   int iters{1000};
   gdf_dtype type = N_GDF_TYPES;
   bool do_full_test = false;

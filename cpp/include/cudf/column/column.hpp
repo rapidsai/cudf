@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include "column_view.hpp"
 
@@ -66,13 +67,13 @@ class column {
    *
    * @param other The column whose contents will be moved into the new column
    *---------------------------------------------------------------------------**/
-  column(column&& other);
+  column(column&& other) noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from existing device memory.
    *
    * @note This constructor is primarily intended for use in column factory
-   * functions. 
+   * functions.
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
@@ -129,6 +130,38 @@ class column {
    * elements indicated by the `null_mask` (if it exists).
    *---------------------------------------------------------------------------**/
   size_type null_count() const;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
+   *
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
+   * of `new_null_mask` does not match the size of this column.
+   *
+   * @param new_null_mask New null value indicator bitmask (rvalue overload &
+   * moved) to set the column's null value indicator mask. May be empty if
+   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown,
+   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
+   * computed on the first invocation of `null_count()`.
+   *---------------------------------------------------------------------------**/
+  void set_null_mask(rmm::device_buffer&& new_null_mask,
+                     size_type new_null_count = UNKNOWN_NULL_COUNT);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
+   *
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
+   * of `new_null_mask` does not match the size of this column.
+   *
+   * @param new_null_mask New null value indicator bitmask (lvalue overload &
+   * copied) to set the column's null value indicator mask. May be empty if
+   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown,
+   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
+   * computed on the first invocation of `null_count()`.
+   *---------------------------------------------------------------------------**/
+  void set_null_mask(rmm::device_buffer const& new_null_mask,
+                     size_type new_null_count = UNKNOWN_NULL_COUNT);
 
   /**---------------------------------------------------------------------------*
    * @brief Updates the count of null elements.
@@ -191,6 +224,34 @@ class column {
   };
 
   /**---------------------------------------------------------------------------*
+   * @brief Wrapper for the contents of a column.
+   *
+   * Returned by `column::release()`.
+   *---------------------------------------------------------------------------**/
+  struct contents {
+    std::unique_ptr<rmm::device_buffer> data;
+    std::unique_ptr<rmm::device_buffer> null_mask;
+    std::vector<std::unique_ptr<column>> children;
+  };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Releases ownership of the column's contents.
+   *
+   * It is the caller's responsibility to query the `size(), null_count(),
+   * type()` before invoking `release()`.
+   *
+   * After calling `release()` on a column it will be empty, i.e.:
+   * - `type() == data_type{EMPTY}`
+   * - `size() == 0`
+   * - `null_count() == 0`
+   * - `num_children() == 0`
+   *
+   * @return A `contents` struct containing the data, null mask, and children of
+   * the column.
+   *---------------------------------------------------------------------------**/
+  contents release() noexcept;
+
+  /**---------------------------------------------------------------------------*
    * @brief Creates an immutable, non-owning view of the column's data and
    * children.
    *
@@ -251,5 +312,23 @@ class column {
       _children{};  ///< Depending on element type, child
                     ///< columns may contain additional data
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief Concatenates multiple columns into a single column.
+ *
+ * @throws cudf::logic_error
+ * If types of the input columns mismatch
+ *
+ * @param columns_to_concat The column views to be concatenated into a single
+ * column
+ * @param mr Optional The resource to use for all allocations
+ * @param stream Optional The stream on which to execute all allocations and copies
+ * @return Unique pointer to a single table having all the rows from the
+ * elements of `columns_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<column>
+concatenate(std::vector<column_view> const& columns_to_concat,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+            cudaStream_t stream = 0);
 
 }  // namespace cudf

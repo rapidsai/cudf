@@ -6,7 +6,6 @@
 # cython: language_level = 3
 
 from cudf._lib.cudf cimport *
-from cudf._lib.includes.io cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -14,17 +13,30 @@ from libcpp.vector cimport vector
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::json" nogil:
 
-    cdef struct reader_options:
-        gdf_input_type source_type
-        string source
-        vector[string] dtype
-        string compression
+    cdef cppclass reader_options:
         bool lines
+        string compression
+        vector[string] dtype
 
         reader_options() except +
 
+        reader_options(
+            bool lines,
+            string compression,
+            vector[string] dtype
+        ) except +
+
     cdef cppclass reader:
-        reader(const reader_options &args) except +
+        reader(
+            string filepath,
+            const reader_options &args
+        ) except +
+
+        reader(
+            const char *buffer,
+            size_t length,
+            const reader_options &args
+        ) except +
 
         cudf_table read() except +
 

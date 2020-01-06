@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,296 +13,214 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/transpose.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
-
-#include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
-#include <utilities/cudf_utils.h>
-
-#include <gtest/gtest.h>
-
-#include <vector>
+#include <limits>
 #include <random>
 #include <algorithm>
-#include <memory>
 
-/** macro to throw a c++ std::runtime_error */
-#define THROW(fmt, ...)                                                 \
-    do {                                                                \
-        std::string msg;                                                \
-        char errMsg[2048];                                              \
-        std::sprintf(errMsg, "Exception occured! file=%s line=%d: ",    \
-                     __FILE__, __LINE__);                               \
-        msg += errMsg;                                                  \
-        std::sprintf(errMsg, fmt, ##__VA_ARGS__);                       \
-        msg += errMsg;                                                  \
-        throw std::runtime_error(msg);                                  \
-    } while(0)
+namespace {
 
-/** macro to check for a conditional and assert on failure */
-#define ASSERT(check, fmt, ...)                  \
-    do {                                         \
-        if(!(check))  THROW(fmt, ##__VA_ARGS__); \
-    } while(0)
+using cudf::test::fixed_width_column_wrapper;
 
-/** check for cuda runtime API errors and assert accordingly */
-#define CUDA_CHECK(call)                                \
-    do {                                                \
-        cudaError_t status = call;                      \
-        ASSERT(status == cudaSuccess,                   \
-               "FAIL: call='%s'. Reason:%s\n",          \
-               #call, cudaGetErrorString(status));      \
-    } while(0)
+template <typename T, typename F>
+auto generate_vectors(size_t ncols, size_t nrows, F generator)
+{
+  std::vector<std::vector<T>> values(ncols);
 
-/** performs a device to host copy */
-template <typename Type>
-void updateHost(Type* hPtr, const Type* dPtr, size_t len) {
-    CUDA_CHECK(cudaMemcpy(hPtr, dPtr, len*sizeof(Type),
-                          cudaMemcpyDeviceToHost));
-}
+  std::for_each(values.begin(), values.end(),
+    [generator, nrows](std::vector<T>& col) {
+      col.resize(nrows);
+      std::generate(col.begin(), col.end(), generator);
+    });
 
-/*
- * @brief Helper function to compare 2 device n-D arrays with custom comparison
- * @tparam T the data type of the arrays
- * @tparam L the comparator lambda or object function
- * @param expected expected value(s)
- * @param actual actual values
- * @param eq_compare the comparator
- * @return the testing assertion to be later used by ASSERT_TRUE/EXPECT_TRUE
- * @{
- */
-template<typename T, typename L>
-::testing::AssertionResult devArrMatch(const T* expected, const T* actual,
-                                       size_t size, L eq_compare) {
-    std::shared_ptr<T> exp_h(new T [size]);
-    std::shared_ptr<T> act_h(new T [size]);
-    updateHost<T>(exp_h.get(), expected, size);
-    updateHost<T>(act_h.get(), actual, size);
-    for(size_t i(0);i<size;++i) {
-        auto exp = exp_h.get()[i];
-        auto act = act_h.get()[i];
-        if(!eq_compare(exp, act)) {
-            return ::testing::AssertionFailure() << "actual=" << act
-                                                 << " != expected=" << exp
-                                                 << " @" << i;
-        }
-    }
-    return ::testing::AssertionSuccess();
+  return values;
 }
 
 template <typename T>
-struct CompareApproxAbs {
-    CompareApproxAbs(T eps_): eps(eps_) {}
-    bool operator()(const T& a, const T& b) const {
-        T diff = abs(abs(a) - abs(b));
-        T m = std::max(abs(a), abs(b));
-        T ratio = m >= eps? diff / m : diff;
-        return (ratio <= eps);
-    }
-private:
-    T eps;
-};
+auto transpose_vectors(std::vector<std::vector<T>> const& input)
+{
+  if (input.empty()) {
+    return input;
+  }
+  size_t ncols = input.size();
+  size_t nrows = input.front().size();
 
+  std::vector<std::vector<T>> transposed(nrows);
+  std::for_each(transposed.begin(), transposed.end(),
+    [=](std::vector<T>& col) { col.resize(ncols); });
+
+  for (size_t col = 0; col < input.size(); ++col) {
+    for (size_t row = 0; row < nrows; ++row) {
+      transposed[row][col] = input[col][row];
+    }
+  }
+
+  return transposed;
+}
 
 template <typename T>
-class TransposeTest : public GdfTest {
+auto make_columns(std::vector<std::vector<T>> const& values)
+{
+  std::vector<fixed_width_column_wrapper<T>> columns;
+  columns.reserve(values.size());
 
-protected:
-    void make_input()
-    {
-        // generate random numbers for the input vector of vectors
-        std::mt19937 rng(1);
-        auto generator = [&](){ 
-            return rng() % std::numeric_limits<T>::max() + 1;
-        };
+  for (auto const& value_col : values) {
+    columns.emplace_back(value_col.begin(), value_col.end());
+  }
 
-        in_columns.resize(_ncols);
+  return columns;
+}
 
-        for(auto & c : in_columns){
-            c.resize(_nrows);
-            std::generate(c.begin(), c.end(), generator);
-        }
+template <typename T>
+auto make_columns(std::vector<std::vector<T>> const& values,
+  std::vector<std::vector<cudf::size_type>> const& valids)
+{
+  std::vector<fixed_width_column_wrapper<T>> columns;
+  columns.reserve(values.size());
 
-        if (_add_nulls) {
-            auto valid_generator = [&](size_t row, size_t col){
-                return static_cast<bool>( (row ^ col) % 3 );
-            };
+  for (size_t col = 0; col < values.size(); ++col) {
+    columns.emplace_back(values[col].begin(), values[col].end(), valids[col].begin());
+  }
 
-            in_gdf_columns = initialize_gdf_columns(in_columns, valid_generator);
-        } 
-        else {
-            in_gdf_columns = initialize_gdf_columns(in_columns);
-        }
-    }
+  return columns;
+}
 
-    void create_gdf_output_buffers()
-    {
-        out_columns.resize(_nrows);
+template <typename T>
+auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols)
+{
+  std::vector<cudf::column_view> views(cols.size());
 
-        for(auto & c : out_columns){
-            c.resize(_ncols);
-        }
+  std::transform(cols.begin(), cols.end(), views.begin(),
+    [](fixed_width_column_wrapper<T> const& col) {
+      return static_cast<cudf::column_view>(col);
+    });
 
-        out_gdf_columns = initialize_gdf_columns(out_columns);
-    }
-    
-    void compute_gdf_result(void)
-    {
-      std::vector<gdf_column*> in_gdf_column_ptr(in_gdf_columns.size());
-      std::vector<gdf_column*> out_gdf_column_ptr(out_gdf_columns.size());
+  return cudf::table_view(views);
+}
 
-      auto to_raw_ptr = [&](gdf_col_pointer const& col) { return col.get(); };
+template <typename T>
+void run_test(size_t ncols, size_t nrows, bool add_nulls)
+{
+  std::mt19937 rng(1);
 
-      std::transform(in_gdf_columns.begin(), in_gdf_columns.end(),
-                     in_gdf_column_ptr.begin(), to_raw_ptr);
+  // Generate values as vector of vectors
+  auto const values = generate_vectors<T>(ncols, nrows, [&rng]() { 
+    return static_cast<T>(rng());
+  });
+  auto const valuesT = transpose_vectors(values);
 
-      std::transform(out_gdf_columns.begin(), out_gdf_columns.end(),
-                     out_gdf_column_ptr.begin(), to_raw_ptr);
+  std::vector<fixed_width_column_wrapper<T>> input_cols;
+  std::vector<fixed_width_column_wrapper<T>> expected_cols;
+  std::vector<cudf::size_type> expected_nulls(nrows);
 
-      gdf_transpose(in_gdf_columns.size(), in_gdf_column_ptr.data(),
-                    out_gdf_column_ptr.data());
+  if (add_nulls) {
+    // Generate null mask as vector of vectors
+    auto const valids = generate_vectors<cudf::size_type>(ncols, nrows, [&rng]() {
+      return static_cast<cudf::size_type>(rng() % 3 > 0 ? 1 : 0);
+    });
+    auto const validsT = transpose_vectors(valids);
 
-    }
+    // Compute the null counts over each transposed column
+    std::transform(validsT.begin(), validsT.end(), expected_nulls.begin(),
+      [ncols](std::vector<cudf::size_type> const& vec) {
+        // num nulls = num elems - num valids
+        return ncols - std::accumulate(vec.begin(), vec.end(), 0);
+      });
 
-    void create_reference_output(void)
-    {
-        // create vec of vec (dim transpose of in_columns)
+    // Create column wrappers from vector of vectors
+    input_cols = make_columns(values, valids);
+    expected_cols = make_columns(valuesT, validsT);
+  } else {
+    input_cols = make_columns(values);
+    expected_cols = make_columns(valuesT);
+  }
 
-        ref_data.resize(_nrows);
+  // Create table views from column wrappers
+  auto input_view = make_table_view(input_cols);
+  auto expected_view = make_table_view(expected_cols);
 
-        for(auto & c : ref_data){
-            c.resize(_ncols);
-        }
+  auto result = transpose(input_view);
+  auto result_view = result->view();
 
-        // copy transposed from in_columns to ref_data
-        for(size_t i = 0; i < _nrows; i++)
-            for(size_t j = 0; j < _ncols; j++)
-                (ref_data[i])[j] = (in_columns[j])[i];
-        
-        if (_add_nulls) {
-            auto valid_generator = [&](size_t row, size_t col){
-                return static_cast<bool>( (row ^ col) % 3 );
-            };
+  CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(), "Expected same number of columns");
+  for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(result_view.column(i), expected_view.column(i));
+    CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i], "Expected correct null count");
+  }
+}
 
-            ref_gdf_columns = initialize_gdf_columns(ref_data, valid_generator);
-        }
-        else {
-            ref_gdf_columns = initialize_gdf_columns(ref_data);
-        }
-    }
+}  // namespace
 
-    void compare_gdf_result(void)
-    {
-        // new num cols = old _nrows
-        for(size_t i = 0; i < _nrows; i++)
-        {
-            ASSERT_TRUE(
-                gdf_equal_columns(*ref_gdf_columns[i].get(), *out_gdf_columns[i].get())
-            );
-        }
-    }
+template <typename T>
+class TransposeTest : public cudf::test::BaseFixture {};
 
-    void set_params(size_t ncols, size_t nrows, bool add_nulls = false)
-    {
-        _nrows = nrows; _ncols = ncols; _add_nulls = add_nulls;
-    }
-
-    void run_test(void)
-    {
-        make_input();
-        create_gdf_output_buffers();
-        compute_gdf_result();
-        create_reference_output();
-        compare_gdf_result();
-    }
-
-    // vector of vector to serve as input to transpose
-    std::vector< std::vector<T> > in_columns;
-    std::vector< gdf_col_pointer > in_gdf_columns;
-    std::vector< std::vector<T> > ref_data;
-    std::vector< gdf_col_pointer > ref_gdf_columns;
-    std::vector< std::vector<T> > out_columns;
-    std::vector< gdf_col_pointer > out_gdf_columns;
-
-    bool _add_nulls = false;
-    size_t _ncols = 0;
-    size_t _nrows = 0;
-};
-
-using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t>;
-
-TYPED_TEST_CASE(TransposeTest, TestTypes);
+TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TransposeTest, SingleValue)
 {
-    size_t num_cols = 1;
-    size_t num_rows = 1;
-    this->set_params(num_cols, num_rows);
-    this->run_test();
+  run_test<TypeParam>(1, 1, false);
 }
 
 TYPED_TEST(TransposeTest, SingleColumn)
 {
-    size_t num_cols = 1;
-    size_t num_rows = 1000;
-    this->set_params(num_cols, num_rows);
-    this->run_test();
+  run_test<TypeParam>(1, 1000, false);
 }
 
 TYPED_TEST(TransposeTest, SingleColumnNulls)
 {
-    size_t num_cols = 1;
-    size_t num_rows = 1000;
-    this->set_params(num_cols, num_rows, true);
-    this->run_test();
+  run_test<TypeParam>(1, 1000, true);
 }
 
 TYPED_TEST(TransposeTest, Square)
 {
-    size_t num_cols = 100;
-    size_t num_rows = 100;
-    this->set_params(num_cols, num_rows);
-    this->run_test();
+  run_test<TypeParam>(100, 100, false);
 }
 
 TYPED_TEST(TransposeTest, SquareNulls)
 {
-    size_t num_cols = 100;
-    size_t num_rows = 100;
-    this->set_params(num_cols, num_rows, true);
-    this->run_test();
+  run_test<TypeParam>(100, 100, true);
 }
 
 TYPED_TEST(TransposeTest, Slim)
 {
-    size_t num_cols = 10;
-    size_t num_rows = 1000;
-    this->set_params(num_cols, num_rows);
-    this->run_test();
+  run_test<TypeParam>(10, 1000, false);
 }
 
 TYPED_TEST(TransposeTest, SlimNulls)
 {
-    size_t num_cols = 10;
-    size_t num_rows = 1000;
-    this->set_params(num_cols, num_rows, true);
-    this->run_test();
+  run_test<TypeParam>(10, 1000, true);
 }
 
 TYPED_TEST(TransposeTest, Fat)
 {
-    size_t num_cols = 1000;
-    size_t num_rows = 10;
-    this->set_params(num_cols, num_rows);
-    this->run_test();
+  run_test<TypeParam>(1000, 10, false);
 }
 
 TYPED_TEST(TransposeTest, FatNulls)
 {
-    size_t num_cols = 1000;
-    size_t num_rows = 10;
-    this->set_params(num_cols, num_rows, true);
-    this->run_test();
+  run_test<TypeParam>(1000, 10, true);
+}
+
+TYPED_TEST(TransposeTest, EmptyTable)
+{
+  run_test<TypeParam>(0, 0, false);
+}
+
+TYPED_TEST(TransposeTest, EmptyColumns)
+{
+  run_test<TypeParam>(10, 0, false);
+}
+
+TYPED_TEST(TransposeTest, MismatchedColumns)
+{
+  fixed_width_column_wrapper<TypeParam> col1{{1, 2, 3}};
+  fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
+  fixed_width_column_wrapper<float> col3{{7, 8, 9}};
+  cudf::table_view input{{col1, col2, col3}};
+  EXPECT_THROW(cudf::transpose(input), cudf::logic_error);
 }

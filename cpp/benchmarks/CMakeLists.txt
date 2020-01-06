@@ -26,8 +26,9 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${GBENCH_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
@@ -47,18 +48,6 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
-### test sources ##################################################################################
-###################################################################################################
-
-###################################################################################################
-# - test benchmark --------------------------------------------------------------------------------
-
-set(TEST_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/test/test_benchmark.cpp")
-
-ConfigureBench(TEST_BENCH "${TEST_BENCH_SRC}")
-
-###################################################################################################
 # - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
@@ -66,12 +55,21 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
 set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
+###################################################################################################
+# - contiguous_split benchmark  -------------------------------------------------------------------
+
+set(CONTIGUOUS_SPLIT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/contiguous_split_benchmark.cu")
+
+ConfigureBench(CONTIGUOUS_SPLIT_BENCH "${CONTIGUOUS_SPLIT_BENCH_SRC}")
 
 ###################################################################################################
 # - apply_boolean_mask benchmark ------------------------------------------------------------------------------
@@ -108,10 +106,18 @@ ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 ###################################################################################################
 # - quantiles benchmark ---------------------------------------------------------------------------
 
-set(QUANTILES_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_benchmark.cu")
+set(LEGACY_QUANTILES_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_benchmark.cu")
 
-ConfigureBench(QUANTILES_BENCH "${QUANTILES_BENCH_SRC}")
+ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
+
+###################################################################################################
+# - stack benchmark -------------------------------------------------------------------------------
+
+set(LEGACY_STACK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_benchmark.cu")
+
+ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")
 
 ###################################################################################################
 # - order_by benchmark ------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,211 +14,120 @@
  * limitations under the License.
  */
 
-//Quantile (percentile) functionality
-
-#include <cudf/cudf.h>
+#include <memory>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <cudf/copying.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <quantiles/quantiles_util.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
-#include <rmm/thrust_rmm_allocator.h>
-
-#include <thrust/device_vector.h>
-#include <thrust/copy.h>
-
-
-namespace{ // anonymous
-
-  // compute quantile value as `result` from `quant` value by `interpolation` method
-  template<typename T, typename RetT>
-  gdf_error select_quantile(T* devarr,
-                          gdf_size_type n,
-                          double quant, 
-                          cudf::interpolation interpolation,
-                          RetT& result,
-                          bool flag_sorted,
-                          cudaStream_t stream)
-  {
-    T hvalue;
-
-    if( quant >= 1.0 && !flag_sorted )
-    {
-      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      hvalue = cudf::detail::get_array_value(d_res, 0);
-      result = static_cast<RetT>( hvalue );
-      return GDF_SUCCESS;
-    }
-
-    if( quant <= 0.0 && !flag_sorted )
-    {
-      T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      hvalue = cudf::detail::get_array_value(d_res, 0);
-      result = static_cast<RetT>( hvalue );
-      return GDF_SUCCESS;
-    }
-
-    // sort if the input is not sorted.
-    if( !flag_sorted ){
-      thrust::sort(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-    }
-
-    result = cudf::detail::select_quantile(devarr, n, quant, interpolation);
-    
-    return GDF_SUCCESS;
-  }
-
-  template<typename ColType,
-           typename RetT = double>
-  gdf_error trampoline_exact(gdf_column*  col_in,
-                             cudf::interpolation interpolation,
-                             double quant,
-                             void* t_erased_res,
-                             gdf_context* ctxt,
-                             cudaStream_t stream)
-  {
-    RetT* ptr_res = static_cast<RetT*>(t_erased_res);
-    size_t n = col_in->size;
-    ColType* col_data = static_cast<ColType*>(col_in->data);
-    
-    if( ctxt->flag_sort_inplace  && ctxt->flag_sorted )
-    {
-      return select_quantile(col_data,
-                             n,
-                             quant, 
-                             interpolation,
-                             *ptr_res,
-                             ctxt->flag_sorted,
-                             stream);
-    }else{
-      // create a clone of col_data if sort is required but sort_inplace is not allowed.
-      rmm::device_vector<ColType> dv(n);
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream), col_data, n, dv.begin());
-      ColType* clone_data = dv.data().get();
-
-      return select_quantile(clone_data,
-                             n,
-                             quant, 
-                             interpolation,
-                             *ptr_res,
-                             ctxt->flag_sorted,
-                             stream);
-    }
-  }
-    
-  struct trampoline_exact_functor{
-    template <typename T,
-              typename std::enable_if_t<!std::is_arithmetic<T>::value, int> = 0>
-    gdf_error operator()(gdf_column* col_in,
-                         cudf::interpolation interpolation,
-                         double              quant,
-                         void*               t_erased_res,
-                         gdf_context*        ctxt,
-                         cudaStream_t        stream = NULL)
-    {
-      return GDF_UNSUPPORTED_DTYPE;
-    }
-
-    template <typename T,
-              typename std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
-    gdf_error operator()(gdf_column*  col_in,
-                         cudf::interpolation interpolation,
-                         double              quant,
-                         void*               t_erased_res,
-                         gdf_context*        ctxt,
-                         cudaStream_t        stream = NULL)
-    {
-      // just in case double won't be enough to hold result
-      // it can be changed in future
-      return trampoline_exact<T, double>
-                 (col_in, interpolation, quant, t_erased_res, ctxt, stream);
-    }
-  };
-
-  struct trampoline_approx_functor{
-    template <typename T,
-              typename std::enable_if_t<!std::is_arithmetic<T>::value, int> = 0>
-    gdf_error operator()(gdf_column* col_in,
-                         double              quant,
-                         void*               t_erased_res,
-                         gdf_context*        ctxt,
-                         cudaStream_t        stream = NULL)
-    {
-      // TODO: support non-arithemetic types
-      return GDF_UNSUPPORTED_DTYPE;
-    }
-
-    template <typename T,
-              typename std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
-    gdf_error operator()(gdf_column*  col_in, 
-                    double       quant,
-                    void*        t_erased_res,
-                    gdf_context* ctxt,
-                    cudaStream_t stream = NULL)
-    {
-      return trampoline_exact<T, T>(col_in, cudf::interpolation::LOWER, quant, t_erased_res, ctxt, stream);
-    }
-  };
-
-} // end of anonymous
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 
-gdf_error quantile_exact( gdf_column*         col_in,       // input column
-                          interpolation       prec,         // interpolation method
-                          double              q,            // requested quantile in [0,1]
-                          gdf_scalar*         result,       // the result
-                          gdf_context*        ctxt)         // context info
+using ScalarResult = double;
+
+struct quantile_functor
 {
-  GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+    template<typename T, typename... Args>
+    std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
+    operator()(Args&&... args)
+    {
+        CUDF_FAIL("Only numeric types are supported in quantiles.");
+    }
 
-  if (col_in->size == 0) {
-     result->is_valid = false;
-     return GDF_SUCCESS;
-  }
+    template<typename T>
+    std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
+    operator()(column_view const& input,
+               double percent,
+               interpolation interp,
+               order_info column_order,
+               rmm::mr::device_memory_resource *mr =
+                 rmm::mr::get_default_resource(),
+               cudaStream_t stream = 0)
+    {
+        if (input.size() == input.null_count()) {
+            return std::make_unique<numeric_scalar<ScalarResult>>(0, false, stream);
+        }
 
-  GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
+        if (input.size() == 1) {
+            auto result = get_array_value<ScalarResult>(input.begin<T>(), 0);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
+        }
 
-  gdf_error ret = GDF_SUCCESS;
-  result->dtype = GDF_FLOAT64;
-  result->is_valid = false; // the scalar is not valid for error case
+        auto valid_count = input.size() - input.null_count();
 
-  ret = cudf::type_dispatcher(col_in->dtype,
-                              trampoline_exact_functor{},
-                              col_in, prec, q, &result->data, ctxt);
+        if (not column_order.is_ordered)
+        {
+            table_view const in_table { { input } };
+            auto sortmap = sorted_order(in_table, { order::ASCENDING }, { null_order::AFTER });
+            auto sortmap_begin = sortmap->view().begin<size_type>();
+            auto input_begin = input.begin<T>();
 
-  if( ret == GDF_SUCCESS ) result->is_valid = true;
-  return ret;
+            auto selector = [&](size_type location) {
+                auto idx = detail::get_array_value<size_type>(sortmap_begin, location);
+                return detail::get_array_value<T>(input_begin, idx);
+            };
+
+            auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
+            return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
+        }
+
+        auto input_begin = column_order.ordering == order::ASCENDING
+            ? input.begin<T>() + (column_order.null_ordering == null_order::BEFORE ? input.null_count() : 0)
+            : input.begin<T>() - (column_order.null_ordering == null_order::AFTER  ? input.null_count() : 0) + input.size() - 1;
+
+        auto selector = [&](size_type location) {
+            return get_array_value<T>(input_begin, column_order.ordering == order::ASCENDING ? location : -location);
+        };
+
+        auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
+        return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
+    }
+};
+
+} // anonymous namespace
+
+std::unique_ptr<scalar>
+quantile(column_view const& input,
+         double percent,
+         interpolation interp,
+         order_info column_order)
+{
+        return type_dispatcher(input.type(), detail::quantile_functor{},
+                               input, percent, interp, column_order);
 }
 
-gdf_error quantile_approx(	gdf_column*  col_in,       // input column
-                            double       q,            // requested quantile in [0,1]
-                            gdf_scalar*  result,       // the result
-                            gdf_context* ctxt)         // context info
+} // namspace detail
+
+std::vector<std::unique_ptr<scalar>>
+quantiles(table_view const& input,
+          double percent,
+          interpolation interp,
+          std::vector<order_info> column_order)
 {
-  GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
-  
-  if (col_in->size == 0) {
-     result->is_valid = false;
-     return GDF_SUCCESS;
-  }
+    if (column_order.size() == 0) {
+        column_order = std::vector<order_info>(input.num_columns(), { false });
+    } else {
+        CUDF_EXPECTS(column_order.size() == static_cast<uint32_t>(input.num_columns()),
+                     "Must provide order_info for each column.");
+    }
 
-  GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
-
-  gdf_error ret = GDF_SUCCESS;
-  result->dtype = col_in->dtype;
-  result->is_valid = false; // the scalar is not valid for error case
-
-  ret = cudf::type_dispatcher(col_in->dtype,
-                              trampoline_approx_functor{},
-                              col_in, q, &result->data, ctxt);
-  
-  if( ret == GDF_SUCCESS ) result->is_valid = true;
-  return ret;
+    std::vector<std::unique_ptr<scalar>> out(input.num_columns());
+    for (size_type i = 0; i < input.num_columns(); i++) {
+        out[i] = detail::quantile(input.column(i),
+                                  percent,
+                                  interp,
+                                  column_order[i]);
+    }
+    return out;
 }
 
+} // namespace experimental
 } // namespace cudf

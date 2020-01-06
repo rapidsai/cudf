@@ -1,3 +1,5 @@
+import gzip
+import os
 import warnings
 
 import numpy as np
@@ -48,6 +50,13 @@ def test_read_csv(tmp_path):
     df3 = dask_cudf.read_csv(f"file://{stmp_path}")
     dd.assert_eq(df2, df3)
 
+    # file list test
+    list_paths = [
+        os.path.join(tmp_path, fname) for fname in sorted(os.listdir(tmp_path))
+    ]
+    df4 = dask_cudf.read_csv(list_paths)
+    dd.assert_eq(df, df4)
+
 
 def test_raises_FileNotFoundError():
     with pytest.raises(FileNotFoundError):
@@ -88,3 +97,21 @@ def test_read_csv_compression(tmp_path):
         )
 
         assert not record
+
+
+def test_read_csv_compression_file_list(tmp_path):
+    # Repro from Issue#3412
+    lines = """col1,col2
+    0,1
+    2,3"""
+
+    files = [tmp_path / "test1.csv", tmp_path / "test2.csv"]
+
+    for fn in files:
+        with gzip.open(fn, "wb") as fp:
+            fp.write(lines.encode("utf-8"))
+
+    ddf_cpu = dd.read_csv(files, compression="gzip").compute()
+    ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)

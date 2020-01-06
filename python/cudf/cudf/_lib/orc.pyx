@@ -47,7 +47,8 @@ cdef unique_ptr[cudf_table] make_table_from_columns(columns):
 
 
 cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
-               skip_rows=None, num_rows=None, use_index=True):
+               skip_rows=None, num_rows=None, use_index=True,
+               decimals_as_float=True, force_decimal_scale=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -61,6 +62,9 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     for col in columns or []:
         options.columns.push_back(str(col).encode())
     options.use_index = use_index
+    options.decimals_as_float = decimals_as_float
+    if force_decimal_scale is not None:
+        options.forced_decimals_scale = force_decimal_scale
 
     # Create reader from source
     cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
@@ -85,9 +89,9 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
 
     # Read data into columns
     cdef cudf_table c_out_table
-    cdef int c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef int c_num_rows = num_rows if num_rows is not None else -1
-    cdef int c_stripe = stripe if stripe is not None else -1
+    cdef size_type c_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef size_type c_num_rows = num_rows if num_rows is not None else -1
+    cdef size_type c_stripe = stripe if stripe is not None else -1
     with nogil:
         if c_skip_rows != 0 or c_num_rows != -1:
             c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)

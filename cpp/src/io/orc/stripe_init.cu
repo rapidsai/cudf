@@ -15,18 +15,7 @@
  */
 #include "orc_common.h"
 #include "orc_gpu.h"
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
+#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace io {
@@ -36,6 +25,7 @@ namespace gpu {
 struct compressed_stream_s
 {
     CompressedStreamInfo info;
+    gpu_inflate_input_s ctl;
 };
 
 // blockDim {128,1,1}
@@ -59,15 +49,16 @@ gpuParseCompressedStripeData(CompressedStreamInfo *strm_info, int32_t num_stream
         // Walk through the compressed blocks
         const uint8_t *cur = s->info.compressed_data;
         const uint8_t *end = cur + s->info.compressed_data_size;
-        gpu_inflate_input_s *decctl = s->info.decctl;
         uint8_t *uncompressed = s->info.uncompressed_data;
         size_t max_uncompressed_size = 0;
         uint32_t num_compressed_blocks = 0;
+        uint32_t num_uncompressed_blocks = 0;
         while (cur + 3 < end)
         {
             uint32_t block_len = SHFL0((t == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
             uint32_t is_uncompressed = block_len & 1;
             uint32_t uncompressed_size;
+            gpu_inflate_input_s *init_ctl;
             block_len >>= 1;
             cur += 3;
             if (block_len > block_size || cur + block_len > end)
@@ -82,29 +73,48 @@ gpuParseCompressedStripeData(CompressedStreamInfo *strm_info, int32_t num_stream
             uncompressed_size = (is_uncompressed) ? block_len : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr : block_size;
             if (is_uncompressed)
             {
-                // Copy the uncompressed data to output (not very efficient, but should only occur for small blocks and probably faster than decompression)
-                if (uncompressed && max_uncompressed_size + uncompressed_size <= s->info.max_uncompressed_size)
+                if (uncompressed_size <= 32)
                 {
-                    for (int i = t; i < uncompressed_size; i += 32)
+                    // For short blocks, copy the uncompressed data to output
+                    init_ctl = 0;
+                    if (uncompressed && max_uncompressed_size + uncompressed_size <= s->info.max_uncompressed_size && t < uncompressed_size)
                     {
-                        uncompressed[max_uncompressed_size + i] = cur[i];
+                        uncompressed[max_uncompressed_size + t] = cur[t];
                     }
                 }
+                else
+                {
+                    init_ctl = s->info.copyctl;
+                    init_ctl = (init_ctl && num_uncompressed_blocks < s->info.num_uncompressed_blocks) ? &init_ctl[num_uncompressed_blocks] : 0;
+                    num_uncompressed_blocks++;
+                }
             }
-            else if (decctl && !t && num_compressed_blocks < s->info.max_compressed_blocks)
+            else
             {
-                decctl[num_compressed_blocks].srcDevice = const_cast<uint8_t *>(cur);
-                decctl[num_compressed_blocks].srcSize = block_len;
-                decctl[num_compressed_blocks].dstDevice = uncompressed + max_uncompressed_size;
-                decctl[num_compressed_blocks].dstSize = uncompressed_size;
+                init_ctl = s->info.decctl;
+                init_ctl = (init_ctl && num_compressed_blocks < s->info.num_compressed_blocks) ? &init_ctl[num_compressed_blocks] : 0;
+                num_compressed_blocks++;
+            }
+            if (!t && init_ctl)
+            {
+                s->ctl.srcDevice = const_cast<uint8_t *>(cur);
+                s->ctl.srcSize = block_len;
+                s->ctl.dstDevice = uncompressed + max_uncompressed_size;
+                s->ctl.dstSize = uncompressed_size;
+            }
+            SYNCWARP();
+            if (init_ctl && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t))
+            {
+                reinterpret_cast<uint32_t *>(init_ctl)[t] = reinterpret_cast<volatile uint32_t *>(&s->ctl)[t];
             }
             cur += block_len;
             max_uncompressed_size += uncompressed_size;
-            num_compressed_blocks += 1 - is_uncompressed;
         }
+        SYNCWARP();
         if (!t)
         {
             s->info.num_compressed_blocks = num_compressed_blocks;
+            s->info.num_uncompressed_blocks = num_uncompressed_blocks;
             s->info.max_uncompressed_size = max_uncompressed_size;
         }
     }
@@ -134,7 +144,7 @@ gpuPostDecompressionReassemble(CompressedStreamInfo *strm_info, int32_t num_stre
         ((uint32_t *)&s->info)[t] = ((const uint32_t *)&strm_info[strm_id])[t];
     }
     __syncthreads();
-    if (strm_id < num_streams && s->info.max_compressed_blocks > 0 && s->info.max_uncompressed_size > 0)
+    if (strm_id < num_streams && s->info.num_compressed_blocks + s->info.num_uncompressed_blocks > 0 && s->info.max_uncompressed_size > 0)
     {
         // Walk through the compressed blocks
         const uint8_t *cur = s->info.compressed_data;
@@ -144,7 +154,7 @@ gpuPostDecompressionReassemble(CompressedStreamInfo *strm_info, int32_t num_stre
         uint8_t *uncompressed_actual = s->info.uncompressed_data;
         uint8_t *uncompressed_estimated = uncompressed_actual;
         uint32_t num_compressed_blocks = 0;
-        uint32_t max_compressed_blocks = min(s->info.num_compressed_blocks, s->info.max_compressed_blocks);
+        uint32_t max_compressed_blocks = s->info.num_compressed_blocks;
 
         while (cur + 3 < end)
         {

@@ -12,49 +12,83 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 
-#include <bitmask/valid_if.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/null_mask.hpp>
+#include <cudf/detail/valid_if.cuh>
+#include <cudf/detail/transform.hpp>
 
 namespace cudf {
-
+namespace experimental {
 namespace detail {
 
-template <typename T>
-struct predicate_not_nan{
+struct dispatch_nan_to_null {
+    template <typename T>
+    std::enable_if_t<std::is_floating_point<T>::value, std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
+    operator ()(column_view const& input,
+                rmm::mr::device_memory_resource* mr,
+                cudaStream_t stream) {
 
-  CUDA_HOST_DEVICE_CALLABLE
-  bool operator()(gdf_index_type index) const {
-      return !isnan(static_cast<T*>(input.data)[index]);
-  }
+        auto input_device_view_ptr = column_device_view::create(input, stream);
+        auto input_device_view = *input_device_view_ptr;
 
-  gdf_column input;
+        if (input.nullable()) {
+            auto pred = [input_device_view] __device__ (cudf::size_type idx) {
+                return not (std::isnan(input_device_view.element<T>(idx)) || input_device_view.is_null_nocheck(idx));
+            };
 
-  predicate_not_nan() = delete;
+            auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
+                                    pred, stream, mr);
 
-  predicate_not_nan(gdf_column const& input_): input(input_) {}
+            return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
+        } else {
+            auto pred = [input_device_view] __device__ (cudf::size_type idx) {
+                return not (std::isnan(input_device_view.element<T>(idx)));
+            };
 
+            auto mask = detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
+                                    pred, stream, mr);
+
+            return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
+        }
+    }
+
+    template <typename T>
+    std::enable_if_t<!std::is_floating_point<T>::value, std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
+    operator ()(column_view const& input,
+                rmm::mr::device_memory_resource* mr,
+                cudaStream_t stream) {
+        CUDF_FAIL("Input column can't be a non-floating type");
+    }
 };
 
-} // namespace detail
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> 
+nans_to_nulls(column_view const& input, 
+              rmm::mr::device_memory_resource * mr,
+              cudaStream_t stream) {
+   
+    if (input.size() == 0){
+        return std::make_pair(std::make_unique<rmm::device_buffer>(), 0);
+    }
 
-std::pair<bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input){
-  
-  if(input.size == 0){
-    return std::pair<bit_mask_t*, gdf_size_type>(nullptr, 0);
-  }
+    return cudf::experimental::type_dispatcher(input.type(), dispatch_nan_to_null{}, 
+                                               input, mr, stream);
+}   
 
-  const bit_mask_t* source_mask = reinterpret_cast<bit_mask_t*>(input.valid);
+}// namespace detail
 
-  switch(input.dtype){
-    case GDF_FLOAT32:
-      return cudf::valid_if(source_mask, cudf::detail::predicate_not_nan<float>(input), input.size);
-    case GDF_FLOAT64:
-      return cudf::valid_if(source_mask, cudf::detail::predicate_not_nan<double>(input), input.size);
-    default:
-      CUDF_FAIL("Unsupported data type for isnan()");
-  }
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> 
+nans_to_nulls(column_view const& input, rmm::mr::device_memory_resource * mr) {
 
+    return detail::nans_to_nulls(input, mr);
 }
-//
-} // namespace cudf
+
+}// namespace experimental
+}// namespace cudf

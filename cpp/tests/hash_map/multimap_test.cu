@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <thrust/device_vector.h>
 
@@ -60,7 +60,9 @@ class MultimapTest : public GdfTest {
 
   MultimapTest(const size_type hash_table_size = 100)
       : the_map(multimap_type::create(hash_table_size)),
-        size(hash_table_size) {}
+        size(hash_table_size) {
+            CUDA_TRY(cudaStreamSynchronize(0));
+        }
 
   ~MultimapTest() {}
 };

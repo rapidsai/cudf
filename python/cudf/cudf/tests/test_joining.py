@@ -93,9 +93,9 @@ def test_dataframe_join_how(aa, bb, how, method):
     gotb = got.b
     gota = got.a
     del got["b"]
-    got.add_column("b", gotb.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._cols), "b", gotb.astype(np.float64).fillna(np.nan))
     del got["a"]
-    got.add_column("a", gota.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._cols), "a", gota.astype(np.float64).fillna(np.nan))
     expect.drop(["b"], axis=1)
     expect["b"] = expectb.astype(np.float64).fillna(np.nan)
     expect.drop(["a"], axis=1)
@@ -372,10 +372,10 @@ def test_dataframe_merge_no_common_column():
 
 
 def test_dataframe_empty_merge():
-    gdf1 = DataFrame([("a", []), ("b", [])])
-    gdf2 = DataFrame([("a", []), ("c", [])])
+    gdf1 = DataFrame({"a": [], "b": []})
+    gdf2 = DataFrame({"a": [], "c": []})
 
-    expect = DataFrame([("a", []), ("b", []), ("c", [])])
+    expect = DataFrame({"a": [], "b": [], "c": []})
     got = gdf1.merge(gdf2, how="left", on=["a"])
 
     assert_eq(expect, got)
@@ -735,3 +735,67 @@ def test_join_empty_table_dtype():
     pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
     assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)
+
+
+@pytest.mark.parametrize("how", ["outer", "inner", "left", "right"])
+@pytest.mark.parametrize(
+    "column_a",
+    [
+        (
+            pd.Series([None, 1, 2, 3, 4, 5, 6, 7]).astype(np.float),
+            pd.Series([8, 9, 10, 11, 12, None, 14, 15]).astype(np.float),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "column_b",
+    [
+        (
+            pd.Series([0, 1, 0, None, 1, 0, 0, 0]).astype(np.float),
+            pd.Series([None, 1, 2, 1, 2, 2, 0, 0]).astype(np.float),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "column_c",
+    [
+        (
+            pd.Series(["dog", "cat", "fish", "bug"] * 2),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2),
+        ),
+        (
+            pd.Series(["dog", "cat", "fish", "bug"] * 2).astype("category"),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2).astype(
+                "category"
+            ),
+        ),
+    ],
+)
+def test_join_multi(how, column_a, column_b, column_c):
+    index = ["b", "c"]
+    df1 = pd.DataFrame()
+    df1["a1"] = column_a[0]
+    df1["b"] = column_b[0]
+    df1["c"] = column_c[0]
+    df1 = df1.set_index(index)
+    gdf1 = cudf.from_pandas(df1)
+
+    df2 = pd.DataFrame()
+    df2["a2"] = column_a[1]
+    df2["b"] = column_b[1]
+    df2["c"] = column_c[1]
+    df2 = df2.set_index(index)
+    gdf2 = cudf.from_pandas(df2)
+
+    gdf_result = gdf1.join(gdf2, how=how, sort=True)
+    pdf_result = df1.join(df2, how=how, sort=True)
+
+    # Make sure columns are in the same order
+    columns = pdf_result.columns.values
+    gdf_result = gdf_result[columns]
+    pdf_result = pdf_result[columns]
+
+    assert_eq(
+        gdf_result.reset_index(drop=True).fillna(-1),
+        pdf_result.sort_index().reset_index(drop=True).fillna(-1),
+    )

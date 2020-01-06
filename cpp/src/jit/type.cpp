@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
- * Copyright 2018-2019 BlazingDB, Inc.
- *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,61 +14,68 @@
  * limitations under the License.
  */
 
-#include <jit/type.h>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <string>
 
 namespace cudf {
 namespace jit {
 
-    /**---------------------------------------------------------------------------*
-     * @brief Functor to get type name in string
-     * 
-     * This functor uses the unofficial compiler macro __PRETTY_FUNCTION__
-     * to obtain the function signature which contains the template type name.
-     * The type name is searched and extracted from the string.
-     * 
-     * Example (clang): __PRETTY_FUNCTION__ =
-     * std::string type_name::operator()() [T = short]
-     * returns std::string("short")
-     * 
-     * Example (gcc): __PRETTY_FUNCTION__ =
-     * std::__cxx11::string type_name::operator()() [with T = short int; std::__cxx11::string = std::__cxx11::basic_string<char>]
-     * returns std::string("short int")
-     * 
-     * In case the type is wrapped using `wrapper`, the extra string "wrapper<" is
-     * also skipped to get the underlying wrapped type.
-     * 
-     *---------------------------------------------------------------------------**/
-    struct type_name {
-        template <class T>
-        CUDA_HOST_DEVICE_CALLABLE
-        std::string operator()() {
-#if defined(__clang__) || defined(__GNUC__)
-            std::string p = __PRETTY_FUNCTION__;
-            std::string search_str = "T = ";
-            size_t start_pos = p.find(search_str) + search_str.size();
-            std::string wrapper_str = "wrapper<";
-            size_t wrapper_pos = p.find(wrapper_str, start_pos);
-            if (wrapper_pos != std::string::npos)
-                start_pos = wrapper_pos + wrapper_str.size();
-            size_t end_pos = p.find_first_of(",;]", start_pos);
-            return p.substr(start_pos, end_pos - start_pos);
-#else
-#   error Only clang and gcc supported
-#endif
-        }
-    };
+struct get_data_ptr_functor {
+  
+  /**
+   * @brief Gets the data pointer from a column_view
+   */
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), const void *>
+  operator()(column_view const& view) {
+    return static_cast<const void*>(view.template data<T>());
+  }
 
-    /**---------------------------------------------------------------------------*
-     * @brief Get the Type Name
-     * 
-     * @param type The data type
-     * @return std::string Name of the data type in string
-     *---------------------------------------------------------------------------**/
-    std::string getTypeName(gdf_dtype type) {
-        return type_dispatcher(type, type_name());
-    }
- 
+  // TODO: both the failing operators can be combined into single template
+  template <typename T>
+  std::enable_if_t<not is_fixed_width<T>(), const void *>
+  operator()(column_view const& view) {
+    CUDF_FAIL("Invalid data type for JIT operation");
+  }
+
+  /**
+   * @brief Gets the data pointer from a scalar
+   */
+  template <typename T>
+  std::enable_if_t<is_fixed_width<T>(), const void *>
+  operator()(scalar const& s) {
+    using ScalarType = experimental::scalar_type_t<T>;
+    auto s1 = static_cast<ScalarType const*>(&s);
+    return static_cast<const void*>(s1->data());
+  }
+
+  template <typename T>
+  std::enable_if_t<not is_fixed_width<T>(), const void *>
+  operator()(scalar const& s) {
+    CUDF_FAIL("Invalid data type for JIT operation");
+  }
+};
+
+const void* get_data_ptr(column_view const& view) {
+  return experimental::type_dispatcher(view.type(),
+                                       get_data_ptr_functor{}, view);
+}
+
+const void* get_data_ptr(scalar const& s) {
+  auto val = experimental::type_dispatcher(s.type(), get_data_ptr_functor{}, s);
+  return val;
+}
+
+std::string get_type_name(data_type type) {
+  // TODO: Remove in JIT type utils PR
+  if (type.id() == type_id::BOOL8) {
+    return CUDF_STRINGIFY(uint8_t);
+  }
+  
+  return experimental::type_dispatcher(type, experimental::type_to_name{});
+}
+
 } // namespace jit
 } // namespace cudf

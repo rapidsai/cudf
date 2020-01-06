@@ -1,11 +1,15 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
 
 #include "./utils.h"
+
+struct TestText : public GdfTest{};
 
 std::vector<const char*> tstrs{ "the fox jumped over the dog",
                                 "the dog chased the cat",
@@ -13,7 +17,7 @@ std::vector<const char*> tstrs{ "the fox jumped over the dog",
                                 nullptr, "",
                                 "the mouse ate the cheese" };
 
-TEST(TestText, Tokenize)
+TEST_F(TestText, Tokenize)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     NVStrings* got = NVText::tokenize(*strs);
@@ -26,7 +30,7 @@ TEST(TestText, Tokenize)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, TokenCount)
+TEST_F(TestText, TokenCount)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     thrust::device_vector<unsigned int> results(tstrs.size(),0);
@@ -39,7 +43,7 @@ TEST(TestText, TokenCount)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, UniqueTokens)
+TEST_F(TestText, UniqueTokens)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     NVStrings* got = NVText::unique_tokens(*strs);
@@ -50,7 +54,7 @@ TEST(TestText, UniqueTokens)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, ContainsStrings)
+TEST_F(TestText, ContainsStrings)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     std::vector<const char*> hstrs{ "the", "cat" };
@@ -67,7 +71,7 @@ TEST(TestText, ContainsStrings)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, StringsCounts)
+TEST_F(TestText, StringsCounts)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     std::vector<const char*> hstrs{ "cat ", "dog " };
@@ -84,7 +88,7 @@ TEST(TestText, StringsCounts)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, TokensCounts)
+TEST_F(TestText, TokensCounts)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     std::vector<const char*> hstrs{ "cat", "dog" };
@@ -101,7 +105,21 @@ TEST(TestText, TokensCounts)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, EditDistance)
+TEST_F(TestText, CharacterTokenize)
+{
+    NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
+    NVStrings* got = NVText::character_tokenize(*strs);
+
+    const char* expected[] = { "t","h","e"," ","f","o","x"," ","j","u","m","p","e","d"," ","o","v","e","r"," ","t","h","e"," ","d","o","g",
+                               "t","h","e"," ","d","o","g"," ","c","h","a","s","e","d"," ","t","h","e"," ","c","a","t",
+                               "t","h","e"," ","c","a","t"," ","c","h","a","s","e","d"," ","t","h","e"," ","m","o","u","s","e",
+                               "t","h","e"," ","m","o","u","s","e"," ","a","t","e"," ","t","h","e"," ","c","h","e","e","s","e" };
+    EXPECT_TRUE( verify_strings(got,expected));
+    NVStrings::destroy(got);
+    NVStrings::destroy(strs);
+}
+
+TEST_F(TestText, EditDistance)
 {
     std::vector<const char*> hstrs{ "dog", nullptr, "cat", "mouse",
                                     "pup", "", "puppy" };
@@ -127,7 +145,7 @@ TEST(TestText, EditDistance)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, EditDistanceMatrix)
+TEST_F(TestText, EditDistanceMatrix)
 {
     std::vector<const char*> hstrs{ "dog", nullptr, "cat", "mouse",
                                     "pup", "", "puppy" };
@@ -148,7 +166,7 @@ TEST(TestText, EditDistanceMatrix)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, NGrams)
+TEST_F(TestText, NGrams)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
     NVStrings* tkns = NVText::tokenize(*strs);
@@ -169,7 +187,7 @@ TEST(TestText, NGrams)
 }
 
 
-TEST(TestText, PorterStemmerMeasure)
+TEST_F(TestText, PorterStemmerMeasure)
 {
     std::vector<const char*> hstrs{ "abandon", nullptr, "abbey", "cleans",
                                     "trouble", "", "yearly" };
@@ -184,8 +202,45 @@ TEST(TestText, PorterStemmerMeasure)
     NVStrings::destroy(strs);
 }
 
+TEST_F(TestText, VowelsAndConsonants)
+{
+    std::vector<const char*> hstrs{ "abandon", nullptr, "abbey", "cleans",
+                                    "trouble", "", "yearly" };
+    NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
-TEST(TestText, ScatterCount)
+    thrust::device_vector<bool> results(hstrs.size(),0);
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::vowel, 5, results.data().get());
+        bool expected[] = { true, false, false, false, false, false, true };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::consonant, 5, results.data().get());
+        bool expected[] = { false, false, false, true, true, false, false };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    thrust::device_vector<int> indices(hstrs.size());
+    thrust::sequence( thrust::device, indices.begin(), indices.end() );
+    indices[hstrs.size()-1] = -1; // throw in a negative index too
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::vowel, indices.data().get(), results.data().get());
+        bool expected[] = { true, false, false, true, false, false, true };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::consonant, indices.data().get(), results.data().get());
+        bool expected[] = { false, false, true, false, true, false, false };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+
+    NVStrings::destroy(strs);
+}
+
+TEST_F(TestText, ScatterCount)
 {
     std::vector<const char*> names{ "Larry", "Curly", "Moe" };
     NVStrings* strs = NVStrings::create_from_array(names.data(),names.size());
@@ -200,10 +255,4 @@ TEST(TestText, ScatterCount)
 
     NVStrings::destroy(got);
     NVStrings::destroy(strs);
-}
-
-int main( int argc, char** argv )
-{
-    testing::InitGoogleTest(&argc,argv);
-    return RUN_ALL_TESTS();
 }

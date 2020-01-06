@@ -16,12 +16,12 @@
 
 #include <memory>
 
-#include "cudf/binaryop.hpp"
-#include "cudf/filling.hpp"
-#include "cudf/reduction.hpp"
-#include "cudf/replace.hpp"
-#include "cudf/stream_compaction.hpp"
-#include "cudf/unary.hpp"
+#include "cudf/legacy/binaryop.hpp"
+#include "cudf/legacy/filling.hpp"
+#include "cudf/legacy/reduction.hpp"
+#include "cudf/legacy/replace.hpp"
+#include "cudf/legacy/stream_compaction.hpp"
+#include "cudf/legacy/unary.hpp"
 
 #include "jni_utils.hpp"
 
@@ -196,21 +196,21 @@ static void gdf_scalar_init(gdf_scalar *scalar, jlong int_values, jfloat f_value
   }
 }
 
-static jni_rmm_unique_ptr<gdf_valid_type>
-copy_validity(JNIEnv *env, gdf_size_type size, gdf_size_type null_count, gdf_valid_type *valid) {
-  jni_rmm_unique_ptr<gdf_valid_type> ret{};
+static jni_rmm_unique_ptr<cudf::valid_type>
+copy_validity(JNIEnv *env, cudf::size_type size, cudf::size_type null_count, cudf::valid_type *valid) {
+  jni_rmm_unique_ptr<cudf::valid_type> ret{};
   if (null_count > 0) {
-    gdf_size_type copy_size = ((size + 7) / 8);
-    gdf_size_type alloc_size = gdf_valid_allocation_size(size);
-    ret = jni_rmm_alloc<gdf_valid_type>(env, alloc_size);
+    cudf::size_type copy_size = ((size + 7) / 8);
+    cudf::size_type alloc_size = gdf_valid_allocation_size(size);
+    ret = jni_rmm_alloc<cudf::valid_type>(env, alloc_size);
     JNI_CUDA_TRY(env, 0, cudaMemcpy(ret.get(), valid, copy_size, cudaMemcpyDeviceToDevice));
   }
   return ret;
 }
 
 static jlong cast_string_cat_to(JNIEnv *env, NVCategory *cat, gdf_dtype target_type,
-                                gdf_time_unit target_unit, gdf_size_type size,
-                                gdf_size_type null_count, gdf_valid_type *valid) {
+                                gdf_time_unit target_unit, cudf::size_type size,
+                                cudf::size_type null_count, cudf::valid_type *valid) {
   switch (target_type) {
     case GDF_STRING: {
       if (size == 0) {
@@ -220,7 +220,7 @@ static jlong cast_string_cat_to(JNIEnv *env, NVCategory *cat, gdf_dtype target_t
       }
       unique_nvstr_ptr str(cat->to_strings(), &NVStrings::destroy);
 
-      jni_rmm_unique_ptr<gdf_valid_type> valid_copy = copy_validity(env, size, null_count, valid);
+      jni_rmm_unique_ptr<cudf::valid_type> valid_copy = copy_validity(env, size, null_count, valid);
 
       gdf_column_wrapper output(size, target_type, null_count, str.release(), valid_copy.release());
       return reinterpret_cast<jlong>(output.release());
@@ -230,8 +230,8 @@ static jlong cast_string_cat_to(JNIEnv *env, NVCategory *cat, gdf_dtype target_t
 }
 
 static jlong cast_string_to(JNIEnv *env, NVStrings *str, gdf_dtype target_type,
-                            gdf_time_unit target_unit, gdf_size_type size, gdf_size_type null_count,
-                            gdf_valid_type *valid) {
+                            gdf_time_unit target_unit, cudf::size_type size, cudf::size_type null_count,
+                            cudf::valid_type *valid) {
   switch (target_type) {
     case GDF_STRING_CATEGORY: {
       if (size == 0) {
@@ -246,7 +246,7 @@ static jlong cast_string_to(JNIEnv *env, NVStrings *str, gdf_dtype target_type,
                       0);
       }
 
-      jni_rmm_unique_ptr<gdf_valid_type> valid_copy = copy_validity(env, size, null_count, valid);
+      jni_rmm_unique_ptr<cudf::valid_type> valid_copy = copy_validity(env, size, null_count, valid);
 
       gdf_column_wrapper output(size, target_type, null_count, cat_data.release(),
                                 valid_copy.release(), cat.release());

@@ -10,7 +10,7 @@ from .core import (
     from_dask_dataframe,
     from_delayed,
 )
-from .io import read_csv, read_json, read_orc
+from .io import read_csv, read_json, read_orc, to_orc
 
 try:
     from .io import read_parquet

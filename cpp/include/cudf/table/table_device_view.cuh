@@ -35,21 +35,21 @@ class table_device_view_base {
   table_device_view_base& operator=(table_device_view_base const&) = default;
   table_device_view_base& operator=(table_device_view_base&&) = default;
 
-  __device__ ColumnDeviceView* begin() noexcept { return _columns; }
+  __device__ ColumnDeviceView* begin() const noexcept { return _columns; }
 
-  __device__ ColumnDeviceView* end() noexcept {
+  __device__ ColumnDeviceView* end() const noexcept {
     return _columns + _num_columns;
   }
 
   __device__ ColumnDeviceView const& column(size_type column_index) const
       noexcept {
-    assert(column_index > 0);
+    assert(column_index >= 0);
     assert(column_index < _num_columns);
     return _columns[column_index];
   }
 
   __device__ ColumnDeviceView& column(size_type column_index) noexcept {
-    assert(column_index > 0);
+    assert(column_index >= 0);
     assert(column_index < _num_columns);
     return _columns[column_index];
   }
