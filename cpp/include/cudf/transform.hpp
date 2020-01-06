@@ -66,7 +66,10 @@ nans_to_nulls(column_view const& input,
 
 
 /**
- * @brief Creates a null_mask from `input`, for `true` bit is set valid (`1`) for
+ * @brief Creates a bitmask from a column of boolean elements.
+ *
+ * If element `i` in `input` is `true`, bit `i` in the resulting mask is set (`1`). Else,
+ * if element `i` is `false` or null, bit `i` is unset (`0`). 
  * that row and for `false` bit is set in-valid (`0`) for that corresponding row.
  *
  * If the input column is nullable, the null element will represent `false`.
