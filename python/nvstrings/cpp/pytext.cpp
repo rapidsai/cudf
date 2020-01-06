@@ -708,6 +708,8 @@ static PyObject* n_scatter_count( PyObject* self, PyObject* args )
                 counts[idx] = (unsigned int)PyLong_AsLong(pyidx);
         }
     }
+    else
+        counts = (unsigned int*)PyLong_AsVoidPtr(pycounts);
 
     Py_BEGIN_ALLOW_THREADS
     strs = NVText::scatter_count(*strs,counts,bdevmem);

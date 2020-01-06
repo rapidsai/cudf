@@ -108,9 +108,9 @@ constexpr T to_clockscale(cudf::type_id timestamp_id) {
   switch (timestamp_id) {
     case cudf::type_id::TIMESTAMP_SECONDS:
       return 9;
-    case cudf::type_id::TIMESTAMP_MICROSECONDS:
-      return 6;
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
+      return 6;
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
       return 3;
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
     default:

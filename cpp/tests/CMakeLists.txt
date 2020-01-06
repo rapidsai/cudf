@@ -103,7 +103,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -362,6 +363,17 @@ set(LEGACY_BINARY_TEST_SRC
 ConfigureTest(LEGACY_BINARY_TEST "${LEGACY_BINARY_TEST_SRC}")
 
 ###################################################################################################
+# - binary tests ----------------------------------------------------------------------------------
+
+set(BINARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-null-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-integration-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-generic-ptx-test.cu")
+
+ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
 # - legacy unary transform tests ------------------------------------------------------------------
 
 set(LEGACY_TRANSFORM_TEST_SRC 
@@ -373,7 +385,9 @@ ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 # - unary transform tests -------------------------------------------------------------------------
 
 set(TRANSFORM_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
@@ -745,11 +759,14 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/ipv4_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
