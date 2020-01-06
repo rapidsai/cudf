@@ -28,23 +28,24 @@ class Buffer(object):
         return cls(mem, size=0, capacity=0)
 
     def __init__(self, mem, size=None, capacity=None, categorical=False):
-        if size is None:
-            if categorical:
-                size = len(mem)
-            elif hasattr(mem, "__len__"):
-                if hasattr(mem, "ndim") and mem.ndim == 0:
-                    pass
-                elif len(mem) == 0:
-                    size = 0
-            if hasattr(mem, "size"):
-                size = mem.size
-        if capacity is None:
-            capacity = size
-        self.mem = cudautils.to_device(mem)
-        _BufferSentry(self.mem).ndim(1)
-        self.size = size
-        self.capacity = capacity
-        self.dtype = self.mem.dtype
+        if mem is not None:
+            if size is None:
+                if categorical:
+                    size = len(mem)
+                elif hasattr(mem, "__len__"):
+                    if hasattr(mem, "ndim") and mem.ndim == 0:
+                        pass
+                    elif len(mem) == 0:
+                        size = 0
+                if hasattr(mem, "size"):
+                    size = mem.size
+            if capacity is None:
+                capacity = size
+            self.mem = cudautils.to_device(mem)
+            _BufferSentry(self.mem).ndim(1)
+            self.size = size
+            self.capacity = capacity
+            self.dtype = self.mem.dtype
 
     def serialize(self):
         """Called when dask.distributed is performing a serialization on this
