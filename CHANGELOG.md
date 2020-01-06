@@ -11,6 +11,7 @@
 
 ## Improvements
 
+- PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
@@ -46,6 +47,7 @@
 - PR #3637 Fix sorted set_index operations in dask_cudf
 - PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
 - PR #3668 Fixing CHECK_CUDA debug build issue
+- PR #3684 Fix ends_with logic for matching string case
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 
 

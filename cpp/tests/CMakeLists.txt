@@ -761,6 +761,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
