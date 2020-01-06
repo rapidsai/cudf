@@ -136,6 +136,35 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
     return *this;
 }
 
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator--()
+{
+    while( bytes_in_utf8_byte((BYTE)p[--offset])==0 );
+    --cpos;
+    return *this;
+}
+
+__device__ inline string_view::const_iterator string_view::const_iterator::operator--(int)
+{
+    string_view::const_iterator tmp(*this);
+    operator--();
+    return tmp;
+}
+
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator-=(string_view::const_iterator::difference_type off)
+{
+    while(off-- > 0)
+        operator--();
+    return *this;
+}
+
+__device__ inline string_view::const_iterator string_view::const_iterator::operator-(string_view::const_iterator::difference_type off)
+{
+    string_view::const_iterator tmp(*this);
+    while(off-- > 0)
+        --tmp;
+    return tmp;
+}
+
 __device__ inline bool string_view::const_iterator::operator==(const string_view::const_iterator& rhs) const
 {
     return (p == rhs.p) && (cpos == rhs.cpos);
@@ -362,104 +391,6 @@ __device__ inline string_view string_view::substr(size_type pos, size_type lengt
     return string_view(data()+spos,epos-spos);
 }
 
-__device__ inline size_type string_view::split(const char* delim, int count, string_view* strs) const
-{
-    const char* sptr = data();
-    size_type sz = size_bytes();
-    if(sz == 0)
-    {
-        if(strs && count)
-            strs[0] = *this;
-        return 1;
-    }
-
-    size_type bytes = string_bytes(delim);
-    size_type delimCount = 0;
-    size_type pos = find(delim, bytes);
-    while(pos >= 0)
-    {
-        ++delimCount;
-        pos = find(delim, bytes, pos + bytes);
-    }
-
-    size_type strsCount = delimCount + 1;
-    size_type rtn = strsCount;
-    if((count > 0) && (rtn > count))
-        rtn = count;
-    if(!strs)
-        return rtn;
-    //
-    if(strsCount < count)
-        count = strsCount;
-    //
-    size_type dchars = (bytes ? strings::detail::characters_in_string(delim,bytes) : 1);
-    size_type nchars = length();
-    size_type spos = 0, sidx = 0;
-    size_type epos = find(delim, bytes);
-    while(epos >= 0)
-    {
-        if(sidx >= (count - 1)) // add this to the while clause
-            break;
-        strs[sidx++] = substr(spos, epos - spos);
-        spos = epos + dchars;
-        epos = find(delim, bytes, spos);
-    }
-    if((spos <= nchars) && (sidx < count))
-        strs[sidx] = substr(spos, nchars - spos);
-    //
-    return rtn;
-}
-
-//
-__device__ inline size_type string_view::rsplit(const char* delim, int count, string_view* strs) const
-{
-    const char* sptr = data();
-    size_type sz = size_bytes();
-    if(sz == 0)
-    {
-        if(strs && count)
-            strs[0] = *this;
-        return 1;
-    }
-
-    size_type bytes = string_bytes(delim);
-    size_type delimCount = 0;
-    size_type pos = find(delim, bytes);
-    while(pos >= 0)
-    {
-        ++delimCount;
-        pos = find(delim, bytes, (unsigned int)pos + bytes);
-    }
-
-    unsigned int strsCount = delimCount + 1;
-    unsigned int rtn = strsCount;
-    if((count > 0) && (rtn > count))
-        rtn = count;
-    if(!strs)
-        return rtn;
-    //
-    if(strsCount < count)
-        count = strsCount;
-    //
-    unsigned int dchars = (bytes ? strings::detail::characters_in_string(delim,bytes) : 1);
-    int epos = (int)length(); // end pos is not inclusive
-    int sidx = count - 1;     // index for strs array
-    int spos = rfind(delim, bytes);
-    while(spos >= 0)
-    {
-        if(sidx <= 0)
-            break;
-        //int spos = pos + (int)bytes;
-        int len = epos - spos - dchars;
-        strs[sidx--] = substr((unsigned int)spos+dchars, (unsigned int)len);
-        epos = spos;
-        spos = rfind(delim, bytes, 0, (unsigned int)epos);
-    }
-    if(epos >= 0)
-        strs[0] = substr(0, epos);
-    //
-    return rtn;
-}
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
 {
