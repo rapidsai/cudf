@@ -20,6 +20,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
@@ -30,7 +31,9 @@ template <typename Source, aggregation::Kind k, typename Enable = void>
 struct update_target_element {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
-                             size_type source_index) const noexcept {}
+                             size_type source_index) const noexcept {
+    release_assert("Invalid source type and aggregation combination.");
+  }
 };
 
 template <typename Source>
