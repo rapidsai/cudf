@@ -1436,9 +1436,9 @@ class Series(object):
 
         Returns
         -------
-        out : Series TODO
-            Copy of ``self`` cast to the given dtype. Returns
-            ``self`` if ``dtype`` is the same as ``self.dtype``.
+        out : Series
+            if `copy` is true then returns a copy of series with updated dtype
+            otherwise returns the `view` of input series with updated dtype.
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
