@@ -27,18 +27,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/device_ptr.h>
 
-#if 1
-// TODO: remove this code
-#include <cudf/utilities/bit.hpp>
-
-#include <cub/cub.cuh>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-
-#include <chrono>
-#include <ctime>
-#endif
-
 struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {};
 
 TEST_F(BitmaskUtilitiesTest, StateNullCount) {
@@ -72,7 +60,6 @@ TEST_F(BitmaskUtilitiesTest, NumBitmaskWords) {
 
 struct CountBitmaskTest : public cudf::test::BaseFixture {};
 
-#if 0
 TEST_F(CountBitmaskTest, NullMask) {
   EXPECT_EQ(0, cudf::count_set_bits(nullptr, 0, 32));
 
@@ -541,135 +528,3 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous) {
   cudf::test::expect_equal_buffers(concatenated_bitmask.data(), gold_mask.data(),
                                    num_elements / CHAR_BIT);
 }
-#endif
-
-#if 1
-// TODO: remove this code
-std::vector<cudf::size_type>
-count_set_bits_simple(cudf::bitmask_type const* p_masks,
-                      std::vector<cudf::size_type> indices) {
-  auto num_ranges = static_cast<cudf::size_type>(indices.size() / 2);
-  auto h_first_indices = thrust::host_vector<cudf::size_type>(num_ranges);
-  auto h_last_indices = thrust::host_vector<cudf::size_type>(num_ranges);
-  for (auto i = cudf::size_type{0}; i < num_ranges; i++) {
-    h_first_indices[i] = indices[i * 2];
-    h_last_indices[i] = indices[i * 2 + 1];
-  }
-  auto d_first_indices = rmm::device_vector<cudf::size_type>(h_first_indices);
-  auto d_last_indices = rmm::device_vector<cudf::size_type>(h_last_indices);
-  auto bit_elements =
-    thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [p_masks] __device__ (auto i) {
-      return static_cast<cudf::size_type>(cudf::bit_is_set(p_masks, i));
-    });
-
-  auto d_null_counts = rmm::device_vector<cudf::size_type>(num_ranges, 0);
-
-  auto temp_storage_bytes = size_t{0};
-  cub::DeviceSegmentedReduce::Sum(nullptr, temp_storage_bytes,
-                                  bit_elements, d_null_counts.begin(),
-                                  num_ranges,
-                                  d_first_indices.begin(),
-                                  d_last_indices.begin());
-  auto d_temp_storage = rmm::device_buffer(temp_storage_bytes);
-
-  cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(), temp_storage_bytes,
-                                  bit_elements, d_null_counts.begin(),
-                                  num_ranges,
-                                  d_first_indices.begin(),
-                                  d_last_indices.begin());
-
-  auto counts = std::vector<cudf::size_type>(num_ranges);
-  CUDA_TRY(cudaMemcpyAsync(counts.data(), d_null_counts.data().get(),
-                      num_ranges * sizeof(cudf::size_type),
-                      cudaMemcpyDeviceToHost));
-
-  return counts;
-}
-
-void
-performance_test(cudf::bitmask_type const* p_masks,
-                      std::vector<cudf::size_type> indices) {
-  auto num_ranges = static_cast<cudf::size_type>(indices.size() / 2);
-  auto sum_ranges = size_t{0};
-  for (auto i = cudf::size_type{0}; i < num_ranges; i++) {
-    sum_ranges += indices[i * 2 + 1] - indices[i * 2];
-  }
-  std::cout << "num_ranges=" << num_ranges << " sum_ranges=" << sum_ranges << "\n";
-
-  auto time0 = 0.0;
-  auto time1 = 0.0;
-  auto time2 = 0.0;
-
-  auto counts0 = std::vector<cudf::size_type>(num_ranges);
-  {
-    auto start = std::chrono::system_clock::now();
-    counts0 = cudf::count_set_bits(p_masks, indices);
-    CUDA_TRY(cudaStreamSynchronize(0));
-    auto end = std::chrono::system_clock::now();
-    auto elapsed_seconds = std::chrono::duration<double>{end - start};
-    time0 = elapsed_seconds.count();
-    std::cout << "0 elapsed time: " << time0 << "\n";
-  }
-
-  auto counts1 = std::vector<cudf::size_type>(num_ranges);
-  {
-    auto start = std::chrono::system_clock::now();
-    for (auto i = cudf::size_type{0}; i < num_ranges; i++) {
-      counts1[i] =
-        cudf::count_set_bits(p_masks, indices[i * 2], indices[i * 2 + 1]);
-    }
-    CUDA_TRY(cudaStreamSynchronize(0));
-    auto end = std::chrono::system_clock::now();
-    auto elapsed_seconds = std::chrono::duration<double>{end - start};
-    time1 = elapsed_seconds.count();
-    std::cout << "1 elapsed time: " << time1 << "\n";
-  }
-
-  auto counts2 = std::vector<cudf::size_type>(num_ranges);
-  {
-    auto start = std::chrono::system_clock::now();
-    counts2 = count_set_bits_simple(p_masks, indices);
-    CUDA_TRY(cudaStreamSynchronize(0));
-    auto end = std::chrono::system_clock::now();
-    auto elapsed_seconds = std::chrono::duration<double>{end - start};
-    time2 = elapsed_seconds.count();
-    std::cout << "2 elapsed time: " << time2 << "\n";
-  }
-
-  std::cout << "ratios=" << time1 / time0 << "," << time2 / time0 << "\n";
-
-  for (auto i = cudf::size_type{0}; i < num_ranges; i++) {
-    EXPECT_EQ(counts0[i], counts1[i]);
-    EXPECT_EQ(counts0[i], counts2[i]);
-  }
-}
-
-TEST_F(CountBitmaskTest, PerformanceTest) {
-  auto num_bits = 1024 * 1024 * 1024;
-  auto bitmask =
-    rmm::device_buffer(cudf::bitmask_allocation_size_bytes(num_bits));
-  auto p_masks = static_cast<cudf::bitmask_type const*>(bitmask.data());
-  CUDA_TRY(
-    cudaMemset(
-      const_cast<cudf::bitmask_type*>(p_masks), 0x3a0fc41e, bitmask.size())
-  );
-  CUDA_TRY(cudaStreamSynchronize(0));
-
-  for (auto divisor = cudf::size_type{1}; divisor <= 128; divisor *= 2) {
-    for (auto num_ranges = cudf::size_type{1}; num_ranges <= 128; num_ranges *= 2) {
-      auto size = cudf::size_type{num_bits / divisor};
-      auto indices = std::vector<cudf::size_type>{};
-      for (auto i = cudf::size_type{0}; i < num_ranges; i++) {
-        if (static_cast<int64_t>(i + 1) * size > num_bits) {
-          break;
-        }
-        indices.push_back(i * size);
-        indices.push_back((i + 1) * size);
-      }
-      performance_test(p_masks, indices);
-    }
-  }
-}
-#endif
