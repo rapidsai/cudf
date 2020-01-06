@@ -1,7 +1,7 @@
+import functools
+import operator
 import pickle
 import types
-import operator
-import functools
 
 import numpy as np
 
