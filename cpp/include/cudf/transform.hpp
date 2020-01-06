@@ -71,7 +71,6 @@ nans_to_nulls(column_view const& input,
  * If element `i` in `input` is `true`, bit `i` in the resulting mask is set (`1`). Else,
  * if element `i` is `false` or null, bit `i` is unset (`0`). 
  *
- * If the input column is nullable, the null element will represent `false`.
  *
  * @throws `cudf::logic_error` if `input.type()` is a non-boolean type
  *
