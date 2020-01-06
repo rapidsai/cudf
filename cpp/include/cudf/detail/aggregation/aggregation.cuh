@@ -34,25 +34,43 @@ struct update_target_element {
                              size_type source_index) const noexcept {}
 };
 
-template <typename Source, aggregation::Kind k>
-struct update_target_element<
-    Source, k,
-    std::enable_if_t<is_valid_aggregation<Source, k>() and
-                     not std::is_void<corresponding_operator_t<k>>::value>> {
+template <typename Source>
+struct update_target_element<Source, aggregation::MIN,
+                             std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
-    // TODO Handle nulls
-    using Target = target_type_t<Source, k>;
-    using Op = corresponding_operator_t<k>;
-
-    // Need to specialize this path for values of k that have corresponding
-    // operators...
-    // genericAtomicOperation(
-    //    &target.element<Target>(target_index),
-    //    static_cast<Target>(source.element<Source>(source_index)), Op{});
+    using Target = target_type_t<Source, aggregation::MIN>;
+    atomicMin(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
   }
 };
+
+template <typename Source>
+struct update_target_element<Source, aggregation::MAX,
+                             std::enable_if_t<is_fixed_width<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::MAX>;
+    atomicMax(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
+  }
+};
+
+/* 
+template <typename Source>
+struct update_target_element<Source, aggregation::SUM,
+                             std::enable_if_t<is_fixed_width<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::SUM>;
+    atomicAdd(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
+  }
+};
+*/
 
 template <typename Source>
 struct update_target_element<
@@ -60,7 +78,10 @@ struct update_target_element<
     std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
-                             size_type source_index) const noexcept {}
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::COUNT>;
+    atomicAdd(&target.element<Target>(target_index), Target{1});
+  }
 };
 
 /**
