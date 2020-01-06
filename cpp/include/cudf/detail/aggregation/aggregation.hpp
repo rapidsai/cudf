@@ -62,37 +62,6 @@ struct quantile_aggregation : aggregation {
   experimental::interpolation _interpolation;  ///< Desired interpolation
 };
 
-/**
- * @brief Maps an `aggregation::Kind` value to it's corresponding binary
- * operator.
- *
- * @note Not all values of `aggregation::Kind` have a valid corresponding binary
- * operator. For these values `E`,
- * `std::is_same_v<corresponding_operator<E>::type, void>`.
- *
- * @tparam k The `aggregation::Kind` value to map to its corresponding operator
- */
-template <aggregation::Kind k>
-struct corresponding_operator {
-    using type = void;
-};
-
-template <>
-struct corresponding_operator<aggregation::MIN> {
-  using type = DeviceMin;
-};
-template <>
-struct corresponding_operator<aggregation::MAX> {
-  using type = DeviceMax;
-};
-template <>
-struct corresponding_operator<aggregation::SUM> {
-  using type = DeviceSum;
-};
-
-template <aggregation::Kind k>
-using corresponding_operator_t = typename corresponding_operator<k>::type;
-
 /**---------------------------------------------------------------------------*
  * @brief Determines accumulator type based on input type and aggregation.
  *
@@ -140,6 +109,13 @@ template <typename Source>
 struct target_type_impl<
     Source, aggregation::SUM,
     std::enable_if_t<std::is_floating_point<Source>::value>> {
+  using type = Source;
+};
+
+// Summing timestamps, use same type accumulator
+template <typename Source>
+struct target_type_impl<Source, aggregation::SUM,
+                        std::enable_if_t<is_timestamp<Source>()>> {
   using type = Source;
 };
 

@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
@@ -58,7 +57,6 @@ struct update_target_element<Source, aggregation::MAX,
   }
 };
 
-/* 
 template <typename Source>
 struct update_target_element<Source, aggregation::SUM,
                              std::enable_if_t<is_fixed_width<Source>()>> {
@@ -70,7 +68,6 @@ struct update_target_element<Source, aggregation::SUM,
               static_cast<Target>(source.element<Source>(source_index)));
   }
 };
-*/
 
 template <typename Source>
 struct update_target_element<
