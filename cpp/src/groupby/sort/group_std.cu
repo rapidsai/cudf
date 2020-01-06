@@ -82,10 +82,12 @@ struct var_functor {
     //   }
     // );
 
-    // thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-    //                       group_labels.begin(), group_labels.end(), values_it, 
-    //                       thrust::make_discard_iterator(),
-    //                       result->mutable_view().data<ResultType>());
+    auto values_it = thrust::make_counting_iterator(0);
+
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+                          group_labels.begin(), group_labels.end(), values_it, 
+                          thrust::make_discard_iterator(),
+                          result->mutable_view().data<ResultType>());
 
     // set nulls
     auto result_view = mutable_column_device_view::create(*result);
