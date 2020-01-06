@@ -84,6 +84,46 @@ struct update_target_element<
   }
 };
 
+template <typename Source>
+struct update_target_element<
+    Source, aggregation::ARGMAX,
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::ARGMAX>;
+    auto old = atomicCAS(&target.element<Target>(target_index), ARGMAX_SENTINEL,
+                         source_index);
+    if (old == ARGMAX_SENTINEL) {
+      return;
+    }
+
+    while (source.element<Source>(source_index) > source.element<Source>(old)) {
+      old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+    }
+  }
+};
+
+template <typename Source>
+struct update_target_element<
+    Source, aggregation::ARGMIN,
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::ARGMIN>;
+    auto old = atomicCAS(&target.element<Target>(target_index), ARGMIN_SENTINEL,
+                         source_index);
+    if (old == ARGMIN_SENTINEL) {
+      return;
+    }
+
+    while (source.element<Source>(source_index) < source.element<Source>(old)) {
+      old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+    }
+  }
+};
+
 /**
  * @brief Function object to update a single element in a target column by
  * performing an aggregation operation with a single element from a source
