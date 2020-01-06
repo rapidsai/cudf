@@ -298,7 +298,7 @@ groupby::sort_aggregate(
   
   auto results = extract_results(requests, cache);
   
-  return std::make_pair(helper().unique_keys(),
+  return std::make_pair(helper().unique_keys(mr, stream),
                         std::move(results));
 }
 }  // namespace groupby

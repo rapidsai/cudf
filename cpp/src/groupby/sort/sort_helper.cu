@@ -86,15 +86,16 @@ namespace groupby {
 namespace detail {
 namespace sort {
 
-size_type helper::num_keys() {
+size_type helper::num_keys(cudaStream_t stream) {
   if (_num_keys > -1)
     return _num_keys;
 
   if (_ignore_null_keys and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
     // in the row bitmask. When `_ignore_null_keys == true`, then only rows `[0, n)` 
-    // in the sorted order are considered for grouping. 
-    _num_keys = keys_bitmask_column().size() - keys_bitmask_column().null_count();
+    // in the sorted keys are considered for grouping. 
+    _num_keys = keys_bitmask_column(stream).size() - 
+                keys_bitmask_column(stream).null_count();
   } else {
     _num_keys = _keys.num_rows();
   }
@@ -150,7 +151,7 @@ helper::index_vector const& helper::group_offsets(cudaStream_t stream) {
   if (_group_offsets)
     return *_group_offsets;
 
-  _group_offsets = std::make_unique<index_vector>(num_keys());
+  _group_offsets = std::make_unique<index_vector>(num_keys(stream));
 
   auto device_input_table = table_device_view::create(_keys, stream);
   auto sorted_order = key_sort_order().data<size_type>();
@@ -160,13 +161,13 @@ helper::index_vector const& helper::group_offsets(cudaStream_t stream) {
   if (has_nulls(_keys)) {
     result_end = thrust::unique_copy(exec->on(stream),
       thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_keys()),
+      thrust::make_counting_iterator<size_type>(num_keys(stream)),
       _group_offsets->begin(),
       permuted_row_equality_comparator<true>(*device_input_table, sorted_order));
   } else {
     result_end = thrust::unique_copy(exec->on(stream), 
       thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_keys()),
+      thrust::make_counting_iterator<size_type>(num_keys(stream)),
       _group_offsets->begin(),
       permuted_row_equality_comparator<false>(*device_input_table, sorted_order));
   }
@@ -182,11 +183,11 @@ helper::index_vector const& helper::group_labels(cudaStream_t stream) {
     return *_group_labels;
 
   // Get group labels for future use in segmented sorting
-  _group_labels = std::make_unique<index_vector>(num_keys());
+  _group_labels = std::make_unique<index_vector>(num_keys(stream));
 
   auto& group_labels = *_group_labels;
 
-  if (num_keys() == 0)
+  if (num_keys(stream) == 0)
     return group_labels;
 
   auto exec = rmm::exec_policy(stream);
@@ -219,7 +220,7 @@ column_view helper::unsorted_keys_labels(cudaStream_t stream) {
                               group_labels().data().get());
   
   auto scatter_map = cudf::experimental::detail::slice(
-    key_sort_order(), 0, num_keys());
+    key_sort_order(), 0, num_keys(stream));
 
   std::unique_ptr<table> t_unsorted_keys_labels = 
     cudf::experimental::detail::scatter(
@@ -262,7 +263,7 @@ helper::column_ptr helper::sorted_values(column_view const& values,
 
   // Zero-copy slice this sort order so that its new size is num_keys()
   column_view gather_map = cudf::experimental::detail::slice(
-    values_sort_order->view(), 0, num_keys() );
+    values_sort_order->view(), 0, num_keys(stream) );
 
   auto sorted_values_table = cudf::experimental::detail::gather(
     table_view({values}), gather_map, false, false, false, mr, stream);

@@ -133,7 +133,7 @@ struct helper {
    * When ignore_null_keys = true, returned value is the number of rows in `keys`
    *  in which no element is null
    */
-  size_type num_keys();
+  size_type num_keys(cudaStream_t stream = 0);
 
   /**
    * @brief Get the sorted order of `keys`.
