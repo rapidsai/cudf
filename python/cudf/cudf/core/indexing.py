@@ -292,7 +292,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame, Series
         from cudf.core.column import column_empty
-        from cudf.core.index import as_index
+        from cudf.core.index import as_index, RangeIndex
 
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
@@ -333,10 +333,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             for col_num in range(len(columns_df.columns)):
                 # need Series() in case a scalar is returned
                 df[col_num] = Series(columns_df._columns[col_num][arg[0]])
-            df.index = as_index(
-                columns_df.index.as_column()[arg[0]],
-                name=columns_df.index.name,
-            )
+
+            if isinstance(columns_df, RangeIndex):
+                df.index = RangeIndex(columns_df.index[arg[0]])
+            else:
+                df.index = as_index(columns_df.index[arg[0]])
             df.columns = columns_df.columns
 
         # Iloc Step 3:
