@@ -48,5 +48,20 @@ std::unique_ptr<column> transform(
   bool is_ptx,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
+
+/**
+ * @brief Creates a null_mask from `input` by converting `NaN` to null and
+ * preserving existing null values and also returns new null_count.
+ *
+ * @throws `cudf::logic_error` if `input.type()` is a non-floating type
+ *
+ * @param input         An immutable view of the input column of floating-point type
+ * @param mr            The memory resource to use for for all device allocations
+ * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * null count obtained by replacing `NaN` in `input` with null.
+ **/
+std::pair<std::unique_ptr<rmm::device_buffer>, size_type>
+nans_to_nulls(column_view const& input,
+              rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf
