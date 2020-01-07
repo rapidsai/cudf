@@ -199,7 +199,7 @@ __device__ bitmask_type get_mask_offset_word(
   return __funnelshift_r(curr_word, next_word, source_begin_bit);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * For each range `[first_bit_indices[i], last_bit_indices[i])`
  * (where 0 <= i < `num_ranges`), count the number of bits set outside the range
  * in the boundary words (i.e. words that include either
@@ -217,7 +217,7 @@ __device__ bitmask_type get_mask_offset_word(
  * range
  * @param[in,out] null_counts The number of non-zero bits in each range to be
  * updated
- *---------------------------------------------------------------------------**/
+ */
 template <typename OffsetIterator, typename OutputIterator>
 __global__ void subtract_set_bits_range_boundaries_kerenel(
     bitmask_type const* bitmask,
