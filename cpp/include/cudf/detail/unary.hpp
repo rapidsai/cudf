@@ -32,8 +32,8 @@ namespace detail{
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
- * @param[in] mr Optional, The resource to use for all allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
  *
  * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
@@ -56,8 +56,10 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
 /**
  * @brief Performs unary op on all values in column
  *
- * @param[in] input A `column_view` as input
- * @param[in] op operation to perform
+ * @param input A `column_view` as input
+ * @param op operation to perform
+ * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
  *
  * @returns std::unique_ptr<cudf::column> Result of the operation
  */
