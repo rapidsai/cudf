@@ -67,6 +67,25 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::get_default_resource(),
                                               cudaStream_t stream = 0);
 
+
+/**
+ * @brief  Casts data from dtype specified in input to dtype specified in output.
+ * Supports only fixed-width types.
+ *
+ * @param column_view Input column
+ * @param out_type Desired datatype of output column
+ * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns unique_ptr<column> Result of the cast operation
+ * @throw cudf::logic_error if `out_type` is not a fixed-width type
+ */
+std::unique_ptr<column> cast(column_view const& input,
+                             data_type type,
+                             rmm::mr::device_memory_resource* mr =
+                                rmm::mr::get_default_resource(),
+                             cudaStream_t stream = 0);
+
 } // namespace detail
 } // namespace experimental
 } // namespace cudf
