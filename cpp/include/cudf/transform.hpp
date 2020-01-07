@@ -48,5 +48,40 @@ std::unique_ptr<column> transform(
   bool is_ptx,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
+
+/**
+ * @brief Creates a null_mask from `input` by converting `NaN` to null and
+ * preserving existing null values and also returns new null_count.
+ *
+ * @throws `cudf::logic_error` if `input.type()` is a non-floating type
+ *
+ * @param input         An immutable view of the input column of floating-point type
+ * @param mr            The memory resource to use for for all device allocations
+ * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * null count obtained by replacing `NaN` in `input` with null.
+ **/
+std::pair<std::unique_ptr<rmm::device_buffer>, size_type>
+nans_to_nulls(column_view const& input,
+              rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
+
+
+/**
+ * @brief Creates a bitmask from a column of boolean elements.
+ *
+ * If element `i` in `input` is `true`, bit `i` in the resulting mask is set (`1`). Else,
+ * if element `i` is `false` or null, bit `i` is unset (`0`). 
+ *
+ *
+ * @throws `cudf::logic_error` if `input.type()` is a non-boolean type
+ *
+ * @param input        Boolean elements to convert to a bitmask. 
+ * @param mr            The memory resource used to allocate the returned bitmask. 
+ * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * null count obtained from input considering `true` represent `valid`/`1` and
+ * `false` represent `invalid`/`0`.
+ **/
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>
+bools_to_mask(column_view const& input,
+                  rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf
