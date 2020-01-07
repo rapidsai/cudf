@@ -84,8 +84,8 @@ TYPED_TEST(cudf_logical_test, LogicalNot)
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
 {
-    cudf::test::fixed_width_column_wrapper<TypeParam>                 input    {{ true,  true,  true,  true  }};
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {{ false, false, false, false }};
+    cudf::test::fixed_width_column_wrapper<TypeParam> input    {{ true,  true,  true,  true  }};
+    cudf::test::fixed_width_column_wrapper<bool>      expected {{ false, false, false, false }};
     auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
     cudf::test::expect_columns_equal(expected, output->view());
 }
@@ -96,7 +96,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
     auto temp_input = cudf::test::make_type_param_vector<T>({ true, true, true, true });
     std::vector<bool> temp_mask = { 1, 0, 1, 1 };
     cudf::test::fixed_width_column_wrapper<T> input (temp_input.cbegin(), temp_input.cend(), temp_mask.cbegin());
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {{ false, true, false, false }, { 1, 0, 1, 1 }};
+    cudf::test::fixed_width_column_wrapper<bool> expected {{ false, true, false, false }, { 1, 0, 1, 1 }};
     auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
     cudf::test::expect_columns_equal(expected, output->view());
 }
@@ -104,7 +104,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
 TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
 {
     cudf::test::fixed_width_column_wrapper<TypeParam>                 input    {};
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected {};
+    cudf::test::fixed_width_column_wrapper<bool> expected {};
     auto output = cudf::experimental::unary_operation(input, cudf::experimental::unary_op::NOT);
     cudf::test::expect_columns_equal(expected, output->view());
 }
@@ -291,7 +291,7 @@ TYPED_TEST(cudf_math_with_char_test, LogicalOpTypeFail)
 template <typename T>
 struct IsNull : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(IsNull, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(IsNull, cudf::test::NumericTypes);
 
 TYPED_TEST(IsNull, AllValid)
 {
@@ -299,8 +299,8 @@ TYPED_TEST(IsNull, AllValid)
 
     cudf::size_type start = 0;
     cudf::size_type size = 10;
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, false);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = create_expected_columns<cudf::experimental::bool8>(size, false, true);
+    cudf::test::fixed_width_column_wrapper<T>    col      = create_fixed_columns<T>(start, size, false);
+    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, false, true);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_null(col);
 
@@ -313,8 +313,8 @@ TYPED_TEST(IsNull, WithInvalids)
 
     cudf::size_type start = 0;
     cudf::size_type size = 10;
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = create_expected_columns<cudf::experimental::bool8>(size, true, true);
+    cudf::test::fixed_width_column_wrapper<T>    col      = create_fixed_columns<T>(start, size, true);
+    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, true);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_null(col);
 
@@ -327,8 +327,8 @@ TYPED_TEST(IsNull, EmptyColumns)
 
     cudf::size_type start = 0;
     cudf::size_type size = 0;
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = create_expected_columns<cudf::experimental::bool8>(size, true, true);
+    cudf::test::fixed_width_column_wrapper<T>    col      = create_fixed_columns<T>(start, size, true);
+    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, true);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_null(col);
 
@@ -338,7 +338,7 @@ TYPED_TEST(IsNull, EmptyColumns)
 template <typename T>
 struct IsNotNull : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(IsNotNull, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(IsNotNull, cudf::test::NumericTypes);
 
 TYPED_TEST(IsNotNull, AllValid)
 {
@@ -346,8 +346,8 @@ TYPED_TEST(IsNotNull, AllValid)
 
     cudf::size_type start = 0;
     cudf::size_type size = 10;
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, false);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = create_expected_columns<cudf::experimental::bool8>(size, false, false);
+    cudf::test::fixed_width_column_wrapper<T>    col      = create_fixed_columns<T>(start, size, false);
+    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, false, false);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
@@ -360,8 +360,8 @@ TYPED_TEST(IsNotNull, WithInvalids)
 
     cudf::size_type start = 0;
     cudf::size_type size = 10;
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = create_expected_columns<cudf::experimental::bool8>(size, true, false);
+    cudf::test::fixed_width_column_wrapper<T>    col      = create_fixed_columns<T>(start, size, true);
+    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, false);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
@@ -374,8 +374,8 @@ TYPED_TEST(IsNotNull, EmptyColumns)
 
     cudf::size_type start = 0;
     cudf::size_type size = 0;
-    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, true);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = create_expected_columns<cudf::experimental::bool8>(size, true, false);
+    cudf::test::fixed_width_column_wrapper<T>    col      = create_fixed_columns<T>(start, size, true);
+    cudf::test::fixed_width_column_wrapper<bool> expected = create_expected_columns<bool>(size, true, false);
 
     std::unique_ptr<cudf::column> got = cudf::experimental::is_valid(col);
 
@@ -507,7 +507,7 @@ TEST_F(CastTimestamps, IsIdempotent) {
 template <typename T>
 struct CastToTimestamps : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(CastToTimestamps, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(CastToTimestamps, cudf::test::NumericTypes);
 
 TYPED_TEST(CastToTimestamps, AllValid) {
   using T = TypeParam;
@@ -543,7 +543,7 @@ TYPED_TEST(CastToTimestamps, AllValid) {
 template <typename T>
 struct CastFromTimestamps : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(CastFromTimestamps, cudf::test::NumericTypesWithoutBool);
+TYPED_TEST_CASE(CastFromTimestamps, cudf::test::NumericTypes);
 
 TYPED_TEST(CastFromTimestamps, AllValid) {
   using T = TypeParam;
