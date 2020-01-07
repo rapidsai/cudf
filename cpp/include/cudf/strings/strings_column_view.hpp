@@ -77,21 +77,6 @@ namespace strings
 {
 
 /**
- * @brief Prints the strings to stdout.
- *
- * @param strings Strings instance for this operation.
- * @param start Index of first string to print.
- * @param end Index of last string to print. Specify -1 for all strings.
- * @param max_width Maximum number of characters to print per string.
- *        Specify -1 to print all characters.
- * @param delimiter The chars to print between each string.
- *        Default is new-line character.
- */
-void print( strings_column_view strings,
-            size_type start=0, size_type end=-1,
-            size_type max_width=-1, const char* delimiter = "\n" );
-
-/**
  * @brief Create output per Arrow strings format.
  * The return pair is the vector of chars and the vector of offsets.
  *
@@ -101,7 +86,7 @@ void print( strings_column_view strings,
  * @return Pair containing a vector of chars and a vector of offsets.
  */
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
-    create_offsets( strings_column_view strings,
+    create_offsets( strings_column_view const& strings,
                     cudaStream_t stream=0,
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
