@@ -315,9 +315,6 @@ def scatter_to_frames(source, maps, index=None, names=None, index_names=None):
                 )
             )
         if index:
-            print(index)
-            print(index_names)
-            print(df)
             df = df.set_index(ind_names_tmp)
             if len(index) == 1:
                 df.index.name = index_names[0]
