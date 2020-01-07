@@ -8,6 +8,7 @@
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
+- PR #3597 Implement new sort based groupby
 
 ## Improvements
 
