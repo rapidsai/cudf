@@ -47,21 +47,22 @@ def test_token_count():
             "the sable siamésé cat jumped under the brown sofa",
             None,
             "",
+            "test_str\x01test_str\x02test_str\x03test_str\x04test_str\x05",
         ]
     )
     outcome = nvtext.token_count(strs)
-    expected = [10, 9, 0, 0]
+    expected = [10, 9, 0, 0, 5]
     assert outcome == expected
 
     # custom delimiter
     outcome = nvtext.token_count(strs, delimiter="o")
-    expected = [6, 3, 0, 0]
+    expected = [6, 3, 0, 0, 1]
     assert outcome == expected
 
     # test device pointer
     outcome_darray = rmm.device_array(strs.size(), dtype=np.int32)
     nvtext.token_count(strs, devptr=outcome_darray.device_ctypes_pointer.value)
-    expected = [10, 9, 0, 0]
+    expected = [10, 9, 0, 0, 5]
     assert np.array_equal(outcome_darray.copy_to_host(), expected)
 
 
@@ -73,6 +74,7 @@ def test_unique_tokens():
             "Your Favorite book is different",
             None,
             "",
+            "test_str\x01test_str\x02test_str\x03test_str\x04test_str\x05",
         ]
     )
     unique_tokens_outcome = nvtext.unique_tokens(strs)
@@ -86,6 +88,7 @@ def test_unique_tokens():
             "is",
             "my",
             "this",
+            "test_str",
         ]
     )
     assert set(unique_tokens_outcome.to_host()) == expected
@@ -93,7 +96,12 @@ def test_unique_tokens():
     # custom delimiter
     unique_tokens_outcome = nvtext.unique_tokens(strs, delimiter="my")
     expected = set(
-        [" favorite book", "Your Favorite book is different", "this is "]
+        [
+            " favorite book",
+            "Your Favorite book is different",
+            "test_str\x01test_str\x02test_str\x03test_str\x04test_str\x05",
+            "this is ",
+        ]
     )
     assert set(unique_tokens_outcome.to_host()) == expected
 
@@ -356,6 +364,34 @@ def test_ngrams():
     ]
     tokens = nvtext.tokenize(dstrings)
     outcome = nvtext.ngrams(tokens, N=3, sep="-")
+    assert outcome.to_host() == expected
+
+
+def test_ngrams_tokenize():
+    # bigrams
+    strings = ["this is my favorite", "book on my bookshelf"]
+    dstrings = nvstrings.to_device(strings)
+    expected = [
+        "this_is",
+        "is_my",
+        "my_favorite",
+        "book_on",
+        "on_my",
+        "my_bookshelf",
+    ]
+    outcome = nvtext.ngrams_tokenize(dstrings, N=2, sep="_")
+    assert outcome.to_host() == expected
+
+    # trigrams
+    strings = ["this is my favorite", "book on my bookshelf"]
+    dstrings = nvstrings.to_device(strings)
+    expected = [
+        "this-is-my",
+        "is-my-favorite",
+        "book-on-my",
+        "on-my-bookshelf",
+    ]
+    outcome = nvtext.ngrams_tokenize(dstrings, N=3, sep="-")
     assert outcome.to_host() == expected
 
 
