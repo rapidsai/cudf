@@ -35,6 +35,7 @@
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3697 Improve column insert performance for wide frames
+- PR #3698 Added count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 
 ## Bug Fixes
 
