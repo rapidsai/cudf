@@ -120,7 +120,15 @@ set(LEGACY_STACK_BENCH_SRC
 ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")
 
 ###################################################################################################
-# - scatter benchmark -----------------------------------------------------------------------------
+# - legacy hashing benchmark -----------------------------------------------------------------------------
+
+set(LEGACY_HASHING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hashing_benchmark.cu")
+
+ConfigureBench(LEGACY_HASHING_BENCH "${LEGACY_HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - hashing benchmark -----------------------------------------------------------------------------
 
 set(HASHING_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
