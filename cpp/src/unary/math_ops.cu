@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "unary_ops.cuh"
+#include <unary/unary_ops.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/unary.hpp>
 
