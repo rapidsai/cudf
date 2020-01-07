@@ -143,8 +143,8 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start,
  * in the specified ranges
  */
 std::vector<size_type>
-count_set_bits(bitmask_type const* bitmask,
-               std::vector<cudf::size_type> const& indices);
+segmented_count_set_bits(bitmask_type const* bitmask,
+                         std::vector<cudf::size_type> const& indices);
 
 /**
  * @brief Given a bitmask, counts the number of unset (0) bits in every range
@@ -163,8 +163,8 @@ count_set_bits(bitmask_type const* bitmask,
  * the specified ranges
  */
 std::vector<size_type>
-count_unset_bits(bitmask_type const* bitmask,
-               std::vector<cudf::size_type> const& indices);
+segmented_count_unset_bits(bitmask_type const* bitmask,
+                           std::vector<cudf::size_type> const& indices);
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range

@@ -458,9 +458,10 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
   return (num_bits - detail::count_set_bits(bitmask, start, stop, stream));
 }
 
-std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
-                                      std::vector<size_type> const& indices,
-                                      cudaStream_t stream) {
+std::vector<size_type>
+segmented_count_set_bits(bitmask_type const* bitmask,
+                         std::vector<size_type> const& indices,
+                         cudaStream_t stream) {
   CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
 
   if ((bitmask == nullptr) || (indices.size() == 0)) {
@@ -548,14 +549,15 @@ std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
   return ret;
 }
 
-std::vector<size_type> count_unset_bits(bitmask_type const* bitmask,
-                                        std::vector<size_type> const& indices,
-                                        cudaStream_t stream) {
+std::vector<size_type>
+segmented_count_unset_bits(bitmask_type const* bitmask,
+                           std::vector<size_type> const& indices,
+                           cudaStream_t stream) {
   if (bitmask == nullptr) {
     return std::vector<size_type>();
   }
 
-  auto ret = count_set_bits(bitmask, indices, stream);
+  auto ret = segmented_count_set_bits(bitmask, indices, stream);
   for (size_type i = 0; i < static_cast<size_type>(ret.size()); i++) {
     auto begin = indices[i * 2];
     auto end = indices[i * 2 + 1];
@@ -613,15 +615,17 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
 }
 
 // Count non-zero bits in the specified ranges
-std::vector<size_type> count_set_bits(bitmask_type const *bitmask,
-                                      std::vector<size_type> const& indices) {
-  return detail::count_set_bits(bitmask, indices, 0);
+std::vector<size_type>
+segmented_count_set_bits(bitmask_type const *bitmask,
+                         std::vector<size_type> const& indices) {
+  return detail::segmented_count_set_bits(bitmask, indices, 0);
 }
 
 // Count zero bits in the specified ranges
-std::vector<size_type> count_unset_bits(bitmask_type const *bitmask,
-                                        std::vector<size_type> const& indices) {
-  return detail::count_unset_bits(bitmask, indices, 0);
+std::vector<size_type>
+segmented_count_unset_bits(bitmask_type const *bitmask,
+                           std::vector<size_type> const& indices) {
+  return detail::segmented_count_unset_bits(bitmask, indices, 0);
 }
 
 // Create a bitmask from a specific range

@@ -64,7 +64,7 @@ TEST_F(CountBitmaskTest, NullMask) {
   EXPECT_EQ(0, cudf::count_set_bits(nullptr, 0, 32));
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
-  auto counts = cudf::count_set_bits(nullptr, indices);
+  auto counts = cudf::segmented_count_set_bits(nullptr, indices);
   EXPECT_EQ(0, static_cast<cudf::size_type>(counts.size()));
 }
 
@@ -74,7 +74,7 @@ TEST_F(CountBitmaskTest, NegativeStart) {
                cudf::logic_error);
 
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
-  EXPECT_THROW(cudf::count_set_bits(mask.data().get(), indices),
+  EXPECT_THROW(cudf::segmented_count_set_bits(mask.data().get(), indices),
                cudf::logic_error);
 }
 
@@ -84,7 +84,7 @@ TEST_F(CountBitmaskTest, StartLargerThanStop) {
                cudf::logic_error);
 
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
-  EXPECT_THROW(cudf::count_set_bits(mask.data().get(), indices),
+  EXPECT_THROW(cudf::segmented_count_set_bits(mask.data().get(), indices),
                cudf::logic_error);
 }
 
@@ -93,7 +93,7 @@ TEST_F(CountBitmaskTest, EmptyRange) {
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 17, 17));
 
   std::vector<cudf::size_type> indices = {0, 0, 17, 17};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(0, counts[0]);
   EXPECT_EQ(0, counts[1]);
@@ -104,7 +104,7 @@ TEST_F(CountBitmaskTest, SingleWordAllZero) {
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 0, 32));
 
   std::vector<cudf::size_type> indices = {0, 32, 0, 32};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(0, counts[0]);
   EXPECT_EQ(0, counts[1]);
@@ -115,7 +115,7 @@ TEST_F(CountBitmaskTest, SingleBitAllZero) {
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 17, 18));
 
   std::vector<cudf::size_type> indices = {17, 18, 7, 8};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(0, counts[0]);
   EXPECT_EQ(0, counts[1]);
@@ -126,7 +126,7 @@ TEST_F(CountBitmaskTest, SingleBitAllSet) {
   EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 13, 14));
 
   std::vector<cudf::size_type> indices = {13, 14, 0, 1};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(1, counts[0]);
   EXPECT_EQ(1, counts[1]);
@@ -137,7 +137,7 @@ TEST_F(CountBitmaskTest, SingleWordAllBitsSet) {
   EXPECT_EQ(32, cudf::count_set_bits(mask.data().get(), 0, 32));
 
   std::vector<cudf::size_type> indices = {0, 32, 0, 32};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(32, counts[0]);
   EXPECT_EQ(32, counts[1]);
@@ -148,7 +148,7 @@ TEST_F(CountBitmaskTest, SingleWordPreSlack) {
   EXPECT_EQ(25, cudf::count_set_bits(mask.data().get(), 7, 32));
 
   std::vector<cudf::size_type> indices = {7, 32, 8, 32};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(25, counts[0]);
   EXPECT_EQ(24, counts[1]);
@@ -159,7 +159,7 @@ TEST_F(CountBitmaskTest, SingleWordPostSlack) {
   EXPECT_EQ(17, cudf::count_set_bits(mask.data().get(), 0, 17));
 
   std::vector<cudf::size_type> indices = {0, 17, 0, 18};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(17, counts[0]);
   EXPECT_EQ(18, counts[1]);
@@ -170,7 +170,7 @@ TEST_F(CountBitmaskTest, SingleWordSubset) {
   EXPECT_EQ(30, cudf::count_set_bits(mask.data().get(), 1, 31));
 
   std::vector<cudf::size_type> indices = {1, 31, 7, 17};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(30, counts[0]);
   EXPECT_EQ(10, counts[1]);
@@ -181,7 +181,7 @@ TEST_F(CountBitmaskTest, SingleWordSubset2) {
   EXPECT_EQ(28, cudf::count_set_bits(mask.data().get(), 2, 30));
 
   std::vector<cudf::size_type> indices = {4, 16, 2, 30};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(12, counts[0]);
   EXPECT_EQ(28, counts[1]);
@@ -192,7 +192,7 @@ TEST_F(CountBitmaskTest, MultipleWordsAllBits) {
   EXPECT_EQ(320, cudf::count_set_bits(mask.data().get(), 0, 320));
 
   std::vector<cudf::size_type> indices = {0, 320, 0, 320};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(320, counts[0]);
   EXPECT_EQ(320, counts[1]);
@@ -203,7 +203,7 @@ TEST_F(CountBitmaskTest, MultipleWordsSubsetWordBoundary) {
   EXPECT_EQ(256, cudf::count_set_bits(mask.data().get(), 32, 288));
 
   std::vector<cudf::size_type> indices = {32, 192, 32, 288};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(160, counts[0]);
   EXPECT_EQ(256, counts[1]);
@@ -214,7 +214,7 @@ TEST_F(CountBitmaskTest, MultipleWordsSplitWordBoundary) {
   EXPECT_EQ(2, cudf::count_set_bits(mask.data().get(), 31, 33));
 
   std::vector<cudf::size_type> indices = {31, 33, 60, 67};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(2, counts[0]);
   EXPECT_EQ(7, counts[1]);
@@ -225,7 +225,7 @@ TEST_F(CountBitmaskTest, MultipleWordsSubset) {
   EXPECT_EQ(226, cudf::count_set_bits(mask.data().get(), 67, 293));
 
   std::vector<cudf::size_type> indices = {67, 293, 37, 319};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(226, counts[0]);
   EXPECT_EQ(282, counts[1]);
@@ -236,7 +236,7 @@ TEST_F(CountBitmaskTest, MultipleWordsSingleBit) {
   EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 67, 68));
 
   std::vector<cudf::size_type> indices = {67, 68, 31, 32, 192, 193};
-  auto counts = cudf::count_set_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
   EXPECT_EQ(3, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(1, counts[0]);
   EXPECT_EQ(1, counts[1]);
@@ -250,7 +250,7 @@ TEST_F(CountUnsetBitsTest, SingleBitAllSet) {
   EXPECT_EQ(0, cudf::count_unset_bits(mask.data().get(), 13, 14));
 
   std::vector<cudf::size_type> indices = {13, 14, 31, 32};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(0, counts[0]);
   EXPECT_EQ(0, counts[1]);
@@ -260,7 +260,7 @@ TEST_F(CountUnsetBitsTest, NullMask) {
   EXPECT_EQ(0, cudf::count_unset_bits(nullptr, 0, 32));
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
-  auto counts = cudf::count_unset_bits(nullptr, indices);
+  auto counts = cudf::segmented_count_unset_bits(nullptr, indices);
   EXPECT_EQ(0, static_cast<cudf::size_type>(counts.size()));
 }
 
@@ -269,7 +269,7 @@ TEST_F(CountUnsetBitsTest, SingleWordAllBits) {
   EXPECT_EQ(32, cudf::count_unset_bits(mask.data().get(), 0, 32));
 
   std::vector<cudf::size_type> indices = {0, 32, 0, 32};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(32, counts[0]);
   EXPECT_EQ(32, counts[1]);
@@ -280,7 +280,7 @@ TEST_F(CountUnsetBitsTest, SingleWordPreSlack) {
   EXPECT_EQ(25, cudf::count_unset_bits(mask.data().get(), 7, 32));
 
   std::vector<cudf::size_type> indices = {7, 32, 8, 32};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(25, counts[0]);
   EXPECT_EQ(24, counts[1]);
@@ -291,7 +291,7 @@ TEST_F(CountUnsetBitsTest, SingleWordPostSlack) {
   EXPECT_EQ(17, cudf::count_unset_bits(mask.data().get(), 0, 17));
 
   std::vector<cudf::size_type> indices = {0, 17, 0, 18};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(17, counts[0]);
   EXPECT_EQ(18, counts[1]);
@@ -302,7 +302,7 @@ TEST_F(CountUnsetBitsTest, SingleWordSubset) {
   EXPECT_EQ(30, cudf::count_unset_bits(mask.data().get(), 1, 31));
 
   std::vector<cudf::size_type> indices = {1, 31, 7, 17};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(30, counts[0]);
   EXPECT_EQ(10, counts[1]);
@@ -313,7 +313,7 @@ TEST_F(CountUnsetBitsTest, SingleWordSubset2) {
   EXPECT_EQ(28, cudf::count_unset_bits(mask.data().get(), 2, 30));
 
   std::vector<cudf::size_type> indices = {4, 16, 2, 30};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(12, counts[0]);
   EXPECT_EQ(28, counts[1]);
@@ -324,7 +324,7 @@ TEST_F(CountUnsetBitsTest, MultipleWordsAllBits) {
   EXPECT_EQ(320, cudf::count_unset_bits(mask.data().get(), 0, 320));
 
   std::vector<cudf::size_type> indices = {0, 320, 0, 320};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(320, counts[0]);
   EXPECT_EQ(320, counts[1]);
@@ -335,7 +335,7 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSubsetWordBoundary) {
   EXPECT_EQ(256, cudf::count_unset_bits(mask.data().get(), 32, 288));
 
   std::vector<cudf::size_type> indices = {32, 192, 32, 288};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(160, counts[0]);
   EXPECT_EQ(256, counts[1]);
@@ -346,7 +346,7 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSplitWordBoundary) {
   EXPECT_EQ(2, cudf::count_unset_bits(mask.data().get(), 31, 33));
 
   std::vector<cudf::size_type> indices = {31, 33, 60, 67};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(2, counts[0]);
   EXPECT_EQ(7, counts[1]);
@@ -357,7 +357,7 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSubset) {
   EXPECT_EQ(226, cudf::count_unset_bits(mask.data().get(), 67, 293));
 
   std::vector<cudf::size_type> indices = {67, 293, 37, 319};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(2, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(226, counts[0]);
   EXPECT_EQ(282, counts[1]);
@@ -368,7 +368,7 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSingleBit) {
   EXPECT_EQ(1, cudf::count_unset_bits(mask.data().get(), 67, 68));
 
   std::vector<cudf::size_type> indices = {67, 68, 31, 32, 192, 193};
-  auto counts = cudf::count_unset_bits(mask.data().get(), indices);
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
   EXPECT_EQ(3, static_cast<cudf::size_type>(counts.size()));
   EXPECT_EQ(1, counts[0]);
   EXPECT_EQ(1, counts[1]);
