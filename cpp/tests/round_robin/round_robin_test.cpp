@@ -170,4 +170,52 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
   }
 }
 
+TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions) {
+  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}, {1,1,1,1,1,1,1,1,1,1,0});
+  
+  cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
+  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+      if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+        cudf::experimental::bool8 ret = (row % 2 == 0);
+        return static_cast<TypeParam>(ret);
+      }
+      else
+        return static_cast<TypeParam>(row); });
+    
+  fixed_width_column_wrapper<TypeParam> rrColWrap2(sequence_l, sequence_l + inputRows);
+
+  cudf::table_view rr_view{{rrColWrap1, rrColWrap2}};
+
+  cudf::size_type num_partitions = inputRows;  
+  cudf::size_type start_partition = 0;
+    
+  EXPECT_THROW(cudf::experimental::round_robin_partition(rr_view,
+                                                         num_partitions,
+                                                         start_partition), cudf::logic_error);
+}
+
+TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition) {
+  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}, {1,1,1,1,1,1,1,1,1,1,0});
+  
+  cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
+
+  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+      if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+        cudf::experimental::bool8 ret = (row % 2 == 0);
+        return static_cast<TypeParam>(ret);
+      }
+      else
+        return static_cast<TypeParam>(row); });
+    
+  fixed_width_column_wrapper<TypeParam> rrColWrap2(sequence_l, sequence_l + inputRows);
+
+  cudf::table_view rr_view{{rrColWrap1, rrColWrap2}};
+
+  cudf::size_type num_partitions = 4;  
+  cudf::size_type start_partition = 5;
+    
+  EXPECT_THROW(cudf::experimental::round_robin_partition(rr_view,
+                                                         num_partitions,
+                                                         start_partition), cudf::logic_error);
+}
