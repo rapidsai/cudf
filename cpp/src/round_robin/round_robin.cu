@@ -34,7 +34,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/legacy/cuda_utils.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/copying.hpp>
