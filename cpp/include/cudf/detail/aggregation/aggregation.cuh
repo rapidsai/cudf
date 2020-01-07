@@ -142,7 +142,9 @@ struct update_target_element<
       old = atomicCAS(&target.element<Target>(target_index), old, source_index);
     }
 
-    // TODO Can the output of ARGMAX be null?
+    if (target_has_nulls and target.is_null(target_index)) {
+      target.set_valid(target_index);
+    }
   }
 };
 
@@ -168,7 +170,9 @@ struct update_target_element<
       old = atomicCAS(&target.element<Target>(target_index), old, source_index);
     }
 
-    // TODO Can the output of ARGMIN be null?
+    if (target_has_nulls and target.is_null(target_index)) {
+      target.set_valid(target_index);
+    }
   }
 };
 
