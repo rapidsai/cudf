@@ -190,14 +190,10 @@ generate_merged_indices(table_view const& left_table,
       rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
       auto ineq_op =
-        experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view, //xxxx
-                                                                              *rhs_device_view,
-                                                                              d_column_order.data().get(),
-                                                                              d_null_precedence.data().get());
-<<<<<<< HEAD
-=======
-
->>>>>>> bug-merge-double-dispatch
+        experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+                                                                        *rhs_device_view,
+                                                                        d_column_order.data().get(),
+                                                                        d_null_precedence.data().get());
         thrust::merge(exec_pol->on(stream),
                       left_begin_zip_iterator,
                       left_end_zip_iterator,
@@ -210,8 +206,8 @@ generate_merged_indices(table_view const& left_table,
     {
       auto ineq_op =
         experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
-                                                                               *rhs_device_view,
-                                                                               d_column_order.data().get());
+                                                                         *rhs_device_view,
+                                                                         d_column_order.data().get());
         thrust::merge(exec_pol->on(stream),
                       left_begin_zip_iterator,
                       left_end_zip_iterator,
@@ -319,7 +315,6 @@ struct column_merger
       //resolve null mask:
       //
       materialize_bitmask(lcol,rcol, merged_view, dv_row_order_.data().get(), stream_);
-	    printf("resolve null mask\n"); //xxxx
     }
 
     return p_merged_col;
@@ -344,7 +339,6 @@ struct column_merger
       {
         auto merged_view = column->mutable_view();
         materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
-	printf("has nulls %d\n", (int)merged_view.size()); //xxxx
       }
     return column;
   }
@@ -390,7 +384,7 @@ std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_ta
 
     //extract merged row order according to indices:
     //
-    rmm::device_vector<index_type> //xxxx merged_indices;
+    rmm::device_vector<index_type>
       merged_indices = generate_merged_indices(index_left_view, index_right_view, column_order, null_precedence, nullable);
 
     //create merged table:
