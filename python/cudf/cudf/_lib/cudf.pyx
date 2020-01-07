@@ -350,7 +350,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         data = nvstrings.bind_cpointer(data_ptr)
         result = as_column(data)
     elif gdf_dtype == GDF_STRING_CATEGORY:
-        c_free(<void*><uintptr_t>data_ptr, <cudaStream_t><size_type>0)
+        c_free(<void*><uintptr_t>data_ptr, <cudaStream_t><uintptr_t>0)
 
         if c_col.size == 0:
             data = nvstrings.to_device([])
