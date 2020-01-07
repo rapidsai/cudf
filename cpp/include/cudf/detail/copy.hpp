@@ -31,19 +31,23 @@ namespace detail {
  * @note It is the caller's responsibility to ensure that the returned view
  * does not outlive the viewed device memory.
  *
- * @throws `cudf::logic_error` if `begin < 0`, `end < begin` or
+ * @throws cudf::logic_error if `begin < 0`, `end < begin` or
  * `end > input.size()`.
  *
- * @param input View of input column to slice
- * @param begin Index of the first desired element in the slice (inclusive).
- * @param end Index of the last desired element in the slice (exclusive).
+ * @param[in] input View of input column to slice
+ * @param[in] begin Index of the first desired element in the slice (inclusive).
+ * @param[in] end Index of the last desired element in the slice (exclusive).
+ * @param[in] null_count Null count of the returned view (optional, if not
+ * provided, cudf::UNKOWN_NULL_COUNT is passed, and the null count will be
+ * computed on the first invocation of `null_count()`).
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
  *---------------------------------------------------------------------------**/
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input,
                   cudf::size_type begin,
-                  cudf::size_type end) {
+                  cudf::size_type end,
+                  cudf::size_type null_count = cudf::UNKNOWN_NULL_COUNT) {
    static_assert(std::is_same<ColumnView, cudf::column_view>::value or
                     std::is_same<ColumnView, cudf::mutable_column_view>::value,
                 "slice can be performed only on column_view and mutable_column_view");
@@ -59,7 +63,7 @@ ColumnView slice(ColumnView const& input,
 
    return ColumnView(input.type(), end - begin,
                      input.head(), input.null_mask(),
-                     cudf::UNKNOWN_NULL_COUNT,
+                     null_count,
                      input.offset() + begin, children);
 }
 
