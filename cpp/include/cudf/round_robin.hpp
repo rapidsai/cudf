@@ -31,9 +31,6 @@ namespace experimental {
  * Rows are assigned partitions based on their row index in the table,
  * based on the following formula:
  * partition = (row_index + start_partition) % num_partitions
- 
- * Merges two sorted tables into one sorted table
- * containing data from both tables.
  *
  * Example 1:
  * input:
