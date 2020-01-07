@@ -16,9 +16,8 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-#include <cudf/types.hpp>
 #include <cudf/table/row_operators.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace experimental {
