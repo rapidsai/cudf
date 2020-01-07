@@ -794,13 +794,14 @@ class DataFrame(object):
                     result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
+            other_cols_keys = list(other_cols.keys())
             result_cols = list(self.columns)
             df_cols = list(result_cols)
             for new_col in other_cols.keys():
                 if new_col not in result_cols:
                     result_cols.append(new_col)
             for col in result_cols:
-                if col in df_cols and col in other.index:
+                if col in df_cols and col in other_cols_keys:
                     l_opr = self._cols[col]
                     r_opr = other_cols[col]
                 else:
@@ -813,10 +814,17 @@ class DataFrame(object):
                                 dtype=np.array(r_opr).dtype,
                             )
                         )
-                    if col not in other.index:
+                    if col not in other_cols_keys:
                         r_opr = None
                         l_opr = self._cols[col]
                 result[col] = op(l_opr, r_opr)
+            # hack to replicate pandas alignment order
+            permute_cols = (
+                pd.Series(index=df_cols)
+                .align(pd.Series(index=other_cols_keys))[0]
+                .index
+            )
+            result = result[permute_cols]
 
         elif isinstance(other, numbers.Number):
             for col in self._cols:
