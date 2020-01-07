@@ -25,7 +25,12 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.column import CategoricalColumn, StringColumn, as_column, column_empty
+from cudf.core.column import (
+    CategoricalColumn,
+    StringColumn,
+    as_column,
+    column_empty,
+)
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
