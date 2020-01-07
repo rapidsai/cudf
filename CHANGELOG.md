@@ -24,6 +24,7 @@
 - PR #3567 Include `strides` in `__cuda_array_interface__`
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
 - PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
@@ -33,6 +34,7 @@
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3699 Stringify libcudacxx headers for binary op JIT
+- PR #3697 Improve column insert performance for wide frames
 
 ## Bug Fixes
 
@@ -51,6 +53,7 @@
 - PR #3668 Fixing CHECK_CUDA debug build issue
 - PR #3684 Fix ends_with logic for matching string case
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
+- PR #3694 Allow for null columns parameter in csv_writer`
 
 
 # cuDF 0.11.0 (11 Dec 2019)
