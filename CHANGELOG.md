@@ -55,6 +55,7 @@
 - PR #3684 Fix ends_with logic for matching string case
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3694 Allow for null columns parameter in csv_writer`
+- PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 
 
 # cuDF 0.11.0 (11 Dec 2019)
