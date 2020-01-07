@@ -1371,9 +1371,6 @@ def _data_from_cuda_array_interface_desc(obj):
     dtype = np.dtype(desc["typestr"])
 
     # TODO: this can be done more efficiently
-    data = rmm.device_array_from_ptr(
-        ptr, nelem=nelem, dtype=dtype, finalizer=None
-    )
     data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
     return data
 
