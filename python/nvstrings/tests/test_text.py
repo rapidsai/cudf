@@ -374,6 +374,12 @@ def test_scatter_count():
     outcome = nvtext.scatter_count(dstrings, [1, 2, 3])
     assert outcome.to_host() == expected
 
+    # with input as GPU mem pointer
+    arr = np.array([1, 2, 3], dtype="int32")
+    dev_arr = rmm.to_device(arr)
+    got = nvtext.scatter_count(dstrings, dev_arr.device_ctypes_pointer.value)
+    assert got.to_host() == expected
+
     # with nulls
     expected = ["Dickens", "Dickens"]
     outcome = nvtext.scatter_count(dstrings, [2, 0, None])

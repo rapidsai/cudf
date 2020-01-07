@@ -163,7 +163,7 @@ struct copy_range_dispatch {
       RMM_FREE(null_count, stream);
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
   }
 };
 
