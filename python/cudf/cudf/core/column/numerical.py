@@ -427,7 +427,7 @@ class NumericalColumn(column.TypedColumnBase):
 
     def overflow_safe_to(self, to_dtype):
         """
-        Returns true if all the values in self can be 
+        Returns true if all the values in self can be
         safely cast to dtype
         """
         if self.dtype.kind == to_dtype.kind:
@@ -456,7 +456,11 @@ class NumericalColumn(column.TypedColumnBase):
                 return True
             else:
                 from cudf import Series
-                if (Series(self).astype(to_dtype).astype(self.dtype) == Series(self)).all():
+
+                if (
+                    Series(self).astype(to_dtype).astype(self.dtype)
+                    == Series(self)
+                ).all():
                     return True
                 else:
                     return False
@@ -468,6 +472,7 @@ class NumericalColumn(column.TypedColumnBase):
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
                 from cudf import Series
+
                 if (Series(self) % 1 == 0).all():
                     return True
                 else:
