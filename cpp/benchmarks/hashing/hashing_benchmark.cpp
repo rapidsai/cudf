@@ -28,8 +28,8 @@ class Hashing : public cudf::benchmark {};
 
 template <class T>
 void BM_hash_partition(benchmark::State& state) {
-  auto const num_cols = state.range(0);
-  auto const num_rows = state.range(1);
+  auto const num_rows = state.range(0);
+  auto const num_cols = state.range(1);
   auto const num_partitions = state.range(2);
 
   // Create owning columns
@@ -61,6 +61,6 @@ BENCHMARK_DEFINE_F(Hashing, hash_partition)
 
 BENCHMARK_REGISTER_F(Hashing, hash_partition)
   ->RangeMultiplier(2)
-  ->Ranges({{512, 2048}, {256, 1024}, {32, 128}})
+  ->Ranges({{1<<17, 1<<20}, {32, 128}, {128, 512}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
