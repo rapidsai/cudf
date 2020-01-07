@@ -1370,7 +1370,6 @@ def _data_from_cuda_array_interface_desc(obj):
     nelem = desc["shape"][0]
     dtype = np.dtype(desc["typestr"])
 
-    # TODO: this can be done more efficiently
     data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
     return data
 
