@@ -27,70 +27,110 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-template <typename Source, aggregation::Kind k, typename Enable = void>
+template <typename Source, aggregation::Kind k, bool target_has_nulls,
+          bool source_has_nulls, typename Enable = void>
 struct update_target_element {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
-    release_assert("Invalid source type and aggregation combination.");
+    release_assert(false and
+                   "Invalid source type and aggregation combination.");
   }
 };
 
-template <typename Source>
-struct update_target_element<Source, aggregation::MIN,
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<Source, aggregation::MIN, target_has_nulls,
+                             source_has_nulls,
                              std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
+    if (source_has_nulls and source.is_null(source_index)) {
+      return;
+    }
+
     using Target = target_type_t<Source, aggregation::MIN>;
     atomicMin(&target.element<Target>(target_index),
               static_cast<Target>(source.element<Source>(source_index)));
+
+    if (target_has_nulls and target.is_null(target_index)) {
+      target.set_valid(target_index);
+    }
   }
 };
 
-template <typename Source>
-struct update_target_element<Source, aggregation::MAX,
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<Source, aggregation::MAX, target_has_nulls,
+                             source_has_nulls,
                              std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
+    if (source_has_nulls and source.is_null(source_index)) {
+      return;
+    }
+
     using Target = target_type_t<Source, aggregation::MAX>;
     atomicMax(&target.element<Target>(target_index),
               static_cast<Target>(source.element<Source>(source_index)));
+
+    if (target_has_nulls and target.is_null(target_index)) {
+      target.set_valid(target_index);
+    }
   }
 };
 
-template <typename Source>
-struct update_target_element<Source, aggregation::SUM,
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<Source, aggregation::SUM, target_has_nulls,
+                             source_has_nulls,
                              std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
+    if (source_has_nulls and source.is_null(source_index)) {
+      return;
+    }
+
     using Target = target_type_t<Source, aggregation::SUM>;
     atomicAdd(&target.element<Target>(target_index),
               static_cast<Target>(source.element<Source>(source_index)));
+
+    if (target_has_nulls and target.is_null(target_index)) {
+      target.set_valid(target_index);
+    }
   }
 };
 
-template <typename Source>
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::COUNT,
+    Source, aggregation::COUNT, target_has_nulls, source_has_nulls,
     std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
+
+    if (source_has_nulls and source.is_null(source_index)) {
+      return;
+    }
+
     using Target = target_type_t<Source, aggregation::COUNT>;
     atomicAdd(&target.element<Target>(target_index), Target{1});
+
+    // It is assumed the output for COUNT is initialized to be all valid
   }
 };
 
-template <typename Source>
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::ARGMAX,
+    Source, aggregation::ARGMAX, target_has_nulls, source_has_nulls,
     std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
+    if (source_has_nulls and source.is_null(source_index)) {
+      return;
+    }
+
     using Target = target_type_t<Source, aggregation::ARGMAX>;
     auto old = atomicCAS(&target.element<Target>(target_index), ARGMAX_SENTINEL,
                          source_index);
@@ -101,16 +141,22 @@ struct update_target_element<
     while (source.element<Source>(source_index) > source.element<Source>(old)) {
       old = atomicCAS(&target.element<Target>(target_index), old, source_index);
     }
+
+    // TODO Can the output of ARGMAX be null?
   }
 };
 
-template <typename Source>
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::ARGMIN,
+    Source, aggregation::ARGMIN, target_has_nulls, source_has_nulls,
     std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
+    if (source_has_nulls and source.is_null(source_index)) {
+      return;
+    }
+
     using Target = target_type_t<Source, aggregation::ARGMIN>;
     auto old = atomicCAS(&target.element<Target>(target_index), ARGMIN_SENTINEL,
                          source_index);
@@ -121,6 +167,8 @@ struct update_target_element<
     while (source.element<Source>(source_index) < source.element<Source>(old)) {
       old = atomicCAS(&target.element<Target>(target_index), old, source_index);
     }
+
+    // TODO Can the output of ARGMIN be null?
   }
 };
 
@@ -138,8 +186,8 @@ struct elementwise_aggregator {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
-    update_target_element<Source, k>{}(target, target_index, source,
-                                       source_index);
+    update_target_element<Source, k, target_has_nulls, source_has_nulls>{}(
+        target, target_index, source, source_index);
   }
 };
 
@@ -152,7 +200,7 @@ struct elementwise_aggregator {
  * ```c++
  * target_row[i] = aggs[i](target_row[i], source_row[i])
  * ```
- * If `source_row[i]` is null, it is skipped.
+ * TODO: Document null handling, expectations for initialization/validity of output columns
  *
  * @param target Table containing the row to update
  * @param target_index Index of the row to update in `target`
@@ -176,7 +224,6 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
         target.column(i), target_index, source.column(i), source_index);
   }
 }
-
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
