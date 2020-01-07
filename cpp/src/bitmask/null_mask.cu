@@ -464,7 +464,7 @@ std::vector<size_type> count_set_bits(bitmask_type const* bitmask,
   CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
 
   if ((bitmask == nullptr) || (indices.size() == 0)) {
-    return std::vector<size_type>();
+    return std::vector<size_type>{};
   }
 
   size_type num_ranges = indices.size() / 2;
