@@ -379,6 +379,40 @@ def ngrams(tokens, N=2, sep="_"):
     return rtn
 
 
+def ngrams_tokenize(strs, delimiter=" ", N=2, sep="_"):
+    """
+    Generate the n-grams using tokens from each string.
+    This will tokenize each string and then generate ngrams for each string.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The tokens for this operation.
+    delimiter : str
+        The character used to locate the split points of each string.
+        Default is space.
+    N : int
+        The degree of the n-gram (number of consecutive tokens).
+        Default of 2 for bigrams.
+    sep : str
+        The separator to use between tokens within an n-gram.
+        Default is '_'.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> dstrings = nvstrings.to_device(['this is the', 'best book'])
+    >>> print(nvtext.ngrams_tokenize(dstrings, N=2, sep='_'))
+    ['this_is', 'is_the', 'best_book']
+    """
+    if N < 1:
+        raise ValueError("N must be >= 1")
+    rtn = pyniNVText.n_ngrams_tokenize(strs, delimiter, N, sep)
+    if rtn is not None:
+        rtn = nvs.nvstrings(rtn)
+    return rtn
+
+
 def scatter_count(strs, counts):
     """
     Create a new strings instance by duplicating each string by

@@ -367,6 +367,34 @@ def test_ngrams():
     assert outcome.to_host() == expected
 
 
+def test_ngrams_tokenize():
+    # bigrams
+    strings = ["this is my favorite", "book on my bookshelf"]
+    dstrings = nvstrings.to_device(strings)
+    expected = [
+        "this_is",
+        "is_my",
+        "my_favorite",
+        "book_on",
+        "on_my",
+        "my_bookshelf",
+    ]
+    outcome = nvtext.ngrams_tokenize(dstrings, N=2, sep="_")
+    assert outcome.to_host() == expected
+
+    # trigrams
+    strings = ["this is my favorite", "book on my bookshelf"]
+    dstrings = nvstrings.to_device(strings)
+    expected = [
+        "this-is-my",
+        "is-my-favorite",
+        "book-on-my",
+        "on-my-bookshelf",
+    ]
+    outcome = nvtext.ngrams_tokenize(dstrings, N=3, sep="-")
+    assert outcome.to_host() == expected
+
+
 def test_scatter_count():
     # regular
     strings = ["Dickens", "Einstein", "Christie"]
