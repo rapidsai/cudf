@@ -53,6 +53,9 @@ struct reduce_functor {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
+    CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
+      "Size of values column should be same as that of group labels");
+
     using OpType = cudf::experimental::detail::corresponding_operator_t<k>;
     using ResultType = cudf::experimental::detail::target_type_t<T, k>;
     size_type num_groups = group_sizes.size();

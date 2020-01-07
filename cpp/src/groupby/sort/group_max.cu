@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "group_single_pass_reduction_util.cuh"
+#include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 namespace cudf {
 namespace experimental {

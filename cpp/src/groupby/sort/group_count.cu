@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "group_reductions.hpp"
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
@@ -36,13 +34,21 @@ std::unique_ptr<column> group_count(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
+  CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
+  CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
+               "Size of values column should be same as that of group labels");
+
   auto result = make_numeric_column(data_type(type_to_id<size_type>()),
                   num_groups, mask_state::UNALLOCATED, stream, mr);
+
+  if (num_groups == 0) {
+    return result;
+  }
 
   if (values.nullable()) {
     auto values_view = column_device_view::create(values);
     
-    // make_validity_iterator returns a boolean iterator that sums to 1
+    // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)
     // so we need to transform it to cast it to an integer type
     auto bitmask_iterator = thrust::make_transform_iterator(
       experimental::detail::make_validity_iterator(*values_view),
