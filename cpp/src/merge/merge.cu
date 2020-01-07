@@ -13,29 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
+//#include <thrust/execution_policy.h>
+//#include <thrust/for_each.h>
+//#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tuple.h>
-#include <thrust/device_vector.h>
+//#include <thrust/device_vector.h>
 #include <thrust/merge.h>
 
-#include <algorithm>
-#include <utility>
+//#include <algorithm>
+//#include <utility>
 #include <vector>
-#include <memory>
-#include <type_traits>
+//#include <memory>
+//#include <type_traits>
 
-#include <cudf/types.hpp>
-#include <cudf/table/table.hpp>
+//#include <cudf/types.hpp>
+//#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/utilities/type_dispatcher.hpp>
+//#include <cudf/table/row_operators.cuh>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/legacy/cuda_utils.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/null_mask.hpp>
+//#include <utilities/legacy/cuda_utils.hpp>
+//#include <cudf/utilities/bit.hpp>
+//#include <cudf/null_mask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 
@@ -198,15 +197,15 @@ generate_merged_indices(table_view const& left_table,
     rmm::device_vector<order> d_column_order(column_order); 
     
     auto exec_pol = rmm::exec_policy(stream);
-    if (nullable){
+    if (nullable)
+    {
       rmm::device_vector<null_order> d_null_precedence(null_precedence);
       
       auto ineq_op =
-        experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+        experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view, //xxxx
                                                                               *rhs_device_view,
                                                                               d_column_order.data().get(),
                                                                               d_null_precedence.data().get());
-      
         thrust::merge(exec_pol->on(stream),
                       left_begin_zip_iterator,
                       left_end_zip_iterator,
@@ -214,7 +213,9 @@ generate_merged_indices(table_view const& left_table,
                       right_end_zip_iterator,
                       merged_indices.begin(),
                       ineq_op);
-    } else {
+    }
+    else
+    {
       auto ineq_op =
         experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
                                                                                *rhs_device_view,
@@ -232,6 +233,7 @@ generate_merged_indices(table_view const& left_table,
 
     return merged_indices;
 }
+
 
 } // anonym. namespace
 
@@ -325,6 +327,7 @@ struct column_merger
       //resolve null mask:
       //
       materialize_bitmask(lcol,rcol, merged_view, dv_row_order_.data().get(), stream_);
+	    printf("resolve null mask\n"); //xxxx
     }
                    
     return p_merged_col;
@@ -348,11 +351,8 @@ struct column_merger
     if (lcol.has_nulls() || rcol.has_nulls())
       {
         auto merged_view = column->mutable_view();
-        materialize_bitmask(lcol,
-                            rcol,
-                            merged_view,
-                            dv_row_order_.data().get(),
-                            stream_);
+        materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+	printf("has nulls %d\n", (int)merged_view.size()); //xxxx
       }
     return column;
   }
@@ -398,12 +398,8 @@ private:
 
     //extract merged row order according to indices:
     //
-    rmm::device_vector<index_type>
-      merged_indices = generate_merged_indices(index_left_view,
-                                               index_right_view,
-                                               column_order,
-                                               null_precedence,
-                                               nullable);
+    rmm::device_vector<index_type> //xxxx merged_indices;
+      merged_indices = generate_merged_indices(index_left_view, index_right_view, column_order, null_precedence, nullable);
 
     //create merged table:
     //
@@ -445,3 +441,4 @@ std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
 
 }  // namespace experimental
 }  // namespace cudf
+

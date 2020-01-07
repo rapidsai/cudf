@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-#include <cudf/types.hpp>
+//#include <cudf/cudf.h>
+//#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/table/row_operators.cuh>
 
 namespace cudf {
@@ -79,11 +80,11 @@ struct tagged_element_relational_comparator {
   }
 
 
-  template <typename Element,
-            std::enable_if_t<cudf::is_relationally_comparable<
-                               Element, Element>()>* = nullptr>
+//  template <typename Element,
+//            std::enable_if_t<cudf::is_relationally_comparable<
+//                               Element, Element>()>* = nullptr>
   __device__
-  weak_ordering operator()(index_type lhs_tagged_index,
+  weak_ordering compare(index_type lhs_tagged_index,
                            index_type rhs_tagged_index) const noexcept {
 
     side l_side = thrust::get<0>(lhs_tagged_index);
@@ -104,15 +105,15 @@ struct tagged_element_relational_comparator {
     
   }
 
-  template <typename Element,
-            std::enable_if_t<not cudf::is_relationally_comparable<
-                Element, Element>()>* = nullptr>
-  __device__
-  weak_ordering operator()(index_type lhs_tagged_index,
-                           index_type rhs_tagged_index) const noexcept {
-    release_assert(false &&
-                   "Attempted to compare elements of uncomparable types.");
-  }
+//  template <typename Element,
+//            std::enable_if_t<not cudf::is_relationally_comparable<
+//                Element, Element>()>* = nullptr>
+//  __device__
+//  weak_ordering operator()(index_type lhs_tagged_index,
+//                           index_type rhs_tagged_index) const noexcept {
+//    release_assert(false &&
+//                   "Attempted to compare elements of uncomparable types.");
+//  }
 private:
   column_device_view lhs;
   column_device_view rhs;
@@ -143,15 +144,16 @@ struct row_lexicographic_tagged_comparator {
       bool ascending =
           (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
-      weak_ordering state{weak_ordering::EQUIVALENT};
+      //weak_ordering state{weak_ordering::EQUIVALENT};
       null_order null_precedence = _null_precedence == nullptr ?
                                      null_order::BEFORE: _null_precedence[i];
 
       auto comparator = tagged_element_relational_comparator<has_nulls>{
           _lhs.column(i), _rhs.column(i), null_precedence};
 
-      state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
-                                         lhs_tagged_index, rhs_tagged_index);
+      //state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
+      //                                   lhs_tagged_index, rhs_tagged_index);
+      weak_ordering state = comparator.compare(lhs_tagged_index,rhs_tagged_index);
 
       if (state == weak_ordering::EQUIVALENT) {
         continue;
