@@ -35,7 +35,15 @@ class aggregation {
   /**
    * @brief Possible aggregation operations
    */
-  enum Kind { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE };
+  enum Kind { SUM,
+              MIN,
+              MAX,
+              COUNT,
+              MEAN,
+              MEDIAN,
+              QUANTILE,
+              NUMBA_UDF,
+              CUDA_UDF};
 
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform

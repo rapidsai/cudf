@@ -56,6 +56,12 @@ std::unique_ptr<aggregation> make_mean_aggregation();
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation();
 
+/// Factory to create a NUMBA UDF aggregation
+std::unique_ptr<aggregation> make_numba_udf_aggregation();
+
+/// Factory to create a CUDA UDF aggregation
+std::unique_ptr<aggregation> make_cuda_udf_aggregation();
+
 /**
  * @brief Factory to create a QUANTILE aggregation
  *

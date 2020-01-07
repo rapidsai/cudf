@@ -23,6 +23,8 @@
 
 #include <cudf/utilities/bit.hpp>
 
+#include <cudf/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <src/rolling/rolling_detail.hpp>
 
@@ -33,7 +35,6 @@
 #include <vector>
 
 using cudf::test::fixed_width_column_wrapper;
-using rolling_operator = cudf::experimental::rolling_operator;
 using cudf::size_type;
 using cudf::bitmask_type;
 
@@ -45,7 +46,7 @@ protected:
                     const std::vector<size_type> &preceding_window,
                     const std::vector<size_type> &following_window,
                     size_type min_periods,
-                    rolling_operator op)
+                    std::unique_ptr<cudf::experimental::aggregation> const& op)
   {
     std::unique_ptr<cudf::column> output;
 
@@ -92,13 +93,13 @@ protected:
                         size_type min_periods)
   {
     // test all supported aggregators
-    run_test_col(input, preceding_window, following_window, min_periods, rolling_operator::MIN);
-    run_test_col(input, preceding_window, following_window, min_periods, rolling_operator::COUNT);
-    run_test_col(input, preceding_window, following_window, min_periods, rolling_operator::MAX);
-    run_test_col(input, preceding_window, following_window, min_periods, rolling_operator::MEAN);
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_min_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
 
     if (!cudf::is_timestamp(input.type()))
-      run_test_col(input, preceding_window, following_window, min_periods, rolling_operator::SUM);
+      run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_sum_aggregation());
   }
 
   private:
@@ -208,26 +209,26 @@ protected:
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
-  std::unique_ptr<cudf::column> create_reference_output(rolling_operator op,
+  std::unique_ptr<cudf::column> create_reference_output(std::unique_ptr<cudf::experimental::aggregation>const& op,
                                                         cudf::column_view const& input,
                                                         std::vector<size_type> const& preceding_window,
                                                         std::vector<size_type> const& following_window,
                                                         size_type min_periods)
   {
     // unroll aggregation types
-    switch(op) {
-    case rolling_operator::SUM:
+    switch(op->kind) {
+    case cudf::experimental::aggregation::SUM:
       return create_reference_output<cudf::DeviceSum, false>(input, preceding_window,
                                                              following_window, min_periods);
-    case rolling_operator::MIN:
+    case cudf::experimental::aggregation::MIN:
       return create_reference_output<cudf::DeviceMin, false>(input, preceding_window,
                                                              following_window, min_periods);
-    case rolling_operator::MAX:
+    case cudf::experimental::aggregation::MAX:
       return create_reference_output<cudf::DeviceMax, false>(input, preceding_window,
                                                              following_window, min_periods);
-    case rolling_operator::COUNT:
+    case cudf::experimental::aggregation::COUNT:
       return create_count_reference_output(input, preceding_window, following_window, min_periods);
-    case rolling_operator::MEAN:
+    case cudf::experimental::aggregation::MEAN:
       return create_reference_output<cudf::DeviceSum, true>(input, preceding_window,
                                                             following_window, min_periods);
     default:
@@ -248,11 +249,11 @@ TEST_F(RollingErrorTest, NegativeSizes)
   const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
   fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
 
-  EXPECT_THROW(cudf::experimental::rolling_window(input, -2,  2,  2, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, -2,  2,  2, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input,  2, -2,  2, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input,  2, -2,  2, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input,  2,  2, -2, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input,  2,  2, -2, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
 }
 
@@ -270,16 +271,16 @@ TEST_F(RollingErrorTest, WindowArraySizeMismatch)
 
   // this runs ok
   EXPECT_NO_THROW(cudf::experimental::rolling_window(input, five_elements, five_elements, 1,
-                                                     rolling_operator::SUM));
+                                                     cudf::experimental::make_sum_aggregation()));
 
   // mismatch for the window array
   EXPECT_THROW(cudf::experimental::rolling_window(input, four_elements, five_elements, 1,
-                                                  rolling_operator::SUM),
+                                                  cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
 
   // mismatch for the forward window array
   EXPECT_THROW(cudf::experimental::rolling_window(input, five_elements, four_elements, 1,
-                                                  rolling_operator::SUM),
+                                                  cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
 }
 
@@ -288,20 +289,20 @@ TEST_F(RollingErrorTest, EmptyInput) {
   cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
   std::unique_ptr<cudf::column> output;
   EXPECT_NO_THROW(output = cudf::experimental::rolling_window(empty_col, 2, 0, 2,
-                                                              rolling_operator::SUM));
+                                                              cudf::experimental::make_sum_aggregation()));
   EXPECT_EQ(output->size(), 0);
 
   fixed_width_column_wrapper<int32_t> preceding_window{};
   fixed_width_column_wrapper<int32_t> following_window{};
   EXPECT_NO_THROW(output = cudf::experimental::rolling_window(empty_col, preceding_window,
                                                              following_window, 2,
-                                                             rolling_operator::SUM));
+                                                             cudf::experimental::make_sum_aggregation()));
   EXPECT_EQ(output->size(), 0);
 
   fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
   EXPECT_NO_THROW(output = cudf::experimental::rolling_window(nonempty_col, preceding_window,
                                                               following_window, 2,
-                                                              rolling_operator::SUM));
+                                                              cudf::experimental::make_sum_aggregation()));
   EXPECT_EQ(output->size(), 0);
 }
 
@@ -314,7 +315,7 @@ TEST_F(RollingErrorTest, SizeMismatch) {
     fixed_width_column_wrapper<int32_t> following_window{{1, 1, 1}};
     EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, preceding_window,
                                                              following_window,
-                                                             2, rolling_operator::SUM),
+                                                             2, cudf::experimental::make_sum_aggregation()),
                  cudf::logic_error);
   }
   {
@@ -322,7 +323,7 @@ TEST_F(RollingErrorTest, SizeMismatch) {
     fixed_width_column_wrapper<int32_t> following_window{{1, 2}}; // wrong size
     EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, preceding_window,
                                                              following_window,
-                                                             2, rolling_operator::SUM),
+                                                             2, cudf::experimental::make_sum_aggregation()),
                  cudf::logic_error);
   }
 }
@@ -335,7 +336,7 @@ TEST_F(RollingErrorTest, WindowWrongDtype) {
   fixed_width_column_wrapper<float> following_window{{1.0f, 1.0f, 1.0f}};
   EXPECT_THROW(output = cudf::experimental::rolling_window(nonempty_col, preceding_window,
                                                             following_window,
-                                                            2, rolling_operator::SUM),
+                                                            2, cudf::experimental::make_sum_aggregation()),
               cudf::logic_error);
 }
 
@@ -354,19 +355,19 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
   fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
                                                        thrust::make_counting_iterator(size));
 
-  EXPECT_THROW(cudf::experimental::rolling_window(input_D, 2, 2, 0, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input_D, 2, 2, 0, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input_s, 2, 2, 0, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input_s, 2, 2, 0, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input_ms, 2, 2, 0, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input_ms, 2, 2, 0, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input_us, 2, 2, 0, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input_us, 2, 2, 0, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input_ns, 2, 2, 0, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input_ns, 2, 2, 0, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(RollingTest, ::testing::Types<int8_t>);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
@@ -601,13 +602,13 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
   
   std::vector<size_type> window{1};
 
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::SUM),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::MEAN),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_mean_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::NUMBA_UDF),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_numba_udf_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, rolling_operator::CUDA_UDF),
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_cuda_udf_aggregation()),
                cudf::logic_error);
 }
 
