@@ -585,7 +585,7 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   cudf::test::expect_tables_equal(gold, *result);
 }
 
-TEST_F(JoinTest, InnerJoinCorenerCase)
+TEST_F(JoinTest, InnerJoinCornerCase)
 {
   column_wrapper <int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
   column_wrapper <int64_t> col1_0{{2}};
