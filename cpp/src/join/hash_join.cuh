@@ -322,8 +322,7 @@ get_base_hash_join_indices(
     CHECK_CUDA(stream);
 
     join_size = write_index.value();
-    estimated_size *= 2;
-  } while (estimated_size < join_size) ;
+  } while ((estimated_size < join_size) and (estimated_size *= 2)) ;
 
   left_indices.resize(join_size);
   right_indices.resize(join_size);
