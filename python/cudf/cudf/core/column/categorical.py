@@ -604,7 +604,6 @@ def pandas_categorical_as_column(categorical, codes=None):
 
     If ``codes`` is defined, use it instead of ``categorical.codes``
     """
-    # TODO fix mutability issue in numba to avoid the .copy()
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
