@@ -118,7 +118,7 @@ static PyObject* n_unique_tokens( PyObject* self, PyObject* args )
     if( strs==0 )
         Py_RETURN_NONE;
 
-    const char* delimiter = " ";
+    const char* delimiter = nullptr;
     PyObject* argDelim = PyTuple_GetItem(args,1);
     if( argDelim != Py_None )
         delimiter = PyUnicode_AsUTF8(argDelim);
@@ -155,7 +155,7 @@ static PyObject* n_token_count( PyObject* self, PyObject* args )
     if( strs==0 )
         Py_RETURN_NONE;
 
-    const char* delimiter = " ";
+    const char* delimiter = nullptr;
     PyObject* argDelim = PyTuple_GetItem(args,1);
     if( argDelim != Py_None )
         delimiter = PyUnicode_AsUTF8(argDelim);
@@ -397,7 +397,7 @@ static PyObject* n_tokens_counts( PyObject* self, PyObject* args )
         Py_RETURN_NONE;
     }
 
-    const char* delimiter = " ";
+    const char* delimiter = nullptr;
     PyObject* argDelim = PyTuple_GetItem(args,2);
     if( argDelim != Py_None )
         delimiter = PyUnicode_AsUTF8(argDelim);

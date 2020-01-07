@@ -4,6 +4,7 @@
 
 - PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
+- PR #3254 Python redesign for libcudf++
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3604 Add nvtext ngrams-tokenize function
@@ -56,6 +57,7 @@
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
+- PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 
 
 # cuDF 0.11.0 (11 Dec 2019)
