@@ -47,6 +47,18 @@ std::unique_ptr<column> sorted_order(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+/**
+ * @copydoc cudf::experimental::sort_by_key
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::unique_ptr<table> sort_by_key(
+    table_view const& values, table_view const& keys,
+    std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
