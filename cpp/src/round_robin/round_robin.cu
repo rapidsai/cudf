@@ -59,9 +59,8 @@ round_robin_partition(table_view const& input,
   
   auto nrows = input.num_rows();
 
-  //TODO: add pre-condition checks:
-  // num_partitions > 1;
-  //start_partition < nrows
+  CUDF_EXPECTS( num_partitions > 1 && num_partitions < nrows, "Incorrect number of partitions. Must be greater than 1 and less than number of rows." );
+  CUDF_EXPECTS( start_partition < num_partitions, "Incorrect start_partition index. Must be less than number of partitions." );
   
   auto n_pmax = nrows % num_partitions;//# partitions of max size
   size_t max_p_size = std::ceil( static_cast<double>(nrows) / static_cast<double>(num_partitions));// max size of partitions
