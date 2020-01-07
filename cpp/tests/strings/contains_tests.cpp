@@ -102,7 +102,7 @@ TEST_F(StringsContainsTests, ContainsTest)
         false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false
     };
 
-    for( int idx=0; idx < (int)patterns.size(); ++idx )
+    for( int idx=0; idx < static_cast<int>(patterns.size()); ++idx )
     {
         std::string ptn = patterns[idx];
         auto results = cudf::strings::contains_re(strings_view,ptn);
