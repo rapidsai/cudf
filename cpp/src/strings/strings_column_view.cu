@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <iostream>
+#include <thrust/for_each.h>
+#include <thrust/transform_scan.h>
 #include <thrust/transform.h>
 
 namespace cudf 
@@ -65,7 +69,7 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
 
     size_type count = strings.size();
     const int32_t* d_offsets = strings.offsets().data<int32_t>() + strings.offset();
-    int32_t first_offset = 0;// thrust::device_pointer_cast(d_offsets)[0];
+    int32_t first_offset = 0;
     CUDA_TRY(cudaMemcpyAsync( &first_offset, d_offsets, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
     results.second = rmm::device_vector<size_type>(count+1);
     // normalize the offset values for the column offset
@@ -74,8 +78,9 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
                        results.second.begin(),
                        [first_offset] __device__ (int32_t offset) { return static_cast<size_type>(offset - first_offset); } );
     // copy the chars column data
-    int32_t bytes = 0;//thrust::device_pointer_cast(d_offsets)[count] - first_offset;
-    CUDA_TRY(cudaMemcpyAsync( &bytes, d_offsets+count, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+    int32_t bytes = 0;
+    CUDA_TRY(cudaMemcpyAsync( &bytes, d_offsets+count, sizeof(int32_t),
+                              cudaMemcpyDeviceToHost, stream));
     bytes -= first_offset;
     const char* d_chars = strings.chars().data<char>() + first_offset;
     results.first = rmm::device_vector<char>(bytes);
