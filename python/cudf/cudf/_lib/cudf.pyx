@@ -366,7 +366,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         data = Buffer(dptr, dtype.itemsize*c_col.size)
 
         mask = None
-        if c_col.valid:
+        if c_col.valid is not NULL:
             mptr = rmm._DevicePointer(int(<uintptr_t>c_col.valid))
             mask = Buffer(mptr, size=calc_chunk_size(c_col.size, mask_bitsize))
 
