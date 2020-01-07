@@ -94,7 +94,7 @@ if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS="ON"
+    BENCHMARKS=ON
 fi
 
 # If clean given, run it prior to any other steps
@@ -121,14 +121,22 @@ fi
 
 ################################################################################
 # Configure, build, and install libnvstrings
-if buildAll || hasArg libnvstrings; then
+
+if buildAll || hasArg libnvstrings || hasArg libcudf; then
 
     mkdir -p ${LIBNVSTRINGS_BUILD_DIR}
     cd ${LIBNVSTRINGS_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
+          -DBUILD_BENCHMARKS=${BENCHMARKS}
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+fi
+
+if buildAll || hasArg libnvstrings; then
+
+    mkdir -p ${LIBNVSTRINGS_BUILD_DIR}
+    cd ${LIBNVSTRINGS_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
     else
@@ -138,7 +146,7 @@ fi
 
 # Build and install the nvstrings Python package
 if buildAll || hasArg nvstrings; then
-
+    
     cd ${REPODIR}/python/nvstrings
     if [[ ${INSTALL_TARGET} != "" ]]; then
         python setup.py build_ext
@@ -153,11 +161,6 @@ if buildAll || hasArg libcudf; then
 
     mkdir -p ${LIBCUDF_BUILD_DIR}
     cd ${LIBCUDF_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_CXX11_ABI=ON \
-          ${GPU_ARCH} \
-          -DBUILD_BENCHMARKS=${BENCHMARKS} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
     else
