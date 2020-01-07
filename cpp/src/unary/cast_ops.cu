@@ -18,6 +18,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/unary.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -112,17 +113,26 @@ struct dispatch_unary_cast_from {
     CUDF_FAIL("Column type must be numeric or timestamp");
   }
 };
+
+std::unique_ptr<column> cast(column_view const& input,
+                             data_type type,
+                             rmm::mr::device_memory_resource* mr,
+                             cudaStream_t stream) {
+  CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
+
+  return experimental::type_dispatcher(input.type(),
+                                       detail::dispatch_unary_cast_from{input},
+                                       type, mr, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::mr::device_memory_resource* mr) {
-  CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
-
-  return experimental::type_dispatcher(input.type(),
-                                       detail::dispatch_unary_cast_from{input},
-                                       type, mr, static_cast<cudaStream_t>(0));
+  return detail::cast(input, type, mr);
 }
+
 
 }  // namespace experimental
 }  // namespace cudf
