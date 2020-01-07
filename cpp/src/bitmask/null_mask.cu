@@ -17,6 +17,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -487,32 +488,27 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
   return null_mask;
 }
 
-// Returns the bitwise AND of the null masks of column views
-rmm::device_buffer bitmask_and(std::vector<column_view> const& views,
-                               cudaStream_t stream,
-                               rmm::mr::device_memory_resource *mr) {
-  CUDF_EXPECTS(views.size() > 0, "No columns to process");
-  CUDF_EXPECTS(std::all_of(views.begin(), views.end(), 
-                          [&views](auto v){return v.size() == views[0].size();}), 
-               "Sizes cannot be different");
-
+// Returns the bitwise AND of the null masks of all columns in the table view
+rmm::device_buffer bitmask_and(table_view const& view,
+                               rmm::mr::device_memory_resource *mr,
+                               cudaStream_t stream) {
   rmm::device_buffer null_mask{};
-  if (views[0].size() == 0) {
+  if (view.num_rows() == 0 or view.num_columns() == 0) {
     return null_mask;
   }
 
   std::vector<bitmask_type const*> masks;
   std::vector<size_type> offsets;
-  for (auto &&view : views) {
-    if (view.nullable()) {
-      masks.push_back(view.null_mask());
-      offsets.push_back(view.offset());
+  for (auto &&col : view) {
+    if (col.nullable()) {
+      masks.push_back(col.null_mask());
+      offsets.push_back(col.offset());
     }
   }
   
   if (masks.size() > 0) {
     return bitmask_and(masks.data(), offsets.data(), masks.size(),
-                       views[0].size(), stream, mr);
+                       view.num_rows(), stream, mr);
   }
   
   return null_mask;

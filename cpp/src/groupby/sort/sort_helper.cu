@@ -237,8 +237,7 @@ column_view helper::keys_bitmask_column(cudaStream_t stream) {
   if (_keys_bitmask_column)
     return _keys_bitmask_column->view();
 
-  auto key_cols = std::vector<column_view>(_keys.begin(), _keys.end());
-  auto row_bitmask = bitmask_and(key_cols, stream);
+  auto row_bitmask = bitmask_and(_keys, rmm::mr::get_default_resource(), stream);
 
   _keys_bitmask_column = make_numeric_column(
     data_type(type_id::INT8), _keys.num_rows(), std::move(row_bitmask),
