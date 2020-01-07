@@ -1462,9 +1462,8 @@ class DataFrame(Table):
 
         self._data[name] = value
         keys = list(self._data.keys())
-        for i, col in enumerate(keys):
-            if num_cols > i >= loc:
-                self._data.move_to_end(col)
+        for i, col in enumerate(keys[loc:-1]):
+            self._data.move_to_end(col)
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
