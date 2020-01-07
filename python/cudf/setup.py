@@ -16,7 +16,20 @@ cython_files = ["cudf/**/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
-    CUDA_HOME = os.path.dirname(os.path.dirname(shutil.which("cuda-gdb")))
+    path_to_cuda_gdb = shutil.which("cuda-gdb")
+    if path_to_cuda_gdb is None:
+        raise OSError(
+            "Could not locate CUDA. "
+            "Please set the environment variable "
+            "CUDA_HOME to the path to the CUDA installation "
+            "and try again."
+        )
+    CUDA_HOME = os.path.dirname(os.path.dirname(path_to_cuda_gdb))
+
+if not os.path.isdir(CUDA_HOME):
+    raise OSError(
+        f"Invalid CUDA_HOME: " "directory does not exist: {CUDA_HOME}"
+    )
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
