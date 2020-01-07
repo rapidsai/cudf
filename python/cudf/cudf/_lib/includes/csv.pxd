@@ -31,9 +31,6 @@ cdef extern from "cudf/cudf.h" namespace "RdKafka" nogil:
 
         ConfResult set(string &name, string &value, string &errstr) except +
 
-cdef extern from "<utility>" namespace "std" nogil:
-    cdef unique_ptr[Conf] move(unique_ptr[Conf])
-
 cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
 
     ctypedef enum quote_style:
