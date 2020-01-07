@@ -11,6 +11,7 @@ from libc.stdint cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 cdef extern from "cudf/cudf.h" namespace "RdKafka" nogil:
 
@@ -29,6 +30,9 @@ cdef extern from "cudf/cudf.h" namespace "RdKafka" nogil:
         Conf *create(ConfType) except +
 
         ConfResult set(string &name, string &value, string &errstr) except +
+
+cdef extern from "<utility>" namespace "std" nogil:
+    cdef unique_ptr[Conf] move(unique_ptr[Conf])
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
 
@@ -75,7 +79,7 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
     cdef cppclass reader:
 
         reader(
-            Conf *global_configs,
+            unique_ptr[Conf] &kafka_conf,
             vector[string] topics,
             int64_t start_offset,
             int16_t batch_size,

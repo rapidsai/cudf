@@ -41,8 +41,8 @@ def read_csv(
     prefix=None,
     index_col=None,
     kafka_configs=None,
-    start_offset=0,
-    batch_size=10000,
+    kafka_start_offset=0,
+    kafka_batch_size=10000,
     **kwargs,
 ):
     """{docstring}"""
@@ -84,8 +84,8 @@ def read_csv(
         prefix=prefix,
         index_col=index_col,
         kafka_configs=kafka_configs,
-        start_offset=start_offset,
-        batch_size=batch_size,
+        kafka_start_offset=kafka_start_offset,
+        kafka_batch_size=kafka_batch_size,
     )
 
 

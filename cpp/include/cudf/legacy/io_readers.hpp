@@ -233,8 +233,6 @@ struct reader_options {
 
   gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< Defines the output resolution for date32, date64, and timestamp columns
 
-  RdKafka::Conf *kafka_configs;             ///< Defines Kafka configurations that apply across an entire connected session.
-  std::vector<std::string> kafka_topics;    ///< Vector of topics that should be read from. Note currently only a single topic is supported.
   int64_t kafka_start_offset;               ///< Kafka offset where the consumption should begin, inclusive. Set to 0 for "from beginning"
   int32_t kafka_batch_size;                 ///< Number of messages that should be read from the start_offset forward.
 
@@ -253,12 +251,12 @@ class reader {
  /**---------------------------------------------------------------------------*
    * @brief Constructor for a Kafka source.
    *---------------------------------------------------------------------------**/
-  explicit reader(RdKafka::Conf* kafka_configs,
+  explicit reader(std::unique_ptr<RdKafka::Conf> const &kafka_configs,
                   std::vector<std::string> kafka_topics,
                   int64_t kafka_start_offset,
                   int32_t kafka_batch_size,
                   reader_options const &options);
-                  
+
   /**---------------------------------------------------------------------------*
    * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/

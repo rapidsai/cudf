@@ -195,10 +195,10 @@ cpdef read_csv(
 
     # Kafka execution path variables
     cdef KafkaConf.ConfType gk = KafkaConf.ConfType.CONF_GLOBAL
-    cdef KafkaConf *gkc
+    cdef unique_ptr[KafkaConf] kafka_conf
     cdef vector[string] topics
-    cdef int64_t kafka_start_offset = start_offset
-    cdef int32_t kafka_batch_size = batch_size
+    cdef int64_t kafka_start_offset_ = kafka_start_offset
+    cdef int32_t kafka_batch_size_ = kafka_batch_size
 
     args.kafka_start_offset = kafka_start_offset
     args.kafka_batch_size = kafka_batch_size
@@ -210,19 +210,15 @@ cpdef read_csv(
     # Create reader from source
     if kafka_configs is not None:
         errstr=""
-        gkc = KafkaConf.create(KafkaConf.ConfType.CONF_GLOBAL)
+        kafka_conf = unique_ptr[KafkaConf](KafkaConf.create(KafkaConf.ConfType.CONF_GLOBAL))
 
         for kafka_conf_key in kafka_configs:
             if kafka_conf_key == 'cudf.topic.list':
                 tops = kafka_configs[kafka_conf_key].split(',')
                 for t in tops:
                     topics.push_back(t.encode())
-            elif kafka_conf_key == 'cudf.start.offset':
-                args.cudf_start_offset = kafka_configs[kafka_conf_key]
-            elif kafka_conf_key == 'cudf.end.offset':
-                args.cudf_end_offset = kafka_configs[kafka_conf_key]
             else:
-                gkc.set(kafka_conf_key.encode(),
+                kafka_conf.get().set(kafka_conf_key.encode(),
                         kafka_configs[kafka_conf_key].encode(),
                         errstr.encode())
     else:
@@ -239,10 +235,10 @@ cpdef read_csv(
     with nogil:
         if kafka_configs is not None:
             reader = unique_ptr[csv_reader](
-                new csv_reader(gkc,
+                new csv_reader(kafka_conf,
                                topics,
-                               kafka_start_offset,
-                               kafka_batch_size,
+                               kafka_start_offset_,
+                               kafka_batch_size_,
                                args)
             )
         else:
