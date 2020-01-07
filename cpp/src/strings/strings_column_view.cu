@@ -14,13 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/for_each.h>
-#include <thrust/transform_scan.h>
 #include <thrust/transform.h>
 
 namespace cudf 
