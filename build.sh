@@ -146,7 +146,7 @@ fi
 
 # Build and install the nvstrings Python package
 if buildAll || hasArg nvstrings; then
-    
+ 
     cd ${REPODIR}/python/nvstrings
     if [[ ${INSTALL_TARGET} != "" ]]; then
         python setup.py build_ext
