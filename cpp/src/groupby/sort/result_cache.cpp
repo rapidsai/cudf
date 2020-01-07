@@ -25,7 +25,11 @@ namespace {
 
 struct typed_agg_copier
 {
+ private:
   std::unique_ptr<aggregation> const& agg;
+
+ public:
+  typed_agg_copier(std::unique_ptr<aggregation> const& agg) : agg(agg) {}
 
   template <aggregation::Kind k>
   std::shared_ptr<aggregation> operator()() {
@@ -39,7 +43,7 @@ struct typed_agg_copier
 std::shared_ptr<aggregation>
 copy_to_shared_ptr(std::unique_ptr<aggregation> const& agg) {
   return experimental::detail::aggregation_dispatcher(agg->kind, 
-                                  typed_agg_copier{agg});
+                                  typed_agg_copier(agg));
 }
 
 } // namespace
