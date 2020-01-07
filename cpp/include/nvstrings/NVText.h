@@ -37,7 +37,7 @@ public:
      * @param delimiter String or character used to identify tokens. Default is whitespace.
      * @return Just the tokens. No empty or null strings.
      */
-    static NVStrings* tokenize(NVStrings& strs, const char* delimiter=nullptr);
+    static NVStrings* tokenize(NVStrings const& strs, const char* delimiter=nullptr);
 
     /**
      * @brief Tokenize all the strings into a single instance using multiple delimiters.
@@ -180,12 +180,39 @@ public:
 
     /**
      * @brief Converts tokenized list of strings into instance with ngrams.
+     *
+     * ```
+     * Example:
+     * s = ['a','b','c','d']
+     * g = create_ngrams(s,2,'_')
+     * g is now ['a_b','b_c','c_d']
+     * ```
+     *
      * @param strs Tokens to make into ngrams.
      * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.
      * @param separator String used to join tokens.
      * @return The tokens as ngrams.
      */
     static NVStrings* create_ngrams(NVStrings& strs, unsigned int ngrams, const char* separator );
+
+    /**
+     * @brief Creates ngrams of the tokens in each string.
+     *
+     * ```
+     * Example:
+     * s = ['a b','c d e']
+     * g = create_ngrams(s,' ',2,'_')
+     * g is now ['a_b','c_d','d_e']
+     * (note that there is no 'b_c' ngram in g)
+     * ```
+     *
+     * @param strs Strings to tokenize and make into ngrams.
+     * @param delimiter String used to determine tokens. If null, whitespace is used as the delimiter.
+     * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.
+     * @param separator String used to join tokens.
+     * @return The tokens as ngrams.
+     */
+    static NVStrings* ngrams_tokenize(NVStrings const& strs, const char* delimiter, int32_t ngrams, const char* separator );
 
     /**
      * @brief Computes Porter Stemmer measure on words in the provided NVStrings instance.
