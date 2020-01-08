@@ -83,7 +83,8 @@ def token_count(strs, delimiter=None, devptr=0):
     strs : nvstrings
         The strings for this operation
     delimiter : str or nvstrings or list of strs
-        The characters or strings used to locate the split points of each string.
+        The characters or strings used to locate the
+        split points of each string.
         Default is whitespace.
     devptr : GPU memory pointer
         Must be able to hold at least strs.size() of int32 values.

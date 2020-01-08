@@ -336,7 +336,7 @@ struct nvtext_token_counter : base_tokenator
 };
 
 // return a count of the number of tokens for each string when applying the specified delimiter
-unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsigned int* results, bool bdevmem )
+unsigned int NVText::token_count( const NVStrings& strs, const char* delimiter, unsigned int* results, bool bdevmem )
 {
     auto execpol = rmm::exec_policy(0);
     custring_view* d_delimiter = custring_from_host(delimiter);
