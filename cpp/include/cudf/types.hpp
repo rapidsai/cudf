@@ -196,7 +196,6 @@ class data_type {
   type_id _id{EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
-  type_id _keys_id{EMPTY};
 };
 
 /**---------------------------------------------------------------------------*
