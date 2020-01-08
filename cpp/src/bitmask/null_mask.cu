@@ -399,14 +399,23 @@ rmm::device_buffer bitmask_and(bitmask_type const *mask1, size_type begin_bit1,
 // convert [first_bit_index,last_bit_index) to
 // [first_word_index,last_word_index)
 struct to_word_index : public thrust::unary_function<size_type, size_type> {
-  bool _first = false;
+  bool _inclusive = false;
   size_type const* _d_bit_indices = nullptr;
 
-  __host__ to_word_index(bool first, size_type const* d_bit_indices) : _first(first), _d_bit_indices(d_bit_indices) {}
+  /**
+   * @brief Constructor of a functor that converts bit indices to bitmask word
+   * indices.
+   *
+   * @param[in] inclusive Flag that indicates whether bit indices are inclusive
+   * or exclusive.
+   * @param[in] d_bit_indices Pointer to an array of bit indices
+   */
+  __host__ to_word_index(bool inclusive, size_type const* d_bit_indices) :
+      _inclusive(inclusive), _d_bit_indices(d_bit_indices) {}
 
   __device__ size_type operator()(const size_type& i) const {
     auto bit_index = _d_bit_indices[i];
-    if (_first) {  // inclusive
+    if (_inclusive) {
       return word_index(bit_index);
     }
     else {  // exclusive
