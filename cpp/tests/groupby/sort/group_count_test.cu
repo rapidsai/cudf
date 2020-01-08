@@ -20,7 +20,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
 namespace test {

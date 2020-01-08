@@ -25,7 +25,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/unary.hpp>

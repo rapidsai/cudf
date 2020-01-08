@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 #include <unordered_map>
 

@@ -20,7 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 

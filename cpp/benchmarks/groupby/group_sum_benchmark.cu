@@ -17,7 +17,7 @@
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
