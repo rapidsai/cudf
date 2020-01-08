@@ -129,7 +129,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
-          -DBUILD_BENCHMARKS=${BENCHMARKS}
+          -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
 
@@ -146,7 +146,7 @@ fi
 
 # Build and install the nvstrings Python package
 if buildAll || hasArg nvstrings; then
- 
+
     cd ${REPODIR}/python/nvstrings
     if [[ ${INSTALL_TARGET} != "" ]]; then
         python setup.py build_ext
