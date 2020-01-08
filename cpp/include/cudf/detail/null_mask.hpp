@@ -34,6 +34,22 @@ void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream);
 
+/**---------------------------------------------------------------------------*
+* @brief Clears a pre-allocated bitmask from given index and before the given 
+* index as true
+*
+* set bits [0, false_begin_bit) as true, and set bits [false_begin_bit, size) as
+* false
+*
+* @param bitmask Pointer to bitmask (e.g. returned by `column_view.null_mask()`)
+* @param size The number of elements represented by the mask (e.g.,
+  number of rows in a column)
+* @param false_begin_bit The index from which bitmask is set to false.
+* @param stream Optional, stream on which all memory allocations/operations
+* will be submitted
+*---------------------------------------------------------------------------**/
+void clear_bits_from(bitmask_type* mask, size_type size,
+    size_type false_begin_bit, cudaStream_t stream=0);
 }  // namespace detail
 
 }  // namespace cudf
