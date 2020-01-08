@@ -268,8 +268,8 @@ TYPED_TEST_CASE(ScatterToTablesFixedWidth, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ScatterToTablesFixedWidth, MixedNulls)
 {
-  auto first = std::vector<TypeParam>({1, 2, 3, 4, 5, 6});
-  auto second = std::vector<TypeParam>({7, 8, 9, 10, 11, 12});
+  auto first         = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5, 6});
+  auto second        = cudf::test::make_type_param_vector<TypeParam>({7, 8, 9, 10, 11, 12});
   auto partition_map = std::vector<int32_t>({3, 1, 1, 4, 1, 3});
 
   auto valid_iter = thrust::make_transform_iterator(thrust::make_counting_iterator(0),

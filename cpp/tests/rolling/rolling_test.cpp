@@ -157,8 +157,8 @@ protected:
                           size_type min_periods)
   {
     size_type num_rows = input.size();
-    std::vector<T> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<T>    ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
     thrust::host_vector<T> in_col;
@@ -372,7 +372,7 @@ TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
 TYPED_TEST(RollingTest, SimpleStatic)
 {
   // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
-  const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
+  const std::vector<TypeParam> col_data = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool>      col_mask = {1, 1, 1, 0, 1};
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -386,7 +386,7 @@ TYPED_TEST(RollingTest, SimpleStatic)
 TYPED_TEST(RollingTest, SimpleDynamic)
 {
   // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
-  const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
+  const std::vector<TypeParam> col_data = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool>      col_mask = {1, 1, 1, 0, 1};
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -400,7 +400,7 @@ TYPED_TEST(RollingTest, SimpleDynamic)
 // this is a special test to check the volatile count variable issue (see rolling.cu for detail)
 TYPED_TEST(RollingTest, VolatileCount)
 {
-  const std::vector<TypeParam> col_data = { 8, 70, 45, 20, 59, 80 };
+  const std::vector<TypeParam> col_data = cudf::test::make_type_param_vector<TypeParam>({ 8, 70, 45, 20, 59, 80 });
   const std::vector<bool>      col_mask = { 1, 1, 0, 0, 1, 0 };
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());

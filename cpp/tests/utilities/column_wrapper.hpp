@@ -135,7 +135,7 @@ std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin,
       cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
   std::vector<bitmask_type> null_mask(num_words, 0);
   for (auto i = 0; i < size; ++i) {
-    if (begin[i] == true) {
+    if (*(begin + i)) {
       set_bit_unsafe(null_mask.data(), i);
     }
   }

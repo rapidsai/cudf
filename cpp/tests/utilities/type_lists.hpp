@@ -94,7 +94,7 @@ using FloatingPointTypes = cudf::test::Types<float, double>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypesWithoutBool);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using NumericTypesWithoutBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double> ; // #CH TODO delete
@@ -135,7 +135,7 @@ using StringTypes = cudf::test::Types<string_view>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using FixedWidthTypes = Concat<NumericTypesWithoutBool, TimestampTypes>;
+using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of sortable types for use in GTest typed tests.
