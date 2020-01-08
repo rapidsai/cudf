@@ -134,7 +134,7 @@ fi
 
 if buildAll || hasArg libnvstrings; then
 
-    cd ${LIBNVSTRINGS_BUILD_DIR}
+    cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
     else
@@ -157,7 +157,7 @@ fi
 # Configure, build, and install libcudf
 if buildAll || hasArg libcudf; then
 
-    cd ${LIBCUDF_BUILD_DIR}
+    cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
     else
