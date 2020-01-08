@@ -161,7 +161,7 @@ class Series(Table):
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self.data.mem)
+        return cupy.asarray(self._column.data_array_view)
 
     @property
     def values_host(self):
