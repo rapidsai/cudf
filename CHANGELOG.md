@@ -39,6 +39,7 @@
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3697 Improve column insert performance for wide frames
+- PR #3710 Remove multiple CMake configuration steps from root build script
 
 ## Bug Fixes
 
@@ -60,6 +61,7 @@
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3709 Fix inner_join incorrect result issue
 
 
 # cuDF 0.11.0 (11 Dec 2019)
