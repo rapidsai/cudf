@@ -77,13 +77,9 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10)
-    buf = Buffer(arr, size=4, capacity=arr.size)
-    assert buf.size == 4
-    assert buf.capacity == 10
+    buf = Buffer(arr)
+    assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)
     # Check that unpacked capacity equals buf.size
-    assert unpacked.size == 4
-    assert unpacked.capacity == 4
-    assert unpacked.mem.size == unpacked.capacity
-    np.testing.assert_equal(unpacked.to_array(), arr[: unpacked.size])
+    assert unpacked.size == arr.nbytes
