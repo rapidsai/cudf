@@ -85,7 +85,7 @@ public:
      /**
      * @brief Computes the number of tokens in each string.
      * @param strs Strings to tokenize.
-     * @param delimiters NVStrings object containing String or characters used to identify tokens.
+     * @param delimiters NVStrings object containing strings or characters used to identify tokens.
      * @param[in,out] results Array of counts, one per string.
      * @param devmem True if results in device memory.
      * @return 0 if successful.
