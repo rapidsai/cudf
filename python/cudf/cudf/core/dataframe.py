@@ -1446,17 +1446,23 @@ class DataFrame(Table):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
+            index = None
             if isinstance(value, (pd.Series, Series)):
-                self._index = as_index(value.index)
-            else:
-                self._index = RangeIndex(start=0, stop=len(value))
+                index = as_index(value.index)
+            len_value = len(value)
+            if len_value > 0:
+                if index is None:
+                    index = RangeIndex(start=0, stop=len_value)
                 if num_cols != 0:
                     for col_name in self._data:
                         self._data[col_name] = column.column_empty_like(
                             self._data[col_name],
                             masked=True,
-                            newsize=len(value),
+                            newsize=len_value,
                         )
+            if index is None:
+                index = RangeIndex(start=0, stop=0)
+            self._index = index
 
         value = column.as_column(value)
 
