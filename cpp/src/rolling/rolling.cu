@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation.hpp>
 #include <cudf/aggregation.hpp>
 #include <rolling/rolling_detail.hpp>
 #include <cudf/rolling.hpp>
