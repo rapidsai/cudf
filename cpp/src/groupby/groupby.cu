@@ -26,6 +26,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/rolling.hpp>
 
 #include <memory>
 #include <utility>
@@ -71,19 +72,21 @@ groupby::~groupby() = default;
 
 namespace {
 /// Make an empty table with appropriate types for requested aggs
-auto empty_results(std::vector<aggregation_request> const& requests) {
+template <typename aggregation_request_t, typename F>
+auto templated_empty_results(std::vector<aggregation_request_t> const& requests, F get_kind) {
+  
   std::vector<aggregation_result> empty_results;
 
   std::transform(
       requests.begin(), requests.end(), std::back_inserter(empty_results),
-      [](auto const& request) {
+      [&get_kind](auto const& request) {
         std::vector<std::unique_ptr<column>> results;
 
         std::transform(
             request.aggregations.begin(), request.aggregations.end(),
-            std::back_inserter(results), [&request](auto const& agg) {
+            std::back_inserter(results), [&request, get_kind](auto const& agg) {
               return make_empty_column(experimental::detail::target_type(
-                  request.values.type(), agg->kind));
+                  request.values.type(), get_kind(agg)));
             });
 
         return aggregation_result{std::move(results)};
@@ -108,6 +111,18 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests) {
       "Invalid type/aggregation combination.");
 }
 
+// TODO: Remove when `rolling_window()` switches to use aggregation-enum directly.
+rolling_operator to_rolling_operator(aggregation const& agg) {
+  switch(agg.kind) {
+    case aggregation::SUM     : return cudf::experimental::rolling_operator::SUM;
+    case aggregation::MIN     : return cudf::experimental::rolling_operator::MIN;
+    case aggregation::MAX     : return cudf::experimental::rolling_operator::MAX;
+    case aggregation::MEAN    : return cudf::experimental::rolling_operator::MEAN;
+    case aggregation::COUNT   : return cudf::experimental::rolling_operator::COUNT;
+    default : throw std::logic_error("Unsupported operator: " + std::to_string(agg.kind));
+  }
+}
+
 }  // namespace
 
 // Compute aggregation requests
@@ -123,7 +138,10 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   verify_valid_requests(requests);
 
   if (_keys.num_rows() == 0) {
-    std::make_pair(empty_like(_keys), empty_results(requests));
+    std::make_pair(empty_like(_keys), 
+                   templated_empty_results(requests, 
+                                           [](std::unique_ptr<aggregation> const& agg)
+                                           {return agg->kind;}));
   }
 
   return dispatch_aggregation(requests, 0, mr);
@@ -137,6 +155,57 @@ detail::sort::sort_groupby_helper& groupby::helper() {
     _keys, _ignore_null_keys, _keys_are_sorted);
   return *_helper;
 };
+
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
+    std::vector<window_aggregation_request> const& requests,
+    rmm::mr::device_memory_resource* mr) {
+
+  CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
+                           [this](auto const& request) {
+                             return request.values.size() == _keys.num_rows();
+                           }),
+               "Size mismatch between request values and groupby keys.");
+
+  CUDF_EXPECTS(this->_keys_are_sorted, 
+               "Window-aggregation is currently supported only on pre-sorted key columns.");
+
+  if (_keys.num_rows() == 0) {
+    std::make_pair(empty_like(_keys), 
+                  templated_empty_results(requests, 
+                                          [](std::pair<window_bounds, std::unique_ptr<aggregation>> const& agg) 
+                                          {return agg.second->kind;}));
+  }
+
+  auto group_offsets = helper().group_offsets();
+  group_offsets.push_back(_keys.num_rows()); // Cap the end.
+
+  std::vector<aggregation_result> results;
+  std::transform(
+    requests.begin(), requests.end(), std::back_inserter(results),
+    [&](auto const& window_request) {
+      std::vector<std::unique_ptr<column>> per_request_results;
+      auto const& values = window_request.values;
+      std::transform(
+        window_request.aggregations.begin(), window_request.aggregations.end(), 
+        std::back_inserter(per_request_results),
+        [&](std::pair<window_bounds, std::unique_ptr<aggregation>> const& agg) {
+          return cudf::experimental::rolling_window(
+            values,
+            group_offsets,
+            agg.first.preceding,
+            agg.first.following,
+            agg.first.min_periods,
+            to_rolling_operator(*agg.second),
+            mr
+          );
+        }
+      );
+      return aggregation_result{std::move(per_request_results)};
+    }
+  );
+
+  return std::make_pair(std::make_unique<table>(_keys), std::move(results));
+}
 
 }  // namespace groupby
 }  // namespace experimental

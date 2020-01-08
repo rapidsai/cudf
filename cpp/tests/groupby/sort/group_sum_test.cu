@@ -49,6 +49,29 @@ TYPED_TEST(groupby_sum_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TYPED_TEST(groupby_sum_test, basic_rolling_window)
+{
+    using K = int32_t;
+    using V = TypeParam;
+    // TODO: Reconcile, once rolling_window() begins using cudf::aggregation. 
+    //       Currently, rolling_window() return-type is the same as the value-type,
+    //       which breaks 4-byte types (E.g "4-byte object <06-00 00-00> != 4-byte object <01-00 00-00>")
+    //       Working around type mismatch.
+    // using R = experimental::detail::target_type_t<V, experimental::aggregation::SUM>;
+    using R = V;
+
+    fixed_width_column_wrapper<K> keys        {  1, 1, 1, 1, 2,  2,  2,  2,  3,  3};
+    fixed_width_column_wrapper<V> vals        {  0, 1, 2, 3, 4,  5,  6,  7,  8,  9};
+
+    size_type preceding = 1, following = 1, min_periods = 1;
+    fixed_width_column_wrapper<K> expect_keys {  1, 1, 1, 1, 2,  2,  2,  2,  3,  3};
+    fixed_width_column_wrapper<R> expect_vals ({ 1, 3, 6, 5, 9, 15, 18, 13, 17, 17}, all_valid());
+
+    auto agg = cudf::experimental::make_sum_aggregation();
+    test_single_rolling_window_agg(keys, vals, expect_keys, expect_vals, std::move(agg), 
+        experimental::groupby::window_bounds{preceding, following, min_periods});
+}
+
 TYPED_TEST(groupby_sum_test, zero_valid_keys)
 {
     using K = int32_t;

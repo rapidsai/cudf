@@ -384,6 +384,19 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     return rolling_window(input, preceding_window, following_window, min_periods, op, mr);
   }
 
+  // `group_offsets` are interpreted in adjacent pairs, each pair representing the offsets
+  // of the first, and one past the last elements in a group.
+  //
+  // If `group_offsets` is not empty, it must contain at least two offsets:
+  //   a. 0, indicating the first element in `input`
+  //   b. input.size(), indicating one past the last element in `input`.
+  //
+  // Thus, for an input of 1000 rows,
+  //   0. [] indicates a single group, spanning the entire column.
+  //   1  [10] is invalid.
+  //   2. [0, 1000] indicates a single group, spanning the entire column (thus, equivalent to no groups.)
+  //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
+
   CUDF_EXPECTS(group_offsets.size() >= 2 && group_offsets[0] == 0 
                && group_offsets[group_offsets.size()-1] == input.size(),
                "Must have at least one group.");
@@ -392,14 +405,16 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto offsets_end   = group_offsets.end();   //   or capture local variables without listing them.
 
   auto preceding_calculator = [offsets_begin, offsets_end, preceding_window] __device__ (size_type idx) {
+    // `upper_bound()` cannot return `offsets_end`, since it is capped with `input.size()`.
     auto group_end = thrust::upper_bound(thrust::device, offsets_begin, offsets_end, idx);
-    auto group_start = group_end - 1;
-    return thrust::minimum<size_type>{}(preceding_window, idx-(*group_start));
+    auto group_start = group_end - 1; // The previous offset identifies the start of the group.
+    return thrust::minimum<size_type>{}(preceding_window, idx - (*group_start));
   };
  
   auto following_calculator = [offsets_begin, offsets_end, following_window] __device__ (size_type idx) {
+    // `upper_bound()` cannot return `offsets_end`, since it is capped with `input.size()`.
     auto group_end = thrust::upper_bound(thrust::device, offsets_begin, offsets_end, idx);
-    return thrust::minimum<size_type>{}(following_window, (*group_end-1)-idx);
+    return thrust::minimum<size_type>{}(following_window, (*group_end - 1) - idx);
   };
   
   return cudf::experimental::detail::rolling_window(
