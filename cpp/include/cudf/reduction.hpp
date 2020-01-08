@@ -99,7 +99,7 @@ std::unique_ptr<scalar> reduce(
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> scan(
-    const column_view& input, scan_op op, bool inclusive,
+    const column_view& input, scan_op op, bool inclusive, bool skipna=true,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
