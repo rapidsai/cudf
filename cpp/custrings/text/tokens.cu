@@ -363,7 +363,7 @@ unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsign
 }
 
 // same but with multiple delimiters
-unsigned int NVText::token_count( NVStrings& strs, NVStrings& delims, unsigned int* results, bool bdevmem )
+unsigned int NVText::token_count( const NVStrings& strs, const NVStrings& delims, unsigned int* results, bool bdevmem )
 {
     unsigned int delims_count = delims.size();
     if( delims_count==0 )
