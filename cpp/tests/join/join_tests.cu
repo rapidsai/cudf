@@ -584,3 +584,29 @@ TEST_F(JoinTest, EqualValuesFullJoin)
 
   cudf::test::expect_tables_equal(gold, *result);
 }
+
+TEST_F(JoinTest, InnerJoinCornerCase)
+{
+  column_wrapper <int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
+  column_wrapper <int64_t> col1_0{{2}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols1.push_back(col1_0.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result = cudf::experimental::inner_join(t0, t1, {0}, {0}, {{0, 0}});
+  auto result_sort_order = cudf::experimental::sorted_order(result->view());
+  auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
+
+  column_wrapper <int64_t> col_gold_0{{2, 2, 2, 2}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
+  auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+}
