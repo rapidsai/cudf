@@ -82,7 +82,8 @@ round_robin_partition(table_view const& input,
 
   rmm::device_vector<cudf::size_type> d_partition_offsets(num_partitions, cudf::size_type{0});
 
-  thrust::transform(thrust::device,
+  auto exec = rmm::exec_policy(stream);
+  thrust::transform(exec->on(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0), thrust::make_counting_iterator<cudf::size_type>(num_partitions),
                     d_partition_offsets.begin(),
                     [num_partitions, max_p_size, n_pmax, pmm, start_partition] __device__ (auto indx){
