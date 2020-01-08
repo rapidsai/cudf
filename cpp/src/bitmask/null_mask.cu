@@ -463,6 +463,12 @@ segmented_count_set_bits(bitmask_type const* bitmask,
                          std::vector<size_type> const& indices,
                          cudaStream_t stream) {
   CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
+  for (size_t i = 0; i < indices.size() / 2; i++) {
+    auto begin = indices[i * 2];
+    auto end = indices[i * 2 + 1];
+    CUDF_EXPECTS(begin >= 0, "Invalid range.");
+    CUDF_EXPECTS(end >= begin, "Invalid range.");
+  }
 
   if ((bitmask == nullptr) || (indices.size() == 0)) {
     return std::vector<size_type>{};
@@ -471,14 +477,12 @@ segmented_count_set_bits(bitmask_type const* bitmask,
   size_type num_ranges = indices.size() / 2;
   thrust::host_vector<size_type> h_first_indices(num_ranges);
   thrust::host_vector<size_type> h_last_indices(num_ranges);
-  for (size_type i = 0; i < num_ranges; i++) {
-    auto begin = indices[i * 2];
-    auto end = indices[i * 2 + 1];
-    CUDF_EXPECTS(begin >= 0, "Invalid range.");
-    CUDF_EXPECTS(end >= begin, "Invalid range.");
-    h_first_indices[i] = begin;
-    h_last_indices[i] = end;
-  }
+  thrust::stable_partition_copy(
+    thrust::seq, std::begin(indices), std::end(indices),
+    thrust::make_counting_iterator(0),
+    h_first_indices.begin(), h_last_indices.begin(),
+    [](auto i) { return (i % 2) == 0; }
+  );
 
   rmm::device_vector<size_type> d_first_indices = h_first_indices;
   rmm::device_vector<size_type> d_last_indices = h_last_indices;
