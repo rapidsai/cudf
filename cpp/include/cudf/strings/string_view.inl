@@ -104,7 +104,7 @@ __host__ __device__ inline bool string_view::is_null() const
 
 // the custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
-    : cpos{pos}, p{str.data()}, offset{str.byte_offset(pos)}
+    : p{str.data()}, cpos{pos}, offset{str.byte_offset(pos)}
 {}
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
@@ -210,7 +210,7 @@ __device__ inline string_view::const_iterator string_view::end() const
 
 __device__ inline char_utf8 string_view::operator[](size_type pos) const
 {
-    unsigned int offset = byte_offset(pos);
+    size_type offset = byte_offset(pos);
     if(offset >= _bytes)
         return 0;
     char_utf8 chr = 0;
@@ -347,7 +347,6 @@ __device__ inline size_type string_view::rfind(const char* str, size_type bytes,
     const char* sptr = data();
     if(!str || !bytes)
         return -1;
-    size_type sz = size_bytes();
     size_type nchars = length();
     size_type end = pos + count;
     if(end < 0 || end > nchars)
