@@ -37,17 +37,13 @@ namespace detail {
  * @param[in] input View of input column to slice
  * @param[in] begin Index of the first desired element in the slice (inclusive).
  * @param[in] end Index of the last desired element in the slice (exclusive).
- * @param[in] null_count Null count of the returned view (optional, if not
- * provided, cudf::UNKOWN_NULL_COUNT is passed, and the null count will be
- * computed on the first invocation of `null_count()`).
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
  *---------------------------------------------------------------------------**/
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input,
                   cudf::size_type begin,
-                  cudf::size_type end,
-                  cudf::size_type null_count = cudf::UNKNOWN_NULL_COUNT) {
+                  cudf::size_type end) {
    static_assert(std::is_same<ColumnView, cudf::column_view>::value or
                     std::is_same<ColumnView, cudf::mutable_column_view>::value,
                 "slice can be performed only on column_view and mutable_column_view");
@@ -63,7 +59,7 @@ ColumnView slice(ColumnView const& input,
 
    return ColumnView(input.type(), end - begin,
                      input.head(), input.null_mask(),
-                     null_count,
+                     cudf::UNKNOWN_NULL_COUNT,
                      input.offset() + begin, children);
 }
 
