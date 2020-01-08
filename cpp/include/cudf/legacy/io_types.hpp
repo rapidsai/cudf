@@ -253,4 +253,15 @@ struct parquet_read_arg {
   explicit parquet_read_arg(const source_info& src) : source(src) {}
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `write_parquet` interface
+ *---------------------------------------------------------------------------**/
+struct parquet_write_arg {
+  sink_info sink;                           ///< Info on sink of data
+
+  cudf::table table;                        ///< Table of columns to write
+
+  explicit parquet_write_arg(const sink_info& snk) : sink(snk) {}
+};
+
 }  // namespace cudf

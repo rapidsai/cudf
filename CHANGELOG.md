@@ -37,6 +37,7 @@
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3697 Improve column insert performance for wide frames
+- PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 
 ## Bug Fixes
 

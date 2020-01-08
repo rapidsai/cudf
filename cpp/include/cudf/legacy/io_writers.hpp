@@ -75,5 +75,63 @@ class writer {
 };
 
 }  // namespace orc
+
+
+namespace parquet {
+
+/**---------------------------------------------------------------------------*
+ * @brief Supported compression algorithms for the Parquet writer
+ *---------------------------------------------------------------------------**/
+enum class compression_type { none, snappy };
+
+enum class statistics_freq {
+  STATISTICS_NONE = 0,     //!< No column statistics
+  STATISTICS_ROWGROUP = 1, //!< Per-Rowgroup column statistics
+  STATISTICS_PAGE = 2,     //!< Per-page column statistics
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Options for the Parquet writer
+ *---------------------------------------------------------------------------**/
+struct writer_options {
+  compression_type compression = compression_type::none;
+  statistics_freq stats_granularity = statistics_freq::STATISTICS_ROWGROUP;
+
+  writer_options() = default;
+  writer_options(writer_options const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate writer options.
+   *
+   * @param[in] comp Compression codec to use
+   *---------------------------------------------------------------------------**/
+  explicit writer_options(compression_type comp) : compression(comp) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to write Parquet data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class writer {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit writer(std::string filepath, writer_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Writes the entire data set.
+   *
+   * @param[in] table Object that contains the array of gdf_columns
+   *---------------------------------------------------------------------------**/
+  void write_all(const cudf::table& table);
+
+  ~writer();
+};
+
+}  // namespace parquet
 }  // namespace io
 }  // namespace cudf

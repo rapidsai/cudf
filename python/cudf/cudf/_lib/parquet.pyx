@@ -11,15 +11,36 @@ from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 from cudf._lib.includes.parquet cimport (
     reader as parquet_reader,
-    reader_options as parquet_reader_options
+    reader_options as parquet_reader_options,
+    writer as parquet_writer,
+    writer_options as parquet_writer_options,
+    compression_type
 )
+from cython.operator cimport dereference as deref
 from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 
 import errno
 import os
 
+cdef unique_ptr[cudf_table] make_table_from_columns(columns):
+    """
+    Cython function to create a `cudf_table` from an ordered dict of columns
+    """
+    cdef vector[gdf_column*] c_columns
+    for idx, (col_name, col) in enumerate(columns.items()):
+        # Workaround for string columns
+        if col.dtype.type == np.object_:
+            c_columns.push_back(
+                column_view_from_string_column(col, col_name)
+            )
+        else:
+            c_columns.push_back(
+                column_view_from_column(col, col_name)
+            )
+
+    return make_unique[cudf_table](c_columns)
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
@@ -87,3 +108,37 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
         df.index.name = new_index_name
 
     return df
+
+cpdef write_parquet(
+        cols,
+        path=None,
+        compression=None):
+    """
+    Cython function to call into libcudf API, see `write_parquet`.
+
+    See Also
+    --------
+    cudf.io.parquet.write_parquet
+    """
+
+    # Setup writer options
+    cdef parquet_writer_options options = parquet_writer_options()
+    if compression is None:
+        options.compression = compression_type.none
+    elif compression == "snappy":
+        options.compression = compression_type.snappy
+    else:
+        raise ValueError("Unsupported `compression` type")
+
+    # Create writer
+    cdef string filepath = <string>str(path).encode()
+    cdef unique_ptr[parquet_writer] writer
+    with nogil:
+        writer = unique_ptr[parquet_writer](
+            new parquet_writer(filepath, options)
+        )
+
+    # Write data to output
+    cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
+    with nogil:
+        writer.get().write_all(deref(c_in_table))

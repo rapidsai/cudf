@@ -169,6 +169,21 @@ void write_orc(orc_write_arg const &args) {
   return writer->write_all(args.table);
 }
 
+void write_parquet(parquet_write_arg const &args) {
+  namespace parquet = cudf::io::parquet;
+  auto writer = [&]() {
+    parquet::writer_options options{};
+
+    if (args.sink.type == FILE_PATH) {
+      return std::make_unique<parquet::writer>(args.sink.filepath, options);
+    } else {
+      CUDF_FAIL("Unsupported sink type");
+    }
+  }();
+
+  return writer->write_all(args.table);
+}
+
 table read_parquet(parquet_read_arg const &args) {
   namespace parquet = cudf::io::parquet;
   auto reader = [&]() {

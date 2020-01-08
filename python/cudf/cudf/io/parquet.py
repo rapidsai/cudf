@@ -64,11 +64,13 @@ def read_parquet(
 
 
 @ioutils.doc_to_parquet()
-def to_parquet(df, path, *args, **kwargs):
+def to_parquet(df, path, compression=None, engine="cudf", *args, **kwargs):
     """{docstring}"""
-    warnings.warn(
-        "Using CPU via PyArrow to write Parquet dataset, this will "
-        "be GPU accelerated in the future"
-    )
-    pa_table = df.to_arrow()
-    pq.write_to_dataset(pa_table, path, *args, **kwargs)
+
+    if engine == "cudf":
+        return libcudf.parquet.write_parquet(
+            cols=df._cols, path=path, compression=compression
+        )
+    else:
+        pa_table = df.to_arrow()
+        pq.write_to_dataset(pa_table, path, *args, **kwargs)
