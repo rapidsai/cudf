@@ -110,7 +110,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     return df
 
 cpdef write_parquet(
-        cols,
+        table,
         path=None,
         compression=None):
     """

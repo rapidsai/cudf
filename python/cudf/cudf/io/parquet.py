@@ -69,7 +69,7 @@ def to_parquet(df, path, compression=None, engine="cudf", *args, **kwargs):
 
     if engine == "cudf":
         return libcudf.parquet.write_parquet(
-            cols=df._cols, path=path, compression=compression
+            table=df.view(), path=path, compression=compression
         )
     else:
         pa_table = df.to_arrow()
