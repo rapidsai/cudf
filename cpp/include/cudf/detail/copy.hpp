@@ -64,6 +64,15 @@ ColumnView slice(ColumnView const& input,
 }
 
 /**
+ * @copydoc cudf::experimental::slice(column_view const&,std::vector<size_type> const&)
+ *
+ * @param stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<column_view> slice(column_view const& input,
+                               std::vector<size_type> const& indices,
+                               cudaStream_t stream = 0);
+
+/**
  * @copydoc cudf::experimental::contiguous_split
  *
  * @param stream Optional CUDA stream on which to execute kernels
