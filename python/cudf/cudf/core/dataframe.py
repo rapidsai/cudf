@@ -850,13 +850,6 @@ class DataFrame(Table):
                         r_opr = None
                         l_opr = self._cols[col]
                 result[col] = op(l_opr, r_opr)
-            # hack to replicate pandas alignment order
-            permute_cols = (
-                pd.Series(index=df_cols)
-                .align(pd.Series(index=other_cols_keys))[0]
-                .index
-            )
-            result = result[permute_cols]
 
         elif isinstance(other, numbers.Number):
             for col in self._data:
