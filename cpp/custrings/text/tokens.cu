@@ -122,7 +122,7 @@ struct tokenize_fn : base_tokenator
     }
 };
 
-NVStrings* NVText::tokenize(NVStrings& strs, const char* delimiter)
+NVStrings* NVText::tokenize(NVStrings const& strs, const char* delimiter)
 {
     auto execpol = rmm::exec_policy(0);
     custring_view* d_delimiter = custring_from_host(delimiter);
