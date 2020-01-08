@@ -4043,7 +4043,10 @@ def test_cov_nans():
         Series([1, 2, 3], index=["a", "b", "d"]),
         Series([1, 2], index=["a", "b"]),
         Series([1, 2, 3], index=gd.core.index.RangeIndex(0, 3)),
-        Series([1, 2, 3, 4, 5], index=["a", "b", "d", 0, "12"]),
+        pytest.param(
+            Series([1, 2, 3, 4, 5], index=["a", "b", "d", 0, "12"]),
+            marks=pytest.mark.xfail,
+        ),
     ],
 )
 @pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
