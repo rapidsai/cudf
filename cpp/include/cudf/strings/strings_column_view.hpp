@@ -20,7 +20,13 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf {
+/**
+ * @file strings_column_view.hpp
+ * @brief Class definition for cudf::strings_column_view
+ */
+
+namespace cudf 
+{
 
 /**
  * @brief Given a column-view of strings type, an instance of this class
@@ -93,6 +99,7 @@ void print( strings_column_view const& strings,
 
 /**
  * @brief Create output per Arrow strings format.
+ *
  * The return pair is the vector of chars and the vector of offsets.
  *
  * @param strings Strings instance for this operation.
