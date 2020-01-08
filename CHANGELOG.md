@@ -7,6 +7,7 @@
 - PR #3254 Python redesign for libcudf++
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
