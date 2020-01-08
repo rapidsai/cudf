@@ -181,7 +181,7 @@ void write_parquet(parquet_write_arg const &args) {
     }
   }();
 
-  return writer->write_all(args.table);
+  return writer->write_all(args.table_view);
 }
 
 table read_parquet(parquet_read_arg const &args) {

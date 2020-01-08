@@ -6,10 +6,10 @@
 # cython: language_level = 3
 
 from cudf._lib.cudf cimport *
+from cudf._libxx.lib cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
 
@@ -72,4 +72,4 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
             const writer_options &args
         ) except +
 
-        void write_all(const cudf_table &table) except +
+        void write_all(const table_view &table_view) except +

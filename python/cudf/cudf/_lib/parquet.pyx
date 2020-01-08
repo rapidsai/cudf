@@ -24,23 +24,8 @@ from libcpp.string cimport string
 import errno
 import os
 
-cdef unique_ptr[cudf_table] make_table_from_columns(columns):
-    """
-    Cython function to create a `cudf_table` from an ordered dict of columns
-    """
-    cdef vector[gdf_column*] c_columns
-    for idx, (col_name, col) in enumerate(columns.items()):
-        # Workaround for string columns
-        if col.dtype.type == np.object_:
-            c_columns.push_back(
-                column_view_from_string_column(col, col_name)
-            )
-        else:
-            c_columns.push_back(
-                column_view_from_column(col, col_name)
-            )
-
-    return make_unique[cudf_table](c_columns)
+from cudf._libxx.lib cimport *
+from cudf._libxx.lib import *
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
@@ -139,6 +124,7 @@ cpdef write_parquet(
         )
 
     # Write data to output
-    cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
+    cdef unique_ptr[table_view] table_view_ptr
     with nogil:
-        writer.get().write_all(deref(c_in_table))
+        table_view_ptr = make_unique[table_view](table.view())
+        writer.get().write_all(deref(table_view_ptr))

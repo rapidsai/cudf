@@ -127,7 +127,7 @@ class writer {
    *
    * @param[in] table Object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  void write_all(const cudf::table& table);
+  void write_all(const cudf::table_view& table_view);
 
   ~writer();
 };
