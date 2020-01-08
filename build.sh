@@ -37,12 +37,11 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    default action (no args) is to build and install 'libnvstrings' then
    'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
-LIBNVSTRINGS_BUILD_DIR=${REPODIR}/cpp/build
+LIB_BUILD_DIR=${REPODIR}/cpp/build
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
-LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIBNVSTRINGS_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
@@ -94,7 +93,7 @@ if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS="ON"
+    BENCHMARKS=ON
 fi
 
 # If clean given, run it prior to any other steps
@@ -121,14 +120,21 @@ fi
 
 ################################################################################
 # Configure, build, and install libnvstrings
-if buildAll || hasArg libnvstrings; then
 
-    mkdir -p ${LIBNVSTRINGS_BUILD_DIR}
-    cd ${LIBNVSTRINGS_BUILD_DIR}
+if buildAll || hasArg libnvstrings || hasArg libcudf; then
+
+    mkdir -p ${LIB_BUILD_DIR}
+    cd ${LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
+          -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+fi
+
+if buildAll || hasArg libnvstrings; then
+
+    cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
     else
@@ -151,13 +157,7 @@ fi
 # Configure, build, and install libcudf
 if buildAll || hasArg libcudf; then
 
-    mkdir -p ${LIBCUDF_BUILD_DIR}
-    cd ${LIBCUDF_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_CXX11_ABI=ON \
-          ${GPU_ARCH} \
-          -DBUILD_BENCHMARKS=${BENCHMARKS} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+    cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
     else
