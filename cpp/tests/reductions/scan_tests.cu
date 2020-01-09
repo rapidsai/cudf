@@ -345,12 +345,19 @@ TEST_F(ScanStringTest, SkipNA)
   std::unique_ptr<cudf::column> col_out;
   //skipna=false
   CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_nulls, scan_op::MAX, true, false));
-  if(true) {
+  if(false) {
     print_view(expected2, "expect = ");
     print_view(col_out->view(),   "result = ");
   }
   cudf::test::expect_column_properties_equal(expected2, col_out->view());
   cudf::test::expect_columns_equal(expected2, col_out->view());
+
+  //Exclusive scan string not supported.
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls, scan_op::MIN, false, true)),
+  "String types supports only inclusive min/max for `cudf::scan`");
+
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls, scan_op::MIN, false, false)),
+  "String types supports only inclusive min/max for `cudf::scan`");
 }
 
 TYPED_TEST(ScanTest, EmptyColumnSkipNA)
@@ -360,7 +367,6 @@ TYPED_TEST(ScanTest, EmptyColumnSkipNA)
   std::vector<bool>      b{};
   cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(),
                                                             b.begin()};
-  const column_view input_view = col_in;
   std::unique_ptr<cudf::column> col_out;
   
   //test output calculation
@@ -368,7 +374,7 @@ TYPED_TEST(ScanTest, EmptyColumnSkipNA)
   std::vector<bool>      out_b(v.size());
   
   //skipna=true (default)
-  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, scan_op::SUM, true, true));
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_in, scan_op::SUM, true, true));
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
       out_v.begin(), out_v.end(), b.cbegin()};
   cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
@@ -379,7 +385,7 @@ TYPED_TEST(ScanTest, EmptyColumnSkipNA)
   }
 
   //skipna=false
-  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, scan_op::SUM, true, false));
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_in, scan_op::SUM, true, false));
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
       out_v.begin(), out_v.end(), out_b.begin()};
   if(do_print) {

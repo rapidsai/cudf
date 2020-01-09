@@ -42,11 +42,29 @@ struct ScanDispatcher {
     return std::is_arithmetic<T>::value || is_string_supported<T>();
   }
 
-  template <typename T>
+  template <typename T, typename InputIterator>
+  static void exclusive_scan_cub(InputIterator input, T *output, size_type size,
+                                 rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+  {
+    rmm::device_buffer temp_storage;
+    size_t temp_storage_bytes = 0;
+    // Prepare temp storage
+    cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                   input, output, Op{},
+                                   Op::template identity<T>(), size, stream);
+    temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+    cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                   input, output, Op{},
+                                   Op::template identity<T>(), size, stream);
+  }
+
+  //for arithmetic types
+  template <typename T,
+    std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
   auto exclusive_scan(const column_view& input_view, bool skipna,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    const size_t size = input_view.size();
+    const size_type size = input_view.size();
     auto output_column = experimental::detail::allocate_like(
         input_view, size, experimental::mask_allocation_policy::NEVER, mr,
         stream);
@@ -57,33 +75,39 @@ struct ScanDispatcher {
     mutable_column_view output = output_column->mutable_view();
     auto d_input = column_device_view::create(input_view, stream);
 
-    rmm::device_buffer temp_storage;
-    size_t temp_storage_bytes = 0;
-
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      // Prepare temp storage
-      cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{},
-                                     Op::template identity<T>(), size, stream);
-      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-      cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{},
-                                     Op::template identity<T>(), size, stream);
+      exclusive_scan_cub(input, output.data<T>(), size, mr, stream);
     } else {
       auto input = d_input->begin<T>();
-      // Prepare temp storage
-      cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{},
-                                     Op::template identity<T>(), size, stream);
-      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-      cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{},
-                                     Op::template identity<T>(), size, stream);
+      exclusive_scan_cub(input, output.data<T>(), size, mr, stream);
     }
 
     CHECK_CUDA(stream);
     return output_column;
+  }
+
+  //for string type
+template <typename T,
+    std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
+  std::unique_ptr<column> exclusive_scan(const column_view& input_view, bool skipna,
+                      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    CUDF_FAIL("String types supports only inclusive min/max for `cudf::scan`");
+  }
+
+  template <typename T, typename InputIterator>
+  static void inclusive_scan_cub(InputIterator input, T *output, size_type size,
+                                 rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+  {
+    rmm::device_buffer temp_storage;
+    size_t temp_storage_bytes = 0;
+    // Prepare temp storage
+    cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                   input, output, Op{}, size, stream);
+    temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+    cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
+                                   input, output, Op{}, size, stream);
   }
 
   rmm::device_buffer mask_inclusive_scan(const column_view &input_view,
@@ -110,7 +134,7 @@ struct ScanDispatcher {
   auto inclusive_scan(const column_view& input_view, bool skipna,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    const size_t size = input_view.size();
+    const size_type size = input_view.size();
     auto output_column = experimental::detail::allocate_like(
         input_view, size, experimental::mask_allocation_policy::NEVER, mr,
         stream);
@@ -126,26 +150,12 @@ struct ScanDispatcher {
     auto d_input = column_device_view::create(input_view, stream);
     mutable_column_view output = output_column->mutable_view();
 
-    rmm::device_buffer temp_storage;
-    size_t temp_storage_bytes = 0;
-
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      // Prepare temp storage
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{}, size, stream);
-      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{}, size, stream);
+      inclusive_scan_cub(input, output.data<T>(), size, mr, stream);
     } else {
       auto input = d_input->begin<T>();
-      // Prepare temp storage
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{},
-                                     size, stream);
-      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, output.data<T>(), Op{}, size, stream);
+      inclusive_scan_cub(input, output.data<T>(), size, mr, stream);
     }
 
     CHECK_CUDA(stream);
@@ -158,31 +168,17 @@ template <typename T,
   std::unique_ptr<column> inclusive_scan(const column_view& input_view, bool skipna,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    const size_t size = input_view.size();
+    const size_type size = input_view.size();
     rmm::device_vector<T> result(size);
 
     auto d_input = column_device_view::create(input_view, stream);
 
-    rmm::device_buffer temp_storage;
-    size_t temp_storage_bytes = 0;
-
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      // Prepare temp storage
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, result.begin(), Op{}, size, stream);
-      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, result.begin(), Op{}, size, stream);
+      inclusive_scan_cub(input, result.data().get(), size, mr, stream);
     } else {
       auto input = d_input->begin<T>();
-      // Prepare temp storage
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, result.begin(), Op{},
-                                     size, stream);
-      temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-      cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                     input, result.begin(), Op{}, size, stream);
+      inclusive_scan_cub(input, result.data().get(), size, mr, stream);
     }
     CHECK_CUDA(stream);
 
