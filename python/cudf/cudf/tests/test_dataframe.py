@@ -4044,7 +4044,7 @@ def test_cov_nans():
         Series([1, 2], index=["a", "b"]),
         Series([1, 2, 3], index=gd.core.index.RangeIndex(0, 3)),
         pytest.param(
-            Series([1, 2, 3, 4, 5], index=["a", "b", "d", 0, "12"]),
+            Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
             marks=pytest.mark.xfail,
         ),
     ],
