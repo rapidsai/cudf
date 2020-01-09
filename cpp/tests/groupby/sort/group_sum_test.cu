@@ -29,7 +29,9 @@ namespace test {
 template <typename V>
 struct groupby_sum_test : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(groupby_sum_test, cudf::test::NumericTypes);
+using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+
+TYPED_TEST_CASE(groupby_sum_test, supported_types);
 
 TYPED_TEST(groupby_sum_test, basic)
 {

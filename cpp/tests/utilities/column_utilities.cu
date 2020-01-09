@@ -54,7 +54,10 @@ public:
   : d_lhs(d_lhs),
     d_rhs(d_rhs),
     comp(d_lhs, d_rhs)
-  {}
+  {
+    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
+                 "Unsupported number of columns");
+  }
   
   struct typed_element_unequal {
     template <typename T>
@@ -71,7 +74,7 @@ public:
             && std::abs(x-y) >= std::numeric_limits<T>::min();
       } else {
         // if either is null, then the inequality was checked already
-        return false;
+        return true;
       }
     }
 
@@ -79,7 +82,7 @@ public:
     __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool>
     operator()(Args... args) {
       // Non-floating point inequality is checked already
-      return false;
+      return true;
   }
   };
   

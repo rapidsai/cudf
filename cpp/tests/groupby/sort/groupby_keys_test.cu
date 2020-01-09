@@ -98,7 +98,7 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,           3,     4,  3},
                                               { 1,        1,           1,     1,  0});
                                           //  { 0, 3, 6,  1, 4, 5, 9,  2, 8,  -,  -}
-    fixed_width_column_wrapper<R> expect_vals { 3,        18,          24,    4,  7};
+    fixed_width_column_wrapper<R> expect_vals { 9,        19,          10,    4,  7};
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
@@ -132,7 +132,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
     fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
 
     fixed_width_column_wrapper<K> expect_keys { 4, 3,       2,          1      };
-    fixed_width_column_wrapper<R> expect_vals { 0, 6,       22,        22      };
+    fixed_width_column_wrapper<R> expect_vals { 0, 6,       22,        21      };
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
@@ -171,7 +171,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
                                           //  { 1, 1, 1,  -, -,  2, 2,  -,  3, 3,  4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,     2,     3,  3,     4},
                                               { 1,        0,     1,     0,  1,     1});
-    fixed_width_column_wrapper<R> expect_vals { 3,        7,     15,    7,  17,    4};
+    fixed_width_column_wrapper<R> expect_vals { 3,        7,     11,    7,  17,    4};
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
@@ -190,7 +190,7 @@ TEST_F(groupby_string_keys_test, basic)
     fixed_width_column_wrapper<V> vals        {     0,     1,    2,     3,     4,     5,     6,    7,    8,     9};
 
     strings_column_wrapper        expect_keys({ "aaa", "año", "₹1" }, all_valid());
-    fixed_width_column_wrapper<R> expect_vals {     9,    18,   17 };
+    fixed_width_column_wrapper<R> expect_vals {     9,    19,   17 };
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
