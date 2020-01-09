@@ -51,7 +51,7 @@ def test_init_via_list_of_empty_tuples(rows):
         },
         {"a": [1, 2, 3], "b": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6])},
         {
-            "a": pd.Series([1.0, 2.0, 3.0], index=["a", " b", "c"]),
+            "a": pd.Series([1.0, 2.0, 3.0], index=["a", "b", "c"]),
             "b": pd.Series([1.0, 2.0, 4.0], index=["c", "d", "e"]),
         },
         {

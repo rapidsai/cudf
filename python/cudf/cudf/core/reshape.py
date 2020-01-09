@@ -82,7 +82,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if len(typs) > 1:
         raise ValueError(
             "`concat` expects all objects to be of the same "
-            "type. Got mix of{ %r." % [t.__name__ for t in typs]
+            "type. Got mix of %r." % [t.__name__ for t in typs]
         )
     typ = list(typs)[0]
 
