@@ -184,13 +184,11 @@ class data_type {
    * @param id The type's identifier
    *---------------------------------------------------------------------------**/
   explicit constexpr data_type(type_id id) : _id{id} {}
-  //explicit constexpr data_type(type_id id, type_id keys_id) : _id{id}, _keys_id{keys_id} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the type identifier
    *---------------------------------------------------------------------------**/
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
-  //CUDA_HOST_DEVICE_CALLABLE type_id keys_id() const noexcept { return _keys_id; }
 
  private:
   type_id _id{EMPTY};
@@ -224,5 +222,10 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) {
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
+/**
+ * @brief Define concrete dictionary type.
+ */
+struct dictionary32_tag{};
 
 }  // namespace cudf

@@ -113,7 +113,7 @@ CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
-
+CUDF_TYPE_MAPPING(dictionary32_tag, type_id::DICTIONARY32);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -307,6 +307,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
           std::forward<Ts>(args)...);
     case TIMESTAMP_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case DICTIONARY32:
+      return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
