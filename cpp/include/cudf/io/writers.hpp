@@ -148,7 +148,7 @@ class writer {
   /**
    * @brief Writes the entire dataset.
    *
-   * @param table table Set of columns to output
+   * @param table Set of columns to output
    * @param metadata Table metadata and column names
    * @param stream Optional stream to use for device memory alloc and kernels
    */
