@@ -561,6 +561,7 @@ add_library(cudf
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
+            src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
@@ -574,6 +575,8 @@ add_library(cudf
             src/strings/find.cu
             src/strings/find_multiple.cu
             src/strings/padding.cu
+            src/strings/regex/regcomp.cpp
+            src/strings/regex/regexec.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
             src/strings/split/split.cu
