@@ -54,6 +54,16 @@ def test_init_via_list_of_empty_tuples(rows):
             "a": pd.Series([1.0, 2.0, 3.0], index=["a", " b", "c"]),
             "b": pd.Series([1.0, 2.0, 4.0], index=["c", "d", "e"]),
         },
+        {
+            "a": pd.Series(
+                ["a", "b", "c"],
+                index=pd.MultiIndex.from_tuples([(1, 2), (1, 3), (2, 3)]),
+            ),
+            "b": pd.Series(
+                ["a", " b", "d"],
+                index=pd.MultiIndex.from_tuples([(1, 2), (1, 3), (2, 3)]),
+            ),
+        },
     ],
 )
 def test_init_from_series_align(dict_of_series):
