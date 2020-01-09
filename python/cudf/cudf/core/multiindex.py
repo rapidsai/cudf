@@ -296,7 +296,7 @@ class MultiIndex(Index):
             else:
                 name = index.names[k]
             out_index.add_column(
-                name, index._source_data[index._source_data.columns[k]],
+                name, index._source_data[index._source_data.columns[k]]
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:

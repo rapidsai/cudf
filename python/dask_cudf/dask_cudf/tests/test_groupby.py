@@ -175,16 +175,11 @@ def test_groupby_split_out(split_out, column):
         }
     ).fillna(0)
     df["e"] = df["d"].astype("category")
-    
+
     gdf = cudf.from_pandas(df)
 
     ddf = dd.from_pandas(df, npartitions=3)
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
-
-    if split_out == 2 and column == ["b", "e"]:
-        pytest.xfail(
-            "dask.dataframe does handle categorial dtype management implimented in pandas 0.25 and fails."
-        )
 
     ddf_result = (
         ddf.groupby(column)

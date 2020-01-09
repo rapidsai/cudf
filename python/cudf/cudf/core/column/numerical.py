@@ -146,7 +146,7 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").data, dtype=dtype, mask=self.mask,
+            data=self.astype("int64").data, dtype=dtype, mask=self.mask
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -246,9 +246,7 @@ class NumericalColumn(column.ColumnBase):
             return self
 
         data = Buffer(cudautils.apply_round(self.data_array_view, decimals))
-        return column.build_column(
-            data=data, dtype=self.dtype, mask=self.mask,
-        )
+        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
