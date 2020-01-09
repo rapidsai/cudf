@@ -247,7 +247,8 @@ class DataFrame(Table):
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
 
-    def _align_input_series_indices(self, data, index):
+    @staticmethod
+    def _align_input_series_indices(data, index):
         data = data.copy()
 
         input_series = [
