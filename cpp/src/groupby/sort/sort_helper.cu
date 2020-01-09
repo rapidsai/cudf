@@ -86,7 +86,7 @@ namespace groupby {
 namespace detail {
 namespace sort {
 
-size_type helper::num_keys(cudaStream_t stream) {
+size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
   if (_num_keys > -1)
     return _num_keys;
 
@@ -103,7 +103,7 @@ size_type helper::num_keys(cudaStream_t stream) {
   return _num_keys; 
 }
 
-column_view helper::key_sort_order(cudaStream_t stream) {
+column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
   if (_key_sorted_order)
     return _key_sorted_order->view();
 
@@ -147,7 +147,8 @@ column_view helper::key_sort_order(cudaStream_t stream) {
   return _key_sorted_order->view();
 }
 
-helper::index_vector const& helper::group_offsets(cudaStream_t stream) {
+sort_groupby_helper::index_vector const& 
+sort_groupby_helper::group_offsets(cudaStream_t stream) {
   if (_group_offsets)
     return *_group_offsets;
 
@@ -178,7 +179,8 @@ helper::index_vector const& helper::group_offsets(cudaStream_t stream) {
   return *_group_offsets;
 }
 
-helper::index_vector const& helper::group_labels(cudaStream_t stream) {
+sort_groupby_helper::index_vector const& 
+sort_groupby_helper::group_labels(cudaStream_t stream) {
   if (_group_labels)
     return *_group_labels;
 
@@ -205,7 +207,7 @@ helper::index_vector const& helper::group_labels(cudaStream_t stream) {
   return group_labels;
 }
 
-column_view helper::unsorted_keys_labels(cudaStream_t stream) {
+column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream) {
   if (_unsorted_keys_labels)
     return _unsorted_keys_labels->view();
 
@@ -233,7 +235,7 @@ column_view helper::unsorted_keys_labels(cudaStream_t stream) {
   return _unsorted_keys_labels->view();
 }
 
-column_view helper::keys_bitmask_column(cudaStream_t stream) {
+column_view sort_groupby_helper::keys_bitmask_column(cudaStream_t stream) {
   if (_keys_bitmask_column)
     return _keys_bitmask_column->view();
 
@@ -252,7 +254,8 @@ column_view helper::keys_bitmask_column(cudaStream_t stream) {
   return _keys_bitmask_column->view();
 }
 
-helper::column_ptr helper::sorted_values(column_view const& values, 
+sort_groupby_helper::column_ptr 
+sort_groupby_helper::sorted_values(column_view const& values, 
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
@@ -270,7 +273,8 @@ helper::column_ptr helper::sorted_values(column_view const& values,
   return std::move(sorted_values_table->release()[0]);
 }
 
-helper::column_ptr helper::grouped_values(column_view const& values, 
+sort_groupby_helper::column_ptr 
+sort_groupby_helper::grouped_values(column_view const& values, 
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
@@ -283,7 +287,7 @@ helper::column_ptr helper::grouped_values(column_view const& values,
   return std::move(grouped_values_table->release()[0]);
 }
 
-std::unique_ptr<table> helper::unique_keys(
+std::unique_ptr<table> sort_groupby_helper::unique_keys(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {

@@ -163,8 +163,8 @@ class groupby {
   std::vector<null_order> _null_precedence{};  ///< If keys are sorted,
                                                ///< indicates null order
                                                ///< of each column
-  std::unique_ptr<detail::sort::helper> _helper; ///< Helper object used by sort
-                                                 ///< based implementation
+  std::unique_ptr<detail::sort::sort_groupby_helper> _helper; ///< Helper object
+                                       ///< used by sort based implementation
 
   /**
    * @brief Get the sort helper object
@@ -172,10 +172,10 @@ class groupby {
    * The object is constructed on first invocation and subsequent invocations
    * of this function return the memoized object.
    */
-  detail::sort::helper& helper() {
+  detail::sort::sort_groupby_helper& helper() {
     if (_helper)
       return *_helper;
-    _helper = std::make_unique<detail::sort::helper>(
+    _helper = std::make_unique<detail::sort::sort_groupby_helper>(
       _keys, _ignore_null_keys, _keys_are_sorted);
     return *_helper;
   };

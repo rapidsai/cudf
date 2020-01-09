@@ -42,7 +42,7 @@ namespace sort {
  * 3. Group valid sizes: The number of valid values in each group in a sorted
  *   value column
  */
-struct helper {
+struct sort_groupby_helper {
   using index_vector = rmm::device_vector<size_type>;
   using bitmask_vector = rmm::device_vector<bitmask_type>;
   using column_ptr = std::unique_ptr<column>;
@@ -62,8 +62,8 @@ struct helper {
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        optimizations to help skip re-sorting keys.
    */
-  helper(table_view const& keys, bool ignore_null_keys = true,
-          bool keys_pre_sorted = false)
+  sort_groupby_helper(table_view const& keys, bool ignore_null_keys = true,
+                      bool keys_pre_sorted = false)
   : _keys(keys),
     _num_keys(-1),
     _ignore_null_keys(ignore_null_keys),
@@ -77,11 +77,11 @@ struct helper {
     }
   };
 
-  ~helper() = default;
-  helper(helper const&) = delete;
-  helper& operator=(helper const&) = delete;
-  helper(helper&&) = default;
-  helper& operator=(helper&&) = default;
+  ~sort_groupby_helper() = default;
+  sort_groupby_helper(sort_groupby_helper const&) = delete;
+  sort_groupby_helper& operator=(sort_groupby_helper const&) = delete;
+  sort_groupby_helper(sort_groupby_helper&&) = default;
+  sort_groupby_helper& operator=(sort_groupby_helper&&) = default;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each
@@ -102,6 +102,8 @@ struct helper {
 
   /**
    * @brief Groups a column of values according to `keys`
+   * 
+   * The order of values within each group is undefined. 
    * 
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    * 
@@ -205,17 +207,17 @@ struct helper {
 
  private:
 
-  column_ptr          _key_sorted_order;
-  column_ptr          _unsorted_keys_labels;
-  column_ptr          _keys_bitmask_column;
-  table_view          _keys;
+  column_ptr          _key_sorted_order;      ///< Indices to produce _keys in sorted order
+  column_ptr          _unsorted_keys_labels;  ///< Group labels for unsorted _keys
+  column_ptr          _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
+  table_view          _keys;                  ///< Input keys to sort by
 
-  index_vector_ptr    _group_offsets;
-  index_vector_ptr    _group_labels;
+  index_vector_ptr    _group_offsets;         ///< Indices into sorted _keys indicating starting index of each groups
+  index_vector_ptr    _group_labels;          ///< Group labels for sorted _keys
 
-  size_type           _num_keys;
-  bool                _keys_pre_sorted;
-  bool                _ignore_null_keys;
+  size_type           _num_keys;              ///< Number of effective rows in _keys (adjusted for _ignore_null_keys)
+  bool                _keys_pre_sorted;       ///< Whether _keys are pre-sorted
+  bool                _ignore_null_keys;      ///< Whether to use rows with nulls in _keys for grouping
 };
 
 }  // namespace sort
