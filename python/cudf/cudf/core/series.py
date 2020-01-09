@@ -2628,10 +2628,6 @@ def _align_indices(lhs, rhs, join="outer"):
     if rhs isn't a Series.
     """
     if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
-        if len(lhs) != len(lhs.index.unique()) or len(rhs) != len(
-            rhs.index.unique()
-        ):
-            raise ValueError("Cannot align indices with non-unique values")
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
         lhs_rhs = lhs.join(rhs, how=join, sort=True)
         lhs = lhs_rhs.iloc[:, 0]
@@ -2659,12 +2655,16 @@ def _align_indices_multi(series_list):
     ).unique()
 
     result = []
-    for sr in series_list:
+    for lhs in series_list:
         rhs = Series(
             column.column_empty(
-                len(aligned_index), dtype=sr.dtype, masked=True
+                len(aligned_index), dtype=lhs.dtype, masked=True
             ),
             index=aligned_index,
         )
+        if len(lhs) != len(lhs.index.unique()) or len(rhs) != len(
+            rhs.index.unique()
+        ):
+            raise ValueError("Cannot align indices with non-unique values")
         result.append(_align_indices(sr, rhs)[0])
     return result
