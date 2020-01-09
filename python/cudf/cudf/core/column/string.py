@@ -53,15 +53,16 @@ class StringMethods(object):
     This mimicks pandas `df.str` interface.
     """
 
-    def __init__(self, parent, index=None):
+    def __init__(self, parent, index=None, name=None):
         self._parent = parent
         self._index = index
+        self._name = name
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
 
-        if hasattr(self._parent._data, attr):
-            passed_attr = getattr(self._parent._data, attr)
+        if hasattr(self._parent.nvstrings, attr):
+            passed_attr = getattr(self._parent.nvstrings, attr)
             if callable(passed_attr):
 
                 @functools.wraps(passed_attr)
@@ -71,7 +72,7 @@ class StringMethods(object):
                         ret = Series(
                             column.as_column(ret),
                             index=self._index,
-                            name=self._parent.name,
+                            name=self._name,
                         )
                     return ret
 
@@ -83,7 +84,7 @@ class StringMethods(object):
 
     def __dir__(self):
         keys = dir(type(self))
-        return set(keys + dir(self._parent._data))
+        return set(keys + dir(self._parent.nvstrings))
 
     def len(self):
         """
@@ -98,16 +99,16 @@ class StringMethods(object):
 
         out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.data.len(ptr)
+        self._parent.nvstrings.len(ptr)
 
         mask = None
-        if self._parent.null_count > 0:
+        if self._parent.has_nulls:
             mask = self._parent.mask
 
         col = column.build_column(
             Buffer(out_dev_arr), np.dtype("int32"), mask=mask
         )
-        return Series(col, index=self._index, name=self._parent.name)
+        return Series(col, index=self._index, name=self._name)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -148,13 +149,12 @@ class StringMethods(object):
         """
         from cudf.core import Series, Index
 
-        if isinstance(others, (Series, Index)):
-            """
-            If others is just another Series/Index,
-            great go ahead with concatenation
-            """
+        if isinstance(others, Series):
             assert others.dtype == np.dtype("object")
-            others = others.data
+            others = others._column.nvstrings
+        elif isinstance(others, Index):
+            assert others.dtype == np.dtype("object")
+            others = others.as_column().nvstrings
         elif isinstance(others, StringMethods):
             """
             If others is a StringMethods then
@@ -187,7 +187,7 @@ class StringMethods(object):
                 """
                 first = None
                 for frame in others:
-                    if not isinstance(frame, (Series, Index)):
+                    if not isinstance(frame, Series):
                         """
                         Make sure all inputs to .cat function call
                         are of type nvstrings so creating a Series object.
@@ -200,10 +200,10 @@ class StringMethods(object):
                         `frame` is of type Series/Index and
                         first isn't yet initialized.
                         """
-                        first = frame.data
+                        first = frame._column.nvstrings
                     else:
                         assert frame.dtype == np.dtype("object")
-                        frame = frame.data
+                        frame = frame._column.nvstrings
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
@@ -218,16 +218,15 @@ class StringMethods(object):
                 first element of list.
                 """
                 others = Series(others)
-                others = others.data
+                others = others._column.nvstrings
         elif isinstance(others, (pd.Series, pd.Index)):
             others = Series(others)
-            others = others.data
+            others = others._column.nvstrings
 
-        out = Series(
-            self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
-            index=self._index,
-            name=self._parent.name,
+        data = self._parent.nvstrings.cat(
+            others=others, sep=sep, na_rep=na_rep
         )
+        out = Series(data, index=self._index, name=self._name)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -274,9 +273,9 @@ class StringMethods(object):
 
         from cudf.core import DataFrame, Series
 
-        out = self._parent.data.extract(pat)
+        out = self._parent.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(out[0], index=self._index, name=self._parent.name)
+            return Series(out[0], index=self._index, name=self._name)
         else:
             out_df = DataFrame(index=self._index)
             for idx, val in enumerate(out):
@@ -323,17 +322,17 @@ class StringMethods(object):
 
         out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.data.contains(pat, regex=regex, devptr=ptr)
+        self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
-        if self._parent.null_count > 0:
+        if self._parent.has_nulls:
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer(out_dev_arr), np.dtype("bool"), mask=mask
+            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask,
         )
 
-        return Series(col, index=self._index, name=self._parent.name)
+        return Series(col, index=self._index, name=self._name)
 
     def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
         """
@@ -376,9 +375,9 @@ class StringMethods(object):
         from cudf.core import Series
 
         return Series(
-            self._parent.data.replace(pat, repl, n=n, regex=regex),
+            self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
             index=self._index,
-            name=self._parent.name,
+            name=self._name,
         )
 
     def lower(self):
@@ -393,9 +392,7 @@ class StringMethods(object):
         from cudf.core import Series
 
         return Series(
-            self._parent.data.lower(),
-            index=self._index,
-            name=self._parent.name,
+            self._parent.nvstrings.lower(), index=self._index, name=self._name
         )
 
     def split(self, pat=None, n=-1, expand=True):
@@ -433,46 +430,45 @@ class StringMethods(object):
         from cudf.core import DataFrame
 
         out_df = DataFrame(index=self._index)
-        out = self._parent.data.split(delimiter=pat, n=n)
+        out = self._parent.nvstrings.split(delimiter=pat, n=n)
+
         for idx, val in enumerate(out):
             out_df[idx] = val
         return out_df
 
 
-class StringColumn(column.TypedColumnBase):
+class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, data, null_count=None, name=None, **kwargs):
+    def __init__(self, mask=None, offset=0, children=()):
         """
         Parameters
         ----------
-        data : nvstrings.nvstrings
-            The nvstrings object
-        null_count : int; optional
-            The number of null values in the mask.
+        mask : Buffer
+            The validity mask
+        offset : int
+            Data offset
+        children : Tuple[Column]
+            Two non-null columns containing the string data and offsets
+            respectively
         """
-        from collections.abc import Sequence
 
-        if isinstance(data, Sequence):
-            data = nvstrings.to_device(data)
-        assert isinstance(data, nvstrings.nvstrings)
-        self._data = data
-        self._dtype = np.dtype("object")
-        self._name = name
+        data = Buffer.empty(0)
+        dtype = np.dtype("object")
 
-        if null_count is None:
-            null_count = data.null_count()
-        self._null_count = null_count
-        self._mask = None
-        if self._null_count > 0:
-            mask_size = utils.calc_chunk_size(
-                len(self.data), utils.mask_bitsize
-            )
-            out_mask_arr = rmm.device_array(mask_size, dtype="int8")
-            out_mask_ptr = libcudf.cudf.get_ctype_ptr(out_mask_arr)
-            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            self._mask = Buffer(out_mask_arr)
+        if children[0].size == 0:
+            size = 0
+        else:
+            # one less because the last element of offsets is the number of
+            # bytes in the data buffer
+            size = children[0].size - 1
+
+        super().__init__(
+            data, size, dtype, mask=mask, children=children,
+        )
+
+        self._nvstrings = None
         self._nvcategory = None
         self._indices = None
 
@@ -483,13 +479,13 @@ class StringColumn(column.TypedColumnBase):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
 
-    def str(self, index=None):
-        return StringMethods(self, index=index)
+    def str(self, index=None, name=None):
+        return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = self._data.device_memory()
-        if self._mask:
-            n += self._mask.__sizeof__()
+        n = self.nvstrings.device_memory()
+        if self.mask:
+            n += self.mask.size
         return n
 
     def _memory_usage(self, deep=False):
@@ -499,34 +495,44 @@ class StringColumn(column.TypedColumnBase):
             return self.str().size() * self.dtype.itemsize
 
     def __len__(self):
-        return self._data.size()
+        return self.nvstrings.size()
 
     @property
-    def dtype(self):
-        return self._dtype
-
-    @property
-    def data(self):
-        """ nvstrings object """
-        return self._data
-
-    @property
-    def null_count(self):
-        return self._null_count
-
-    @property
-    def mask(self):
-        """Validity mask buffer
-        """
-        return self._mask
+    def nvstrings(self):
+        if self._nvstrings is None:
+            if self.nullable:
+                mask_ptr = self.mask.ptr
+            else:
+                mask_ptr = None
+            if self.size == 0:
+                self._nvstrings = nvstrings.to_device([])
+            else:
+                self._nvstrings = nvstrings.from_offsets(
+                    self.children[1].data.ptr,
+                    self.children[0].data.ptr,
+                    self.size,
+                    mask_ptr,
+                    ncount=self.null_count,
+                    bdevmem=True,
+                )
+        return self._nvstrings
 
     @property
     def nvcategory(self):
         if self._nvcategory is None:
             import nvcategory as nvc
 
-            self._nvcategory = nvc.from_strings(self.data)
+            self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
+
+    @nvcategory.setter
+    def nvcategory(self, nvc):
+        self._nvcategory = nvc
+
+    def _set_mask(self, value):
+        self._nvstrings = None
+        self._nvcategory = None
+        super()._set_mask(value)
 
     @property
     def indices(self):
@@ -536,7 +542,7 @@ class StringColumn(column.TypedColumnBase):
             )
             ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
             self.nvcategory.values(devptr=ptr)
-            self._indices = Buffer(out_dev_arr)
+            self._indices = out_dev_arr
         return self._indices
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -552,7 +558,7 @@ class StringColumn(column.TypedColumnBase):
             kwargs.update(units=np.datetime_data(mem_dtype)[0])
             mem_dtype = np.dtype(np.int64)
             if "format" not in kwargs:
-                if len(self.data) > 0:
+                if len(self.nvstrings) > 0:
                     # infer on host from the first not na element
                     fmt = pd.core.tools.datetimes._guess_datetime_format(
                         self[self.notna()][0]
@@ -565,19 +571,20 @@ class StringColumn(column.TypedColumnBase):
         out_ptr = libcudf.cudf.get_ctype_ptr(out_arr)
         kwargs.update({"devptr": out_ptr})
 
-        _str_to_numeric_typecast_functions[str_dtype](self.str(), **kwargs)
+        _str_to_numeric_typecast_functions[str_dtype](self.nvstrings, **kwargs)
 
         out_col = column.as_column(out_arr)
 
-        if self.null_count > 0:
+        if self.has_nulls:
             mask_size = utils.calc_chunk_size(
-                len(self.data), utils.mask_bitsize
+                len(self.nvstrings), utils.mask_bitsize
             )
-            out_mask_arr = rmm.device_array(mask_size, dtype="int8")
-            out_mask_ptr = libcudf.cudf.get_ctype_ptr(out_mask_arr)
-            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            mask = Buffer(out_mask_arr)
-            out_col = out_col.set_mask(mask)
+            out_mask = column.column_empty(
+                mask_size, dtype="int8", masked=False
+            ).data
+            out_mask_ptr = out_mask.ptr
+            self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
+            out_col.mask = out_mask
 
         return out_col.astype(out_dtype)
 
@@ -588,10 +595,12 @@ class StringColumn(column.TypedColumnBase):
         return self
 
     def to_arrow(self):
-        sbuf = np.empty(self._data.byte_count(), dtype="int8")
-        obuf = np.empty(len(self._data) + 1, dtype="int32")
+        sbuf = np.empty(self.nvstrings.byte_count(), dtype="int8")
+        obuf = np.empty(len(self.nvstrings) + 1, dtype="int32")
 
-        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
+        mask_size = utils.calc_chunk_size(
+            len(self.nvstrings), utils.mask_bitsize
+        )
         nbuf = np.empty(mask_size, dtype="int8")
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
@@ -604,14 +613,17 @@ class StringColumn(column.TypedColumnBase):
             )
         else:
             return pa.StringArray.from_buffers(
-                len(self._data), obuf, sbuf, nbuf, self._data.null_count()
+                len(self.nvstrings),
+                obuf,
+                sbuf,
+                nbuf,
+                self.nvstrings.null_count(),
             )
 
     def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
-        pd_series.name = self.name
         return pd_series
 
     def to_array(self, fillna=None):
@@ -633,16 +645,18 @@ class StringColumn(column.TypedColumnBase):
         return self.to_arrow().to_pandas().array
 
     def serialize(self):
-        header = {"null_count": self._null_count}
+        header = {"null_count": self.null_count}
         header["type"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
 
-        sbuf = rmm.device_array(self._data.byte_count(), dtype="int8")
-        obuf = rmm.device_array(len(self._data) + 1, dtype="int32")
-        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
+        sbuf = rmm.device_array(self.nvstrings.byte_count(), dtype="int8")
+        obuf = rmm.device_array(len(self.nvstrings) + 1, dtype="int32")
+        mask_size = utils.calc_chunk_size(
+            len(self.nvstrings), utils.mask_bitsize
+        )
         nbuf = rmm.device_array(mask_size, dtype="int8")
-        self.data.to_offsets(
+        self.nvstrings.to_offsets(
             libcudf.cudf.get_ctype_ptr(sbuf),
             libcudf.cudf.get_ctype_ptr(obuf),
             nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
@@ -654,7 +668,7 @@ class StringColumn(column.TypedColumnBase):
             sub_headers.append(sheader)
             frames.append(item)
 
-        header["nvstrings"] = len(self._data)
+        header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
         header["frame_count"] = len(frames)
         return header, frames
@@ -684,8 +698,7 @@ class StringColumn(column.TypedColumnBase):
             ncount=header["null_count"],
             bdevmem=True,
         )
-        typ = pickle.loads(header["type"])
-        return typ(data)
+        return column.as_column(data)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":
@@ -695,24 +708,20 @@ class StringColumn(column.TypedColumnBase):
 
         idx_dev_arr = rmm.device_array(len(self), dtype="int32")
         dev_ptr = libcudf.cudf.get_ctype_ptr(idx_dev_arr)
-        self.data.order(2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr)
+        self.nvstrings.order(
+            2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr
+        )
 
         col_inds = column.build_column(
             Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
         )
 
-        col_keys = self[col_inds.data.mem]
+        col_keys = self[col_inds.data_array_view]
 
         return col_keys, col_inds
 
-    def _replace_defaults(self):
-        import cudf.core.column as c
-
-        return c.Column._replace_defaults(self)
-
     def copy(self, deep=True):
-        params = self._replace_defaults()
-        return type(self)(**params)
+        return column.as_column(self.nvstrings.copy())
 
     def unordered_compare(self, cmpop, rhs):
         return _string_column_binop(self, rhs, op=cmpop)
@@ -724,10 +733,10 @@ class StringColumn(column.TypedColumnBase):
         to_replace = column.as_column(to_replace)
         replacement = column.as_column(replacement)
         if len(to_replace) == 1 and len(replacement) == 1:
-            to_replace = to_replace.data.to_host()[0]
-            replacement = replacement.data.to_host()[0]
-            result = self.data.replace(to_replace, replacement)
-            return self.replace(data=result)
+            to_replace = to_replace.nvstrings.to_host()[0]
+            replacement = replacement.nvstrings.to_host()[0]
+            result = self.nvstrings.replace(to_replace, replacement)
+            return column.as_column(result)
         else:
             raise NotImplementedError(
                 "StringColumn currently only supports replacing"
@@ -756,11 +765,11 @@ class StringColumn(column.TypedColumnBase):
                     "greater length than the series to be filled"
                 )
 
-            fill_value = fill_value[: len(self)]._column._data
+            fill_value = fill_value[: len(self)]._column.nvstrings
 
-        filled_data = self._data.fillna(fill_value)
-        result = StringColumn(filled_data)
-        result = result.replace(mask=None)
+        filled_data = self.nvstrings.fillna(fill_value)
+        result = column.as_column(filled_data)
+        result.mask = None
         return self._mimic_inplace(result, inplace)
 
     def _find_first_and_last(self, value):
@@ -770,10 +779,10 @@ class StringColumn(column.TypedColumnBase):
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
 
-    def find_first_value(self, value):
+    def find_first_value(self, value, closest=False):
         return self._find_first_and_last(value)[0]
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         return self._find_first_and_last(value)[1]
 
     def unique(self, method="sort"):
@@ -782,16 +791,16 @@ class StringColumn(column.TypedColumnBase):
         """
         import nvcategory as nvc
 
-        return StringColumn(nvc.from_strings(self.data).keys())
+        return column.as_column(nvc.from_strings(self.nvstrings).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
             col = utils.scalar_broadcast_to(
-                other, shape=len(self), dtype="object"
+                other, size=len(self), dtype="object"
             )
-            return self.replace(data=col.data)
+            return col
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
@@ -803,7 +812,7 @@ class StringColumn(column.TypedColumnBase):
         if reflect:
             lhs, rhs = rhs, lhs
         if isinstance(rhs, StringColumn) and binop == "add":
-            return lhs.data.cat(others=rhs.data)
+            return lhs.nvstrings.cat(others=rhs.nvstrings)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
@@ -815,7 +824,7 @@ class StringColumn(column.TypedColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.has_null_mask:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -826,7 +835,7 @@ class StringColumn(column.TypedColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.has_null_mask:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(
@@ -844,11 +853,9 @@ class StringColumn(column.TypedColumnBase):
 def _string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
-    masked = lhs.has_null_mask or rhs.has_null_mask
+    masked = lhs.nullable or rhs.nullable
     out = column.column_empty_like(lhs, dtype="bool", masked=masked)
     # Call and fix null_count
-    null_count = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-
-    result = out.replace(null_count=null_count)
+    _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
     nvtx_range_pop()
-    return result
+    return out
