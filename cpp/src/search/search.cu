@@ -161,7 +161,12 @@ void populate_element<string_view>(scalar const& value, string_view &e) {
 
   e = string_view{s1->data(), s1->size()};
 }
-  
+
+template <>
+void populate_element<dictionary32_tag>(scalar const& value, dictionary32_tag &e) {
+  CUDF_FAIL("dictionary type not supported yet");
+}
+
 struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_view const& col, scalar const& value,
@@ -265,6 +270,14 @@ struct multi_contains_dispatch {
     return result;
   }
 };
+
+template <>
+std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32_tag>(column_view const& haystack,
+                                   column_view const& needles,
+                                   rmm::mr::device_memory_resource *mr,
+                                   cudaStream_t stream) {
+  CUDF_FAIL("dictionary type not supported");
+}
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,

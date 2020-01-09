@@ -37,6 +37,9 @@ namespace detail {
 
 namespace { // anonymous
 
+template <typename T>
+struct specialization_type{};
+
 /**
  * @brief Computes the rolling window function
  *
@@ -58,9 +61,9 @@ namespace { // anonymous
  */
 template <typename T, typename agg_op, rolling_operator op, int block_size, bool has_nulls,
           typename WindowIterator>
-__launch_bounds__(block_size)
-__global__
-void gpu_rolling(column_device_view input,
+__device__
+void kernel_gpu_rolling(specialization_type<T>,
+                 column_device_view input,
                  mutable_column_device_view output,
                  size_type * __restrict__ output_valid_count,
                  WindowIterator preceding_window_begin,
@@ -129,6 +132,37 @@ void gpu_rolling(column_device_view input,
   if(threadIdx.x == 0) {
     atomicAdd(output_valid_count, block_valid_count);
   }
+}
+
+template <typename T, typename agg_op, rolling_operator op, int block_size, bool has_nulls,
+          typename WindowIterator>
+__device__
+void kernel_gpu_rolling(specialization_type<dictionary32_tag>,
+                 column_device_view input,
+                 mutable_column_device_view output,
+                 size_type * __restrict__ output_valid_count,
+                 WindowIterator preceding_window_begin,
+                 WindowIterator following_window_begin,
+                 size_type min_periods)
+{
+  release_assert(false && "dictionary type not supported");
+}
+
+
+template <typename T, typename agg_op, rolling_operator op, int block_size, bool has_nulls,
+          typename WindowIterator>
+__launch_bounds__(block_size)
+__global__
+void gpu_rolling(column_device_view input,
+                 mutable_column_device_view output,
+                 size_type * __restrict__ output_valid_count,
+                 WindowIterator preceding_window_begin,
+                 WindowIterator following_window_begin,
+                 size_type min_periods)
+{
+  kernel_gpu_rolling<T,agg_op,op,block_size,has_nulls,WindowIterator>
+  (specialization_type<T>{},
+  input,output,output_valid_count,preceding_window_begin,following_window_begin,min_periods);
 }
 
 struct rolling_window_launcher

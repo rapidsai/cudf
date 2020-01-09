@@ -105,6 +105,16 @@ struct out_of_place_fill_range_dispatch {
     return cudf::strings::detail::fill(cudf::strings_column_view(input),
                                        begin, end, *p_scalar, mr, stream);
   }
+  
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::dictionary32_tag, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type begin, cudf::size_type end,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
+      cudaStream_t stream = 0) {
+        CUDF_FAIL("dictionary not supported yet");
+  }
 };
 
 }  // namespace

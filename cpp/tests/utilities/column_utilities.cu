@@ -205,6 +205,10 @@ struct column_view_printer {
       out = std::move(h_data.first);
     }
   }
+
+  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32_tag>::value>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
+  }
 };
 
 std::vector<std::string> to_strings(cudf::column_view const& col) {

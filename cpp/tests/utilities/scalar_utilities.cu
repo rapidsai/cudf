@@ -34,7 +34,8 @@ namespace {
 struct compare_scalar_functor
 {
     template<typename T>
-    typename std::enable_if_t<not std::is_floating_point<T>::value, void>
+    //typename std::enable_if_t<not std::is_floating_point<T>::value, void>
+    typename std::enable_if_t<not std::is_same<T,cudf::dictionary32_tag>::value and not std::is_floating_point<T>::value, void>
     operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
@@ -58,6 +59,13 @@ struct compare_scalar_functor
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
         auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
         EXPECT_DOUBLE_EQ(lhs_t.value(), rhs_t.value());
+    }
+
+    template<typename T>
+    std::enable_if_t<std::is_same<T, cudf::dictionary32_tag>::value>
+    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    {
+        // not supported yet
     }
 };
 

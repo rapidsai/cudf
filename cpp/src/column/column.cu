@@ -188,6 +188,12 @@ struct create_column_from_view {
  }
 
  template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32_tag>::value>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   CUDF_FAIL("dictionary not supported yet");
+ }
+
+ template <typename ColumnType,
            std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
  std::unique_ptr<column> operator()() {
 
@@ -230,6 +236,12 @@ struct create_column_from_view_vector {
    }
 
    return col;
+ }
+
+ template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32_tag>::value>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   CUDF_FAIL("dictionary not supported yet");
  }
 
  template <typename ColumnType,
