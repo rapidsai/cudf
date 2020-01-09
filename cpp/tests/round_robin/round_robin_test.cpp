@@ -50,13 +50,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
   cudf::table_view rr_view{{rrColWrap1, rrColWrap2}};
 
   cudf::size_type num_partitions = 3;
-  std::vector<cudf::size_type> sequence(num_partitions,0);
-  std::iota(sequence.begin(), sequence.end(), 0);
   
-  std::vector<cudf::size_type> partition_offsets_0{0,5,9};
-  EXPECT_EQ(num_partitions, partition_offsets_0.size());
-  
-  for(cudf::size_type start_partition = 0; start_partition < num_partitions; ++start_partition) {
+  cudf::size_type start_partition = 0;  
+  {
     std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(result = cudf::experimental::round_robin_partition(rr_view,
                                                                        num_partitions,
@@ -87,15 +83,84 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
 
-    //rotate `partition_offsets_0` right by `start_partition` positions:
-    //
-    std::vector<cudf::size_type> expected_partition_offsets(num_partitions);
-    std::transform(sequence.begin(), sequence.end(),
-                   expected_partition_offsets.begin(),
-                   [partition_offsets_0, start_partition](auto index) {
-                     auto n = partition_offsets_0.size();
-                     return partition_offsets_0[(index + n - start_partition) % n];
-                   });
+    std::vector<cudf::size_type> expected_partition_offsets{0,5,9};
+    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+
+    EXPECT_EQ(expected_partition_offsets, result.second);
+  }
+
+  start_partition = 1;  
+  {
+    std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result;
+    EXPECT_NO_THROW(result = cudf::experimental::round_robin_partition(rr_view,
+                                                                       num_partitions,
+                                                                       start_partition));
+
+    auto p_outputTable = std::move(result.first);
+
+    auto output_column_view1{p_outputTable->view().column(0)};
+    auto output_column_view2{p_outputTable->view().column(1)};
+  
+    strings_column_wrapper expectedDataWrap1({"c","f","i","l","a","d","g","j","m","b","e","h","k"},
+                                             {1,1,1,1,1,1,1,1,0,1,1,1,1});
+
+    auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
+    cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+
+    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,0,1,0,1,0,1,0,1,0,1,0,1});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+
+      EXPECT_EQ(inputRows, expected_column_view2.size());
+      EXPECT_EQ(inputRows, output_column_view2.size());
+      
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    } else {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({2,5,8,11,0,3,6,9,12,1,4,7,10});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    }
+
+    std::vector<cudf::size_type> expected_partition_offsets{0,4,9};
+    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+
+    EXPECT_EQ(expected_partition_offsets, result.second);
+  }
+
+  start_partition = 2;  
+  {
+    std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result;
+    EXPECT_NO_THROW(result = cudf::experimental::round_robin_partition(rr_view,
+                                                                       num_partitions,
+                                                                       start_partition));
+
+    auto p_outputTable = std::move(result.first);
+
+    auto output_column_view1{p_outputTable->view().column(0)};
+    auto output_column_view2{p_outputTable->view().column(1)};
+  
+    strings_column_wrapper expectedDataWrap1({"b","e","h","k","c","f","i","l","a","d","g","j","m"},
+                                             {1,1,1,1,1,1,1,1,1,1,1,1,0});
+
+    auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
+    cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+
+    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,1,0,1,1,0,1,0,1,0,1,0,1});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+
+      EXPECT_EQ(inputRows, expected_column_view2.size());
+      EXPECT_EQ(inputRows, output_column_view2.size());
+      
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    } else {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,4,7,10,2,5,8,11,0,3,6,9,12});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    }
+
+    std::vector<cudf::size_type> expected_partition_offsets{0,4,8};
+    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -119,13 +184,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
   cudf::table_view rr_view{{rrColWrap1, rrColWrap2}};
 
   cudf::size_type num_partitions = 3;
-  std::vector<cudf::size_type> sequence(num_partitions,0);
-  std::iota(sequence.begin(), sequence.end(), 0);
-  
-  std::vector<cudf::size_type> partition_offsets_0{0,4,8};
-  EXPECT_EQ(num_partitions, partition_offsets_0.size());
-  
-  for(cudf::size_type start_partition = 0; start_partition < num_partitions; ++start_partition) {
+    
+  cudf::size_type start_partition = 0;
+  {
     std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(result = cudf::experimental::round_robin_partition(rr_view,
                                                                        num_partitions,
@@ -156,15 +217,84 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
 
-    //rotate `partition_offsets_0` right by `start_partition` positions:
-    //
-    std::vector<cudf::size_type> expected_partition_offsets(num_partitions);
-    std::transform(sequence.begin(), sequence.end(),
-                   expected_partition_offsets.begin(),
-                   [partition_offsets_0, start_partition](auto index) {
-                     auto n = partition_offsets_0.size();
-                     return partition_offsets_0[(index + n - start_partition) % n];
-                   });
+    std::vector<cudf::size_type> expected_partition_offsets{0,4,8};
+    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+
+    EXPECT_EQ(expected_partition_offsets, result.second);
+  }
+
+  start_partition = 1;
+  {
+    std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result;
+    EXPECT_NO_THROW(result = cudf::experimental::round_robin_partition(rr_view,
+                                                                       num_partitions,
+                                                                       start_partition));
+
+    auto p_outputTable = std::move(result.first);
+
+    auto output_column_view1{p_outputTable->view().column(0)};
+    auto output_column_view2{p_outputTable->view().column(1)};
+  
+    strings_column_wrapper expectedDataWrap1({"c","f","i","a","d","g","j","b","e","h","k"},
+                                             {1,1,1,1,1,1,1,1,1,1,0});
+
+    auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
+    cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+
+    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,0,1,1,0,1,0,0,1,0,1});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+
+      EXPECT_EQ(inputRows, expected_column_view2.size());
+      EXPECT_EQ(inputRows, output_column_view2.size());
+      
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    } else {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({2,5,8,0,3,6,9,1,4,7,10});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    }
+
+    std::vector<cudf::size_type> expected_partition_offsets{0,3,7};
+    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+
+    EXPECT_EQ(expected_partition_offsets, result.second);
+  }
+
+  start_partition = 2;
+  {
+    std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result;
+    EXPECT_NO_THROW(result = cudf::experimental::round_robin_partition(rr_view,
+                                                                       num_partitions,
+                                                                       start_partition));
+
+    auto p_outputTable = std::move(result.first);
+
+    auto output_column_view1{p_outputTable->view().column(0)};
+    auto output_column_view2{p_outputTable->view().column(1)};
+  
+    strings_column_wrapper expectedDataWrap1({"b","e","h","k","c","f","i","a","d","g","j"},
+                                             {1,1,1,0,1,1,1,1,1,1,1});
+
+    auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
+    cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+
+    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,1,0,1,1,0,1,1,0,1,0});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+
+      EXPECT_EQ(inputRows, expected_column_view2.size());
+      EXPECT_EQ(inputRows, output_column_view2.size());
+      
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    } else {
+      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,4,7,10,2,5,8,0,3,6,9});
+      auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+      cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+    }
+
+    std::vector<cudf::size_type> expected_partition_offsets{0,4,7};
+    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
