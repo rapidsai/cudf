@@ -29,56 +29,53 @@ namespace cudf {
 
 namespace {
 
+/** 
+ * @brief  Functor to map a hash value to a particular 'bin' or partition number
+ * that uses the modulo operation.
+ */
+template <typename hash_value_t>
+class modulo_partitioner
+{
+ public:
+  modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
+
+  __device__
+  size_type operator()(hash_value_t hash_value) const {
+    return hash_value % divisor;
+  }
+
+ private:
+  const size_type divisor;
+};
+
 template <typename T>
 bool is_power_two(T number) {
   return (0 == (number & (number - 1)));
 }
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
- * that uses the modulo operation.
- */
-/* ----------------------------------------------------------------------------*/
-template <typename hash_value_t>
-struct modulo_partitioner
-{
-  modulo_partitioner(size_type num_partitions) : divisor{num_partitions}{}
-
-  __host__ __device__
-  size_type operator()(hash_value_t hash_value) const 
-  {
-    return hash_value % divisor;
-  }
-
-  const size_type divisor;
-};
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Functor to map a hash value to a particular 'bin' or partition number
- * that uses bitshifts. Only works when num_partitions is a power of 2.
+ * that uses a bitwise mask. Only works when num_partitions is a power of 2.
  *
  * For n % d, if d is a power of two, then it can be computed more efficiently via 
  * a single bitwise AND as:
  * n & (d - 1)
  */
-/* ----------------------------------------------------------------------------*/
 template <typename hash_value_t>
-struct bitwise_partitioner
+class bitwise_partitioner
 {
-  bitwise_partitioner(size_type num_partitions) : divisor{(num_partitions - 1)}
-  {
-    assert( is_power_two(num_partitions) );
+ public:
+  bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)} {
+    assert(is_power_two(num_partitions));
   }
 
-  __host__ __device__
-  size_type operator()(hash_value_t hash_value) const 
-  {
-    return hash_value & (divisor);
+  __device__
+  size_type operator()(hash_value_t hash_value) const {
+    return hash_value & mask; // hash_value & (num_partitions - 1)
   }
 
-  const size_type divisor;
+ private:
+  const size_type mask;
 };
 
 /* --------------------------------------------------------------------------*/
