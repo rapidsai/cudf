@@ -19,8 +19,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -60,62 +63,64 @@ struct reduce_functor {
     using ResultType = cudf::experimental::detail::target_type_t<T, k>;
     size_type num_groups = group_sizes.size();
 
-    auto result = make_fixed_width_column(data_type(type_to_id<ResultType>()), 
-                                          num_groups,
-                                          values.nullable() 
-                                            ? mask_state::UNINITIALIZED
-                                            : mask_state::UNALLOCATED,
-                                          stream, mr);
-    auto op = OpType{};
+    rmm::device_buffer result_bitmask;
+    size_type result_null_count;
+    std::tie(result_bitmask, result_null_count) = 
+      experimental::detail::valid_if(
+        group_sizes.begin<size_type>(), group_sizes.end<size_type>(),
+        [] __device__ (auto s) { return s > 0; });
+
+    std::unique_ptr<column> result;
+    if (result_null_count > 0) {
+      result = make_fixed_width_column(data_type(type_to_id<ResultType>()), 
+                                       num_groups,
+                                       std::move(result_bitmask),
+                                       result_null_count,
+                                       stream, mr);
+    } else {
+      result = make_fixed_width_column(data_type(type_to_id<ResultType>()), 
+                                       num_groups,
+                                       mask_state::UNALLOCATED,
+                                       stream, mr);
+    }
 
     if (values.size() == 0) {
       return result;
     }
 
-    if (values.nullable()) {
-      T default_value = OpType::template identity<T>();
-      auto device_values = column_device_view::create(values);
-      auto val_it = cudf::experimental::detail::make_null_replacement_iterator(
-                        *device_values, default_value);
+    thrust::fill(rmm::exec_policy(stream)->on(stream),
+      result->mutable_view().begin<ResultType>(), 
+      result->mutable_view().end<ResultType>(),
+      OpType::template identity<ResultType>());
 
-      // Without this transform, thrust throws a runtime error
-      auto it = thrust::make_transform_iterator(val_it,
-                          [] __device__ (auto i) -> ResultType { return i; });
-      
-      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-        // Input keys
-          group_labels.begin(), group_labels.end(),
-        // Input values
-          it,
-        // Output keys
-          thrust::make_discard_iterator(),
-        // Output values
-          result->mutable_view().begin<ResultType>(),
-        // comparator and operation
-          thrust::equal_to<size_type>(), op);
+    auto resultview = mutable_column_device_view::create(result->mutable_view());
+    auto valuesview = column_device_view::create(values);
 
-      auto result_view = mutable_column_device_view::create(*result);
-      auto group_size_view = column_device_view::create(group_sizes);
-
-      thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
-        thrust::make_counting_iterator(0), group_sizes.size(),
-        [d_result=*result_view, d_group_sizes=*group_size_view]
-        __device__ (size_type i){
-          size_type group_size = d_group_sizes.element<size_type>(i);
-          if (group_size == 0)
-            d_result.set_null(i);
-          else
-            d_result.set_valid(i);
-        });
-    } else {
-      auto it = thrust::make_transform_iterator(values.data<T>(),
-                          [] __device__ (auto i) -> ResultType { return i; });
-      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                            group_labels.begin(), group_labels.end(),
-                            it, thrust::make_discard_iterator(),
-                            result->mutable_view().begin<ResultType>(),
-                            thrust::equal_to<size_type>(), op);
-    }
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0), values.size(),
+      [
+        d_values = *valuesview,
+        d_result = *resultview,
+        dest_indices = group_labels.data().get()
+      ] __device__ (auto i) {
+        if (d_values.is_valid(i))
+          switch (k) {
+          case aggregation::Kind::SUM:
+            atomicAdd(d_result.data<ResultType>() + dest_indices[i],
+                      static_cast<ResultType>(d_values.element<T>(i)));
+            break;
+          case aggregation::Kind::MIN:
+            atomicMin(d_result.data<ResultType>() + dest_indices[i],
+                      static_cast<ResultType>(d_values.element<T>(i)));
+            break;
+          case aggregation::Kind::MAX:
+            atomicMax(d_result.data<ResultType>() + dest_indices[i],
+                      static_cast<ResultType>(d_values.element<T>(i)));
+            break;
+          default:
+            break;
+          }
+      });
     
     return result;
   }
@@ -123,7 +128,7 @@ struct reduce_functor {
   template <typename T, typename... Args>
   std::enable_if_t<not is_supported<T>(), std::unique_ptr<column> >
   operator()(Args&&... args) {
-    CUDF_FAIL("Only numeric types are supported in variance");
+    CUDF_FAIL("Unsupported type-agg combination");
   }
 };
 
