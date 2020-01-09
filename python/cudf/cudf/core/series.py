@@ -2643,7 +2643,7 @@ class DatetimeProperties(object):
         )
 
 
-def _align_indices(series_list, join="outer", allow_non_unique=False):
+def _align_indices(series_list, how="outer", allow_non_unique=False):
     """
     Internal util to align the indices of a list of Series objects
 
