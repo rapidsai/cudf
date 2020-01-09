@@ -16,24 +16,22 @@
 
 /** --------------------------------------------------------------------------*
  * @brief unary functions for thrust::transform_iterator
- * @file trasnsform_unary_functions.cuh
+ * @file transform_unary_functions.cuh
  *
  * These are designed for using as AdaptableUnaryFunction
  * for thrust::transform_iterator.
  * For the detail of example cases,
- * @see iteraror.cuh iterator_test.cu
+ * @see iterator.cuh iterator_test.cu
  * -------------------------------------------------------------------------**/
 
-#ifndef CUDF_TRANSFORM_UNARY_FUNCTIONS_CUH
-#define CUDF_TRANSFORM_UNARY_FUNCTIONS_CUH
+#pragma once
 
 #include <cudf/cudf.h>
 
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-namespace cudf
-{
+namespace cudf {
 /** -------------------------------------------------------------------------*
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.
@@ -125,8 +123,4 @@ struct transformer_meanvar
     };
 };
 
-
-
 } // namespace cudf
-
-#endif
