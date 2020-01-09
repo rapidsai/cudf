@@ -14,7 +14,7 @@ import rmm
 import cudf as gd
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq, gen_rand
+from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
 
 
 def test_init_via_list_of_tuples():
@@ -50,9 +50,13 @@ def test_init_via_list_of_empty_tuples(rows):
             "b": pd.Series([1.0, 2.0, 4.0], index=[1, 2, 3]),
         },
         {"a": [1, 2, 3], "b": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6])},
+        {
+            "a": pd.Series([1.0, 2.0, 3.0], index=["a", " b", "c"]),
+            "b": pd.Series([1.0, 2.0, 4.0], index=["c", "d", "e"]),
+        },
     ],
 )
-def test_init_from_dict_of_series(dict_of_series):
+def test_init_from_series_align(dict_of_series):
     pdf = pd.DataFrame(dict_of_series)
     gdf = gd.DataFrame(dict_of_series)
 
@@ -65,6 +69,36 @@ def test_init_from_dict_of_series(dict_of_series):
     gdf = gd.DataFrame(dict_of_series)
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    ("dict_of_series", "expectation"),
+    [
+        (
+            {
+                "a": pd.Series(["a", "b", "c"], index=[4, 4, 5]),
+                "b": pd.Series(["a", "b", "c"], index=[4, 5, 6]),
+            },
+            pytest.raises(
+                ValueError, match="Cannot align indices with non-unique values"
+            ),
+        ),
+        (
+            {
+                "a": pd.Series(["a", "b", "c"], index=[4, 4, 5]),
+                "b": pd.Series(["a", "b", "c"], index=[4, 4, 5]),
+            },
+            does_not_raise(),
+        ),
+    ],
+)
+def test_init_from_series_align_nonunique(dict_of_series, expectation):
+    with expectation:
+        gdf = gd.DataFrame(dict_of_series)
+
+    if expectation == does_not_raise():
+        pdf = pd.DataFrame(dict_of_series)
+        assert_eq(pdf, gdf)
 
 
 def test_init_unaligned_with_index():
