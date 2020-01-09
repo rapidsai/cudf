@@ -662,6 +662,10 @@ class RangeIndex(Index):
     def memory_usage(self, **kwargs):
         return 0
 
+    def unique(self):
+        # RangeIndex always has unique values
+        return self
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
