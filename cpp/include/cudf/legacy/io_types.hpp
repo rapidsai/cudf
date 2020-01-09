@@ -24,7 +24,6 @@
 #include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/legacy/io_types.h>
-#include <cudf/table/table_view.hpp>
 
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }
@@ -252,17 +251,6 @@ struct parquet_read_arg {
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit parquet_read_arg(const source_info& src) : source(src) {}
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Input arguments to the `write_parquet` interface
- *---------------------------------------------------------------------------**/
-struct parquet_write_arg {
-  sink_info sink;                           ///< Info on sink of data
-
-  cudf::table_view table_view;              ///< Table View
-
-  explicit parquet_write_arg(const sink_info& snk) : sink(snk) {}
 };
 
 }  // namespace cudf

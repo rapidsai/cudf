@@ -64,12 +64,20 @@ def read_parquet(
 
 
 @ioutils.doc_to_parquet()
-def to_parquet(df, path, compression=None, engine="cudf", *args, **kwargs):
+def to_parquet(
+    df,
+    path,
+    compression=None,
+    statistics="ROWGROUP",
+    engine="cudf",
+    *args,
+    **kwargs,
+):
     """{docstring}"""
 
     if engine == "cudf":
         return libcudf.parquet.write_parquet(
-            table=df, path=path, compression=compression
+            df, path, compression=compression, statistics=statistics
         )
     else:
         pa_table = df.to_arrow()

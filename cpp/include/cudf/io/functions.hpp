@@ -344,6 +344,8 @@ struct write_parquet_args {
   /// Optional associated metadata
   const table_metadata *metadata;
 
+  write_parquet_args() = default;
+
   explicit write_parquet_args(sink_info const& sink_, table_view const& table_,
                               const table_metadata *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,

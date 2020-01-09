@@ -148,11 +148,11 @@ class writer {
   /**
    * @brief Writes the entire dataset.
    *
-   * @param table_view table_view object containing the output information
+   * @param table table Set of columns to output
    * @param metadata Table metadata and column names
    * @param stream Optional stream to use for device memory alloc and kernels
    */
-  void write_all(table_view const& table_view, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
+  void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
 };
 
 }  // namespace parquet

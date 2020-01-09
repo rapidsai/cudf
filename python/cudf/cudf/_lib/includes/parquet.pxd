@@ -10,6 +10,7 @@ from cudf._libxx.lib cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
 
@@ -48,28 +49,48 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
 
         cudf_table read_row_group(size_t row_group) except +
 
+cdef extern from "cudf/io/functions.hpp"
+namespace "cudf::experimental::io" nogil:
+
     ctypedef enum compression_type:
-        none "cudf::io::parquet::compression_type::none"
-        snappy "cudf::io::parquet::compression_type::snappy"
+        none "cudf::experimental::io::compression_type::NONE"
+        snappy "cudf::experimental::io::compression_type::SNAPPY"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0
         STATISTICS_ROWGROUP = 1
         STATISTICS_PAGE = 2
 
-    cdef cppclass writer_options:
+    ctypedef enum io_type:
+        FILEPATH
+        HOST_BUFFER
+        ARROW_RANDOM_ACCESS_FILE
+
+    cdef cppclass sink_info:
+        io_type type
+        string filepath
+
+        sink_info() except +
+        sink_info(string file_path) except +
+
+    cdef cppclass table_metadata:
+        table_metadata() except +
+
+        vector[string] column_names
+        map[string, string] user_data
+
+    cdef cppclass write_parquet_args:
+        sink_info sink
         compression_type compression
-        statistics_freq stats_granularity
+        statistics_freq stats_level
+        table_view table
+        const table_metadata *metadata
 
-        writer_options() except +
+        write_parquet_args() except +
+        write_parquet_args(sink_info sink_,
+                           table_view table_,
+                           table_metadata *table_metadata_,
+                           compression_type compression_,
+                           statistics_freq stats_lvl_) except +
 
-        writer_options(compression_type comp,
-                       statistics_freq stats_lvl) except +
-
-    cdef cppclass writer:
-        writer(
-            string filepath,
-            const writer_options &args
-        ) except +
-
-        void write_all(const table_view &table_view) except +
+    cdef void write_parquet(write_parquet_args args)

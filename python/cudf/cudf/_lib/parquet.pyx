@@ -12,11 +12,14 @@ from cudf._lib.utils import *
 from cudf._lib.includes.parquet cimport (
     reader as parquet_reader,
     reader_options as parquet_reader_options,
-    writer as parquet_writer,
-    writer_options as parquet_writer_options,
-    compression_type
+    compression_type,
+    write_parquet_args,
+    sink_info,
+    table_view,
+    table_metadata,
+    statistics_freq,
+    write_parquet as parquet_writer
 )
-from cython.operator cimport dereference as deref
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
@@ -24,8 +27,7 @@ from libcpp.string cimport string
 import errno
 import os
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.lib import *
+from cudf._libxx.table cimport *
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
@@ -95,9 +97,10 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     return df
 
 cpdef write_parquet(
-        table,
-        path=None,
-        compression=None):
+        _Table table,
+        path,
+        compression=None,
+        statistics="ROWGROUP"):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -106,25 +109,39 @@ cpdef write_parquet(
     cudf.io.parquet.write_parquet
     """
 
-    # Setup writer options
-    cdef parquet_writer_options options = parquet_writer_options()
+    # Create the write options
+    cdef string filepath = <string>str(path).encode()
+    cdef sink_info sink = sink_info(filepath)
+    cdef table_metadata *tbl_meta = new table_metadata()
+
+    cdef compression_type comp_type
     if compression is None:
-        options.compression = compression_type.none
+        comp_type = compression_type.none
     elif compression == "snappy":
-        options.compression = compression_type.snappy
+        comp_type = compression_type.snappy
     else:
         raise ValueError("Unsupported `compression` type")
 
-    # Create writer
-    cdef string filepath = <string>str(path).encode()
-    cdef unique_ptr[parquet_writer] writer
-    with nogil:
-        writer = unique_ptr[parquet_writer](
-            new parquet_writer(filepath, options)
-        )
+    cdef statistics_freq stat_freq
+    statistics = statistics.upper()
+    if statistics == "NONE":
+        stat_freq = statistics_freq.STATISTICS_NONE
+    elif statistics == "ROWGROUP":
+        stat_freq = statistics_freq.STATISTICS_ROWGROUP
+    elif statistics == "PAGE":
+        stat_freq = statistics_freq.STATISTICS_PAGE
+    else:
+        raise ValueError("Unsupported `statistics_freq` type")
 
-    # Write data to output
-    cdef unique_ptr[table_view] table_view_ptr
+    cdef write_parquet_args args = write_parquet_args(sink,
+                                                      table.view(),
+                                                      tbl_meta,
+                                                      comp_type,
+                                                      stat_freq)
+
+    # Perform write
     with nogil:
-        table_view_ptr = make_unique[table_view](table.view())
-        writer.get().write_all(deref(table_view_ptr))
+        parquet_writer(args)
+
+    # Cleanup
+    del tbl_meta
