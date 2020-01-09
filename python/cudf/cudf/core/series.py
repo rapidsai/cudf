@@ -2689,11 +2689,10 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
             ).index
 
     # align all Series to the combined index
-    result = []
-    for sr in series_list:
-        result.append(
-            sr._align_to_index(
-                combined_index, how=join, allow_non_unique=allow_non_unique
-            )
+    result = [
+        sr._align_to_index(
+            combined_index, how=how, allow_non_unique=allow_non_unique
         )
+        for sr in series_list
+    ]
     return result
