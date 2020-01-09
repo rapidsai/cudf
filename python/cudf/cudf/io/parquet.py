@@ -70,6 +70,8 @@ def to_parquet(
     compression=None,
     statistics="ROWGROUP",
     engine="cudf",
+    index=None,
+    partition_cols=None,
     *args,
     **kwargs,
 ):
