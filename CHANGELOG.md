@@ -64,6 +64,7 @@
 - PR #3731 Fix performance of zero sized dataframe slice
 - PR #3709 Fix inner_join incorrect result issue
 - PR #3734 Update numba to 0.46 in conda files
+- PR #3738 Update libxx cython types.hpp path
 
 
 # cuDF 0.11.0 (11 Dec 2019)
