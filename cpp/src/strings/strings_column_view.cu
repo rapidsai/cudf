@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/string_view.cuh>
 #include <iostream>
+
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
-
 #include <thrust/transform.h>
 
 namespace cudf
@@ -64,16 +64,16 @@ namespace strings
 
 // print strings to stdout
 void print( strings_column_view const& strings,
-            size_type start, size_type end,
+            size_type first, size_type last,
             size_type max_width, const char* delimiter )
 {
     size_type count = strings.size();
-    if( end < 0 || end > count )
-        end = count;
-    if( start < 0 )
-        start = 0;
-    CUDF_EXPECTS( ((start >= 0) && (start < end)), "invalid start parameter");
-    count = end - start;
+    if( last < 0 || last > count )
+        last = count;
+    if( first < 0 )
+        first = 0;
+    CUDF_EXPECTS( ((first >= 0) && (first < last)), "invalid start parameter");
+    count = last - first;
 
     // stick with the default stream for this odd/rare stdout function
     auto strings_column = column_device_view::create(strings.parent());
@@ -83,8 +83,8 @@ void print( strings_column_view const& strings,
     rmm::device_vector<size_type> output_offsets(count+1);
     size_type* d_output_offsets = output_offsets.data().get();
     thrust::transform_inclusive_scan( thrust::device,
-        thrust::make_counting_iterator<size_type>(start),
-        thrust::make_counting_iterator<size_type>(end),
+        thrust::make_counting_iterator<size_type>(first),
+        thrust::make_counting_iterator<size_type>(last),
         d_output_offsets + 1,
         [d_column, max_width] __device__ (size_type idx) {
             if( d_column.is_null(idx) )
@@ -109,10 +109,10 @@ void print( strings_column_view const& strings,
     // copy strings into output buffer
     thrust::for_each_n( thrust::device,
         thrust::make_counting_iterator<size_type>(0), count,
-        [d_column, max_width, start, d_output_offsets, d_buffer] __device__(size_type idx) {
-            if( d_column.is_null(start+idx) )
+        [d_column, max_width, first, d_output_offsets, d_buffer] __device__(size_type idx) {
+            if( d_column.is_null(first+idx) )
                 return;
-            string_view d_str = d_column.element<string_view>(start+idx);
+            string_view d_str = d_column.element<string_view>(first+idx);
             size_type bytes = d_str.size_bytes();
             if( (max_width > 0) && (d_str.length() > max_width) )
                 bytes = d_str.byte_offset(max_width);
@@ -147,25 +147,25 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type> >
 {
     size_type count = strings.size();
     const int32_t* d_offsets = strings.offsets().data<int32_t>() + strings.offset();
-    int32_t first_offset = 0;
-    CUDA_TRY(cudaMemcpyAsync( &first_offset, d_offsets, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
-    rmm::device_vector<size_type> second(count+1);
+    int32_t first = 0;
+    CUDA_TRY(cudaMemcpyAsync( &first, d_offsets, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+    rmm::device_vector<size_type> offsets(count+1);
     // normalize the offset values for the column offset
     thrust::transform( rmm::exec_policy(stream)->on(stream),
                        d_offsets, d_offsets + count + 1,
-                       second.begin(),
-                       [first_offset] __device__ (int32_t offset) { return static_cast<size_type>(offset - first_offset); } );
+                       offsets.begin(),
+                       [first] __device__ (int32_t offset) { return static_cast<size_type>(offset - first); } );
     // copy the chars column data
     int32_t bytes = 0; // last offset entry is the size in bytes
-    CUDA_TRY(cudaMemcpyAsync( &bytes, d_offsets+count, sizeof(int32_t),
+    CUDA_TRY(cudaMemcpyAsync( &bytes, d_offsets + count, sizeof(int32_t),
                               cudaMemcpyDeviceToHost, stream));
-    bytes -= first_offset;
-    const char* d_chars = strings.chars().data<char>() + first_offset;
-    rmm::device_vector<char> first(bytes);
-    CUDA_TRY(cudaMemcpyAsync( first.data().get(), d_chars, bytes,
+    bytes -= first;
+    const char* d_chars = strings.chars().data<char>() + first;
+    rmm::device_vector<char> chars(bytes);
+    CUDA_TRY(cudaMemcpyAsync( chars.data().get(), d_chars, bytes,
                               cudaMemcpyDeviceToHost, stream));
-
-    return std::make_pair(std::move(first), std::move(second));
+    // return offsets and chars
+    return std::make_pair(std::move(chars), std::move(offsets));
 }
 
 } // namespace strings
