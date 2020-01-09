@@ -231,6 +231,8 @@ class DataFrame(Table):
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
 
+        data, index = self._align_input_series_indices(data, index=index)
+
         if index is None:
             for i, col_name in enumerate(data):
                 if is_scalar(data[col_name]):
@@ -244,6 +246,40 @@ class DataFrame(Table):
 
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
+
+    def _align_input_series_indices(self, data, index):
+        from cudf.core.series import _align_indices_multi
+
+        data = data.copy()
+
+        input_series = [
+            cudf.Series(val)
+            for val in data.values()
+            if isinstance(val, (pd.Series, cudf.Series))
+        ]
+        if input_series:
+            if index is not None:
+                input_series.append(
+                    cudf.Series(
+                        column.column_empty(len(index), masked=True),
+                        index=index,
+                    )
+                )
+
+            aligned_input_series = _align_indices_multi(input_series)
+
+            if index is None:
+                index = aligned_input_series[0].index
+            else:
+                aligned_input_series = [
+                    sr.loc[index] for sr in aligned_input_series[:-1]
+                ]
+
+            for name, val in data.items():
+                if isinstance(val, (pd.Series, cudf.Series)):
+                    data[name] = aligned_input_series.pop(0)
+
+        return data, index
 
     @property
     def _constructor(self):
@@ -3868,7 +3904,7 @@ class DataFrame(Table):
         """
         result_columns = OrderedDict({})
         for col in columns:
-            result_columns[col] = self[col]
+            result_columns[col] = self._data[col]
         return DataFrame(result_columns, index=self.index)
 
     def select_dtypes(self, include=None, exclude=None):

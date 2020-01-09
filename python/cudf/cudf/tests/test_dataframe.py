@@ -40,6 +40,52 @@ def test_init_via_list_of_empty_tuples(rows):
     assert_eq(pdf, gdf, check_like=True)
 
 
+@pytest.mark.parametrize(
+    "dict_of_series",
+    [
+        {"a": pd.Series([1.0, 2.0, 3.0])},
+        {"a": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6])},
+        {
+            "a": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6]),
+            "b": pd.Series([1.0, 2.0, 4.0], index=[1, 2, 3]),
+        },
+        {"a": [1, 2, 3], "b": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6])},
+    ],
+)
+def test_init_from_dict_of_series(dict_of_series):
+    pdf = pd.DataFrame(dict_of_series)
+    gdf = gd.DataFrame(dict_of_series)
+
+    assert_eq(pdf, gdf)
+
+    for key in dict_of_series:
+        if isinstance(dict_of_series[key], pd.Series):
+            dict_of_series[key] = gd.Series(dict_of_series[key])
+
+    gdf = gd.DataFrame(dict_of_series)
+
+    assert_eq(pdf, gdf)
+
+
+def test_init_unaligned_with_index():
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6]),
+            "b": pd.Series([1.0, 2.0, 3.0], index=[1, 2, 3]),
+        },
+        index=[7, 8, 9],
+    )
+    gdf = gd.DataFrame(
+        {
+            "a": gd.Series([1.0, 2.0, 3.0], index=[4, 5, 6]),
+            "b": gd.Series([1.0, 2.0, 3.0], index=[1, 2, 3]),
+        },
+        index=[7, 8, 9],
+    )
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+
 def test_series_basic():
     # Make series from buffer
     a1 = np.arange(10, dtype=np.float64)
