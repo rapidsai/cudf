@@ -2,6 +2,7 @@
 
 import numpy as np
 
+import cudf
 from cudf.core import DataFrame, Index, MultiIndex, Series
 from cudf.core.column import build_categorical_column
 from cudf.utils import cudautils
@@ -80,6 +81,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
     elif typ is Series:
         return Series._concat(objs, axis=axis)
+    elif typ is cudf.MultiIndex:
+        return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):
         return Index._concat(objs)
     else:
