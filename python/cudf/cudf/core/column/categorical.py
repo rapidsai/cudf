@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -25,25 +26,15 @@ class CategoricalAccessor(object):
     def categories(self):
         from cudf.core.index import as_index
 
-        return as_index(self._parent._categories)
-
-    @property
-    def ordered(self):
-        return self._parent._ordered
+        return as_index(self._parent.categories)
 
     @property
     def codes(self):
-        from cudf import Series
+        return cudf.Series(self._parent.codes)
 
-        data = self._parent.data
-        if self._parent.has_null_mask:
-            mask = self._parent.mask
-            null_count = self._parent.null_count
-            return Series.from_masked_array(
-                data=data.mem, mask=mask.mem, null_count=null_count
-            )
-        else:
-            return Series(data, name=self._parent.name)
+    @property
+    def ordered(self):
+        return self._parent.ordered
 
     def as_ordered(self, **kwargs):
         inplace = kwargs.get("inplace", False)
@@ -54,21 +45,37 @@ class CategoricalAccessor(object):
         if data is not None:
             from cudf import Series
 
-            return Series(data=data)
+            parent = self._parent
+            return Series(
+                column.build_categorical_column(
+                    categories=parent.dtype.categories,
+                    codes=parent.cat().codes,
+                    mask=parent.mask,
+                    ordered=True,
+                )
+            )
 
     def as_unordered(self, inplace=False):
         if inplace:
-            self._parent._ordered = False
+            self._parent.dtype.ordered = False
         else:
             from cudf import Series
 
-            return Series(data=self._parent.replace(ordered=False))
+            parent = self._parent
+            return Series(
+                column.build_categorical_column(
+                    categories=parent.dtype.categories,
+                    codes=parent.codes,
+                    mask=parent.mask,
+                    ordered=False,
+                )
+            )
 
     def add_categories(self, new_categories, **kwargs):
         inplace = kwargs.get("inplace", False)
         data = None if inplace else self._parent
         new_categories = column.as_column(new_categories)
-        new_categories = self._parent._categories.append(new_categories)
+        new_categories = self._parent.categories.append(new_categories)
         if not self._categories_equal(new_categories, **kwargs):
             data = self._set_categories(new_categories, **kwargs)
         if data is not None:
@@ -100,7 +107,7 @@ class CategoricalAccessor(object):
         # categories.
         if kwargs.pop("rename", False):
             # enforce same length
-            if len(new_categories) != len(data._categories):
+            if len(new_categories) != len(data.categories):
                 raise ValueError(
                     "new_categories must have the same "
                     "number of items as old categories"
@@ -110,7 +117,7 @@ class CategoricalAccessor(object):
                 data = data.replace(categories=new_categories, **kwargs)
             else:
                 # mutate inplace if inplace=True
-                data._categories = new_categories
+                data.categories = new_categories
                 ordered = kwargs.get("ordered", self.ordered)
                 data._dtype = CategoricalDtype(
                     categories=column.as_column(new_categories),
@@ -141,7 +148,7 @@ class CategoricalAccessor(object):
             return Series(data=data)
 
     def _categories_equal(self, new_categories, **kwargs):
-        cur_categories = self._parent._categories
+        cur_categories = self._parent.categories
         if len(new_categories) != len(cur_categories):
             return False
         # if order doesn't matter, sort before the equals call below
@@ -163,7 +170,7 @@ class CategoricalAccessor(object):
 
         from cudf import DataFrame, Series
 
-        cur_cats = self._parent._categories
+        cur_cats = self._parent.categories
         new_cats = column.as_column(new_categories)
 
         # Join the old and new categories to build a map from
@@ -191,108 +198,129 @@ class CategoricalAccessor(object):
         df = df.sort_values(by="order").reset_index(True)
 
         ordered = kwargs.get("ordered", self.ordered)
-        kwargs = df["new_codes"]._column._replace_defaults()
-        kwargs.update(categories=new_cats, ordered=ordered, name=None)
+        new_codes = df["new_codes"]._column
+        new_dtype = CategoricalDtype(categories=new_cats, ordered=ordered,)
 
         if kwargs.get("inplace", False):
-            self._parent._categories = new_cats
-            self._parent._mask = kwargs["mask"]
-            self._parent._data = kwargs["data"]
-            self._parent._ordered = kwargs["ordered"]
-            self._parent._null_count = kwargs["null_count"]
-            self._parent._dtype = CategoricalDtype(ordered=ordered)
+            self._parent.data = None
+            self._parent.mask = new_codes.mask
+            self._parent.dtype = new_dtype
+            self._parent.children = (new_codes,)
             return None
 
-        return self._parent.replace(**kwargs)
+        return column.build_column(
+            data=None,
+            dtype=new_dtype,
+            mask=new_codes.mask,
+            children=(new_codes,),
+        )
 
 
-class CategoricalColumn(column.TypedColumnBase):
+class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, dtype, mask=None, offset=0, children=()):
         """
         Parameters
         ----------
-        data : Buffer
-            The code values
-        mask : Buffer; optional
+        dtype : CategoricalDtype
+        mask : Buffer
             The validity mask
-        null_count : int; optional
-            The number of null values in the mask.
-        categories : iterable
-            The categories
-        ordered : bool
-            whether the categorical has a logical ordering (e.g. less than)
+        offset : int
+            Data offset
+        children : Tuple[Column]
+            Two non-null columns containing the categories and codes
+            respectively
         """
-
-        ordered = bool(kwargs.pop("ordered"))
-        categories = kwargs.pop("categories", [])
-        # Default to String dtype if len(categories) == 0, like pandas does
-        categories = (
-            column.as_column(categories)
-            if len(categories) > 0
-            else column.column_empty(0, np.dtype("object"), masked=False)
+        data = Buffer.empty(0)
+        size = children[0].size
+        if isinstance(dtype, pd.api.types.CategoricalDtype):
+            dtype = CategoricalDtype.from_pandas(dtype)
+        if not isinstance(dtype, CategoricalDtype):
+            raise ValueError("dtype must be instance of CategoricalDtype")
+        super().__init__(
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            children=children,
         )
-
-        dtype = CategoricalDtype(
-            categories=column.as_column(categories), ordered=ordered
-        )
-        kwargs.update({"dtype": dtype})
-        super(CategoricalColumn, self).__init__(**kwargs)
-        self._categories = categories
-        self._ordered = ordered
+        self._codes = None
 
     def __contains__(self, item):
+        try:
+            self._encode(item)
+        except ValueError:
+            return False
         return self._encode(item) in self.as_numerical
 
     def serialize(self):
-        header, frames = super(CategoricalColumn, self).serialize()
-        header["ordered"] = self._ordered
-        header["categories"], category_frames = self._categories.serialize()
-        header["category_frame_count"] = len(category_frames)
+        header = {}
+        frames = []
         header["type"] = pickle.dumps(type(self))
-        header["dtype"] = self._dtype.str
-        frames.extend(category_frames)
+        header["dtype"], dtype_frames = self.dtype.serialize()
+        header["dtype_frames_count"] = len(dtype_frames)
+        frames.extend(dtype_frames)
+        header["data"], data_frames = self.codes.serialize()
+        header["data_frames_count"] = len(data_frames)
+        frames.extend(data_frames)
+        if self.nullable:
+            mask_frames = [self.mask_array_view]
+        else:
+            mask_frames = []
+        frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        data, mask = super(CategoricalColumn, cls).deserialize(header, frames)
-
-        # Handle categories that were serialized as a cudf.Column
-        category_frames = frames[
-            len(frames) - header["category_frame_count"] :
-        ]
-        cat_typ = pickle.loads(header["categories"]["type"])
-        _categories = cat_typ.deserialize(
-            header["categories"], category_frames
+        n_dtype_frames = header["dtype_frames_count"]
+        dtype = CategoricalDtype.deserialize(
+            header["dtype"], frames[:n_dtype_frames]
         )
+        n_data_frames = header["data_frames_count"]
 
-        categories = column.as_column(_categories)
-
-        return cls(
-            data=data,
-            mask=mask,
-            categories=categories,
-            ordered=header["ordered"],
+        column_type = pickle.loads(header["data"]["type"])
+        data = column_type.deserialize(
+            header["data"],
+            frames[n_dtype_frames : n_dtype_frames + n_data_frames],
         )
-
-    def _replace_defaults(self):
-        params = super(CategoricalColumn, self)._replace_defaults()
-        params.update(categories=self._categories, ordered=self._ordered)
-        return params
+        mask = None
+        if header["frame_count"] > n_dtype_frames + n_data_frames:
+            mask = Buffer(frames[n_dtype_frames + n_data_frames])
+        return column.build_column(
+            data=None, dtype=dtype, mask=mask, children=(data,)
+        )
 
     @property
     def as_numerical(self):
-        from cudf.core.column import numerical
-
-        return self.view(numerical.NumericalColumn, dtype=self.data.dtype)
+        return column.build_column(
+            data=self.codes.data, dtype=self.codes.dtype, mask=self.mask,
+        )
 
     @property
     def categories(self):
-        return self._categories
+        return self.dtype.categories.as_column()
+
+    @categories.setter
+    def categories(self, value):
+        self.dtype = CategoricalDtype(
+            categories=value, ordered=self.dtype.ordered,
+        )
+
+    @property
+    def codes(self):
+        return self.children[0].set_mask(self.mask)
+
+    @property
+    def ordered(self):
+        return self.dtype.ordered
+
+    @ordered.setter
+    def ordered(self, value):
+        self.dtype.ordered = value
 
     def cat(self):
         return CategoricalAccessor(self)
@@ -312,33 +340,39 @@ class CategoricalColumn(column.TypedColumnBase):
         raise TypeError(msg)
 
     def unordered_compare(self, cmpop, rhs):
-        if not self.is_type_equivalent(rhs):
+        if self.dtype != rhs.dtype:
             raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.unordered_compare(cmpop, rhs.as_numerical)
 
     def ordered_compare(self, cmpop, rhs):
-        if not (self._ordered and rhs._ordered):
+        if not (self.ordered and rhs.ordered):
             msg = "Unordered Categoricals can only compare equality or not"
             raise TypeError(msg)
-        if not self.is_type_equivalent(rhs):
+        if self.dtype != rhs.dtype:
             raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
         ary = utils.scalar_broadcast_to(
-            self._encode(other), shape=len(self), dtype=self.data.dtype
+            self._encode(other), size=len(self), dtype=self.codes.dtype
         )
-        col = self.replace(
-            data=Buffer(ary),
-            dtype=self.dtype,
-            categories=self._categories,
-            ordered=self._ordered,
+        col = column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=column.as_column(ary),
+            mask=self.mask,
+            ordered=self.dtype.ordered,
         )
         return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
-        return self.replace(data=codes.data), inds
+        col = column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=codes,
+            mask=self.mask,
+            ordered=self.dtype.ordered,
+        )
+        return col, inds
 
     def element_indexing(self, index):
         val = self.as_numerical.element_indexing(index)
@@ -354,33 +388,36 @@ class CategoricalColumn(column.TypedColumnBase):
 
     def to_pandas(self, index=None):
         codes = self.cat().codes.fillna(-1).to_array()
-        categories = self._categories.to_pandas()
+        categories = self.categories.to_pandas()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=self._ordered
+            codes, categories=categories, ordered=self.ordered
         )
         return pd.Series(data, index=index)
 
     def to_arrow(self):
         return pa.DictionaryArray.from_arrays(
             from_pandas=True,
-            ordered=self._ordered,
+            ordered=self.ordered,
             indices=self.as_numerical.to_arrow(),
-            dictionary=self._categories.to_arrow(),
+            dictionary=self.categories.to_arrow(),
         )
 
     def unique(self, method=None):
-        codes = self.as_numerical.unique(method).data
-        return CategoricalColumn(
-            data=codes, categories=self._categories, ordered=self._ordered
+        codes = self.as_numerical.unique(method)
+        return column.build_categorical_column(
+            categories=self.categories,
+            codes=codes,
+            mask=codes.mask,
+            ordered=self.ordered,
         )
 
     def _encode(self, value):
-        return self._categories.find_first_value(value)
+        return self.categories.find_first_value(value)
 
     def _decode(self, value):
         if value == self.default_na_value():
             return None
-        return self._categories.element_indexing(value)
+        return self.categories.element_indexing(value)
 
     def default_na_value(self):
         return -1
@@ -407,24 +444,29 @@ class CategoricalColumn(column.TypedColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-        return self.replace(data=output.data)
+        return column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=output,
+            mask=self.mask,
+            ordered=self.dtype.ordered,
+        )
 
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with *fill_value*
         """
-        if not self.has_null_mask:
+        if not self.nullable:
             return self
 
         fill_is_scalar = np.isscalar(fill_value)
 
         if fill_is_scalar:
             if fill_value == self.default_na_value():
-                fill_value = self.data.dtype.type(fill_value)
+                fill_value = self.codes.dtype.type(fill_value)
             else:
                 try:
                     fill_value = self._encode(fill_value)
-                    fill_value = self.data.dtype.type(fill_value)
+                    fill_value = self.codes.dtype.type(fill_value)
                 except (ValueError) as err:
                     err_msg = "fill value must be in categories"
                     raise ValueError(err_msg) from err
@@ -432,38 +474,51 @@ class CategoricalColumn(column.TypedColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
             fill_value = fill_value.cat()._set_categories(
-                self._categories, is_unique=True
+                self.categories, is_unique=True
             )
-            fill_value = column.as_column(fill_value.data).astype(
-                self.data.dtype
+            fill_value = column.as_column(fill_value.codes).astype(
+                self.codes.dtype
             )
 
         result = libcudf.replace.replace_nulls(self, fill_value)
 
-        result = column.build_column(
-            result.data, "category", result.mask, categories=self._categories
+        result = column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=result,
+            mask=result.mask,
+            ordered=self.dtype.ordered,
         )
 
-        return self._mimic_inplace(result.replace(mask=None), inplace)
+        result.mask = None
+        return self._mimic_inplace(result, inplace)
 
-    def find_first_value(self, value):
+    def apply_boolean_mask(self, mask):
+        codes = super().apply_boolean_mask(mask)
+        return column.build_categorical_column(
+            categories=self.dtype.categories,
+            codes=codes,
+            mask=codes.mask,
+            ordered=self.dtype.ordered,
+        )
+
+    def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches
         """
         return self.as_numerical.find_first_value(self._encode(value))
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         """
         Returns offset of last value that matches
         """
         return self.as_numerical.find_last_value(self._encode(value))
 
     def searchsorted(self, value, side="left"):
-        if not self._ordered:
+        if not self.ordered:
             raise ValueError("Requires ordered categories")
 
         value_col = column.as_column(value)
-        if not self.is_type_equivalent(value_col):
+        if self.dtype != value_col.dtype:
             raise TypeError("Categoricals can only compare with the same type")
 
         return libcudf.search.search_sorted(self, value_col, side)
@@ -472,7 +527,7 @@ class CategoricalColumn(column.TypedColumnBase):
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = (
-                self._ordered and self.as_numerical.is_monotonic_increasing
+                self.ordered and self.as_numerical.is_monotonic_increasing
             )
         return self._is_monotonic_increasing
 
@@ -480,7 +535,7 @@ class CategoricalColumn(column.TypedColumnBase):
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = (
-                self._ordered and self.as_numerical.is_monotonic_decreasing
+                self.ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
 
@@ -504,36 +559,34 @@ class CategoricalColumn(column.TypedColumnBase):
 
     def _get_decategorized_column(self):
         if self.null_count == len(self):
-            # self._categories is empty; just return codes
+            # self.categories is empty; just return codes
             return self.cat().codes._column
-        gather_map = (
-            self.cat().codes.astype("int32").fillna(0)._column.data.mem
-        )
-        out = self._categories.take(gather_map)
-        return out.replace(mask=self.mask)
+        gather_map = self.cat().codes.astype("int32").fillna(0)._column
+        out = self.categories.take(gather_map)
+        out.mask = self.mask
+        return out
 
     def copy(self, deep=True):
-        """Categorical Columns are immutable, so a deep copy produces a
-        copy of the underlying data, mask, categories and a shallow copy
-        creates a new column and copies the references of the data, mask
-        and categories.
-        """
         if deep:
             copied_col = libcudf.copying.copy_column(self)
-            category_col = libcudf.copying.copy_column(self._categories)
-            return self.replace(
-                data=copied_col.data,
+            return column.build_categorical_column(
+                categories=self.dtype.categories,
+                codes=copied_col,
                 mask=copied_col.mask,
-                dtype=self.dtype,
-                categories=category_col,
-                ordered=self._ordered,
+                ordered=self.dtype.ordered,
             )
         else:
-            params = self._replace_defaults()
-            return type(self)(**params)
+            return column.build_categorical_column(
+                categories=self.dtype.categories,
+                codes=self.codes,
+                mask=self.mask,
+                ordered=self.dtype.ordered,
+            )
 
     def __sizeof__(self):
-        return self._categories.__sizeof__() + self.cat().codes.__sizeof__()
+        return (
+            self.cat().categories.__sizeof__() + self.cat().codes.__sizeof__()
+        )
 
     def _memory_usage(self, deep=False):
         if deep:
@@ -546,26 +599,24 @@ class CategoricalColumn(column.TypedColumnBase):
 
 
 def pandas_categorical_as_column(categorical, codes=None):
+
     """Creates a CategoricalColumn from a pandas.Categorical
 
     If ``codes`` is defined, use it instead of ``categorical.codes``
     """
-    # TODO fix mutability issue in numba to avoid the .copy()
-    codes = categorical.codes.copy() if codes is None else codes
-    # TODO pending pandas to be improved
-    #       https://github.com/pandas-dev/pandas/issues/14711
-    #       https://github.com/pandas-dev/pandas/pull/16015
+    codes = categorical.codes if codes is None else codes
+    codes = column.as_column(codes)
+
     valid_codes = codes != -1
-    buf = Buffer(codes)
-    params = dict(
-        data=buf,
-        categories=categorical.categories,
-        ordered=categorical.ordered,
-    )
+
+    mask = None
     if not np.all(valid_codes):
         mask = cudautils.compact_mask_bytes(valid_codes)
-        nnz = np.count_nonzero(valid_codes)
-        null_count = codes.size - nnz
-        params.update(dict(mask=Buffer(mask), null_count=null_count))
+        mask = Buffer(mask)
 
-    return CategoricalColumn(**params)
+    return column.build_categorical_column(
+        categories=categorical.categories,
+        codes=codes,
+        mask=mask,
+        ordered=categorical.ordered,
+    )

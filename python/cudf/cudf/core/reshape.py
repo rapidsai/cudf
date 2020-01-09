@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from cudf.core import Buffer, DataFrame, Index, MultiIndex, Series
-from cudf.core.column import CategoricalColumn
+from cudf.core import DataFrame, Index, MultiIndex, Series
+from cudf.core.column import build_categorical_column
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
@@ -208,7 +208,7 @@ def melt(
         if reps > 0:
             return Series._concat(objs=series_list, index=None)
         else:
-            return Series(Buffer.null(dtype=A.dtype))
+            return Series([], dtype=A.dtype)
 
     # Step 1: tile id_vars
     mdata = collections.OrderedDict()
@@ -218,17 +218,15 @@ def melt(
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
-        var_cols.append(
-            Series(Buffer(cudautils.full(size=N, value=i, dtype=np.int8)))
-        )
+        var_cols.append(Series(cudautils.full(size=N, value=i, dtype=np.int8)))
     temp = Series._concat(objs=var_cols, index=None)
 
     if not var_name:
         var_name = "variable"
 
     mdata[var_name] = Series(
-        CategoricalColumn(
-            categories=value_vars, data=temp._column.data, ordered=False
+        build_categorical_column(
+            categories=value_vars, codes=temp._column, ordered=False
         )
     )
 
