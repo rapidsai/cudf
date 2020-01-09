@@ -36,42 +36,10 @@ namespace detail
 {
 
 using string_index_pair = thrust::pair<const char*,size_type>;
+using findall_result = thrust::pair<size_type,string_index_pair>;
 
 namespace
 {
-
-/**
- * @brief This functor handles counting the number of matches per string.
- *
- * @tparam stack_size Correlates to the number of regex instructions.
- *         Each instruction requires a fixed sized memory overhead.
- */
-template<size_t stack_size>
-struct findall_count_fn
-{
-    column_device_view const d_strings;
-    reprog_device prog;
-
-    __device__ size_type operator()(size_type idx)
-    {
-        if( d_strings.is_null(idx) )
-            return 0;
-        u_char data1[stack_size], data2[stack_size];
-        prog.set_stack_mem(data1,data2);
-        string_view d_str = d_strings.element<string_view>(idx);
-        auto nchars = d_str.length();
-        size_type spos = 0, epos = nchars, column_count = 0;
-        while( spos <= nchars )
-        {
-            if( prog.find(idx,d_str,spos,epos) <=0 )
-                break; // no more matches found
-            spos = epos > spos ? epos : spos + 1;
-            epos = nchars;
-            ++column_count;
-        }
-        return column_count;
-    }
-};
 
 /**
  * @brief This functor handles extracting matched strings by applying the compiled regex pattern
@@ -85,16 +53,27 @@ struct findall_fn
     size_type column_index;
     size_type const* d_counts;
 
-    __device__ string_index_pair operator()(size_type idx)
+    findall_fn( column_device_view const& d_strings,
+                reprog_device& prog,
+                size_type column_index = -1,
+                size_type const* d_counts = nullptr )
+        : d_strings(d_strings), prog(prog), column_index(column_index), d_counts(d_counts) {}
+
+    // this will count columns as well as locate a specific string for a column
+    __device__ findall_result findall(size_type idx)
     {
         string_index_pair result{nullptr,0};
-        if( d_strings.is_null(idx) || (column_index >= d_counts[idx]) )
-            return result;
-        u_char data1[stack_size], data2[stack_size];
+        if( d_strings.is_null(idx) ||
+            (d_counts && (column_index >= d_counts[idx])) )
+            return findall_result{0,result};
+        u_char data1[stack_size];
+        u_char data2[stack_size];
         prog.set_stack_mem(data1,data2);
         string_view d_str = d_strings.element<string_view>(idx);
         auto nchars = d_str.length();
-        size_type spos = 0, epos = nchars, column_count = 0;
+        size_type spos = 0;
+        size_type epos = nchars;
+        size_type column_count = 0;
         while( spos <= nchars )
         {
             if( prog.find(idx,d_str,spos,epos) <=0 )
@@ -111,9 +90,31 @@ struct findall_fn
             epos = d_str.byte_offset(epos); // to bytes
             result = string_index_pair{d_str.data() + spos, (epos-spos)};
         }
-        return result;
+        // return the strings location and the column count
+        return findall_result{column_count,result};
+    }
+
+    __device__ string_index_pair operator()(size_type idx)
+    {
+        // this one only cares about the string
+        return findall(idx).second;
     }
 };
+
+template<size_t stack_size>
+struct findall_count_fn : public findall_fn<stack_size>
+{
+    findall_count_fn( column_device_view const& strings,
+                      reprog_device& prog)
+        : findall_fn<stack_size>{strings,prog} {}
+
+    __device__ size_type operator()(size_type idx)
+    {
+        // this one only cares about the column count
+        return findall_fn<stack_size>::findall(idx).first;
+    }
+};
+
 
 } // namespace
 
@@ -202,4 +203,3 @@ std::unique_ptr<experimental::table> findall_re( strings_column_view const& stri
 
 } // namespace strings
 } // namespace cudf
-
