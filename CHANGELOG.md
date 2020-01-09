@@ -58,6 +58,7 @@
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3743 Fix for `None` data in `__array_interface__`
 
 
 # cuDF 0.11.0 (11 Dec 2019)
