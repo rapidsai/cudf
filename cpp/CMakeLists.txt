@@ -579,6 +579,7 @@ add_library(cudf
             src/strings/regex/regexec.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/partition.cu
             src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu

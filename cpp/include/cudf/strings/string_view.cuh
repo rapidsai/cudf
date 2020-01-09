@@ -108,9 +108,9 @@ class string_view
       __device__ const_iterator operator--(int);
       __device__ const_iterator& operator-=(difference_type);
       __device__ const_iterator operator-(difference_type);
-      __device__ bool operator==(const const_iterator& rhs) const;
-      __device__ bool operator!=(const const_iterator& rhs) const;
-      __device__ bool operator<(const const_iterator& rhs) const;
+      __device__ bool operator==(const const_iterator&) const;
+      __device__ bool operator!=(const const_iterator&) const;
+      __device__ bool operator<(const const_iterator&) const;
       __device__ char_utf8 operator*() const;
       __device__ size_type position() const;
       __device__ size_type byte_offset() const;

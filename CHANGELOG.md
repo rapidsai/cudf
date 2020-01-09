@@ -19,6 +19,7 @@
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
+- PR #3463 Port NVStrings partition/rpartition to cudf strings column
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 - PR #3590 Specialize hash functions for floating point
