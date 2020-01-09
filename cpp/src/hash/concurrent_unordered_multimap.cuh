@@ -24,6 +24,7 @@
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/table/row_operators.cuh>
 
 #include <thrust/pair.h>
 
@@ -31,6 +32,8 @@
 #include <iostream>
 #include <iterator>
 #include <type_traits>
+
+using row_equality = cudf::experimental::row_equality_comparator<true>;
 
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
@@ -262,39 +265,19 @@ class concurrent_unordered_multimap {
    * @brief  Inserts a (key, value) pair into the hash map
    *
    * @param[in] x The (key, value) pair to insert
-   * @param[in] precomputed_hash A flag indicating whether or not a precomputed
-   * hash value is passed in
-   * @param[in] precomputed_hash_value A precomputed hash value to use for
+   * @param[in] hash_value A precomputed hash value to use for
    * determing the write location of the key into the hash map instead of
    * computing the the hash value directly from the key
-   * @param[in] keys_are_equal An optional functor for comparing if two keys are
-   * equal
    * @tparam hash_value_type The datatype of the hash value
-   * @tparam comparison_type The type of the key comparison functor
    *
    * @returns An iterator to the newly inserted (key, value) pair
    */
   /* ----------------------------------------------------------------------------*/
-  template <typename hash_value_type = typename Hasher::result_type,
-            typename comparison_type = key_equal>
+  template <typename hash_value_type = typename Hasher::result_type>
   __forceinline__ __device__ iterator
-  insert(const value_type& x, bool precomputed_hash = false,
-         hash_value_type precomputed_hash_value = 0,
-         comparison_type keys_are_equal = key_equal()) {
+  insert(const value_type& x, hash_value_type hash_value) {
     const size_type hashtbl_size = m_hashtbl_size;
     value_type* hashtbl_values = m_hashtbl_values;
-
-    hash_value_type hash_value{0};
-
-    // If a precomputed hash value has been passed in, then use it to determine
-    // the write location of the new key
-    if (true == precomputed_hash) {
-      hash_value = precomputed_hash_value;
-    }
-    // Otherwise, compute the hash value from the new key
-    else {
-      hash_value = m_hf(x.first);
-    }
 
     size_type hash_tbl_idx = hash_value % hashtbl_size;
 
@@ -324,7 +307,7 @@ class concurrent_unordered_multimap {
         const key_type old_key =
             atomicCAS(&(tmp_it->first), unused_key, x.first);
 
-        if (keys_are_equal(unused_key, old_key)) {
+        if (m_equal(unused_key, old_key)) {
           (m_hashtbl_values + hash_tbl_idx)->second = x.second;
           it = tmp_it;
         } else if (count_collisions) {
@@ -342,6 +325,23 @@ class concurrent_unordered_multimap {
     }
 
     return iterator(m_hashtbl_values, m_hashtbl_values + hashtbl_size, it);
+  }
+
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @brief  Inserts a (key, value) pair into the hash map
+   *
+   * @param[in] x The (key, value) pair to insert
+   * @tparam hash_value_type The datatype of the hash value
+   *
+   * @returns An iterator to the newly inserted (key, value) pair
+   */
+  /* ----------------------------------------------------------------------------*/
+  template <typename hash_value_type = typename Hasher::result_type>
+  __forceinline__ __device__ iterator
+  insert(const value_type& x) {
+    auto hash_value = m_hf(x);
+    return insert<hash_value_type>(x, hash_value);
   }
 
   /* --------------------------------------------------------------------------*/
@@ -393,7 +393,7 @@ class concurrent_unordered_multimap {
     if (dest_part != part)
       return end();
     else
-      return insert(x, true, hash_value, keys_are_equal);
+      return insert(x, hash_value);
   }
 
   /* --------------------------------------------------------------------------*/
@@ -402,36 +402,17 @@ class concurrent_unordered_multimap {
    * first instance of the key in the map.
    *
    * @param[in] the_key The key to search for
-   * @param[in] precomputed_hash A flag indicating whether or not a precomputed
-   * hash value is passed in
-   * @param[in] precomputed_hash_value A precomputed hash value to use for
+   * @param[in] hash_value A precomputed hash value to use for
    * determing the write location of the key into the hash map instead of
    * computing the the hash value directly from the key
-   * @param[in] keys_are_equal An optional functor for comparing if two keys are
-   * equal
    * @tparam hash_value_type The datatype of the hash value
-   * @tparam comparison_type The type of the key comparison functor
    *
    * @returns   An iterator to the first instance of the key in the map
    */
   /* ----------------------------------------------------------------------------*/
-  template <typename hash_value_type = typename Hasher::result_type,
-            typename comparison_type = key_equal>
+  template <typename hash_value_type = typename Hasher::result_type>
   __forceinline__ __host__ __device__ const_iterator
-  find(const key_type& the_key, bool precomputed_hash = false,
-       hash_value_type precomputed_hash_value = 0,
-       comparison_type keys_are_equal = key_equal()) const {
-    hash_value_type hash_value{0};
-
-    // If a precomputed hash value has been passed in, then use it to determine
-    // the location of the key
-    if (true == precomputed_hash) {
-      hash_value = precomputed_hash_value;
-    }
-    // Otherwise, compute the hash value from the key
-    else {
-      hash_value = m_hf(the_key);
-    }
+  find(const key_type& the_key, hash_value_type hash_value) const {
 
     size_type hash_tbl_idx = hash_value % m_hashtbl_size;
 
@@ -441,11 +422,11 @@ class concurrent_unordered_multimap {
     while (0 == begin_ptr) {
       value_type* tmp_ptr = m_hashtbl_values + hash_tbl_idx;
       const key_type tmp_val = tmp_ptr->first;
-      if (keys_are_equal(the_key, tmp_val)) {
+      if (m_equal(the_key, tmp_val)) {
         begin_ptr = tmp_ptr;
         break;
       }
-      if (keys_are_equal(unused_key, tmp_val) || (counter > m_hashtbl_size)) {
+      if (m_equal(unused_key, tmp_val) || (counter > m_hashtbl_size)) {
         begin_ptr = m_hashtbl_values + m_hashtbl_size;
         break;
       }
@@ -456,6 +437,89 @@ class concurrent_unordered_multimap {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size,
                           begin_ptr);
   }
+
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @brief Searches for a key in the hash map and returns an iterator to the
+   * first instance of the key in the map.
+   *
+   * @param[in] the_key The key to search for
+   * @tparam hash_value_type The datatype of the hash value
+   *
+   * @returns   An iterator to the first instance of the key in the map
+   */
+  /* ----------------------------------------------------------------------------*/
+  template <typename hash_value_type = typename Hasher::result_type>
+  __forceinline__ __host__ __device__ const_iterator
+  find(const key_type& the_key) const {
+    auto hash_value = m_hf(the_key);
+    return find(the_key, hash_value);
+  }
+
+  /* --------------------------------------------------------------------------*/
+  /**
+    TODO Documentation
+   * @brief Count number of instances a key is present in table
+   *
+   *** @param[in] the_key The key to search for
+   *** @param[in] hash_value A precomputed hash value to use for
+   *** determing the write location of the key into the hash map instead of
+   *** computing the the hash value directly from the key
+   *** @tparam hash_value_type The datatype of the hash value
+   ***
+   *** @returns   An iterator to the first instance of the key in the map
+   */
+  /* ----------------------------------------------------------------------------*/
+#if 1
+  template <typename hash_value_type = typename Hasher::result_type>
+  __forceinline__ __host__ __device__ size_type
+  count(const key_type& k, row_equality check_row_equality,
+      size_type probe_row_index, iterator& found) const {
+
+    auto e = end();
+    size_type thread_counter{0};
+    bool running = (e != found);
+    while ( running )
+    {
+      // TODO Simplify this logic...
+
+      // Stop searching after encountering an empty hash table entry
+      if ( unused_key == found->first ) {
+        running = false;
+      }
+      // First check that the hash values of the two rows match
+      else if (found->first == k)
+      {
+        // If the hash values are equal, check that the rows are equal
+        if(check_row_equality(probe_row_index, found->second))
+        {
+          // If the rows are equal, then we have found a true match
+          ++thread_counter;
+        }
+        // Continue searching for matching rows until you hit an empty hash map entry
+        ++found;
+        // If you hit the end of the hash map, wrap around to the beginning
+        if(e == found)
+          found = begin();
+        // Next entry is empty, stop searching
+        if(unused_key == found->first)
+          running = false;
+      }
+      else
+      {
+        // Continue searching for matching rows until you hit an empty hash table entry
+        ++found;
+        // If you hit the end of the hash map, wrap around to the beginning
+        if(e == found)
+          found = begin();
+        // Next entry is empty, stop searching
+        if(unused_key == found->first)
+          running = false;
+      }
+    }
+    return thread_counter;
+  }
+#endif
 
   gdf_error assign_async(const concurrent_unordered_multimap& other,
                          cudaStream_t stream = 0) {

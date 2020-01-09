@@ -84,7 +84,7 @@ __global__ void build_hash_table(multimap_type multi_map,
       // using the row hash value to determine the location in the
       // hash map where the new pair should be inserted
       const auto insert_location = multi_map.insert(
-          thrust::make_pair(row_hash_value, i), true, row_hash_value);
+          thrust::make_pair(row_hash_value, i), row_hash_value);
 
       // If the insert failed, set the error code accordingly
       if (multi_map.end() == insert_location) {
@@ -129,70 +129,22 @@ __global__ void compute_join_output_size( multimap_type multi_map,
   cudf::size_type thread_counter {0};
   const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type stride = blockDim.x * gridDim.x;
-  const auto unused_key = multi_map.get_unused_key();
   const auto end = multi_map.end();
 
   for (cudf::size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows; probe_row_index += stride) {
 
-    auto found = end;
-
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    hash_value_type probe_row_hash_value{0};
-    // Search the hash map for the hash value of the probe row
-    probe_row_hash_value = hash_probe(probe_row_index);
-    found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    hash_value_type probe_row_hash_value{hash_probe(probe_row_index)};
+
+    auto found = multi_map.find(probe_row_hash_value, probe_row_hash_value);
+    if (JoinKind != join_kind::LEFT_JOIN || (multi_map.end() != found)) {
+      thread_counter = multi_map.count(probe_row_hash_value, check_row_equality, probe_row_index, found);
+    }
 
     // for left-joins we always need to add an output
-    bool running = (JoinKind == join_kind::LEFT_JOIN) || (end != found);
-    bool found_match = false;
-
-    while ( running )
-    {
-      // TODO Simplify this logic...
-
-      // Left joins always have an entry in the output
-      if (JoinKind == join_kind::LEFT_JOIN && (end == found)) {
-        running = false;
-      }
-      // Stop searching after encountering an empty hash table entry
-      else if ( unused_key == found->first ) {
-        running = false;
-      }
-      // First check that the hash values of the two rows match
-      else if (found->first == probe_row_hash_value)
-      {
-        // If the hash values are equal, check that the rows are equal
-        if(check_row_equality(probe_row_index, found->second))
-        {
-          // If the rows are equal, then we have found a true match
-          found_match = true;
-          ++thread_counter;
-        }
-        // Continue searching for matching rows until you hit an empty hash map entry
-        ++found;
-        // If you hit the end of the hash map, wrap around to the beginning
-        if(end == found)
-          found = multi_map.begin();
-        // Next entry is empty, stop searching
-        if(unused_key == found->first)
-          running = false;
-      }
-      else
-      {
-        // Continue searching for matching rows until you hit an empty hash table entry
-        ++found;
-        // If you hit the end of the hash map, wrap around to the beginning
-        if(end == found)
-          found = multi_map.begin();
-        // Next entry is empty, stop searching
-        if(unused_key == found->first)
-          running = false;
-      }
-
-      if ((JoinKind == join_kind::LEFT_JOIN) && (!running) && (!found_match)) {
-        ++thread_counter;
-      }
+    if ((JoinKind == join_kind::LEFT_JOIN) && (thread_counter == 0)) {
+      ++thread_counter;
     }
   }
 
@@ -318,7 +270,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
     probe_row_hash_value = hash_probe(probe_row_index);
-    found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    found = multi_map.find(probe_row_hash_value, probe_row_hash_value);
 
     bool running = (JoinKind == join_kind::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;

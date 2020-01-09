@@ -63,7 +63,7 @@ __global__ void build_hash_table( multimap_type multi_map,
       // using the row hash value to determine the location in the
       // hash map where the new pair should be inserted
       const auto insert_location = multi_map.insert(
-          thrust::make_pair(row_hash_value, i), true, row_hash_value);
+          thrust::make_pair(row_hash_value, i), row_hash_value);
 
       // If the insert failed, set the error code accordingly
       if (multi_map.end() == insert_location) {
@@ -149,7 +149,7 @@ __global__ void compute_join_output_size( multimap_type multi_map,
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
     probe_row_hash_value = hash_row(probe_table,probe_row_index);
-    found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    found = multi_map.find(probe_row_hash_value, probe_row_hash_value);
 
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
@@ -296,7 +296,7 @@ __global__ void probe_hash_table( multimap_type multi_map,
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
     probe_row_hash_value = hash_row(probe_table,probe_row_index);
-    found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    found = multi_map.find(probe_row_hash_value, probe_row_hash_value);
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
