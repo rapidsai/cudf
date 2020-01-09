@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
@@ -290,9 +291,12 @@ class MultiIndex(Index):
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
         for k in range(size, len(index._source_data.columns)):
+            if index.names is None:
+                name = k
+            else:
+                name = index.names[k]
             out_index.add_column(
-                index.names[k],
-                index._source_data[index._source_data.columns[k]],
+                name, index._source_data[index._source_data.columns[k]],
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
@@ -337,16 +341,16 @@ class MultiIndex(Index):
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
 
-    def _get_column_major(self, df, row_tuple):
+    def _get_column_major(self, df, column_tuple):
         from cudf import Series
         from cudf import DataFrame
 
         valid_indices = self._get_valid_indices_by_tuple(
-            df.columns, row_tuple, len(df._cols)
+            df.columns, column_tuple, len(df._data)
         )
         result = df._take_columns(valid_indices)
-        if isinstance(row_tuple, (numbers.Number, slice)):
-            row_tuple = [row_tuple]
+        if isinstance(column_tuple, (numbers.Number, slice)):
+            column_tuple = [column_tuple]
         if len(result) == 0 and len(result.columns) == 0:
             result_columns = df.columns.copy(deep=False)
             clear_codes = DataFrame()
@@ -355,11 +359,11 @@ class MultiIndex(Index):
             result_columns._codes = clear_codes
             result_columns._source_data = clear_codes
             result.columns = result_columns
-        elif len(row_tuple) < len(self.levels) and (
-            not slice(None) in row_tuple
-            and not isinstance(row_tuple[0], slice)
+        elif len(column_tuple) < len(self.levels) and (
+            not slice(None) in column_tuple
+            and not isinstance(column_tuple[0], (slice, numbers.Number))
         ):
-            columns = self._popn(len(row_tuple))
+            columns = self._popn(len(column_tuple))
             result.columns = columns.take(valid_indices)
         else:
             result.columns = self.take(valid_indices)
@@ -369,8 +373,12 @@ class MultiIndex(Index):
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
             result.columns = as_index(columns, name=name)
-        if len(row_tuple) == len(self.levels) and len(result.columns) == 1:
-            result = list(result._cols.values())[0]
+        if len(column_tuple) == len(self.levels) and len(result.columns) == 1:
+            result = cudf.Series(
+                next(iter(result._data.values())),
+                name=column_tuple,
+                index=result.index,
+            )
         return result
 
     def _split_tuples(self, tuples):
@@ -433,9 +441,9 @@ class MultiIndex(Index):
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
         elif isinstance(indices, Series):
-            if indices.null_count != 0:
+            if indices.has_nulls:
                 raise ValueError("Column must have no nulls.")
-            indices = indices.data.mem
+            indices = indices
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
@@ -642,9 +650,8 @@ class MultiIndex(Index):
     @property
     def is_unique(self):
         if not hasattr(self, "_is_unique"):
-            self._is_unique = (
-                self._source_data._size
-                == self._source_data.drop_duplicates()._size
+            self._is_unique = len(self._source_data) == len(
+                self._source_data.drop_duplicates()
             )
         return self._is_unique
 

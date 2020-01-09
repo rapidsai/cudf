@@ -23,7 +23,7 @@ def test_categorical_basic():
 
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array())
+    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
@@ -50,7 +50,9 @@ def test_categorical_integer():
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array(fillna="pandas"))
+    np.testing.assert_array_equal(
+        cat.codes, sr.cat.codes.to_array(fillna="pandas")
+    )
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
@@ -322,7 +324,7 @@ def test_categorical_empty():
     cat = pd.Categorical([])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array())
+    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)

@@ -76,25 +76,38 @@ def require_writeable_array(arr):
     return np.require(arr, requirements="W")
 
 
-def scalar_broadcast_to(scalar, shape, dtype):
+def scalar_broadcast_to(scalar, size, dtype=None):
     from cudf.utils.cudautils import fill_value
-    from cudf.utils.dtypes import to_cudf_compatible_scalar
+    from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
+    from cudf.core.column import column_empty
 
-    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+    if isinstance(size, (tuple, list)):
+        size = size[0]
 
-    if not isinstance(shape, tuple):
-        shape = (shape,)
+    if scalar is None:
+        if dtype is None:
+            dtype = "object"
+        return column_empty(size, dtype=dtype, masked=True)
+
+    if isinstance(scalar, pd.Categorical):
+        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
+
+    if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
+        dtype = "object"
+    else:
+        scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+        dtype = scalar.dtype
 
     if np.dtype(dtype) == np.dtype("object"):
         import nvstrings
-        from cudf.core.column import StringColumn
+        from cudf.core.column import as_column
         from cudf.utils.cudautils import zeros
 
-        gather_map = zeros(shape[0], dtype="int32")
-        scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
+        gather_map = zeros(size, dtype="int32")
+        scalar_str_col = as_column(nvstrings.to_device([scalar]))
         return scalar_str_col[gather_map]
     else:
-        da = rmm.device_array(shape, dtype=dtype)
+        da = rmm.device_array((size,), dtype=dtype)
         if da.size != 0:
             fill_value(da, scalar)
         return da
@@ -119,31 +132,39 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
 
     buffers = pa_arr.buffers()
 
-    if buffers[0]:
+    if pa_arr.null_count:
         mask_dev_array = make_mask(len(pa_arr))
-        arrow_dev_array = rmm.to_device(np.array(buffers[0]).view("int8"))
+        arrow_dev_array = rmm.to_device(np.asarray(buffers[0]).view("int8"))
         copy_array(arrow_dev_array, mask_dev_array)
         pamask = Buffer(mask_dev_array)
     else:
         pamask = None
 
+    offset = pa_arr.offset
+    size = pa_arr.offset + len(pa_arr)
+
     if dtype:
-        new_dtype = dtype
+        data_dtype = dtype
+    elif isinstance(pa_arr, pa.StringArray):
+        data_dtype = np.int32
+        size = size + 1  # extra element holds number of bytes
     else:
         if isinstance(pa_arr, pa.DictionaryArray):
-            new_dtype = pa_arr.indices.type.to_pandas_dtype()
+            data_dtype = pa_arr.indices.type.to_pandas_dtype()
         else:
-            new_dtype = pa_arr.type.to_pandas_dtype()
+            data_dtype = pa_arr.type.to_pandas_dtype()
 
     if buffers[1]:
         padata = Buffer(
-            np.array(buffers[1]).view(new_dtype)[
-                pa_arr.offset : pa_arr.offset + len(pa_arr)
-            ]
+            np.asarray(buffers[1]).view(data_dtype)[offset : offset + size]
         )
     else:
-        padata = Buffer(np.empty(0, dtype=new_dtype))
-    return (pamask, padata)
+        padata = Buffer.empty(0)
+
+    pastrs = None
+    if isinstance(pa_arr, pa.StringArray):
+        pastrs = Buffer(np.asarray(buffers[2]).view(np.int8))
+    return (pamask, padata, pastrs)
 
 
 def get_result_name(left, right):
@@ -283,3 +304,22 @@ def set_allocator(
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
+
+
+class cached_property:
+    """
+    Like @property, but only evaluated upon first invocation.
+    To force re-evaluation of a cached_property, simply delete
+    it with `del`.
+    """
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, cls):
+        if instance is None:
+            return self
+        else:
+            value = self.func(instance)
+            setattr(instance, self.func.__name__, value)
+            return value
