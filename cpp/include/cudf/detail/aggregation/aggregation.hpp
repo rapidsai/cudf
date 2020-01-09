@@ -304,6 +304,24 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(
           std::forward<Ts>(args)...);
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Unsupported aggregation.");
+#else
+      release_assert(false && "Unsuported aggregation.");
+
+      // The following code will never be reached, but the compiler generates a
+      // warning if there isn't a return value.
+
+      // Need to find out what the return type is in order to have a default
+      // return value and solve the compiler warning for lack of a default
+      // return
+      using return_type =
+          decltype(f.template operator()<aggregation::SUM>(
+            std::forward<Ts>(args)...));
+      return return_type();
+#endif
+    }
   }
 }
 
