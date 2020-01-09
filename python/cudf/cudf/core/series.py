@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import operator
 import pickle
 import warnings
@@ -119,6 +118,7 @@ class Series(Table):
                 data = data.astype(dtype)
 
         if data is None:
+            size = len(index) if index is not None else 0
             data = {}
 
         if not isinstance(data, column.ColumnBase):
@@ -362,7 +362,7 @@ class Series(Table):
         else:
             col = self.name
 
-        return DataFrame({col: self}, index=self.index)
+        return DataFrame({col: self._column}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -2628,8 +2628,43 @@ def _align_indices(lhs, rhs, join="outer"):
     if rhs isn't a Series.
     """
     if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
+        if len(lhs) != len(lhs.index.unique()) or len(rhs) != len(
+            rhs.index.unique()
+        ):
+            raise ValueError("Cannot align indices with non-unique values")
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
         lhs_rhs = lhs.join(rhs, how=join, sort=True)
         lhs = lhs_rhs.iloc[:, 0]
         rhs = lhs_rhs.iloc[:, 1]
     return lhs, rhs
+
+
+def _align_indices_multi(series_list):
+    """
+    Internal util to align the indices of a list of Series objects
+    """
+    head = series_list[0].index
+
+    all_index_equal = True
+    for sr in series_list[1:]:
+        if not sr.index.equals(head):
+            all_index_equal = False
+            break
+
+    if all_index_equal:
+        return series_list
+
+    aligned_index = cudf.core.reshape.concat(
+        [sr.index for sr in series_list]
+    ).unique()
+
+    result = []
+    for sr in series_list:
+        rhs = Series(
+            column.column_empty(
+                len(aligned_index), dtype=sr.dtype, masked=True
+            ),
+            index=aligned_index,
+        )
+        result.append(_align_indices(sr, rhs)[0])
+    return result
