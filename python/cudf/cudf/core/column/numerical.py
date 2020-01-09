@@ -2,8 +2,6 @@
 
 from __future__ import division, print_function
 
-import pickle
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -24,22 +22,21 @@ from cudf.utils.dtypes import (
 )
 
 
-class NumericalColumn(column.TypedColumnBase):
-    def __init__(self, **kwargs):
+class NumericalColumn(column.ColumnBase):
+    def __init__(self, data, dtype, mask=None, offset=0):
         """
         Parameters
         ----------
         data : Buffer
-            The code values
-        mask : Buffer; optional
-            The validity mask
-        null_count : int; optional
-            The number of null values in the mask.
         dtype : np.dtype
-            Data type
+            The dtype associated with the data Buffer
+        mask : Buffer, optional
         """
-        super(NumericalColumn, self).__init__(**kwargs)
-        assert self._dtype == self._data.dtype
+        dtype = np.dtype(dtype)
+        if data.size % dtype.itemsize:
+            raise ValueError("Buffer size must be divisible by element size")
+        size = data.size // dtype.itemsize
+        super().__init__(data, size=size, dtype=dtype, mask=mask)
 
     def __contains__(self, item):
         """
@@ -48,33 +45,13 @@ class NumericalColumn(column.TypedColumnBase):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data.mem.dtype):
-                item = self.data.mem.dtype.type(item)
+            if np.can_cast(item, self.data_array_view.dtype):
+                item = self.data_array_view.dtype.type(item)
             else:
                 return False
         except Exception:
             return False
         return libcudf.search.contains(self, item)
-
-    def replace(self, **kwargs):
-        if "data" in kwargs and "dtype" not in kwargs:
-            kwargs["dtype"] = kwargs["data"].dtype
-        return super(NumericalColumn, self).replace(**kwargs)
-
-    def serialize(self):
-        header, frames = super(NumericalColumn, self).serialize()
-        header["type"] = pickle.dumps(type(self))
-        header["dtype"] = self._dtype.str
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        data, mask = super(NumericalColumn, cls).deserialize(header, frames)
-        dtype = header["dtype"]
-        col = cls(
-            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
-        )
-        return col
 
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
@@ -133,58 +110,62 @@ class NumericalColumn(column.TypedColumnBase):
                 return other
             else:
                 ary = utils.scalar_broadcast_to(
-                    other, shape=len(self), dtype=other_dtype
+                    other, size=len(self), dtype=other_dtype
                 )
-                return self.replace(data=Buffer(ary), dtype=ary.dtype)
+                return column.build_column(
+                    data=Buffer.from_array_lik(ary),
+                    dtype=ary.dtype,
+                    mask=self.mask,
+                )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import string
+        from cudf.core.column import string, as_column
 
         if len(self) > 0:
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                dev_array = self.astype("int32", **kwargs).data.mem
+                self_as_int32 = self.astype("int32", **kwargs)
+                dev_array = self_as_int32.data_array_view
+                dev_ptr = self_as_int32.data.ptr
             else:
-                dev_array = self.data.mem
-            dev_ptr = libcudf.cudf.get_ctype_ptr(dev_array)
+                dev_array = self.data_array_view
+                dev_ptr = self.data.ptr
             null_ptr = None
-            if self.mask is not None:
-                null_ptr = libcudf.cudf.get_ctype_ptr(self.mask.mem)
+            if self.nullable:
+                null_ptr = self.mask.ptr
             kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
             ](dev_ptr, **kwargs)
+            return as_column(data)
         else:
-            data = []
-        return string.StringColumn(data=data)
+            return as_column([], dtype="object")
 
     def as_datetime_column(self, dtype, **kwargs):
-        from cudf.core.column import datetime
+        from cudf.core.column import build_column
 
-        return self.view(
-            datetime.DatetimeColumn,
-            dtype=dtype,
-            data=libcudf.typecast.cast(self, dtype=np.dtype(dtype)).data,
+        return build_column(
+            data=self.astype("int64").data, dtype=dtype, mask=self.mask,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self.replace(
-            data=libcudf.typecast.cast(self, dtype).data, dtype=np.dtype(dtype)
+        return column.build_column(
+            data=libcudf.typecast.cast(self, dtype).data,
+            dtype=np.dtype(dtype),
+            mask=self.mask,
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = self[sort_inds]
-        col_inds = self.replace(
-            data=sort_inds.data,
-            mask=sort_inds.mask,
-            dtype=sort_inds.data.dtype,
+        col_inds = column.build_column(
+            sort_inds.data, dtype=sort_inds.dtype, mask=sort_inds.mask
         )
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        if self.null_count > 0 and self.dtype == np.bool:
+        if self.has_nulls and self.dtype == np.bool:
             # Boolean series in Pandas that contains None/NaN is of dtype
             # `np.object`, which is not natively supported in GDF.
             ret = self.astype(np.int8).to_array(fillna=-1)
@@ -198,9 +179,9 @@ class NumericalColumn(column.TypedColumnBase):
 
     def to_arrow(self):
         mask = None
-        if self.has_null_mask:
-            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        data = pa.py_buffer(self.data.mem.copy_to_host())
+        if self.nullable:
+            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
+        data = pa.py_buffer(self.data_array_view.copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
@@ -264,8 +245,10 @@ class NumericalColumn(column.TypedColumnBase):
         if np.issubdtype(self.dtype, np.integer):
             return self
 
-        data = Buffer(cudautils.apply_round(self.data.mem, decimals))
-        return self.replace(data=data)
+        data = Buffer(cudautils.apply_round(self.data_array_view, decimals))
+        return column.build_column(
+            data=data, dtype=self.dtype, mask=self.mask,
+        )
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -286,7 +269,7 @@ class NumericalColumn(column.TypedColumnBase):
         if out_dtype is None:
             out_dtype = self.dtype
         out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
-        return self.replace(data=out, dtype=out_dtype)
+        return out
 
     def default_na_value(self):
         """Returns the default NA value for this column
@@ -355,22 +338,23 @@ class NumericalColumn(column.TypedColumnBase):
         result = libcudf.replace.replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
-    def find_first_value(self, value):
+    def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches. For monotonic
-        columns, returns the offset of the first larger value.
+        columns, returns the offset of the first larger value
+        if closest=True.
         """
         found = 0
         if len(self):
-            found = cudautils.find_first(self.data.mem, value)
-        if found == -1 and self.is_monotonic:
+            found = cudautils.find_first(self.data_array_view, value)
+        if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = 0
             elif value > self.max():
                 found = len(self)
             else:
                 found = cudautils.find_first(
-                    self.data.mem, value, compare="gt"
+                    self.data_array_view, value, compare="gt"
                 )
                 if found == -1:
                     raise ValueError("value not found")
@@ -378,21 +362,24 @@ class NumericalColumn(column.TypedColumnBase):
             raise ValueError("value not found")
         return found
 
-    def find_last_value(self, value):
+    def find_last_value(self, value, closest=False):
         """
         Returns offset of last value that matches. For monotonic
-        columns, returns the offset of the last smaller value.
+        columns, returns the offset of the last smaller value
+        if closest=True.
         """
         found = 0
         if len(self):
-            found = cudautils.find_last(self.data.mem, value)
-        if found == -1 and self.is_monotonic:
+            found = cudautils.find_last(self.data_array_view, value)
+        if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = -1
             elif value > self.max():
                 found = len(self) - 1
             else:
-                found = cudautils.find_last(self.data.mem, value, compare="lt")
+                found = cudautils.find_last(
+                    self.data_array_view, value, compare="lt"
+                )
                 if found == -1:
                     raise ValueError("value not found")
         elif found == -1:
@@ -406,7 +393,7 @@ class NumericalColumn(column.TypedColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            if self.has_null_mask:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudf.issorted.issorted(
@@ -417,7 +404,7 @@ class NumericalColumn(column.TypedColumnBase):
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.has_null_mask:
+            if self.nullable and self.has_nulls:
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudf.issorted.issorted(
@@ -432,15 +419,12 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = False
-    name = None
     if np.isscalar(lhs):
-        masked = rhs.has_null_mask
+        masked = rhs.nullable
         row_count = len(rhs)
-        name = rhs.name
     elif np.isscalar(rhs):
-        masked = lhs.has_null_mask
+        masked = lhs.nullable
         row_count = len(lhs)
-        name = lhs.name
     elif rhs is None:
         masked = True
         row_count = len(lhs)
@@ -448,28 +432,25 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
         masked = True
         row_count = len(rhs)
     else:
-        masked = lhs.has_null_mask or rhs.has_null_mask
+        masked = lhs.nullable or rhs.nullable
         row_count = len(lhs)
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
     out = column.column_empty(row_count, dtype=out_dtype, masked=masked)
-    # Call and fix null_count
-    null_count = libcudf.binops.apply_op(lhs, rhs, out, op)
+
+    _ = libcudf.binops.apply_op(lhs, rhs, out, op)
 
     if is_op_comparison:
         out.fillna(op == "ne", inplace=True)
-    else:
-        out = out.replace(null_count=null_count)
 
-    result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     libcudf.nvtx.nvtx_range_pop()
-    return result
+    return out
 
 
 def _numeric_column_unaryop(operand, op):
     out = libcudf.unaryops.apply_unary_op(operand, op)
-    return out.view(NumericalColumn, dtype=out.dtype)
+    return out
 
 
 def _numeric_column_compare(lhs, rhs, op):
@@ -536,9 +517,10 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
+    from cudf.core.column import column_empty
+
     columns = [column0] + list(other_columns)
-    buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
-    result = NumericalColumn(data=buf, dtype=buf.dtype)
+    result = column_empty(len(column0), dtype=np.int32, masked=False)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
     libcudf.hash.hash_columns(columns, result, initial_hash_values)
