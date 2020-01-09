@@ -57,11 +57,6 @@ namespace binops {
 
 namespace jit {
 
-#ifndef LIBCUDF_INCLUDE_DIR
-#define LIBCUDF_INCLUDE_DIR \
-  std::string{std::getenv("CONDA_PREFIX")} + "/include/libcudf"
-#endif
-
 const std::string hash = "prog_binop.experimental";
 
 const std::vector<std::string> compiler_flags{
