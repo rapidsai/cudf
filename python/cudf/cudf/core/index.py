@@ -175,6 +175,9 @@ class Index(object):
         else:
             return as_index(op())
 
+    def unique(self):
+        return as_index(self._values.unique())
+
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
