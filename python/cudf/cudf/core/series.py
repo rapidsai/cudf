@@ -2693,7 +2693,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     for sr in series_list:
         result.append(
             sr._align_to_index(
-                combined_index, how=join, allow_non_unique=allow_non_unique
+                combined_index, how=how, allow_non_unique=allow_non_unique
             )
         )
     return result
