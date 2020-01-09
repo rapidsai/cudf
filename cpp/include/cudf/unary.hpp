@@ -42,8 +42,9 @@ enum class unary_op {
 /**
  * @brief Performs unary op on all values in column
  *
- * @param[in] input A `column_view` as input
- * @param[in] op operation to perform
+ * @param input A `column_view` as input
+ * @param op operation to perform
+ * @param mr Optional, The resource to use for all allocations
  *
  * @returns std::unique_ptr<cudf::column> Result of the operation
  */
@@ -56,21 +57,27 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
  * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
  * indicates the value is null and `false` indicates the value is valid.
  *
- * @param[in] input A `column_view` as input
+ * @param input A `column_view` as input
+ * @param mr Optional, The resource to use for all allocations
  *
  * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `true` representing `null` values.
  */
-std::unique_ptr<cudf::column> is_null(cudf::column_view const& input);
+std::unique_ptr<cudf::column> is_null(cudf::column_view const& input,
+                                      rmm::mr::device_memory_resource* mr =
+                                              rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
  * indicates the value is valid and `false` indicates the value is null.
  *
- * @param[in] input A `column_view` as input
+ * @param input A `column_view` as input
+ * @param mr Optional, The resource to use for all allocations
  *
  * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `false` representing `null` values.
  */
-std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input);
+std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input,
+                                       rmm::mr::device_memory_resource* mr =
+                                              rmm::mr::get_default_resource());
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
@@ -78,6 +85,7 @@ std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input);
  *
  * @param column_view Input column
  * @param out_type Desired datatype of output column
+ * @param mr Optional, The resource to use for all allocations
  *
  * @returns unique_ptr<column> Result of the cast operation
  * @throw cudf::logic_error if `out_type` is not a fixed-width type

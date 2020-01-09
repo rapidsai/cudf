@@ -14,7 +14,12 @@ def indices_from_labels(obj, labels):
 
     if is_categorical_dtype(obj.index):
         labels = labels.astype("category")
-        labels._data = labels.data.astype(obj.index._values.data.dtype)
+        codes = labels.codes.astype(obj.index._values.codes.dtype)
+        labels = column.build_categorical_column(
+            categories=labels.dtype.categories,
+            codes=codes,
+            ordered=labels.dtype.ordered,
+        )
     else:
         labels = labels.astype(obj.index.dtype)
 
@@ -186,8 +191,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.dataframe import Series
+        from cudf.core.dataframe import Series, DataFrame
         from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf.utils.cudautils import arange
@@ -200,9 +204,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 return columns_df
         else:
             columns = self._get_column_selection(arg[1])
-            columns_df = DataFrame()
+            columns_df = DataFrame(index=self._df.index)
             for i, col in enumerate(columns):
                 columns_df.insert(i, col, self._df[col])
+
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
@@ -217,7 +222,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 df = DataFrame()
                 for col in columns_df.columns:
-                    df[col] = columns_df[col].loc[arg[0]]
+                    # need Series() in case a scalar is returned
+                    df[col] = Series(columns_df[col].loc[arg[0]])
+                df.columns = columns_df.columns
+
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):
@@ -282,8 +290,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.dataframe import Series
+        from cudf.core.dataframe import DataFrame, Series
+        from cudf.core.column import column_empty
         from cudf.core.index import as_index
 
         # Iloc Step 1:
@@ -296,7 +304,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 and len(columns_df.columns) == 0
                 and not isinstance(arg[0], slice)
             ):
-                result = Series([], name=arg[0])
+                result = Series(column_empty(0, dtype="float64"), name=arg[0])
                 result._index = columns_df.columns.copy(deep=False)
                 return result
         else:
@@ -322,8 +330,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             df = DataFrame()
-            for key, col in columns_df._cols.items():
-                df[key] = col.iloc[arg[0]]
+            for col_num in range(len(columns_df.columns)):
+                # need Series() in case a scalar is returned
+                df[col_num] = Series(columns_df._columns[col_num][arg[0]])
+
+            df.index = as_index(columns_df.index[arg[0]])
             df.columns = columns_df.columns
 
         # Iloc Step 3:
@@ -344,18 +355,25 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 if len(df) > 0 and not (
                     isinstance(arg[0], slice) or isinstance(arg[1], slice)
                 ):
-                    return list(df._cols.values())[0][0]
+                    return list(df._data.values())[0][0]
                 elif df.shape[1] > 1:
                     result = self._downcast_to_series(df, arg)
                     result.index = df.columns
                     return result
                 elif not isinstance(arg[0], slice):
-                    result_series = list(df._cols.values())[0]
-                    result_series.index = df.columns
-                    result_series.name = arg[0]
-                    return result_series
+                    if len(df._data) == 0:
+                        return Series(
+                            column_empty(0, dtype="float64"),
+                            index=df.columns,
+                            name=arg[0],
+                        )
+                    else:
+                        result_series = df[df.columns[0]]
+                        result_series.index = df.columns
+                        result_series.name = arg[0]
+                        return result_series
                 else:
-                    return list(df._cols.values())[0]
+                    return df[df.columns[0]]
             return self._downcast_to_series(df, arg)
         if df.shape[0] == 0 and df.shape[1] == 0:
             from cudf.core.index import RangeIndex
@@ -388,6 +406,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 def _normalize_dtypes(df):
     dtypes = df.dtypes.values.tolist()
     normalized_dtype = np.result_type(*dtypes)
-    for name, col in df._cols.items():
+    for name, col in df._data.items():
         df[name] = col.astype(normalized_dtype)
     return df

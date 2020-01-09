@@ -130,7 +130,6 @@ def make_gpu_parse_arrow_cats_batch():
     reason="need compatible pyarrow to generate test data",
 )
 def test_gpu_parse_arrow_cats():
-
     batch = make_gpu_parse_arrow_cats_batch()
 
     stream = pa.BufferOutputStream()

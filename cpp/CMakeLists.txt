@@ -450,6 +450,18 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
+            src/reductions/reductions.cpp
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/any.cu
+            src/reductions/all.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
+            src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reshape/legacy/stack.cu

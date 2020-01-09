@@ -43,7 +43,7 @@ def tokenize(strs, delimiter=None):
     return rtn
 
 
-def unique_tokens(strs, delimiter=" "):
+def unique_tokens(strs, delimiter=None):
     """
     Each string is split into tokens using the provided delimiter.
     The nvstrings instance returned contains unique list of tokens.
@@ -54,7 +54,7 @@ def unique_tokens(strs, delimiter=" "):
         The strings for this operation
     delimiter : str
         The character used to locate the split points of each string.
-        Default is space.
+        Default is whitespace.
 
     Examples
     --------
@@ -73,7 +73,7 @@ def unique_tokens(strs, delimiter=" "):
     return rtn
 
 
-def token_count(strs, delimiter=" ", devptr=0):
+def token_count(strs, delimiter=None, devptr=0):
     """
     Each string is split into tokens using the provided delimiter.
     The returned integer array is the number of tokens in each string.
@@ -84,7 +84,7 @@ def token_count(strs, delimiter=" ", devptr=0):
         The strings for this operation
     delimiter : str
         The character used to locate the split points of each string.
-        Default is space.
+        Default is whitespace.
     devptr : GPU memory pointer
         Must be able to hold at least strs.size() of int32 values.
 
@@ -186,7 +186,7 @@ def strings_counts(strs, tgts, devptr=0):
     return rtn
 
 
-def tokens_counts(strs, tgts, delimiter=" ", devptr=0):
+def tokens_counts(strs, tgts, delimiter=None, devptr=0):
     """
     The tgts strings are searched for within each strs.
     The returned int32 array is number of occurrences of each tgts in strs.
@@ -199,7 +199,7 @@ def tokens_counts(strs, tgts, delimiter=" ", devptr=0):
         The strings to count for inside each strs.
     delimiter : str
         The character used to locate the split points of each string.
-        Default is space.
+        Default is whitespace.
     devptr : GPU memory pointer
         Must be able to hold at least strs.size()*tgts.size()
         of int32 values.
@@ -374,6 +374,40 @@ def ngrams(tokens, N=2, sep="_"):
     if N < 1:
         raise ValueError("N must be >= 1")
     rtn = pyniNVText.n_create_ngrams(tokens, N, sep)
+    if rtn is not None:
+        rtn = nvs.nvstrings(rtn)
+    return rtn
+
+
+def ngrams_tokenize(strs, delimiter=" ", N=2, sep="_"):
+    """
+    Generate the n-grams using tokens from each string.
+    This will tokenize each string and then generate ngrams for each string.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The tokens for this operation.
+    delimiter : str
+        The character used to locate the split points of each string.
+        Default is space.
+    N : int
+        The degree of the n-gram (number of consecutive tokens).
+        Default of 2 for bigrams.
+    sep : str
+        The separator to use between tokens within an n-gram.
+        Default is '_'.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> dstrings = nvstrings.to_device(['this is the', 'best book'])
+    >>> print(nvtext.ngrams_tokenize(dstrings, N=2, sep='_'))
+    ['this_is', 'is_the', 'best_book']
+    """
+    if N < 1:
+        raise ValueError("N must be >= 1")
+    rtn = pyniNVText.n_ngrams_tokenize(strs, delimiter, N, sep)
     if rtn is not None:
         rtn = nvs.nvstrings(rtn)
     return rtn
