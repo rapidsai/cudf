@@ -267,23 +267,6 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                              min_periods, aggr, mr, stream);
 }
 
-// Applies a user-defined rolling window function to the values in a column.
-template <typename WindowIterator>
-std::unique_ptr<column> rolling_window(column_view const &input,
-                                       WindowIterator preceding_window_begin,
-                                       WindowIterator following_window_begin,
-                                       size_type min_periods,
-                                       std::string const& user_defined_aggregator,
-                                       std::unique_ptr<aggregation> const& aggr,
-                                       data_type output_type,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream = 0)
-{
-  // TODO
-  CUDF_FAIL("Unimplemented");
-  //return cudf::make_numeric_column(data_type{INT32}, 0);
-}
-
 } // namespace detail
 
 // Applies a fixed-size rolling window function to the values in a column.
@@ -323,50 +306,6 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   return cudf::experimental::detail::rolling_window(input, preceding_window.begin<size_type>(),
                                                     following_window.begin<size_type>(),
                                                     min_periods, aggr, mr, 0);
-}
-
-// Applies a fixed-size user-defined rolling window function to the values in a column.
-std::unique_ptr<column> rolling_window(column_view const &input,
-                                       size_type preceding_window,
-                                       size_type following_window,
-                                       size_type min_periods,
-                                       std::string const& user_defined_aggregator,
-                                       std::unique_ptr<aggregation> const& aggr,
-                                       data_type output_type,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS((preceding_window >= 0) && (following_window >= 0) && (min_periods >= 0),
-               "Window sizes and min periods must be non-negative");
-
-  auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
-  auto following_window_begin = thrust::make_constant_iterator(following_window);
-
-  return cudf::experimental::detail::rolling_window(input, preceding_window_begin,
-                                                    following_window_begin, min_periods,
-                                                    user_defined_aggregator, aggr, output_type, mr, 0);
-}
-
-// Applies a variable-size user-defined rolling window function to the values in a column.
-std::unique_ptr<column> rolling_window(column_view const &input,
-                                       column_view const& preceding_window,
-                                       column_view const& following_window,
-                                       size_type min_periods,
-                                       std::string const& user_defined_aggregator,
-                                       std::unique_ptr<aggregation> const& aggr,
-                                       data_type output_type,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  if (preceding_window.size() == 0 || following_window.size() == 0) return empty_like(input);
-
-  CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
-               "preceding_window/following_window must have INT32 type");
-
-  CUDF_EXPECTS(preceding_window.size() != input.size() && following_window.size() != input.size(),
-               "preceding_window/following_window size must match input size");
-
-  return cudf::experimental::detail::rolling_window(input, preceding_window.begin<size_type>(),
-                                                    following_window.begin<size_type>(), min_periods,
-                                                    user_defined_aggregator, aggr, output_type, mr, 0);
 }
 
 } // namespace experimental 

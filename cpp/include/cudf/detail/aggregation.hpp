@@ -42,12 +42,13 @@ class aggregation {
               MEAN,
               MEDIAN,
               QUANTILE,
-              NUMBA_UDF,
-              CUDA_UDF};
+              PTX,
+              CUDA};
 
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
 };
+
 namespace detail {
 /**
  * @brief Derived class for specifying a quantile aggregation
@@ -58,6 +59,15 @@ struct quantile_aggregation : aggregation {
       : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
   std::vector<double> _quantiles;              ///< Desired quantile(s)
   experimental::interpolation _interpolation;  ///< Desired interpolation
+};
+
+struct udf_aggregation : aggregation {
+  udf_aggregation(aggregation::Kind type,
+          std::string const& user_defined_aggregator,
+          data_type output_type): aggregation{type},
+                                  source{user_defined_aggregator}, _output_type{output_type} {}
+  std::string const source;
+  data_type _output_type;
 };
 
 /**

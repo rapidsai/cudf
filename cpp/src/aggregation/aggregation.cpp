@@ -54,13 +54,21 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
   aggregation* a = new detail::quantile_aggregation{q, i};
   return std::unique_ptr<aggregation>(a);
 }
-/// Factory to create a NUMBDA_UDF aggregation
-std::unique_ptr<aggregation> make_numba_udf_aggregation() {
-  return std::make_unique<aggregation>(aggregation::NUMBA_UDF);
+/// Factory to create a PTX aggregation
+std::unique_ptr<aggregation> make_ptx_aggregation(std::string user_defined_aggregator,
+                                                  data_type output_type) {
+  aggregation* a = new detail::udf_aggregation{aggregation::PTX,
+                                                    user_defined_aggregator,
+                                                    output_type};
+ return std::unique_ptr<aggregation>(a);
 }
-/// Factory to create a CUDA_UDF aggregation
-std::unique_ptr<aggregation> make_cuda_udf_aggregation() {
-  return std::make_unique<aggregation>(aggregation::CUDA_UDF);
+/// Factory to create a CUDA aggregation
+std::unique_ptr<aggregation> make_cuda_aggregation(std::string user_defined_aggregator,
+                                                   data_type output_type) {
+  aggregation* a = new detail::udf_aggregation{aggregation::CUDA,
+                                                    user_defined_aggregator,
+                                                    output_type};
+  return std::unique_ptr<aggregation>(a);
 }
 
 namespace detail {

@@ -56,12 +56,6 @@ std::unique_ptr<aggregation> make_mean_aggregation();
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation();
 
-/// Factory to create a NUMBA UDF aggregation
-std::unique_ptr<aggregation> make_numba_udf_aggregation();
-
-/// Factory to create a CUDA UDF aggregation
-std::unique_ptr<aggregation> make_cuda_udf_aggregation();
-
 /**
  * @brief Factory to create a QUANTILE aggregation
  *
@@ -70,5 +64,25 @@ std::unique_ptr<aggregation> make_cuda_udf_aggregation();
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& q, interpolation i);
+
+/**
+ * @brief Factory to create a PTX aggregation
+ *
+ * @param[in] user_defined_aggregator A string which has the required aggregation
+ * @param[in] output_type expected output type
+ *
+ * @return aggregation unique pointer housing user_defined_aggregator PTX string.
+ */
+std::unique_ptr<aggregation> make_ptx_aggregation(std::string user_defined_aggregator, data_type output_type);
+
+/**
+ * @brief Factory to create a CUDA aggregation
+ *
+ * @param[in] user_defined_aggregator A string which has the required aggregation
+ * @param[in] output_type expected output type
+ *
+ * @return aggregation unique pointer housing user_defined_aggregator CUDA string.
+ */
+std::unique_ptr<aggregation> make_cuda_aggregation(std::string user_defined_aggregator, data_type output_type);
 }  // namespace experimental
 }  // namespace cudf
