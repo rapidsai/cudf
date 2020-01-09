@@ -16,7 +16,7 @@ import cudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
-    Column,
+    ColumnBase,
     DatetimeColumn,
     NumericalColumn,
     StringColumn,
@@ -125,7 +125,7 @@ class Index(object):
 
     @property
     def gpu_values(self):
-        return self.as_column().data.mem
+        return self.as_column().data_array_view
 
     def min(self):
         return self.as_column().min()
@@ -148,12 +148,22 @@ class Index(object):
 
     def _find_segments(self):
         seg, markers = cudautils.find_segments(self.gpu_values)
-        return NumericalColumn(data=Buffer(seg), dtype=seg.dtype), markers
+        return (
+            column.build_column(data=Buffer(seg), dtype=seg.dtype),
+            markers,
+        )
 
     @classmethod
     def _concat(cls, objs):
-        data = Column._concat([o.as_column() for o in objs])
-        return as_index(data)
+        data = ColumnBase._concat([o.as_column() for o in objs])
+        names = {obj.name for obj in objs}
+        if len(names) == 1:
+            [name] = names
+        else:
+            name = None
+        result = as_index(data)
+        result.name = name
+        return result
 
     def _apply_op(self, fn, other=None):
         from cudf.core.series import Series
@@ -512,7 +522,7 @@ class RangeIndex(Index):
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)
-            index = column.as_column(index).data.mem
+            index = column.as_column(index)
 
         return as_index(self.as_column()[index], name=self.name)
 
@@ -602,9 +612,7 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return NumericalColumn(
-            data=Buffer(vals), dtype=vals.dtype, name=self.name
-        )
+        return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -684,7 +692,7 @@ class GenericIndex(Index):
         # normalize the input
         if isinstance(values, Series):
             values = values._column
-        elif isinstance(values, column.TypedColumnBase):
+        elif isinstance(values, column.ColumnBase):
             values = values
         else:
             if isinstance(values, (list, tuple)):
@@ -696,16 +704,15 @@ class GenericIndex(Index):
             assert isinstance(values, (NumericalColumn, StringColumn))
 
         self._values = values
-        self.name = kwargs.get("name")
+        self._name = kwargs.get("name")
 
-        assert isinstance(values, column.TypedColumnBase), type(values)
+        assert isinstance(values, column.ColumnBase), type(values)
 
     def copy(self, deep=True):
         if deep:
-            result = deepcopy(self)
+            result = as_index(self.as_column().copy(deep=True))
         else:
-            result = copy(self)
-        result._values = self._values.copy(deep)
+            result = as_index(self.as_column().copy())
         result.name = self.name
         return result
 
@@ -736,6 +743,7 @@ class GenericIndex(Index):
         res = self.as_column()[index]
         if not isinstance(index, int):
             res = as_index(res)
+            res.name = self.name
             return res
         else:
             return res
@@ -753,13 +761,11 @@ class GenericIndex(Index):
 
     @property
     def name(self):
-        return self._values.name
+        return self._name
 
     @name.setter
     def name(self, name):
-        if name != self._values.name:
-            # ensure we don't modify somebody else's Column name
-            self._values = self._values.replace(name=name)
+        self._name = name
 
     @property
     def dtype(self):
@@ -778,9 +784,9 @@ class GenericIndex(Index):
         col = self._values
         begin, end = None, None
         if first is not None:
-            begin = col.find_first_value(first)
+            begin = col.find_first_value(first, closest=True)
         if last is not None:
-            end = col.find_last_value(last)
+            end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
 
@@ -886,14 +892,10 @@ class DatetimeIndex(GenericIndex):
         # column.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
-        out_column = NumericalColumn(
-            data=out_column.data,
-            mask=out_column.mask,
-            null_count=out_column.null_count,
-            dtype=out_column.dtype,
-            name=self.name,
+        out_column = column.build_column(
+            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask,
         )
-        return as_index(out_column)
+        return as_index(out_column, name=self.name)
 
 
 class CategoricalIndex(GenericIndex):
@@ -913,15 +915,17 @@ class CategoricalIndex(GenericIndex):
         elif isinstance(values, pd.Series) and (
             is_categorical_dtype(values.dtype)
         ):
-            values = CategoricalColumn(
-                data=Buffer(values.cat.codes.values),
+            codes_data = column.as_column(values.cat.codes.values)
+            values = column.build_categorical_column(
                 categories=values.cat.categories,
+                codes=codes_data,
                 ordered=values.cat.ordered,
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
-            values = CategoricalColumn(
-                data=Buffer(values.codes),
+            codes_data = column.as_column(values.codes)
+            values = column.build_categorical_column(
                 categories=values.categories,
+                codes=codes_data,
                 ordered=values.ordered,
             )
         elif isinstance(values, (list, tuple)):
@@ -959,9 +963,7 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.build_column(
-                nvstrings.to_device(values), dtype="object"
-            )
+            values = column.as_column(nvstrings.to_device(values))
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):
@@ -1026,6 +1028,10 @@ def as_index(arbitrary, **kwargs):
         return RangeIndex(
             start=arbitrary._start, stop=arbitrary._stop, **kwargs
         )
+    elif isinstance(arbitrary, cudf.MultiIndex):
+        return arbitrary
+    elif isinstance(arbitrary, pd.MultiIndex):
+        return cudf.MultiIndex.from_pandas(arbitrary)
     else:
         return as_index(column.as_column(arbitrary), **kwargs)
 

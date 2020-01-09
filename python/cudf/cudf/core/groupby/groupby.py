@@ -12,7 +12,7 @@ from cudf.utils.dtypes import is_scalar
 
 
 def columns_from_dataframe(df):
-    cols = [sr._column for sr in df._cols.values()]
+    cols = list(df._data.values())
     # strip column names
     for col in cols:
         col.name = None
@@ -156,6 +156,7 @@ class DataFrameGroupBy(_Groupby):
             raise AttributeError()
         if key in self._df.columns:
             by_list = []
+
             for by_name, by in zip(
                 self._groupby.key_names, self._groupby.key_columns
             ):
@@ -470,10 +471,10 @@ class _GroupbyHelper(object):
 
         index = self.compute_result_index(out_key_columns, out_value_columns)
         if len(result) == 0 and len(index) != 0:
-            # len(result) must be len(index) for
-            # ``result.index = index`` to work:
-            result._size = len(index)
-        result.index = index
+            # Can't go through the setter in this case
+            result._index = index
+        else:
+            result.index = index
 
         if isinstance(self.obj, cudf.Series):
             # May need to downcast from DataFrame to Series:
