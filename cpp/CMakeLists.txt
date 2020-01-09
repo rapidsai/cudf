@@ -421,6 +421,7 @@ add_library(cudf
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
+            src/transform/bools_to_mask.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -449,6 +450,18 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
+            src/reductions/reductions.cpp
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/any.cu
+            src/reductions/all.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
+            src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reshape/legacy/stack.cu
@@ -548,24 +561,29 @@ add_library(cudf
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
+            src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_ipv4.cu
             src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
+            src/strings/filling/fill.cu
             src/strings/find.cu
             src/strings/find_multiple.cu
-            src/strings/filling/fill.cu
             src/strings/padding.cu
+            src/strings/regex/regcomp.cpp
+            src/strings/regex/regexec.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
             src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
+            src/strings/strip.cu
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu

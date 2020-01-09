@@ -93,9 +93,9 @@ def test_dataframe_join_how(aa, bb, how, method):
     gotb = got.b
     gota = got.a
     del got["b"]
-    got.insert(len(got._cols), "b", gotb.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._data), "b", gotb.astype(np.float64).fillna(np.nan))
     del got["a"]
-    got.insert(len(got._cols), "a", gota.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._data), "a", gota.astype(np.float64).fillna(np.nan))
     expect.drop(["b"], axis=1)
     expect["b"] = expectb.astype(np.float64).fillna(np.nan)
     expect.drop(["a"], axis=1)
