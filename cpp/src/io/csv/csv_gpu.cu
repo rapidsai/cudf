@@ -543,6 +543,8 @@ struct decode_op {
    * @brief Dispatch for numeric types whose values can be convertible to
    * 0 or 1 to represent boolean false/true, based upon checking against a
    * true/false values list.
+   *
+   * @return bool Whether the parsed value is valid.
    */
   template <typename T,
             typename std::enable_if_t<
