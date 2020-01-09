@@ -62,6 +62,7 @@
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 - PR #3709 Fix inner_join incorrect result issue
+- PR #3730 CSV reader: Set invalid float values to NaN/null
 
 
 # cuDF 0.11.0 (11 Dec 2019)
