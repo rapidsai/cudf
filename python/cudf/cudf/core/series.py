@@ -118,7 +118,6 @@ class Series(Table):
                 data = data.astype(dtype)
 
         if data is None:
-            size = len(index) if index is not None else 0
             data = {}
 
         if not isinstance(data, column.ColumnBase):
