@@ -613,7 +613,10 @@ class Series(Table):
 
         libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
-        lhs, rhs = _align_indices(self, other)
+        if isinstance(other, Series):
+            lhs, rhs = _align_indices([self, other])
+        else:
+            lhs, rhs = self, other
         rhs = self._normalize_binop_value(rhs)
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
@@ -632,7 +635,10 @@ class Series(Table):
         def func(lhs, rhs):
             return fn(rhs, lhs) if reflect else fn(lhs, rhs)
 
-        lhs, rhs = _align_indices(self, other)
+        if isinstance(other, Series):
+            lhs, rhs = _align_indices([self, other])
+        else:
+            lhs, rhs = self, other
 
         if fill_value is not None:
             if isinstance(rhs, Series):
@@ -1994,7 +2000,8 @@ class Series(Table):
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
-        lhs, rhs = _align_indices(lhs, rhs, join="inner")
+
+        lhs, rhs = _align_indices([lhs, rhs], join="inner")
 
         if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
             return np.nan
@@ -2014,7 +2021,7 @@ class Series(Table):
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
-        lhs, rhs = _align_indices(lhs, rhs, join="inner")
+        lhs, rhs = _align_indices([lhs, rhs], join="inner")
 
         if lhs.empty or rhs.empty:
             return np.nan
@@ -2572,6 +2579,22 @@ class Series(Table):
         new_index = self.index.repeat(repeats)
         return Series(data, index=new_index, name=self.name)
 
+    def _align_to_index(self, index, join="outer", allow_non_unique=False):
+        """
+        Align to the given Index
+        """
+        index = as_index(index)
+        if self.index.equals(index):
+            return self
+        if not allow_non_unique:
+            if len(self) != len(self.index.unique()) or len(index) != len(
+                index.unique()
+            ):
+                raise ValueError("Cannot align indices with non-unique values")
+        lhs = self.to_frame(0)
+        rhs = cudf.DataFrame(index=as_index(index))
+        return lhs.join(rhs, how=join, sort=True).iloc[:, 0].loc[index]
+
 
 truediv_int_dtype_corrections = {
     "int16": "float32",
@@ -2621,24 +2644,11 @@ class DatetimeProperties(object):
         )
 
 
-def _align_indices(lhs, rhs, join="outer"):
-    """
-    Internal util to align the indices of two Series. Returns a tuple of the
-    aligned series, or the original arguments if the indices are the same, or
-    if rhs isn't a Series.
-    """
-    if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
-        lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
-        lhs_rhs = lhs.join(rhs, how=join, sort=True)
-        lhs = lhs_rhs.iloc[:, 0]
-        rhs = lhs_rhs.iloc[:, 1]
-    return lhs, rhs
-
-
-def _align_indices_multi(series_list):
+def _align_indices(series_list, join="outer", allow_non_unique=False):
     """
     Internal util to align the indices of a list of Series objects
     """
+    # check if all indices aer the same
     head = series_list[0].index
 
     all_index_equal = True
@@ -2650,21 +2660,27 @@ def _align_indices_multi(series_list):
     if all_index_equal:
         return series_list
 
-    aligned_index = cudf.core.reshape.concat(
-        [sr.index for sr in series_list]
-    ).unique()
+    if join == "outer":
+        combined_index = cudf.core.reshape.concat(
+            [sr.index for sr in series_list]
+        ).unique()
+    else:
+        combined_index = series_list[0].index
+        for sr in series_list[1:]:
+            combined_index = (
+                cudf.DataFrame(index=sr.index).join(
+                    cudf.DataFrame(index=combined_index),
+                    sort=True,
+                    how="inner",
+                )
+            ).index
 
+    # align all Series to the combined index
     result = []
-    for lhs in series_list:
-        rhs = Series(
-            column.column_empty(
-                len(aligned_index), dtype=lhs.dtype, masked=True
-            ),
-            index=aligned_index,
+    for sr in series_list:
+        result.append(
+            sr._align_to_index(
+                combined_index, join=join, allow_non_unique=True
+            )
         )
-        if len(lhs) != len(lhs.index.unique()) or len(rhs) != len(
-            rhs.index.unique()
-        ):
-            raise ValueError("Cannot align indices with non-unique values")
-        result.append(_align_indices(lhs, rhs)[0])
     return result

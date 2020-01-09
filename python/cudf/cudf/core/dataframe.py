@@ -248,8 +248,6 @@ class DataFrame(Table):
             self.insert(i, col_name, data[col_name])
 
     def _align_input_series_indices(self, data, index):
-        from cudf.core.series import _align_indices_multi
-
         data = data.copy()
 
         input_series = [
@@ -257,23 +255,18 @@ class DataFrame(Table):
             for val in data.values()
             if isinstance(val, (pd.Series, cudf.Series))
         ]
+
         if input_series:
             if index is not None:
-                input_series.append(
-                    cudf.Series(
-                        column.column_empty(len(index), masked=True),
-                        index=index,
-                    )
-                )
-
-            aligned_input_series = _align_indices_multi(input_series)
-
-            if index is None:
-                index = aligned_input_series[0].index
-            else:
                 aligned_input_series = [
-                    sr.loc[index] for sr in aligned_input_series[:-1]
+                    sr._align_to_index(index) for sr in input_series
                 ]
+
+            else:
+                aligned_input_series = cudf.core.series._align_indices(
+                    input_series
+                )
+                index = aligned_input_series[0].index
 
             for name, val in data.items():
                 if isinstance(val, (pd.Series, cudf.Series)):
