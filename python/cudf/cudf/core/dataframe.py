@@ -834,7 +834,7 @@ class DataFrame(Table):
                     result_cols.append(new_col)
             for col in result_cols:
                 if col in df_cols and col in other_cols_keys:
-                    l_opr = self._cols[col]
+                    l_opr = self[col]
                     r_opr = other_cols[col]
                 else:
                     if col not in df_cols:
@@ -848,7 +848,7 @@ class DataFrame(Table):
                         )
                     if col not in other_cols_keys:
                         r_opr = None
-                        l_opr = self._cols[col]
+                        l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
         elif isinstance(other, numbers.Number):
