@@ -60,8 +60,12 @@
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
 - PR #3694 Allow for null columns parameter in csv_writer`
+- PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3731 Fix performance of zero sized dataframe slice
 - PR #3709 Fix inner_join incorrect result issue
+- PR #3734 Update numba to 0.46 in conda files
+- PR #3738 Update libxx cython types.hpp path
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
 
 
@@ -119,7 +123,7 @@
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
-- PR #3557 Add contiguous_split() function. 
+- PR #3557 Add contiguous_split() function.
 - PR #3507 Define and implement new binary operation APIs
 
 ## Improvements
