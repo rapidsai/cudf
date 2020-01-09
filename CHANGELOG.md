@@ -124,6 +124,7 @@
 - PR #3527 Add string functionality for merge API
 - PR #3557 Add contiguous_split() function.
 - PR #3507 Define and implement new binary operation APIs
+- PR #3273 Define and implement new reduction APIs
 
 ## Improvements
 
