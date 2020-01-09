@@ -65,7 +65,7 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys,
 
   EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
-  return std::make_pair(sorted_output_keys, sorted_output_values);
+  return std::make_pair(std::move(sorted_output_keys), std::move(sorted_output_values));
 }
 
 struct column_equality {

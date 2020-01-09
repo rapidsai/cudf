@@ -38,18 +38,17 @@ try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
     from cudf.core.column import column, CategoricalColumn, StringColumn
-    import rmm
-    import cudf._lib as libcudf
-    from cudf.core.buffer import Buffer
 
     def _string_safe_hash(df):
         frame = df.copy(deep=False)
         for col in frame.columns:
             if isinstance(frame[col]._column, StringColumn):
-                out_dev_arr = rmm.device_array(len(frame), dtype="int32")
-                ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-                frame[col]._column.data.hash(devptr=ptr)
-                frame[col] = cudf.Series(Buffer(out_dev_arr))
+                out_col = column.column_empty(
+                    len(frame), dtype="int32", masked=False
+                )
+                ptr = out_col.data.ptr
+                frame[col]._column.data_array_view.hash(devptr=ptr)
+                frame[col] = out_col
         return frame.hash_columns()
 
     @hash_object_dispatch.register(cudf.DataFrame)
