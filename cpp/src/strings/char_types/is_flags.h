@@ -17,13 +17,12 @@
 
 //
 // 8-bit flag for each code-point.
-// Flags for each character are defined in char_flags.h
 //
-#define IS_DECIMAL(x)  (x &  1)
-#define IS_NUMERIC(x)  (x &  2)
-#define IS_DIGIT(x)    (x &  4)
-#define IS_ALPHA(x)    (x &  8)
-#define IS_ALPHANUM(x) (x & 15)
-#define IS_SPACE(x)    (x & 16)
-#define IS_UPPER(x)    (x & 32)
-#define IS_LOWER(x)    (x & 64)
+#define IS_DECIMAL(x)  ((x) & (1 << 0))
+#define IS_NUMERIC(x)  ((x) & (1 << 1))
+#define IS_DIGIT(x)    ((x) & (1 << 2))
+#define IS_ALPHA(x)    ((x) & (1 << 3))
+#define IS_SPACE(x)    ((x) & (1 << 4))
+#define IS_UPPER(x)    ((x) & (1 << 5))
+#define IS_LOWER(x)    ((x) & (1 << 6))
+#define IS_ALPHANUM(x) ((x) & (0x0F))

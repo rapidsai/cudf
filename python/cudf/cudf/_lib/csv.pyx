@@ -298,7 +298,7 @@ cpdef write_csv(
             if col_name not in cols:
                 raise NameError('column {!r} does not exist in DataFrame'
                                 .format(col_name))
-            col = cols[col_name]._column
+            col = cols[col_name]
             check_gdf_compatibility(col)
             # Workaround for string columns
             if col.dtype.type == np.object_:
@@ -308,7 +308,6 @@ cpdef write_csv(
             list_cols.push_back(c_col)
     else:
         for idx, (col_name, col) in enumerate(cols.items()):
-            col = col._column
             check_gdf_compatibility(col)
             # Workaround for string columns
             if col.dtype.type == np.object_:

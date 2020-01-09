@@ -279,8 +279,7 @@ def prefixsum(vals):
     """
     import cudf._lib as libcudf
 
-    from cudf.core.column import NumericalColumn
-    from cudf.core.buffer import Buffer
+    from cudf.core.column import as_column
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
@@ -288,12 +287,8 @@ def prefixsum(vals):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    in_col = NumericalColumn(
-        data=Buffer(vals), mask=None, null_count=0, dtype=vals.dtype
-    )
-    out_col = NumericalColumn(
-        data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
-    )
+    in_col = as_column(vals)
+    out_col = as_column(slots[1:])
     libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
@@ -813,7 +808,9 @@ def row_matrix(cols, nrow, ncol, dtype):
     for colidx, col in enumerate(cols):
         data = matrix[:, colidx]
         if data.size > 0:
-            gpu_row_matrix.forall(data.size)(data, col.data.mem, nrow, ncol)
+            gpu_row_matrix.forall(data.size)(
+                data, col.to_gpu_array(), nrow, ncol
+            )
     return matrix
 
 
