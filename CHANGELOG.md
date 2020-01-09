@@ -63,6 +63,7 @@
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 - PR #3731 Fix performance of zero sized dataframe slice
 - PR #3709 Fix inner_join incorrect result issue
+- PR #3734 Update numba to 0.46 in conda files
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -119,7 +120,7 @@
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
-- PR #3557 Add contiguous_split() function. 
+- PR #3557 Add contiguous_split() function.
 - PR #3507 Define and implement new binary operation APIs
 
 ## Improvements
