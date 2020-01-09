@@ -33,11 +33,13 @@
 - PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
+- PR #3647 Remove PatchedNumbaDeviceArray with CuPy 6.6.0
 - PR #3641 Remove duplicate definitions of CUDA_DEVICE_CALLABLE
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3697 Improve column insert performance for wide frames
+- PR #3710 Remove multiple CMake configuration steps from root build script
 
 ## Bug Fixes
 
@@ -60,6 +62,8 @@
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 - PR #3724 Update rmm version to match release
+- PR #3709 Fix inner_join incorrect result issue
+
 
 # cuDF 0.11.0 (11 Dec 2019)
 
