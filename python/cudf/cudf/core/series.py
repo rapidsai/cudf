@@ -614,7 +614,7 @@ class Series(Table):
         libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
-            lhs, rhs = _align_indices([self, other])
+            lhs, rhs = _align_indices([self, other], allow_non_unique=True)
         else:
             lhs, rhs = self, other
         rhs = self._normalize_binop_value(rhs)
@@ -636,7 +636,7 @@ class Series(Table):
             return fn(rhs, lhs) if reflect else fn(lhs, rhs)
 
         if isinstance(other, Series):
-            lhs, rhs = _align_indices([self, other])
+            lhs, rhs = _align_indices([self, other], allow_non_unique=True)
         else:
             lhs, rhs = self, other
 
@@ -2680,7 +2680,7 @@ def _align_indices(series_list, join="outer", allow_non_unique=False):
     for sr in series_list:
         result.append(
             sr._align_to_index(
-                combined_index, join=join, allow_non_unique=True
+                combined_index, join=join, allow_non_unique=allow_non_unique
             )
         )
     return result
