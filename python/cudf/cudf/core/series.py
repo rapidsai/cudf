@@ -2648,7 +2648,7 @@ def _align_indices(series_list, join="outer", allow_non_unique=False):
     """
     Internal util to align the indices of a list of Series objects
     """
-    if len(series_list) == 0:
+    if len(series_list) <= 1:
         return series_list
 
     # check if all indices aer the same
