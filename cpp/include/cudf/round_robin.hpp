@@ -49,8 +49,8 @@ namespace experimental {
  * start_partition = 1
  * 
  * output: pair<table, partition_offsets>
- * table => col 1 {0,3,6,9,12,1,4,7,10,2,5,8,11}
- * partition_offsets => {9,0,5}
+ * table => col 1 {2,5,8,11,0,3,6,9,12,1,4,7,10}
+ * partition_offsets => {0,4,9}
  * 
  * Example 3:
  * input:
@@ -66,11 +66,21 @@ namespace experimental {
  * input:
  * table => col 1 {0, ..., 10}
  * num_partitions = 3
+ * start_partition = 1
+ * 
+ * output: pair<table, partition_offsets>
+ * table => col 1 {2,5,8,0,3,6,9,1,4,7,10}
+ * partition_offsets => {0,3,7}
+ *
+ * Example 5:
+ * input:
+ * table => col 1 {0, ..., 10}
+ * num_partitions = 3
  * start_partition = 2
  * 
  * output: pair<table, partition_offsets>
- * table => col 1 {0,3,6,9,1,4,7,10,2,5,8}
- * partition_offsets => {4,8,0}
+ * table => col 1 {1,4,7,10,2,5,8,0,3,6,9}
+ * partition_offsets => {0,4,7}
  *
  * @Param[in] input The input table to be round-robin partitioned
  * @Param[in] num_partitions Number of partitions for the table
