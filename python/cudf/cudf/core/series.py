@@ -2666,5 +2666,5 @@ def _align_indices_multi(series_list):
             rhs.index.unique()
         ):
             raise ValueError("Cannot align indices with non-unique values")
-        result.append(_align_indices(sr, rhs)[0])
+        result.append(_align_indices(lhs, rhs)[0])
     return result
