@@ -69,6 +69,7 @@
 - PR #3734 Update numba to 0.46 in conda files
 - PR #3738 Update libxx cython types.hpp path
 - PR #3672 Fix to_host issue with column_view having offset
+- PR #3730 CSV reader: Set invalid float values to NaN/null
 
 
 # cuDF 0.11.0 (11 Dec 2019)
