@@ -421,6 +421,7 @@ add_library(cudf
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
+            src/transform/bools_to_mask.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -565,12 +566,13 @@ add_library(cudf
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_ipv4.cu
             src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
+            src/strings/filling/fill.cu
             src/strings/find.cu
             src/strings/find_multiple.cu
-            src/strings/filling/fill.cu
             src/strings/padding.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
@@ -578,6 +580,7 @@ add_library(cudf
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
+            src/strings/strip.cu
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu

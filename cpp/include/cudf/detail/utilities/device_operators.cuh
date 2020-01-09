@@ -73,8 +73,17 @@ struct DeviceCount {
   }
 };
 
-// sentinel value which is the highest possible valid UTF-8 encoded character
-__constant__ char sentinel[5]{"\xF7\xBF\xBF\xBF"};
+/**
+ * @brief string value for sentinel which is used in min, max reduction
+ * operators
+ * This sentinel string value is the highest possible valid UTF-8 encoded
+ * character. This serves as identity value for maximum operator on string
+ * values. Also, this char pointer serves as valid device pointer of identity
+ * value for minimum operator on string values.
+ *
+ */
+__constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+
 /* @brief binary `min` operator */
 struct DeviceMin {
   template <typename T>
@@ -93,7 +102,7 @@ struct DeviceMin {
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     const char* psentinel{nullptr};
-    cudaGetSymbolAddress((void**)&psentinel, sentinel);
+    cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel);
     return T(psentinel, 4);
   }
 };
@@ -114,7 +123,7 @@ struct DeviceMax {
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     const char* psentinel{nullptr};
-    cudaGetSymbolAddress((void**)&psentinel, sentinel);
+    cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel);
     return T(psentinel, 0);
   }
 
