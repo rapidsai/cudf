@@ -132,7 +132,7 @@ void print( strings_column_view const& strings,
         size_type length = h_offsets[idx+1] - offset;
         std::cout << idx << ":";
         if( length )
-            std::cout << "[" << h_buffer.data()+offset << "]";
+            std::cout << "[" << std::string(h_buffer.data()+offset) << "]";
         else
             std::cout << "<null>";
         std::cout << delimiter;
