@@ -56,14 +56,16 @@ std::unique_ptr<aggregation> make_mean_aggregation();
 /**
  * @brief Factory to create a VARIANCE aggregation
  * 
- * @param ddof Delta degrees of freedom
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `variance` is `N - ddof`, where `N` is the population size.
  */
 std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
 
 /**
  * @brief Factory to create a STD aggregation
  * 
- * @param ddof Delta degrees of freedom
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `std` is `N - ddof`, where `N` is the population size.
  */
 std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
 
