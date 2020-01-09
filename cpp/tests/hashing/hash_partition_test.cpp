@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/hashing.hpp>
+#include <cudf/sorting.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/table_utilities.hpp>
@@ -185,13 +186,41 @@ void run_fixed_width_test(size_t cols, size_t rows, cudf::size_type num_partitio
 
   // Expect output to have size num_partitions
   EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
-  EXPECT_EQ(offsets1.size(), offsets2.size());
+  EXPECT_TRUE(std::equal(offsets1.begin(), offsets1.end(), offsets2.begin()));
 
   // Expect output to have same shape as input
   expect_table_properties_equal(input, output1->view());
+  expect_table_properties_equal(output1->view(), output2->view());
 
-  // Expect deterministic result from hashing the same input
-  expect_tables_equal(output1->view(), output2->view());
+  // Compute number of rows in each partition
+  EXPECT_EQ(0, offsets1[0]);
+  offsets1.push_back(rows);
+  std::adjacent_difference(offsets1.begin() + 1, offsets1.end(), offsets1.begin() + 1);
+
+  // Compute the partition number for each row
+  cudf::size_type partition = 0;
+  thrust::host_vector<cudf::size_type> partitions;
+  std::for_each(offsets1.begin() + 1, offsets1.end(), [&](cudf::size_type const& count) {
+     std::fill_n(std::back_inserter(partitions), count, partition++);
+  });
+
+  // Make a table view of the partition numbers
+  constexpr cudf::data_type dtype{cudf::INT32};
+  rmm::device_vector<cudf::size_type> d_partitions(partitions);
+  cudf::column_view partitions_col(dtype, rows, d_partitions.data().get());
+  cudf::table_view partitions_table({partitions_col});
+
+  // Sort partition numbers by the corresponding row hashes of each output
+  auto hash1 = cudf::hash(output1->view());
+  cudf::table_view hash1_table({hash1->view()});
+  auto sorted_partitions1 = cudf::experimental::sort_by_key(partitions_table, hash1_table);
+
+  auto hash2 = cudf::hash(output2->view());
+  cudf::table_view hash2_table({hash2->view()});
+  auto sorted_partitions2 = cudf::experimental::sort_by_key(partitions_table, hash2_table);
+
+  // After sorting by row hashes, the corresponding partition numbers should be equal
+  expect_tables_equal(sorted_partitions1->view(), sorted_partitions2->view());
 }
 
 TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)
