@@ -6,7 +6,7 @@ import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
-from cudf.core.column import CategoricalColumn
+from cudf.core.column import build_categorical_column
 
 
 class CudfEngine(ArrowEngine):
@@ -83,8 +83,8 @@ class CudfEngine(ArrowEngine):
                     val.as_py() for val in partitions.levels[i].dictionary
                 ]
                 sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
-                df[name] = CategoricalColumn(
-                    data=sr._column.data, categories=categories, ordered=False
+                df[name] = build_categorical_column(
+                    categories=categories, codes=sr._column, ordered=False
                 )
 
         return df
