@@ -15,7 +15,7 @@ def test_overflow_safe_to_same_kind():
     assert data.overflow_safe_to(to_dtype)
 
     data = Series([1, 2, 2 ** 31], dtype="int64")._column
-    assert data.overflow_safe_to(to_dtype)
+    assert not data.overflow_safe_to(to_dtype)
 
 
 def test_overflow_safe_to_mixed_kind():
@@ -25,7 +25,7 @@ def test_overflow_safe_to_mixed_kind():
 
     # too big to fit into f32 exactly
     data = Series([1, 2, 2 ** 24 + 1], dtype="int32")._column
-    assert data.overflow_safe_to(to_dtype)
+    assert not data.overflow_safe_to(to_dtype)
 
     to_dtype = np.dtype("float64")
     assert data.overflow_safe_to(to_dtype)
@@ -36,8 +36,8 @@ def test_overflow_safe_to_mixed_kind():
 
     # not integer float
     data = Series([1.0, 2.0, 3.5], dtype="float32")._column
-    assert data.overflow_safe_to(to_dtype)
+    assert not data.overflow_safe_to(to_dtype)
 
     # float out of int range
     data = Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
-    assert data.overflow_safe_to(to_dtype)
+    assert not data.overflow_safe_to(to_dtype)
