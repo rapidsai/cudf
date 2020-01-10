@@ -17,7 +17,7 @@ import cudf._lib as libcudf
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.core.table import Table
+from cudf.core.table import NamedTable
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, numbautils, utils
 from cudf.utils.docutils import copy_docstring
@@ -31,7 +31,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Series(Table):
+class Series(NamedTable):
     """
     Data and null-masks.
 

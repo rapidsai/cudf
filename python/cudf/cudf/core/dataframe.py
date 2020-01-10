@@ -29,7 +29,7 @@ from cudf.core.column import CategoricalColumn, StringColumn, as_column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
-from cudf.core.table import Table
+from cudf.core.table import NamedTable
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -85,7 +85,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Table):
+class DataFrame(NamedTable):
     """
     A GPU Dataframe object.
 
@@ -1147,13 +1147,6 @@ class DataFrame(Table):
             self._rename_columns(columns)
             if hasattr(columns, "name"):
                 self._columns_name = columns.name
-
-    @property
-    def _columns(self):
-        """
-        Return a list of Column objects backing this dataframe
-        """
-        return list(self._data.values())
 
     def _rename_columns(self, new_names):
         old_cols = iter(self._data.keys())
