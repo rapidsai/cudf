@@ -40,29 +40,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/gather.cuh>
 
-namespace{
-template<typename T>
-using VectorT = rmm::device_vector<T>;
-
-template<typename IndexT>
-  VectorT<IndexT> rotate_partition_sizes(cudf::size_type np, cudf::size_type sp, cudf::size_type m, cudf::size_type n_pmax, cudaStream_t stream)
-{
-  VectorT<IndexT> rotated(np, IndexT{0});
-
-  auto exec = rmm::exec_policy(stream);
-  thrust::transform(exec->on(stream),
-                    thrust::make_counting_iterator<IndexT>(0), thrust::make_counting_iterator<IndexT>(np),
-                    rotated.begin(),
-                    //(\indx -> if (indx + np - sp) `mod` np < pmax then m else (m-1) )
-                    [np, sp, m, n_pmax] __device__ (auto indx){
-                      return ((indx + np - sp) % np < n_pmax? m : m-1);
-                    });
-                    
-  return rotated;
-}
-
-} // anonym.
-
 namespace cudf {
 namespace experimental { 
 namespace detail {
@@ -120,13 +97,18 @@ round_robin_partition(table_view const& input,
                                                      mr,
                                                      stream);
 
-  auto rotated_v = rotate_partition_sizes<cudf::size_type>(num_partitions, start_partition, max_p_size, n_pmax, stream);
-
   rmm::device_vector<cudf::size_type> d_partition_offsets(num_partitions, cudf::size_type{0});
+
+  auto rotated_iter_begin =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
+                                    //(\indx -> if (indx + np - sp) `mod` np < pmax then m else (m-1) )
+                                    [num_partitions, start_partition, max_p_size, n_pmax] __device__ (auto indx){
+                                      return ((indx + num_partitions - start_partition) % num_partitions < n_pmax? max_p_size : max_p_size-1);
+                                    });
 
   auto exec = rmm::exec_policy(stream);
   thrust::exclusive_scan(exec->on(stream),
-                         rotated_v.begin(), rotated_v.end(),
+                         rotated_iter_begin, rotated_iter_begin + num_partitions,
                          d_partition_offsets.begin());
 
   ret_pair.first = std::move(uniq_tbl);
