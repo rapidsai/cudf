@@ -157,8 +157,6 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
 
 std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
                                                 column_view const& indices_column,
-                                                rmm::device_buffer& null_mask,
-                                                size_type null_count,
                                                 rmm::mr::device_memory_resource* mr,
                                                 cudaStream_t stream)
 {
@@ -170,7 +168,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
     return std::make_unique<column>(
         data_type{DICTIONARY32}, indices_column.size(),
         rmm::device_buffer{0,stream,mr},
-        null_mask, null_count,
+        copy_bitmask(indices_column,stream,mr), indices_column.null_count(),
         std::move(children),
         std::move(keys_copy));
 }

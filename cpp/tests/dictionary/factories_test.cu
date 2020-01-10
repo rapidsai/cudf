@@ -52,10 +52,8 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns)
     cudf::test::strings_column_wrapper keys_strings( h_keys.begin(), h_keys.end() );
     std::vector<int32_t> h_values{2,0,3,1,2,2,2,3,0};
     cudf::test::fixed_width_column_wrapper<int32_t> values( h_values.begin(), h_values.end() );
-    rmm::device_buffer null_mask{};
 
-    auto dictionary = cudf::make_dictionary_column( keys_strings, values,
-                                                    null_mask, 0 );
+    auto dictionary = cudf::make_dictionary_column( keys_strings, values );
     cudf::dictionary_column_view view(dictionary->view());
     auto keys = *(view.dictionary_keys());
 
