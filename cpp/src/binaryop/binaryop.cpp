@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -30,6 +31,8 @@
 #include <binaryop/jit/util.hpp>
 #include <cudf/datetime.hpp>  // replace eventually
 
+#include "compiled/binary_ops.hpp"
+
 #include <string>
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
@@ -38,6 +41,28 @@ namespace cudf {
 namespace experimental {
 
 namespace binops {
+namespace detail {
+/**
+ * @brief Computes output valid mask for op between a column and a scalar
+ */
+rmm::device_buffer scalar_col_valid_mask_and(
+    column_view const& col,
+    scalar const& s,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr) {
+  if (col.size() == 0) {
+    return rmm::device_buffer{};
+  }
+
+  if (not s.is_valid()) {
+    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
+  } else if (s.is_valid() && col.nullable()) {
+    return copy_bitmask(col, stream, mr);
+  } else {
+    return rmm::device_buffer{};
+  }
+}
+}  // namespace detail
 
 namespace jit {
 
@@ -94,7 +119,7 @@ void binary_operation(mutable_column_view& out,
   cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
                       headers_code, stream)
       .set_kernel_inst(
-          "cudf::experimental::kernel_v_s",       // name of the kernel we are
+          "kernel_v_s",                           // name of the kernel we are
                                                   // launching
           {cudf::jit::get_type_name(out.type()),  // list of template arguments
            cudf::jit::get_type_name(rhs.type()),
@@ -112,7 +137,7 @@ void binary_operation(mutable_column_view& out,
   cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
                       headers_code, stream)
       .set_kernel_inst(
-          "cudf::experimental::kernel_v_s",       // name of the kernel we are
+          "kernel_v_s",                           // name of the kernel we are
                                                   // launching
           {cudf::jit::get_type_name(out.type()),  // list of template arguments
            cudf::jit::get_type_name(lhs.type()),
@@ -130,7 +155,7 @@ void binary_operation(mutable_column_view& out,
   cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags,
                       headers_code, stream)
       .set_kernel_inst(
-          "cudf::experimental::kernel_v_v",       // name of the kernel we are
+          "kernel_v_v",                           // name of the kernel we are
                                                   // launching
           {cudf::jit::get_type_name(out.type()),  // list of template arguments
            cudf::jit::get_type_name(lhs.type()),
@@ -157,8 +182,8 @@ void binary_operation(mutable_column_view& out,
 
   cudf::jit::launcher(ptx_hash, cuda_source, header_names, compiler_flags,
                       headers_code, stream)
-      .set_kernel_inst("cudf::experimental::kernel_v_v",  // name of the kernel
-                                                          // we are launching
+      .set_kernel_inst("kernel_v_v",       // name of the kernel
+                                           // we are launching
                        {output_type_name,  // list of template arguments
                         cudf::jit::get_type_name(lhs.type()),
                         cudf::jit::get_type_name(rhs.type()),
@@ -171,28 +196,6 @@ void binary_operation(mutable_column_view& out,
 }  // namespace jit
 }  // namespace binops
 
-namespace {
-/**
- * @brief Computes output valid mask for op between a column and a scalar
- */
-auto scalar_col_valid_mask_and(column_view const& col,
-                               scalar const& s,
-                               cudaStream_t stream,
-                               rmm::mr::device_memory_resource* mr) {
-  if (col.size() == 0) {
-    return rmm::device_buffer{};
-  }
-
-  if (not s.is_valid()) {
-    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
-  } else if (s.is_valid() && col.nullable()) {
-    return copy_bitmask(col, stream, mr);
-  } else if (s.is_valid() && not col.nullable()) {
-    return rmm::device_buffer{};
-  }
-}
-}  // namespace
-
 namespace detail {
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
@@ -202,11 +205,19 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type),
+               "Invalid/Unsupported output datatype");
+
+  if ((lhs.type().id() == type_id::STRING) &&
+      (rhs.type().id() == type_id::STRING)) {
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
+                                              stream);
+  }
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
 
-  auto new_mask = scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+  auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
   auto out = make_numeric_column(output_type, rhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -226,11 +237,19 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
   // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type),
+               "Invalid/Unsupported output datatype");
+
+  if ((lhs.type().id() == type_id::STRING) &&
+      (rhs.type().id() == type_id::STRING)) {
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
+                                              stream);
+  }
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
 
-  auto new_mask = scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+  auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
   auto out = make_numeric_column(output_type, lhs.size(), new_mask,
                                  cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -249,13 +268,20 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream) {
+  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+
   // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+  if ((lhs.type().id() == type_id::STRING) &&
+      (rhs.type().id() == type_id::STRING)) {
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
+                                              stream);
+  }
+
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   auto new_mask = bitmask_and(lhs, rhs, stream, mr);
   auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
@@ -282,6 +308,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     return is_fixed_width(type) and
            type.id() != type_id::INT8;  // Numba PTX doesn't support int8
   };
+
   CUDF_EXPECTS(is_type_supported_ptx(lhs.type()),
                "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_type_supported_ptx(rhs.type()),
