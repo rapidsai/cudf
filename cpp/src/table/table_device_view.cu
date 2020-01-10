@@ -72,8 +72,8 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // objects in order for _columns to be used as an array. Therefore,
     // any child data is assigned to the end of this array (h_end/d_end).
-    int8_t* h_end = (int8_t*)(h_column + source_view.num_columns());
-    int8_t* d_end = (int8_t*)(d_column + source_view.num_columns());
+    auto h_end = (int8_t*)(h_column + source_view.num_columns());
+    auto d_end = (int8_t*)(d_column + source_view.num_columns());
     // Create the ColumnDeviceView from each column within the CPU memory
     // Any column child data should be copied into h_end and any
     // internal pointers should be set using d_end.

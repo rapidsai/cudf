@@ -47,10 +47,10 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
   size_type num_children = source.num_children();
   if( num_children > 0 )
   {
-    column_device_view* h_column = reinterpret_cast<column_device_view*>(h_ptr);
-    column_device_view* d_column = reinterpret_cast<column_device_view*>(d_ptr);
-    int8_t* h_end = reinterpret_cast<int8_t*>(h_column + num_children);
-    int8_t* d_end = reinterpret_cast<int8_t*>(d_column + num_children);
+    auto h_column = reinterpret_cast<column_device_view*>(h_ptr);
+    auto d_column = reinterpret_cast<column_device_view*>(d_ptr);
+    auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
+    auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
     d_children = d_column; // set member ptr to device memory
     for( size_type idx=0; idx < _num_children; ++idx )
     { // inplace-new each child into host memory
@@ -93,8 +93,8 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     // The beginning of the memory must be the fixed-sized column_device_view
     // struct objects in order for d_children to be used as an array. Therefore,
     // any child data is assigned to the end of this array.
-    int8_t* h_end = reinterpret_cast<int8_t*>(h_column + num_children);
-    int8_t* d_end = reinterpret_cast<int8_t*>(d_column + num_children);
+    auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
+    auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
     for( size_type idx=0; idx < num_children; ++idx )
     {
       // create device-view from view
@@ -112,7 +112,7 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     CUDA_TRY(cudaMemcpyAsync(p->d_children, h_buffer.data(), size_bytes,
                               cudaMemcpyHostToDevice, stream));
     p->_num_children = num_children;
-    cudaStreamSynchronize(stream);
+    CUDA_TRY(cudaStreamSynchronize(stream));
   }
   return p;
 }
