@@ -2207,8 +2207,8 @@ class DataFrame(Table):
         def casting_rules(dtype_l, dtype_r, how):
             cast_warn = "can't safely cast column {} from {} with type \
                          {} to {}, upcasting to {}"
-            ctgry_err = "can't implicitly cast column {} to categories \
-                         from right during left join"
+            ctgry_err = "can't implicitly cast column {0} to categories \
+                         from {1} during {1} join"
 
             rtn = None
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
@@ -2235,14 +2235,14 @@ class DataFrame(Table):
 
             elif is_categorical_dtype(dtype_l):
                 if how == "right":
-                    raise ValueError(ctgry_err.format(rcol))
+                    raise ValueError(ctgry_err.format(rcol, "right"))
 
                 rtn = lhs[lcol].cat.categories.dtype
                 to_categorical.append(lcol)
                 lhs[lcol + "_codes"] = lhs[lcol].cat.codes
             elif is_categorical_dtype(dtype_r):
                 if how == "left":
-                    raise ValueError(ctgry_err.format(lcol))
+                    raise ValueError(ctgry_err.format(lcol, "left"))
                 rtn = rhs[rcol].cat.categories.dtype
                 to_categorical.append(rcol)
                 rhs[rcol + "_codes"] = rhs[rcol].cat.codes
