@@ -841,9 +841,7 @@ class DataFrame(Table):
                         r_opr = other_cols[col]
                         l_opr = Series(
                             column_empty(
-                                len(self),
-                                masked=True,
-                                dtype=np.array(r_opr).dtype,
+                                len(self), masked=True, dtype=other.dtype,
                             )
                         )
                     if col not in other_cols_keys:
