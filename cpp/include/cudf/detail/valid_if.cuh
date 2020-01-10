@@ -135,7 +135,10 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  *
  * @tparam BinaryPredicate bool(Iter1 + mask_idx, Iter2 + bit_idx)
  *---------------------------------------------------------------------------**/
-template <typename Iter1, typename Iter2, typename BinaryPredicate, int32_t block_size>
+template <typename InputIterator1,
+          typename InputIterator2,
+          typename BinaryPredicate,
+          int32_t block_size>
 __global__ void valid_if_n_kernel(Iter1 begin1,
                                   Iter2 begin2,
                                   BinaryPredicate p,
