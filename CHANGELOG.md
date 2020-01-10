@@ -42,6 +42,7 @@
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
+- PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
@@ -77,6 +78,7 @@
 - PR #3672 Fix to_host issue with column_view having offset
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
+- PR #3728 Fix apply_boolean_mask issue with non-null string column
 
 
 # cuDF 0.11.0 (11 Dec 2019)
