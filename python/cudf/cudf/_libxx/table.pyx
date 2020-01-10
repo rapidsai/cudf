@@ -15,7 +15,7 @@ class OrderedColumnDict(OrderedDict):
         if not isinstance(value, ColumnBase):
             raise TypeError(
                 f"Cannot insert object of type "
-                "{value.__class__.__name__} into OrderedColumnDict"
+                f"{value.__class__.__name__} into OrderedColumnDict"
             )
 
         if self.first is not None and len(self.first) > 0:

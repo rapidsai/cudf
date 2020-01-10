@@ -22,6 +22,7 @@ from cudf.core.column import (
     StringColumn,
     column,
 )
+from cudf.core.table import Table
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
@@ -57,7 +58,7 @@ def _to_frame(this_index, index=True, name=None):
     )
 
 
-class Index(object):
+class Index(Table):
     """The root interface for all Series indexes.
     """
 
@@ -91,6 +92,15 @@ class Index(object):
         col_typ = pickle.loads(h["type"])
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
+
+    @property
+    def name(self):
+        return next(iter(self._data.keys()))
+
+    @name.setter
+    def name(self, value):
+        col = self._data.pop(self.name)
+        self._data[value] = col
 
     def take(self, indices):
         """Gather only the specific subset of indices
@@ -462,8 +472,8 @@ class RangeIndex(Index):
             start, stop = 0, start
         self._start = int(start)
         self._stop = int(stop)
-        self.name = name
         self._cached_values = None
+        super().__init__({name: column.column_empty(0)})
 
     def __contains__(self, item):
         if self._start <= item < self._stop:
@@ -612,7 +622,10 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
+        self._data[self.name] = column.build_column(
+            data=Buffer(vals), dtype=vals.dtype,
+        )
+        return self._data[self.name]
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -703,10 +716,12 @@ class GenericIndex(Index):
             values = column.as_column(values)
             assert isinstance(values, (NumericalColumn, StringColumn))
 
-        self._values = values
-        self._name = kwargs.get("name")
+        name = kwargs.get("name")
+        super().__init__({name: values})
 
-        assert isinstance(values, column.ColumnBase), type(values)
+    @property
+    def _values(self):
+        return next(iter(self._data.values()))
 
     def copy(self, deep=True):
         if deep:
@@ -751,21 +766,11 @@ class GenericIndex(Index):
     def as_column(self):
         """Convert the index as a Series.
         """
-        col = self._values
-        col.name = self.name
-        return col
+        return self._values
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, name):
-        self._name = name
 
     @property
     def dtype(self):
