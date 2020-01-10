@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,6 +191,20 @@ if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
 endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
 
 ###################################################################################################
+# - clone libcu++ ------------------------------------------------------------------------------------
+
+message(STATUS "Installing libcu++")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                COMMAND git clone --branch cudf --recurse-submodules
+                        https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/include/        DESTINATION include/libcudacxx)
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/libcxx/include/ DESTINATION include/libcxx/include)
+
+###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
@@ -220,6 +234,9 @@ message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
 
 if(Boost_FOUND)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
 endif(Boost_FOUND)
@@ -305,6 +322,7 @@ if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
+                    "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
@@ -390,6 +408,7 @@ add_library(cudf
             src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
+            src/join/join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -410,7 +429,13 @@ add_library(cudf
             src/binaryop/legacy/jit/code/traits.cpp
             src/binaryop/legacy/jit/util/operator.cpp
             src/binaryop/legacy/jit/util/type.cpp
+            src/binaryop/binaryop.cpp
+            src/binaryop/compiled/binary_ops.cu
+            src/binaryop/jit/code/kernel.cpp
+            src/binaryop/jit/code/operation.cpp
+            src/binaryop/jit/code/traits.cpp
             src/jit/legacy/type.cpp
+            src/jit/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
@@ -418,6 +443,8 @@ add_library(cudf
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
+            src/transform/nans_to_nulls.cu
+            src/transform/bools_to_mask.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -446,6 +473,18 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
+            src/reductions/reductions.cpp
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/any.cu
+            src/reductions/all.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
+            src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reshape/legacy/stack.cu
@@ -514,6 +553,7 @@ add_library(cudf
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
+            src/copying/contiguous_split.cu
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -544,22 +584,30 @@ add_library(cudf
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
+            src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_ipv4.cu
+            src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
+            src/strings/filling/fill.cu
             src/strings/find.cu
             src/strings/find_multiple.cu
-            src/strings/filling/fill.cu
             src/strings/padding.cu
+            src/strings/regex/regcomp.cpp
+            src/strings/regex/regexec.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/partition.cu
+            src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
+            src/strings/strip.cu
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
@@ -594,25 +642,96 @@ set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 # Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
 add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        ${CMAKE_BINARY_DIR}/include/jit
+        ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details
+        ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt
+        ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include)
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
+add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMENT "Stringify headers for use in JIT compiled code"
                    DEPENDS stringify
-                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
+                   OUTPUT ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/details/__config
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/limits
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/cfloat
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/chrono
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/ctime
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/ratio
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/type_traits
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/version
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/__config
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/__undef_macros
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/cfloat
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/chrono
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ctime
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/limits
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ratio
+                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/type_traits
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                   COMMENT "Run stringify on header types.hpp to convert it to c-str for use in JIT compiled code"
-                   DEPENDS stringify
-                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
+                   # stringified headers are placed underneath the bin include jit directory and end in ".jit"
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/cfloat libcudacxx_simt_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/chrono libcudacxx_simt_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/ctime libcudacxx_simt_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/ratio libcudacxx_simt_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/type_traits libcudacxx_simt_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/version libcudacxx_simt_version > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/__config libcxx_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/__undef_macros libcxx_undef_macros > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/cfloat libcxx_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/chrono libcxx_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/ctime libcxx_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/limits libcxx_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/ratio libcxx_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/type_traits libcxx_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                   )
 
 add_custom_target(stringify_run DEPENDS
-                  ${CMAKE_BINARY_DIR}/include/types.h.jit
-                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
+                  ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit)
 
 add_dependencies(cudf stringify_run)
 
@@ -676,6 +795,14 @@ install(TARGETS cudf
         COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
+        DESTINATION include/libcudf
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcudacxx
+        DESTINATION include/libcudf
         COMPONENT cudf)
 
 add_custom_target(install_cudf

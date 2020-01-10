@@ -230,7 +230,7 @@ std::unique_ptr<column> ends_with( strings_column_view const& strings,
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
         auto str_length = d_string.length();
         auto tgt_length = d_target.length();
-        if( str_length <= tgt_length )
+        if( str_length < tgt_length )
             return false;
         return d_string.find( d_target, str_length - tgt_length )>=0;
     };
