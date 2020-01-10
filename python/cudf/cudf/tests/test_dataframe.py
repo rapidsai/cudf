@@ -4035,6 +4035,93 @@ def test_cov_nans():
     assert_eq(pdf.cov(), gdf.cov())
 
 
+@pytest.mark.parametrize(
+    "gsr",
+    [
+        Series([1, 2, 3]),
+        Series([1, 2, 3], index=["a", "b", "c"]),
+        Series([1, 2, 3], index=["a", "b", "d"]),
+        Series([1, 2], index=["a", "b"]),
+        Series([1, 2, 3], index=gd.core.index.RangeIndex(0, 3)),
+        pytest.param(
+            Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
+            marks=pytest.mark.xfail,
+        ),
+    ],
+)
+@pytest.mark.parametrize("colnames", [["a", "b", "c"], [0, 1, 2]])
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.add,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
+    ],
+)
+def test_df_sr_binop(gsr, colnames, op):
+    data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
+    data = dict(zip(colnames, data))
+
+    gdf = DataFrame(data)
+    pdf = pd.DataFrame.from_dict(data)
+
+    psr = gsr.to_pandas()
+
+    expect = op(pdf, psr)
+    got = op(gdf, gsr)
+    assert_eq(expect.astype(float), got.astype(float))
+
+    expect = op(psr, pdf)
+    got = op(psr, pdf)
+    assert_eq(expect.astype(float), got.astype(float))
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.add,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
+    ],
+)
+@pytest.mark.parametrize(
+    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])],
+)
+def test_df_sr_binop_col_order(gsr, op):
+    colnames = [0, 1, 2]
+    data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
+    data = dict(zip(colnames, data))
+
+    gdf = DataFrame(data)
+    pdf = pd.DataFrame.from_dict(data)
+
+    psr = gsr.to_pandas()
+
+    expect = op(pdf, psr).astype("float")
+    out = op(gdf, gsr).astype("float")
+    got = out[expect.columns]
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.xfail
 @pytest.mark.parametrize("set_index", [None, "A", "C", "D"])
 @pytest.mark.parametrize("index", [True, False])

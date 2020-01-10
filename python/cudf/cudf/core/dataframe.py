@@ -25,7 +25,12 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.column import CategoricalColumn, StringColumn, as_column
+from cudf.core.column import (
+    CategoricalColumn,
+    StringColumn,
+    as_column,
+    column_empty,
+)
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -820,11 +825,30 @@ class DataFrame(Table):
                 else:
                     result[col] = fallback(rhs[col], _reverse_op(fn))
         elif isinstance(other, Series):
-            raise NotImplementedError(
-                "Series to DataFrame arithmetic not supported "
-                "until strings can be used as indices. Try converting your"
-                " Series into a DataFrame first."
-            )
+            other_cols = other.to_pandas().to_dict()
+            other_cols_keys = list(other_cols.keys())
+            result_cols = list(self.columns)
+            df_cols = list(result_cols)
+            for new_col in other_cols.keys():
+                if new_col not in result_cols:
+                    result_cols.append(new_col)
+            for col in result_cols:
+                if col in df_cols and col in other_cols_keys:
+                    l_opr = self[col]
+                    r_opr = other_cols[col]
+                else:
+                    if col not in df_cols:
+                        r_opr = other_cols[col]
+                        l_opr = Series(
+                            column_empty(
+                                len(self), masked=True, dtype=other.dtype,
+                            )
+                        )
+                    if col not in other_cols_keys:
+                        r_opr = None
+                        l_opr = self[col]
+                result[col] = op(l_opr, r_opr)
+
         elif isinstance(other, numbers.Number):
             for col in self._data:
                 result[col] = op(self[col], other)
