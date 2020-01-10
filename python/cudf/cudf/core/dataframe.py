@@ -2213,6 +2213,10 @@ class DataFrame(Table):
             rtn = None
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 rtn = dtype_l
+            elif is_categorical_dtype(dtype_l) and is_categorical_dtype(
+                dtype_r
+            ):
+                raise TypeError("Left and right categories must be the same.")
             elif how == "left":
 
                 check_col = rhs._data[rcol].fillna(0)
