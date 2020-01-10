@@ -134,7 +134,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     rmm::device_vector<size_type> keys_indices(unique_count);
     auto d_keys_indices = keys_indices.data().get();
     thrust::gather( execpol->on(stream), d_map_indices, d_map_nend, d_ordinals, d_keys_indices );
-    // output of gather [0,2,3,6,7] from [1,8,3,4,5,6,2,0,7]
+    // output of gathering [0,2,3,6,7] from [1,8,3,4,5,6,2,0,7] is
     //  keys_indices: [1,3,4,2,0]
 
     // in-place scan will produce the actual indices
@@ -142,7 +142,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     // output of scan indices [0,0,1,1,0,0,1,1,0] is now [0,0,1,2,2,2,3,4,4]
     // sort will put the indices in the correct order
     thrust::sort_by_key(execpol->on(stream), ordinals.begin(), ordinals.end(), d_indices);
-    // output of sort; indices is now [4,0,3,1,2,2,2,4,0]
+    // output of sort: indices is now [4,0,3,1,2,2,2,4,0]
 
     // if there are nulls, just truncate the null entry -- it was sorted to the end;
     // the indices do not need to be updated since any value for a null entry is technically undefined
