@@ -67,22 +67,40 @@ def read_parquet(
 def to_parquet(
     df,
     path,
-    compression="snappy",
-    statistics="ROWGROUP",
     engine="cudf",
+    compression="snappy",
     index=None,
     partition_cols=None,
+    statistics="ROWGROUP",
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
     if engine == "cudf":
+
+        if index is not None:
+            ValueError(
+                "'index' is currently not supported by the gpu "
+                + "accelerated parquet writer"
+            )
+
+        if partition_cols is not None:
+            ValueError(
+                "'partition_cols' is currently not supported by the "
+                + "gpu accelerated parquet writer"
+            )
+
         return libcudf.parquet.write_parquet(
             df, path, compression=compression, statistics=statistics
         )
     else:
         pa_table = df.to_arrow()
         pq.write_to_dataset(
-            pa_table, path, partition_cols=partition_cols, *args, **kwargs
+            pa_table,
+            path,
+            partition_cols=partition_cols,
+            index=index,
+            *args,
+            **kwargs,
         )
