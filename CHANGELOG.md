@@ -63,12 +63,14 @@
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3724 Update rmm version to match release
 - PR #3743 Fix for `None` data in `__array_interface__`
 - PR #3731 Fix performance of zero sized dataframe slice
 - PR #3709 Fix inner_join incorrect result issue
 - PR #3734 Update numba to 0.46 in conda files
 - PR #3738 Update libxx cython types.hpp path
 - PR #3672 Fix to_host issue with column_view having offset
+- PR #3730 CSV reader: Set invalid float values to NaN/null
 
 
 # cuDF 0.11.0 (11 Dec 2019)
