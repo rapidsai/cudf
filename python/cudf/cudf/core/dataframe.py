@@ -1479,7 +1479,7 @@ class DataFrame(Table):
         if len(self) == 0:
             if isinstance(value, (pd.Series, Series)):
                 self._index = as_index(value.index)
-            else:
+            elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
                 if num_cols != 0:
                     for col_name in self._data:
