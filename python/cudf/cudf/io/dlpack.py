@@ -3,7 +3,7 @@
 from cudf._lib import dlpack as cpp_dlpack
 from cudf._lib.GDFError import GDFError
 from cudf.core.buffer import Buffer
-from cudf.core.column import Column, column
+from cudf.core.column import ColumnBase, column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index
 from cudf.core.series import Series
@@ -47,7 +47,7 @@ def from_dlpack(pycapsule_obj):
             mask = Buffer(valids[idx])
         cols.append(
             column.build_column(
-                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask
+                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask,
             )
         )
     if len(cols) == 1:
@@ -66,12 +66,12 @@ def to_dlpack(cudf_obj):
         raise ValueError("Cannot create DLPack tensor of 0 size")
 
     if isinstance(cudf_obj, DataFrame):
-        gdf_cols = [col[1]._column for col in cudf_obj._cols.items()]
+        gdf_cols = list(cudf_obj._data.values())
     elif isinstance(cudf_obj, Series):
         gdf_cols = [cudf_obj._column]
     elif isinstance(cudf_obj, Index):
         gdf_cols = [cudf_obj._values]
-    elif isinstance(cudf_obj, Column):
+    elif isinstance(cudf_obj, ColumnBase):
         gdf_cols = [cudf_obj]
     else:
         raise TypeError(
