@@ -19,6 +19,7 @@
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
 - PR #3364 Port NVStrings split functions
+- PR #3463 Port NVStrings partition/rpartition to cudf strings column
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
 - PR #3590 Specialize hash functions for floating point
@@ -62,10 +63,13 @@
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3743 Fix for `None` data in `__array_interface__`
 - PR #3731 Fix performance of zero sized dataframe slice
 - PR #3709 Fix inner_join incorrect result issue
 - PR #3734 Update numba to 0.46 in conda files
 - PR #3738 Update libxx cython types.hpp path
+- PR #3672 Fix to_host issue with column_view having offset
+- PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
 
 
@@ -125,6 +129,7 @@
 - PR #3527 Add string functionality for merge API
 - PR #3557 Add contiguous_split() function.
 - PR #3507 Define and implement new binary operation APIs
+- PR #3273 Define and implement new reduction APIs
 
 ## Improvements
 
@@ -206,6 +211,7 @@
 - PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
+- PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
