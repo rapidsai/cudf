@@ -129,7 +129,7 @@ class Series(Table):
 
         assert isinstance(data, column.ColumnBase)
 
-        super().__init__([data], [name])
+        super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
 
     @property

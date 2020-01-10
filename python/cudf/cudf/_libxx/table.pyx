@@ -41,15 +41,10 @@ class OrderedColumnDict(OrderedDict):
 
 cdef class _Table:
 
-    def __init__(self, data=None, names=None):
+    def __init__(self, data=None):
         if data is None:
             data = OrderedColumnDict()
-        if isinstance(data, OrderedColumnDict):
-            self._data = data
-        else:
-            if names is None:
-                names = range(len(data))
-            self._data = OrderedColumnDict(zip(names, data))
+        self._data = OrderedColumnDict(data)
 
     cdef table_view view(self) except *:
         cdef vector[column_view] column_views
@@ -70,7 +65,7 @@ cdef class _Table:
         return mutable_table_view(column_views)
 
     @staticmethod
-    cdef _Table from_unique_ptr(unique_ptr[table] c_tbl, names=None):
+    cdef _Table from_unique_ptr(unique_ptr[table] c_tbl):
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
         result = []
