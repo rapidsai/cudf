@@ -358,34 +358,42 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
 /**
  * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
  * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
- * If the character is not a valid numeric digit then `0` is returned.
+ * If the character is not a valid numeric digit then `0` is returned and
+ * valid_flag is set to false.
  *
  * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T,
           typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c) {
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
   if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+
+  *valid_flag = false;
   return 0;
 }
 
 /**
  * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. Does not check if
- * character is a valid numeric value.
+ * for non-integral types. Handles only decimal digits. If the character is not
+ * a valid numeric digit then `0` is returned and valid_flag is set to false.
  *
  * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T,
           typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c) {
-  return c - '0';
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+  if (c >= '0' && c <= '9') return c - '0';
+
+  *valid_flag = false;
+  return 0;
 }
 
 /**
@@ -403,6 +411,7 @@ template <typename T>
 __inline__ __device__ T parse_numeric(const char *data, long start, long end,
                                       ParseOptions const &opts, int base = 10) {
   T value = 0;
+  bool all_digits_valid = true;
 
   // Handle negative values if necessary
   int32_t sign = 1;
@@ -420,7 +429,7 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
     } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
       break;
     } else if (data[index] != opts.thousands && data[index] != '+') {
-      value = (value * base) + decode_digit<T>(data[index]);
+      value = (value * base) + decode_digit<T>(data[index], &all_digits_valid);
     }
     ++index;
   }
@@ -434,27 +443,28 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
         break;
       } else if (data[index] != opts.thousands && data[index] != '+') {
         divisor /= base;
-        value += decode_digit<T>(data[index]) * divisor;
+        value += decode_digit<T>(data[index], &all_digits_valid) * divisor;
       }
       ++index;
     }
 
     // Handle exponential part of the number if necessary
-    int32_t exponent = 0;
-    int32_t exponentsign = 1;
-    while (index <= end) {
-      if (data[index] == '-') {
-        exponentsign = -1;
-      } else if (data[index] == '+') {
-        exponentsign = 1;
-      } else {
-        exponent = (exponent * 10) + (data[index] - '0');
+    if (index <= end) {
+      const int32_t exponent_sign = data[index] == '-' ? -1 : 1;
+      if (data[index] == '-' || data[index] == '+') {
+        ++index;
       }
-      ++index;
+      int32_t exponent = 0;
+      while (index <= end) {
+          exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
+      }
+      if (exponent != 0) {
+        value *= exp10(double(exponent * exponent_sign));
+      }
     }
-    if (exponent != 0) {
-      value *= exp10(double(exponent * exponentsign));
-    }
+  }
+  if (!all_digits_valid){
+    return std::numeric_limits<T>::quiet_NaN();
   }
 
   return value * sign;
@@ -533,12 +543,14 @@ struct decode_op {
    * @brief Dispatch for numeric types whose values can be convertible to
    * 0 or 1 to represent boolean false/true, based upon checking against a
    * true/false values list.
+   *
+   * @return bool Whether the parsed value is valid.
    */
   template <typename T,
             typename std::enable_if_t<
                 std::is_integral<T>::value and
                 !std::is_same<T, cudf::experimental::bool8>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(
+  __host__ __device__ __forceinline__ bool operator()(
       const char *data, void *out_buffer, size_t row, long start, long end,
       ParseOptions const &opts, column_parse::flags flags) {
     auto &value{static_cast<T *>(out_buffer)[row]};
@@ -558,6 +570,7 @@ struct decode_op {
         value = decode_value<T>(data, start, end, opts);
       }
     }
+    return true;
   }
 
   /**
@@ -565,7 +578,7 @@ struct decode_op {
    */
   template <typename T, typename std::enable_if_t<std::is_same<
                             T, cudf::experimental::bool8>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(
+  __host__ __device__ __forceinline__ bool operator()(
       const char *data, void *out_buffer, size_t row, long start, long end,
       ParseOptions const &opts, column_parse::flags flags) {
     auto &value{static_cast<T *>(out_buffer)[row]};
@@ -581,19 +594,37 @@ struct decode_op {
     } else {
       value = decode_value<T>(data, start, end, opts);
     }
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for floating points, which are set to NaN if the input 
+   * is not valid. In such case, the validity mask is set to zero too.
+   */
+   template <typename T,
+             typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(
+      const char *data, void *out_buffer, size_t row, long start, long end,
+      ParseOptions const &opts, column_parse::flags flags) {
+    auto &value{static_cast<T *>(out_buffer)[row]};
+
+    value = decode_value<T>(data, start, end, opts);
+    return !std::isnan(value);
   }
 
   /**
    * @brief Dispatch for all other types.
    */
   template <typename T,
-            typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(
+            typename std::enable_if_t<!std::is_integral<T>::value and 
+            !std::is_floating_point<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(
       const char *data, void *out_buffer, size_t row, long start, long end,
       ParseOptions const &opts, column_parse::flags flags) {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
     value = decode_value<T>(data, start, end, opts);
+    return true;
   }
 };
 
@@ -670,13 +701,13 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
           str_list[rec_id].first = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          cudf::experimental::type_dispatcher(dtype[actual_col], decode_op{},
+          if (cudf::experimental::type_dispatcher(dtype[actual_col], decode_op{},
                                               raw_csv, data[actual_col], rec_id,
-                                              start, tempPos, opts, flags[col]);
+                                              start, tempPos, opts, flags[col])){
+            // set the valid bitmap - all bits were set to 0 to start
+            set_bit(valid[actual_col], rec_id);
+          }
         }
-
-        // set the valid bitmap - all bits were set to 0 to start
-        set_bit(valid[actual_col], rec_id);
       } else if (dtype[actual_col].id() == cudf::type_id::STRING) {
         auto str_list =
             static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
