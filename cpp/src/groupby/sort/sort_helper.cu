@@ -19,6 +19,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/copy.hpp>
@@ -292,19 +293,12 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(
   cudaStream_t stream)
 {
   auto idx_data = key_sort_order().data<size_type>();
-  auto transformed_group_ids = index_vector(num_groups());
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    group_offsets().begin(), group_offsets().end(),
-                    transformed_group_ids.begin(),
+  auto gather_map_it = thrust::make_transform_iterator(group_offsets().begin(),
     [idx_data] __device__ (size_type i) { return idx_data[i]; } );
 
-  auto gather_map = cudf::column_view(data_type(type_to_id<size_type>()),
-    num_groups(), transformed_group_ids.data().get());
-
-  // TODO (dm): replace this with iterator based gather when it's made so that 
-  //            gather_map is not required to be generated
-  return cudf::experimental::detail::gather(_keys, gather_map,
+  return cudf::experimental::detail::gather(_keys, gather_map_it,
+                                            gather_map_it + num_groups(),
                                             false, false, false, mr, stream);
 }
 
