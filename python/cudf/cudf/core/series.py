@@ -2578,7 +2578,10 @@ class Series(Table):
         new_index = self.index.repeat(repeats)
         return Series(data, index=new_index, name=self.name)
 
-    def _align_to_index(self, index, how="outer", allow_non_unique=False):
+    def _align_to_index(
+        self, index, how="outer", sort=True, allow_non_unique=False
+    ):
+
         """
         Align to the given Index. See _align_indices below.
         """
@@ -2592,7 +2595,8 @@ class Series(Table):
                 raise ValueError("Cannot align indices with non-unique values")
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
-        return lhs.join(rhs, how=how, sort=True).iloc[:, 0].loc[index]
+        result = lhs.join(rhs, how=how, sort=sort)[0]
+        return result
 
 
 truediv_int_dtype_corrections = {
@@ -2695,4 +2699,5 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
         )
         for sr in series_list
     ]
+
     return result

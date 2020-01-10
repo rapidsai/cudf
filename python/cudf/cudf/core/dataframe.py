@@ -260,7 +260,8 @@ class DataFrame(Table):
         if input_series:
             if index is not None:
                 aligned_input_series = [
-                    sr._align_to_index(index) for sr in input_series
+                    sr._align_to_index(index, how="right")
+                    for sr in input_series
                 ]
 
             else:
