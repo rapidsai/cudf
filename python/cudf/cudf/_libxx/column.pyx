@@ -209,7 +209,7 @@ cdef class Column:
             children)
 
     @staticmethod
-    cdef Column from_ptr(unique_ptr[column] c_col):
+    cdef Column from_unique_ptr(unique_ptr[column] c_col):
         from cudf.core.column import build_column
 
         size = c_col.get()[0].size()
@@ -231,7 +231,7 @@ cdef class Column:
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
         children = None
         if c_children.size() != 0:
-            children = tuple(Column.from_ptr(move(c_children[i]))
+            children = tuple(Column.from_unique_ptr(move(c_children[i]))
                              for i in range(c_children.size()))
 
         return build_column(data, dtype=dtype, mask=mask, children=children)

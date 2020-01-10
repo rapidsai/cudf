@@ -9,4 +9,4 @@ cdef class _Table:
     cdef mutable_table_view mutable_view(self) except *
 
     @staticmethod
-    cdef _Table from_ptr(unique_ptr[table] c_tbl, names=*)
+    cdef _Table from_unique_ptr(unique_ptr[table] c_tbl, names=*)

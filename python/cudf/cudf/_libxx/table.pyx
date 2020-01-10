@@ -70,10 +70,10 @@ cdef class _Table:
         return mutable_table_view(column_views)
 
     @staticmethod
-    cdef _Table from_ptr(unique_ptr[table] c_tbl, names=None):
+    cdef _Table from_unique_ptr(unique_ptr[table] c_tbl, names=None):
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
         result = []
         for i in range(columns.size()):
-            result.append(Column.from_ptr(move(columns[i])))
+            result.append(Column.from_unique_ptr(move(columns[i])))
         return _Table(result)

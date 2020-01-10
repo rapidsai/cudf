@@ -11,4 +11,4 @@ def gather(_Table source_table, Column gather_map):
             gather_map.view()
         )
     )
-    return _Table.from_ptr(move(c_result))
+    return _Table.from_unique_ptr(move(c_result))
