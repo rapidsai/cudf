@@ -226,6 +226,9 @@ std::size_t size_of(data_type t);
 /**
  * @brief Define concrete dictionary type.
  */
-struct dictionary32_tag{};
+struct dictionary32_tag
+{
+  using index_type = int32_t;
+};
 
 }  // namespace cudf
