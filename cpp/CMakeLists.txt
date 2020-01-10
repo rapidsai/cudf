@@ -450,6 +450,18 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
+            src/reductions/reductions.cpp
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/any.cu
+            src/reductions/all.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
+            src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reshape/legacy/stack.cu
@@ -549,6 +561,7 @@ add_library(cudf
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
+            src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
@@ -562,8 +575,11 @@ add_library(cudf
             src/strings/find.cu
             src/strings/find_multiple.cu
             src/strings/padding.cu
+            src/strings/regex/regcomp.cpp
+            src/strings/regex/regexec.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/partition.cu
             src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu

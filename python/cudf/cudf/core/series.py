@@ -18,7 +18,7 @@ from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.table import Table
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, numbautils, utils
+from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -160,11 +160,7 @@ class Series(Table):
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        # numbautils.PatchedNumbaDeviceArray() is a
-        # temporary fix for CuPy < 7.0, numba = 0.46
-        return cupy.asarray(
-            numbautils.PatchedNumbaDeviceArray(self._column.data_array_view)
-        )
+        return cupy.asarray(self._column.data_array_view)
 
     @property
     def values_host(self):
@@ -2665,7 +2661,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     if len(series_list) <= 1:
         return series_list
 
-    # check if all indices aer the same
+    # check if all indices are the same
     head = series_list[0].index
 
     all_index_equal = True
