@@ -67,7 +67,7 @@ def read_parquet(
 def to_parquet(
     df,
     path,
-    compression=None,
+    compression="snappy",
     statistics="ROWGROUP",
     engine="cudf",
     index=None,
@@ -83,4 +83,4 @@ def to_parquet(
         )
     else:
         pa_table = df.to_arrow()
-        pq.write_to_dataset(pa_table, path, *args, **kwargs)
+        pq.write_to_dataset(pa_table, path, partition_cols=partition_cols, *args, **kwargs)

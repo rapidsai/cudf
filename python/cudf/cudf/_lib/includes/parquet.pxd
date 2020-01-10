@@ -49,8 +49,8 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
 
         cudf_table read_row_group(size_t row_group) except +
 
-cdef extern from "cudf/io/functions.hpp"
-namespace "cudf::experimental::io" nogil:
+cdef extern from "cudf/io/functions.hpp" \
+        namespace "cudf::experimental::io" nogil:
 
     ctypedef enum compression_type:
         none "cudf::experimental::io::compression_type::NONE"

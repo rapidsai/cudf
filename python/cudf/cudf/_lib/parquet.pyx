@@ -133,14 +133,16 @@ cpdef write_parquet(
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 
-    cdef write_parquet_args args = write_parquet_args(sink,
-                                                      table.view(),
-                                                      tbl_meta,
-                                                      comp_type,
-                                                      stat_freq)
+    cdef table_view tv = table.view()
+    cdef write_parquet_args args
 
     # Perform write
     with nogil:
+        args = write_parquet_args(sink,
+                                  tv,
+                                  tbl_meta,
+                                  comp_type,
+                                  stat_freq)
         parquet_writer(args)
 
     # Cleanup
