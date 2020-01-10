@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
+#include "thrust/iterator/counting_iterator.h"
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -80,11 +81,14 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   constexpr size_type block_size = 256;
   using Selector = gather_bitmask_functor<true, decltype(gather_map)>;
   auto bitmask_selector = Selector{ *device_source, masks, gather_map };
-  auto bitmask_kernel = select_bitmask_kernel<Selector, block_size>;
+  auto counting_it = thrust::make_counting_iterator(0);
+  auto bitmask_kernel = valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
   size_type const grid_size = grid_1d(target_rows, block_size).num_blocks;
 
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
-  bitmask_kernel<<<grid_size, block_size, 0, stream>>>(bitmask_selector,
+  bitmask_kernel<<<grid_size, block_size, 0, stream>>>(counting_it,
+                                                       counting_it,
+                                                       bitmask_selector,
                                                        masks,
                                                        target.size(),
                                                        target_rows,

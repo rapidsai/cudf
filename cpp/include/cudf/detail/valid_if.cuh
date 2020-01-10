@@ -23,6 +23,7 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <thrust/distance.h>
+#include <thrust/device_vector.h>
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
@@ -115,6 +116,68 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   }
   return std::make_pair(std::move(null_mask), null_count);
 }
+
+/**----------------------------------------------------------------------------*
+ * @brief For each mask, assigns each bit to a value obtained by calling the
+ *        predicate.
+ *
+ * @note If any mask is `nullptr`, that mask will be ignored.
+ *
+ * @param get_validity    Function used to obtain validity for each bit.
+ *                        Signature: `bool(size_type mask_idx, size_type bit_idx)`
+ * @param masks           Masks for which bits will be obtained and assigned.
+ * @param mask_count      The number of `masks`.
+ * @param mask_num_bits   The number of bits to assign for each mask. If this
+ *                        number is smaller than the total number of bits, the
+ *                        remaining bits will be set to `0` / `false`.
+ * @param validity_counts Used to obtain the total number of valid bits for each
+ *                        mask.
+ *
+ * @tparam BinaryPredicate bool(Iter1 + mask_idx, Iter2 + bit_idx)
+ *---------------------------------------------------------------------------**/
+template <typename Iter1, typename Iter2, typename BinaryPredicate, int32_t block_size>
+__global__ void valid_if_n_kernel(Iter1 begin1,
+                                  Iter2 begin2,
+                                  BinaryPredicate p,
+                                  bitmask_type* masks[],
+                                  size_type mask_count,
+                                  size_type mask_num_bits,
+                                  size_type* valid_counts)
+{
+  for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
+    auto const mask = masks[mask_idx];
+    if (mask == nullptr) {
+      continue;
+    }
+
+    auto block_offset = blockIdx.x * blockDim.x;
+    auto warp_valid_count = static_cast<size_type>(0);
+
+    while (block_offset < mask_num_bits) {
+      auto const thread_idx = block_offset + threadIdx.x;
+      auto const thread_active = thread_idx < mask_num_bits;
+      auto const arg_1 = *(begin1 + mask_idx);
+      auto const arg_2 = *(begin2 + thread_idx);
+      auto const bit_is_valid = thread_active && p(arg_1, arg_2);
+      auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
+      auto const mask_idx = word_index(thread_idx);
+
+      if (thread_active && threadIdx.x % warp_size == 0) {
+        mask[mask_idx] = warp_validity;
+      }
+
+      warp_valid_count += __popc(warp_validity);
+      block_offset += blockDim.x * gridDim.x;
+    }
+
+    auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+
+    if (threadIdx.x == 0) {
+      atomicAdd(valid_counts + mask_idx, block_valid_count);
+    }
+  }
+}
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf

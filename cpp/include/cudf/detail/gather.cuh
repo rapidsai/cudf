@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/gather.cuh>
+#include <cudf/detail/valid_if.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -60,64 +61,6 @@ struct bounds_checker {
     return ((index >= begin) && (index < end));
   }
 };
-
-
-/**----------------------------------------------------------------------------*
- * @brief For each mask, assigns each bit to a value obtained by calling the
- *        validity selector.
- *
- * @note If any mask is `nullptr`, that mask will be ignored.
- *
- * @param get_validity    Function used to obtain validity for each bit.
- *                        Signature: `bool(size_type mask_idx, size_type bit_idx)`
- * @param masks           Masks for which bits will be obtained and assigned.
- * @param mask_count      The number of `masks`.
- * @param mask_num_bits   The number of bits to assign for each mask. If this
- *                        number is smaller than the total number of bits, the
- *                        remaining bits will be set to `0` / `false`.
- * @param validity_counts Used to obtain the total number of valid bits for each
- *                        mask.
- *
- * @tparam ValiditySelector bool(size_type mask_idx, size_type bit_idx);
- *---------------------------------------------------------------------------**/
-template <typename ValiditySelector, int32_t block_size>
-__global__ void select_bitmask_kernel(ValiditySelector get_validity,
-                                      bitmask_type* masks[],
-                                      size_type mask_count,
-                                      size_type mask_num_bits,
-                                      size_type* valid_counts)
-{
-  for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
-    auto const mask = masks[mask_idx];
-    if (mask == nullptr) {
-      continue;
-    }
-
-    auto block_offset = blockIdx.x * blockDim.x;
-    auto warp_valid_count = static_cast<size_type>(0);
-
-    while (block_offset < mask_num_bits) {
-      auto const thread_idx = block_offset + threadIdx.x;
-      auto const thread_active = thread_idx < mask_num_bits;
-      auto const bit_is_valid = thread_active && get_validity(mask_idx, thread_idx);
-      auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
-      auto const mask_idx = word_index(thread_idx);
-
-      if (thread_active && threadIdx.x % warp_size == 0) {
-        mask[mask_idx] = warp_validity;
-      }
-
-      warp_valid_count += __popc(warp_validity);
-      block_offset += blockDim.x * gridDim.x;
-    }
-
-    auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-
-    if (threadIdx.x == 0) {
-      atomicAdd(valid_counts + mask_idx, block_valid_count);
-    }
-  }
-}
 
 template <bool ignore_out_of_bounds, typename MapIterator>
 struct gather_bitmask_functor {
@@ -322,10 +265,13 @@ void gather_bitmask(table_device_view input,
   constexpr size_type block_size = 256;
   using Selector = gather_bitmask_functor<ignore_out_of_bounds, decltype(gather_map_begin)>;
   auto selector = Selector{ input, masks, gather_map_begin };
-  auto kernel = select_bitmask_kernel<Selector, block_size>;
+  auto counting_it = thrust::make_counting_iterator(0);
+  auto kernel = valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 
   cudf::experimental::detail::grid_1d grid { mask_size, block_size, 1 };
-  kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
+  kernel<<<grid.num_blocks, block_size, 0, stream>>>(counting_it,
+                                                     counting_it,
+                                                     selector,
                                                      masks,
                                                      mask_count,
                                                      mask_size,
