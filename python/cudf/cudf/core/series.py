@@ -2665,7 +2665,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     if len(series_list) <= 1:
         return series_list
 
-    # check if all indices aer the same
+    # check if all indices are the same
     head = series_list[0].index
 
     all_index_equal = True
