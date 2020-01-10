@@ -95,12 +95,7 @@ def to_parquet(
             df, path, compression=compression, statistics=statistics
         )
     else:
-        pa_table = df.to_arrow()
+        pa_table = df.to_arrow(preserve_index=index)
         pq.write_to_dataset(
-            pa_table,
-            path,
-            partition_cols=partition_cols,
-            index=index,
-            *args,
-            **kwargs,
+            pa_table, path, partition_cols=partition_cols, *args, **kwargs,
         )

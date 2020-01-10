@@ -112,7 +112,8 @@ cpdef write_parquet(
     # Create the write options
     cdef string filepath = <string>str(path).encode()
     cdef sink_info sink = sink_info(filepath)
-    cdef table_metadata *tbl_meta = new table_metadata()
+    cdef unique_ptr[table_metadata] tbl_meta = \
+        unique_ptr[table_metadata](new table_metadata())
 
     cdef compression_type comp_type
     if compression is None:
@@ -140,10 +141,7 @@ cpdef write_parquet(
     with nogil:
         args = write_parquet_args(sink,
                                   tv,
-                                  tbl_meta,
+                                  tbl_meta.get(),
                                   comp_type,
                                   stat_freq)
         parquet_writer(args)
-
-    # Cleanup
-    del tbl_meta
