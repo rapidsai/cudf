@@ -19,7 +19,6 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/detail/groupby/sort_helper.hpp>
 
 #include <utility>
 #include <vector>
@@ -27,6 +26,15 @@
 namespace cudf {
 namespace experimental {
 namespace groupby {
+
+namespace detail {
+namespace sort {
+
+class sort_groupby_helper;
+    
+} // namespace sort  
+} // namespace detail
+
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
@@ -172,13 +180,7 @@ class groupby {
    * The object is constructed on first invocation and subsequent invocations
    * of this function return the memoized object.
    */
-  detail::sort::sort_groupby_helper& helper() {
-    if (_helper)
-      return *_helper;
-    _helper = std::make_unique<detail::sort::sort_groupby_helper>(
-      _keys, _ignore_null_keys, _keys_are_sorted);
-    return *_helper;
-  };
+  detail::sort::sort_groupby_helper& helper();
 
   /**
    * @brief Dispatches to the appropriate implementation to satisfy the

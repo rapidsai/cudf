@@ -20,6 +20,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -123,6 +124,16 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
 
   return dispatch_aggregation(requests, 0, mr);
 }
+
+// Get the sort helper object
+detail::sort::sort_groupby_helper& groupby::helper() {
+  if (_helper)
+    return *_helper;
+  _helper = std::make_unique<detail::sort::sort_groupby_helper>(
+    _keys, _ignore_null_keys, _keys_are_sorted);
+  return *_helper;
+};
+
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf
