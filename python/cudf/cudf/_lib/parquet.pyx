@@ -112,8 +112,7 @@ cpdef write_parquet(
     # Create the write options
     cdef string filepath = <string>str(path).encode()
     cdef sink_info sink = sink_info(filepath)
-    cdef unique_ptr[table_metadata] tbl_meta = \
-        unique_ptr[table_metadata](new table_metadata())
+    cdef unique_ptr[table_metadata] tbl_meta = make_unique[table_metadata]()
 
     cdef compression_type comp_type
     if compression is None:
