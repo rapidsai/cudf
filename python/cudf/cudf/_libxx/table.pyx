@@ -10,12 +10,10 @@ from cudf._libxx.lib cimport *
 
 cdef class _Table:
 
-    def __init__(self, columns=None):
+    def __init__(self, columns):
         """
-        Data: a list or iter of columns
+        Data: an iterable of Columns
         """
-        if columns is None:
-            columns = []
         self._columns = columns
 
     cdef table_view view(self) except *:

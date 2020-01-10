@@ -482,12 +482,7 @@ class RangeIndex(Index):
             return False
 
     def copy(self, deep=True):
-        if deep:
-            result = deepcopy(self)
-        else:
-            result = copy(self)
-        result.name = self.name
-        return result
+        return RangeIndex(start=self._start, stop=self._stop, name=self.name)
 
     def __repr__(self):
         return (
@@ -538,6 +533,9 @@ class RangeIndex(Index):
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
+
+    def __reduce__(self):
+        return (RangeIndex, (self._start, self._stop, self.name))
 
     def equals(self, other):
         if self is other:

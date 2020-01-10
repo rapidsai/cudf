@@ -1410,6 +1410,9 @@ class DataFrame(NamedTable):
             memo = {}
         return self.copy(deep=True)
 
+    def __reduce__(self):
+        return (DataFrame, (self._data, self.index))
+
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
 
@@ -1668,7 +1671,7 @@ class DataFrame(NamedTable):
         else:
             index_cols.append(self.index.as_column())
 
-        input_cols = index_cols + data_cols
+        input_cols = index_cols + list(data_cols)
 
         if subset is not None:
             subset = self._columns_view(subset)._columns
@@ -4067,7 +4070,7 @@ class DataFrame(NamedTable):
 
         if keep_index:
             if isinstance(self.index, cudf.MultiIndex):
-                index = self.index.to_frame()._columns
+                index = list(self.index.to_frame()._columns)
                 index_names = self.index.to_frame().columns.to_list()
             else:
                 index = [self.index.as_column()]
@@ -4077,7 +4080,7 @@ class DataFrame(NamedTable):
             index_names = []
 
         tables = libcudf.copying.scatter_to_frames(
-            self._columns,
+            list(self._columns),
             map_index._column,
             index,
             names=self.columns.to_list(),
