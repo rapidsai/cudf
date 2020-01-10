@@ -15,6 +15,7 @@
 
 ## Improvements
 
+- PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
@@ -25,6 +26,7 @@
 - PR #3590 Specialize hash functions for floating point
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
+- PR #3511 Support DataFrame / Series mixed arithmetic
 - PR #3567 Include `strides` in `__cuda_array_interface__`
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column

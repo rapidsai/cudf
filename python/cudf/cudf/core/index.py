@@ -466,6 +466,12 @@ class RangeIndex(Index):
         self._cached_values = None
 
     def __contains__(self, item):
+        if not isinstance(
+            item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
+        ):
+            return False
+        if not item % 1 == 0:
+            return False
         if self._start <= item < self._stop:
             return True
         else:
