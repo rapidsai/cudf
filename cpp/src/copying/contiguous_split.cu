@@ -275,7 +275,8 @@ struct column_copy_functor {
       // offsets column.
       strings_column_view strings_c(in);
       column_view in_offsets = strings_c.offsets();
-      cudf::size_type num_els = cudf::util::round_up_safe(std::max(split_info.num_chars, in_offsets.size()), cudf::experimental::detail::warp_size);
+      size_type num_offsets = in.size() + 1;
+      cudf::size_type num_threads = cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::experimental::detail::warp_size);
 
       // get the chars column directly instead of calling .chars(), since .chars() will end up
       // doing gpu work we specifically want to avoid.
@@ -283,7 +284,7 @@ struct column_copy_functor {
 
       // no work to do. I -think- this cannot happen as a string column with 0 strings in it will still have
       // a single terminating offset. leaving this in just in case
-      if(num_els == 0){    
+      if(num_offsets == 0){    
          column_view out_offsets{in_offsets.type(), 0, nullptr};
          column_view out_chars{in_chars.type(), 0, nullptr};         
          out_cols.push_back(column_view(  in.type(), 0, nullptr,
@@ -295,11 +296,11 @@ struct column_copy_functor {
       // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
       // this exists in the kernel brief.    
       constexpr int block_size = 256;
-      cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};            
+      cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};            
       if(in.nullable()){
          copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
                            in.size(),                                            // num_rows
-                           in_offsets.data<size_type>(),                         // offsets_in
+                           in_offsets.head<size_type>() + in.offset(),           // offsets_in
                            offsets_buf,                                          // offsets_out
                            in.offset(),                                          // validity_in_offset
                            in.null_mask(),                                       // validity_in
@@ -313,7 +314,7 @@ struct column_copy_functor {
       } else {                                       
          copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
                            in.size(),                                            // num_rows
-                           in_offsets.data<size_type>(),                         // offsets_in
+                           in_offsets.head<size_type>() + in.offset(),           // offsets_in
                            offsets_buf,                                          // offsets_out
                            0,                                                    // validity_in_offset
                            nullptr,                                              // validity_in
@@ -327,7 +328,7 @@ struct column_copy_functor {
       }       
 
       // output child columns      
-      column_view out_offsets{in_offsets.type(), in_offsets.size(), offsets_buf};
+      column_view out_offsets{in_offsets.type(), num_offsets, offsets_buf};
       column_view out_chars{in_chars.type(), static_cast<size_type>(split_info.num_chars), chars_buf};
 
       // result
@@ -387,6 +388,14 @@ struct column_copy_functor {
    }
 };
 
+struct column_preprocess_info {
+   size_type                  index;
+   size_type                  offset;
+   size_type                  size;
+   bool                       nullable;      
+   cudf::column_device_view   offsets;
+};
+
 /**
  * @brief Creates a contiguous_split_result object which contains a deep-copy of the input
  * table_view into a single contiguous block of memory. 
@@ -407,9 +416,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device
    
    // build a list of all the offset columns and their indices for all input string columns and put them on the gpu
    //
-   // i'm using this pair structure instead of thrust::tuple because using tuple somehow causes the cudf::column_device_view
-   // default constructor to get called (compiler error) when doing the assignment to device_offset_columns below
-   thrust::host_vector<thrust::pair<thrust::pair<size_type, bool>, cudf::column_device_view>> offset_columns;
+   thrust::host_vector<column_preprocess_info> offset_columns;
    offset_columns.reserve(t.num_columns());  // worst case
    size_type column_index = 0;
    std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){
@@ -418,30 +425,24 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device
          // strings_column_view will result in memory allocation/cudaMemcpy() calls, which would
          // defeat the whole purpose of this step.
          cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
-         offset_columns.push_back(thrust::pair<thrust::pair<size_type, bool>, cudf::column_device_view>(
-                  thrust::pair<size_type, bool>(column_index, c.nullable()), cdv));
+         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});
       }
       column_index++;
    });   
-   thrust::device_vector<thrust::pair<thrust::pair<size_type, bool>, cudf::column_device_view>> device_offset_columns = offset_columns;   
+   thrust::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
      
-   // compute column split info for all string columns   
+    // compute column split info for all string columns   
    auto *sizes_p = device_split_info.data().get();   
    thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
-      [sizes_p] __device__ (auto column_info){
-         size_type                  col_index = column_info.first.first;
-         bool                       include_validity = column_info.first.second;
-         cudf::column_device_view   col = column_info.second;
-         size_type                  num_elements = col.size()-1;
-
-         auto num_chars = col.data<int32_t>()[num_elements] - col.data<int32_t>()[0];         
-         sizes_p[col_index].data_buf_size = round_up_safe_nothrow(static_cast<size_t>(num_chars), split_align);         
+      [sizes_p] __device__ (column_preprocess_info cpi){          
+         auto num_chars = cpi.offsets.head<int32_t>()[cpi.offset + cpi.size] - cpi.offsets.head<int32_t>()[cpi.offset];
+         sizes_p[cpi.index].data_buf_size = round_up_safe_nothrow(static_cast<size_t>(num_chars), split_align);         
          // can't use cudf::bitmask_allocation_size_bytes() because it throws
-         sizes_p[col_index].validity_buf_size = include_validity ? bitmask_allocation_size_bytes_nothrow(num_elements, split_align) : 0;                  
+         sizes_p[cpi.index].validity_buf_size = cpi.nullable ? bitmask_allocation_size_bytes_nothrow(cpi.size, split_align) : 0;                  
          // can't use cudf::util::round_up_safe() because it throws
-         sizes_p[col_index].offsets_buf_size = round_up_safe_nothrow(col.size() * sizeof(size_type), split_align);
-         sizes_p[col_index].num_chars = num_chars;
-         sizes_p[col_index].chars_offset = col.data<int32_t>()[0];
+         sizes_p[cpi.index].offsets_buf_size = round_up_safe_nothrow((cpi.size+1) * sizeof(size_type), split_align);
+         sizes_p[cpi.index].num_chars = num_chars;
+         sizes_p[cpi.index].chars_offset = cpi.offsets.head<int32_t>()[cpi.offset];
       }
    );
 
