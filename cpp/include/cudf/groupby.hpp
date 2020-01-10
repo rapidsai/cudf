@@ -71,7 +71,7 @@ struct aggregation_result {
 class groupby {
  public:
   groupby() = delete;
-  ~groupby() = default;
+  ~groupby();
   groupby(groupby const&) = delete;
   groupby(groupby&&) = delete;
   groupby& operator=(groupby const&) = delete;

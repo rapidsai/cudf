@@ -65,6 +65,10 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   }
 }
 
+// Destructor
+// Needs to be in source file because sort_groupby_helper was forward declared
+groupby::~groupby() = default;
+
 namespace {
 /// Make an empty table with appropriate types for requested aggs
 auto empty_results(std::vector<aggregation_request> const& requests) {
