@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
