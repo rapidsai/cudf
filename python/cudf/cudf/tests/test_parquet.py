@@ -2,6 +2,7 @@
 
 import os
 import random
+from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
@@ -426,3 +427,13 @@ def test_parquet_writer(tmpdir, pdf, gdf):
 
     # assert_eq(expect, got)
     assert pa.Table.equals(expect, got)
+
+
+def test_multifile_warning(datadir):
+    fpath = datadir.__fspath__() + "/*.parquet"
+    with pytest.warns(UserWarning):
+        got = cudf.read_parquet(fpath)
+        fname = sorted(glob(fpath))[0]
+        expect = pd.read_parquet(fname)
+        expect = expect.apply(pd.to_numeric)
+        assert_eq(expect, got)
