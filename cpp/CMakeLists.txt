@@ -664,6 +664,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ratio
                                    ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/type_traits
 
+                   # stringified headers are placed underneath the bin include jit directory and end in ".jit"
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
