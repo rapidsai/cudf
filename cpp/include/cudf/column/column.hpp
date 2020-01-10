@@ -90,14 +90,14 @@ class column {
   column(data_type dtype, size_type size, B1&& data, B2&& null_mask = {},
          size_type null_count = UNKNOWN_NULL_COUNT,
          std::vector<std::unique_ptr<column>>&& children = {},
-         std::shared_ptr<const column> keys = {})
+         std::shared_ptr<const column> dictionary_keys = {})
       : _type{dtype},
         _size{size},
         _data{std::forward<B1>(data)},
         _null_mask{std::forward<B2>(null_mask)},
         _null_count{null_count},
         _children{std::move(children)},
-        _keys{keys} {}
+        _dictionary_keys{dictionary_keys} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying the contents of a
@@ -229,7 +229,7 @@ class column {
   /**
    * @brief Returns a shared pointer to the keys column for this column.
    */
-  std::shared_ptr<const column> keys() const noexcept { return _keys; }
+  std::shared_ptr<const column> dictionary_keys() const noexcept { return _dictionary_keys; }
 
   /**---------------------------------------------------------------------------*
    * @brief Wrapper for the contents of a column.
@@ -240,7 +240,7 @@ class column {
     std::unique_ptr<rmm::device_buffer> data;
     std::unique_ptr<rmm::device_buffer> null_mask;
     std::vector<std::unique_ptr<column>> children;
-    std::shared_ptr<const column> keys;
+    std::shared_ptr<const column> dictionary_keys;
   };
 
   /**---------------------------------------------------------------------------*
@@ -320,7 +320,7 @@ class column {
   std::vector<std::unique_ptr<column>>
       _children{};  ///< Depending on element type, child
                     ///< columns may contain additional data
-  std::shared_ptr<const column> _keys{}; ///< Used for dictionary column
+  std::shared_ptr<const column> _dictionary_keys{}; ///< Used for dictionary column
 };
 
 /**---------------------------------------------------------------------------*
