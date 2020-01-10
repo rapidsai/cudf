@@ -41,6 +41,7 @@
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3697 Improve column insert performance for wide frames
 - PR #3710 Remove multiple CMake configuration steps from root build script
+- PR #3758 detail::scatter variant with map iterator support
 
 ## Bug Fixes
 

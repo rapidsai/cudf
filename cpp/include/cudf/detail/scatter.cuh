@@ -172,7 +172,7 @@ scatter(table_view const& source, MapIterator scatter_map_begin,
     cudaStream_t stream = 0) {
 
     CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
-            "scatter map size should be less than of equal to number of rows in source");
+            "scatter map size should be <= to number of rows in source");
 
     auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
     auto scatter_functor = column_scatterer<MapIterator>{};
