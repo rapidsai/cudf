@@ -41,7 +41,7 @@ class NamedTable(_Table):
         """
         if data is None:
             data = OrderedColumnDict()
-        self._data = data
+        self._data = OrderedColumnDict(data)
         super().__init__(self._data.values())
 
     def _unaryop(self, op):
