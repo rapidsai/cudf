@@ -35,13 +35,13 @@ namespace
 {
 
 // Sort functor for column row positions.
-// TODO add has_nulls template parameter
+template <bool has_nulls = true>
 struct sort_functor
 {
     column_device_view d_column;
     __host__ __device__ bool operator()(size_type lhs_index, size_type rhs_index)
     {
-        auto comparator = experimental::element_relational_comparator<true>{ // true=has_nulls
+        auto comparator = experimental::element_relational_comparator<has_nulls>{
                           d_column, d_column, null_order::AFTER }; // put nulls at the end
         auto result = experimental::type_dispatcher(d_column.type(), comparator,
                                                     lhs_index, rhs_index);
@@ -50,7 +50,7 @@ struct sort_functor
 };
 
 // Copy functor used for locating and marking unique values.
-// TODO add has_nulls template parameter
+template <bool has_nulls = true>
 struct copy_unique_functor
 {
     column_device_view d_column;
@@ -68,7 +68,7 @@ struct copy_unique_functor
         auto lhs_index = d_ordinals[idx-1];
         auto rhs_index = d_ordinals[idx];
         auto result = !cudf::experimental::type_dispatcher( d_column.type(),
-                             experimental::element_equality_comparator<true>{d_column, d_column, true},
+                             experimental::element_equality_comparator<has_nulls>{d_column, d_column, true},
                              lhs_index, rhs_index);
         d_indices[idx] = static_cast<int32_t>(result); // convert bool to integer [0,1]
         return result;
@@ -97,7 +97,10 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     rmm::device_vector<size_type> ordinals(count);
     auto d_ordinals = ordinals.data().get();
     thrust::sequence(execpol->on(stream), ordinals.begin(), ordinals.end()); // [0,1,2,3,4,5,6,7,8]
-    thrust::sort(execpol->on(stream), ordinals.begin(), ordinals.end(), detail::sort_functor{d_column} );
+    if( input_column.has_nulls() )
+        thrust::sort(execpol->on(stream), ordinals.begin(), ordinals.end(), detail::sort_functor<true>{d_column} );
+    else
+        thrust::sort(execpol->on(stream), ordinals.begin(), ordinals.end(), detail::sort_functor<false>{d_column} );
     // output of sort:
     //  ordinals: [1,8,3,4,5,6,2,0,7]  => these represent sorted strings as: [a,a,b,c,c,c,d,e,e]
     // create empty indices_column
@@ -112,9 +115,16 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     // The copy-if here does 2 things in one kernel; (trying to minimize element compares)
     // 1) compute indices of only the unique elements from the sorted result
     // 2) mark in indices with 1 where unique values are found and 0 otherwise
-    int* d_map_nend = thrust::copy_if( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
-                                       thrust::make_counting_iterator<int32_t>(count), d_map_indices,
-                                       detail::copy_unique_functor{d_column, d_ordinals, d_indices} );
+    int* d_map_nend = nullptr;
+    if( input_column.has_nulls() )
+        d_map_nend = thrust::copy_if( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
+                                      thrust::make_counting_iterator<int32_t>(count), d_map_indices,
+                                      detail::copy_unique_functor<true>{d_column, d_ordinals, d_indices} );
+    else
+        d_map_nend = thrust::copy_if( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
+                                      thrust::make_counting_iterator<int32_t>(count), d_map_indices,
+                                      detail::copy_unique_functor<false>{d_column, d_ordinals, d_indices} );
+
     // output of copy_if:
     //  map_indices: [0,2,3,6,7]     => start of unique values        0,1,2,3,4,5,6,7,8
     //  indices: [0,0,1,1,0,0,1,1,0] => identifies unique positions   a,a,b,c,c,c,d,e,e
