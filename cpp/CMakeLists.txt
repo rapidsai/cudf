@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -49,6 +49,9 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+
+    # Suppress parentheses warning which causes gmock to fail
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
 
     option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
     if(CMAKE_CXX11_ABI)
@@ -167,6 +170,20 @@ else()
 endif(ARROW_FOUND)
 
 ###################################################################################################
+# - clone libcu++ ------------------------------------------------------------------------------------
+
+message(STATUS "Installing libcu++")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                COMMAND git clone --branch cudf --recurse-submodules
+                        https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/include/        DESTINATION include/libcudacxx)
+file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/libcxx/include/ DESTINATION include/libcxx/include)
+
+###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
@@ -196,6 +213,9 @@ message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
 
 if(Boost_FOUND)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
 endif(Boost_FOUND)
@@ -363,8 +383,10 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
+            src/merge/merge.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
+            src/join/join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -385,7 +407,12 @@ add_library(cudf
             src/binaryop/legacy/jit/code/traits.cpp
             src/binaryop/legacy/jit/util/operator.cpp
             src/binaryop/legacy/jit/util/type.cpp
+            src/binaryop/binaryop.cpp
+            src/binaryop/jit/code/kernel.cpp
+            src/binaryop/jit/code/operation.cpp
+            src/binaryop/jit/code/traits.cpp
             src/jit/legacy/type.cpp
+            src/jit/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
@@ -393,6 +420,8 @@ add_library(cudf
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
+            src/transform/nans_to_nulls.cu
+            src/transform/bools_to_mask.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -403,8 +432,10 @@ add_library(cudf
             src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
+            src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
+            src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu
@@ -419,6 +450,18 @@ add_library(cudf
             src/reductions/legacy/std.cu
             src/reductions/legacy/group_std.cu
             src/reductions/legacy/scan.cu
+            src/reductions/reductions.cpp
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/any.cu
+            src/reductions/all.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
+            src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/reshape/legacy/stack.cu
@@ -435,6 +478,7 @@ add_library(cudf
             src/io/legacy/cuio_common.cpp
             src/io/legacy/io_functions.cpp
             src/io/convert/csr/legacy/cudf_to_csr.cu
+            src/dlpack/dlpack.cpp
             src/io/convert/dlpack/legacy/cudf_dlpack.cpp
             src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -458,9 +502,12 @@ add_library(cudf
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
+            src/io/parquet/page_enc.cu
+            src/io/parquet/page_dict.cu
             src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/parquet/reader_impl.cu
+            src/io/parquet/writer_impl.cu
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
@@ -469,20 +516,21 @@ add_library(cudf
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/functions.cpp
+            src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
+            src/copying/gather.cu
             src/utilities/legacy/column_utils.cpp
-	        src/copying/gather.cu
             src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
-            src/copying/gather.cu
             src/copying/scatter.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
+            src/copying/contiguous_split.cu
             src/copying/legacy/copy.cpp
             src/copying/legacy/gather.cu
             src/copying/legacy/scatter.cu
@@ -506,27 +554,39 @@ add_library(cudf
             src/table/table_device_view.cu
             src/table/table.cpp
             src/bitmask/null_mask.cu
+            src/rolling/rolling.cu
             src/sort/sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
+            src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
             src/strings/convert/convert_floats.cu
+            src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
+            src/strings/convert/convert_ipv4.cu
+            src/strings/convert/convert_urls.cu
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
-            src/strings/find.cu
             src/strings/filling/fill.cu
+            src/strings/find.cu
+            src/strings/find_multiple.cu
             src/strings/padding.cu
+            src/strings/regex/regcomp.cpp
+            src/strings/regex/regexec.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
+            src/strings/split/partition.cu
+            src/strings/split/split.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
+            src/strings/strip.cu
             src/strings/substring.cu
+            src/strings/translate.cu
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
@@ -557,23 +617,25 @@ add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
+add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMENT "Stringify types.h, types.hpp, and timestamps.hpp for use in JIT compiled code"
                    DEPENDS stringify
-                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
+                   OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
+                          ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/types.hpp.jit
-                   COMMENT "Run stringify on header types.hpp to convert it to c-str for use in JIT compiled code"
-                   DEPENDS stringify
-                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp)
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit
+                   )
 
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/types.h.jit
-                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit)
+                  ${CMAKE_BINARY_DIR}/include/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/timestamps.hpp.jit)
 
 add_dependencies(cudf stringify_run)
 
@@ -637,6 +699,14 @@ install(TARGETS cudf
         COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
+        DESTINATION include/libcudf
+        COMPONENT cudf)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcudacxx
+        DESTINATION include/libcudf
         COMPONENT cudf)
 
 add_custom_target(install_cudf

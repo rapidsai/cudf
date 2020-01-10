@@ -33,18 +33,18 @@ namespace detail
  * If the value parameter is invalid, the specified rows are filled with
  * null entries.
  *
- * @throw cudf::logic_error if [first,last) is outside the range of the input column.
+ * @throw cudf::logic_error if [begin,end) is outside the range of the input column.
  *
  * @param strings Strings column to fill.
- * @param first First row index to include the new string.
- * @param last Last row index (exclusive).
+ * @param begin First row index to include the new string.
+ * @param end Last row index (exclusive).
  * @param value String to use when filling the range.
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use for any kernels in this function.
  * @return New strings column.
  */
 std::unique_ptr<column> fill( strings_column_view const& strings,
-                              size_type first, size_type last,
+                              size_type begin, size_type end,
                               string_scalar const& value,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream = 0 );

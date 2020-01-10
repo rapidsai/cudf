@@ -99,7 +99,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 template <typename T>
 std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
   std::vector<T> host_data(c.size());
-  CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return { host_data, bitmask_to_host(c) };
 }
 
@@ -118,7 +118,7 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
   thrust::host_vector<char> h_chars(strings_data.first);
   thrust::host_vector<size_type> h_offsets(strings_data.second);
-  
+
   // build std::string vector from chars and offsets
   if( !h_chars.empty() ) { // check for all nulls case
     std::vector<std::string> host_data;

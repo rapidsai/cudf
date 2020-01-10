@@ -29,6 +29,21 @@ export HOME=$WORKSPACE
 cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
+# it's local to the container's virtual file system, and not shared with other CI jobs
+# like `/tmp` is.
+export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
+
+function remove_libcudf_kernel_cache_dir {
+    EXITCODE=$?
+    logger "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
+    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
+    exit $EXITCODE
+}
+
+trap remove_libcudf_kernel_cache_dir EXIT
+
+mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
 
 ################################################################################
 # SETUP - Check environment
@@ -45,7 +60,7 @@ source activate gdf
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
-              "feather-format" "cupy>=6.0.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
+              "feather-format" "cupy>=6.6.0,<8.0.0a0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
               "fastavro>=0.22.0" "pandas>=0.24.2,<0.25" "hypothesis" "s3fs" "gcsfs" \
               "boto3" "moto" "httpretty" "streamz"
 

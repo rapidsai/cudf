@@ -108,11 +108,11 @@ CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
 CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
-CUDF_TYPE_MAPPING(timestamp_D, type_id::TIMESTAMP_DAYS);
-CUDF_TYPE_MAPPING(timestamp_s, type_id::TIMESTAMP_SECONDS);
-CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
-CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
-CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_D, type_id::TIMESTAMP_DAYS);
+CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 
 
 template <typename T>
@@ -125,6 +125,7 @@ struct type_to_scalar_type_impl {
 template <>                                         \
 struct type_to_scalar_type_impl<Type> {             \
   using ScalarType = cudf::numeric_scalar<Type>;    \
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<Type>; \
 };
 #endif
 
@@ -139,6 +140,7 @@ MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
 template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType = cudf::string_scalar;
+  using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -146,6 +148,7 @@ struct type_to_scalar_type_impl<cudf::string_view> {
 template <>                                         \
 struct type_to_scalar_type_impl<Type> {             \
   using ScalarType = cudf::timestamp_scalar<Type>;  \
+  using ScalarDeviceType = cudf::timestamp_scalar_device_view<Type>;       \
 };
 #endif
 
@@ -162,6 +165,9 @@ MAP_TIMESTAMP_SCALAR(timestamp_ns)
  */
 template <typename T>
 using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
+
+template <typename T>
+using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
