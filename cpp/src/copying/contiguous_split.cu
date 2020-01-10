@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/cudf.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -388,6 +404,12 @@ struct column_copy_functor {
    }
 };
 
+/**
+ * @brief Information about a string column in a table view.
+ * 
+ * Used internally by preprocess_string_column_info as part of a device-accessible 
+ * vector for computing final string information in a single kernel call.
+ */
 struct column_preprocess_info {
    size_type                  index;
    size_type                  offset;
@@ -397,25 +419,21 @@ struct column_preprocess_info {
 };
 
 /**
- * @brief Creates a contiguous_split_result object which contains a deep-copy of the input
- * table_view into a single contiguous block of memory. 
+ * @brief Preprocess information about all strings columns in a table view.
  * 
- * The table_view contained within the contiguous_split_result will pass an expect_tables_equal()
- * call with the input table.  The memory referenced by the table_view and its internal column_views
- * is entirely contained in single block of memory.
+ * In order to minimize how often we touch the cpu, we need to preprocess various pieces of information
+ * about the string columns in a table as a batch process.  This function builds a list of the offset
+ * columns for all input string columns and computes this information with a single thrust call.  In addition,
+ * the vector returned is allocated for -all- columns in the table so further processing of non-string columns
+ * can happen afterwards.
+ * 
+ * The key things this function avoids
+ * - avoiding reaching into gpu memory on the cpu to retrieve offsets to compute string sizes.
+ * - creating column_device_views on the base string_column_view itself as that causes gpu memory allocation.
  */
-contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)      
-{   
-   // preprocess column sizes for string columns.  the idea here is this:
-   // - determining string lengths involves reaching into device memory to look at offsets, which is slow.
-   // - contiguous_split() is typically used in situations with very large numbers of output columns, exaggerating
-   //   the problem.
-   // - so rather than reaching into device memory once per column (in column_buffer_size_functor), 
-   //   we are doing it once per split (for all string columns in the split).  For an example case of a table with 
-   //   512 columns split 256 ways, that reduces our number of trips to/from the gpu from 128k -> 256
-   
-   // build a list of all the offset columns and their indices for all input string columns and put them on the gpu
-   //
+thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, cudaStream_t stream)
+{          
+   // build a list of all the offset columns and their indices for all input string columns and put them on the gpu   
    thrust::host_vector<column_preprocess_info> offset_columns;
    offset_columns.reserve(t.num_columns());  // worst case
    size_type column_index = 0;
@@ -446,14 +464,25 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device
       }
    );
 
-   // TODO : refactor everything above this into a function like 'preprocess_string_split_info'
-   
-   // copy sizes back from gpu. entries from non-string columns are uninitialized at this point.
-   thrust::host_vector<column_split_info> split_info = device_split_info;  
+   return thrust::host_vector<column_split_info>(device_split_info);
+}
+
+/**
+ * @brief Creates a contiguous_split_result object which contains a deep-copy of the input
+ * table_view into a single contiguous block of memory. 
+ * 
+ * The table_view contained within the contiguous_split_result will pass an expect_tables_equal()
+ * call with the input table.  The memory referenced by the table_view and its internal column_views
+ * is entirely contained in single block of memory.
+ */
+contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{           
+   // preprocess column split information for string columns.
+   thrust::host_vector<column_split_info> split_info = preprocess_string_column_info(t, device_split_info, stream);
      
    // compute the rest of the column sizes (non-string columns, and total buffer size)
    size_t total_size = 0;
-   column_index = 0;
+   size_type column_index = 0;
    std::for_each(t.begin(), t.end(), [&total_size, &column_index, &split_info](cudf::column_view const& c){   
       total_size += cudf::experimental::type_dispatcher(c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
       column_index++;
