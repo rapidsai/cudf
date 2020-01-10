@@ -83,4 +83,6 @@ def to_parquet(
         )
     else:
         pa_table = df.to_arrow()
-        pq.write_to_dataset(pa_table, path, partition_cols=partition_cols, *args, **kwargs)
+        pq.write_to_dataset(
+            pa_table, path, partition_cols=partition_cols, *args, **kwargs
+        )
