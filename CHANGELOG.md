@@ -12,9 +12,11 @@
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3690 Add bools_to_mask
+- PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 
 ## Improvements
 
+- PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
 - PR #3441 Port NVStrings url encode/decode to cudf strings column
@@ -25,6 +27,7 @@
 - PR #3590 Specialize hash functions for floating point
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
+- PR #3511 Support DataFrame / Series mixed arithmetic
 - PR #3567 Include `strides` in `__cuda_array_interface__`
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
@@ -63,6 +66,7 @@
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3724 Update rmm version to match release
 - PR #3743 Fix for `None` data in `__array_interface__`
 - PR #3731 Fix performance of zero sized dataframe slice
 - PR #3709 Fix inner_join incorrect result issue
@@ -70,6 +74,7 @@
 - PR #3738 Update libxx cython types.hpp path
 - PR #3672 Fix to_host issue with column_view having offset
 - PR #3730 CSV reader: Set invalid float values to NaN/null
+- PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
 
 

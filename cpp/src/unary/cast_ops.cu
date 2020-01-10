@@ -32,10 +32,17 @@ struct unary_cast {
       typename T = _T,
       typename R = _R,
       typename std::enable_if_t<
-          (cudf::is_numeric<T>() && cudf::is_numeric<R>()) ||
-          (cudf::is_timestamp<T>() && cudf::is_timestamp<R>())>* = nullptr>
+          (cudf::is_numeric<T>() && cudf::is_numeric<R>())>* = nullptr>
   CUDA_DEVICE_CALLABLE R operator()(T const element) {
     return static_cast<R>(element);
+  }
+  template <
+      typename T = _T,
+      typename R = _R,
+      typename std::enable_if_t<
+          (cudf::is_timestamp<T>() && cudf::is_timestamp<R>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE R operator()(T const element) {
+    return static_cast<R>(simt::std::chrono::floor<R::duration>(element));
   }
   template <typename T = _T,
             typename R = _R,
