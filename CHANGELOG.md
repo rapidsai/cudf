@@ -13,6 +13,7 @@
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3690 Add bools_to_mask
 - PR #3577 Add initial dictionary support to column classes
+- PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 
 ## Improvements
 
@@ -44,6 +45,7 @@
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3697 Improve column insert performance for wide frames
 - PR #3710 Remove multiple CMake configuration steps from root build script
+- PR #3657 Define and implement compiled binops for string column comparisons
 
 ## Bug Fixes
 
@@ -74,6 +76,7 @@
 - PR #3738 Update libxx cython types.hpp path
 - PR #3672 Fix to_host issue with column_view having offset
 - PR #3730 CSV reader: Set invalid float values to NaN/null
+- PR #3670 Floor when casting between timestamps of different precisions
 
 
 # cuDF 0.11.0 (11 Dec 2019)

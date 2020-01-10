@@ -138,6 +138,12 @@ MAP_NUMERIC_SCALAR(double)
 MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
 
 template <>
+struct type_to_scalar_type_impl<std::string> {
+  using ScalarType = cudf::string_scalar;
+  using ScalarDeviceType = cudf::string_scalar_device_view;
+};
+
+template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType = cudf::string_scalar;
   using ScalarDeviceType = cudf::string_scalar_device_view;
