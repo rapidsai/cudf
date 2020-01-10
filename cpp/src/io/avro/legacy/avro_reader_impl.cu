@@ -109,8 +109,7 @@ class avro_metadata : public avro::file_metadata {
         }
       }
     } else {
-      // Iterate backwards as fastavro returns from last-to-first?!
-      for (int i = num_avro_columns - 1; i >= 0; --i) {
+      for (int i = 0; i < num_avro_columns; ++i) {
         const auto dtype = to_dtype(&schema[columns[i].schema_data_idx]);
         CUDF_EXPECTS(dtype != GDF_invalid, "Unsupported data type");
         selection.emplace_back(i, columns[i].name);

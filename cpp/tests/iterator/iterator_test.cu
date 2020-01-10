@@ -15,7 +15,7 @@
  */
 
 #include <cudf/detail/iterator.cuh>                // include iterator header
-#include <iterator/transform_unary_functions.cuh>  //for meanvar
+#include <cudf/detail/utilities/transform_unary_functions.cuh>  //for meanvar
 
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
