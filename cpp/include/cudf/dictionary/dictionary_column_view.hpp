@@ -42,7 +42,7 @@ public:
     using column_view::null_count;
     using column_view::has_nulls;
     using column_view::offset;
-    using column_view::keys;
+    using column_view::dictionary_keys;
 
     /**
      * @brief Returns the parent column.

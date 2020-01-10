@@ -308,13 +308,13 @@ class column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
-   * @param keys optional, keys for dictionary column
+   * @param dictionary_keys optional, keys for dictionary column
    */
   column_view(data_type type, size_type size, void const* data,
               bitmask_type const* null_mask = nullptr,
               size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
               std::vector<column_view> const& children = {},
-              std::shared_ptr<column_view> keys = {} );
+              std::shared_ptr<column_view> dictionary_keys = {} );
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -327,9 +327,11 @@ class column_view : public detail::column_view_base {
   }
 
   /**
-   * @brief Returns the keys column.
+   * @brief Returns the dictionary_keys column.
    */
-  std::shared_ptr<column_view> keys() const noexcept  { return _keys; }
+  std::shared_ptr<column_view> dictionary_keys() const noexcept {
+    return _dictionary_keys;
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of child columns.
@@ -339,7 +341,7 @@ class column_view : public detail::column_view_base {
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-  std::shared_ptr<column_view> _keys;    ///< Keys for dictionary column
+  std::shared_ptr<column_view> _dictionary_keys;    ///< Keys for dictionary column
 };
 
 /**---------------------------------------------------------------------------*

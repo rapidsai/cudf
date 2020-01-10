@@ -209,7 +209,7 @@ class data_type {
  * @return false `lhs` is not equal to `rhs`
  *---------------------------------------------------------------------------**/
 inline bool operator==(data_type const& lhs, data_type const& rhs) {
-  return lhs.id() == rhs.id();// and rhs.keys_id() == lhs.keys_id();
+  return lhs.id() == rhs.id();
 }
 
 /**

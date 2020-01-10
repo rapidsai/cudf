@@ -35,7 +35,7 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumn)
 
     auto dictionary = cudf::make_dictionary_column( strings );
     cudf::dictionary_column_view view(dictionary->view());
-    auto keys = *(view.keys());
+    auto keys = *(view.dictionary_keys());
 
     std::vector<const char*> h_keys{ "aaa", "bbb", "ccc", "ddd", "eee" };
     cudf::test::strings_column_wrapper keys_strings( h_keys.begin(), h_keys.end(), thrust::make_constant_iterator(1) );
@@ -53,11 +53,11 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns)
     std::vector<int32_t> h_values{2,0,3,1,2,2,2,3,0};
     cudf::test::fixed_width_column_wrapper<int32_t> values( h_values.begin(), h_values.end() );
     rmm::device_buffer null_mask{};
-     
+
     auto dictionary = cudf::make_dictionary_column( keys_strings, values,
                                                     null_mask, 0 );
     cudf::dictionary_column_view view(dictionary->view());
-    auto keys = *(view.keys());
+    auto keys = *(view.dictionary_keys());
 
     cudf::test::expect_columns_equal(keys, keys_strings);
     cudf::test::expect_columns_equal(view.indices(), values);

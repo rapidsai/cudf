@@ -48,7 +48,7 @@ column_view_base::column_view_base(data_type type, size_type size,
             is_compound(type) ) {
     CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
   } else if( size > 0){
-    CUDF_EXPECTS(nullptr != data, "Null data pointer.");	   
+    CUDF_EXPECTS(nullptr != data, "Null data pointer.");
   }
 
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");
@@ -81,9 +81,9 @@ column_view::column_view(data_type type, size_type size, void const* data,
                          bitmask_type const* null_mask, size_type null_count,
                          size_type offset,
                          std::vector<column_view> const& children,
-                         std::shared_ptr<column_view> keys)
+                         std::shared_ptr<column_view> dictionary_keys)
     : detail::column_view_base{type, size, data, null_mask, null_count, offset},
-      _children{children}, _keys{keys} {
+      _children{children}, _dictionary_keys{dictionary_keys} {
   if (type.id() == EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }

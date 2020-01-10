@@ -84,7 +84,7 @@ class column {
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
    * @param children Optional, vector of child columns
-   * @param keys Optional, keys for dictionary column
+   * @param dictionary_keys Optional, keys for dictionary column
    */
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype, size_type size, B1&& data, B2&& null_mask = {},
