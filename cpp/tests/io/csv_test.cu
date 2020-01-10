@@ -376,10 +376,12 @@ TEST_F(CsvReaderTest, FloatingPoint) {
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::FLOAT32, view.column(0).type().id());
 
-  expect_column_data_equal(
-      std::vector<float>{5.6, 56.79, 12000000000, 0.7, 3.000, 12.34, 0.31,
-                         -73.98007199999998},
-      view.column(0));
+  const auto ref_vals = std::vector<float>{5.6, 56.79, 12000000000, 0.7, 
+    3.000, 12.34, 0.31, -73.98007199999998};
+  expect_column_data_equal(ref_vals, view.column(0));
+
+  const auto bitmask = cudf::test::bitmask_to_host(view.column(0));
+  ASSERT_EQ((1u << ref_vals.size()) - 1, bitmask[0]);
 }
 
 TEST_F(CsvReaderTest, Strings) {
@@ -586,4 +588,29 @@ TEST_F(CsvReaderTest, ArrowFileSource) {
 
   expect_column_data_equal(std::vector<int8_t>{9, 8, 7, 6, 5, 4, 3, 2},
                            view.column(0));
+}
+
+TEST_F(CsvReaderTest, InvalidFloatingPoint) {
+  const auto filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "1.2e1+\n3.4e2-\n5.6e3e\n7.8e3A\n9.0Be1\n1C.2";
+  }
+
+  cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
+  in_args.names = {"A"};
+  in_args.dtype = {"float32"};
+  in_args.header = -1;
+  const auto result = cudf_io::read_csv(in_args);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::FLOAT32, view.column(0).type().id());
+
+  const auto col_data = cudf::test::to_host<float>(view.column(0));
+  // col_data.first contains the column data
+  for (const auto& elem: col_data.first)
+    ASSERT_TRUE(std::isnan(elem));
+  // col_data.second contains the bitmasks
+  ASSERT_EQ(0u, col_data.second[0]);
 }
