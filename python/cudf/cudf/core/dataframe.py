@@ -2220,7 +2220,7 @@ class DataFrame(Table):
             elif how == "left":
 
                 check_col = rhs._data[rcol].fillna(0)
-                if not check_col.overflow_safe_to(dtype_l):
+                if not check_col.can_cast_safely(dtype_l):
                     rtn = casting_rules(dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
@@ -2229,7 +2229,7 @@ class DataFrame(Table):
                     rtn = dtype_l
             elif how == "right":
                 check_col = lhs._data[lcol].fillna(0)
-                if not check_col.overflow_safe_to(dtype_r):
+                if not check_col.can_cast_safely(dtype_r):
                     rtn = casting_rules(dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)

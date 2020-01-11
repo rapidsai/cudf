@@ -412,7 +412,7 @@ class NumericalColumn(column.ColumnBase):
                 )
         return self._is_monotonic_decreasing
 
-    def overflow_safe_to(self, to_dtype):
+    def can_cast_safely(self, to_dtype):
         """
         Returns true if all the values in self can be
         safely cast to dtype
