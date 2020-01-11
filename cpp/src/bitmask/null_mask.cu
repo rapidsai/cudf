@@ -564,7 +564,7 @@ segmented_count_set_bits(bitmask_type const* bitmask,
                            num_ranges * sizeof(size_type),
                            cudaMemcpyDeviceToHost, stream));
 
-  CHECK_CUDA(stream);
+  CUDA_TRY(cudaStreamSynchronize(stream));  // now ret is valid.
 
   return ret;
 }
