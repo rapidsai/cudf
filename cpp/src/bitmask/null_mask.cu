@@ -479,8 +479,15 @@ segmented_count_set_bits(bitmask_type const* bitmask,
     CUDF_EXPECTS(end >= begin, "Invalid range.");
   }
 
-  if ((bitmask == nullptr) || (indices.size() == 0)) {
+  if (indices.size() == 0) {
     return std::vector<size_type>{};
+  }
+  else if (bitmask == nullptr) {
+    std::vector<size_type> ret(indices.size() / 2);
+    for (size_t i = 0; i < indices.size() / 2; i++) {
+      ret[i] = indices[2 * i + 1] - indices[2 * i];
+    }
+    return ret;
   }
 
   size_type num_ranges = indices.size() / 2;
@@ -566,8 +573,11 @@ std::vector<size_type>
 segmented_count_unset_bits(bitmask_type const* bitmask,
                            std::vector<size_type> const& indices,
                            cudaStream_t stream) {
-  if (bitmask == nullptr) {
-    return std::vector<size_type>();
+  if (indices.size() == 0) {
+    return std::vector<size_type>{};
+  }
+  else if (bitmask == nullptr) {
+    return std::vector<size_type>(indices.size() / 2, 0);
   }
 
   auto ret = segmented_count_set_bits(bitmask, indices, stream);
