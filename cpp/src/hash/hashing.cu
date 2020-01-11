@@ -265,7 +265,7 @@ struct move_to_output_buffer_dispatcher{
                   size_type * scanned_block_partition_sizes,
                   size_type grid_size)
   {
-    constexpr int smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
+    int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
       + (num_partitions + 1) * sizeof(size_type) * 2;
     move_to_output_buffer<DataType>
       <<<grid_size, BLOCK_SIZE, smem>>>(
