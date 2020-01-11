@@ -65,7 +65,10 @@ TEST_F(CountBitmaskTest, NullMask) {
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
   auto counts = cudf::segmented_count_set_bits(nullptr, indices);
-  EXPECT_EQ(0, static_cast<cudf::size_type>(counts.size()));
+  EXPECT_EQ(indices.size(), counts.size() * 2);
+  for (size_t i = 0; i < counts.size(); i++) {
+    EXPECT_EQ(indices[2 * i + 1] - indices[2 * i], counts[i]);
+  }
 }
 
 TEST_F(CountBitmaskTest, NegativeStart) {
@@ -261,7 +264,10 @@ TEST_F(CountUnsetBitsTest, NullMask) {
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
   auto counts = cudf::segmented_count_unset_bits(nullptr, indices);
-  EXPECT_EQ(0, static_cast<cudf::size_type>(counts.size()));
+  EXPECT_EQ(indices.size(), counts.size() * 2);
+  for (size_t i = 0; i < counts.size(); i++) {
+    EXPECT_EQ(0, counts[i]);
+  }
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordAllBits) {
