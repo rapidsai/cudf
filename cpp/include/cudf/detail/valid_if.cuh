@@ -135,8 +135,8 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  * valid_counts:  [0, 0, 0]
  *
  * Example Results:
- * masks:         [[b100...], [b010...], [b001...]]
- * valid_counts:  [1, 1, 1]
+ * masks:         [[b100...], [b010...], [b000...]]
+ * valid_counts:  [1, 1, 0]
  *
  * @note If any mask in `masks` is `nullptr`, that mask will be ignored.
  *
