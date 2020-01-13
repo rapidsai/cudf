@@ -15,7 +15,8 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/nvcategory_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -103,7 +104,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -303,6 +305,12 @@ set(LEGACY_REDUCTION_TEST_SRC
 
 ConfigureTest(LEGACY_REDUCTION_TEST "${LEGACY_REDUCTION_TEST_SRC}")
 
+set(REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+
+ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
+
 ###################################################################################################
 # - legacy replace tests --------------------------------------------------------------------------
 
@@ -385,7 +393,8 @@ ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 
 set(TRANSFORM_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
@@ -749,22 +758,23 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/ipv4_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
