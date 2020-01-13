@@ -82,8 +82,9 @@ def token_count(strs, delimiter=None, devptr=0):
     ----------
     strs : nvstrings
         The strings for this operation
-    delimiter : str
-        The character used to locate the split points of each string.
+    delimiter : str or nvstrings or list of strs
+        The characters or strings used to locate the
+        split points of each string.
         Default is whitespace.
     devptr : GPU memory pointer
         Must be able to hold at least strs.size() of int32 values.
@@ -97,7 +98,15 @@ def token_count(strs, delimiter=None, devptr=0):
     [2,1,0]
 
     """
-    rtn = pyniNVText.n_token_count(strs, delimiter, devptr)
+    rtn = None
+    if delimiter is None:
+        rtn = pyniNVText.n_token_count(strs, delimiter, devptr)
+    if isinstance(delimiter, str):
+        rtn = pyniNVText.n_token_count(strs, delimiter, devptr)
+    if isinstance(delimiter, list):
+        delimiter = nvs.to_device(delimiter)
+    if isinstance(delimiter, nvs.nvstrings):
+        rtn = pyniNVText.n_token_count_multi(strs, delimiter, devptr)
     return rtn
 
 
