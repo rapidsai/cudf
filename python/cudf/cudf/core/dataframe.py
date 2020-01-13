@@ -1678,7 +1678,7 @@ class DataFrame(NamedTable):
         else:
             index_cols.append(self.index.as_column())
 
-        input_cols = index_cols + list(data_cols)
+        input_cols = index_cols + data_cols
 
         if subset is not None:
             subset = self._columns_view(subset)._columns
@@ -4077,7 +4077,7 @@ class DataFrame(NamedTable):
 
         if keep_index:
             if isinstance(self.index, cudf.MultiIndex):
-                index = list(self.index.to_frame()._columns)
+                index = self.index.to_frame()._columns
                 index_names = self.index.to_frame().columns.to_list()
             else:
                 index = [self.index.as_column()]
@@ -4087,7 +4087,7 @@ class DataFrame(NamedTable):
             index_names = []
 
         tables = libcudf.copying.scatter_to_frames(
-            list(self._columns),
+            self._columns,
             map_index._column,
             index,
             names=self.columns.to_list(),

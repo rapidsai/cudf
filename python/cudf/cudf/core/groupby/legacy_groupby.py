@@ -293,7 +293,7 @@ class Groupby(object):
                  Group starting index.
         """
         sorted_cols, offsets = libcudf.groupby.groupby_without_aggregations(
-            list(df._columns), list(df[levels]._columns)
+            df._columns, df[levels]._columns
         )
         outdf = cudf.DataFrame._from_columns(sorted_cols)
         segs = Series(offsets)
