@@ -81,6 +81,17 @@ public class Cuda {
   public static native int getDevice() throws CudaException;
 
   /**
+   * Set the id of the device to use.
+   * @param device - the id of the device to use
+   * @throws CudaException on any error
+   */
+  public static native void setDevice(int device) throws CudaException;
+
+  public static native void freeZero() throws CudaException;
+
+  public static native long mallocTom(long size) throws CudaException;
+
+  /**
    * This should only be used for tests, to enable or disable tests if the current environment
    * is not compatible with this version of the library.  Currently it only does some very
    * basic checks, but these may be expanded in the future depending on needs.
