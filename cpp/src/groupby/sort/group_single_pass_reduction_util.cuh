@@ -21,7 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
