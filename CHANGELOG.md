@@ -11,6 +11,7 @@
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3690 Add bools_to_mask
+- PR #3761 Introduce a NamedTable class and make Index, DataFrame and Series subclasses
 
 ## Improvements
 
