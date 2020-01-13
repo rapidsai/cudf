@@ -37,6 +37,8 @@ namespace detail
 namespace
 {
 
+using backref_type = thrust::pair<size_type,size_type>;
+
 /**
  * @brief Parse the back-ref index and position values from a given replace format.
  *
@@ -50,7 +52,7 @@ namespace
  *    returned string is:  'hello  and '
  * ```
  */
-std::string parse_backrefs( std::string const& repl, std::vector<thrust::pair<size_type,size_type> >& backrefs )
+std::string parse_backrefs( std::string const& repl, std::vector<backref_type>& backrefs )
 {
     std::string str = repl; // make a modifiable copy
     std::smatch m;
@@ -61,7 +63,7 @@ std::string parse_backrefs( std::string const& repl, std::vector<thrust::pair<si
     {
         if( m.size()==0 )
             break;
-        std::pair<size_type,size_type> item;
+        backref_type item;
         std::string bref = m[0];
         size_type position = static_cast<size_type>(m.position(0));
         size_type length = static_cast<size_type>(bref.length());
@@ -99,8 +101,8 @@ struct backrefs_fn
     column_device_view const d_strings;
     reprog_device prog;
     string_view const d_repl;   // string replacement template
-    thrust::pair<size_type,size_type>* d_backrefs; // ref/pos pairs
-    size_type backref_count;
+    rmm::device_vector<backref_type>::iterator backrefs_begin;
+    rmm::device_vector<backref_type>::iterator backrefs_end;
     const int32_t* d_offsets{}; // these are null when
     char* d_chars{};            // only computing size
 
@@ -114,10 +116,8 @@ struct backrefs_fn
         string_view d_str = d_strings.element<string_view>(idx);
         auto nchars = d_str.length();     // number of characters in input string
         auto nbytes = d_str.size_bytes(); // number of bytes in input string
-        const char* in_ptr = d_str.data(); // input pointer
-        char* out_ptr = nullptr;  // running output pointer
-        if( d_offsets )
-            out_ptr = d_chars + d_offsets[idx];
+        const char* in_ptr = d_str.data();
+        char* out_ptr = d_offsets ? (d_chars + d_offsets[idx]) : nullptr;
         size_type lpos = 0;      // last byte position processed in d_str
         size_type begin = 0;     // first character position matching regex
         size_type end = nchars;  // last character position (exclusive)
@@ -130,29 +130,29 @@ struct backrefs_fn
             if( out_ptr )
                 out_ptr = copy_and_increment(out_ptr,in_ptr+lpos,spos-lpos);
             size_type lpos_template = 0;   // last end pos of replace template
-            auto repl_ptr = d_repl.data(); // replace template pointer
-            for( size_type ridx=0; ridx < backref_count; ++ridx )
-            {
-                auto backref_index = d_backrefs[ridx].first; // backref number
-                if( out_ptr )
+            auto repl_ptr = d_repl.data(); // replace template pattern
+            thrust::for_each( thrust::seq, backrefs_begin, backrefs_end,
+                [&] __device__ (backref_type backref)
                 {
-                    auto copy_length = d_backrefs[ridx].second - lpos_template;
-                    out_ptr = copy_and_increment(out_ptr, repl_ptr, copy_length );
-                    repl_ptr += copy_length;
-                    lpos_template += copy_length;
-                }
-                // extract the specific group's string for the backref_index
-                size_type spos_extract = begin; // these are modified
-                size_type epos_extract = end;   // by extract()
-                if( (prog.extract(idx,d_str,spos_extract,epos_extract,backref_index-1)<=0 ) ||
-                    (epos_extract <= spos_extract) )
-                    continue; // no value for this backref number; that is ok
-                spos_extract = d_str.byte_offset(spos_extract); // convert
-                epos_extract = d_str.byte_offset(epos_extract); // to bytes
-                nbytes += epos_extract - spos_extract;
-                if( out_ptr )
-                    out_ptr = copy_and_increment(out_ptr, d_str.data()+spos_extract, (epos_extract-spos_extract));
-            }
+                    if( out_ptr )
+                    {
+                        auto copy_length = backref.second - lpos_template;
+                        out_ptr = copy_and_increment(out_ptr, repl_ptr, copy_length );
+                        repl_ptr += copy_length;
+                        lpos_template += copy_length;
+                    }
+                    // extract the specific group's string for this backref's index
+                    size_type spos_extract = begin; // these are modified
+                    size_type epos_extract = end;   // by extract()
+                    if( (prog.extract(idx,d_str,spos_extract,epos_extract,backref.first-1)<=0 ) ||
+                        (epos_extract <= spos_extract) )
+                        return; // no value for this backref number; that is ok
+                    spos_extract = d_str.byte_offset(spos_extract); // convert
+                    epos_extract = d_str.byte_offset(epos_extract); // to bytes
+                    nbytes += epos_extract - spos_extract;
+                    if( out_ptr )
+                        out_ptr = copy_and_increment(out_ptr, d_str.data()+spos_extract, (epos_extract-spos_extract));
+                });
             if( out_ptr && (lpos_template < d_repl.size_bytes()) )// copy remainder of template
                 out_ptr = copy_and_increment(out_ptr, repl_ptr+lpos_template, d_repl.size_bytes() - lpos_template);
             lpos = epos;
@@ -189,12 +189,9 @@ std::unique_ptr<column> replace_with_backrefs( strings_column_view const& string
     auto regex_insts = d_prog.insts_counts();
 
     // parse the repl string for backref indicators
-    std::vector<thrust::pair<size_type,size_type> > h_backrefs;
+    std::vector<backref_type> h_backrefs;
     std::string repl_template = parse_backrefs(repl,h_backrefs);
-    rmm::device_vector<thrust::pair<size_type,size_type> > backrefs(h_backrefs);
-    auto d_backrefs = backrefs.data().get();
-    size_type backref_count = static_cast<size_type>(backrefs.size());
-    //    CUDF_EXPECTS( backref_count == d_prog.group_counts(), "Not all backrefs are accounted by groups");
+    rmm::device_vector<backref_type> backrefs(h_backrefs);
     string_scalar repl_scalar(repl_template);
     string_view d_repl_template{ repl_scalar.data(), repl_scalar.size() };
 
@@ -206,13 +203,16 @@ std::unique_ptr<column> replace_with_backrefs( strings_column_view const& string
     std::pair< std::unique_ptr<column>, std::unique_ptr<column> > children(nullptr,nullptr);
     // Each invocation is predicated on the stack size which is dependent on the number of regex instructions
     if( (regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS) )
-        children = make_strings_children(backrefs_fn<RX_STACK_SMALL>{d_strings,d_prog,d_repl_template,d_backrefs,backref_count},
+        children = make_strings_children(backrefs_fn<RX_STACK_SMALL>{d_strings,d_prog,d_repl_template,
+                                                                     backrefs.begin(), backrefs.end()},
                                          strings_count, null_count, mr, stream);
     else if( regex_insts <= RX_MEDIUM_INSTS )
-        children = make_strings_children(backrefs_fn<RX_STACK_MEDIUM>{d_strings,d_prog,d_repl_template,d_backrefs,backref_count},
+        children = make_strings_children(backrefs_fn<RX_STACK_MEDIUM>{d_strings,d_prog,d_repl_template,
+                                                                      backrefs.begin(), backrefs.end()},
                                          strings_count, null_count, mr, stream);
     else
-        children = make_strings_children(backrefs_fn<RX_STACK_LARGE>{d_strings,d_prog,d_repl_template,d_backrefs,backref_count},
+        children = make_strings_children(backrefs_fn<RX_STACK_LARGE>{d_strings,d_prog,d_repl_template,
+                                                                     backrefs.begin(), backrefs.end()},
                                          strings_count, null_count, mr, stream);
     //
     return make_strings_column(strings_count, std::move(children.first), std::move(children.second),
