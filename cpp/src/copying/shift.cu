@@ -83,12 +83,12 @@ struct functor {
     std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>>
     operator()(column_view const& input,
                size_type offset,
-               std::unique_ptr<scalar> const& fill_value,
+               scalar const& fill_value,
                rmm::mr::device_memory_resource *mr,
                cudaStream_t stream)
     {
         using ScalarType = cudf::experimental::scalar_type_t<T>;
-        auto p_scalar = static_cast<ScalarType const*>(fill_value.get());
+        auto& p_scalar = static_cast<ScalarType const&>(fill_value);
 
         auto device_input = column_device_view::create(input);
         auto output = allocate_like(input, mask_allocation_policy::NEVER);
@@ -99,7 +99,7 @@ struct functor {
                            functor_foreach<T>{*device_input,
                                               *device_output,
                                               offset,
-                                              p_scalar->value(stream)});
+                                              p_scalar.value(stream)});
 
         return output;
     }
@@ -109,7 +109,7 @@ struct functor {
 
 std::unique_ptr<table> shift(table_view const& input,
                              size_type offset,
-                             std::vector<std::unique_ptr<scalar>> const& fill_values,
+                             std::vector<scalar> const& fill_values,
                              rmm::mr::device_memory_resource *mr,
                              cudaStream_t stream)
 {
