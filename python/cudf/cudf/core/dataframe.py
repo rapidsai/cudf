@@ -259,6 +259,13 @@ class DataFrame(NamedTable):
             "_constructor_expanddim not supported for DataFrames!"
         )
 
+    @property
+    def _columns(self):
+        """
+        Return a list of Column objects backing this dataframe
+        """
+        return list(self._data.values())
+
     def serialize(self):
         header = {}
         frames = []
