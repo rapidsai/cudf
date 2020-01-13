@@ -129,13 +129,13 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  * begin1:        zero-based counting iterator,
  * begin2:        zero-based counting iterator,
  * p:             [](size_type col, size_type row){ return col == row; } 
- * masks:         [[b000...], [b000...], [b000...]]
+ * masks:         [[b00...], [b00...], [b00...]]
  * mask_count:    3
  * mask_num_bits: 2
  * valid_counts:  [0, 0, 0]
  *
  * Example Results:
- * masks:         [[b100...], [b010...], [b000...]]
+ * masks:         [[b10...], [b01...], [b00...]]
  * valid_counts:  [1, 1, 0]
  *
  * @note If any mask in `masks` is `nullptr`, that mask will be ignored.
