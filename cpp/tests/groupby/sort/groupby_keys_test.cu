@@ -189,7 +189,7 @@ TEST_F(groupby_string_keys_test, basic)
     strings_column_wrapper        keys        { "aaa", "año", "₹1", "aaa", "año", "año", "aaa", "₹1", "₹1", "año"};
     fixed_width_column_wrapper<V> vals        {     0,     1,    2,     3,     4,     5,     6,    7,    8,     9};
 
-    strings_column_wrapper        expect_keys({ "aaa", "año", "₹1" }, all_valid());
+    strings_column_wrapper        expect_keys({ "aaa", "año", "₹1" });
     fixed_width_column_wrapper<R> expect_vals {     9,    19,   17 };
 
     auto agg = cudf::experimental::make_sum_aggregation();
