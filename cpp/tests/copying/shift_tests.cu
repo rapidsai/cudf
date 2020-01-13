@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
@@ -21,35 +22,39 @@
 #include <gtest/gtest-typed-test.h>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
-#include "cudf/scalar/scalar.hpp"
+#include <cudf/scalar/scalar.hpp>
+#include "cudf/scalar/scalar_device_view.cuh"
+#include "cudf/scalar/scalar_factories.hpp"
+#include "cudf/types.hpp"
 
 using cudf::test::fixed_width_column_wrapper;
+using TestTypes = cudf::test::Types<int32_t>;
 
 template <typename T>
 struct ShiftTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(ShiftTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(ShiftTest, TestTypes);
 
-TYPED_TEST(ShiftTest, OneColumnEmpty)
-{
-    using T =  TypeParam;
+// TYPED_TEST(ShiftTest, OneColumnEmpty)
+// {
+//     using T =  TypeParam;
 
-    fixed_width_column_wrapper<T> a{};
+//     fixed_width_column_wrapper<T> a{};
 
-    cudf::table_view input{ { a } };
-    cudf::experimental::shift(input, 5, {});
-}
+//     cudf::table_view input{ { a } };
+//     cudf::experimental::shift(input, 5, {});
+// }
 
-TYPED_TEST(ShiftTest, TwoColumnsEmpty)
-{
-    using T =  TypeParam;
+// TYPED_TEST(ShiftTest, TwoColumnsEmpty)
+// {
+//     using T =  TypeParam;
 
-    fixed_width_column_wrapper<T> a{};
-    fixed_width_column_wrapper<T> b{};
+//     fixed_width_column_wrapper<T> a{};
+//     fixed_width_column_wrapper<T> b{};
 
-    cudf::table_view input{ { a, b } };
-    cudf::experimental::shift(input, 5, {});
-}
+//     cudf::table_view input{ { a, b } };
+//     cudf::experimental::shift(input, 5, {});
+// }
 
 TYPED_TEST(ShiftTest, OneColumn)
 {
@@ -60,10 +65,11 @@ TYPED_TEST(ShiftTest, OneColumn)
 
     auto expected_a = fixed_width_column_wrapper<T>{ 7, 7, 1, 2, 3 };
     auto expected = cudf::table_view{ { expected_a } };
-
-    auto fills = std::vector<cudf::scalar>{ cudf::numeric_scalar<T>(7) };
     
-    auto actual = cudf::experimental::shift(input, 5, { fills });
+    auto fills = std::vector<std::unique_ptr<cudf::scalar>> {
+        std::make_unique<cudf::numeric_scalar<T>>(7, true)
+    };
+    auto actual = cudf::experimental::shift(input, 2, fills);
 
     cudf::test::expect_tables_equal(expected, *actual);
 }
