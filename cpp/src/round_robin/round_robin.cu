@@ -52,9 +52,6 @@ round_robin_partition(table_view const& input,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                       cudaStream_t stream = 0)
 {
-  std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> ret_pair =
-    std::make_pair(nullptr, std::vector<cudf::size_type>(num_partitions));
-  
   auto nrows = input.num_rows();
 
   CUDF_EXPECTS( num_partitions > 1 && num_partitions < nrows, "Incorrect number of partitions. Must be greater than 1 and less than number of rows." );
@@ -97,6 +94,8 @@ round_robin_partition(table_view const& input,
                                                      mr,
                                                      stream);
 
+  auto ret_pair =
+    std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
   rmm::device_vector<cudf::size_type> d_partition_offsets(num_partitions, cudf::size_type{0});
 
   auto rotated_iter_begin =
@@ -111,7 +110,6 @@ round_robin_partition(table_view const& input,
                          rotated_iter_begin, rotated_iter_begin + num_partitions,
                          d_partition_offsets.begin());
 
-  ret_pair.first = std::move(uniq_tbl);
   cudaMemcpy(ret_pair.second.data(), d_partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
 
   return ret_pair;
