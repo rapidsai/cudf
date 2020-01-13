@@ -255,7 +255,7 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      aggregation::Kind* aggs) {
   for (auto i = 0; i < target.num_columns(); ++i) {
     dispatch_type_and_aggregation(
-        target.column(i).type(), aggs[i], elementwise_aggregator<true, true>{},
+        source.column(i).type(), aggs[i], elementwise_aggregator<true, true>{},
         // elementwise_aggregator<target_has_nulls, source_has_nulls>{},
         target.column(i), target_index, source.column(i), source_index);
   }
