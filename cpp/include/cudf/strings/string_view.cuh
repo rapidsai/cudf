@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cuda_runtime.h>
 #include <cudf/types.hpp>
+#include <iterator>
 
 /**
  * @file string_view.cuh
