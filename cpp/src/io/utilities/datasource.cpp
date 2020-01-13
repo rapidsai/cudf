@@ -28,11 +28,40 @@
 #include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
+#include <dlfcn.h>
+#include <gnu/lib-names.h>
+
 namespace cudf {
 namespace io {
 
 class kafka_io_source : public datasource {
  public:
+
+  explicit kafka_io_source() {
+    void *handle;
+    double (*cosine)(double);
+    char *error;
+
+    handle = dlopen(LIBSM_SO, RTLD_LAZY);
+    if (!handle) {
+      fprintf(stderr, "%s\n", dlerror());
+      exit(EXIT_FAILURE);
+    }
+
+    dlerror();    /* Clear any existing error */
+
+    cosine = (double (*)(double)) dlsym(handle, "cos");
+
+    error = dlerror();
+    if (error != NULL) {
+      fprintf(stderr, "%s\n", error);
+      exit(EXIT_FAILURE);
+    }
+
+    printf("%f\n", (*cosine)(2.0));
+    dlclose(handle);
+  }
+
   explicit kafka_io_source(std::unique_ptr<RdKafka::Conf> const &kafka_conf_,
                            std::vector<std::string> kafka_topics,
                            int64_t kafka_start_offset,
