@@ -237,13 +237,36 @@ class DataFrame(Table):
                 data.update({key: None for key in extra_cols})
 
         if index is None:
+            inf_index = None
             for i, col_name in enumerate(data):
+
+                # Use first index if all items in data are
+                # cudf Series and have indices with the same name.
+                # Note that we are not checking that indices are
+                # aligned for all items (just that they exist and
+                # have the same name).
+                if inf_index is not False:
+                    if (not isinstance(data[col_name], Series)) or (
+                        not data[col_name].index
+                    ):
+                        # Item is not a series or does not have an index
+                        inf_index = False
+                    elif i == 0:
+                        inf_index = data[col_name].index
+                    elif data[col_name].index.name != inf_index.name:
+                        # Index name does not match previous item
+                        inf_index = False
+
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
                     data[col_name] = column.as_column(data[col_name])
                     num_rows = data[col_name].size
-            self._index = RangeIndex(0, num_rows)
+
+            if inf_index:
+                self._index = as_index(inf_index)
+            else:
+                self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)
 
@@ -841,7 +864,7 @@ class DataFrame(Table):
                         r_opr = other_cols[col]
                         l_opr = Series(
                             column_empty(
-                                len(self), masked=True, dtype=other.dtype,
+                                len(self), masked=True, dtype=other.dtype
                             )
                         )
                     if col not in other_cols_keys:

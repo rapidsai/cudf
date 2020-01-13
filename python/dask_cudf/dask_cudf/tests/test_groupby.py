@@ -240,3 +240,17 @@ def test_groupby_string_index_name(myindex):
     gdf = ddf.groupby("index").agg({"data": "count"})
 
     assert gdf.compute().index.name == gdf.index.name
+
+
+def test_group_by_agg():
+    # GH-Issue #3533
+    gdf = cudf.datasets.randomdata(5)
+    pdf = gdf.to_pandas()
+
+    gddf = dask_cudf.from_cudf(gdf, npartitions=2)
+    gb_gddf = gddf.groupby("id").agg({"x": ["sum", "mean"]})
+
+    pddf = dd.from_pandas(pdf, npartitions=2)
+    gb_pddf = pddf.groupby("id").agg({"x": ["sum", "mean"]})
+
+    dd.assert_eq(gb_gddf.compute(), gb_pddf.compute())

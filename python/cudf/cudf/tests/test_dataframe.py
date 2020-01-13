@@ -4103,7 +4103,7 @@ def test_df_sr_binop(gsr, colnames, op):
     ],
 )
 @pytest.mark.parametrize(
-    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])],
+    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])]
 )
 def test_df_sr_binop_col_order(gsr, op):
     colnames = [0, 1, 2]
@@ -4236,3 +4236,17 @@ def test_memory_usage_multi():
     expect += 3 * 8  # Level 1
 
     assert expect == gdf.index.memory_usage(deep=deep)
+
+
+@pytest.mark.parametrize("index", [True, False])
+def test_dataframe_from_series_items(index):
+
+    pdf = pd.DataFrame({"id": [2, 4, 6], "a": ["X", "Y", "Z"], "b": [0, 1, 2]})
+    if index:
+        pdf = pdf.set_index("id")
+    pdf2 = pd.DataFrame({"a": pdf["a"], "b": pdf["b"]})
+
+    df = gd.from_pandas(pdf)
+    df2 = gd.DataFrame({"a": df["a"], "b": df["b"]})
+
+    pd.testing.assert_frame_equal(pdf2, df2.to_pandas())
