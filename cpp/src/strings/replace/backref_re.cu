@@ -136,7 +136,7 @@ struct backrefs_fn
                 {
                     if( out_ptr )
                     {
-                        auto copy_length = backref.second - lpos_template;
+                        auto const copy_length = backref.second - lpos_template;
                         out_ptr = copy_and_increment(out_ptr, repl_ptr, copy_length );
                         repl_ptr += copy_length;
                         lpos_template += copy_length;
