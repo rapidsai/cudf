@@ -108,16 +108,19 @@ struct backrefs_fn
     {
         if( d_strings.is_null(idx) )
             return 0;
-        u_char data1[stack_size], data2[stack_size];
+        u_char data1[stack_size];
+        u_char data2[stack_size];
         prog.set_stack_mem(data1,data2);
         string_view d_str = d_strings.element<string_view>(idx);
         auto nchars = d_str.length();     // number of characters in input string
         auto nbytes = d_str.size_bytes(); // number of bytes in input string
-        const char* in_ptr = d_str.data(); // input pointer (i)
-        char* out_ptr = nullptr;  // running output pointer (o)
+        const char* in_ptr = d_str.data(); // input pointer
+        char* out_ptr = nullptr;  // running output pointer
         if( d_offsets )
             out_ptr = d_chars + d_offsets[idx];
-        size_type lpos = 0, begin = 0, end = nchars;  // working vars
+        size_type lpos = 0;      // last byte position processed in d_str
+        size_type begin = 0;     // first character position matching regex
+        size_type end = nchars;  // last character position (exclusive)
         // copy input to output replacing strings as we go
         while( prog.find(idx,d_str,begin,end) > 0 ) // inits the begin/end vars
         {
@@ -139,15 +142,16 @@ struct backrefs_fn
                     lpos_template += copy_length;
                 }
                 // extract the specific group's string for the backref_index
-                size_type spos = begin, epos = end; // these are modified by extract()
-                if( (prog.extract(idx,d_str,spos,epos,backref_index-1)<=0 ) ||
-                    (epos <= spos) )
+                size_type spos_extract = begin; // these are modified
+                size_type epos_extract = end;   // by extract()
+                if( (prog.extract(idx,d_str,spos_extract,epos_extract,backref_index-1)<=0 ) ||
+                    (epos_extract <= spos_extract) )
                     continue; // no value for this backref number; that is ok
-                spos = d_str.byte_offset(spos); // convert
-                epos = d_str.byte_offset(epos); // to bytes
-                nbytes += epos - spos;
+                spos_extract = d_str.byte_offset(spos_extract); // convert
+                epos_extract = d_str.byte_offset(epos_extract); // to bytes
+                nbytes += epos_extract - spos_extract;
                 if( out_ptr )
-                    out_ptr = copy_and_increment(out_ptr, d_str.data()+spos, (epos-spos));
+                    out_ptr = copy_and_increment(out_ptr, d_str.data()+spos_extract, (epos_extract-spos_extract));
             }
             if( out_ptr && (lpos_template < d_repl.size_bytes()) )// copy remainder of template
                 out_ptr = copy_and_increment(out_ptr, repl_ptr+lpos_template, d_repl.size_bytes() - lpos_template);
