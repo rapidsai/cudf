@@ -27,6 +27,38 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
+/**	
+ * @brief Maps an `aggregation::Kind` value to it's corresponding binary	
+ * operator.	
+ *	
+ * @note Not all values of `aggregation::Kind` have a valid corresponding binary	
+ * operator. For these values `E`,	
+ * `std::is_same_v<corresponding_operator<E>::type, void>`.	
+ *	
+ * @tparam k The `aggregation::Kind` value to map to its corresponding operator	
+ */	
+template <aggregation::Kind k>	
+struct corresponding_operator {	
+    using type = void;	
+};	
+
+template <>	
+struct corresponding_operator<aggregation::MIN> {	
+  using type = DeviceMin;	
+};	
+template <>	
+struct corresponding_operator<aggregation::MAX> {	
+  using type = DeviceMax;	
+};	
+template <>	
+struct corresponding_operator<aggregation::SUM> {	
+  using type = DeviceSum;	
+};	
+
+template <aggregation::Kind k>	
+using corresponding_operator_t = typename corresponding_operator<k>::type;	
+
+
 template <typename Source, aggregation::Kind k, bool target_has_nulls,
           bool source_has_nulls, typename Enable = void>
 struct update_target_element {

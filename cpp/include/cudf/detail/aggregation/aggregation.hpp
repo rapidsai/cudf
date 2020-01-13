@@ -16,7 +16,8 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/types.hpp>
 
@@ -103,37 +104,6 @@ constexpr size_type ARGMAX_SENTINEL{-1};
  * sentinel value to indicate an unused element.
  */
 constexpr size_type ARGMIN_SENTINEL{-1};
-
-/**	
- * @brief Maps an `aggregation::Kind` value to it's corresponding binary	
- * operator.	
- *	
- * @note Not all values of `aggregation::Kind` have a valid corresponding binary	
- * operator. For these values `E`,	
- * `std::is_same_v<corresponding_operator<E>::type, void>`.	
- *	
- * @tparam k The `aggregation::Kind` value to map to its corresponding operator	
- */	
-template <aggregation::Kind k>	
-struct corresponding_operator {	
-    using type = void;	
-};	
-
-template <>	
-struct corresponding_operator<aggregation::MIN> {	
-  using type = DeviceMin;	
-};	
-template <>	
-struct corresponding_operator<aggregation::MAX> {	
-  using type = DeviceMax;	
-};	
-template <>	
-struct corresponding_operator<aggregation::SUM> {	
-  using type = DeviceSum;	
-};	
-
-template <aggregation::Kind k>	
-using corresponding_operator_t = typename corresponding_operator<k>::type;	
 
 /**---------------------------------------------------------------------------*
  * @brief Determines accumulator type based on input type and aggregation.
