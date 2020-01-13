@@ -22,7 +22,7 @@ namespace cudf
 {
 
 //
-dictionary_column_view::dictionary_column_view( column_view strings_column )
+dictionary_column_view::dictionary_column_view( column_view const& strings_column )
     : column_view(strings_column)
 {
     CUDF_EXPECTS( type().id()==DICTIONARY32, "dictionary_column_view only supports DICTIONARY type");

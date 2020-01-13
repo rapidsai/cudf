@@ -30,7 +30,7 @@ namespace cudf
 class dictionary_column_view : private column_view
 {
 public:
-    dictionary_column_view( column_view dictionary_column );
+    dictionary_column_view( column_view const& dictionary_column );
     dictionary_column_view( dictionary_column_view&& dictionary_view ) = default;
     dictionary_column_view( const dictionary_column_view& dictionary_view ) = default;
     ~dictionary_column_view() = default;
