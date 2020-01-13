@@ -63,11 +63,17 @@ struct functor_foreach {
     {
     }
 
-    void __device__ operator() (size_type idx) {
-        auto oob = idx < offset || idx > offset + input.size();
-        auto value = oob ? fill_value : input.element<T>(idx - offset);
-        *(output.data<T>() + idx) = value;
-    };
+    T __device__ operator()(size_type idx) {
+        if (idx < offset) {
+            return fill_value;
+        }
+
+        if (idx > offset + size) {
+            return fill_value;
+        }
+
+        return input.element<T>(idx - offset);
+    }
 };
 
 struct functor {
@@ -88,18 +94,21 @@ struct functor {
                cudaStream_t stream)
     {
         using ScalarType = cudf::experimental::scalar_type_t<T>;
-        auto& p_scalar = static_cast<ScalarType const&>(fill_value);
+        auto& scalar = static_cast<ScalarType const&>(fill_value);
 
         auto device_input = column_device_view::create(input);
         auto output = allocate_like(input, mask_allocation_policy::NEVER);
         auto device_output = mutable_column_device_view::create(*output);
-        thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
-                           thrust::make_counting_iterator<size_type>(0),
-                           input.size(),
-                           functor_foreach<T>{*device_input,
-                                              *device_output,
-                                              offset,
-                                              p_scalar.value(stream)});
+        auto func = functor_foreach<T>{*device_input,
+                                       *device_output,
+                                       offset,
+                                       scalar.value(stream)};
+
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          thrust::make_counting_iterator<size_type>(0),
+                          thrust::make_counting_iterator<size_type>(input.size()),
+                          device_output->data<T>(),
+                          func);
 
         return output;
     }
