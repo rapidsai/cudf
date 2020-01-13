@@ -42,23 +42,10 @@ struct dispatch_map_type {
       table_view const& target, bool check_bounds,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    if (check_bounds) {
-      auto const begin = -target.num_rows();
-      auto const end = target.num_rows();
-      auto bounds = bounds_checker<map_type>{begin, end};
-      CUDF_EXPECTS(scatter_map.size() == thrust::count_if(
-        rmm::exec_policy(stream)->on(stream),
-        scatter_map.begin<map_type>(), scatter_map.end<map_type>(), bounds),
-        "Scatter map index out of bounds");
-    }
 
     return detail::scatter<map_type>(source,
-           thrust::make_transform_iterator(
-                           scatter_map.begin<map_type>(),
-                           index_converter<map_type>{target.num_rows()}),
-           thrust::make_transform_iterator(
-                           scatter_map.end<map_type>(),
-                           index_converter<map_type>{target.num_rows()}),
+           scatter_map.begin<map_type>(),
+           scatter_map.end<map_type>(),
            target, check_bounds, mr, stream);
   }
 

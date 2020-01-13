@@ -144,15 +144,15 @@ struct column_scatterer {
  * and their corresponding datatypes must be the same.
  *
  * If the same index appears more than once in the scatter map, the result is
- * undefined.
+ * undefined. This range might have negative values, which will be modified by adding target.size()
  *
+ * @throws cudf::logic_error if scatter map index is out of bounds
  * @throws cudf::logic_error if scatter_map.size() > source.num_rows()
  *
  * @param[in] source The input columns containing values to be scattered into the
  * target columns
- * @param[in] scatter_map_begin Beginning of iterator range of integer indices that map the rows in the
- * source columns to rows in the target columns
- * @param[in] scatter_map_end End of iterator range of integer indices that map the rows in the
+ * @param[in] scatter_map_begin Beginning of iterator range of integer indices that has been provided.
+ * @param[in] scatter_map_end End of iterator range of integer indices that has been provided.
  * source columns to rows in the target columns
  * @param[in] target The set of columns into which values from the source_table
  * are to be scattered
@@ -171,18 +171,38 @@ scatter(table_view const& source, MapIterator scatter_map_begin,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0) {
 
+    if (check_bounds) {
+      auto const begin = -target.num_rows();
+      auto const end = target.num_rows();
+      auto bounds = bounds_checker<T>{begin, end};
+      CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) == thrust::count_if(
+        rmm::exec_policy(stream)->on(stream),
+        scatter_map_begin, scatter_map_end, bounds),
+        "Scatter map index out of bounds");
+    }
+
     CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
             "scatter map size should be <= to number of rows in source");
 
+    // Transform negative indices to index + target size
+    auto updated_scatter_map_begin = thrust::make_transform_iterator(
+                           scatter_map_begin,
+                           index_converter<T>{target.num_rows()});
+
+    auto updated_scatter_map_end = thrust::make_transform_iterator(
+                           scatter_map_end,
+                           index_converter<T>{target.num_rows()});
+
     auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
-    auto scatter_functor = column_scatterer<MapIterator>{};
+    auto scatter_functor = column_scatterer<decltype(updated_scatter_map_begin)>{};
     std::transform(source.begin(), source.end(), target.begin(), result.begin(),
       [=](auto const& source_col, auto const& target_col) {
         return type_dispatcher(source_col.type(), scatter_functor,
-          source_col, scatter_map_begin, scatter_map_end, target_col, mr, stream);
+          source_col, updated_scatter_map_begin, 
+          updated_scatter_map_end, target_col, mr, stream);
       });
 
-    auto gather_map = make_gather_map<T>(scatter_map_begin, scatter_map_end,
+    auto gather_map = make_gather_map<T>(updated_scatter_map_begin, updated_scatter_map_end,
       target.num_rows(), stream);
     gather_bitmask(source, gather_map.begin(), result, mr, stream);
 
