@@ -118,22 +118,38 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 }
 
 /**----------------------------------------------------------------------------*
- * @brief For each mask, assigns each bit to a value obtained by calling the
- *        predicate.
+ * @brief Populates a set of bitmasks by applying a binary predicate to two
+*         input ranges.
+
+ * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
+ * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predivate evaluates
+ * to true, the the bit is set to `1`. If false, set to `0`.
  *
- * @note If any mask is `nullptr`, that mask will be ignored.
+ * Example Arguments:
+ * begin1:        zero-based counting iterator,
+ * begin2:        zero-based counting iterator,
+ * p:             [](size_type col, size_type row){ return col == row; } 
+ * masks:         [[b00...], [b00...], [b00...]]
+ * mask_count:    3
+ * mask_num_bits: 2
+ * valid_counts:  [0, 0, 0]
  *
- * @param get_validity    Function used to obtain validity for each bit.
- *                        Signature: `bool(size_type mask_idx, size_type bit_idx)`
- * @param masks           Masks for which bits will be obtained and assigned.
- * @param mask_count      The number of `masks`.
- * @param mask_num_bits   The number of bits to assign for each mask. If this
- *                        number is smaller than the total number of bits, the
- *                        remaining bits will be set to `0` / `false`.
- * @param validity_counts Used to obtain the total number of valid bits for each
- *                        mask.
+ * Example Results:
+ * masks:         [[b10...], [b01...], [b00...]]
+ * valid_counts:  [1, 1, 0]
  *
- * @tparam BinaryPredicate bool(Iter1 + mask_idx, Iter2 + bit_idx)
+ * @note If any mask in `masks` is `nullptr`, that mask will be ignored.
+ *
+ * @param begin1        LHS arguments to binary predicte. ex: column/mask idx
+ * @param begin2        RHS arguments to binary predicate. ex: row/bit idx
+ * @param p             Predicate: `bit = p(begin1 + mask_idx, begin2 + bit_idx)`
+ * @param masks         Masks for which bits will be obtained and assigned.
+ * @param mask_count    The number of `masks`.
+ * @param mask_num_bits The number of bits to assign for each mask. If this
+ *                      number is smaller than the total number of bits, the
+ *                      remaining bits may not be initialized.
+ * @param valid_counts  Used to obtain the total number of valid bits for each
+ *                      mask.
  *---------------------------------------------------------------------------**/
 template <typename InputIterator1,
           typename InputIterator2,
