@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,37 +27,36 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-/**	
- * @brief Maps an `aggregation::Kind` value to it's corresponding binary	
- * operator.	
- *	
- * @note Not all values of `aggregation::Kind` have a valid corresponding binary	
- * operator. For these values `E`,	
- * `std::is_same_v<corresponding_operator<E>::type, void>`.	
- *	
- * @tparam k The `aggregation::Kind` value to map to its corresponding operator	
- */	
-template <aggregation::Kind k>	
-struct corresponding_operator {	
-    using type = void;	
-};	
+/**
+ * @brief Maps an `aggregation::Kind` value to it's corresponding binary
+ * operator.
+ *
+ * @note Not all values of `aggregation::Kind` have a valid corresponding binary
+ * operator. For these values `E`,
+ * `std::is_same_v<corresponding_operator<E>::type, void>`.
+ *
+ * @tparam k The `aggregation::Kind` value to map to its corresponding operator
+ */
+template <aggregation::Kind k>
+struct corresponding_operator {
+  using type = void;
+};
 
-template <>	
-struct corresponding_operator<aggregation::MIN> {	
-  using type = DeviceMin;	
-};	
-template <>	
-struct corresponding_operator<aggregation::MAX> {	
-  using type = DeviceMax;	
-};	
-template <>	
-struct corresponding_operator<aggregation::SUM> {	
-  using type = DeviceSum;	
-};	
+template <>
+struct corresponding_operator<aggregation::MIN> {
+  using type = DeviceMin;
+};
+template <>
+struct corresponding_operator<aggregation::MAX> {
+  using type = DeviceMax;
+};
+template <>
+struct corresponding_operator<aggregation::SUM> {
+  using type = DeviceSum;
+};
 
-template <aggregation::Kind k>	
-using corresponding_operator_t = typename corresponding_operator<k>::type;	
-
+template <aggregation::Kind k>
+using corresponding_operator_t = typename corresponding_operator<k>::type;
 
 template <typename Source, aggregation::Kind k, bool target_has_nulls,
           bool source_has_nulls, typename Enable = void>
@@ -140,7 +139,6 @@ struct update_target_element<
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
-
     if (source_has_nulls and source.is_null(source_index)) {
       return;
     }
@@ -236,7 +234,30 @@ struct elementwise_aggregator {
  * ```c++
  * target_row[i] = aggs[i](target_row[i], source_row[i])
  * ```
- * TODO: Document null handling, expectations for initialization/validity of output columns
+ * 
+ * This function only supports aggregations that can be done in a "single pass", 
+ * i.e., given an initial value `R`, the aggregation `op` can be computed on a series
+ * of elements `e[i] for i in [0,n)` by computing `R = op(e[i],R)` for any order 
+ * of the values of `i`.
+ * 
+ * The initial value and validity of `R` depends on the aggregation:
+ * SUM: 0 and NULL
+ * COUNT: 0 and VALID
+ * MIN: Max element of type and NULL
+ * MAX: Min element of type and NULL
+ * ARGMAX: `ARGMAX_SENTINEL` and NULL
+ * ARGMIN: `ARGMIN_SENTINEL` and NULL
+ * 
+ * It is required that the elements of `target` be initialized with the corresponding
+ * initial values and validity specified above.
+ * 
+ * Handling of null elements in both `source` and `target` depends on the aggregation:
+ * SUM, MIN, MAX, ARGMIN, ARGMAX:
+ *  - `source`: Skipped
+ *  - `target`: Updated from null to valid upon first successful aggregation
+ * COUNT:
+ *  - `source`: Skipped
+ *  - `target`: Cannot be null
  *
  * @param target Table containing the row to update
  * @param target_index Index of the row to update in `target`
@@ -247,7 +268,7 @@ struct elementwise_aggregator {
  * and `source` rows. Must contain at least `target.num_columns()` valid
  * `aggregation::Kind` values.
  */
-// template <bool target_has_nulls = true, bool source_has_nulls = true>
+template <bool target_has_nulls = true, bool source_has_nulls = true>
 __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
@@ -255,8 +276,8 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      aggregation::Kind* aggs) {
   for (auto i = 0; i < target.num_columns(); ++i) {
     dispatch_type_and_aggregation(
-        target.column(i).type(), aggs[i], elementwise_aggregator<true, true>{},
-        // elementwise_aggregator<target_has_nulls, source_has_nulls>{},
+        source.column(i).type(), aggs[i],
+        elementwise_aggregator<target_has_nulls, source_has_nulls>{},
         target.column(i), target_index, source.column(i), source_index);
   }
 }

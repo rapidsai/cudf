@@ -49,6 +49,7 @@
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
+- PR #3520 Change read_parquet defaults and add warnings
 
 ## Bug Fixes
 
@@ -134,6 +135,7 @@
 - PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
+- PR #3490 Add pair iterators for columns
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
