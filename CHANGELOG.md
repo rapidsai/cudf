@@ -46,6 +46,7 @@
 - PR #3697 Improve column insert performance for wide frames
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
+- PR #3520 Change read_parquet defaults and add warnings
 
 ## Bug Fixes
 
@@ -79,6 +80,7 @@
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
 - PR #3783 Bind cuDF operators to Dask Dataframe
+- PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 
 
 # cuDF 0.11.0 (11 Dec 2019)
