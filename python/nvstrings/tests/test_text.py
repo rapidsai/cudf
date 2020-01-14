@@ -47,22 +47,43 @@ def test_token_count():
             "the sable siamésé cat jumped under the brown sofa",
             None,
             "",
+            "test_str\x01test_str\x02test_str\x03test_str\x04test_str\x05",
         ]
     )
     outcome = nvtext.token_count(strs)
-    expected = [10, 9, 0, 0]
+    expected = [10, 9, 0, 0, 5]
     assert outcome == expected
 
     # custom delimiter
     outcome = nvtext.token_count(strs, delimiter="o")
-    expected = [6, 3, 0, 0]
+    expected = [6, 3, 0, 0, 1]
     assert outcome == expected
 
     # test device pointer
     outcome_darray = rmm.device_array(strs.size(), dtype=np.int32)
     nvtext.token_count(strs, devptr=outcome_darray.device_ctypes_pointer.value)
-    expected = [10, 9, 0, 0]
+    expected = [10, 9, 0, 0, 5]
     assert np.array_equal(outcome_darray.copy_to_host(), expected)
+
+    # test multi char delimiter
+    got = nvtext.token_count(strs, delimiter=["a", "e", "i", "o", "u"])
+    expected = [14, 15, 0, 0, 6]
+    assert got == expected
+
+    # test empty list of delimiter
+    got = nvtext.token_count(strs, delimiter=[])
+    expected = [10, 9, 0, 0, 5]
+    assert got == expected
+
+    # test device pointer
+    got_darray = rmm.device_array(strs.size(), dtype=np.int32)
+    nvtext.token_count(
+        strs,
+        delimiter=["a", "e", "i", "o"],
+        devptr=got_darray.device_ctypes_pointer.value,
+    )
+    expected = [12, 13, 0, 0, 6]
+    assert np.array_equal(got_darray.copy_to_host(), expected)
 
 
 def test_unique_tokens():
@@ -73,6 +94,7 @@ def test_unique_tokens():
             "Your Favorite book is different",
             None,
             "",
+            "test_str\x01test_str\x02test_str\x03test_str\x04test_str\x05",
         ]
     )
     unique_tokens_outcome = nvtext.unique_tokens(strs)
@@ -86,6 +108,7 @@ def test_unique_tokens():
             "is",
             "my",
             "this",
+            "test_str",
         ]
     )
     assert set(unique_tokens_outcome.to_host()) == expected
@@ -93,7 +116,12 @@ def test_unique_tokens():
     # custom delimiter
     unique_tokens_outcome = nvtext.unique_tokens(strs, delimiter="my")
     expected = set(
-        [" favorite book", "Your Favorite book is different", "this is "]
+        [
+            " favorite book",
+            "Your Favorite book is different",
+            "test_str\x01test_str\x02test_str\x03test_str\x04test_str\x05",
+            "this is ",
+        ]
     )
     assert set(unique_tokens_outcome.to_host()) == expected
 

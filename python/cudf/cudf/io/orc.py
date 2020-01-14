@@ -73,4 +73,4 @@ def read_orc(
 def to_orc(df, fname, compression=None, *args, **kwargs):
     """{docstring}"""
 
-    libcudf.orc.write_orc(df._cols, fname, compression)
+    libcudf.orc.write_orc(df._data, fname, compression)

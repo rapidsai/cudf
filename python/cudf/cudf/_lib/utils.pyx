@@ -44,8 +44,13 @@ cdef table_to_dataframe(cudf_table* c_table, int_col_names=False):
     df = DataFrame()
     for i in range(c_table[0].num_columns()):
         c_col = c_table[0].get_column(i)
-        col = gdf_column_to_column(c_col, int_col_names)
-        df.insert(i, col.name, col)
+        col = gdf_column_to_column(c_col)
+        name = None
+        if c_col.col_name is not NULL:
+            name = c_col.col_name.decode()
+        if int_col_names:
+            name = int(name)
+        df.insert(i, name, col)
         free_column(c_col)
     return df
 
@@ -70,7 +75,7 @@ cdef columns_from_table(cudf_table* c_table, int_col_names=False):
     cdef gdf_column* c_col
     for i in range(c_table[0].num_columns()):
         c_col = c_table[0].get_column(i)
-        col = gdf_column_to_column(c_col, int_col_names)
+        col = gdf_column_to_column(c_col)
         columns.append(col)
         free_column(c_col)
     return columns
