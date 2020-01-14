@@ -133,6 +133,15 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest) {
   cudf::test::expect_columns_equivalent(col1, col2);
 }
 
+TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest) {
+  auto all_valid = cudf::test::make_counting_transform_iterator(
+                                  0, [](auto i) { return true; });
+  cudf::test::fixed_width_column_wrapper<double> col1 { 1, 2, 3 };
+  cudf::test::fixed_width_column_wrapper<double> col2({ 1, 2, 3 }, all_valid);
+
+  cudf::test::expect_columns_equivalent(col1, col2);
+}
+
 struct ColumnUtilitiesStringsTest: public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHost)

@@ -35,6 +35,18 @@ namespace test {
 void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
 
 /**
+ * @brief Verifies the property equivalence of two columns.
+ *
+ * If the columns don't have nulls, then the nullability equality is relaxed.
+ * i.e. the two columns are considered equivalent even if one has a null mask
+ * and the other doesn't. 
+ * 
+ * @param lhs The first column
+ * @param rhs The second column
+ */
+void expect_column_properties_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs);
+
+/**
  * @brief Verifies the element-wise equality of two columns.
  *
  * Treats null elements as equivalent.
