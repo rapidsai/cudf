@@ -34,16 +34,24 @@
 namespace cudf {
 namespace test {
 
-// Property equality
-void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs) {
+// Property comparison
+template <bool check_exact_equality>
+void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());
-  if (lhs.size() > 0) {
-     EXPECT_EQ(lhs.nullable(), rhs.nullable());
+  if (lhs.size() > 0 and check_exact_equality) {
+    EXPECT_EQ(lhs.nullable(), rhs.nullable());
   }
-  EXPECT_EQ(lhs.has_nulls(), rhs.has_nulls());
   EXPECT_EQ(lhs.num_children(), rhs.num_children());
+}
+
+void expect_column_properties_equal(column_view const& lhs, column_view const& rhs) {
+  column_property_comparison<true>(lhs, rhs);
+}
+
+void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs) {
+  column_property_comparison<false>(lhs, rhs);
 }
 
 class corresponding_rows_unequal {
@@ -161,10 +169,14 @@ public:
 
 namespace {
 
-template <typename ComparatorType>
+template <bool check_exact_equality>
 void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs,
                        bool print_all_differences) {
-  expect_column_properties_equal(lhs, rhs);
+  column_property_comparison<check_exact_equality>(lhs, rhs);
+
+  using ComparatorType = std::conditional_t<check_exact_equality, 
+                                            corresponding_rows_unequal,
+                                            corresponding_rows_not_equivalent>;
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
@@ -235,14 +247,14 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
 void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
                           bool print_all_differences) 
 {
-  column_comparison<corresponding_rows_unequal>(lhs, rhs, print_all_differences);
+  column_comparison<true>(lhs, rhs, print_all_differences);
 }
 
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
                                bool print_all_differences) 
 {
-  column_comparison<corresponding_rows_not_equivalent>(lhs, rhs, print_all_differences);
+  column_comparison<false>(lhs, rhs, print_all_differences);
 }
 
 // Bitwise equality
