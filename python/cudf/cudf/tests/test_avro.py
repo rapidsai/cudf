@@ -49,8 +49,13 @@ def path_or_buf(datadir):
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
 def test_avro_reader_basic(datadir, inputfile, columns, engine):
     path = datadir / inputfile
+
+    got = cudf.read_avro(path, engine=engine, columns=columns)
+
     try:
-        reader = fa.reader(open(path, "rb"))
+        avro_file = open(path, "rb")
+        reader = fa.reader(avro_file)
+
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".avro file is not found")
@@ -58,7 +63,8 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
             print(type(excpr).__name__)
 
     expect = pd.DataFrame.from_records(reader)
-    got = cudf.read_avro(path, engine=engine, columns=columns)
+    if not avro_file.closed:
+        avro_file.close()
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
@@ -69,4 +75,4 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
 
     # fastavro appears to return columns in reverse order
     # (actual order may depend on pandas/python version)
-    assert_eq(expect, got[expect.columns], check_categorical=False)
+    assert_eq(expect, got, check_categorical=False)
