@@ -57,11 +57,11 @@ round_robin_partition(table_view const& input,
   CUDF_EXPECTS( num_partitions > 1 && num_partitions < nrows, "Incorrect number of partitions. Must be greater than 1 and less than number of rows." );
   CUDF_EXPECTS( start_partition < num_partitions, "Incorrect start_partition index. Must be less than number of partitions." );
   
-  auto n_pmax = nrows % num_partitions;//# partitions of max size
-  cudf::size_type max_p_size = std::ceil( static_cast<double>(nrows) / static_cast<double>(num_partitions));// max size of partitions
+  auto num_partitions_max_size = nrows % num_partitions;//# partitions of max size
+  cudf::size_type max_partition_size = std::ceil( static_cast<double>(nrows) / static_cast<double>(num_partitions));// max size of partitions
   
-  auto pmm = n_pmax * max_p_size;
-  auto dnpmax = num_partitions - n_pmax;
+  auto total_max_partitions_size = num_partitions_max_size * max_partition_size;
+  auto num_partitions_min_size = num_partitions - num_partitions_max_size;
 
   //delta is the number of positions to rotate right
   //the original range [0,1,...,n-1]
@@ -70,22 +70,30 @@ round_robin_partition(table_view const& input,
   //i.e.,
   //the partition sizes array (of size p) being:
   //[m,m,...,m,(m-1),...,(m-1)]
-  //(with n_pmax sizes `m` at the beginning;
-  //and (p-n_pmax) sizes `(m-1)` at the end)
+  //(with num_partitions_max_size sizes `m` at the beginning;
+  //and (p-num_partitions_max_size) sizes `(m-1)` at the end)
   //we accumulate the 1st `start_partition` entries from the end:
   //
-  auto delta = (start_partition > dnpmax?
-                dnpmax*(max_p_size-1) + (start_partition - dnpmax)*max_p_size :
-                start_partition*(max_p_size-1));
+  auto delta = (start_partition > num_partitions_min_size?
+                num_partitions_min_size*(max_partition_size-1) + (start_partition - num_partitions_min_size)*max_partition_size :
+                start_partition*(max_partition_size-1));
 
   
   auto iter_begin =
     thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                    [nrows, num_partitions, max_p_size, n_pmax, pmm, delta] __device__ (auto index0){
-                                      auto indx = (index0 + nrows - delta) % nrows;//rotate original index right by delta positions
-                                      auto ipj = (indx <= pmm ? indx % max_p_size: (indx - pmm) % (max_p_size-1) );
-                                      auto pij = (indx <= pmm ? indx / max_p_size: n_pmax + (indx - pmm) / (max_p_size-1) );
-                                      return num_partitions * ipj + pij;
+                                    [nrows, num_partitions, max_partition_size, num_partitions_max_size, total_max_partitions_size, delta] __device__ (auto index0){
+                                      //rotate original index right by delta positions;
+                                      //this is the effect of applying start_partition:
+                                      //
+                                      auto rotated_index = (index0 + nrows - delta) % nrows;
+
+                                      //using rotated_index = given index0, rotated;
+                                      //the algorithm below calculates the src round-robin row,
+                                      //by calculating the partition_index and the index_within_partition:
+                                      //
+                                      auto index_within_partition = (rotated_index <= total_max_partitions_size ? rotated_index % max_partition_size: (rotated_index - total_max_partitions_size) % (max_partition_size-1) );
+                                      auto partition_index = (rotated_index <= total_max_partitions_size ? rotated_index / max_partition_size: num_partitions_max_size + (rotated_index - total_max_partitions_size) / (max_partition_size-1) );
+                                      return num_partitions * index_within_partition + partition_index;
                                     });
 
   auto uniq_tbl = cudf::experimental::detail::gather(input,
@@ -100,9 +108,9 @@ round_robin_partition(table_view const& input,
 
   auto rotated_iter_begin =
     thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                    //(\indx -> if (indx + np - sp) `mod` np < pmax then m else (m-1) )
-                                    [num_partitions, start_partition, max_p_size, n_pmax] __device__ (auto indx){
-                                      return ((indx + num_partitions - start_partition) % num_partitions < n_pmax? max_p_size : max_p_size-1);
+                                    //(\rotated_index -> if (rotated_index + np - sp) `mod` np < pmax then m else (m-1) )
+                                    [num_partitions, start_partition, max_partition_size, num_partitions_max_size] __device__ (auto index){
+                                      return ((index + num_partitions - start_partition) % num_partitions < num_partitions_max_size? max_partition_size : max_partition_size-1);
                                     });
 
   auto exec = rmm::exec_policy(stream);
