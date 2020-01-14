@@ -635,3 +635,25 @@ from_cudf = dd.from_pandas
 
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
+
+for name in [
+    "add",
+    "sub",
+    "mul",
+    "truediv",
+    "floordiv",
+    "mod",
+    "pow",
+    "radd",
+    "rsub",
+    "rmul",
+    "rtruediv",
+    "rfloordiv",
+    "rmod",
+    "rpow",
+]:
+    meth = getattr(cudf.DataFrame, name)
+    DataFrame._bind_operator_method(name, meth)
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_operator_method(name, meth)
