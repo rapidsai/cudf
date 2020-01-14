@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/detail/copy.hpp>
@@ -10,6 +12,7 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/gather.cuh>
+#include <cudf/dictionary/detail/gather.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -203,6 +206,44 @@ struct column_gatherer_impl<string_view, MapItType>
   }
 
 };
+
+template<typename MapItType>
+struct column_gatherer_impl<dictionary32_tag, MapItType>
+{
+ /**
+  * @brief Type-dispatched function to gather from one column to another based
+  * on a `gather_map`. This handles dictionary column_views only.
+  *
+  * @param source_column View into the column to gather from
+  * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
+  * @param gather_map_end End of iterator range of integral values representing the gather map
+  * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
+  * @param mr Memory resource to use for all allocations
+  * @param stream CUDA stream on which to execute kernels
+  */
+  std::unique_ptr<column> operator()(column_view const& source_column,
+                                     MapItType gather_map_begin,
+                                     MapItType gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
+      if (true == nullify_out_of_bounds) {
+        return cudf::dictionary::detail::gather<true>(
+                       dictionary_column_view(source_column),
+                       gather_map_begin, gather_map_end,
+                       false,
+                       mr, stream);
+      } else {
+        return cudf::dictionary::detail::gather<false>(
+                       dictionary_column_view(source_column),
+                       gather_map_begin, gather_map_end,
+                       false,
+                       mr, stream);
+      }
+  }
+
+};
+
 
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased

@@ -792,7 +792,8 @@ ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 # - dictionary tests ---------------------------------------------------------------------------------
 
 set(DICTIONARY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cu")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 

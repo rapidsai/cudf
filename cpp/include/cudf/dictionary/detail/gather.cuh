@@ -20,8 +20,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 //#include <cudf/detail/copy.hpp>
-//#include <cudf/detail/valid_if.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/valid_if.cuh>
+//#include <cudf/detail/gather.cuh>
 
 namespace cudf
 {
@@ -67,27 +67,29 @@ std::unique_ptr<cudf::column> gather( dictionary_column_view const& dictionary,
         return make_empty_column(data_type{DICTIONARY32});
 
     // create null mask -- caller must update this
+    mask_state mstate = NullifyOutOfBounds ? mask_state::ALL_NULL : mask_state::UNINITIALIZED;
     rmm::device_buffer null_mask;
     if( dictionary.parent().nullable() or NullifyOutOfBounds )
         null_mask = create_null_mask(output_count, mstate, stream, mr);
 
     // gather the new indices
-    auto table = experimental::detail::gather( table_view{std::vector<column_view>{dictionary.indices()}},
-                                               begin, end,
-                                               false, false, false, mr, stream)->release();
-    std::unique_ptr<column> indices_column = table[0];
-    auto keys_copy = std::make_shared<column>(dictionary.dictionary_keys());
+// THIS IS NOT YET DEFINED IN THE INCLUDE HEADER HIERARCHY
+//    auto table = experimental::detail::gather( table_view{std::vector<column_view>{dictionary.indices()}},
+//                                               begin, end,
+//                                               false, false, false, mr, stream)->release();
+    std::unique_ptr<column> indices_column = nullptr; //table[0];
+    auto keys_copy = std::make_shared<column>(*(dictionary.dictionary_keys()));
 
     // TODO: handle remove_unused_keys
 
     std::vector<std::unique_ptr<column>> children;
     children.emplace_back(std::move(indices_column));
     return std::make_unique<column>(
-        data_type{DICTIONARY32}, indices_column.size(),
+        data_type{DICTIONARY32}, output_count,
         rmm::device_buffer{0,stream,mr},
         null_mask, dictionary.null_count(),
         std::move(children),
-        std::move(keys_copy));
+        keys_copy);
 }
 
 /**
