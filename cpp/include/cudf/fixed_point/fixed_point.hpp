@@ -15,7 +15,7 @@
  */
 
 #include <cmath>
-#include <limits> // TODO needed?
+#include <limits>
 #include <functional>
 
 namespace cudf {
