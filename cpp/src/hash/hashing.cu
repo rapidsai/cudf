@@ -266,6 +266,8 @@ struct move_to_output_buffer_dispatcher{
                   rmm::mr::device_memory_resource* mr,
                   cudaStream_t stream)
   {
+    CUDF_EXPECTS(input.null_mask() == nullptr, "null input column unsupported");
+
     rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
 
     int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
