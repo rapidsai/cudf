@@ -997,7 +997,7 @@ class Series(Table):
         libcudf.nvtx.nvtx_range_pop()
         return result
 
-    def eq(self, other, fill_value=None):
+    def eq(self, other, fill_value=None, axis=0):
         """Equal to of series and other, element-wise
         (binary operator eq).
 
@@ -1020,7 +1020,7 @@ class Series(Table):
             return False
         return self._unordered_compare(other, "eq").min()
 
-    def ne(self, other, fill_value=None):
+    def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
         (binary operator ne).
 
@@ -1031,12 +1031,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.ne, fill_value)
 
     def __ne__(self, other):
         return self._unordered_compare(other, "ne")
 
-    def lt(self, other, fill_value=None):
+    def lt(self, other, fill_value=None, axis=0):
         """Less than of series and other, element-wise
         (binary operator lt).
 
@@ -1047,12 +1049,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.lt, fill_value)
 
     def __lt__(self, other):
         return self._ordered_compare(other, "lt")
 
-    def le(self, other, fill_value=None):
+    def le(self, other, fill_value=None, axis=0):
         """Less than or equal to of series and other, element-wise
         (binary operator le).
 
@@ -1063,12 +1067,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.le, fill_value)
 
     def __le__(self, other):
         return self._ordered_compare(other, "le")
 
-    def gt(self, other, fill_value=None):
+    def gt(self, other, fill_value=None, axis=0):
         """Greater than of series and other, element-wise
         (binary operator gt).
 
@@ -1079,12 +1085,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.gt, fill_value)
 
     def __gt__(self, other):
         return self._ordered_compare(other, "gt")
 
-    def ge(self, other, fill_value=None):
+    def ge(self, other, fill_value=None, axis=0):
         """Greater than or equal to of series and other, element-wise
         (binary operator ge).
 
@@ -1095,6 +1103,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.ge, fill_value)
 
     def __ge__(self, other):

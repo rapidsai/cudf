@@ -658,3 +658,8 @@ for name in [
 
     meth = getattr(cudf.Series, name)
     Series._bind_operator_method(name, meth)
+
+for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_comparison_method(name, meth)
