@@ -214,7 +214,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      release_assert(false && "Unsuported aggregation.");
+      release_assert(false && "Unsupported aggregation.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.
