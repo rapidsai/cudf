@@ -27,6 +27,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/logical.h>
 
 #include <gmock/gmock.h>
 
@@ -57,8 +58,65 @@ public:
   }
 };
 
-void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
-                          bool print_all_differences) {
+class corresponding_rows_not_equivalent {
+  table_device_view d_lhs; 
+  table_device_view d_rhs;
+public:
+  corresponding_rows_not_equivalent(table_device_view d_lhs, table_device_view d_rhs)
+  : d_lhs(d_lhs),
+    d_rhs(d_rhs),
+    comp(d_lhs, d_rhs)
+  {
+    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
+                 "Unsupported number of columns");
+  }
+  
+  struct typed_element_not_equivalent {
+    template <typename T>
+    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool>
+    operator()(column_device_view const& lhs,
+               column_device_view const& rhs,
+               size_type index)
+    {
+      if (lhs.is_valid(index) and rhs.is_valid(index)) {
+        int ulp = 4; // value taken from google test
+        T x = lhs.element<T>(index);
+        T y = rhs.element<T>(index);
+        return std::abs(x-y) > std::numeric_limits<T>::epsilon() * std::abs(x+y) * ulp
+            && std::abs(x-y) >= std::numeric_limits<T>::min();
+      } else {
+        // if either is null, then the inequality was checked already
+        return true;
+      }
+    }
+
+    template <typename T, typename... Args>
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool>
+    operator()(Args... args) {
+      // Non-floating point inequality is checked already
+      return true;
+    }
+  };
+  
+  cudf::experimental::row_equality_comparator<true> comp;
+    
+  __device__ bool operator()(size_type index) {
+    if (not comp(index, index)) {
+      auto lhs_col = this->d_lhs.column(0);
+      auto rhs_col = this->d_rhs.column(0);
+      return experimental::type_dispatcher(lhs_col.type(), 
+                                           typed_element_not_equivalent{},
+                                           lhs_col, rhs_col, index);
+    }
+    return false;
+  }
+};
+
+namespace {
+
+template <typename ComparatorType>
+void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                       bool print_all_differences) {
   expect_column_properties_equal(lhs, rhs);
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
@@ -70,7 +128,7 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
                                    thrust::make_counting_iterator(0),
                                    thrust::make_counting_iterator(lhs.size()),
                                    differences.begin(),
-                                   corresponding_rows_unequal(*d_lhs, *d_rhs));
+                                   ComparatorType(*d_lhs, *d_rhs));
 
   CUDA_TRY(cudaDeviceSynchronize());
 
@@ -122,6 +180,21 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
                                                << to_string(diff_rhs, "");
     }
   }
+}
+
+} // namespace anonymous
+
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences) 
+{
+  column_comparison<corresponding_rows_unequal>(lhs, rhs, print_all_differences);
+}
+
+void expect_columns_equivalent(cudf::column_view const& lhs,
+                               cudf::column_view const& rhs,
+                               bool print_all_differences) 
+{
+  column_comparison<corresponding_rows_not_equivalent>(lhs, rhs, print_all_differences);
 }
 
 // Bitwise equality
