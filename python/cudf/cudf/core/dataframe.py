@@ -860,84 +860,112 @@ class DataFrame(Table):
         return result
 
     def add(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("add", other, fill_value)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
     def radd(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("radd", other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
     def sub(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("sub", other, fill_value)
 
     def __sub__(self, other):
         return self._apply_op("__sub__", other)
 
     def rsub(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("rsub", other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
     def mul(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("mul", other, fill_value)
 
     def __mul__(self, other):
         return self._apply_op("__mul__", other)
 
     def rmul(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("rmul", other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
     def mod(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("mod", other, fill_value)
 
     def __mod__(self, other):
         return self._apply_op("__mod__", other)
 
     def rmod(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("rmod", other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
     def pow(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("pow", other, fill_value)
 
     def __pow__(self, other):
         return self._apply_op("__pow__", other)
 
     def rpow(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
         return self._apply_op("__pow__", other)
 
     def floordiv(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("floordiv", other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op("__floordiv__", other)
 
     def rfloordiv(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("rfloordiv", other, fill_value)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
     def truediv(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("truediv", other, fill_value)
 
     def __truediv__(self, other):
         return self._apply_op("__truediv__", other)
 
     def rtruediv(self, other, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError('Only axis=0 supported at this time.')
         return self._apply_op("rtruediv", other, fill_value)
 
     def __rtruediv__(self, other):
