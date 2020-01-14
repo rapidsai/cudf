@@ -418,7 +418,7 @@ TYPED_TEST(PairIteratorTest, mean_var_output) {
   std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = cudf::experimental::detail::make_pair_iterator<T, true>(*d_col);
+  auto it_dev = d_col->pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
   auto result = thrust::reduce( it_dev_squared, it_dev_squared+ d_col->size(), thrust::make_pair(T_output{}, true), sum_if_not_null{} );
   EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
@@ -455,10 +455,10 @@ TYPED_TEST(IteratorTest, error_handling) {
   CUDF_EXPECT_THROW_MESSAGE((d_col_null->begin<T>()),
                             "Unexpected column with nulls.");
 
-  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_pair_iterator<T, true>(*d_col_no_null)),
+  CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
                             "Unexpected non-nullable column.");
-  CUDF_EXPECT_NO_THROW((cudf::experimental::detail::make_pair_iterator<T, false>(*d_col_null)));
-  CUDF_EXPECT_NO_THROW((cudf::experimental::detail::make_pair_iterator<T, true>(*d_col_null)));
+  CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, false>()));
+  CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, true>()));
 
   //scalar iterator
   using ScalarType = cudf::experimental::scalar_type_t<T>;
@@ -551,7 +551,7 @@ TYPED_TEST(IteratorTest, nonull_pair_iterator) {
                  [](auto s) { return thrust::make_pair(s, true); });
 
   // GPU test
-  auto it_dev = cudf::experimental::detail::make_pair_iterator<T, false>(*d_col);
+  auto it_dev = d_col->pair_begin<T, false>();
   this->iterator_test_thrust(replaced_array, it_dev, host_values.size());
 }
 
@@ -577,10 +577,10 @@ TYPED_TEST(IteratorTest, null_pair_iterator) {
                  [](auto s, auto b) { return thrust::pair<T, bool>{s, true}; });
 
   // GPU test
-  auto it_dev = cudf::experimental::detail::make_pair_iterator<T, true>(*d_col);
+  auto it_dev = d_col->pair_begin<T, true>();
   this->iterator_test_thrust(value_and_validity, it_dev, host_values.size());
 
-  auto it_hasnonull_dev = cudf::experimental::detail::make_pair_iterator<T, false>(*d_col);
+  auto it_hasnonull_dev = d_col->pair_begin<T, false>();
   this->iterator_test_thrust(value_all_valid, it_hasnonull_dev, host_values.size());
   
   auto itb_dev = cudf::experimental::detail::make_validity_iterator(*d_col);

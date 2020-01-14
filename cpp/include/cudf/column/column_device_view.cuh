@@ -238,6 +238,8 @@ class alignas(16) column_device_view_base {
 //Forward declaration
 template <typename T>
 struct value_accessor; 
+template <typename T, bool has_nulls>
+struct pair_accessor; 
 template <typename T>
 struct mutable_value_accessor;
 }  // namespace detail
@@ -718,6 +720,46 @@ struct value_accessor {
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
+};
+
+/** -------------------------------------------------------------------------*
+ * @brief pair accessor of column with/without null bitmask
+ * A unary functor returns pair with scalar value at `id` and boolean validity
+ * `operator() (cudf::size_type id)` computes `element`  and
+ * returns a `pair(element, validity)`
+ *
+ * the return value for element `i` will return `pair(column[i], validity)`
+ * `validity` is `true` if `has_nulls=false`.
+ * `validity` is validity of the element at `i` if `has_nulls=true` and the
+ * column is nullable.
+ *
+ * @throws `cudf::logic_error` if `has_nulls==true` and the column is not
+ * nullable.
+ * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ *
+ * @tparam T The type of elements in the column
+ * @tparam has_nulls boolean indicating to treat the column is nullable
+ * -------------------------------------------------------------------------**/
+template <typename T, bool has_nulls = false>
+struct pair_accessor {
+  column_device_view const col; ///< column view of column in device
+
+  /** -------------------------------------------------------------------------*
+   * @brief constructor
+   * @param[in] _col column device view of cudf column
+   * -------------------------------------------------------------------------**/
+  pair_accessor(column_device_view const &_col) : col{_col} {
+    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
+                 "the data type mismatch");
+    if (has_nulls) {
+      CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+    }
+  }
+
+  CUDA_DEVICE_CALLABLE
+  thrust::pair<T, bool> operator()(cudf::size_type i) const {
+    return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
+  }
 };
 
 template <typename T>

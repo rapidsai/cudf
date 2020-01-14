@@ -219,11 +219,12 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the scalar
- * @tparam is_null boolean unused
+ * @tparam bool unused. This template parameter exists to enforce same 
+ * template interface as @ref make_pair_iterator(column_device_view const&).
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar, and validity of the scalar in a pair
  */
-template <typename Element, bool is_null=false>
+template <typename Element, bool=false>
 auto inline make_pair_iterator(scalar const& scalar_value) {
   CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   using ScalarType = experimental::scalar_type_t<Element>;
