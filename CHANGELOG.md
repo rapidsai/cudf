@@ -13,6 +13,7 @@
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3690 Add bools_to_mask
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
+- PR #3782 Add `fixed_point` class to support DecimalType
 
 ## Improvements
 
