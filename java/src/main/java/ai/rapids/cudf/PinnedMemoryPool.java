@@ -153,6 +153,14 @@ public final class PinnedMemoryPool implements AutoCloseable {
   /**
    * Initialize the pool.
    * @param poolSize size of the pool to initialize.
+   */
+  public static synchronized void initialize(long poolSize) {
+    initialize(poolSize, -1);
+  }
+
+  /**
+   * Initialize the pool.
+   * @param poolSize size of the pool to initialize.
    * @param gpuId gpu id to set to get memory pool from, -1 means to use default
    */
   public static synchronized void initialize(long poolSize, int gpuId) {
