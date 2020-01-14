@@ -651,7 +651,7 @@ class Series(Table):
                 return func(lhs.fillna(fill_value), rhs)
         return func(lhs, rhs)
 
-    def add(self, other, fill_value=None):
+    def add(self, other, fill_value=None, axis=0):
         """Addition of series and other, element-wise
         (binary operator add).
 
@@ -667,7 +667,7 @@ class Series(Table):
     def __add__(self, other):
         return self._binaryop(other, "add")
 
-    def radd(self, other, fill_value=None):
+    def radd(self, other, fill_value=None, axis=0):
         """Addition of series and other, element-wise
         (binary operator radd).
 
@@ -683,7 +683,7 @@ class Series(Table):
     def __radd__(self, other):
         return self._rbinaryop(other, "add")
 
-    def sub(self, other, fill_value=None):
+    def sub(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
         (binary operator sub).
 
@@ -699,7 +699,7 @@ class Series(Table):
     def __sub__(self, other):
         return self._binaryop(other, "sub")
 
-    def rsub(self, other, fill_value=None):
+    def rsub(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
         (binary operator rsub).
 
@@ -715,7 +715,7 @@ class Series(Table):
     def __rsub__(self, other):
         return self._rbinaryop(other, "sub")
 
-    def mul(self, other, fill_value=None):
+    def mul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator mul).
 
@@ -731,7 +731,7 @@ class Series(Table):
     def __mul__(self, other):
         return self._binaryop(other, "mul")
 
-    def rmul(self, other, fill_value=None):
+    def rmul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator rmul).
 
@@ -747,7 +747,7 @@ class Series(Table):
     def __rmul__(self, other):
         return self._rbinaryop(other, "mul")
 
-    def mod(self, other, fill_value=None):
+    def mod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
         (binary operator mod).
 
@@ -763,7 +763,7 @@ class Series(Table):
     def __mod__(self, other):
         return self._binaryop(other, "mod")
 
-    def rmod(self, other, fill_value=None):
+    def rmod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
         (binary operator rmod).
 
@@ -779,7 +779,7 @@ class Series(Table):
     def __rmod__(self, other):
         return self._rbinaryop(other, "mod")
 
-    def pow(self, other, fill_value=None):
+    def pow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
         (binary operator pow).
 
@@ -795,7 +795,7 @@ class Series(Table):
     def __pow__(self, other):
         return self._binaryop(other, "pow")
 
-    def rpow(self, other, fill_value=None):
+    def rpow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
         (binary operator rpow).
 
@@ -811,7 +811,7 @@ class Series(Table):
     def __rpow__(self, other):
         return self._rbinaryop(other, "pow")
 
-    def floordiv(self, other, fill_value=None):
+    def floordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
         (binary operator floordiv).
 
@@ -827,7 +827,7 @@ class Series(Table):
     def __floordiv__(self, other):
         return self._binaryop(other, "floordiv")
 
-    def rfloordiv(self, other, fill_value=None):
+    def rfloordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
         (binary operator rfloordiv).
 
@@ -845,7 +845,7 @@ class Series(Table):
     def __rfloordiv__(self, other):
         return self._rbinaryop(other, "floordiv")
 
-    def truediv(self, other, fill_value=None):
+    def truediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
         (binary operator truediv).
 
@@ -865,7 +865,7 @@ class Series(Table):
         else:
             return self._binaryop(other, "truediv")
 
-    def rtruediv(self, other, fill_value=None):
+    def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
         (binary operator rtruediv).
 
