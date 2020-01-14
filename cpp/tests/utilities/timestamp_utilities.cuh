@@ -53,19 +53,17 @@ generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
   using Period = typename T::period;
   using ToDuration = simt::std::chrono::duration<Rep, Period>;
 
-  auto lhs = simt::std::chrono::time_point_cast<ToDuration>(start)
-                 .time_since_epoch()
-                 .count();
-  auto rhs = simt::std::chrono::time_point_cast<ToDuration>(stop)
-                 .time_since_epoch()
-                 .count();
+  auto lhs = start.time_since_epoch().count();
+  auto rhs = stop.time_since_epoch().count();
 
   // When C++17, auto [min, max] = std::minmax(lhs, rhs)
   auto min = std::min(lhs, rhs);
   auto max = std::max(lhs, rhs);
-  auto range = static_cast<Rep>(max - min);
-  auto iter = cudf::test::make_counting_transform_iterator(
-      0, [=](auto i) { return min + (range / count) * i; });
+  auto range = max - min;
+  auto iter = cudf::test::make_counting_transform_iterator(0, [=](auto i) {
+    return simt::std::chrono::floor<ToDuration>(
+      simt::std::chrono::milliseconds(min + (range / count) * i)).count();
+  });
 
   if (nullable) {
     auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
