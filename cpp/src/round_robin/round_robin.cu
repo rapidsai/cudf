@@ -101,24 +101,29 @@ round_robin_partition(table_view const& input,
                                                      false, false, false,
                                                      mr,
                                                      stream);
-
   auto ret_pair =
     std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
-  rmm::device_vector<cudf::size_type> d_partition_offsets(num_partitions, cudf::size_type{0});
 
+  //this has the effect of rotating the set of partition sizes
+  //right by start_partition positions:
+  //
   auto rotated_iter_begin =
     thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                    //(\rotated_index -> if (rotated_index + np - sp) `mod` np < pmax then m else (m-1) )
-                                    [num_partitions, start_partition, max_partition_size, num_partitions_max_size] __device__ (auto index){
+                                    [num_partitions, start_partition, max_partition_size, num_partitions_max_size] (auto index){
                                       return ((index + num_partitions - start_partition) % num_partitions < num_partitions_max_size? max_partition_size : max_partition_size-1);
                                     });
 
-  auto exec = rmm::exec_policy(stream);
-  thrust::exclusive_scan(exec->on(stream),
+  //then exclusive_scan on the resulting
+  //rotated partition sizes to get the partition offsets
+  //corresponding to start_partition:
+  //Since:
+  //"num_partitions is usually going to be relatively small
+  //(<1,000), as such, it's probably more expensive to do this on the device.
+  //Instead, do it on the host directly into the std::vector and avoid the memcpy." - JH
+  //
+  thrust::exclusive_scan(thrust::host,
                          rotated_iter_begin, rotated_iter_begin + num_partitions,
-                         d_partition_offsets.begin());
-
-  cudaMemcpy(ret_pair.second.data(), d_partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
+                         ret_pair.second.begin());
 
   return ret_pair;
 }
