@@ -636,6 +636,7 @@ from_cudf = dd.from_pandas
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
 
+
 for name in [
     "add",
     "sub",

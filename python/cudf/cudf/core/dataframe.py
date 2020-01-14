@@ -861,7 +861,7 @@ class DataFrame(Table):
 
     def add(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("add", other, fill_value)
 
     def __add__(self, other):
@@ -869,7 +869,7 @@ class DataFrame(Table):
 
     def radd(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("radd", other, fill_value)
 
     def __radd__(self, other):
@@ -877,7 +877,7 @@ class DataFrame(Table):
 
     def sub(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("sub", other, fill_value)
 
     def __sub__(self, other):
@@ -885,7 +885,7 @@ class DataFrame(Table):
 
     def rsub(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("rsub", other, fill_value)
 
     def __rsub__(self, other):
@@ -893,7 +893,7 @@ class DataFrame(Table):
 
     def mul(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("mul", other, fill_value)
 
     def __mul__(self, other):
@@ -901,7 +901,7 @@ class DataFrame(Table):
 
     def rmul(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("rmul", other, fill_value)
 
     def __rmul__(self, other):
@@ -909,7 +909,7 @@ class DataFrame(Table):
 
     def mod(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("mod", other, fill_value)
 
     def __mod__(self, other):
@@ -917,7 +917,7 @@ class DataFrame(Table):
 
     def rmod(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("rmod", other, fill_value)
 
     def __rmod__(self, other):
@@ -925,7 +925,7 @@ class DataFrame(Table):
 
     def pow(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("pow", other, fill_value)
 
     def __pow__(self, other):
@@ -933,7 +933,7 @@ class DataFrame(Table):
 
     def rpow(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
@@ -941,7 +941,7 @@ class DataFrame(Table):
 
     def floordiv(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("floordiv", other, fill_value)
 
     def __floordiv__(self, other):
@@ -949,7 +949,7 @@ class DataFrame(Table):
 
     def rfloordiv(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("rfloordiv", other, fill_value)
 
     def __rfloordiv__(self, other):
@@ -957,7 +957,7 @@ class DataFrame(Table):
 
     def truediv(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("truediv", other, fill_value)
 
     def __truediv__(self, other):
@@ -965,7 +965,7 @@ class DataFrame(Table):
 
     def rtruediv(self, other, fill_value=None, axis=0):
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._apply_op("rtruediv", other, fill_value)
 
     def __rtruediv__(self, other):

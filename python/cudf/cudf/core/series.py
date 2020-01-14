@@ -663,7 +663,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.add, fill_value)
 
     def __add__(self, other):
@@ -681,7 +681,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.add, fill_value, True)
 
     def __radd__(self, other):
@@ -699,7 +699,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.sub, fill_value)
 
     def __sub__(self, other):
@@ -717,7 +717,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.sub, fill_value, True)
 
     def __rsub__(self, other):
@@ -735,7 +735,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mul, fill_value)
 
     def __mul__(self, other):
@@ -753,7 +753,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mul, fill_value, True)
 
     def __rmul__(self, other):
@@ -771,7 +771,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mod, fill_value)
 
     def __mod__(self, other):
@@ -789,7 +789,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mod, fill_value, True)
 
     def __rmod__(self, other):
@@ -807,7 +807,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.pow, fill_value)
 
     def __pow__(self, other):
@@ -825,7 +825,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.pow, fill_value, True)
 
     def __rpow__(self, other):
@@ -843,7 +843,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.floordiv, fill_value)
 
     def __floordiv__(self, other):
@@ -861,7 +861,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(
             other, operator.floordiv, fill_value, True
         )
@@ -881,7 +881,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.truediv, fill_value)
 
     def __truediv__(self, other):
@@ -903,7 +903,7 @@ class Series(Table):
             corresponding Series locations is null the result will be null
         """
         if axis != 0:
-            raise NotImplementedError('Only axis=0 supported at this time.')
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.truediv, fill_value, True)
 
     def __rtruediv__(self, other):
