@@ -9,4 +9,10 @@ cdef class _Table:
     cdef mutable_table_view mutable_view(self) except *
 
     @staticmethod
+    cdef table_view _make_table_view(columns)
+
+    @staticmethod
+    cdef mutable_table_view _make_mutable_table_view(columns)
+
+    @staticmethod
     cdef _Table from_unique_ptr(unique_ptr[table] c_tbl)

@@ -17,23 +17,32 @@ cdef class _Table:
         self.__columns = columns
 
     cdef table_view view(self) except *:
+        return _Table._make_table_view(self.__column.values())
+
+    cdef mutable_table_view mutable_view(self) except *:
+        return _Table._make_mutable_table_view(self.__column.values())
+
+    @staticmethod
+    cdef table_view _make_table_view(columns):
         cdef vector[column_view] column_views
 
         cdef Column col
-        for col in self.__columns:
+        for col in columns:
             column_views.push_back(col.view())
 
         return table_view(column_views)
 
-    cdef mutable_table_view mutable_view(self) except *:
-        cdef vector[mutable_column_view] column_views
+    @staticmethod
+    cdef mutable_table_view _make_mutable_table_view(columns):
+        cdef vector[mutable_column_view] mutable_column_views
 
         cdef Column col
-        for col in self.__columns:
-            column_views.push_back(col.mutable_view())
+        for col in columns:
+            mutable_column_views.push_back(col.mutable_view())
 
-        return mutable_table_view(column_views)
+        return mutable_table_view(mutable_column_views)
 
+    
     @staticmethod
     cdef _Table from_unique_ptr(unique_ptr[table] c_tbl):
         cdef vector[unique_ptr[column]] columns
