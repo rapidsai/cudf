@@ -47,6 +47,19 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
                           bool print_all_differences = false);
 
 /**
+ * @brief Verifies the element-wise equivalence of two columns.
+ * 
+ * Uses machine epsilon to compare floating point types. 
+ * Treats null elements as equivalent.
+ *
+ * @param lhs                   The first column
+ * @param rhs                   The second column
+ * @param print_all_differences If true display all differences
+ *---------------------------------------------------------------------------**/
+void expect_columns_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                               bool print_all_differences = false);
+
+/**
  * @brief Verifies the bitwise equality of two device memory buffers.
  *
  * @param lhs The first buffer

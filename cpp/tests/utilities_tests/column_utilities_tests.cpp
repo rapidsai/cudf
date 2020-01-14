@@ -124,6 +124,15 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
 }
 
+struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {};
+
+TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest) {
+  cudf::test::fixed_width_column_wrapper<double> col1 { 10./3, 22./7 };
+  cudf::test::fixed_width_column_wrapper<double> col2 { 31./3 - 21./3, 19./7 + 3./7 };
+
+  cudf::test::expect_columns_equivalent(col1, col2);
+}
+
 struct ColumnUtilitiesStringsTest: public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHost)

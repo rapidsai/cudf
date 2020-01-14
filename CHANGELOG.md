@@ -12,6 +12,7 @@
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3597 Implement new sort based groupby
+- PR #3776 Column equivalence comparator (using epsilon for float equality)
 - PR #3690 Add bools_to_mask
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 
