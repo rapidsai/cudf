@@ -47,6 +47,7 @@
 - PR #3697 Improve column insert performance for wide frames
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
+- PR #3748 Optimize hash_partition using shared memory
 
 ## Bug Fixes
 
