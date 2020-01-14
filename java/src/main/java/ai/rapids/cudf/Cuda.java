@@ -87,9 +87,11 @@ public class Cuda {
    */
   public static native void setDevice(int device) throws CudaException;
 
+  /**
+   * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
+   * @throws CudaException on any error
+   */
   public static native void freeZero() throws CudaException;
-
-  public static native long mallocTom(long size) throws CudaException;
 
   /**
    * This should only be used for tests, to enable or disable tests if the current environment

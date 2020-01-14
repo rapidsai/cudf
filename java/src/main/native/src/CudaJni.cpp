@@ -75,10 +75,4 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
   JNI_CUDA_TRY(env, , cudaFree(0));
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cuda_mallocTom(JNIEnv *env, jclass, jlong size) {
-  void * ret = nullptr;
-  JNI_CUDA_TRY(env, 0, cudaMalloc(&ret, size));
-  return reinterpret_cast<jlong>(ret);
-}
-
 } // extern "C"
