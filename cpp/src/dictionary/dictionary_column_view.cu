@@ -16,7 +16,6 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/copy.hpp>
 
 namespace cudf
 {
