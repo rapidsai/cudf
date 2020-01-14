@@ -51,6 +51,8 @@ _binops = [
     operator.le,
 ]
 
+_cudf_bind_ops = ["add", "sub", "mul", "truediv", "floordiv", "mod", "pow"]
+
 
 @pytest.mark.parametrize("binop", _binops)
 def test_series_binops_integer(binop):
@@ -72,3 +74,21 @@ def test_series_binops_float(binop):
     got = binop(lhs_gdf.x, rhs_gdf.y)
     exp = binop(lhs_df.x, rhs_df.y)
     dd.assert_eq(got, exp)
+
+
+@pytest.mark.parametrize("operator", _cudf_bind_ops)
+def test_df_series_bind_ops(operator):
+    np.random.seed(0)
+    size = 1000
+    lhs_df, lhs_gdf = _make_random_frame_float(size)
+    rhs = np.random.rand()
+
+    got = getattr(lhs_gdf, operator)(rhs)
+    exp = getattr(lhs_df, operator)(rhs)
+
+    dd.assert_eq(got, exp)
+
+    for col in lhs_gdf.columns:
+        got = getattr(lhs_gdf[col], operator)(rhs)
+        exp = getattr(lhs_df[col], operator)(rhs)
+        dd.assert_eq(got, exp)
