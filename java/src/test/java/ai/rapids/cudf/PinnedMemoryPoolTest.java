@@ -38,7 +38,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   @Test
   void init() {
     assertFalse(PinnedMemoryPool.isInitialized());
-    PinnedMemoryPool.initialize(1024*1024*500L);
+    PinnedMemoryPool.initialize(1024*1024*500L, -1);
     assertTrue(PinnedMemoryPool.isInitialized());
     PinnedMemoryPool.shutdown();
     assertFalse(PinnedMemoryPool.isInitialized());
@@ -46,7 +46,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
 
   @Test
   void allocate() {
-    PinnedMemoryPool.initialize(1024*1024*500L);
+    PinnedMemoryPool.initialize(1024*1024*500L, -1);
     for (int i = 2048000; i < 1024*1024*1024; i = i * 2) {
       log.warn("STARTING TEST FOR size = " + i);
       HostMemoryBuffer buff = null;
@@ -79,7 +79,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   @Test
   void testFragmentationAndExhaustion() {
     final long poolSize = 15 * 1024L;
-    PinnedMemoryPool.initialize(poolSize);
+    PinnedMemoryPool.initialize(poolSize, -1);
     assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
     HostMemoryBuffer[] buffers = new HostMemoryBuffer[5];
     try {
@@ -122,7 +122,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   @Test
   void testZeroSizedAllocation() {
     final long poolSize = 4 * 1024L;
-    PinnedMemoryPool.initialize(poolSize);
+    PinnedMemoryPool.initialize(poolSize, -1);
     assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
     try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(0)) {
       assertNotNull(buffer);

@@ -153,8 +153,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
   /**
    * Initialize the pool.
    * @param poolSize size of the pool to initialize.
+   * @param gpuId gpu id to set to get memory pool from, -1 means to use default
    */
-  public static synchronized void initialize(long poolSize) {
+  public static synchronized void initialize(long poolSize, int gpuId) {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
@@ -163,7 +164,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
       t.setDaemon(true);
       return t;
     });
-    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize));
+    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId));
     initService.shutdown();
   }
 
@@ -226,7 +227,12 @@ public final class PinnedMemoryPool implements AutoCloseable {
     return 0;
   }
 
-  private PinnedMemoryPool(long poolSize) {
+  private PinnedMemoryPool(long poolSize, int gpuId) {
+    if (gpuId > -1 ) {
+      // set the gpu device to use
+      Cuda.setDevice(gpuId);
+      Cuda.freeZero();
+    }
     this.pinnedPoolBase = Cuda.hostAllocPinned(poolSize);
     freeHeap.add(new MemorySection(pinnedPoolBase, poolSize));
     this.availableBytes = poolSize;
