@@ -1,17 +1,12 @@
 from collections import OrderedDict
 
-from cudf._libxx.table import _Table
+import cudf._libxx as libcudfxx
+from cudf.core.column import as_column
 
 
-class NamedTable(_Table):
-    def __init__(self, data=None):
-        """
-        Data: an OrderedColumnDict of columns
-        """
-        if data is None:
-            data = OrderedColumnDict()
-        self._data = OrderedColumnDict(data)
-        super().__init__(self._data.values())
+class NamedTable(libcudfxx.Table):
+    def gather(self, gather_map):
+        return self._from_table(libcudfxx.gather(self, as_column(gather_map)))
 
     def _unaryop(self, op):
         result = self.copy()

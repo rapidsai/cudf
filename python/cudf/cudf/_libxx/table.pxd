@@ -11,11 +11,10 @@ cdef class Table:
     cdef table_view indexed_view(self) except *
     cdef mutable_table_view mutable_indexed_view(self) except *
 
-    @staticmethod
-    cdef table_view _make_table_view(columns)
+    cdef table_view _make_table_view(self, columns) except *
+
+    cdef mutable_table_view _make_mutable_table_view(self, columns) except *
 
     @staticmethod
-    cdef mutable_table_view _make_mutable_table_view(columns)
-
-    @staticmethod
-    cdef Table from_unique_ptr(unique_ptr[table] c_tbl, column_names=*, index_names=*)
+    cdef Table from_unique_ptr(unique_ptr[table] c_tbl, column_names=*,
+                               index_names=*)

@@ -42,16 +42,20 @@ class OrderedColumnDict(OrderedDict):
 
 cdef class Table:
 
-    def __init__(self, data, index=None):
+    def __init__(self, data=None, index=None):
         """
         Data: an iterable of Columns
         """
+        if data is None:
+            data = OrderedColumnDict({})
         self._data = data
         self._index = index
 
+    @property
     def _column_names(self):
         return self._data.keys()
 
+    @property
     def _index_names(self):
         if self._index is not None:
             return self._index._column_names
@@ -59,15 +63,15 @@ cdef class Table:
 
 
     cdef table_view view(self) except *:
-        return Table._make_table_view(self._data.values())
+        return self._make_table_view(self._data.values())
 
     cdef mutable_table_view mutable_view(self) except *:
-        return Table._make_mutable_table_view(self._data.values())
+        return self._make_mutable_table_view(self._data.values())
 
     cdef table_view indexed_view(self) except *:
         if self._index is None:
             return self.view()
-        return Table._make_table_view(
+        return self._make_table_view(
             itertools.chain(
                 self._data.values(),
                 self._index._data.values()
@@ -77,15 +81,14 @@ cdef class Table:
     cdef mutable_table_view mutable_indexed_view(self) except *:
         if self._index is None:
             return self.mutable_view()
-        return Table._make_mutable_table_view(
+        return self._make_mutable_table_view(
             itertools.chain(
                 self._data.values(),
                 self._index._data.values()
             )
         )
     
-    @staticmethod
-    cdef table_view _make_table_view(columns):
+    cdef table_view _make_table_view(self, columns) except*:
         cdef vector[column_view] column_views
 
         cdef Column col
@@ -94,8 +97,7 @@ cdef class Table:
 
         return table_view(column_views)
 
-    @staticmethod
-    cdef mutable_table_view _make_mutable_table_view(columns):
+    cdef mutable_table_view _make_mutable_table_view(self, columns) except*:
         cdef vector[mutable_column_view] mutable_column_views
 
         cdef Column col
@@ -105,7 +107,8 @@ cdef class Table:
         return mutable_table_view(mutable_column_views)
     
     @staticmethod
-    cdef Table from_unique_ptr(unique_ptr[table] c_tbl, column_names=None, index_names=None):
+    cdef Table from_unique_ptr(unique_ptr[table] c_tbl, column_names=None,
+                               index_names=None):
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
 
@@ -113,6 +116,7 @@ cdef class Table:
         num_index_columns = 0
         
         if index_names:
+            num_index_columns = len(index_names)
             index_columns = []
             for i in range(len(index_names)):
                 index_columns.append(Column.from_unique_ptr(move(columns[i])))

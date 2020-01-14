@@ -23,6 +23,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import CategoricalColumn, StringColumn, as_column
@@ -163,6 +164,9 @@ class DataFrame(NamedTable):
 
         self._columns_name = None
 
+        if isinstance(data, libcudfxx.Table):
+            return DataFrame._from_table(data)
+
         if isinstance(columns, cudf.MultiIndex):
             self.multi_cols = columns
             columns = RangeIndex(len(columns))
@@ -244,6 +248,10 @@ class DataFrame(NamedTable):
 
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
+
+    @classmethod
+    def _from_table(cls, table):
+        return cls(data=table._data, index=Index._from_table(table._index))
 
     @property
     def _constructor(self):

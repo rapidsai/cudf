@@ -442,6 +442,13 @@ class Index(NamedTable):
         ind.name = index.name
         return ind
 
+    @classmethod
+    def _from_table(cls, table):
+        return as_index(
+            next(iter(table._data.values())),
+            name=next(iter(table._data.keys())),
+        )
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
