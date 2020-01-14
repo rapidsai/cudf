@@ -72,15 +72,11 @@ std::unique_ptr<cudf::column> gather( dictionary_column_view const& dictionary,
         null_mask = create_null_mask(output_count, mstate, stream, mr);
 
     // gather the new indices
-    // problem here is handling nulls
-    // -- the indices-column does not have any nulls -- they are in the parent
-    // -- any new nulls need to be accounted for
-    // -- finally, we need to somehow remove the nulls from the output here
     auto table = experimental::detail::gather( table_view{std::vector<column_view>{dictionary.indices()}},
                                                begin, end,
-                                               false, NullifyOutOfBounds, false, mr, stream)->release();
-    auto indices_column = table[0]; // can we remove the null_mask somehow?
-    auto keys_copy = column( dictionary.dictionary_keys() );
+                                               false, false, false, mr, stream)->release();
+    std::unique_ptr<column> indices_column = table[0];
+    auto keys_copy = std::make_shared<column>(dictionary.dictionary_keys());
 
     // TODO: handle remove_unused_keys
 
