@@ -254,25 +254,45 @@ void move_to_output_buffer(DataType const *input_buf,
 }
 
 struct move_to_output_buffer_dispatcher{
-  template <typename DataType>
-  void operator()(column_view const& input,
-                  mutable_column_view& output,
-                  const size_type num_rows,
+  template <typename DataType,
+      std::enable_if_t<is_fixed_width<DataType>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& input,
                   const size_type num_partitions,
                   size_type * row_partition_numbers,
                   size_type * row_partition_offset,
                   size_type * block_partition_sizes,
                   size_type * scanned_block_partition_sizes,
-                  size_type grid_size)
+                  size_type grid_size,
+                  rmm::mr::device_memory_resource* mr,
+                  cudaStream_t stream)
   {
+    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
+
     int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
       + (num_partitions + 1) * sizeof(size_type) * 2;
     move_to_output_buffer<DataType>
-      <<<grid_size, BLOCK_SIZE, smem>>>(
-        input.data<DataType>(), output.data<DataType>(), num_rows, num_partitions,
-        row_partition_numbers, row_partition_offset,
+      <<<grid_size, BLOCK_SIZE, smem, stream>>>(
+        input.data<DataType>(), static_cast<DataType*>(output.data()), input.size(),
+        num_partitions, row_partition_numbers, row_partition_offset,
         block_partition_sizes, scanned_block_partition_sizes
     );
+
+    return std::make_unique<column>(input.type(), input.size(), std::move(output));
+  }
+
+  template <typename DataType,
+      std::enable_if_t<not is_fixed_width<DataType>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& input,
+                  const size_type num_partitions,
+                  size_type * row_partition_numbers,
+                  size_type * row_partition_offset,
+                  size_type * block_partition_sizes,
+                  size_type * scanned_block_partition_sizes,
+                  size_type grid_size,
+                  rmm::mr::device_memory_resource* mr,
+                  cudaStream_t stream)
+  {
+    CUDF_FAIL("non-fixed width types unsupported");
   }
 };
 
@@ -368,26 +388,28 @@ hash_partition_table(table_view const& input,
                            cudaMemcpyDeviceToHost,
                            stream));
 
-  auto output = std::make_unique<cudf::experimental::table>(input, stream, mr);
-  auto output_view = output->mutable_view();
+  std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
 
   // Move data from input table to hashed table
-  for (int icol = 0; icol < input.num_columns(); icol++) {
-    cudf::experimental::type_dispatcher(
-      input.column(icol).type(),
-      move_to_output_buffer_dispatcher{},
-      input.column(icol),
-      output_view.column(icol),
-      input.num_rows(),
-      num_partitions,
-      row_partition_numbers.data().get(),
-      row_partition_offset.data().get(),
-      block_partition_sizes.data().get(),
-      scanned_block_partition_sizes.data().get(),
-      grid_size
-    );
-  }
+  auto row_partition_numbers_ptr {row_partition_numbers.data().get()};
+  auto row_partition_offset_ptr {row_partition_offset.data().get()};
+  auto block_partition_sizes_ptr {block_partition_sizes.data().get()};
+  auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
+  std::transform(input.begin(), input.end(), output_cols.begin(),
+    [=](auto const& col) {
+      return cudf::experimental::type_dispatcher(
+        col.type(),
+        move_to_output_buffer_dispatcher{},
+        col,
+        num_partitions,
+        row_partition_numbers_ptr,
+        row_partition_offset_ptr,
+        block_partition_sizes_ptr,
+        scanned_block_partition_sizes_ptr,
+        grid_size, mr, stream);
+    });
 
+  auto output {std::make_unique<experimental::table>(std::move(output_cols))};
   return std::make_pair(std::move(output), std::move(partition_offsets));
 }
 
