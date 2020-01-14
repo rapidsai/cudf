@@ -1008,6 +1008,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.eq, fill_value)
 
     def __eq__(self, other):
