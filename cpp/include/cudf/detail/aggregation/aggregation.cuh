@@ -234,8 +234,30 @@ struct elementwise_aggregator {
  * ```c++
  * target_row[i] = aggs[i](target_row[i], source_row[i])
  * ```
- * TODO: Document null handling, expectations for initialization/validity of
- * output columns
+ * 
+ * This function only supports aggregations that can be done in a "single pass", 
+ * i.e., given an initial value `R`, the aggregation `op` can be computed on a series
+ * of elements `e[i] for i in [0,n)` by computing `R = op(e[i],R)` for any order 
+ * of the values of `i`.
+ * 
+ * The initial value and validity of `R` depends on the aggregation:
+ * SUM: 0 and NULL
+ * COUNT: 0 and VALID
+ * MIN: Max element of type and NULL
+ * MAX: Min element of type and NULL
+ * ARGMAX: `ARGMAX_SENTINEL` and NULL
+ * ARGMIN: `ARGMIN_SENTINEL` and NULL
+ * 
+ * It is required that the elements of `target` be initialized with the corresponding
+ * initial values and validity specified above.
+ * 
+ * Handling of null elements in both `source` and `target` depends on the aggregation:
+ * SUM, MIN, MAX, ARGMIN, ARGMAX:
+ *  - `source`: Skipped
+ *  - `target`: Updated from null to valid upon first successful aggregation
+ * COUNT:
+ *  - `source`: Skipped
+ *  - `target`: Cannot be null
  *
  * @param target Table containing the row to update
  * @param target_index Index of the row to update in `target`
