@@ -246,7 +246,7 @@ struct elementwise_aggregator {
  * and `source` rows. Must contain at least `target.num_columns()` valid
  * `aggregation::Kind` values.
  */
-// template <bool target_has_nulls = true, bool source_has_nulls = true>
+template <bool target_has_nulls = true, bool source_has_nulls = true>
 __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
