@@ -46,6 +46,7 @@
 - PR #3697 Improve column insert performance for wide frames
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
+- PR #3520 Change read_parquet defaults and add warnings
 - PR #3698 Added count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 
 ## Bug Fixes
@@ -79,6 +80,7 @@
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
+- PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -132,6 +134,7 @@
 - PR #3427 Define and Implement new multi-search API
 - PR #3442 Add Bool-index + Multi column + DataFrame support for set-item
 - PR #3172 Define and implement new fill/repeat/copy_range APIs
+- PR #3490 Add pair iterators for columns
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
 - PR #3527 Add string functionality for merge API
@@ -262,6 +265,7 @@
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3451 Add support for implicit typecasting of join columns
 
 ## Bug Fixes
 
