@@ -31,8 +31,6 @@ R"***(
     #include <cudf/wrappers/timestamps.hpp>
     #include "operation.h"
 
-namespace cudf {
-namespace experimental {
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_s(cudf::size_type size,
@@ -66,8 +64,6 @@ namespace experimental {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[i]);
         }
     }
-}
-}
 )***";
 
 } // namespace code
