@@ -166,7 +166,7 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
   column_wrapper <int32_t> col_gold_0{{3, 3, 1, 2, 0}, {1, 1, 1, 1, 1}};
-  strcol_wrapper           col_gold_1({"s1", "s0", "s1", "s2", "s4"});
+  strcol_wrapper           col_gold_1({"s1", "s0", "s1", "s2", "s4"}, {1, 1, 1, 1, 1, 1});
   column_wrapper <int32_t> col_gold_2{{1, 0, 1, 2, 4}, {1, 1, 1, 1, 1}};
   column_wrapper <int32_t> col_gold_3{{1, -1, -1, -1, -1}, {1, 0, 0, 0, 0}};
   CVector cols_gold;
@@ -289,7 +289,7 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
   column_wrapper <int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper           col_gold_1({"s1", "s0"});
+  strcol_wrapper           col_gold_1({"s1", "s0"}, {1, 1});
   column_wrapper <int32_t> col_gold_2{{0, 1}};
   column_wrapper <int32_t> col_gold_3{{1, -1}, {1, 0}};
   CVector cols_gold;
@@ -518,7 +518,7 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   auto result = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
 
   column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
-  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
+  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"});
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
