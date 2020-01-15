@@ -43,6 +43,8 @@ _binops = [
     operator.mul,
     operator.truediv,
     operator.floordiv,
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.ne,
     operator.gt,
