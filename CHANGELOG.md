@@ -48,6 +48,7 @@
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
+- PR #3780 Java APIs for selecting a GPU
 - PR #3713 Adding aggregation support to rolling_window
 
 ## Bug Fixes
