@@ -709,3 +709,104 @@ TYPED_TEST(CastFromTimestamps, WithNulls) {
   validate_cast_result<T, T>(timestamps_us_exp, *timestamps_us_got);
   validate_cast_result<T, T>(timestamps_ns_exp, *timestamps_ns_got);
 }
+
+template <typename T>
+struct IsNAN : public cudf::test::BaseFixture {};
+
+using test_types =
+    ::testing::Types<float, double>;
+
+TYPED_TEST_CASE(IsNAN, test_types);
+
+TYPED_TEST(IsNAN, AllValid) {
+  using T = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}};
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {false, false, true, false, true, false, false};
+
+  std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col);
+
+  cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(IsNAN, WithNull) {
+  using T = TypeParam;
+
+  // The last NAN is null
+  cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {false, false, true, false, false, false, false};
+
+  std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col);
+
+  cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(IsNAN, EmptyColumn) {
+  using T = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<T> col {};
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {};
+
+  std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col);
+
+  cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(IsNAN, NonFloatingColumn) {
+  using T = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<int32_t> col {{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
+
+  EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col), cudf::logic_error);
+}
+
+template <typename T>
+struct IsNotNAN : public cudf::test::BaseFixture {};
+
+using test_types =
+    ::testing::Types<float, double>;
+
+TYPED_TEST_CASE(IsNotNAN, test_types);
+
+TYPED_TEST(IsNotNAN, AllValid) {
+  using T = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}};
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {true, true, false, true, false, true, true};
+
+  std::unique_ptr<cudf::column> got = cudf::experimental::is_notnan(col);
+
+  cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(IsNotNAN, WithNull) {
+  using T = TypeParam;
+
+  // The last NAN is null
+  cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {true, true, false, true, true, true, true};
+
+  std::unique_ptr<cudf::column> got = cudf::experimental::is_notnan(col);
+
+  cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(IsNotNAN, EmptyColumn) {
+  using T = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<T> col {};
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {};
+
+  std::unique_ptr<cudf::column> got = cudf::experimental::is_notnan(col);
+
+  cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(IsNotNAN, NonFloatingColumn) {
+  using T = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<int64_t> col {{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
+
+  EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::experimental::is_notnan(col), cudf::logic_error);
+}
+
