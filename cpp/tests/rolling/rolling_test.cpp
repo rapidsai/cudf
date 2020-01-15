@@ -22,12 +22,10 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/utilities/bit.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation.hpp>
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <src/rolling/rolling_detail.hpp>
-
-//#include <cudf/strings/convert/convert_datetime.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -36,6 +34,62 @@
 using cudf::test::fixed_width_column_wrapper;
 using cudf::size_type;
 using cudf::bitmask_type;
+
+class RollingStringTest : public cudf::test::BaseFixture {};
+
+TEST_F (RollingStringTest, NoNullStringMinMaxCount) {
+    cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"});
+    std::vector<size_type> window{2};
+    cudf::test::strings_column_wrapper expected_min ({"This", "This", "This", "being", "being", "being", "being", "column", "column"}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+    cudf::test::strings_column_wrapper expected_max ({"rolling", "test", "test", "test", "test", "test", "string", "string", "string"}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<size_type> expected_count ({3, 4, 5, 5, 5, 5, 5, 4, 3}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+    auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_min_aggregation());
+    auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
+    auto got_count  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation());
+
+    cudf::test::expect_columns_equal(expected_min, got_min->view());
+    cudf::test::expect_columns_equal(expected_max, got_max->view());
+    cudf::test::expect_columns_equal(expected_count, got_count->view());
+}
+
+TEST_F (RollingStringTest, NullStringMinMaxCount) {
+    cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"}, 
+                                              {     1,    0,         0,     1,        0,          1,    1,        1,       0});
+    std::vector<size_type> window{2};
+    cudf::test::strings_column_wrapper expected_min ({"This", "This", "This", "operated", "on", "on", "on", "on", "on"},
+                                                     {     1,      1,    1,            1,    1,    1,    1,    1,    1});
+    cudf::test::strings_column_wrapper expected_max ({"This", "test", "test", "test", "test", "test", "string", "string", "string"},
+                                                     {     1,      1,      1,      1,     1,       1,        1,        1,       1});
+    fixed_width_column_wrapper<size_type> expected_count ({1, 2, 2, 2, 3, 4, 3, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+    auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_min_aggregation());
+    auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
+    auto got_count  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation());
+   
+    cudf::test::expect_columns_equal(expected_min, got_min->view());
+    cudf::test::expect_columns_equal(expected_max, got_max->view());
+    cudf::test::expect_columns_equal(expected_count, got_count->view());
+}
+
+TEST_F (RollingStringTest, MinPeriods) {
+    cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
+                                              {     1,    0,         0,     1,        0,          1,    1,        1,       0});
+    std::vector<size_type> window{2};
+    cudf::test::strings_column_wrapper expected_min ({"This", "This", "This", "operated", "on", "on", "on", "on", "on"},
+                                                     {     0,      0,    0,            0,    1,    1,    1,    1,    0});
+    cudf::test::strings_column_wrapper expected_max ({"This", "test", "test", "test", "test", "test", "string", "string", "string"},
+                                                     {     0,      0,      0,      0,     1,       1,        1,        1,       0});
+    fixed_width_column_wrapper<size_type> expected_count ({0, 2, 2, 2, 3, 4, 3, 3, 2}, {0, 0, 0, 0, 1, 1, 1, 1, 0});
+
+    auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_min_aggregation());
+    auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_max_aggregation());
+    auto got_count  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_count_aggregation());
+
+    cudf::test::expect_columns_equal(expected_min, got_min->view());
+    cudf::test::expect_columns_equal(expected_max, got_max->view());
+    cudf::test::expect_columns_equal(expected_count, got_count->view());
+}
 
 template <typename T>
 class RollingTest : public cudf::test::BaseFixture {
@@ -82,6 +136,13 @@ protected:
     std::cout << "\n";
 #endif
 
+#if 0 
+    std::cout<<"Output"<<std::endl;
+    cudf::test::print(*output);
+    std::cout<<"\n"<<std::endl;
+    std::cout<<"Reference"<<std::endl;
+    cudf::test::print(*reference);
+#endif
     cudf::test::expect_columns_equal(*output, *reference);
   }
 
@@ -148,7 +209,7 @@ protected:
     return col.release();
   }
 
-  template<typename agg_op, bool is_mean,
+  template<typename agg_op, typename OutputType, bool is_mean,
            std::enable_if_t<cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
   std::unique_ptr<cudf::column>
   create_reference_output(cudf::column_view const& input,
@@ -157,7 +218,7 @@ protected:
                           size_type min_periods)
   {
     size_type num_rows = input.size();
-    std::vector<T> ref_data(num_rows);
+    std::vector<OutputType> ref_data(num_rows);
     std::vector<bool> ref_valid(num_rows);
 
     // input data and mask
@@ -168,7 +229,7 @@ protected:
     
     agg_op op;
     for(size_type i = 0; i < num_rows; i++) {
-      T val = agg_op::template identity<T>();
+      OutputType val = agg_op::template identity<OutputType>();
 
       // load sizes
       min_periods = std::max(min_periods, 1); // at least one observation is required
@@ -183,18 +244,18 @@ protected:
       size_type count = 0;
       for (size_type j = start_index; j < end_index; j++) {
         if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
-          val = op(in_col[j], val);
+          val = op(static_cast<OutputType>(in_col[j]), val);
           count++;
         }
       }
 
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i]) {
-        cudf::detail::store_output_functor<T, is_mean>{}(ref_data[i], val, count);
+        cudf::detail::store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
       }
     }
 
-    fixed_width_column_wrapper<T> col(ref_data.begin(), ref_data.end(), ref_valid.begin());
+    fixed_width_column_wrapper<OutputType> col(ref_data.begin(), ref_data.end(), ref_valid.begin());
     return col.release();
   }
 
@@ -217,18 +278,18 @@ protected:
     // unroll aggregation types
     switch(op->kind) {
     case cudf::experimental::aggregation::SUM:
-      return create_reference_output<cudf::DeviceSum, false>(input, preceding_window,
+      return create_reference_output<cudf::DeviceSum, cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(input, preceding_window,
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::MIN:
-      return create_reference_output<cudf::DeviceMin, false>(input, preceding_window,
+      return create_reference_output<cudf::DeviceMin, cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MIN>, false>(input, preceding_window,
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::MAX:
-      return create_reference_output<cudf::DeviceMax, false>(input, preceding_window,
+      return create_reference_output<cudf::DeviceMax, cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MAX>, false>(input, preceding_window,
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::COUNT:
       return create_count_reference_output(input, preceding_window, following_window, min_periods);
     case cudf::experimental::aggregation::MEAN:
-      return create_reference_output<cudf::DeviceSum, true>(input, preceding_window,
+      return create_reference_output<cudf::DeviceSum, cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(input, preceding_window,
                                                             following_window, min_periods);
     default:
       return fixed_width_column_wrapper<T>({}).release();
