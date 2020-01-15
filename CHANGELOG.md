@@ -11,6 +11,7 @@
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
+- PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3662 Define and implement `shift`.
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
@@ -83,6 +84,7 @@
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
+- PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 
 
