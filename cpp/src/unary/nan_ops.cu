@@ -57,7 +57,7 @@ struct nan_dispatcher {
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream) {
 
-        CUDF_FAIL("NAN is not supported in Non-floating point input column");
+        CUDF_FAIL("NAN is not supported in a Non-floating point type column");
     }
 };
 
