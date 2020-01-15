@@ -22,7 +22,7 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/utilities/bit.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <src/rolling/rolling_detail.hpp>
