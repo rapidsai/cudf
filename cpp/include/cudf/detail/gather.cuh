@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/utilities/bit.hpp>
