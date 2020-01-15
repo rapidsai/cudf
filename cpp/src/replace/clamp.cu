@@ -200,27 +200,18 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
 }
 
 struct dispatch_clamp {
-    template <typename T, typename Transformer>
-    void apply_transform (column_device_view  input,
+    template <typename T, typename InputIterator, typename Transformer>
+    void apply_transform (InputIterator input_begin,
+                          InputIterator input_end,
                           mutable_column_device_view output,
                           Transformer trans,
                           cudaStream_t stream)
     {
-        if (input.nullable()){
-            auto input_begin = cudf::experimental::detail::make_null_replacement_iterator<T>(input);
             thrust::transform(rmm::exec_policy(stream)->on(stream),
                               input_begin,
-                              input_begin+input.size(),
-                              detail::make_validity_iterator(input),
+                              input_end,
                               output.begin<T>(),
                               trans);
-        } else {
-            thrust::transform(rmm::exec_policy(stream)->on(stream),
-                              input.begin<T>(),
-                              input.end<T>(),
-                              output.begin<T>(),
-                              trans);
-        }
     }
 
     template <typename T>
@@ -245,40 +236,64 @@ struct dispatch_clamp {
         auto input_device_view  = cudf::column_device_view::create(input, stream);
 
         if (lo.is_valid(stream) and hi.is_valid(stream)) {
-            auto trans = [lo_value, hi_value] __device__ (T input, bool is_valid = true){
-                if (is_valid) {
-                    if (input < lo_value) {
+            auto trans = [lo_value, hi_value] __device__ (auto input){
+                if (input.second) {
+                    if (input.first < lo_value) {
                         return lo_value;
-                    } else if (input > hi_value) {
+                    } else if (input.first > hi_value) {
                         return hi_value;
                     }
                 }
 
-                return input;
+                return input.first;
             };
 
-            apply_transform<T>(*input_device_view, *output_device_view, trans, stream);
+            if (input.has_nulls()) {
+                auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
+                apply_transform<T>(input_pair_iterator, input_pair_iterator+input.size(),
+                                   *output_device_view, trans, stream);
+            } else {
+                auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
+                apply_transform<T>(input_pair_iterator, input_pair_iterator+input.size(),
+                                   *output_device_view, trans, stream);
+            }
         } else if (not lo.is_valid(stream)) {
-            auto trans = [hi_value] __device__ (T input, bool is_valid = true){
-                if (is_valid and input > hi_value) {
+            auto trans = [hi_value] __device__ (auto input){
+                if (input.second and input.first > hi_value) {
                     return hi_value;
                 }
 
-                return input;
+                return input.first;
             };
 
-            apply_transform<T>(*input_device_view, *output_device_view, trans, stream);
+            if (input.has_nulls()) {
+                auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
+                apply_transform<T>(input_pair_iterator, input_pair_iterator+input.size(),
+                                   *output_device_view, trans, stream);
+            } else {
+                auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
+                apply_transform<T>(input_pair_iterator, input_pair_iterator+input.size(),
+                                   *output_device_view, trans, stream);
+            }
         } else {
 
-            auto trans = [lo_value] __device__ (T input, bool is_valid = true){
-                if (is_valid and input < lo_value) {
+            auto trans = [lo_value] __device__ (auto input){
+                if (input.second and input.first < lo_value) {
                     return lo_value;
                 }
 
-                return input;
+                return input.first;
             };
 
-            apply_transform<T>(*input_device_view, *output_device_view, trans, stream);
+            if (input.has_nulls()) {
+                auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
+                apply_transform<T>(input_pair_iterator, input_pair_iterator+input.size(),
+                                   *output_device_view, trans, stream);
+            } else {
+                auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
+                apply_transform<T>(input_pair_iterator, input_pair_iterator+input.size(),
+                                   *output_device_view, trans, stream);
+            }
         }
         
         return output;

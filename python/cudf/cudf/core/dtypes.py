@@ -1,3 +1,5 @@
+import pickle
+
 import pandas as pd
 from pandas.api.extensions import ExtensionDtype
 
@@ -16,7 +18,9 @@ class CategoricalDtype(ExtensionDtype):
     @property
     def categories(self):
         if self._categories is None:
-            return None
+            return cudf.core.index.as_index(
+                cudf.core.column.column_empty(0, dtype="object", masked=False)
+            )
         return cudf.core.index.as_index(self._categories)
 
     @property
@@ -30,6 +34,12 @@ class CategoricalDtype(ExtensionDtype):
     @property
     def str(self):
         return "|O08"
+
+    @classmethod
+    def from_pandas(cls, dtype):
+        return CategoricalDtype(
+            categories=dtype.categories, ordered=dtype.ordered
+        )
 
     def to_pandas(self):
         if self.categories is None:
@@ -54,7 +64,7 @@ class CategoricalDtype(ExtensionDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
-        elif self.categories is None or other.categories is None:
+        elif self._categories is None or other._categories is None:
             return True
         else:
             return (
@@ -64,3 +74,24 @@ class CategoricalDtype(ExtensionDtype):
 
     def construct_from_string(self):
         raise NotImplementedError()
+
+    def serialize(self):
+        header = {}
+        frames = []
+        header["ordered"] = self.ordered
+        if self.categories is not None:
+            categories_header, categories_frames = self.categories.serialize()
+        header["categories"] = categories_header
+        frames.extend(categories_frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        ordered = header["ordered"]
+        categories_header = header["categories"]
+        categories_frames = frames
+        categories_type = pickle.loads(categories_header["type"])
+        categories = categories_type.deserialize(
+            categories_header, categories_frames
+        )
+        return cls(categories=categories, ordered=ordered)
