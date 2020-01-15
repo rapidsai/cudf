@@ -47,8 +47,8 @@ class aggregation {
     QUANTILE,  ///< compute specified quantile(s)
     ARGMAX,    ///< Index of max element
     ARGMIN,    ///< Index of min element
-    PTX,
-    CUDA
+    PTX,       ///< PTX UDF based reduction
+    CUDA       ///< CUDA UDf based reduction
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
