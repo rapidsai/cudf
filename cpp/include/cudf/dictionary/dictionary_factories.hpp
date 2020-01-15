@@ -26,9 +26,14 @@ namespace cudf
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
- * Unique elements are managed in a dictionary.
- * The output column will have indices with the same count
- * as the input column.
+ * The output column is a DICTIONARY type with a keys column of non-null, unique values
+ * that are in a strict, total order. Meaning, `keys[i]` is _ordered before
+ * `keys[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
+
+ * The output column has a child indices column that is of integer type and with
+ * the same size as the input column.
+ * 
+ * The null_mask and null count are copied from the input column to the output column.
  *
  * ```
  * c = [429,111,213,111,213,429,213]
@@ -40,6 +45,7 @@ namespace cudf
  * @param[in] mr Optional resource to use for device memory allocation.
  * @param[in] stream Optional stream on which to issue all memory allocation and
  * device kernels.
+ * @return Returns a dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column(
     column_view const& column,
@@ -66,7 +72,7 @@ std::unique_ptr<column> make_dictionary_column(
  * d is now {["a","c","d"],[1,0,0,2,2]}
  * ```
  *
- * @param keys_column Existing dictionary column.
+ * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
  * @param mr Resource for allocating memory for the output.
  * @param[in] stream Optional stream on which to issue all memory allocation and
