@@ -49,6 +49,7 @@
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3713 Adding aggregation support to rolling_window
+- PR #3786 Adding string support to rolling_windows
 
 ## Bug Fixes
 
