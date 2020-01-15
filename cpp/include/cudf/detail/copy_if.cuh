@@ -131,7 +131,7 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
       temp_data[local_index] = input_view.data<T>()[tid]; // scatter data to shared
 
       // scatter validity mask to shared memory
-      if (input_view.is_valid(tid)) {
+      if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
         const cudf::size_type aligned_offset = block_offset % cudf::experimental::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
@@ -326,7 +326,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
                                                      per_thread,
                                                      filter);
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::size_type output_size = 0;
 
@@ -353,7 +353,7 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         output_size = block_counts.back();
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
 
    if (output_size == input.num_rows()) {
