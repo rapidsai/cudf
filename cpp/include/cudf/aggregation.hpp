@@ -66,6 +66,20 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& q, interpolation i);
 
 /**
+ * @brief Factory to create an `argmax` aggregation
+ * 
+ * `argmax` returns the index of the maximum element.
+*/
+std::unique_ptr<aggregation> make_argmax_aggregation();
+
+/**
+ * @brief Factory to create an `argmin` aggregation
+ * 
+ * `argmin` returns the index of the minimum element.
+*/
+std::unique_ptr<aggregation> make_argmin_aggregation();
+
+/**
  * @brief Factory to create a PTX aggregation
  *
  * @param[in] user_defined_aggregator A string which has the required aggregation
@@ -84,5 +98,6 @@ std::unique_ptr<aggregation> make_ptx_aggregation(std::string user_defined_aggre
  * @return aggregation unique pointer housing user_defined_aggregator CUDA string.
  */
 std::unique_ptr<aggregation> make_cuda_aggregation(std::string user_defined_aggregator, data_type output_type);
+
 }  // namespace experimental
 }  // namespace cudf

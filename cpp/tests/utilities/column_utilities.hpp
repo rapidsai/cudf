@@ -99,7 +99,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 template <typename T>
 std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
   std::vector<T> host_data(c.size());
-  CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return { host_data, bitmask_to_host(c) };
 }
 
