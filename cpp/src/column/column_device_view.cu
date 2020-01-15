@@ -47,6 +47,9 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
   size_type num_children = source.num_children();
   if( num_children > 0 )
   {
+    // The beginning of the memory must be the fixed-sized column_device_view
+    // struct objects in order for d_children to be used as an array.
+    // Therefore, any child data is assigned past the end of this array.
     auto h_column = reinterpret_cast<column_device_view*>(h_ptr);
     auto d_column = reinterpret_cast<column_device_view*>(d_ptr);
     auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
@@ -67,13 +70,14 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
-  size_type num_children = source.num_children();
-  auto deleter = [](column_device_view* v) { v->destroy(); };
-  std::unique_ptr<column_device_view, decltype(deleter)> p{
-      new column_device_view(source), deleter};
-
-  if( num_children > 0 )
-  {
+    auto deleter = [](column_device_view* v) { v->destroy(); };
+    size_type num_children = source.num_children();
+    if( num_children == 0 )
+    {
+      std::unique_ptr<column_device_view, decltype(deleter)> p{
+          new column_device_view(source), deleter};
+      return p;
+    }
     // First calculate the size of memory needed to hold the
     // child columns. This is done by calling extent()
     // for each of the children.
@@ -81,40 +85,25 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     for( size_type idx=0; idx < num_children; ++idx )
       size_bytes += extent(source.child(idx));
     // A buffer of CPU memory is allocated to hold the column_device_view
-    // objects. Once filled, the CPU memory is then copied to device memory
-    // at the d_children member pointer.
+    // objects. Once filled, the CPU memory is copied to device memory
+    // and then set into the d_children member pointer.
     std::vector<int8_t> h_buffer(size_bytes);
-    column_device_view* h_column = reinterpret_cast<column_device_view*>(h_buffer.data());
+    auto h_start = h_buffer.data();
     // Each column_device_view instance may have child objects that
     // require setting some internal device pointers before being copied
     // from CPU to device.
-    RMM_TRY(RMM_ALLOC(&p->d_children, size_bytes, stream));
-    column_device_view* d_column = p->d_children;
-    // The beginning of the memory must be the fixed-sized column_device_view
-    // struct objects in order for d_children to be used as an array. Therefore,
-    // any child data is assigned to the end of this array.
-    auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
-    auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
-    for( size_type idx=0; idx < num_children; ++idx )
-    {
-      // create device-view from view
-      auto child = source.child(idx);
-      // copy child into buffer
-      new(h_column) column_device_view(child,reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
-      // point to the next array slot
-      h_column++; // point to memory slot for the next child
-      // update the pointers for holding this child column's child data
-      auto col_child_data_size = extent(child) - sizeof(child);
-      h_end += col_child_data_size;
-      d_end += col_child_data_size;
-    }
+    int8_t* d_start;
+    RMM_TRY(RMM_ALLOC(&d_start, size_bytes, stream));
+    std::unique_ptr<column_device_view, decltype(deleter)> p{
+        new column_device_view(source,reinterpret_cast<ptrdiff_t>(h_start),reinterpret_cast<ptrdiff_t>(d_start)), deleter};
+
     // copy the CPU memory with all the children into device memory
-    CUDA_TRY(cudaMemcpyAsync(p->d_children, h_buffer.data(), size_bytes,
+    CUDA_TRY(cudaMemcpyAsync(d_start, h_start, size_bytes,
                               cudaMemcpyHostToDevice, stream));
     p->_num_children = num_children;
+    p->d_children = reinterpret_cast<column_device_view*>(d_start);
     CUDA_TRY(cudaStreamSynchronize(stream));
-  }
-  return p;
+    return p;
 }
 
 size_type column_device_view::extent(column_view source) {
