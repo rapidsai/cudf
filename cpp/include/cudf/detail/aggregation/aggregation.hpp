@@ -48,8 +48,7 @@ class aggregation {
     ARGMAX,    ///< Index of max element
     ARGMIN,    ///< Index of min element
     PTX,
-    CUDA};
-
+    CUDA
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
