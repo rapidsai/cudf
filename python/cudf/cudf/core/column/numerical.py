@@ -77,7 +77,7 @@ class NumericalColumn(column.ColumnBase):
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
         return _numeric_column_binop(
-            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect,
+            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
     def unary_operator(self, unaryop):
@@ -146,7 +146,7 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").data, dtype=dtype, mask=self.mask,
+            data=self.astype("int64").data, dtype=dtype, mask=self.mask
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -246,9 +246,7 @@ class NumericalColumn(column.ColumnBase):
             return self
 
         data = Buffer(cudautils.apply_round(self.data_array_view, decimals))
-        return column.build_column(
-            data=data, dtype=self.dtype, mask=self.mask,
-        )
+        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
