@@ -85,6 +85,7 @@
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
+- PR #3799 Align indices of Series inputs when adding as columns to DataFrame 
 
 
 # cuDF 0.11.0 (11 Dec 2019)
