@@ -64,7 +64,8 @@ struct replace_regex_fn
     {
         if( d_strings.is_null(idx) )
             return 0;
-        u_char data1[stack_size], data2[stack_size];
+        u_char data1[stack_size];
+        u_char data2[stack_size];
         prog.set_stack_mem(data1,data2);
         string_view d_str = d_strings.element<string_view>(idx);
         auto mxn = maxrepl;
@@ -76,7 +77,9 @@ struct replace_regex_fn
         char* out_ptr = nullptr;  // running output pointer (o)
         if( d_offsets )
             out_ptr = d_chars + d_offsets[idx];
-        size_type lpos = 0, begin = 0, end = nchars;  // working vars
+        size_type lpos = 0;
+        size_type begin = 0;
+        size_type end = nchars;  // working vars
         // copy input to output replacing strings as we go
         while( mxn-- > 0 ) // maximum number of replaces
         {
