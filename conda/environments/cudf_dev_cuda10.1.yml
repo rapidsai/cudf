@@ -6,7 +6,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cupy>=6.60,<8.0.0a0,!=7.1.0
+  - cupy>=6.6.0,<8.0.0a0,!=7.1.0
   - rmm=0.12.*
   - cmake>=3.12
   - cmake_setuptools>=0.1.3
