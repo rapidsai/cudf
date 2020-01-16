@@ -264,7 +264,7 @@ def scatter_to_frames(source, maps, index=None, names=None, index_names=None):
     """
     from cudf.core.column import column, build_column, build_categorical_column
     from cudf.core.series import Series
-    in_cols = source
+    in_cols = list(source)
 
     if index:
         ind_names_tmp = [(ind_name or "_tmp_index")

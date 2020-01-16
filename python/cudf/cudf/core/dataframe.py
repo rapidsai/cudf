@@ -258,9 +258,6 @@ class DataFrame(NamedTable):
 
     @classmethod
     def _from_table(cls, table):
-        import pdb
-
-        pdb.set_trace()
         return cls(data=table._data, index=Index._from_table(table._index))
 
     @staticmethod
@@ -291,7 +288,6 @@ class DataFrame(NamedTable):
                     data[name] = aligned_input_series.pop(0)
 
         return data, index
->>>>>>> 3827d6bdfc6250696dbff1e4de5f12899d27769e
 
     @property
     def _constructor(self):
