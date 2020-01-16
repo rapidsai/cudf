@@ -39,12 +39,15 @@ std::unique_ptr<column> encode( column_view const& input_column,
                                 rmm::mr::device_memory_resource* mr,
                                 cudaStream_t stream)
 {
+    // side effects of this function were are now dependent on:
+    // - resulting column elements are sorted ascending
+    // - nulls are sorted to the beginning
     auto table_keys = experimental::detail::drop_duplicates( table_view{{input_column}},
                         std::vector<size_type>{0},
                         experimental::duplicate_keep_option::KEEP_FIRST,
                         true, mr, stream )->release(); // true == nulls are equal
-
     std::unique_ptr<column> keys(std::move(table_keys[0]));
+
     if( input_column.has_nulls() )
     {
         // the single null entry should be at the beginning -- side effect from drop_duplicates
@@ -52,14 +55,21 @@ std::unique_ptr<column> encode( column_view const& input_column,
         keys = std::make_unique<column>(experimental::slice(*keys, std::vector<size_type>{1,keys->size()})[0],stream,mr);
         keys->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 ); // remove the null-mask
     }
-
     std::shared_ptr<const column> keys_column(keys.release());
 
+    // this returns a column with no null entries
+    // - it actually appears to ignore the null entries and tries to place the value regardless
     auto indices_column = cudf::experimental::lower_bound(table_view{{*keys_column}},
                     table_view{{input_column}},
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER},
                     mr );
+
+    if( input_column.has_nulls() )
+    {
+        // copy the null mask -- this should match the input column
+        indices_column->set_null_mask( copy_bitmask(input_column,stream,mr), input_column.null_count() );
+    }
 
     // create column with keys_column and indices_column
     std::vector<std::unique_ptr<column>> children;

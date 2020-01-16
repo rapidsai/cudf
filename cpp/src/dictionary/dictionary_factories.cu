@@ -173,6 +173,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
                                                 rmm::mr::device_memory_resource* mr,
                                                 cudaStream_t stream)
 {
+    CUDF_EXPECTS( !keys_column.has_nulls(), "keys column must not have nulls" );
     auto indices_copy = std::make_unique<column>( indices_column, stream, mr);
     std::shared_ptr<const column> keys_copy = std::make_unique<column>(keys_column, stream, mr);
 
