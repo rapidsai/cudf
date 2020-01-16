@@ -516,6 +516,15 @@ class DataFrame(Table):
                 if arg in self._data:
                     if is_scalar(value):
                         value = utils.scalar_broadcast_to(value, len(self))
+                    if len(self) == 0:
+                        if isinstance(value, (pd.Series, Series)):
+                            self._index = as_index(value.index)
+                        elif len(value) > 0:
+                            self._index = RangeIndex(start=0, stop=len(value))
+                    elif isinstance(value, (pd.Series, Series)):
+                        value = Series(value)._align_to_index(
+                            self._index, how="right"
+                        )
                     self._data[arg] = column.as_column(value)
                 else:
                     # disc. with pandas here
@@ -872,7 +881,7 @@ class DataFrame(Table):
                         r_opr = other_cols[col]
                         l_opr = Series(
                             column_empty(
-                                len(self), masked=True, dtype=other.dtype,
+                                len(self), masked=True, dtype=other.dtype
                             )
                         )
                     if col not in other_cols_keys:
@@ -1540,6 +1549,8 @@ class DataFrame(Table):
                             masked=True,
                             newsize=len(value),
                         )
+        elif isinstance(value, (pd.Series, Series)):
+            value = Series(value)._align_to_index(self._index, how="right")
 
         value = column.as_column(value)
 
