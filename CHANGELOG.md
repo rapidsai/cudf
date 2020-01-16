@@ -78,6 +78,7 @@
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
+- PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 
 
 # cuDF 0.11.0 (11 Dec 2019)
