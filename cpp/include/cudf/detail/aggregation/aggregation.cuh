@@ -58,6 +58,10 @@ template <>
 struct corresponding_operator<aggregation::COUNT> {
   using type = DeviceCount;
 };
+template <>
+struct corresponding_operator<aggregation::MEAN> {
+  using type = DeviceSum;
+};
  
 template <aggregation::Kind k>
 using corresponding_operator_t = typename corresponding_operator<k>::type;

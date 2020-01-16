@@ -167,12 +167,7 @@ struct rolling_window_launcher
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
     if (input.has_nulls()) {
-        if (op == aggregation::MEAN) {
-            gpu_rolling<InputType, corresponding_operator<aggregation::SUM>::type, op, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
-                (*input_device_view, *output_device_view, device_valid_count.data(),
-                 preceding_window_begin, following_window_begin, min_periods);
-        }
-        else if (op == aggregation::COUNT) {
+        if (op == aggregation::COUNT) {
             gpu_rolling<size_type, agg_op, op, block_size, true><<<grid.num_blocks, block_size, 0, stream>>>
                 (*input_device_view, *output_device_view, device_valid_count.data(),
                  preceding_window_begin, following_window_begin, min_periods);
@@ -183,12 +178,7 @@ struct rolling_window_launcher
                  preceding_window_begin, following_window_begin, min_periods);
         }
     } else {
-        if (op == aggregation::MEAN) {
-            gpu_rolling<InputType, corresponding_operator<aggregation::SUM>::type, op, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
-                (*input_device_view, *output_device_view, device_valid_count.data(),
-                 preceding_window_begin, following_window_begin, min_periods);
-        } 
-        else if (op == aggregation::COUNT) {
+        if (op == aggregation::COUNT) {
             gpu_rolling<size_type, agg_op, op, block_size, false><<<grid.num_blocks, block_size, 0, stream>>>
                 (*input_device_view, *output_device_view, device_valid_count.data(),
                  preceding_window_begin, following_window_begin, min_periods);
@@ -214,12 +204,12 @@ struct rolling_window_launcher
   std::enable_if_t<!cudf::detail::is_supported<T, agg_op,
                                   op, op == aggregation::MEAN>(), std::unique_ptr<column>>
   launch (column_view const& input,
-                                     WindowIterator preceding_window_begin,
-                                     WindowIterator following_window_begin,
-                                     size_type min_periods,
-                                     std::unique_ptr<aggregation> const& aggr,
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream) {
+          WindowIterator preceding_window_begin,
+          WindowIterator following_window_begin,
+          size_type min_periods,
+          std::unique_ptr<aggregation> const& aggr,
+          rmm::mr::device_memory_resource *mr,
+          cudaStream_t stream) {
       CUDF_FAIL("Aggregation operator and/or input type combination is invalid");
   }
 

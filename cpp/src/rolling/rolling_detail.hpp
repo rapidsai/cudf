@@ -37,32 +37,25 @@ namespace detail
       std::is_same<AggOp, DeviceMax>::value ||
       std::is_same<AggOp, DeviceCount>::value;
 
-    constexpr bool is_valid_rolling_agg = (op == experimental::aggregation::SUM) or
-             (op == experimental::aggregation::MIN) or
-             (op == experimental::aggregation::MAX) or
-             (op == experimental::aggregation::COUNT) or
-             (op == experimental::aggregation::MEAN);
-
     constexpr bool timestamp_mean =
       is_mean &&
       std::is_same<AggOp, DeviceSum>::value &&
       cudf::is_timestamp<ColumnType>();
 
-    return !std::is_same<ColumnType, cudf::string_view>::value &&
-           is_valid_rolling_agg &&
-           (cudf::is_numeric<ColumnType>() ||
-            comparable_countable_op ||
-            timestamp_mean);
-  }
+    constexpr bool is_valid_rolling_agg = !std::is_same<ColumnType, cudf::string_view>::value and
+                                            ((op == experimental::aggregation::SUM) or
+                                             (op == experimental::aggregation::MIN) or
+                                             (op == experimental::aggregation::MAX) or
+                                             (op == experimental::aggregation::COUNT) or
+                                             (op == experimental::aggregation::MEAN)) and
+                                           (cudf::is_numeric<ColumnType>() or
+                                            comparable_countable_op or
+                                            timestamp_mean);
 
-  template <cudf::experimental::aggregation::Kind op>
-  static constexpr bool is_op_supported()
-  {
-      return (op == experimental::aggregation::SUM) or
-             (op == experimental::aggregation::MIN) or
-             (op == experimental::aggregation::MAX) or
-             (op == experimental::aggregation::COUNT) or
-             (op == experimental::aggregation::MEAN);
+
+    return is_valid_rolling_agg and
+           cudf::experimental::detail::is_valid_aggregation<ColumnType, op>();
+    //return is_valid_rolling_agg;
   }
 
   // store functor
