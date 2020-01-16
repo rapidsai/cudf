@@ -47,8 +47,7 @@ rmm::device_vector<T> make_gather_map(MapIterator scatter_map_begin,
   thrust::scatter(rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<T>(0),
     thrust::make_counting_iterator<T>(std::distance(scatter_map_begin, scatter_map_end)),
-    scatter_map_begin,
-    gather_map.begin());
+    scatter_map_begin, gather_map.begin());
 
   return gather_map;
 }
@@ -75,14 +74,25 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   rmm::device_vector<bitmask_type*> d_target_masks(target_masks);
   auto target_rows = target.front()->size();
 
+
+  auto masks = d_target_masks.data().get();
+
   // Compute block size
-  auto bitmask_kernel = gather_bitmask_kernel<true, decltype(gather_map)>;
   constexpr size_type block_size = 256;
+  using Selector = gather_bitmask_functor<true, decltype(gather_map)>;
+  auto bitmask_selector = Selector{ *device_source, masks, gather_map };
+  auto counting_it = thrust::make_counting_iterator(0);
+  auto bitmask_kernel = valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
   size_type const grid_size = grid_1d(target_rows, block_size).num_blocks;
 
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
-  bitmask_kernel<<<grid_size, block_size, 0, stream>>>(*device_source,
-    gather_map, d_target_masks.data().get(), target_rows, d_valid_counts.data().get());
+  bitmask_kernel<<<grid_size, block_size, 0, stream>>>(counting_it,
+                                                       counting_it,
+                                                       bitmask_selector,
+                                                       masks,
+                                                       target.size(),
+                                                       target_rows,
+                                                       d_valid_counts.data().get());
 
   // Copy the valid counts into each column
   auto const valid_counts = thrust::host_vector<size_type>(d_valid_counts);

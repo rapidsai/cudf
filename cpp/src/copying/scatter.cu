@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
+#include "thrust/iterator/counting_iterator.h"
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -37,7 +38,7 @@ namespace {
 struct dispatch_map_type {
     template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value
      and not std::is_same<map_type, bool8>::value>* = nullptr>
-  std::unique_ptr<table> operator()(
+    std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
