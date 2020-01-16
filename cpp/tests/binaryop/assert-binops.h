@@ -37,7 +37,7 @@ void ASSERT_BINOP(column_view const& out,
                   scalar const& lhs,
                   column_view const& rhs,
                   TypeOp&& op) {
-    auto lhs_h = static_cast<const ScalarType*>(&lhs)->value();
+    auto lhs_h = static_cast<ScalarType const&>(lhs).operator TypeLhs();
     auto rhs_h = cudf::test::to_host<TypeRhs>(rhs);
     auto rhs_data = rhs_h.first;
     auto out_h = cudf::test::to_host<TypeOut>(out);
@@ -45,7 +45,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (size_t i = 0; i < out_data.size(); ++i) {
-        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_h, rhs_data[i]))) << i;
+        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_h, rhs_data[i])));
     }
 
     if (rhs.nullable()) {
@@ -79,7 +79,7 @@ void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   scalar const& rhs,
                   TypeOp&& op) {
-    auto rhs_h = static_cast<const ScalarType*>(&rhs)->value();
+    auto rhs_h = static_cast<ScalarType const&>(rhs).operator TypeRhs();
     auto lhs_h = cudf::test::to_host<TypeLhs>(lhs);
     auto lhs_data = lhs_h.first;
     auto out_h = cudf::test::to_host<TypeOut>(out);
@@ -87,7 +87,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_data.size(), lhs_data.size());
     for (size_t i = 0; i < out_data.size(); ++i) {
-        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_data[i], rhs_h))) << i;
+        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_data[i], rhs_h)));
     }
 
     if (lhs.nullable()) {

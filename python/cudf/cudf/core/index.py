@@ -175,6 +175,9 @@ class Index(object):
         else:
             return as_index(op())
 
+    def unique(self):
+        return as_index(self._values.unique())
+
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
@@ -466,6 +469,12 @@ class RangeIndex(Index):
         self._cached_values = None
 
     def __contains__(self, item):
+        if not isinstance(
+            item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
+        ):
+            return False
+        if not item % 1 == 0:
+            return False
         if self._start <= item < self._stop:
             return True
         else:
@@ -658,6 +667,10 @@ class RangeIndex(Index):
 
     def memory_usage(self, **kwargs):
         return 0
+
+    def unique(self):
+        # RangeIndex always has unique values
+        return self
 
 
 def index_from_range(start, stop=None, step=None):
