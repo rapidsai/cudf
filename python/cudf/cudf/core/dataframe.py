@@ -236,6 +236,8 @@ class DataFrame(Table):
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
 
+        data, index = self._align_input_series_indices(data, index=index)
+
         if index is None:
             for i, col_name in enumerate(data):
                 if is_scalar(data[col_name]):
@@ -249,6 +251,35 @@ class DataFrame(Table):
 
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
+
+    @staticmethod
+    def _align_input_series_indices(data, index):
+        data = data.copy()
+
+        input_series = [
+            cudf.Series(val)
+            for val in data.values()
+            if isinstance(val, (pd.Series, cudf.Series))
+        ]
+
+        if input_series:
+            if index is not None:
+                aligned_input_series = [
+                    sr._align_to_index(index, how="right")
+                    for sr in input_series
+                ]
+
+            else:
+                aligned_input_series = cudf.core.series._align_indices(
+                    input_series
+                )
+                index = aligned_input_series[0].index
+
+            for name, val in data.items():
+                if isinstance(val, (pd.Series, cudf.Series)):
+                    data[name] = aligned_input_series.pop(0)
+
+        return data, index
 
     @property
     def _constructor(self):
@@ -1498,23 +1529,17 @@ class DataFrame(Table):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
-            index = None
             if isinstance(value, (pd.Series, Series)):
-                index = as_index(value.index)
-            len_value = len(value)
-            if len_value > 0:
-                if index is None:
-                    index = RangeIndex(start=0, stop=len_value)
+                self._index = as_index(value.index)
+            elif len(value) > 0:
+                self._index = RangeIndex(start=0, stop=len(value))
                 if num_cols != 0:
                     for col_name in self._data:
                         self._data[col_name] = column.column_empty_like(
                             self._data[col_name],
                             masked=True,
-                            newsize=len_value,
+                            newsize=len(value),
                         )
-            if index is None:
-                index = RangeIndex(start=0, stop=0)
-            self._index = index
 
         value = column.as_column(value)
 
@@ -4020,7 +4045,7 @@ class DataFrame(Table):
         """
         result_columns = OrderedDict({})
         for col in columns:
-            result_columns[col] = self[col]
+            result_columns[col] = self._data[col]
         return DataFrame(result_columns, index=self.index)
 
     def select_dtypes(self, include=None, exclude=None):
