@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import array as arr
 import operator
@@ -4193,7 +4193,7 @@ def test_df_sr_binop(gsr, colnames, op):
     ],
 )
 @pytest.mark.parametrize(
-    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])],
+    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])]
 )
 def test_df_sr_binop_col_order(gsr, op):
     colnames = [0, 1, 2]
@@ -4326,3 +4326,68 @@ def test_memory_usage_multi():
     expect += 3 * 8  # Level 1
 
     assert expect == gdf.index.memory_usage(deep=deep)
+
+
+@pytest.mark.parametrize(
+    "list_input",
+    [
+        pytest.param([1, 2, 3, 4], id="smaller"),
+        pytest.param([1, 2, 3, 4, 5, 6], id="larger"),
+    ],
+)
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param("list_test", id="new_column"),
+        pytest.param("id", id="existing_column"),
+    ],
+)
+def test_setitem_diff_size_list(list_input, key):
+    gdf = gd.datasets.randomdata(5)
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Cannot insert Column of different length into OrderedColumnDict"
+        ),
+    ):
+        gdf[key] = list_input
+
+
+@pytest.mark.parametrize(
+    "series_input",
+    [
+        pytest.param(gd.Series([1, 2, 3, 4]), id="smaller_cudf"),
+        pytest.param(gd.Series([1, 2, 3, 4, 5, 6]), id="larger_cudf"),
+        pytest.param(gd.Series([1, 2, 3], index=[4, 5, 6]), id="index_cudf"),
+        pytest.param(pd.Series([1, 2, 3, 4]), id="smaller_pandas"),
+        pytest.param(pd.Series([1, 2, 3, 4, 5, 6]), id="larger_pandas"),
+        pytest.param(pd.Series([1, 2, 3], index=[4, 5, 6]), id="index_pandas"),
+    ],
+)
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param("list_test", id="new_column"),
+        pytest.param("id", id="existing_column"),
+    ],
+)
+def test_setitem_diff_size_series(series_input, key):
+    gdf = gd.datasets.randomdata(5)
+    pdf = gdf.to_pandas()
+
+    pandas_input = series_input
+    if isinstance(pandas_input, gd.Series):
+        pandas_input = pandas_input.to_pandas()
+
+    expect = pdf
+    expect[key] = pandas_input
+
+    got = gdf
+    got[key] = series_input
+
+    # Pandas uses NaN and typecasts to float64 if there's missing values on
+    # alignment, so need to typecast to float64 for equality comparison
+    expect = expect.astype("float64")
+    got = got.astype("float64")
+
+    assert_eq(expect, got)
