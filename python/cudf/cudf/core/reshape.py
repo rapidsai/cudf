@@ -67,10 +67,10 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 if o.name is None:
                     # pandas uses 0-offset
                     name = idx - 1
-                df[name] = o
+                df[name] = o._column
             else:
                 for col in o.columns:
-                    df[col] = o[col]
+                    df[col] = o._data[col]
         if isinstance(objs[0], DataFrame) and isinstance(
             objs[0].columns, MultiIndex
         ):

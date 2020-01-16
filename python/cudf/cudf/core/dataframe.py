@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from __future__ import division, print_function
 
@@ -461,7 +461,7 @@ class DataFrame(Table):
                     df.index = self.index
                     return df
                 for col in arg:
-                    df[col] = self[col]
+                    df[col] = self._data[col]
                 df.index = self.index
             return df
         elif isinstance(arg, DataFrame):
@@ -523,7 +523,7 @@ class DataFrame(Table):
                             self._index = RangeIndex(start=0, stop=len(value))
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
-                            self._index, how="right"
+                            self._index, how="right", allow_non_unique=True
                         )
                     self._data[arg] = column.as_column(value)
                 else:
@@ -1423,20 +1423,20 @@ class DataFrame(Table):
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
-                for c in framed.columns:
-                    out[c] = framed[c]
+                for col_name, col_value in framed._data.items():
+                    out[col_name] = col_value
             else:
                 name = "index"
                 if self.index.name is not None:
                     name = self.index.name
-                out[name] = self.index
-            for c in self.columns:
-                out[c] = self[c]
+                out[name] = self.index._values
+            for col_name, col_value in self._data.items():
+                out[col_name] = col_value
         else:
             out = self
         if inplace is True:
             for column_name in set(out.columns) - set(self.columns):
-                self[column_name] = out[column_name]
+                self[column_name] = out._data[column_name]
                 self._data.move_to_end(column_name, last=False)
             self.index = RangeIndex(len(self))
         else:
@@ -2744,23 +2744,19 @@ class DataFrame(Table):
                 idx_col_name = str(uuid.uuid4())
                 idx_col_names.append(idx_col_name)
 
-                lhs[idx_col_name] = index_frame_l[name].set_index(self.index)
-                rhs[idx_col_name] = index_frame_r[name].set_index(other.index)
+                lhs[idx_col_name] = index_frame_l._data[name]
+                rhs[idx_col_name] = index_frame_r._data[name]
 
         else:
             idx_col_names.append(str(uuid.uuid4()))
-            lhs[idx_col_names[0]] = Series(self.index.as_column()).set_index(
-                self.index
-            )
-            rhs[idx_col_names[0]] = Series(other.index.as_column()).set_index(
-                other.index
-            )
+            lhs[idx_col_names[0]] = self.index.as_column()
+            rhs[idx_col_names[0]] = other.index.as_column()
 
-        for name in self.columns:
-            lhs[name] = self[name]
+        for name, col in self._data.items():
+            lhs[name] = col
 
-        for name in other.columns:
-            rhs[name] = other[name]
+        for name, col in other._data.items():
+            rhs[name] = col
 
         lhs = lhs.reset_index(drop=True)
         rhs = rhs.reset_index(drop=True)
