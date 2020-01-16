@@ -127,6 +127,11 @@ class fixed_width_scalar : public scalar {
   }
 
   /**
+   * @brief Implicit conversion operator to get the value of the scalar on the host
+   */
+  explicit operator value_type() const { return this->value(0); }
+
+  /**
    * @brief Get the value of the scalar
    * 
    * @param stream The CUDA stream to do the operation in
@@ -276,6 +281,11 @@ class string_scalar : public scalar {
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
    : string_scalar(data.value(), is_valid, stream, mr)
   { }
+
+  /**
+   * @brief Implicit conversion operator to get the value of the scalar in a host std::string
+   */
+  explicit operator std::string() const { return this->to_string(0); }
 
   /**
    * @brief Get the value of the scalar in a host std::string

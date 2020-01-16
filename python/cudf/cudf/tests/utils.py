@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -121,3 +123,8 @@ def gen_rand_series(dtype, size, **kwargs):
         return Series.from_masked_array(values, random_bitmask(size))
 
     return Series(values)
+
+
+@contextmanager
+def does_not_raise():
+    yield
