@@ -43,6 +43,7 @@ def path_or_buf(datadir):
 
     yield _make_path_or_buf
 
+
 @pytest.mark.skip(
     reason="This test segfaults occasionally. Skipping until "
     "we can figure out why."
