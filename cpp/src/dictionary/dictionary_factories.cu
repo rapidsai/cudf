@@ -39,9 +39,12 @@ namespace
 template <typename Element, bool has_nulls = true>
 struct copy_unique_functor
 {
-    column_device_view d_column;
+    experimental::element_equality_comparator<has_nulls> comparator;
     const int32_t* d_ordinals;
     int32_t* d_indices;
+
+    copy_unique_functor( column_device_view& d_column, int32_t const* d_ordinals, int32_t* d_indices )
+    : comparator{d_column,d_column,true}, d_ordinals(d_ordinals), d_indices(d_indices) {}
 
     __device__ bool operator()(int32_t idx)
     {
@@ -53,7 +56,6 @@ struct copy_unique_functor
         // check if adjacent elements match
         auto lhs_index = d_ordinals[idx-1];
         auto rhs_index = d_ordinals[idx];
-        experimental::element_equality_comparator<has_nulls> comparator{d_column,d_column,true};
         auto result = !comparator.template operator()<Element>(lhs_index, rhs_index);
         d_indices[idx] = static_cast<int32_t>(result); // convert bool to integer [0,1]
         return result;
@@ -70,10 +72,11 @@ struct copy_unique_dispatch
     template<typename Element>
     auto operator()(rmm::device_vector<int32_t>& map_indices, cudaStream_t stream )
     {
-        detail::copy_unique_functor<Element,has_nulls> fn{d_column, d_ordinals, d_indices};
-        return thrust::copy_if( rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<int32_t>(0),
-                                thrust::make_counting_iterator<int32_t>(d_column.size()), map_indices.begin(),
-                                fn );
+        return thrust::copy_if( rmm::exec_policy(stream)->on(stream),
+                                thrust::make_counting_iterator<int32_t>(0),
+                                thrust::make_counting_iterator<int32_t>(d_column.size()),
+                                map_indices.begin(),
+                                detail::copy_unique_functor<Element,has_nulls>{d_column, d_ordinals, d_indices} );
     }
 };
 
@@ -96,13 +99,6 @@ std::unique_ptr<column> make_dictionary_column( column_view const& input_column,
     // Example using a strings column:  [e,a,d,b,c,c,c,e,a]
     //    row positions for reference:   0,1,2,3,4,5,6,7,8
 
-    //rmm::device_vector<size_type> ordinals(count);
-    //auto d_ordinals = ordinals.data().get();
-    //thrust::sequence(execpol->on(stream), ordinals.begin(), ordinals.end()); // [0,1,2,3,4,5,6,7,8]
-    //if( input_column.has_nulls() )
-    //    thrust::sort(execpol->on(stream), ordinals.begin(), ordinals.end(), detail::sort_functor<true>{d_column} );
-    //else
-    //    thrust::sort(execpol->on(stream), ordinals.begin(), ordinals.end(), detail::sort_functor<false>{d_column} );
     auto ordinals_column = experimental::detail::sorted_order( table_view{{input_column}},
                             std::vector<order>{order::ASCENDING},
                             std::vector<null_order>{null_order::AFTER}, mr, stream);
