@@ -31,7 +31,7 @@ namespace dictionary
 {
 
 /**
- * @brief Create dictionary column from a column_view.
+ * @brief Create a new dictionary column from a column_view.
  *
  */
 std::unique_ptr<column> encode( column_view const& input_column,

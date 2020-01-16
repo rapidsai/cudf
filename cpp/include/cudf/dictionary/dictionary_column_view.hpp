@@ -190,30 +190,11 @@ std::unique_ptr<column> merge_dictionaries( dictionary_column_view const& dictio
 
 /**
  * @brief Create a column by gathering the keys from the provided
- * dictionary_column into a new column using the specified indices.
- *
- * ```
- * d1 = {["a","c","d"],[2,0,1,0]}
- * s = gather_type(d1,[1,0,0,2,2])
- * s is now ["c","a","a","d","d"]
- * ```
- *
- * @param dictionary_column Existing dictionary column.
- * @param indices Indices to use for the new dictionary column.
- * @param mr Resource for allocating memory for the output.
- * @return New column with type matching the dictionary_column's keys.
- */
-std::unique_ptr<column> gather_type( dictionary_column_view const& dictionary_column,
-                                     column_view const& indices,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
- * @brief Create a column by gathering the keys from the provided
  * dictionary_column into a new column using the indices from that column.
  *
  * ```
  * d1 = {["a","c","d"],[2,0,1,0]}
- * s = to_type(d1)
+ * s = decode(d1)
  * s is now ["d","a","c","a"]
  * ```
  *
@@ -221,8 +202,8 @@ std::unique_ptr<column> gather_type( dictionary_column_view const& dictionary_co
  * @param mr Resource for allocating memory for the output.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> to_type( dictionary_column_view const& dictionary_column,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
+                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace dictionary
 } // namespace cudf

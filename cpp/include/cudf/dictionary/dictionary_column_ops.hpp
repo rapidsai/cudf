@@ -37,7 +37,7 @@ namespace dictionary
  * 
  * The null_mask and null count are copied from the input column to the output column.
  * 
- * @throw Only INT32 is supported for the indices type.
+ * @throw cudf::logic_error - only INT32 is supported for the indices type.
  *
  * ```
  * c = [429,111,213,111,213,429,213]
@@ -45,11 +45,11 @@ namespace dictionary
  * d now has keys [111,213,429] and indices [2,0,1,0,1,2,1]
  * ```
  *
- * @param[in] column The column to dictionary encode.
- * @param[in] indices_type The integer type to use for the indices.
- * @param[in] mr Optional resource to use for device memory allocation.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels.
+ * @param column The column to dictionary encode.
+ * @param indices_type The integer type to use for the indices.
+ * @param mr Optional resource to use for device memory allocation.
+ * @param stream Optional stream on which to issue all memory allocation and
+ *               device kernels.
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(

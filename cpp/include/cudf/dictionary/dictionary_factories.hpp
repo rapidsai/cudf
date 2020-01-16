@@ -41,10 +41,10 @@ namespace cudf
  * d now has keys [111,213,429] and indices [2,0,1,0,1,2,1]
  * ```
  *
- * @param[in] column The column to dictionary encode.
- * @param[in] mr Optional resource to use for device memory allocation.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels.
+ * @param column The column to dictionary encode.
+ * @param mr Optional resource to use for device memory allocation.
+ * @param stream Optional stream on which to issue all memory allocation and
+ *               device kernels.
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column(
@@ -75,8 +75,8 @@ std::unique_ptr<column> make_dictionary_column(
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
  * @param mr Resource for allocating memory for the output.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels.
+ * @param stream Optional stream on which to issue all memory allocation and
+ *               device kernels.
  * @return New dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
