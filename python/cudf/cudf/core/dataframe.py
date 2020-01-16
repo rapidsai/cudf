@@ -236,6 +236,8 @@ class DataFrame(Table):
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
 
+        data, index = self._align_input_series_indices(data, index=index)
+
         if index is None:
             for i, col_name in enumerate(data):
                 if is_scalar(data[col_name]):
@@ -249,6 +251,35 @@ class DataFrame(Table):
 
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
+
+    @staticmethod
+    def _align_input_series_indices(data, index):
+        data = data.copy()
+
+        input_series = [
+            cudf.Series(val)
+            for val in data.values()
+            if isinstance(val, (pd.Series, cudf.Series))
+        ]
+
+        if input_series:
+            if index is not None:
+                aligned_input_series = [
+                    sr._align_to_index(index, how="right")
+                    for sr in input_series
+                ]
+
+            else:
+                aligned_input_series = cudf.core.series._align_indices(
+                    input_series
+                )
+                index = aligned_input_series[0].index
+
+            for name, val in data.items():
+                if isinstance(val, (pd.Series, cudf.Series)):
+                    data[name] = aligned_input_series.pop(0)
+
+        return data, index
 
     @property
     def _constructor(self):
@@ -859,85 +890,113 @@ class DataFrame(Table):
             )
         return result
 
-    def add(self, other, fill_value=None):
+    def add(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("add", other, fill_value)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
-    def radd(self, other, fill_value=None):
+    def radd(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("radd", other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
-    def sub(self, other, fill_value=None):
+    def sub(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("sub", other, fill_value)
 
     def __sub__(self, other):
         return self._apply_op("__sub__", other)
 
-    def rsub(self, other, fill_value=None):
+    def rsub(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rsub", other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
-    def mul(self, other, fill_value=None):
+    def mul(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("mul", other, fill_value)
 
     def __mul__(self, other):
         return self._apply_op("__mul__", other)
 
-    def rmul(self, other, fill_value=None):
+    def rmul(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rmul", other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
-    def mod(self, other, fill_value=None):
+    def mod(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("mod", other, fill_value)
 
     def __mod__(self, other):
         return self._apply_op("__mod__", other)
 
-    def rmod(self, other, fill_value=None):
+    def rmod(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rmod", other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
-    def pow(self, other, fill_value=None):
+    def pow(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("pow", other, fill_value)
 
     def __pow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def rpow(self, other, fill_value=None):
+    def rpow(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def floordiv(self, other, fill_value=None):
+    def floordiv(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("floordiv", other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op("__floordiv__", other)
 
-    def rfloordiv(self, other, fill_value=None):
+    def rfloordiv(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rfloordiv", other, fill_value)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
-    def truediv(self, other, fill_value=None):
+    def truediv(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("truediv", other, fill_value)
 
     def __truediv__(self, other):
         return self._apply_op("__truediv__", other)
 
-    def rtruediv(self, other, fill_value=None):
+    def rtruediv(self, other, fill_value=None, axis=1):
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rtruediv", other, fill_value)
 
     def __rtruediv__(self, other):
@@ -1470,23 +1529,17 @@ class DataFrame(Table):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
-            index = None
             if isinstance(value, (pd.Series, Series)):
-                index = as_index(value.index)
-            len_value = len(value)
-            if len_value > 0:
-                if index is None:
-                    index = RangeIndex(start=0, stop=len_value)
+                self._index = as_index(value.index)
+            elif len(value) > 0:
+                self._index = RangeIndex(start=0, stop=len(value))
                 if num_cols != 0:
                     for col_name in self._data:
                         self._data[col_name] = column.column_empty_like(
                             self._data[col_name],
                             masked=True,
-                            newsize=len_value,
+                            newsize=len(value),
                         )
-            if index is None:
-                index = RangeIndex(start=0, stop=0)
-            self._index = index
 
         value = column.as_column(value)
 
@@ -3992,7 +4045,7 @@ class DataFrame(Table):
         """
         result_columns = OrderedDict({})
         for col in columns:
-            result_columns[col] = self[col]
+            result_columns[col] = self._data[col]
         return DataFrame(result_columns, index=self.index)
 
     def select_dtypes(self, include=None, exclude=None):

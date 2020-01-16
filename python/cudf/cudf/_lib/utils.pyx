@@ -92,7 +92,7 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
     return c_table
 
 
-cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer):
+cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer) except *:
     """
     Util to obtain a 1-D char-typed memoryview into a Python buffer
 

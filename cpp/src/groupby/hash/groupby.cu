@@ -22,7 +22,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.cuh>
 
 #include <memory>
 #include <utility>
