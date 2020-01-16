@@ -15,7 +15,7 @@
  */
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/dictionary_column_ops.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
