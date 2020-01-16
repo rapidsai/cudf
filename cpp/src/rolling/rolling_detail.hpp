@@ -42,6 +42,7 @@ namespace detail
       cudf::is_timestamp<ColumnType>();
 
     return !std::is_same<ColumnType, cudf::string_view>::value &&
+           !std::is_same<ColumnType, cudf::dictionary32_tag>::value &&
            (cudf::is_numeric<ColumnType>() ||
             comparable_countable_op ||
             timestamp_mean);

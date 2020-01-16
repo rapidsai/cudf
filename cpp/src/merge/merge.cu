@@ -248,10 +248,9 @@ struct column_merger
 
   // column merger operator;
   //
-  template<typename Element>//required: column type
-  std::enable_if_t<cudf::is_fixed_width<Element>(),
-                   std::unique_ptr<cudf::column>>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
+  template<typename Element> //required: column type
+  std::unique_ptr<column> operator()(column_view const& lcol,
+                                     column_view const& rcol) const
   {
     auto lsz = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -320,35 +319,38 @@ struct column_merger
     return p_merged_col;
   }
 
-  //specialization for strings
-  //
-  template<typename Element>//required: column type
-  std::enable_if_t<not cudf::is_fixed_width<Element>(),
-                   std::unique_ptr<cudf::column>>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
-  {
-
-    auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
-                                                      strings_column_view(rcol),
-                                                      dv_row_order_.begin(),
-                                                      dv_row_order_.end(),
-                                                      mr_,
-                                                      stream_);
-
-    if (lcol.has_nulls() || rcol.has_nulls())
-      {
-        auto merged_view = column->mutable_view();
-        materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
-      }
-    return column;
-  }
-
 private:
   index_vector const& dv_row_order_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
 };
 
+// specialization for strings
+template<>
+std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view const& lcol,
+                                                                     column_view const& rcol) const
+{
+  auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
+                                                    strings_column_view(rcol),
+                                                    dv_row_order_.begin(),
+                                                    dv_row_order_.end(),
+                                                    mr_,
+                                                    stream_);
+  if (lcol.has_nulls() || rcol.has_nulls())
+    {
+      auto merged_view = column->mutable_view();
+      materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+    }
+  return column;
+}
+
+// specialization for dictionary
+template<>
+std::unique_ptr<column> column_merger::operator()<cudf::dictionary32_tag>(column_view const& lcol,
+                                                                          column_view const& rcol) const
+{
+  CUDF_FAIL("dictionary not supported yet");
+}
 
 std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_table,
                                                  cudf::table_view const& right_table,

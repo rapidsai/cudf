@@ -385,6 +385,7 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/merge/merge.cu
+            src/round_robin/round_robin.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
@@ -593,8 +594,9 @@ add_library(cudf
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
-            src/dictionary/dictionary_column_view.cu
+            src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
+            src/dictionary/encode.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu

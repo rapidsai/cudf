@@ -643,6 +643,14 @@ set(MERGE_TEST_SRC
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
 ###################################################################################################
+# - round-robin new tests ----------------------------------------------------------------------------
+
+set(ROUND_ROBIN_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/round_robin/round_robin_test.cpp")
+
+ConfigureTest(ROUND_ROBIN_TEST "${ROUND_ROBIN_TEST_SRC}")
+
+###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -792,7 +800,8 @@ ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 # - dictionary tests ---------------------------------------------------------------------------------
 
 set(DICTIONARY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cu")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
