@@ -780,9 +780,7 @@ class DataFrame(Table):
                 and not self._data[col].dtype == "O"
                 and not is_datetime_dtype(self._data[col].dtype)
             ):
-                output[col] = (
-                    output._data[col].astype("str").str().fillna("null")
-                )
+                output[col] = output._data[col].astype("str").fillna("null")
             else:
                 output[col] = output._data[col]
         if isinstance(self.columns, cudf.MultiIndex):
