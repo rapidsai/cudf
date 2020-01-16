@@ -2,6 +2,7 @@
 
 from __future__ import division, print_function
 
+import functools
 import pickle
 
 import numpy as np
@@ -183,6 +184,9 @@ class Index(NamedTable):
             return as_index(op(other))
         else:
             return as_index(op())
+
+    def unique(self):
+        return as_index(self._values.unique())
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -515,6 +519,12 @@ class RangeIndex(Index):
         return OrderedColumnDict({self.name: self._values})
 
     def __contains__(self, item):
+        if not isinstance(
+            item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
+        ):
+            return False
+        if not item % 1 == 0:
+            return False
         if self._start <= item < self._stop:
             return True
         else:
@@ -693,6 +703,10 @@ class RangeIndex(Index):
     def memory_usage(self, **kwargs):
         return 0
 
+    def unique(self):
+        # RangeIndex always has unique values
+        return self
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
@@ -756,7 +770,11 @@ class GenericIndex(Index):
         return self._values.__sizeof__()
 
     def __reduce__(self):
-        return self.__class__, tuple([self._values])
+        _maker = functools.partial(
+            self.__class__, self._values, name=self.name
+        )
+
+        return _maker, ()
 
     def __len__(self):
         return len(self._values)
@@ -919,7 +937,7 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask,
+            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
         )
         return as_index(out_column, name=self.name)
 

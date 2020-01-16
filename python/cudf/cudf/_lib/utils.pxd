@@ -17,4 +17,4 @@ cdef cudf_table* table_from_dataframe(df) except? NULL
 cdef columns_from_table(cudf_table* table, int_col_names=*)
 cdef cudf_table* table_from_columns(columns) except? NULL
 
-cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer)
+cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer) except *
