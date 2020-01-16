@@ -18,7 +18,7 @@ cdef cudf_table* table_from_dataframe(df) except? NULL:
     cdef vector[gdf_column*] c_columns
     for col_name in df:
         col = df[col_name]._column
-        c_columns.push_back(column_view_from_column(col, col.name))
+        c_columns.push_back(column_view_from_column(col))
     c_table = new cudf_table(c_columns)
     return c_table
 
@@ -44,8 +44,13 @@ cdef table_to_dataframe(cudf_table* c_table, int_col_names=False):
     df = DataFrame()
     for i in range(c_table[0].num_columns()):
         c_col = c_table[0].get_column(i)
-        col = gdf_column_to_column(c_col, int_col_names)
-        df.insert(i, col.name, col)
+        col = gdf_column_to_column(c_col)
+        name = None
+        if c_col.col_name is not NULL:
+            name = c_col.col_name.decode()
+        if int_col_names:
+            name = int(name)
+        df.insert(i, name, col)
         free_column(c_col)
     return df
 
@@ -70,7 +75,7 @@ cdef columns_from_table(cudf_table* c_table, int_col_names=False):
     cdef gdf_column* c_col
     for i in range(c_table[0].num_columns()):
         c_col = c_table[0].get_column(i)
-        col = gdf_column_to_column(c_col, int_col_names)
+        col = gdf_column_to_column(c_col)
         columns.append(col)
         free_column(c_col)
     return columns
@@ -87,7 +92,7 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
     return c_table
 
 
-cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer):
+cdef const unsigned char[::1] view_of_buffer(filepath_or_buffer) except *:
     """
     Util to obtain a 1-D char-typed memoryview into a Python buffer
 

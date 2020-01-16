@@ -65,6 +65,16 @@ TEST_F(StringsFindTest, Find)
         auto results = cudf::strings::ends_with(strings_view, cudf::string_scalar("se"));
         cudf::test::expect_columns_equal(*results, expected);
     }
+    {
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,0,0,0}, {1,1,0,1,1,1} );
+        auto results = cudf::strings::starts_with(strings_view, cudf::string_scalar("thesé"));
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,0,0,0}, {1,1,0,1,1,1} );
+        auto results = cudf::strings::ends_with(strings_view, cudf::string_scalar("thesé"));
+        cudf::test::expect_columns_equal(*results, expected);
+    }
 }
 
 TEST_F(StringsFindTest, ZeroSizeStringsColumn)
