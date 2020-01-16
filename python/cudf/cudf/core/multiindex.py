@@ -116,6 +116,11 @@ class MultiIndex(Index):
         self._data = source_data._data
         self.names = [None] * len(self._levels) if names is None else names
 
+    @classmethod
+    def _from_table(cls, table):
+        df = cudf.DataFrame(table._data)
+        return MultiIndex.from_frame(df)
+
     @property
     def _source_data(self):
         return cudf.DataFrame(self._data)
@@ -599,6 +604,7 @@ class MultiIndex(Index):
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
+        names = dataframe.columns if names is None else names
         return cls(source_data=dataframe, names=names)
 
     @classmethod

@@ -444,10 +444,15 @@ class Index(NamedTable):
 
     @classmethod
     def _from_table(cls, table):
-        return as_index(
-            next(iter(table._data.values())),
-            name=next(iter(table._data.keys())),
-        )
+        if len(table._data) == 0:
+            raise ValueError("Cannot construct Index from any empty Table")
+        if len(table._data) == 1:
+            return as_index(
+                next(iter(table._data.values())),
+                name=next(iter(table._data.keys())),
+            )
+        else:
+            return cudf.MultiIndex._from_table(table)
 
 
 class RangeIndex(Index):
@@ -479,7 +484,35 @@ class RangeIndex(Index):
         self._start = int(start)
         self._stop = int(stop)
         self._cached_values = None
-        super().__init__({name: column.column_empty(0)})
+        self._index = None
+        self._name = name
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    def as_column(self):
+        if len(self) > 0:
+            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        else:
+            vals = rmm.device_array(0, dtype=self.dtype)
+        return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
+
+    @property
+    def _values(self):
+        if self._cached_values is None:
+            self._cached_values = self.as_column()
+        return self._cached_values
+
+    @property
+    def _data(self):
+        from cudf.utils.utils import OrderedColumnDict
+
+        return OrderedColumnDict({self.name: self._values})
 
     def __contains__(self, item):
         if self._start <= item < self._stop:
@@ -588,12 +621,6 @@ class RangeIndex(Index):
         return np.dtype(np.int64)
 
     @property
-    def _values(self):
-        if self._cached_values is None:
-            self._cached_values = self.as_column()
-        return self._cached_values
-
-    @property
     def is_contiguous(self):
         return True
 
@@ -620,16 +647,6 @@ class RangeIndex(Index):
             end = self._stop
         # shift to index
         return begin - self._start, end - self._start
-
-    def as_column(self):
-        if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
-        else:
-            vals = rmm.device_array(0, dtype=self.dtype)
-        self._data[self.name] = column.build_column(
-            data=Buffer(vals), dtype=vals.dtype,
-        )
-        return self._data[self.name]
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -770,7 +787,7 @@ class GenericIndex(Index):
     def as_column(self):
         """Convert the index as a Series.
         """
-        return self._values
+        return self._data[self.name]
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):

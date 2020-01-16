@@ -251,6 +251,9 @@ class DataFrame(NamedTable):
 
     @classmethod
     def _from_table(cls, table):
+        import pdb
+
+        pdb.set_trace()
         return cls(data=table._data, index=Index._from_table(table._index))
 
     @property
@@ -266,13 +269,6 @@ class DataFrame(NamedTable):
         raise NotImplementedError(
             "_constructor_expanddim not supported for DataFrames!"
         )
-
-    @property
-    def _columns(self):
-        """
-        Return a list of Column objects backing this dataframe
-        """
-        return list(self._data.values())
 
     def serialize(self):
         header = {}
@@ -1359,14 +1355,25 @@ class DataFrame(NamedTable):
             return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
+        positions = as_column(positions)
+        if pd.api.types.is_bool_dtype(positions):
+            return self._apply_boolean_mask(
+                positions, ignore_index=ignore_index
+            )
+        out = self.gather(positions)
         if ignore_index:
-            index = RangeIndex(len(positions))
+            out = out.set_index(RangeIndex(len(positions)))
+        return out
+
+    def _apply_boolean_mask(self, mask, ignore_index=False):
+        if ignore_index:
+            index = RangeIndex(len(mask))
         else:
-            index = self.index.take(positions)
+            index = self.index.take(mask)
         out = DataFrame()
         if self._data:
             for i, col_name in enumerate(self._data.keys()):
-                out[col_name] = self._data[col_name][positions]
+                out[col_name] = self._data[col_name][mask]
         return out.set_index(index)
 
     def _take_columns(self, positions):
@@ -1686,7 +1693,7 @@ class DataFrame(NamedTable):
         else:
             index_cols.append(self.index.as_column())
 
-        input_cols = index_cols + data_cols
+        input_cols = index_cols + list(data_cols)
 
         if subset is not None:
             subset = self._columns_view(subset)._columns

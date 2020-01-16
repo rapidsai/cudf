@@ -453,11 +453,12 @@ class StringColumn(column.ColumnBase):
             Two non-null columns containing the string data and offsets
             respectively
         """
-
         data = Buffer.empty(0)
         dtype = np.dtype("object")
 
-        if children[0].size == 0:
+        if len(children) == 0:
+            size = 0
+        elif children[0].size == 0:
             size = 0
         else:
             # one less because the last element of offsets is the number of

@@ -229,7 +229,7 @@ cdef class Column:
             mask = None
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
-        children = None
+        children = ()
         if c_children.size() != 0:
             children = tuple(Column.from_unique_ptr(move(c_children[i]))
                              for i in range(c_children.size()))

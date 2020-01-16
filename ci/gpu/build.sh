@@ -118,7 +118,7 @@ else
 
     cd $WORKSPACE/python/cudf
     logger "Python py.test for cuDF..."
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -x -v --pdb --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."

@@ -30,6 +30,9 @@ def _column_concat(cols_to_concat, Column output_col):
             num_cols
         )
 
+    if hasattr(col, "null_count"):
+        del col.null_count  # force null_count to be recomputed
+    
     check_gdf_error(result)
 
     free_column(c_output_col)
