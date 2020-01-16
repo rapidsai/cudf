@@ -2,6 +2,7 @@
 
 from __future__ import division, print_function
 
+import functools
 import pickle
 from copy import copy, deepcopy
 
@@ -733,7 +734,11 @@ class GenericIndex(Index):
         return self._values.__sizeof__()
 
     def __reduce__(self):
-        return self.__class__, tuple([self._values])
+        _maker = functools.partial(
+            self.__class__, self._values, name=self.name
+        )
+
+        return _maker, ()
 
     def __len__(self):
         return len(self._values)
