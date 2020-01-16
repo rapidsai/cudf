@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/legacy/interop.hpp>
-#include <cudf/types.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-#include <initializer_list>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
-#include <tests/utilities/type_lists.hpp>
-#include <vector>
-
 #include <cudf/fixed_point/fixed_point.hpp>
 
 struct FixedPointTest : public cudf::test::BaseFixture {};
