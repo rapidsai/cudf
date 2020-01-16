@@ -621,7 +621,7 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
+        return column.build_column(data=Buffer(vals), dtype=vals.dtype)
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -906,7 +906,7 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask,
+            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
         )
         return as_index(out_column, name=self.name)
 
